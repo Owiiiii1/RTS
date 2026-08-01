@@ -8,7 +8,7 @@
 
 > Стан станом на 2026-08-01 (після SETUP-001 + DOCS-001). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: `git log -- GP/Source/`, наявність файлів зі `Files Touched` поточної slice, заповненість секції `Output` у task-файлі, та [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md).
 
-**Поточна фаза:** Phase 6B — Slice 2 Match Flow. GP-S09 **DONE**.
+**Поточна фаза:** Phase 6B — Slice 2 Match Flow. GP-S10 **DONE**. Наступний етап автоматично не починати.
 
 **Status of materialized slices:**
 
@@ -22,11 +22,12 @@
 | GP-S06 AGP_GameState | **DONE** | [`GP-S06_Game_State.md`](GP-S06_Game_State.md) |
 | GP-S07 AGP_GameMode | **DONE** | [`GP-S07_Game_Mode.md`](GP-S07_Game_Mode.md) |
 | GP-S08 AGP_PlayerController | **DONE** | [`GP-S08_Player_Controller.md`](GP-S08_Player_Controller.md) |
-| **GP-S09 AGP_PlayerState** | **DONE** | [`GP-S09_Player_State.md`](GP-S09_Player_State.md) |
-| GP-S10+ | not materialized | do not create until explicitly assigned |
+| GP-S09 AGP_PlayerState | **DONE** | [`GP-S09_Player_State.md`](GP-S09_Player_State.md) |
+| **GP-S10 UGP_MatchAssetLoader** | **DONE** | [`GP-S10_Match_Asset_Loader.md`](GP-S10_Match_Asset_Loader.md) — operator PIE PASSED; tech lead + operator accepted |
+| GP-S11+ | not materialized | do not create / start until explicitly assigned |
 | GP-S54..S56 (Slice 10, AI Opponent) | files materialized, code not started | depends on Slice 1 → 9 sequence |
 
-**NEXT action для агента:** STOP. Do **not** materialize GP-S10. Do **not** start the next task automatically. Await explicit assignment.
+**NEXT action для агента:** STOP. GP-S10 closed. Do **not** start GP-S11. Do **not** materialize GP-S11+. Wait for explicit assignment.
 
 ### Drift Warning
 
@@ -352,7 +353,8 @@ Per-slice C++ writing. **Code Allowed: Yes** після approval поперед�
 - [GP-S07 Game Mode](GP-S07_Game_Mode.md) — **DONE**
 - [GP-S08 Player Controller](GP-S08_Player_Controller.md) — **DONE**
 - [GP-S09 Player State](GP-S09_Player_State.md) — **DONE**
-- GP-S10+ — not materialized (do not auto-start)
+- [GP-S10 Match Asset Loader](GP-S10_Match_Asset_Loader.md) — **DONE**
+- GP-S11+ — not materialized
 
 ### Phase 6B — AI Opponent Code Slices (Slice 10, materialized, code not started)
 

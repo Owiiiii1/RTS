@@ -385,7 +385,7 @@ Cursor также должен обновить соответствующий t
 
 Базовые правила разработки:
 
-- Unreal Engine 5.7.
+- Unreal Engine 5.8.1.
 - C++ first.
 - Blueprint только для UI, Editor workflow, tuning и минимальных asset bindings.
 - GAS-first там, где это связано с атрибутами, эффектами, способностями, уроном.

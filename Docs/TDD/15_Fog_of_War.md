@@ -1,0 +1,322 @@
+# Fog of War
+
+## Scope
+
+Engineering implementation of 3-level FoW (per [`../GDD/11_Fog_of_War`](../GDD/11_Fog_of_War.md)). Replaces previous "no FoW у MVP" decision (pivot 2026-05-16). Visibility grid, sight scan, replication relevance, selection/combat/drop interactions, minimap rendering.
+
+## Hard Rules
+
+1. **Server-authoritative.** Visibility computed server-side. Client receives relevance-filtered actors і per-team visibility bitmap.
+2. **Per-team grids.** Each team has independent Explored і Visible bitmaps. No allied vision sharing (no allies у MVP).
+3. **Standard UE relevance API.** Use `IsNetRelevantFor` / `bOnlyRelevantToOwner` overrides; не custom replication channel.
+4. **Bit-grid storage.** `TBitArray` per team per state. Cell size DA-driven (placeholder 2 m).
+5. **No client-side FoW gameplay.** Client can render fog mask, but server arbiters all visibility-gated logic.
+6. **No tick-poll у widgets.** FoW reads через `UGP_FoWVM` (Common UI + MVVM per TDD/12).
+
+## Data Structures
+
+### Grid Storage
+
+```cpp
+// UGP_FogOfWarComponent (на AGP_GameState, server-side primary)
+UCLASS()
+class GPRUNTIME_API UGP_FogOfWarComponent : public UActorComponent
+{
+    GENERATED_BODY()
+public:
+    /** Cell size у cm. DA-driven, default 200 cm. */
+    UPROPERTY(EditDefaultsOnly)
+    int32 CellSize = 200;
+
+    /** Grid dimensions, computed from map bounds at BeginPlay. */
+    UPROPERTY(VisibleAnywhere)
+    FIntPoint GridDims;
+
+    /** Bit per cell per team. Server-only authoritative. */
+    UPROPERTY()
+    TMap<int32 /*TeamId*/, FGP_FoWGrid> ExploredByTeam;
+
+    UPROPERTY()
+    TMap<int32 /*TeamId*/, FGP_FoWGrid> VisibleByTeam;
+
+    /** Public query API. */
+    UFUNCTION(BlueprintPure)
+    bool IsExploredByTeam(int32 TeamId, FVector WorldLoc) const;
+
+    UFUNCTION(BlueprintPure)
+    bool IsVisibleToTeam(int32 TeamId, FVector WorldLoc) const;
+
+    /** Cell-space query. */
+    bool IsCellVisibleToTeam(int32 TeamId, FIntPoint Cell) const;
+
+protected:
+    /** Server tick — recompute Visible from sight sources. */
+    virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+                               FActorComponentTickFunction* ThisTickFn) override;
+};
+
+USTRUCT()
+struct FGP_FoWGrid
+{
+    GENERATED_BODY()
+    UPROPERTY()  TBitArray<> Bits;
+    FORCEINLINE int32 IndexOf(FIntPoint Cell, FIntPoint GridDims) const;
+    FORCEINLINE bool Get(FIntPoint Cell, FIntPoint GridDims) const;
+    FORCEINLINE void Set(FIntPoint Cell, FIntPoint GridDims, bool bValue);
+    void Clear() { Bits.Init(false, Bits.Num()); }
+    void UnionWith(const FGP_FoWGrid& Other);
+};
+```
+
+Replication: server does **not** replicate raw `Bits` arrays — natively large + per-team-private. Replicates **only per-client filtered actors** via relevance API. Client's local FoW state — derived from "which actors am I seeing now" + persistent local cache of "where I've been".
+
+### Per-Client State (Local Mirror)
+
+```cpp
+// UGP_LocalFoWComponent (на AGP_PlayerController, local-only)
+UCLASS()
+class GPRUNTIME_API UGP_LocalFoWComponent : public UActorComponent
+{
+    GENERATED_BODY()
+public:
+    /** Local mirror of server's ExploredByTeam[LocalTeam]. Updated via dedicated low-rate RPC. */
+    UPROPERTY()
+    FGP_FoWGrid LocalExplored;
+
+    /** Live visibility — derived from currently relevant own units / structures positions. */
+    UPROPERTY()
+    FGP_FoWGrid LocalVisible;
+
+    /** Called every render frame або 30 Hz to update VisibleByTeam from current sight sources. */
+    void RecomputeLocalVisibility();
+
+    /** Server pushes Explored grid diffs to client via Client_PushExploredDelta. */
+    UFUNCTION(Client, Reliable)
+    void Client_PushExploredDelta(const TArray<int32>& NewlyExploredCellIndices);
+};
+```
+
+Client mirrors Explored locally for rendering (last-known state). Updates у `Client_PushExploredDelta` — sent on cell-explore event (rate-limited у server, e.g., bundle 0.5 s of new cells per push).
+
+### Sight Source Contract
+
+Actors з sight contribute via interface OR property:
+
+```cpp
+// In UGP_UnitDefinition / UGP_BuildingDefinition:
+UPROPERTY(EditAnywhere, Category = "GP|Vision")
+float SightRadius = 0.f;     // cm
+
+UPROPERTY(EditAnywhere, Category = "GP|Vision")
+bool bGrantsVision = false;  // explicit flag
+```
+
+`AGP_UnitBase::IsSightSource()` returns `bGrantsVision && SightRadius > 0 && !HasTag(GP.Unit.State.Dead)`.
+
+## Sight Tick (Server)
+
+`UGP_FogOfWarComponent::TickComponent` (5 Hz server tick):
+
+```
+for each TeamId у MatchTeams:
+    NewVisible = empty grid
+
+    for each Actor у World з IsSightSource() && Actor.TeamId == TeamId:
+        Center = Actor.Location → cell
+        Radius_cells = ceil(Actor.SightRadius / CellSize)
+        for each Cell within radius (circle iteration):
+            NewVisible.Set(Cell, true)
+            if !ExploredByTeam[TeamId].Get(Cell):
+                ExploredByTeam[TeamId].Set(Cell, true)
+                NewlyExploredCells[TeamId].Add(CellIndex)
+
+    VisibleByTeam[TeamId] = NewVisible
+
+for each PlayerController:
+    if NewlyExploredCells[PC.TeamId].Num() > 0:
+        PC->Client_PushExploredDelta(NewlyExploredCells[PC.TeamId])
+        NewlyExploredCells[PC.TeamId].Empty()
+```
+
+Drop pod telegraph: pod actor у flight contributes temporary sight (per `DropDef.bPodGrantsVision = true`, default true).
+
+## Replication Relevance
+
+Override на key actor types:
+
+```cpp
+// AGP_UnitBase
+virtual bool IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget,
+                              const FVector& SrcLocation) const override
+{
+    // Always relevant to owner team
+    if (const APlayerController* PC = Cast<APlayerController>(RealViewer))
+    {
+        if (const AGP_PlayerState* PS = PC->GetPlayerState<AGP_PlayerState>())
+        {
+            if (PS->GetTeamId() == TeamId) return true;
+            // Cross-team: relevant only if currently visible to viewer's team
+            return GetFoWComponent()->IsVisibleToTeam(PS->GetTeamId(), GetActorLocation());
+        }
+    }
+    return Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
+}
+```
+
+Engine handles connection-level filtering. Hidden enemies — not replicated to opponent client. Cheat-resistant.
+
+**Buildings:** `IsNetRelevantFor` similar, але once explored, last-known state persists локально (no unrelevance once seen — buildings static, OK to keep).
+
+**FerroniteDeposits:** same as buildings.
+
+## Selection / Inspect Interaction (Updates to GP-0202)
+
+- `UGP_SelectionComponent::TrySelectAt(FVector Loc)`:
+  - HitActor — only relevant actors hit (engine relevance filters network already).
+  - For local hit testing на actively-visible actors: standard line trace.
+  - Hidden enemies → not hit by trace (they're not у local scene since relevance-culled).
+- `Inspect`: only `Visible` enemy can be inspected.
+- Control group recall з member у hidden zone: keep entry; member's `IsValid()` returns true server-side, але local client sees "unknown position" placeholder. UI shows greyed-out portrait. On re-sight, position resyncs.
+
+## Combat Interaction (Updates to GP-0204)
+
+`UGP_TargetingComponent::FindClosestEnemy`:
+
+```
+candidates = OverlapSphere(AcquireRange) filter by:
+    - Visible OR Owner-team
+    - Not Dead
+    ...
+```
+
+`OverlapSphere` returns only actors relevant to attacker's team — i.e., server tick on attacker (which is server-side) sees all candidates regardless of FoW. But filter checks `IsVisibleToTeam(AttackerTeamId, candidate.Location)`. Auto-acquire `false` if hidden.
+
+Explicit attack on hidden enemy: command persists, attacker moves to last-known. On reach, evaluate visibility again.
+
+## Drop Targeting Interaction (Updates to TDD/14)
+
+Drop validation step 3:
+```
+IsVisibleToTeam(OwnerTeamId, LandingLoc) → required if DropDef.bRequiresActiveVisibility (default true).
+```
+
+Drop reticle on client:
+- Mouse raycast hits ground.
+- Query `UGP_LocalFoWComponent::IsVisibleToTeam(LocalTeam, HitLoc)`.
+- Tint reticle accordingly.
+
+## Minimap Rendering (Per TDD/12 Update)
+
+`UGP_MinimapSubsystem` snapshot uses 3 layers:
+
+```cpp
+struct FGP_MinimapCellRender
+{
+    EGP_FoWState State;            // Unexplored / Explored / Visible
+    FColor TerrainTint;
+    TArray<FGP_MinimapBlip> Blips;
+};
+```
+
+- Unexplored: black overlay (full alpha).
+- Explored: dim grey overlay (~0.5 alpha) + frozen blips for last-known static actors.
+- Visible: no overlay + live blips.
+
+Blip fading rules (per [`../GDD/11_Fog_of_War`](../GDD/11_Fog_of_War.md)):
+- Dynamic actors: fade out 5 s after `Visible → Explored` transition.
+- Static actors: persistent у Explored.
+
+`UGP_MinimapVM` extended:
+
+```cpp
+UPROPERTY(BlueprintReadOnly, FieldNotify, Getter)
+TArray<FGP_MinimapCellRender> Cells;
+```
+
+VM Adapter polls `UGP_LocalFoWComponent` snapshot at 5 Hz (matches sight tick).
+
+## Tag Surface
+
+```
+GP.FoW.Unexplored            // cell state tags (for queries, not on actors)
+GP.FoW.Explored
+GP.FoW.Visible
+
+GP.Capability.GrantsVision   // marks actors that contribute vision
+GP.Capability.AlwaysVisible  // reserved post-MVP for special landmarks
+```
+
+## DataAsset Refs
+
+| DataAsset | Field | Type |
+| --- | --- | --- |
+| `UGP_UnitDefinition` | `SightRadius`, `bGrantsVision` | scalars / bool |
+| `UGP_BuildingDefinition` | `SightRadius`, `bGrantsVision` | scalars / bool |
+| `UGP_OrbitalDropDefinition` | `bPodGrantsVision` | bool |
+| `UGP_FactionDefinition` | `InitialFoWReveal` | optional initial-explored radius around landing |
+
+Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — all values are DA-driven, soft refs only.
+
+## Anti-Patterns
+
+- ❌ Replicating raw FoW grid arrays.
+- ❌ Per-frame visibility scan на all-vs-all.
+- ❌ Client decides visibility — server-only.
+- ❌ Last-known state writes to live state.
+- ❌ Widget code calling `FoWComponent->IsVisibleToTeam` directly — must go через `UGP_FoWVM`.
+- ❌ Removing `Explored` flag once set (no re-fog у MVP).
+
+## Performance Budget
+
+- 5 Hz sight tick × O(units × area_cells_covered). With 50 units × ~100 cells average = 25k cell ops/sec — acceptable.
+- Relevance check called by engine per actor per client. Cheap (per-cell bit query + team check).
+- Multicast and replication budget unchanged from existing.
+
+## Validation per Pillars
+
+**Pillar 8 (Simple Core):**
+- 1-2 sentence: "Three layers: black (never seen), grey (seen once but not now), full (currently looking)."
+- Fun у v1: yes — scout fantasy + ambush.
+- New decision: vision pyramid investment, pre-attack reveal, scouting cost.
+- Cheap: standard bit-grid + UE relevance API.
+- Scales via content: more sight sources via DataAsset `SightRadius`.
+
+**Pillar 9 (Technical):** server-authoritative ✓, data-driven ✓ (sight radii via DA), GAS-friendly (no GAS state needed for FoW itself).
+
+## Playtest Scenarios
+
+| # | Scenario | Pass Criteria |
+| --- | --- | --- |
+| 1 | Initial state | Map starts black except small bubble around each MainBase + Workers. |
+| 2 | Worker explore | Move Worker outward → cells transition Unexplored → Visible → Explored on retreat. |
+| 3 | Enemy detection | Enemy unit enters own Visible bubble → suddenly appears на client. |
+| 4 | Enemy hide | Enemy unit moves out of Visible → disappears from local scene; last-known marker fades 5 s on minimap. |
+| 5 | Building last-known | Enemy MainBase у Explored zone → still rendered (frozen damage state). Re-explore → live state. |
+| 6 | Cheat resistance | Packet sniff confirms hidden enemy actors NOT replicated to opponent. |
+| 7 | Drop zone gating | Try drop on Explored — red reticle, reject. Visible — green, allow. |
+| 8 | Inspect hidden | Enemy goes hidden during inspect → InspectPanel auto-clears. |
+| 9 | Combat re-engage | Attack target → target hides → attacker moves to last-known → target re-emerges → re-engage. |
+| 10 | Minimap layers | All 3 layers rendered correctly з proper alpha. |
+| 11 | Drop pod telegraph | Pod adds temporary vision at landing site (DropDef.bPodGrantsVision = true). Pod destroyed → vision contribution gone. |
+| 12 | Performance | 50 actors, 5 Hz sight tick, no frame-time spike > 1 ms server-side. |
+
+## Out of MVP
+
+- Allied vision sharing.
+- Stealth units / cloak abilities.
+- Scanner reveal abilities (ping reveal).
+- Always-visible landmarks.
+- Fog re-application (visibility downgrade Explored → Unexplored).
+- Vision-cone direction (omni 360° у MVP).
+- Height / elevation vision effects.
+- High-ground vision bonus.
+
+## References
+
+- Fog of War GDD — [`../GDD/11_Fog_of_War`](../GDD/11_Fog_of_War.md).
+- Selection rules (FoW interactions) — [`04_RTS_Selection_And_Commands`](04_RTS_Selection_And_Commands.md).
+- Combat (LOS + FoW filter) — [`04_RTS_Selection_And_Commands`](04_RTS_Selection_And_Commands.md) §Detailed Attack Command Rules.
+- Orbital Delivery (drop zone gating) — [`14_Orbital_Delivery`](14_Orbital_Delivery.md).
+- UI / MVVM (minimap, FoW VM) — [`12_UI_Architecture`](12_UI_Architecture.md).
+- Multiplayer relevance — [`03_Multiplayer_Architecture`](03_Multiplayer_Architecture.md).
+- Data assets — [`10_Data_Assets`](10_Data_Assets.md), [`../Architecture_Decisions/ADR_0002_Data_Driven_First`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md).

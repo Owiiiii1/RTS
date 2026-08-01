@@ -159,13 +159,15 @@ DataAssets зберігаються у `/Game/GrimProtocol/DataAssets/<Category>
 
 ## Gameplay Tags
 
-Native registry у `GPGASRuntime/Public/Tags/FGPGameplayTags.h` (struct з `UE_DEFINE_GAMEPLAY_TAG_STATIC` or runtime-add у `UGameplayTagsManager`).
+Native registry у `GPGASRuntime/Public/Tags/GPGameplayTags.h` (`FGPGameplayTags`, `AddNativeGameplayTag` at `GPGASRuntime` startup).
+
+**Authoritative list:** [`09_Gameplay_Tags.md`](09_Gameplay_Tags.md). This section is a synchronized summary only — do not diverge.
 
 ```
 GP.Match.State.{Loading, WaitingForPlayers, Playing, Paused, Finished}
 GP.Match.WinReason.{DeliveryQuota, TimerScore, Annihilation, OpponentDisconnect}
 
-GP.Unit.Type.{Worker, Combat, Support, Building}
+GP.Unit.Type.{Worker, SalvageWalker, Combat, Support, Building}
 GP.Unit.State.{Moving, Mining, Repairing, Attacking, AttackCooldown, Dead, Stunned}
 
 GP.Building.Type.{MainBase, LogisticsHub, DefensiveTurret, Wall, WallTurret, FerroniteDeposit}
@@ -174,10 +176,10 @@ GP.Building.Role.{Command, Logistics, Defense, Resource}
 GP.Resource.Type.Ferronite
 GP.Resource.Node
 
-GP.Command.{Move, AttackMove, Attack, Mine, Repair, Stop, OrderDrop}
+GP.Command.{Move, Stop, Attack, AttackMove, Mine, Repair, Sell, Demolish, OrderDrop, CancelOrder}
 
-GP.Drop.Type.{...}            // one per UGP_OrbitalDropDefinition payload kind
-GP.State.PodInFlight          // carried by AGP_DropPod during descent
+GP.Drop.Type.{Unit, Building, Wall, Module}
+GP.State.PodInFlight
 
 GP.Ability.Repair
 GP.Ability.State.Channeling
@@ -187,12 +189,13 @@ GP.Selection.Type.{Unit, Building}
 
 GP.Faction.Corporate
 
-GP.Team.{Neutral, A, B}
+GP.Team.{Neutral, Player.One, Player.Two}   // NOT Team.A / Team.B
 
 GP.Effect.Source.UnitCapBuilding
 
 GP.Notify.{InsufficientOrbitalFerronite, UnitCapReached, WorkerIdle,
            BaseUnderAttack, DropRejected, MatchEndingSoon, CommandRejected}
+// NOT GP.Notify.InsufficientOrbital
 ```
 
 Жодних magic-string tags у коді (review-blocking per CONTRIBUTING).

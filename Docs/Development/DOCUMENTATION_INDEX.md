@@ -34,24 +34,24 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + **GP-S01 DONE** |
-| Runtime modules on disk | `GP` (primary) + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (scaffolds only) |
-| Last closed stage | **GP-S01** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 + **GP-S02 DONE** |
+| Runtime modules on disk | `GP` (primary) + `GPRuntime` + `GPGASRuntime` (tags registry) + `GPUIRuntime` |
+| Last closed stage | **GP-S02** |
 | Current stage | **none** |
 
 ---
 
 ## Current NEXT Task
 
-**NEXT:** [`GP-S02_Native_Gameplay_Tags`](Claude_Tasks/GP-S02_Native_Gameplay_Tags.md)
+**NEXT:** [`GP-S03_Attribute_Sets`](Claude_Tasks/GP-S03_Attribute_Sets.md)
 
-GP-S01 Module Scaffolds is accepted and closed. The next allowed implementation stage is **GP-S02 Native Gameplay Tags**. Do not start GP-S02 until explicitly assigned.
+GP-S02 Native Gameplay Tags is accepted and closed. The next allowed implementation stage is **GP-S03 Attribute Sets**. Do not start GP-S03 until explicitly assigned.
 
 ### Foundation sequence
 
 1. GP-S01 Module Scaffolds — **DONE**
-2. GP-S02 Native Gameplay Tags — **NEXT**
-3. GP-S03 Attribute Sets — blocked by S02
+2. GP-S02 Native Gameplay Tags — **DONE**
+3. GP-S03 Attribute Sets — **NEXT**
 4. GP-S04 AbilitySystemComponent Subclass — blocked by S03
 
 ---
@@ -134,4 +134,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, and GP-S01 are closed. Current stage: **none**. Next allowed stage: **GP-S02 Native Gameplay Tags** (not started here).
+SETUP-001, DOCS-001, GP-S01, and GP-S02 are closed. Current stage: **none**. Next allowed stage: **GP-S03 Attribute Sets** (not started here).

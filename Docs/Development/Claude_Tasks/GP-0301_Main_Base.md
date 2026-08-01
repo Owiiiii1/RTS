@@ -50,7 +50,7 @@ Base identity, owner/team, health, damage, destruction, match-flow relationship.
   - Repair: Worker `GP.Ability.Repair` (channel, costs Ferronite per tick).
   - Destruction: economic loss, NOT auto-lose. Match continues; score race до 10-min timer per GDD/08.
 - DataAsset schema enumerated: `MaxProductionQueue=5`, `bSupportsRallyPoint=true`, `DefaultRallyOffset`, `bSelfRegen=false`, `RepairAbility=UGP_GA_Repair`.
-- Tags added: `GP.Command.SetRallyPoint`, `GP.Command.QueueProduction`, `GP.Command.CancelProduction`, `GP.Command.Repair`, `GP.Ability.Repair`.
+- Tags noted in original pre-pivot output (deprecated — do not use in new code): `GP.Command.SetRallyPoint`, `GP.Command.QueueProduction`, `GP.Command.CancelProduction`. Active retained: `GP.Command.Repair`, `GP.Ability.Repair`.
 - Code implementation deferred to follow-up task **GP-0301A Main Base Implementation** (Code Allowed: Yes).
 
 ## Pivot Note (2026-05-16 — Orbital Delivery Model)

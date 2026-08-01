@@ -4,6 +4,7 @@
 #include "Game/GPGameState.h"
 #include "GameFramework/PlayerController.h"
 #include "Player/GPPlayerController.h"
+#include "Player/GPPlayerState.h"
 #include "Tags/GPGameplayTags.h"
 #include "TimerManager.h"
 
@@ -11,6 +12,7 @@ AGP_GameMode::AGP_GameMode()
 {
 	GameStateClass = AGP_GameState::StaticClass();
 	PlayerControllerClass = AGP_PlayerController::StaticClass();
+	PlayerStateClass = AGP_PlayerState::StaticClass();
 	PrimaryActorTick.bCanEverTick = false;
 	MatchDurationSeconds = 600.0f;
 	ExpectedHumanPlayers = 2;

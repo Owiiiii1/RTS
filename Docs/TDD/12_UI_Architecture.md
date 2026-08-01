@@ -18,22 +18,22 @@ Engineering-canonical UI architecture for GrimProtocol. Currently scoped до MV
 
 These are **mandatory project-setup prerequisites** that MUST be enabled before any UI work begins. This document **states the requirement**; the actual `GP.uproject` / `*.Build.cs` edits are a **separate engineering task** (NOT performed in this documentation pass).
 
-**1. `GP.uproject` — enable plugins:**
+**1. `GP.uproject` — enable stock UE 5.8.1 plugins only:**
 
-- `CommonUI`
-- `CommonGame`
-- `CommonInput`
-- `ModelViewViewModel`
-- (`EnhancedInput` is already enabled — no action needed.)
+- `CommonUI` (engine plugin; Common Input capability comes with Common UI)
+- `ModelViewViewModel` (engine plugin)
+- `EnhancedInput` where not already enabled by the blank project
+- **Do not enable `CommonGame`.** It belongs to the Lyra / CommonUser ecosystem, is not assumed present in a blank UE 5.8.1 install, and is forbidden by [ADR-0005](../Architecture_Decisions/ADR_0005_No_Lyra.md).
+- **Do not require a separate `CommonInput` plugin entry** unless the installed engine exposes it as a standalone plugin. Prefer `CommonInput` as a Build.cs **module** dependency under Common UI.
 
-**2. `GPUIRuntime.Build.cs` — declare module dependencies:** must depend on `CommonUI`, `CommonInput`, `ModelViewViewModel`, `CommonGame`, and `UMG`:
+**2. `GPUIRuntime.Build.cs` — declare module dependencies:** must depend on `CommonUI`, `CommonInput` (module), `ModelViewViewModel`, and `UMG` — **not** `CommonGame`:
 
 ```csharp
 PublicDependencyModuleNames.AddRange(new string[]
 {
     "Core", "CoreUObject", "Engine",
     "UMG", "Slate", "SlateCore",
-    "CommonUI", "CommonInput", "CommonGame",
+    "CommonUI", "CommonInput",
     "ModelViewViewModel",
     "GameplayAbilities", "GameplayTags",
     "GPRuntime", "GPGASRuntime"
@@ -41,6 +41,8 @@ PublicDependencyModuleNames.AddRange(new string[]
 ```
 
 **3. Module-boundary guideline (verify):** `GPRuntime` should **NOT** depend on `UMG` or any UI module — all UI lives in `GPUIRuntime`. This keeps gameplay free of a hard dependency on the UI layer. Flagged as a guideline to verify against the actual `GPRuntime.Build.cs`.
+
+**4. No Lyra UI foundation:** do not import Lyra, `CommonGame`, `CommonUser`, or Lyra sample `CommonPlayerController` / experience stack. Project PlayerController remains a GP-owned `APlayerController` subclass that uses Common UI action routing APIs available from the Common UI plugin.
 
 > Until the `.uproject` plugins and `GPUIRuntime.Build.cs` dependencies above are in place, none of the class bases or binding contracts below will compile. Treat this as a gate.
 
@@ -96,9 +98,9 @@ VMs created у PC `BeginPlay` / `OnPossess`, registered у `UMVVMSubsystem` per 
 ### Input Routing — Common UI
 
 - Project Settings → CommonUI Input Routing enabled.
-- `AGP_PlayerController` extends `CommonPlayerController` (або wraps `UCommonUIActionRouterBase`).
+- `AGP_PlayerController` extends project `APlayerController` (not Lyra `CommonPlayerController`) and integrates Common UI action routing (`UCommonUIActionRouterBase` / LocalPlayer Common UI services) without `CommonGame`.
 - Action sets: `CommonUI.Default`, `CommonUI.OrderMenu`, `CommonUI.EndOfMatch` — switch on activatable widget activation.
-- Gameplay IMC (`IMC_GP_Camera`, `IMC_GP_Selection`, `IMC_GP_Commands`) — gated by `IsMatchInput` predicate; suspended коли activatable modal у focus.
+- Gameplay IMC (`IMC_GP_Camera`, `IMC_GP_Selection`, `IMC_GP_Commands`) via Enhanced Input — gated by `IsMatchInput` predicate; suspended коли activatable modal у focus.
 
 ## Module Ownership
 

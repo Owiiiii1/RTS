@@ -104,10 +104,11 @@
 2. **Task cursor vs disk:** Claude_Tasks claimed S01–S03 DONE / NEXT S04; disk has blank `GP` only → corrected to **NEXT = GP-S01**.
 3. **Economy / SWARM:** Canon = `FerroniteThreatValue` from planetary stock at base (`GDD/06`, ADR-0009). Conflict: `GDD/00` still implies SWARM scales with shipped Ferronite / time-escalation produce loop.
 4. **FoW MVP:** In MVP per GDD/11 + TDD/15 + Docs/README pivots. Conflict: `GDD/Out_Of_Scope.md` still excludes full FoW from MVP.
-5. **Common UI:** Mandatory per TDD/12 + CONTRIBUTING/README. Conflict: TDD/00 says deferred; `GP.uproject` currently lacks CommonUI plugins (expected until GP-S01).
-6. **Local production vs orbital:** ADR-0009 / GDD orbital docs win. Residual Production/Construction references remain in CONTRIBUTING component list, TDD/01, ADR-0003 examples, GDD/09.
-7. **Git LFS:** `.gitattributes` already tracks `*.uasset` / `*.umap` via LFS; `Git_Workflow.md` still says LFS is deferred — process docs should be reconciled later.
-8. **Duplicate start rules:** Root `GRIM_PROTOCOL_START_RULES.md` and `Docs/Development/GRIM_PROTOCOL_START_RULES.md` must stay in sync.
+5. **Common UI enablement timing:** Mandatory per TDD/12 + CONTRIBUTING/README. Residual: TDD/00 still says deferred in places; `GP.uproject` lacks CommonUI until GP-S01 (expected).
+6. **CommonGame / Lyra UI stack (RESOLVED 2026-08-01):** Active docs previously listed `CommonGame` (+ often a separate `CommonInput` plugin entry) as mandatory. **Resolution:** blank UE 5.8.1 uses stock plugins `CommonUI` + `ModelViewViewModel` only; `CommonInput` is a module dependency provided with Common UI; `EnhancedInput` remains for gameplay IMC. `CommonGame` / `CommonUser` / Lyra foundation are **not** required and must not be imported (ADR-0005). Updated: GP-S01, TDD/12, TDD/13 (S47), GP-0401.
+7. **Local production vs orbital:** ADR-0009 / GDD orbital docs win. Residual Production/Construction references remain in CONTRIBUTING component list, TDD/01, ADR-0003 examples, GDD/09.
+8. **Git LFS:** `.gitattributes` already tracks `*.uasset` / `*.umap` via LFS; `Git_Workflow.md` still says LFS is deferred — process docs should be reconciled later.
+9. **Duplicate start rules:** Root `GRIM_PROTOCOL_START_RULES.md` and `Docs/Development/GRIM_PROTOCOL_START_RULES.md` must stay in sync.
 
 ---
 

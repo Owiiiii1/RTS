@@ -44,8 +44,8 @@ HUD information architecture only. No widget code.
 
 - Design spec: created [`../../TDD/12_UI_Architecture.md`](../../TDD/12_UI_Architecture.md) with framework rules + "Detailed MVP HUD Rules (GP-0401)" section.
 - **Framework decisions (project-wide):**
-  - Common UI + MVVM mandatory. Plugins: `CommonUI`, `CommonGame`, `CommonInput`, `ModelViewViewModel`.
-  - All native widget bases: `UCommonUserWidget` / `UCommonActivatableWidget`.
+  - Common UI + MVVM mandatory. Stock plugins: `CommonUI`, `ModelViewViewModel` (+ `EnhancedInput` for gameplay IMC). `CommonInput` as module dependency under Common UI. **Not** `CommonGame` / Lyra.
+  - All native widget bases: `UCommonUserWidget` / `UCommonActivatableWidget` (from Common UI, not CommonGame).
   - **Server updates only ViewModels.** Widgets bind to VMs via `UMVVMSubsystem`; widgets never query gameplay state directly.
   - Adapter layer translates replicated state → VM `Set*` calls; FieldNotify auto-broadcasts to widgets.
 - HUD state inventory complete (21 entries) з source/sync/replication contract.

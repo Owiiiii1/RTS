@@ -407,7 +407,7 @@ Slice 8 — Buildings + Orbital Drops + Wall + Grid (post-pivot)
   GP-S46A Sell + Demolish (GP-0307): Server_SellBuilding / Server_DemolishWalls RPCs, UGP_BuildingDefinition.bSellable/SellRefundRate fields, GE_GP_RefundOrbital, demolish cursor mode UI integration.
 
 Slice 9 — UI Foundation + FoW (GP-0401A skeleton + TDD/15 hookup)
-  GP-S47  Required Project Setup: enable plugins CommonUI / CommonGame / CommonInput / ModelViewViewModel in GP.uproject + matching deps in GPUIRuntime.Build.cs (CommonUI + MVVM are a HARD requirement). Then UGP_UserWidgetBase, UGP_ActivatableScreenBase.
+  GP-S47  Required Project Setup: enable stock plugins CommonUI + ModelViewViewModel in GP.uproject (CommonInput as module dep under Common UI; EnhancedInput for gameplay IMC). Do NOT enable CommonGame / Lyra. Matching deps in GPUIRuntime.Build.cs (CommonUI + MVVM are a HARD requirement). Then UGP_UserWidgetBase, UGP_ActivatableScreenBase. Note: plugin enablement for blank baseline is owned by GP-S01; S47 focuses on widget bases once plugins exist.
   GP-S48  UGP_FogOfWarComponent (server grid + sight tick) + UGP_LocalFoWComponent (client mirror).
   GP-S49  ViewModels (UGP_ResourceVM, UGP_MatchVM, UGP_SelectionVM, UGP_OrderMenuVM, UGP_CargoVM, UGP_NotificationVM, UGP_MinimapVM, UGP_LobbyVM, UGP_FoWVM).
   GP-S50  VM Adapters (UGP_*VMAdapter) як PC subobjects.

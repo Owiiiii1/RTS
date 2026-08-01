@@ -34,25 +34,25 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 DONE — blank C++ module `GP` only (`GP/Source/GP/`) |
-| Runtime modules on disk | **Not created yet** (`GPRuntime` / `GPGASRuntime` / `GPUIRuntime` absent) |
-| Last closed stage | **DOCS-001** (SETUP-001 also DONE) |
-| Current stage | **none / baseline complete** |
+| Code baseline | SETUP-001 + DOCS-001 + **GP-S01 DONE** |
+| Runtime modules on disk | `GP` (primary) + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (scaffolds only) |
+| Last closed stage | **GP-S01** |
+| Current stage | **none** |
 
 ---
 
 ## Current NEXT Task
 
-**NEXT:** [`GP-S01_Module_Scaffolds`](Claude_Tasks/GP-S01_Module_Scaffolds.md)
+**NEXT:** [`GP-S02_Native_Gameplay_Tags`](Claude_Tasks/GP-S02_Native_Gameplay_Tags.md)
 
-SETUP-001 and DOCS-001 are accepted and closed. The next allowed implementation stage after merge to `main` is **GP-S01**.
+GP-S01 Module Scaffolds is accepted and closed. The next allowed implementation stage is **GP-S02 Native Gameplay Tags**. Do not start GP-S02 until explicitly assigned.
 
-### Why GP-S01 (not GP-S04)
+### Foundation sequence
 
-1. SETUP-001 left a clean blank `GP` primary module — no `GPRuntime` / `GPGASRuntime` / `GPUIRuntime`.
-2. `Claude_Tasks/README.md` previously marked S01–S03 DONE and NEXT=S04 based on commit `a31d092`, which **does not exist** in this repository history.
-3. TDD/13 Implementation Order starts with GP-S01 module scaffolds.
-4. GP-S04 (`UGP_AbilitySystemComponent`) depends on `GPGASRuntime` existing after S01–S03.
+1. GP-S01 Module Scaffolds — **DONE**
+2. GP-S02 Native Gameplay Tags — **NEXT**
+3. GP-S03 Attribute Sets — blocked by S02
+4. GP-S04 AbilitySystemComponent Subclass — blocked by S03
 
 ---
 
@@ -134,4 +134,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-Baseline documentation stages (SETUP-001, DOCS-001) are closed. Current stage: none / baseline complete. Next allowed stage: **GP-S01** (not started here).
+SETUP-001, DOCS-001, and GP-S01 are closed. Current stage: **none**. Next allowed stage: **GP-S02 Native Gameplay Tags** (not started here).

@@ -5,11 +5,17 @@ using System.Collections.Generic;
 
 public class GPEditorTarget : TargetRules
 {
-	public GPEditorTarget( TargetInfo Target) : base(Target)
+	public GPEditorTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V7;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
-		ExtraModuleNames.Add("GP");
+		ExtraModuleNames.AddRange(new string[]
+		{
+			"GP",
+			"GPGASRuntime",
+			"GPRuntime",
+			"GPUIRuntime"
+		});
 	}
 }

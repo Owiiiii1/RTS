@@ -51,17 +51,29 @@ Create three runtime modules (`GPRuntime`, `GPGASRuntime`, `GPUIRuntime`) so the
 - Config verification only: `DefaultEngine.ini` / `DefaultInput.ini` (no gameplay content)
 
 ## Acceptance Criteria
-- [ ] `GPRuntime`, `GPGASRuntime`, `GPUIRuntime` exist under `GP/Source/` with module entry points + Build.cs.
-- [ ] `GP.uproject` lists the three runtime modules and enables plugins `CommonUI` and `ModelViewViewModel` (plus existing/required `EnhancedInput` usage).
-- [ ] `GP.uproject` does **not** enable `CommonGame`.
-- [ ] `GPUIRuntime.Build.cs` depends on `CommonUI`, `ModelViewViewModel`, and `CommonInput` as a module where valid — not on `CommonGame`.
-- [ ] Editor target compiles clean on UE 5.8.1.
-- [ ] DevelopmentEditor + Development + Shipping configurations build.
-- [ ] No new compile warnings introduced by this slice.
-- [ ] Module dependency graph is `GPUIRuntime → GPRuntime → GPGASRuntime` (no upward dependency).
-- [ ] No fourth gameplay runtime module created.
-- [ ] No gameplay classes / DataAssets / widgets added beyond bare module scaffolds.
-- [ ] No Lyra / CommonGame / CommonUser code imported.
+- [x] `GPRuntime`, `GPGASRuntime`, `GPUIRuntime` exist under `GP/Source/` with module entry points + Build.cs.
+- [x] `GP.uproject` lists the three runtime modules and enables plugins `CommonUI` and `ModelViewViewModel` (plus existing/required `EnhancedInput` usage).
+- [x] `GP.uproject` does **not** enable `CommonGame`.
+- [x] `GPUIRuntime.Build.cs` depends on `CommonUI`, `ModelViewViewModel`, and `CommonInput` as a module where valid — not on `CommonGame`.
+- [x] Editor target compiles clean on UE 5.8.1.
+- [x] DevelopmentEditor + Development + Shipping configurations build.
+- [x] No new compile warnings introduced by this slice.
+- [x] Module dependency graph is `GPUIRuntime → GPRuntime → GPGASRuntime` (no upward dependency).
+- [x] No fourth gameplay runtime module created.
+- [x] No gameplay classes / DataAssets / widgets added beyond bare module scaffolds.
+- [x] No Lyra / CommonGame / CommonUser code imported.
+
+## Output
+- Status: **DONE**
+- Modules created: `GPGASRuntime`, `GPRuntime`, `GPUIRuntime` (blank primary `GP` retained).
+- Plugins enabled in `.uproject`: `GameplayAbilities`, `EnhancedInput`, `CommonUI`, `ModelViewViewModel` (no `CommonGame`; no separate `CommonInput` plugin — module via CommonUI).
+- Builds (UE 5.8 `Build.bat`):
+  - `GPEditor Win64 Development` — PASSED
+  - `GP Win64 Development` — PASSED
+  - `GP Win64 Shipping` — PASSED
+- Operator validation: Editor OPENED; modules LOADED; Common UI + ModelViewViewModel enabled; CommonGame absent; PIE PASSED.
+- Tech lead accepted. Operator accepted.
+- STOP. Do **not** start GP-S02 in this task.
 
 ## Playtest / Validation Note
 Open editor. Confirm no missing-module errors. Open Project Settings → Plugins → Common UI and Model View View Model enabled; CommonGame absent. `Window → Output Log` clean of `LogModuleManager` errors. No assets touched.
@@ -80,4 +92,4 @@ Open editor. Confirm no missing-module errors. Open Project Settings → Plugins
 - [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) — CommonGame conflict resolution.
 
 ## Stop Condition
-STOP. Await approval before GP-S02.
+DONE. Closed after tech lead + operator acceptance. Do **not** start GP-S02 here.

@@ -267,7 +267,7 @@ PC blocks input where appropriate (during Loading / WaitingForPlayers / Finished
 
 | Tag | Trigger | Severity |
 | --- | --- | --- |
-| `GP.Notify.InsufficientOrbital` | `GE_GP_SpendOrbital` fails / orbital drop order rejected (`EReason::InsufficientOrbital`) | Warning |
+| `GP.Notify.InsufficientOrbitalFerronite` | `GE_GP_SpendOrbital` fails / orbital drop order rejected (`EReason::InsufficientOrbital`) | Warning |
 | `GP.Notify.UnitCapReached` | Orbital order rejected on `CurrentUnits >= MaxUnits` | Warning |
 | `GP.Notify.StorageFull` | All MainBase containers Ready/Launching — Worker drop-off has nowhere to go | Warning |
 | `GP.Notify.WorkerIdle` | `UGP_MiningComponent::OnIdleWithNoDeposit` | Info |

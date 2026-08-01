@@ -191,12 +191,13 @@ Gameplay Tags — основа gameplay state. Усе state-driven через т
 ### Baseline таксономія (MVP)
 
 ```
-GP.Match.State.{Loading, WaitingForPlayers, Playing, Paused, Spectating, Finished}
-GP.Unit.Type.{Worker, Combat, Support, Building}
-GP.Command.{Move, Attack, Mine, Build, Patrol, Stop}
-GP.Ability.{Build, Research, Scan, LaunchResource}
+GP.Match.State.{Loading, WaitingForPlayers, Playing, Paused, Finished}
+GP.Unit.Type.{Worker, SalvageWalker, Combat, Support, Building}
+GP.Command.{Move, Stop, Attack, AttackMove, Mine, Repair, Sell, Demolish, OrderDrop, CancelOrder}
 GP.Team.{Neutral, Player.One, Player.Two}
 ```
+
+Authoritative full taxonomy — [`Docs/TDD/09_Gameplay_Tags.md`](Docs/TDD/09_Gameplay_Tags.md). Deprecated pre-pivot commands (`Build`, `QueueProduction`, `CancelProduction`, etc.) must not be used in new code.
 
 Розширення — через ADR або TDD update, не ad-hoc.
 

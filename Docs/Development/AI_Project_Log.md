@@ -221,3 +221,80 @@ Status: DONE
 
 ### Stop condition
 GP-S01 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage: **GP-S02 Native Gameplay Tags**. GP-S02 not started in this close-out.
+
+---
+
+## 2026-08-01 — GP-S02 / Native Gameplay Tags Registry
+
+Status: DONE
+
+### Files changed
+- Docs/TDD/09_Gameplay_Tags.md — authoritative Active MVP taxonomy + tech-lead lock
+- Docs/TDD/13_Architecture_Proposal.md — §Gameplay Tags synchronized to TDD/09
+- Docs/TDD/12_UI_Architecture.md — canonical Notify name
+- CONTRIBUTING.md — baseline taxonomy synced to TDD/09
+- Docs/Development/Claude_Tasks/GP-0301_Main_Base.md — historical pre-pivot tags marked deprecated
+- GP/Source/GPGASRuntime/Public/Tags/GPGameplayTags.h — FGPGameplayTags registry
+- GP/Source/GPGASRuntime/Private/Tags/GPGameplayTags.cpp — native registration + descriptions
+- GP/Source/GPGASRuntime/Private/GPGASRuntime.cpp — InitializeNativeTags() in StartupModule
+- Docs/Development/Claude_Tasks/GP-S02_Native_Gameplay_Tags.md
+- Docs/Development/DOCUMENTATION_INDEX.md — Last closed = GP-S02; NEXT = GP-S03
+- Docs/Development/AI_Project_Log.md (this entry)
+
+### Tech-lead decisions applied
+- Teams: Player.One / Player.Two (not A/B)
+- Commands: include AttackMove + Sell / Demolish / CancelOrder
+- Unit: keep SalvageWalker
+- Notify: InsufficientOrbitalFerronite (not InsufficientOrbital)
+- TDD/09 authoritative; TDD/13 tag section synced
+
+### What was done
+- Unblocked taxonomy docs, then implemented native FGPGameplayTags singleton in GPGASRuntime.
+- Registered Active MVP tags only (no Deprecated / Pre-Pivot; no Team.A/B or InsufficientOrbital aliases).
+- Initialization: FGPGASRuntimeModule::StartupModule() → FGPGameplayTags::InitializeNativeTags() with static duplicate-registration guard.
+- Magic-string gate: no RequestGameplayTag usage in project code; tag name strings exist only inside the native registry .cpp.
+- Builds Passed on UE 5.8 for Editor Development, Game Development, Shipping.
+- Docs cleanup: TDD/12 InsufficientOrbital → InsufficientOrbitalFerronite; CONTRIBUTING baseline taxonomy synced away from GP.Command.Build; GP-0301 historical tag list marked deprecated.
+
+### What was intentionally not done
+- No AttributeSet / ASC / abilities / effects / gameplay logic.
+- No temporary DataAssets for Tag Manager autocomplete.
+- No ini-defined duplicate tag tables.
+- No GP-S03 implementation.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor: **OPENED / PASSED**
+- GPGASRuntime startup errors: **none / PASSED**
+- Gameplay Tags GP.* tree: **PRESENT / PASSED**
+- PIE: **PASSED**
+- Rejected aliases not used as active tags: **PASSED**
+- Notes: Tech lead accepted. Operator accepted.
+
+### Manual Unreal Editor steps for operator
+1. Open GP/GP.uproject (UE 5.8.1).
+2. Confirm no startup / LogModuleManager errors for GPGASRuntime.
+3. Open Project Settings → Gameplay Tags; verify full GP.* tree.
+4. Confirm absent: GP.Team.A, GP.Team.B, GP.Notify.InsufficientOrbital.
+5. Start PIE; confirm clean run.
+6. Report results.
+
+### Acceptance checklist
+- [x] All Active MVP tags registered with English descriptions
+- [x] FGPGameplayTags::Get() + typed members
+- [x] StartupModule init + duplicate guard
+- [x] Magic-string gate (no RequestGameplayTag)
+- [x] Three builds PASSED
+- [x] Tag Manager tree verified (operator) — PASSED
+- [x] Editor OPENED (operator) — PASSED
+- [x] PIE PASSED (operator)
+- [x] Tech lead accepted GP-S02
+- [x] Operator accepted GP-S02
+
+### Risks / open questions
+- TDD/12 conflict resolved: Feedback Matrix now uses canonical GP.Notify.InsufficientOrbitalFerronite. Active-repo sweep cleaned unmarked Build/QueueProduction/CancelProduction proposals (CONTRIBUTING baseline + GP-0301 historical tags note).
+
+### Stop condition
+GP-S02 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage: **GP-S03 Attribute Sets**. GP-S03 not started in this close-out.

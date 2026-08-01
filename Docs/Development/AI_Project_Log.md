@@ -471,3 +471,88 @@ Status: DONE
 
 ### Stop condition
 GP-S04 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage: **GP-S05 Damage Calculation MMC**. GP-S05 not started in this close-out.
+
+---
+
+## 2026-08-01 — GP-S05 / Damage Calculation MMC
+
+Status: DONE
+
+### Files changed
+- `GP/Source/GPGASRuntime/Public/Calculations/GPDamageCalculation.h`
+- `GP/Source/GPGASRuntime/Private/Calculations/GPDamageCalculation.cpp`
+- `Docs/Development/Claude_Tasks/GP-S05_Damage_Calculation_MMC.md` — closed DONE; Combat GE / Magnitude picker deferred
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S05; NEXT = GP-S06
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### Documentation contradictions reviewed (pre-code)
+- **Formula:** task + stage prompt + TDD/13 (`Source.Damage − Armor`, then Resistance multiplier) + TDD/02 damage effects (source Damage, target Armor/Resistance → Health) — **aligned**. Control case −60 confirmed.
+- **Capture:** Source Damage / Target Armor / Target DamageResistance — aligned.
+- **Snapshot:** task risk text “Snapshot vs Source” was incorrect; corrected to Source/Target side + `snapshot=false` live policy.
+- **Location:** `GPGASRuntime/Calculations` — aligned.
+- **Negative Health modifier:** return `-EffectiveDamage` — aligned.
+- No direct conflict requiring BLOCKED.
+
+### What was done
+- Implemented `UGP_DamageCalculation` with three capture defs (`RelevantAttributesToCapture`).
+- `CalculateBaseMagnitude_Implementation` (UE 5.8 BlueprintNativeEvent) with defensive clamps and formula above.
+- Capture read via MMC `GetCapturedAttributeMagnitude` + `FAggregatorEvaluateParameters` from Spec CapturedSource/TargetTags.
+- Missing capture → Warning + 0 (no hardcoded balance).
+- Normal path Verbose `LogTemp` only.
+- Builds Passed on UE 5.8 for Editor Development, Game Development, Shipping.
+
+### What was intentionally not done
+- No GE asset / temp GE / debug actor / Blueprint / map / ability.
+- No crit / armor pen / damage types / PostGameplayEffectExecute / RPC.
+- AttributeSets and ASC unchanged.
+- No GE / assets / debug actors / abilities.
+- Runtime GE Health delta + Magnitude picker validation deferred to Combat slice.
+- GP-S06 not started.
+
+### Capture definitions
+| Attribute | Side | Snapshot |
+| --- | --- | --- |
+| Damage | Source | false (live) |
+| Armor | Target | false (live) |
+| DamageResistance | Target | false (live) |
+
+### Exact formula
+`return -max(0, max(0,Damage) - max(0,Armor)) * (1 - clamp(DamageResistance,0,1))`  
+Control: 100 / 20 / 0.25 → **-60**.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor / module load (operator) → **PASSED**
+- PIE (operator) → **PASSED**
+- GP-S05 related errors → **ABSENT**
+- Blocking errors → **NONE**
+- DirectoryWatcher warning → local project-folder issue (empty `GP/Content` restored); **not related to MMC**
+- Notes: Tech lead accepted. Operator accepted.
+
+### Manual Unreal Editor steps for operator
+1. Open `GP/GP.uproject` (UE 5.8.1).
+2. Confirm no module/load errors for `GPGASRuntime`.
+3. Start PIE; confirm clean run.
+4. Do **not** create temporary GE or Blueprint.
+5. Magnitude picker + Health delta — **deferred** to Combat slice (`GE_GP_Damage_Basic`).
+
+### Acceptance checklist
+- [x] Compiles clean (three targets) PASSED
+- [x] Capture defs + formula in code
+- [x] No hardcoded balance values
+- [x] Defensive clamps (Armor/Damage ≥ 0, Resistance [0,1])
+- [x] Runtime GE / Magnitude picker — deferred to Combat (accepted for close)
+- [x] Editor / module load (operator) PASSED
+- [x] PIE PASSED (operator)
+- [x] GP-S05 related errors ABSENT
+- [x] Tech lead accepted GP-S05
+- [x] Operator accepted GP-S05
+
+### Risks / open questions
+- Without a GE Spec that captures RelevantAttributes, capture helpers return false → 0 (expected until Combat wires GE).
+- UE 5.8 MMC API is `GetCapturedAttributeMagnitude`, not Execution’s `AttemptCalculateCapturedAttributeMagnitude`.
+
+### Stop condition
+GP-S05 closed as DONE. Tech lead accepted. Operator accepted. Slice 1 Foundation complete. Next allowed stage: **GP-S06 AGP_GameState** (MatchState, Timer) per TDD/13. GP-S06 not started in this close-out.

@@ -34,20 +34,20 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S07 DONE** |
-| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`, `AGP_GameMode`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
-| Last closed stage | **GP-S07** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S08 DONE** |
+| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`, `AGP_GameMode`, `AGP_PlayerController`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
+| Last closed stage | **GP-S08** |
 | Current stage | **none** |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** none (GP-S07 closed).
+**Current:** none (GP-S08 closed).
 
-**NEXT:** **GP-S08** — `AGP_PlayerController` scaffold (Possess CameraPawn, ASC linkage on PlayerState), per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order (Slice 2 — Match Flow + Asset Loader).
+**NEXT:** **GP-S09** — `AGP_PlayerState` (+ASC + AttributeSet), per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order (Slice 2 — Match Flow + Asset Loader).
 
-Task file **not created**. Do **not** start GP-S08 until explicitly assigned.
+Task file **not created**. Do **not** start GP-S09 until explicitly assigned.
 
 ### Foundation / Match Flow sequence
 
@@ -58,7 +58,8 @@ Task file **not created**. Do **not** start GP-S08 until explicitly assigned.
 5. GP-S05 Damage Calculation MMC — **DONE**
 6. GP-S06 AGP_GameState (Match State and Timer) — **DONE**
 7. GP-S07 AGP_GameMode (PostLogin, Match Countdown, EndMatch Hook) — **DONE**
-8. GP-S08 AGP_PlayerController scaffold — not assigned (task file not materialized)
+8. GP-S08 AGP_PlayerController scaffold — **DONE**
+9. GP-S09 AGP_PlayerState (+ASC + AttributeSet) — not assigned (task file not materialized)
 
 ---
 
@@ -140,4 +141,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S07 are closed. Current stage: **none**. NEXT per TDD/13 = **GP-S08** (task file not materialized; not started).
+SETUP-001, DOCS-001, GP-S01…GP-S08 are closed. Current stage: **none**. NEXT per TDD/13 = **GP-S09** (task file not materialized; not started).

@@ -758,3 +758,99 @@ Status: **DONE**
 
 ### Stop condition
 GP-S07 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S08 AGP_PlayerController** (Possess CameraPawn, ASC linkage on PlayerState). GP-S08 not started; task file not materialized.
+
+---
+
+## 2026-08-01 — GP-S08 / Player Controller — specification pass
+
+Status: **SPEC_READY** (OD-1…OD-10 proposed; C++ not started)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S08_Player_Controller.md` — created SPEC_READY
+- `Docs/Development/Claude_Tasks/README.md` — GP-S08 = SPEC_READY; GP-S09 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S08 specification ready; NEXT = GP-S08 implementation after approval
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Specification-only pass for `AGP_PlayerController` scaffold (CameraPawn possession slot + future PlayerState ASC linkage).
+- Disk audit: no `AGP_CameraPawn`, no `AGP_PlayerState`, no existing PlayerController C++.
+- Documented honest deferred gaps: CameraPawn = GP-S13, PlayerState/ASC init = GP-S09, IMC = GP-S15.
+- Proposed OD locks (DefaultPawnClass ownership, Option A PS hooks, typed ASC getter → nullptr, no RPC, GameMode `PlayerControllerClass` wiring on implementation, cursor/input deferred).
+
+### Disk / architecture findings
+- `UGP_AbilitySystemComponent` exists in `GPGASRuntime`; canonical owner = future `AGP_PlayerState` (TDD/13 / TDD/03).
+- `AGP_GameMode` currently sets `GameStateClass` only; no `PlayerControllerClass` yet.
+- TDD/11 names `AGP_CameraPawn` + `DefaultPawnClass` + `bShowMouseCursor`; CameraPawn not on disk.
+
+### What was intentionally not done
+- **No C++** (`GPPlayerController.h/.cpp` not created; GameMode not edited).
+- No builds, assets, Blueprint, map/config changes.
+- No `AGP_PlayerState` / CameraPawn / input assets / UI.
+- No commit / push.
+- No GP-S09.
+
+### Stop condition
+SPEC_READY. Await tech-lead OD approval + explicit **GP-S08 implementation** assignment before C++. Do **not** start GP-S09.
+
+---
+
+## 2026-08-01 — GP-S08 / Player Controller — implementation
+
+Status: **DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h` — new
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp` — new
+- `GP/Source/GPRuntime/Private/Game/GPGameMode.cpp` — `PlayerControllerClass` wiring
+- `Docs/Development/Claude_Tasks/GP-S08_Player_Controller.md` — closed DONE; OD-1…OD-10 RESOLVED
+- `Docs/Development/Claude_Tasks/README.md` — GP-S08 DONE; S09+ not auto-materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S08; NEXT = GP-S09 (TDD/13; task file not created)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Implemented `AGP_PlayerController : APlayerController` (Tick off; no RPC; no replicated gameplay fields; no components).
+- Lifecycle: BeginPlay (local), OnPossess/OnUnPossess, AcknowledgePossession, OnRep_PlayerState, BeginPlayingState, SetupInputComponent (Super only).
+- Local pawn init gated by `IsLocalController()` + `LastInitializedLocalPawn` idempotency; clear on unpossess match.
+- PlayerState link via `APlayerState` + `IAbilitySystemInterface`; ASC notify via `LastNotifiedAbilitySystemComponent` (reset on PS change).
+- `GetGPAbilitySystemComponent()` live query (not permanent stub); no ASC create/`InitAbilityActorInfo` / Owner/Avatar.
+- `AGP_GameMode` sets `PlayerControllerClass`; `PlayerStateClass` / `DefaultPawnClass` unchanged.
+- No input/cursor/selection/UI/assets/map wiring. No GP-S09 task file.
+
+### Idempotency / weak ptr choice
+- Private `TWeakObjectPtr` guards without `UPROPERTY` — Coding_Rules allow `TWeakObjectPtr` for transient refs; guards are non-replicated lifecycle-only.
+
+### What was intentionally not done
+- No AGP_PlayerState, CameraPawn, IMC, selection/command, HUD, cursor policy.
+- No PlayerStateClass / DefaultPawnClass / map / ini.
+- No GP-S09 (not started; task file not created).
+- Runtime PlayerControllerClass / listen-server proof deferred to temporary GameMode wiring (operator; not committed).
+- ASC runtime proof deferred until GP-S09 PlayerState.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor / module load (operator) → **PASSED**
+- AGP_PlayerController found in Class Viewer (operator) → **PASSED**
+- AGP_GameMode found in Class Viewer (operator) → **PASSED**
+- PIE (operator) → **PASSED**
+- GP-S08 related errors → **ABSENT**
+- Blocking errors → **NONE**
+- Notes: Tech lead accepted. Operator accepted.
+
+### Acceptance checklist
+- [x] Compiles (three targets) PASSED
+- [x] Lifecycle + ASI ASC query + GameMode PlayerControllerClass
+- [x] No Tick / RPC / replicated PC gameplay fields / assets / map-config
+- [x] Editor / module load (operator) PASSED
+- [x] AGP_PlayerController found in Class Viewer (operator) PASSED
+- [x] AGP_GameMode found in Class Viewer (operator) PASSED
+- [x] PIE PASSED (operator)
+- [x] GP-S08 related errors ABSENT
+- [x] PlayerControllerClass / listen-server — **deferred** (accepted for close)
+- [x] ASC runtime proof — **deferred** to GP-S09 (accepted for close)
+- [x] Tech lead accepted GP-S08
+- [x] Operator accepted GP-S08
+
+### Stop condition
+GP-S08 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S09 AGP_PlayerState** (+ASC + AttributeSet). GP-S09 not started; task file not materialized.

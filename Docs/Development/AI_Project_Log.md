@@ -97,3 +97,57 @@ Status: DONE
 
 ### Stop condition
 SETUP-001 closed as DONE after operator confirmation. No next stage started.
+
+---
+
+## 2026-08-01 — DOCS-001 / Import and audit full documentation
+
+Status: DONE_CANDIDATE
+
+### Files changed
+- `Docs/Development/DOCUMENTATION_INDEX.md` (created)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Claude_Tasks/README.md` (cursor reset: NEXT = GP-S01)
+- `Docs/Development/Claude_Tasks/GP-S01_Module_Scaffolds.md` (baseline note for blank `GP` project)
+- `Docs/README.md` / `Docs/Development/README.md` / root `README.md` (index wiring)
+- `README.md`, `CONTRIBUTING.md`, `Docs/GDD/00_Project_Overview.md`, `Docs/TDD/00_Technical_Overview.md`, `Docs/Architecture_Decisions/ADR_0007_Building_As_Pawn.md` (UE 5.7 → 5.8.1)
+
+### What was done
+- Audited imported documentation tree: GDD, TDD, ADRs, Development ops, Claude Tasks, Archive policy.
+- Created unified documentation index with sources of truth, deprecated list, conflicts, and NEXT task.
+- Reset false foundation cursor (S01–S03 DONE / NEXT S04 / commit `a31d092`) against SETUP-001 blank baseline.
+- Updated active UE version mentions to **Unreal Engine 5.8.1**; left `Docs/Archive/*` historical RN 5.7 references untouched.
+- Confirmed nested `Docs/grim-protocol-docs/` is not present on disk; marked as deprecated duplicate if reimported.
+- No gameplay code, no `GP/Source` changes, no Unreal assets/classes created.
+
+### What was intentionally not done
+- No full rewrite of all stale pre-pivot GDD/TDD fragments (listed as known conflicts instead).
+- No GP-S01 implementation.
+- No commit / push.
+- No Archive edits.
+
+### Build / validation
+- Command run: Not run (docs-only stage)
+- Result: N/A
+- Notes: Operator validation for DOCS-001 = review index + NEXT cursor + UE version consistency
+
+### Manual Unreal Editor steps for operator
+1. No Editor build required for DOCS-001.
+2. Optionally open `Docs/Development/DOCUMENTATION_INDEX.md` and confirm NEXT = GP-S01.
+3. Confirm no unexpected gameplay/code changes under `GP/Source`.
+
+### Acceptance checklist
+- [x] Documentation audited
+- [x] DOCUMENTATION_INDEX created with SoT + NEXT
+- [x] Active UE 5.7 mentions updated to 5.8.1
+- [x] Archive left untouched
+- [x] AI_Project_Log updated
+- [ ] Tech lead accepts DOCS-001
+- [ ] Operator confirms docs/status review
+
+### Risks / open questions
+- Residual pre-pivot contradictions remain in GDD/00, GDD/09, Out_Of_Scope FoW line, TDD/00 CommonUI wording, CONTRIBUTING Production/Construction component list — tracked in DOCUMENTATION_INDEX, not fixed in this stage.
+- GP-S01 task text was adapted for blank baseline; tech lead should confirm scaffold scope before code start.
+
+### Stop condition
+Stopped after DOCS-001. Awaiting review. NEXT after acceptance: GP-S01. No implementation started.

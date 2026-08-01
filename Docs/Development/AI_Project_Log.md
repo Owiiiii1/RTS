@@ -959,3 +959,111 @@ Status: **DONE**
 
 ### Stop condition
 GP-S09 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S10 UGP_MatchAssetLoader** (PreloadForMatch + Resolve API). GP-S10 not started; task file not materialized.
+
+---
+
+## 2026-08-01 — GP-S10 / Match Asset Loader — specification pass
+
+Status: **BLOCKED** (initial; OD-1/2/5/7/8/9/11/18 open; C++ not started)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S10_Match_Asset_Loader.md` — created/rewritten full OD-1…OD-20 BLOCKED specification
+- `Docs/Development/Claude_Tasks/README.md` — GP-S10 = BLOCKED; GP-S11 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S10 specification BLOCKED
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Specification-only pass for `UGP_MatchAssetLoader` (PreloadForMatch + Resolve API).
+- Disk audit: no subsystems, no DA classes/assets, no AssetManager/PrimaryAsset ini, no soft-ref gameplay usage, no automation tests, no project log category.
+- Documented conflicts: TDD/10 FactionA/B/Map + Assert Resolve vs honest path-list / nullptr without DA content.
+- Left blocking ODs for tech lead (input contract, PrimaryAsset vs paths, repeated-request, completion API, failure/invalid-path, membership, tests).
+- Strong non-blocking proposals: GameMode gate deferred; no DA creation; C++-only; async-only Resolve; handle retention; network local-only.
+
+### Blocking tech-lead decisions
+Lock OD-1, OD-2, OD-5, OD-7, OD-8+OD-11, OD-9 membership, OD-18 (see task file candidates).
+
+### What was intentionally not done
+- **No C++**, no GameMode/config/uproject/AssetManager changes, no Data Assets, no tests assets.
+- No commit / push.
+- No GP-S11.
+
+### Stop condition
+BLOCKED. Await tech-lead OD locks → SPEC_READY rewrite / implementation assignment. Do **not** start GP-S11.
+
+---
+
+## 2026-08-01 — GP-S10 / Match Asset Loader — tech-lead resolution → SPEC_READY
+
+Status: **SPEC_READY** (OD-1…OD-20 locked; C++ not started)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S10_Match_Asset_Loader.md` — BLOCKED removed; OD-1…OD-20 RESOLVED; locked API/semantics; UE 5.8 APIs verified
+- `Docs/Development/Claude_Tasks/README.md` — GP-S10 = SPEC_READY; GP-S11 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S10 specification ready; NEXT = GP-S10 implementation after explicit approval
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Applied final tech-lead locks for OD-1…OD-20 (path-list input; AssetManager StreamableManager; async-only; Idle/Loading/Loaded/Failed; generation-safe repeated requests; handle retain on Loaded; native multicast completion; membership Resolve; no GameMode/DA/tests/Blueprint; local GI only).
+- Verified UE 5.8.1 APIs: `UAssetManager::GetStreamableManager`, `RequestAsyncLoad`, `CancelHandle`/`ReleaseHandle`, `FSoftObjectPath::IsValid`/`ResolveObject`/`LexicalLess`/`GetTypeHash`, `FStreamableDelegate::CreateUObject` + payload.
+
+### What was intentionally not done
+- **No C++**, no config/uproject/AssetManager changes, no Data Assets, no builds, no commit/push.
+- No GP-S11.
+
+### Stop condition
+SPEC_READY. Await explicit **GP-S10 implementation** assignment before C++. Do **not** start GP-S11.
+
+---
+
+## 2026-08-01 — GP-S10 / Match Asset Loader — implementation
+
+Status: **DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Assets/GPMatchAssetLoader.h` — new
+- `GP/Source/GPRuntime/Private/Assets/GPMatchAssetLoader.cpp` — new
+- `Docs/Development/Claude_Tasks/GP-S10_Match_Asset_Loader.md` — closed DONE
+- `Docs/Development/Claude_Tasks/README.md` — GP-S10 DONE; S11+ not auto-materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S10; NEXT = GP-S11 (TDD/13; task file not created)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Implemented `UGP_MatchAssetLoader : UGameInstanceSubsystem` in `GPRuntime`.
+- Raw `FSoftObjectPath` list API; normalize (LexicalLess + unique); invalid → Failed; empty → Loaded.
+- Async via `UAssetManager::GetStreamableManager().RequestAsyncLoad` + `CreateUObject` generation payload.
+- Four-state machine; same-set no-op; Failed retry; handle retain on Loaded; Release/Deinitialize cleanup.
+- Strict ResolveObject / typed Resolve / ResolveClass; async-only; C++-only.
+- No Primary Assets, Data Assets, config, GameMode, Blueprint API, tests, Tick, network handshake.
+- `GPRuntime.Build.cs` unchanged.
+
+### What was intentionally not done
+- No GameMode / ini / uproject / AssetManagerSettings / DA / test assets.
+- No GP-S11 (not started; task file not created).
+- Real async preload with project assets remains deferred — no stable match asset set exists.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor / module load (operator) → **PASSED**
+- `GP_MatchAssetLoader` found in Class Viewer (operator) → **PASSED**
+- PIE (operator) → **PASSED**
+- GP-S10 related errors → **ABSENT**
+- Blocking errors → **NONE**
+- Notes: Tech lead accepted. Operator accepted.
+- Real async preload with project assets → **deferred** (no stable match asset set)
+
+### Acceptance checklist
+- [x] Compiles (three targets) PASSED
+- [x] Subsystem + StreamableManager async path + generation-safe semantics
+- [x] No GameMode / PrimaryAsset / DA / Blueprint / Tick / RPC / config / tests
+- [x] Editor / module load (operator) PASSED
+- [x] `GP_MatchAssetLoader` found in Class Viewer (operator) PASSED
+- [x] PIE PASSED (operator)
+- [x] GP-S10 related errors ABSENT
+- [x] Real asset async success/failure — **deferred** (accepted for close)
+- [x] Tech lead accepted GP-S10
+- [x] Operator accepted GP-S10
+
+### Stop condition
+GP-S10 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S11 AGP_LobbyState** (replicated `FGP_LobbyPlayer` list). GP-S11 not started; task file not materialized.

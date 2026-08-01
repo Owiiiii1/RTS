@@ -155,3 +155,69 @@ Status: DONE
 
 ### Stop condition
 DOCS-001 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage after merge to `main`: **GP-S01 Module Scaffolds**. GP-S01 not started in this close-out.
+
+---
+
+## 2026-08-01 — GP-S01 / Module Scaffolds
+
+Status: DONE
+
+### Files changed
+- `GP/GP.uproject` — modules `GPGASRuntime`, `GPRuntime`, `GPUIRuntime`; plugins `GameplayAbilities`, `EnhancedInput`, `CommonUI`, `ModelViewViewModel` (no CommonGame / CommonInput plugin entry)
+- `GP/Source/GP.Target.cs` / `GP/Source/GPEditor.Target.cs` — ExtraModuleNames for three runtime modules
+- `GP/Source/GPGASRuntime/` — Build.cs + Public/Private module scaffold
+- `GP/Source/GPRuntime/` — Build.cs + Public/Private module scaffold
+- `GP/Source/GPUIRuntime/` — Build.cs + Public/Private module scaffold
+- `Docs/Development/Claude_Tasks/GP-S01_Module_Scaffolds.md` — Output / acceptance checked
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S01; NEXT = GP-S02
+- `Docs/Development/AI_Project_Log.md` — this entry
+
+### What was done
+- Created minimal compileable runtime modules: `GPRuntime`, `GPGASRuntime`, `GPUIRuntime` (`IMPLEMENT_MODULE`, no gameplay classes).
+- Kept blank primary module `GP` unchanged as primary game module.
+- Dependency graph: `GPUIRuntime → GPRuntime → GPGASRuntime` (no upward deps).
+- Enabled stock UE 5.8.1 plugins required by Build.cs: `CommonUI`, `ModelViewViewModel`, plus `GameplayAbilities` and `EnhancedInput` for declared module deps. Confirmed `CommonInput` is a module inside CommonUI plugin (no separate plugin entry).
+- Verified `DefaultInput.ini` already uses Enhanced Input classes; no config content changes required.
+- Built and operator-validated on UE 5.8.1.
+
+### What was intentionally not done
+- No gameplay classes, AttributeSets, ASC, tags, DataAssets, widgets, Blueprints, maps, test actors.
+- No CommonGame / CommonUser / Lyra import.
+- No GP-S02 implementation.
+
+### Build / validation
+- Command run:
+  - `Build.bat GPEditor Win64 Development` → **PASSED**
+  - `Build.bat GP Win64 Development` → **PASSED**
+  - `Build.bat GP Win64 Shipping` → **PASSED**
+- Editor: **OPENED / PASSED**
+- Modules: **LOADED without errors / PASSED**
+- Plugins: Common UI **enabled**; ModelViewViewModel **enabled**; CommonGame **absent**
+- PIE: **PASSED**
+- Notes: Tech lead accepted. Operator accepted.
+
+### Manual Unreal Editor steps for operator
+1. Open `GP/GP.uproject` with UE 5.8.1.
+2. Confirm modules load: no `LogModuleManager` errors for `GPRuntime` / `GPGASRuntime` / `GPUIRuntime`.
+3. Project Settings → Plugins: Common UI and Model View View Model enabled; CommonGame absent.
+4. Start PIE on default/template map; confirm Editor stays clean.
+5. Report compile/open/PIE results.
+
+### Acceptance checklist
+- [x] Modules scaffolded and wired into uproject/targets
+- [x] Plugins: CommonUI + ModelViewViewModel; no CommonGame
+- [x] GPEditor Development build PASSED
+- [x] GP Development build PASSED
+- [x] GP Shipping build PASSED
+- [x] Unreal Editor OPENED (operator)
+- [x] Modules LOADED without errors (operator)
+- [x] PIE PASSED (operator)
+- [x] Tech lead accepted GP-S01
+- [x] Operator accepted GP-S01
+
+### Risks / open questions
+- `GPRuntime.Build.cs` includes `UMG` per GP-S01 task list; TDD/01 guideline prefers UI-only UMG ownership in `GPUIRuntime` — leave for later cleanup if tech lead wants stricter boundary.
+- `GameplayAbilities` and `EnhancedInput` were enabled in `.uproject` because Build.cs depends on them; not Lyra-related.
+
+### Stop condition
+GP-S01 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage: **GP-S02 Native Gameplay Tags**. GP-S02 not started in this close-out.

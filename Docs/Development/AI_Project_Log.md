@@ -102,7 +102,7 @@ SETUP-001 closed as DONE after operator confirmation. No next stage started.
 
 ## 2026-08-01 — DOCS-001 / Import and audit full documentation
 
-Status: DONE_CANDIDATE
+Status: DONE
 
 ### Files changed
 - `Docs/Development/DOCUMENTATION_INDEX.md` (created; later updated for CommonGame resolution)
@@ -146,13 +146,12 @@ Status: DONE_CANDIDATE
 - [x] CommonGame mandatory references removed/clarified in active docs
 - [x] Archive left untouched
 - [x] AI_Project_Log updated
-- [ ] Tech lead accepts DOCS-001
-- [ ] Operator confirms docs/status review
+- [x] Tech lead accepted DOCS-001
+- [x] Operator accepted DOCS-001
 
 ### Risks / open questions
 - Residual pre-pivot contradictions remain in GDD/00, GDD/09, Out_Of_Scope FoW line, TDD/00 CommonUI wording, CONTRIBUTING Production/Construction component list — tracked in DOCUMENTATION_INDEX, not fixed in this stage.
 - Historical audit text in `grim_protocol_docs_audit_v2.md` may still mention CommonGame as a past finding; active SoT is DOCUMENTATION_INDEX + TDD/12 + GP-S01.
-- GP-S01 scaffold scope confirmed for blank baseline; tech lead should accept before code start.
 
 ### Stop condition
-Stopped after DOCS-001 FIX (CommonGame). Status remains DONE_CANDIDATE. NEXT after acceptance: GP-S01. No implementation started.
+DOCS-001 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage after merge to `main`: **GP-S01 Module Scaffolds**. GP-S01 not started in this close-out.

@@ -36,8 +36,8 @@
 | Engine | **Unreal Engine 5.8.1** |
 | Code baseline | SETUP-001 DONE — blank C++ module `GP` only (`GP/Source/GP/`) |
 | Runtime modules on disk | **Not created yet** (`GPRuntime` / `GPGASRuntime` / `GPUIRuntime` absent) |
-| Last closed stage | SETUP-001 |
-| This stage | DOCS-001 |
+| Last closed stage | **DOCS-001** (SETUP-001 also DONE) |
+| Current stage | **none / baseline complete** |
 
 ---
 
@@ -45,14 +45,14 @@
 
 **NEXT:** [`GP-S01_Module_Scaffolds`](Claude_Tasks/GP-S01_Module_Scaffolds.md)
 
+SETUP-001 and DOCS-001 are accepted and closed. The next allowed implementation stage after merge to `main` is **GP-S01**.
+
 ### Why GP-S01 (not GP-S04)
 
 1. SETUP-001 left a clean blank `GP` primary module — no `GPRuntime` / `GPGASRuntime` / `GPUIRuntime`.
 2. `Claude_Tasks/README.md` previously marked S01–S03 DONE and NEXT=S04 based on commit `a31d092`, which **does not exist** in this repository history.
 3. TDD/13 Implementation Order starts with GP-S01 module scaffolds.
 4. GP-S04 (`UGP_AbilitySystemComponent`) depends on `GPGASRuntime` existing after S01–S03.
-
-**Do not start GP-S01 until DOCS-001 is accepted** by tech lead + operator (process rule).
 
 ---
 
@@ -134,4 +134,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-DOCS-001 is documentation-only. No gameplay code and no GP-S01 implementation until stage acceptance.
+Baseline documentation stages (SETUP-001, DOCS-001) are closed. Current stage: none / baseline complete. Next allowed stage: **GP-S01** (not started here).

@@ -390,3 +390,84 @@ Status: DONE
 
 ### Stop condition
 GP-S03 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage: **GP-S04 AbilitySystemComponent Subclass**. GP-S04 not started in this close-out.
+
+---
+
+## 2026-08-01 — GP-S04 / AbilitySystemComponent Subclass
+
+Status: DONE
+
+### Files changed
+- `GP/Source/GPGASRuntime/Public/AbilitySystem/GPAbilitySystemComponent.h`
+- `GP/Source/GPGASRuntime/Private/AbilitySystem/GPAbilitySystemComponent.cpp`
+- `Docs/Development/Claude_Tasks/GP-S04_AbilitySystemComponent_Subclass.md` — closed DONE; ShowDebug / Attribute Picker deferred; GameplayCueNotifyPaths deferred
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S04; NEXT = GP-S05
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### Documentation contradictions reviewed (pre-code)
+- **Single ASC subclass:** TDD/13 + task + stage prompt agree (`UGP_AbilitySystemComponent` project-wide). TDD/02 still says “standard UE class / custom subclass deferred” — stale vs TDD/13; not blocking.
+- **Replication modes:** TDD/02 Player=`Mixed`, Unit=`Minimal`; helper exposes per-actor `SetProjectReplicationMode` before `InitAbilityActorInfo` — aligned.
+- **Owner / Avatar:** Player ASC on PlayerState (TDD/02) implies Owner≠Avatar with Pawn avatar is normal. Task phrase “catches misconfig” corrected to diagnostic “verify this is intentional.”
+- No direct conflict requiring BLOCKED.
+
+### What was done
+- Implemented `UGP_AbilitySystemComponent : UAbilitySystemComponent` (`ClassGroup=Abilities`, `BlueprintSpawnableComponent`, `GPGASRUNTIME_API`).
+- `SetProjectReplicationMode` wraps engine `SetReplicationMode`, logs via `LogTemp` (no project log category yet), documents call-before-init; no duplicate replicated field.
+- `InitAbilityActorInfo`: Super; null Owner/Avatar warning; Owner≠Avatar diagnostic warning with names + “verify this is intentional”; Owner==Avatar Verbose.
+- No permanent debug actor / Blueprint / map / GE / ASI host.
+- Builds Passed on UE 5.8 for Editor Development, Game Development, Shipping.
+
+### What was intentionally not done
+- No `GetReplicatedAnimMontage` override.
+- No replicated UPROPERTYs, abilities, effects, RPCs, gameplay logic.
+- No AttributeSet ownership inside ASC.
+- No GPRuntime / GPUIRuntime changes.
+- No abilities / effects / AttributeSet ownership inside ASC.
+- `ShowDebug AbilitySystem` / live Attribute Picker deferred to actor integration slice.
+- `GameplayCueNotifyPaths` not configured (Gameplay Cues out of scope; defer to Gameplay Cue slice).
+- GP-S05 not started.
+
+### Public API
+- `void SetProjectReplicationMode(EGameplayEffectReplicationMode NewMode);`
+- `virtual void InitAbilityActorInfo(AActor* InOwnerActor, AActor* InAvatarActor) override;`
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor / module load (operator) → **PASSED**
+- GP Ability System Component in Component Picker (operator) → **PASSED**
+- Temporary Blueprint compile (operator) → **PASSED**
+- PIE (operator) → **PASSED**
+- Blocking errors → **NONE**
+- Non-blocking warnings (operator):
+  - `r.MotionVectorSimulation` — engine-level
+  - ModelViewViewModelBlueprint ClassViewer — plugin/editor-level
+  - No GameplayCueNotifyPaths specified — expected until Gameplay Cue slice
+- Notes: Tech lead accepted. Operator accepted.
+
+### Manual Unreal Editor steps for operator
+1. Open `GP/GP.uproject` (UE 5.8.1).
+2. Confirm no module/load errors for `GPGASRuntime`.
+3. On any temporary actor (editor-only, not committed): Add Component → find **GP Ability System Component**.
+4. Start PIE; confirm clean run.
+5. `ShowDebug AbilitySystem` — **deferred** until first real `IAbilitySystemInterface` actor.
+
+### Acceptance checklist
+- [x] Compiles clean (three targets) PASSED
+- [x] No new replicated UPROPERTYs
+- [x] Owner≠Avatar diagnostic warning (not unconditional misconfig)
+- [x] ShowDebug / live Attribute Picker — deferred to actor integration (accepted for close)
+- [x] Component picker shows GP Ability System Component (operator) PASSED
+- [x] Editor / module load (operator) PASSED
+- [x] Temporary Blueprint compile (operator) PASSED
+- [x] PIE PASSED (operator)
+- [x] Tech lead accepted GP-S04
+- [x] Operator accepted GP-S04
+
+### Risks / open questions
+- Owner≠Avatar Warning will appear for intentional PlayerState→Pawn setups when those actors land — expected diagnostic noise until logging is dialed per actor type.
+- Dedicated `LogGPGas` category not created yet (uses `LogTemp`).
+
+### Stop condition
+GP-S04 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage: **GP-S05 Damage Calculation MMC**. GP-S05 not started in this close-out.

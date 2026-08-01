@@ -34,18 +34,20 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … GP-S05 + **GP-S06 DONE** |
-| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
-| Last closed stage | **GP-S06** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S07 DONE** |
+| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`, `AGP_GameMode`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
+| Last closed stage | **GP-S07** |
 | Current stage | **none** |
 
 ---
 
 ## Current NEXT Task
 
-**NEXT:** GP-S07 — `AGP_GameMode` (PostLogin, EndMatch hook)
+**Current:** none (GP-S07 closed).
 
-Per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order (Slice 2 — Match Flow + Asset Loader). Claude_Tasks file for GP-S07 is **not** materialized — do not create or start GP-S07 until explicitly assigned.
+**NEXT:** **GP-S08** — `AGP_PlayerController` scaffold (Possess CameraPawn, ASC linkage on PlayerState), per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order (Slice 2 — Match Flow + Asset Loader).
+
+Task file **not created**. Do **not** start GP-S08 until explicitly assigned.
 
 ### Foundation / Match Flow sequence
 
@@ -55,7 +57,8 @@ Per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Imple
 4. GP-S04 AbilitySystemComponent Subclass — **DONE**
 5. GP-S05 Damage Calculation MMC — **DONE**
 6. GP-S06 AGP_GameState (Match State and Timer) — **DONE**
-7. GP-S07 AGP_GameMode (PostLogin, EndMatch hook) — **NEXT** (task file not created)
+7. GP-S07 AGP_GameMode (PostLogin, Match Countdown, EndMatch Hook) — **DONE**
+8. GP-S08 AGP_PlayerController scaffold — not assigned (task file not materialized)
 
 ---
 
@@ -137,4 +140,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S05 (Slice 1), and GP-S06 are closed. Current stage: **none**. Next allowed stage per TDD/13: **GP-S07 AGP_GameMode** (not started; task file not materialized).
+SETUP-001, DOCS-001, GP-S01…GP-S07 are closed. Current stage: **none**. NEXT per TDD/13 = **GP-S08** (task file not materialized; not started).

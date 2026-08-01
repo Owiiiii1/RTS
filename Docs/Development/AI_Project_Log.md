@@ -1067,3 +1067,106 @@ Status: **DONE**
 
 ### Stop condition
 GP-S10 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S11 AGP_LobbyState** (replicated `FGP_LobbyPlayer` list). GP-S11 not started; task file not materialized.
+
+---
+
+## 2026-08-01 — GP-S11 / Lobby State — specification pass
+
+Status: **BLOCKED** (identity / TeamId / bAllReady / AI-host / Blueprint / naming / OnRep style / spawn-before-travel need tech-lead locks; C++ not started)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S11_Lobby_State.md` — created full OD-1…OD-26 BLOCKED specification
+- `Docs/Development/Claude_Tasks/README.md` — GP-S11 = BLOCKED; GP-S12 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S11 specification BLOCKED
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Specification-only pass for `AGP_LobbyState : AInfo` (replicated lobby player list + `bAllReady`).
+- Disk audit: no LobbyState/SessionSubsystem/lobby map/ready RPC/TeamId/FactionId/UniqueNetId/FastArray; Online/Steam config absent; `GDD/10_Multiplayer_and_Lobby.md` absent.
+- Existing patterns: `AGP_GameState` authority mutators + COND_None + old-value OnRep + native delegates; `AGP_PlayerState` has ASC only (no TeamId); MatchAssetLoader native multicast C++-only.
+- Documented conflicts: TDD/08 SteamId/`Server_SetReady` on LobbyState vs no OSS + PC RPC boundary; TDD/13 spawn-before-travel vs world lifetime; TeamId required in TDD/08 but deferred in S09; `bAllReady` vs PlayerCount==2 start gate.
+
+### Blocking tech-lead decisions
+Lock identity, name field, TeamId include/semantics, `bAllReady` formula, AI/host fields, Players vs LobbyPlayers naming, OnRep style, Blueprint exposure, spawn-before-travel deferral, list ordering; confirm TArray + no PlayerState* + no RPC in S11.
+
+### What was intentionally not done
+- **No C++**, no GameMode/GameState/PC/PS/config/uproject/map/session changes.
+- No commit / push.
+- No GP-S12.
+
+### Stop condition
+BLOCKED. Await tech-lead OD locks → SPEC_READY rewrite / implementation assignment. Do **not** start GP-S12.
+
+---
+
+## 2026-08-01 — GP-S11 / Lobby State — tech-lead resolution → SPEC_READY
+
+Status: **SPEC_READY** (OD-1…OD-26 locked; C++ not started)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S11_Lobby_State.md` — BLOCKED removed; OD-1…OD-26 RESOLVED; locked fields/API/semantics
+- `Docs/Development/Claude_Tasks/README.md` — GP-S11 = SPEC_READY; GP-S12 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S11 specification ready; NEXT = GP-S11 implementation after explicit approval
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Applied final tech-lead locks: `AInfo` + replicate/always-relevant; no spawn wiring; `TArray<FGP_LobbyPlayer>` with exactly `PlayerId` / `DisplayName` / `bIsReady`; no TeamId/AI/host/SteamId; `bAllReady` = all current ready (≠ can start); authority mutations; sort-by-PlayerId on add; native delegates; C++-only; no discovery/RPC/travel/GameMode changes.
+
+### What was intentionally not done
+- **No C++**, no GameMode/GameState/PC/PS/config/map/uproject changes, no builds, no commit/push.
+- No GP-S12.
+
+### Stop condition
+SPEC_READY. Await explicit **GP-S11 implementation** assignment before C++. Do **not** start GP-S12.
+
+---
+
+## 2026-08-01 — GP-S11 / Lobby State — implementation
+
+Status: **DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Lobby/GPLobbyState.h` — new
+- `GP/Source/GPRuntime/Private/Lobby/GPLobbyState.cpp` — new
+- `Docs/Development/Claude_Tasks/GP-S11_Lobby_State.md` — closed DONE
+- `Docs/Development/Claude_Tasks/README.md` — GP-S11 DONE; S12+ not auto-materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S11; NEXT = GP-S12 (TDD/13; task file not created)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Implemented `AGP_LobbyState : AInfo` with exact `FGP_LobbyPlayer` (PlayerId, DisplayName, bIsReady).
+- Authority mutations; sort-by-PlayerId on add; `bAllReady` readiness summary; `TArray` + RepNotify; native delegates; `ForceNetUpdate` on real change.
+- No TeamId/AI/host/Steam/PlayerState*/RPC/Blueprint/spawn/GameMode/session/travel/config/tests.
+- `GPRuntime.Build.cs` unchanged.
+
+### What was intentionally not done
+- No GameMode/GameState/PC/PS/config/map/uproject/session changes.
+- No GP-S12 (not started; task file not created).
+- Real replication/listen-server proof remains deferred until Lobby GameMode spawn wiring exists.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor / module load (operator) → **PASSED**
+- `GP_LobbyState` found in Class Viewer (operator) → **PASSED**
+- PIE (operator) → **PASSED**
+- GP-S11 related errors → **ABSENT**
+- Blocking errors → **NONE**
+- Notes: Tech lead accepted. Operator accepted.
+- Real replication/listen-server proof → **deferred** (Lobby GameMode spawn wiring absent)
+
+### Acceptance checklist
+- [x] Compiles (three targets) PASSED
+- [x] AInfo + three-field snapshot + authority mutations + bAllReady summary
+- [x] No GameMode/GameState/PC/PS/RPC/Blueprint/TeamId/AI/host/session/travel
+- [x] Editor / module load (operator) PASSED
+- [x] `GP_LobbyState` found in Class Viewer (operator) PASSED
+- [x] PIE PASSED (operator)
+- [x] GP-S11 related errors ABSENT
+- [x] Real replication/listen-server — **deferred** (accepted for close)
+- [x] Tech lead accepted GP-S11
+- [x] Operator accepted GP-S11
+
+### Stop condition
+GP-S11 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S12 UGP_CameraConfigDataAsset**. GP-S12 not started; task file not materialized.

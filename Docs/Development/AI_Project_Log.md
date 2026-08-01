@@ -556,3 +556,105 @@ Control: 100 / 20 / 0.25 → **-60**.
 
 ### Stop condition
 GP-S05 closed as DONE. Tech lead accepted. Operator accepted. Slice 1 Foundation complete. Next allowed stage: **GP-S06 AGP_GameState** (MatchState, Timer) per TDD/13. GP-S06 not started in this close-out.
+
+---
+
+## 2026-08-01 — GP-S06 / Game State — specification pass
+
+Status: **SPEC_READY** (OD-1…OD-4 locked; C++ not started)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S06_Game_State.md` — created, then updated to SPEC_READY with tech-lead locks
+- `Docs/Development/Claude_Tasks/README.md` — GP-S06 = SPEC_READY; implementation awaits assignment
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S06 specification ready; NEXT = GP-S06 implementation after approval
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Specification-only pass for `AGP_GameState` (Match State and Timer).
+- Initial pass found OD-1…OD-4 conflicts → temporarily BLOCKED.
+- Tech-lead locks applied (see below); task rewritten to SPEC_READY.
+- Noted `Docs/TDD/05_Match_Flow.md` missing; used `Docs/GDD/07_Match_Flow.md`.
+- Documented TDD/07 per-player `FerroniteThreatValue` wording as stale vs TDD/13 + TDD/03 + OD-4.
+
+### Tech-lead decisions (OD-1…OD-4)
+- **OD-1:** Timer orchestration = `AGP_GameMode` (future). GameState has **no** `FTimerHandle`, no `StartMatchTimer`/`StopMatchTimer`; only `SetMatchTimeRemaining(float)`.
+- **OD-2:** At remaining == 0, GameState does **not** auto-Finished / pick winner / EndMatch. GameMode later calls `SetMatchResult` + `SetMatchStateTag(Finished)`. No `OnMatchTimerExpired` on GameState. Generic time-changed delegate OK.
+- **OD-3:** `MatchTimeRemaining` = **`float`**, clamp `>= 0`, no GameState Tick.
+- **OD-4:** Single global **`float FerroniteThreatValue`** (aggregate stock); per-player threat rejected for MVP.
+
+### What was intentionally not done
+- **No C++** (`GPGameState.h/.cpp` not created).
+- No builds, no assets, no commit/push.
+- No GP-S07 task materialization.
+- No DefaultEngine/map GameStateClass assignment.
+
+### Remaining open (non-blocking)
+- OD-5: flat Winner/WinReason vs full `MatchResult` struct — deferred; GP-S06 uses flat fields.
+- MatchStateTag default: Loading if tags safe at construction, else invalid — document at implementation.
+
+### Stop condition
+SPEC_READY. Await explicit **GP-S06 implementation** assignment before C++. Do **not** start GP-S07.
+
+---
+
+## 2026-08-01 — GP-S06 / Game State — implementation
+
+Status: **DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Game/GPGameState.h` — new
+- `GP/Source/GPRuntime/Private/Game/GPGameState.cpp` — new
+- `Docs/Development/Claude_Tasks/GP-S06_Game_State.md` — closed DONE
+- `Docs/Development/Claude_Tasks/README.md` — GP-S06 DONE; S07+ not auto-materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S06; NEXT = GP-S07 (TDD/13; task file not created)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Implemented `AGP_GameState` (`GPRUNTIME_API`, `bReplicates=true`, Tick disabled).
+- Five replicated properties with `DOREPLIFETIME_CONDITION_NOTIFY` (`COND_None`, `REPNOTIFY_Always`).
+- Authority-only setters + BlueprintPure getters; native multicast delegates (C++ only).
+- Tag branch validation via native leaf `.RequestDirectParent()` + `MatchesTag` (no magic-string RequestGameplayTag).
+- Result OnRep split: `OnRep_WinnerTeamId` / `OnRep_WinReasonTag` → shared `BroadcastMatchResultChanged` (field-level refresh).
+- Builds Passed: GPEditor Development, GP Development, GP Shipping.
+
+### MatchStateTag default decision
+Initialize to `FGPGameplayTags::Get().Match_State_Loading` when valid — native tags registered in `GPGASRuntime` StartupModule before GameState construction. Fallback: invalid + Warning (does not call `InitializeNativeTags` from GameState).
+
+### What was intentionally not done
+- No FTimerHandle / Start|StopMatchTimer / Tick / GameMode / RPC / MatchResult struct / assets / GameStateClass ini/map wiring.
+- No winner/score/storage aggregation.
+- No GP-S07 (not started; task file not created).
+- Multiplayer replication proof deferred to GameMode/map integration.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor / module load (operator) → **PASSED**
+- AGP_GameState found in Class Viewer (operator) → **PASSED**
+- PIE (operator) → **PASSED**
+- GP-S06 related errors → **ABSENT**
+- Blocking errors → **NONE**
+- Notes: Tech lead accepted. Operator accepted.
+
+### Manual Unreal Editor steps for operator
+1. Open `GP/GP.uproject` (UE 5.8.1).
+2. Confirm no module/load errors for `GPRuntime`.
+3. Confirm `AGP_GameState` in Class Viewer / as BP parent.
+4. PIE (do not change map GameStateClass).
+5. Multiplayer replication — deferred.
+
+### Acceptance checklist
+- [x] Compiles (three targets) PASSED
+- [x] Properties + authority API + delegates/OnRep
+- [x] No timer / GameMode / RPC / assets
+- [x] Editor / module load (operator) PASSED
+- [x] AGP_GameState found in Class Viewer (operator) PASSED
+- [x] PIE PASSED (operator)
+- [x] GP-S06 related errors ABSENT
+- [x] Multiplayer replication — **deferred** to GameMode/map integration (accepted for close)
+- [x] Tech lead accepted GP-S06
+- [x] Operator accepted GP-S06
+
+### Stop condition
+GP-S06 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S07 AGP_GameMode** (PostLogin, EndMatch hook). GP-S07 not started; task file not materialized.

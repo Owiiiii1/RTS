@@ -8,24 +8,26 @@
 
 > Стан станом на 2026-08-01 (після SETUP-001 + DOCS-001). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: `git log -- GP/Source/`, наявність файлів зі `Files Touched` поточної slice, заповненість секції `Output` у task-файлі, та [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md).
 
-**Поточна фаза:** Phase 6A — Foundation Code Slices (Slice 1). Code baseline = blank `GP` module (SETUP-001).
+**Поточна фаза:** Phase 6B — Slice 2 Match Flow (specification). Slice 1 Foundation (GP-S01…GP-S05) = **DONE**.
 
 **Status of materialized slices:**
 
 | Slice | Status | Доказ |
 |---|---|---|
-| **GP-S01 Module Scaffolds** | **NEXT** | `GP/Source/` містить лише blank primary module `GP`; `GPRuntime` / `GPGASRuntime` / `GPUIRuntime` відсутні |
-| GP-S02 Native Gameplay Tags | blocked by S01 | `GP/Source/GPGASRuntime/Public/Tags/GPGameplayTags.h` відсутній |
-| GP-S03 Attribute Sets | blocked by S02 | AttributeSet headers відсутні |
-| GP-S04 AbilitySystemComponent Subclass | blocked by S03 | `UGP_AbilitySystemComponent` відсутній |
-| GP-S05 Damage Calculation MMC | blocked by S04 | папка `Calculations/` ще не створена |
+| GP-S01 Module Scaffolds | **DONE** | `GPRuntime` / `GPGASRuntime` / `GPUIRuntime` on disk |
+| GP-S02 Native Gameplay Tags | **DONE** | `FGPGameplayTags` registry |
+| GP-S03 Attribute Sets | **DONE** | `UGP_PlayerAttributeSet` / `UGP_UnitAttributeSet` |
+| GP-S04 AbilitySystemComponent Subclass | **DONE** | `UGP_AbilitySystemComponent` |
+| GP-S05 Damage Calculation MMC | **DONE** | `UGP_DamageCalculation` |
+| GP-S06 AGP_GameState | **DONE** | [`GP-S06_Game_State.md`](GP-S06_Game_State.md) — `AGP_GameState` replicated storage |
+| GP-S07+ | not materialized | do **not** auto-create; await explicit assignment per TDD/13 |
 | GP-S54..S56 (Slice 10, AI Opponent) | files materialized, code not started | depends on Slice 1 → 9 sequence |
 
-**NEXT action для агента (після acceptance DOCS-001):** відкрити [`GP-S01_Module_Scaffolds.md`](GP-S01_Module_Scaffolds.md), виконати ТІЛЬКИ його Scope, дотриматись Stop Condition.
+**NEXT action для агента:** await explicit assignment for next stage (TDD/13: GP-S07 AGP_GameMode). Do **not** materialize GP-S07+ automatically.
 
-### Drift Warning (reset after SETUP-001)
+### Drift Warning
 
-Попередній cursor (S01–S03 DONE / NEXT S04, commit `a31d092`) **не відповідає** поточному репозиторію: commit `a31d092` відсутній, runtime modules на диску не створені. Не вважати foundation slices виконаними. Не імпортувати nested `Docs/grim-protocol-docs/**/GP/Source` як live code. Дотримуватись granularity: один slice = один PR.
+Cursor above is authoritative with [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) + `AI_Project_Log.md`. Do not invent GP-S07 task files. One slice = one PR.
 
 ---
 
@@ -333,13 +335,18 @@ Per-slice C++ writing. **Code Allowed: Yes** після approval поперед�
 - [GP-0601 Architecture Proposal](GP-0601_Architecture_Proposal.md) → `TDD/13_Architecture_Proposal`
 - [GP-0602 Implementation Slices](GP-0602_Implementation_Slices.md) → [`../Slice_Template.md`](../Slice_Template.md)
 
-### Phase 6A — Foundation Code Slices (Slice 1, awaiting start)
+### Phase 6A — Foundation Code Slices (Slice 1) — DONE
 
-- [GP-S01 Module Scaffolds](GP-S01_Module_Scaffolds.md) — **← NEXT**
-- [GP-S02 Native Gameplay Tags](GP-S02_Native_Gameplay_Tags.md) — blocked by S01
-- [GP-S03 Attribute Sets](GP-S03_Attribute_Sets.md) — blocked by S02
-- [GP-S04 AbilitySystemComponent Subclass](GP-S04_AbilitySystemComponent_Subclass.md) — blocked by S03
-- [GP-S05 Damage Calculation MMC](GP-S05_Damage_Calculation_MMC.md) — blocked by S04
+- [GP-S01 Module Scaffolds](GP-S01_Module_Scaffolds.md) — **DONE**
+- [GP-S02 Native Gameplay Tags](GP-S02_Native_Gameplay_Tags.md) — **DONE**
+- [GP-S03 Attribute Sets](GP-S03_Attribute_Sets.md) — **DONE**
+- [GP-S04 AbilitySystemComponent Subclass](GP-S04_AbilitySystemComponent_Subclass.md) — **DONE**
+- [GP-S05 Damage Calculation MMC](GP-S05_Damage_Calculation_MMC.md) — **DONE**
+
+### Phase 6A2 — Match Flow Code Slices (Slice 2) — in progress (spec)
+
+- [GP-S06 Game State](GP-S06_Game_State.md) — **DONE**
+- GP-S07+ — not materialized (do not auto-create)
 
 ### Phase 6B — AI Opponent Code Slices (Slice 10, materialized, code not started)
 

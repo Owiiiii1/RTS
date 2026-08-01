@@ -34,25 +34,26 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 + GP-S02 + **GP-S03 DONE** |
-| Runtime modules on disk | `GP` (primary) + `GPRuntime` + `GPGASRuntime` (tags + AttributeSets) + `GPUIRuntime` |
-| Last closed stage | **GP-S03** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 + GP-S02 + GP-S03 + **GP-S04 DONE** |
+| Runtime modules on disk | `GP` (primary) + `GPRuntime` + `GPGASRuntime` (tags + AttributeSets + ASC) + `GPUIRuntime` |
+| Last closed stage | **GP-S04** |
 | Current stage | **none** |
 
 ---
 
 ## Current NEXT Task
 
-**NEXT:** [`GP-S04_AbilitySystemComponent_Subclass`](Claude_Tasks/GP-S04_AbilitySystemComponent_Subclass.md)
+**NEXT:** [`GP-S05_Damage_Calculation_MMC`](Claude_Tasks/GP-S05_Damage_Calculation_MMC.md)
 
-GP-S03 Attribute Sets is accepted and closed. The next allowed implementation stage is **GP-S04 AbilitySystemComponent Subclass**. Do not start GP-S04 until explicitly assigned.
+GP-S04 AbilitySystemComponent Subclass is accepted and closed. The next allowed implementation stage is **GP-S05 Damage Calculation MMC**. Do not start GP-S05 until explicitly assigned.
 
 ### Foundation sequence
 
 1. GP-S01 Module Scaffolds — **DONE**
 2. GP-S02 Native Gameplay Tags — **DONE**
 3. GP-S03 Attribute Sets — **DONE**
-4. GP-S04 AbilitySystemComponent Subclass — **NEXT**
+4. GP-S04 AbilitySystemComponent Subclass — **DONE**
+5. GP-S05 Damage Calculation MMC — **NEXT**
 
 ---
 
@@ -134,4 +135,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01, GP-S02, and GP-S03 are closed. Current stage: **none**. Next allowed stage: **GP-S04 AbilitySystemComponent Subclass** (not started here).
+SETUP-001, DOCS-001, GP-S01, GP-S02, GP-S03, and GP-S04 are closed. Current stage: **none**. Next allowed stage: **GP-S05 Damage Calculation MMC** (not started here).

@@ -658,3 +658,103 @@ Initialize to `FGPGameplayTags::Get().Match_State_Loading` when valid — native
 
 ### Stop condition
 GP-S06 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S07 AGP_GameMode** (PostLogin, EndMatch hook). GP-S07 not started; task file not materialized.
+
+---
+
+## 2026-08-01 — GP-S07 / Game Mode — specification pass
+
+Status: **SPEC_READY** (OD-1…OD-7 locked; C++ not started)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S07_Game_Mode.md` — created, then updated to SPEC_READY with tech-lead locks
+- `Docs/Development/Claude_Tasks/README.md` — GP-S07 = SPEC_READY; implementation awaits assignment
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S07 specification ready; NEXT = GP-S07 implementation after approval
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Specification-only pass for `AGP_GameMode` (PostLogin, Match Countdown, EndMatch Hook).
+- Initial pass found OD conflicts → temporarily BLOCKED.
+- Tech-lead locks applied (see below); task rewritten to SPEC_READY.
+- Timeout documented as intentional integration gap (hook validated in S07; TimerScore winner later).
+- FinishMatch: GameMode pre-validates result fields (GameState setters return void; no GameState API change).
+
+### Tech-lead decisions (OD-1…OD-7)
+- **OD-1:** GameMode `FTimerHandle` / `FTimerManager` 1 Hz; no Tick; GameState storage only; TDD/03 Tick wording stale.
+- **OD-2:** BeginPlay → WaitingForPlayers only; PostLogin → TryStartMatch; idempotent; no Lobby.
+- **OD-3:** `ExpectedHumanPlayers` default **2**; humans only; SP 1+AI deferred; no default-1 for PIE.
+- **OD-4:** Expiry → `EvaluateAndFinishMatch` logs unavailable-score; stays Playing @ time 0; no fake FinishMatch; later score slice calls FinishMatch(..., TimerScore).
+- **OD-5:** Project tags only; no engine StartMatch/EndMatch orchestration.
+- **OD-6:** BeginPlay sets WaitingForPlayers (GameState ctor may be Loading).
+- **OD-7:** Logout Super + recount; no winner / no OpponentDisconnect in S07.
+
+### What was intentionally not done
+- **No C++** (`GPGameMode.h/.cpp` not created).
+- No builds, assets, Blueprint GameMode, map/config changes.
+- No commit / push.
+- No GP-S08.
+
+### Remaining non-blocking
+- Warning vs Error for EvaluateAndFinishMatch log level.
+- Keep empty `OnMatchFlowStarted` virtual hook.
+- Test overrides of ExpectedHumanPlayers via subclass/config only.
+
+### Stop condition
+SPEC_READY. Await explicit **GP-S07 implementation** assignment before C++. Do **not** start GP-S08.
+
+---
+
+## 2026-08-01 — GP-S07 / Game Mode — implementation
+
+Status: **DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Game/GPGameMode.h` — new
+- `GP/Source/GPRuntime/Private/Game/GPGameMode.cpp` — new
+- `Docs/Development/Claude_Tasks/GP-S07_Game_Mode.md` — closed DONE
+- `Docs/Development/Claude_Tasks/README.md` — GP-S07 DONE; S08+ not auto-materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S07; NEXT = GP-S08 (TDD/13; task file not created)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Implemented server-only `AGP_GameMode : AGameModeBase` in `GPRuntime`.
+- Constructor assigns `GameStateClass = AGP_GameState::StaticClass()`, disables Tick, defaults `MatchDurationSeconds=600.f`, `ExpectedHumanPlayers=2`.
+- BeginPlay (authority): WaitingForPlayers, time 0, ClearMatchResult; no auto-start.
+- PostLogin → TryStartMatch (idempotent); Logout logs human count, no FinishMatch / OpponentDisconnect; re-calls TryStartMatch only as no-op-safe gate.
+- Human count via `World->GetPlayerControllerIterator()` (valid `APlayerController` only; excludes AIController; no `AGP_PlayerState` dependency).
+- Countdown owned by GameMode `FTimerHandle` + `FTimerManager` 1 Hz; writes `AGP_GameState::SetMatchTimeRemaining` only (no second authoritative clock on GameMode).
+- Timeout guard `bTimeoutEvaluationTriggered` reset in StartMatchFlow; `EvaluateAndFinishMatch` Warning + intentional gap (Playing @ time 0; no FinishMatch / TimerScore).
+- FinishMatch: authority, Finished idempotent, WinnerTeamId `>= -1`, WinReason under `GP.Match.WinReason` via native tag parent (`RequestDirectParent` / `MatchesTag`), then SetMatchResult + Finished + `OnMatchFlowFinished`.
+- Hooks: `OnMatchFlowStarted`, `OnMatchFlowFinished`, `EvaluateAndFinishMatch` (C++ virtual; log-only defaults).
+- No engine StartMatch/EndMatch as project SoT; no RPC; no replicated GameMode props; no Tick; no UI/assets/map wiring.
+
+### What was intentionally not done
+- No AGP_PlayerState, AI, Lobby, score evaluation, disconnect winner, unit spawn.
+- No RPC / replicated GameMode fields / Tick / UI / assets / map or DefaultEngine GameModeClass.
+- No GP-S08 (not started; task file not created).
+- Listen-server replication proof deferred to temporary GameMode/map wiring (operator; not committed).
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor / module load (operator) → **PASSED**
+- AGP_GameMode found in Class Viewer (operator) → **PASSED**
+- PIE (operator) → **PASSED**
+- GP-S07 related errors → **ABSENT**
+- Blocking errors → **NONE**
+- Notes: Tech lead accepted. Operator accepted.
+
+### Acceptance checklist
+- [x] Compiles (three targets) PASSED
+- [x] Lifecycle + countdown + FinishMatch / EvaluateAndFinishMatch gap
+- [x] No Tick / RPC / replicated GameMode props / assets / map-config
+- [x] Editor / module load (operator) PASSED
+- [x] AGP_GameMode found in Class Viewer (operator) PASSED
+- [x] PIE PASSED (operator)
+- [x] GP-S07 related errors ABSENT
+- [x] Listen-server replication — **deferred** to temporary GameMode/map wiring (accepted for close)
+- [x] Tech lead accepted GP-S07
+- [x] Operator accepted GP-S07
+
+### Stop condition
+GP-S07 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S08 AGP_PlayerController** (Possess CameraPawn, ASC linkage on PlayerState). GP-S08 not started; task file not materialized.

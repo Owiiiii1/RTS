@@ -8,7 +8,7 @@
 
 > Стан станом на 2026-08-01 (після SETUP-001 + DOCS-001). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: `git log -- GP/Source/`, наявність файлів зі `Files Touched` поточної slice, заповненість секції `Output` у task-файлі, та [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md).
 
-**Поточна фаза:** Phase 6B — Slice 2 Match Flow (specification). Slice 1 Foundation (GP-S01…GP-S05) = **DONE**.
+**Поточна фаза:** Phase 6B — Slice 2 Match Flow. GP-S07 **DONE**.
 
 **Status of materialized slices:**
 
@@ -19,15 +19,16 @@
 | GP-S03 Attribute Sets | **DONE** | `UGP_PlayerAttributeSet` / `UGP_UnitAttributeSet` |
 | GP-S04 AbilitySystemComponent Subclass | **DONE** | `UGP_AbilitySystemComponent` |
 | GP-S05 Damage Calculation MMC | **DONE** | `UGP_DamageCalculation` |
-| GP-S06 AGP_GameState | **DONE** | [`GP-S06_Game_State.md`](GP-S06_Game_State.md) — `AGP_GameState` replicated storage |
-| GP-S07+ | not materialized | do **not** auto-create; await explicit assignment per TDD/13 |
+| GP-S06 AGP_GameState | **DONE** | [`GP-S06_Game_State.md`](GP-S06_Game_State.md) |
+| **GP-S07 AGP_GameMode** | **DONE** | [`GP-S07_Game_Mode.md`](GP-S07_Game_Mode.md) |
+| GP-S08+ | not materialized | do not create until explicitly assigned |
 | GP-S54..S56 (Slice 10, AI Opponent) | files materialized, code not started | depends on Slice 1 → 9 sequence |
 
-**NEXT action для агента:** await explicit assignment for next stage (TDD/13: GP-S07 AGP_GameMode). Do **not** materialize GP-S07+ automatically.
+**NEXT action для агента:** STOP. Do **not** materialize GP-S08. Do **not** start the next task automatically. Await explicit assignment.
 
 ### Drift Warning
 
-Cursor above is authoritative with [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) + `AI_Project_Log.md`. Do not invent GP-S07 task files. One slice = one PR.
+Cursor above is authoritative with [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) + `AI_Project_Log.md`. One slice = one PR.
 
 ---
 
@@ -343,10 +344,11 @@ Per-slice C++ writing. **Code Allowed: Yes** після approval поперед�
 - [GP-S04 AbilitySystemComponent Subclass](GP-S04_AbilitySystemComponent_Subclass.md) — **DONE**
 - [GP-S05 Damage Calculation MMC](GP-S05_Damage_Calculation_MMC.md) — **DONE**
 
-### Phase 6A2 — Match Flow Code Slices (Slice 2) — in progress (spec)
+### Phase 6A2 — Match Flow Code Slices (Slice 2)
 
 - [GP-S06 Game State](GP-S06_Game_State.md) — **DONE**
-- GP-S07+ — not materialized (do not auto-create)
+- [GP-S07 Game Mode](GP-S07_Game_Mode.md) — **DONE**
+- GP-S08+ — not materialized (do not auto-start)
 
 ### Phase 6B — AI Opponent Code Slices (Slice 10, materialized, code not started)
 

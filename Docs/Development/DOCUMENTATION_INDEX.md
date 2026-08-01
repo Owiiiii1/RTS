@@ -34,18 +34,18 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 + GP-S02 + GP-S03 + **GP-S04 DONE** |
-| Runtime modules on disk | `GP` (primary) + `GPRuntime` + `GPGASRuntime` (tags + AttributeSets + ASC) + `GPUIRuntime` |
-| Last closed stage | **GP-S04** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … GP-S04 + **GP-S05 DONE** (Slice 1 Foundation complete) |
+| Runtime modules on disk | `GP` (primary) + `GPRuntime` + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
+| Last closed stage | **GP-S05** |
 | Current stage | **none** |
 
 ---
 
 ## Current NEXT Task
 
-**NEXT:** [`GP-S05_Damage_Calculation_MMC`](Claude_Tasks/GP-S05_Damage_Calculation_MMC.md)
+**NEXT:** GP-S06 — `AGP_GameState` (MatchState, Timer)
 
-GP-S04 AbilitySystemComponent Subclass is accepted and closed. The next allowed implementation stage is **GP-S05 Damage Calculation MMC**. Do not start GP-S05 until explicitly assigned.
+Per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order (Slice 2 — Match Flow + Asset Loader). Claude_Tasks file for GP-S06 is not yet materialized (S06–S11 materialize incrementally). Do not start GP-S06 until explicitly assigned.
 
 ### Foundation sequence
 
@@ -53,7 +53,8 @@ GP-S04 AbilitySystemComponent Subclass is accepted and closed. The next allowed 
 2. GP-S02 Native Gameplay Tags — **DONE**
 3. GP-S03 Attribute Sets — **DONE**
 4. GP-S04 AbilitySystemComponent Subclass — **DONE**
-5. GP-S05 Damage Calculation MMC — **NEXT**
+5. GP-S05 Damage Calculation MMC — **DONE**
+6. GP-S06 AGP_GameState (MatchState, Timer) — **NEXT** (Slice 2)
 
 ---
 
@@ -135,4 +136,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01, GP-S02, GP-S03, and GP-S04 are closed. Current stage: **none**. Next allowed stage: **GP-S05 Damage Calculation MMC** (not started here).
+SETUP-001, DOCS-001, and GP-S01…GP-S05 (Slice 1 Foundation) are closed. Current stage: **none**. Next allowed stage: **GP-S06 AGP_GameState** (MatchState, Timer) per TDD/13 (not started here).

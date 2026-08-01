@@ -854,3 +854,108 @@ Status: **DONE**
 
 ### Stop condition
 GP-S08 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S09 AGP_PlayerState** (+ASC + AttributeSet). GP-S09 not started; task file not materialized.
+
+---
+
+## 2026-08-01 — GP-S09 / Player State — specification pass
+
+Status: **SPEC_READY** (OD-1…OD-14 locked; C++ not started)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S09_Player_State.md` — created BLOCKED, then updated to SPEC_READY with tech-lead locks
+- `Docs/Development/Claude_Tasks/README.md` — GP-S09 = SPEC_READY; GP-S10 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S09 specification ready; NEXT = GP-S09 implementation after approval
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Specification-only pass for `AGP_PlayerState` (+ASC + AttributeSet).
+- Initial pass BLOCKED on OD-4; tech-lead locks applied → SPEC_READY.
+- Inventoried disk `UGP_PlayerAttributeSet` (4 attrs; existing GetLifetimeReplicatedProps; no mirrors).
+- Locked player ASC: Mixed; Owner=Avatar=PlayerState (`InitAbilityActorInfo(this, this)`); permanent (not temporary until CameraPawn).
+- Lifecycle: constructor subobjects only; BeginPlay + ClientInitialize → idempotent `InitializeAbilitySystemActorInfo`.
+- GameMode `PlayerStateClass` wiring on implementation; no PC changes; no TeamId; attrs default 0; no NetUpdateFrequency=100.
+- Engine `APlayerState` already AlwaysRelevant — do not duplicate assign.
+
+### Tech-lead decisions (OD-1…OD-14)
+- **OD-1:** CDS ASC; replicated; Mixed via `SetProjectReplicationMode`.
+- **OD-2:** CDS PlayerAttributeSet; no PS attr mirrors.
+- **OD-3:** ASI + typed BlueprintPure getters.
+- **OD-4:** Option A — Owner/Avatar = PlayerState permanently for this ASC.
+- **OD-5:** BeginPlay + ClientInitialize helper; no Tick/pawn callbacks/PostInitializeComponents for actor-info.
+- **OD-6:** Client path via BeginPlay + ClientInitialize; PC ASI discovery unchanged.
+- **OD-7:** `PlayerStateClass` in GameMode ctor only.
+- **OD-8:** Engine PS AlwaysRelevant / default NetUpdateFrequency; no 100 Hz.
+- **OD-9:** AttributeSet owns attr replication unchanged.
+- **OD-10:** No TeamId/Faction/ready/bConnected/score mirrors.
+- **OD-11:** Defaults 0; no startup GE / SetNumericAttributeBase.
+- **OD-12:** Mixed + standard PS/Controller ownership; no custom owner repl.
+- **OD-13:** Do not modify `AGP_PlayerController`.
+- **OD-14:** No pawn Avatar updates / possess re-init.
+
+### What was intentionally not done
+- **No C++** (`GPPlayerState` not created; GameMode/PC not edited).
+- No builds, assets, Blueprint, map/config.
+- No commit / push.
+- No GP-S10.
+
+### Stop condition
+SPEC_READY. Await explicit **GP-S09 implementation** assignment before C++. Do **not** start GP-S10.
+
+---
+
+## 2026-08-01 — GP-S09 / Player State — implementation
+
+Status: **DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Player/GPPlayerState.h` — new
+- `GP/Source/GPRuntime/Private/Player/GPPlayerState.cpp` — new
+- `GP/Source/GPRuntime/Private/Game/GPGameMode.cpp` — `PlayerStateClass` wiring
+- `Docs/Development/Claude_Tasks/GP-S09_Player_State.md` — closed DONE
+- `Docs/Development/Claude_Tasks/README.md` — GP-S09 DONE; S10+ not auto-materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S09; NEXT = GP-S10 (TDD/13; task file not created)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Implemented `AGP_PlayerState : APlayerState, IAbilitySystemInterface`.
+- CDS `UGP_AbilitySystemComponent` + `SetIsReplicated(true)` + `SetProjectReplicationMode(Mixed)` in constructor (before any InitAbilityActorInfo).
+- CDS `UGP_PlayerAttributeSet`; no attr mirrors; inventory/replication unchanged.
+- Owner/Avatar = this/this via `InitializeAbilitySystemActorInfo` using `GetOwnerActor()` + `GetAvatarActor()` idempotency.
+- `BeginPlay` + `ClientInitialize(AController* C)` (UE 5.8.1 signature) call helper after Super.
+- `AGP_GameMode::PlayerStateClass = AGP_PlayerState`; PC **unchanged**.
+- Tick off; no TeamId; no startup GE; no pawn re-init; no NetUpdateFrequency=100; no AlwaysRelevant reassign.
+
+### What was intentionally not done
+- No TeamId / CameraPawn / startup GE / abilities / UI / RPC / map/ini.
+- No `AGP_PlayerController` changes.
+- No GP-S10 (not started; task file not created).
+- Runtime PlayerStateClass / ASC / listen-server proof deferred to temporary GameMode wiring (operator; not committed).
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor / module load (operator) → **PASSED**
+- AGP_PlayerState found in Class Viewer (operator) → **PASSED**
+- AGP_GameMode found in Class Viewer (operator) → **PASSED**
+- PIE (operator) → **PASSED**
+- GP-S09 related errors → **ABSENT**
+- EOS/HTTP warnings → classified as **external connectivity** (no internet); not GP-S09 defects
+- Blocking errors → **NONE**
+- Notes: Tech lead accepted. Operator accepted.
+
+### Acceptance checklist
+- [x] Compiles (three targets) PASSED
+- [x] ASI + ASC Mixed + AttributeSet + Owner/Avatar = PlayerState
+- [x] GameMode PlayerStateClass; no PC changes; no TeamId / startup GE / Tick / RPC
+- [x] Editor / module load (operator) PASSED
+- [x] AGP_PlayerState found in Class Viewer (operator) PASSED
+- [x] AGP_GameMode found in Class Viewer (operator) PASSED
+- [x] PIE PASSED (operator)
+- [x] GP-S09 related errors ABSENT
+- [x] PlayerStateClass / ASC / listen-server — **deferred** (accepted for close)
+- [x] Tech lead accepted GP-S09
+- [x] Operator accepted GP-S09
+
+### Stop condition
+GP-S09 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S10 UGP_MatchAssetLoader** (PreloadForMatch + Resolve API). GP-S10 not started; task file not materialized.

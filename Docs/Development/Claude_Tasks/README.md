@@ -8,7 +8,7 @@
 
 > Стан станом на 2026-08-01 (після SETUP-001 + DOCS-001). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: `git log -- GP/Source/`, наявність файлів зі `Files Touched` поточної slice, заповненість секції `Output` у task-файлі, та [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md).
 
-**Поточна фаза:** Phase 6B — Slice 2 Match Flow. GP-S07 **DONE**.
+**Поточна фаза:** Phase 6B — Slice 2 Match Flow. GP-S08 **DONE**.
 
 **Status of materialized slices:**
 
@@ -20,11 +20,12 @@
 | GP-S04 AbilitySystemComponent Subclass | **DONE** | `UGP_AbilitySystemComponent` |
 | GP-S05 Damage Calculation MMC | **DONE** | `UGP_DamageCalculation` |
 | GP-S06 AGP_GameState | **DONE** | [`GP-S06_Game_State.md`](GP-S06_Game_State.md) |
-| **GP-S07 AGP_GameMode** | **DONE** | [`GP-S07_Game_Mode.md`](GP-S07_Game_Mode.md) |
-| GP-S08+ | not materialized | do not create until explicitly assigned |
+| GP-S07 AGP_GameMode | **DONE** | [`GP-S07_Game_Mode.md`](GP-S07_Game_Mode.md) |
+| **GP-S08 AGP_PlayerController** | **DONE** | [`GP-S08_Player_Controller.md`](GP-S08_Player_Controller.md) |
+| GP-S09+ | not materialized | do not create until explicitly assigned |
 | GP-S54..S56 (Slice 10, AI Opponent) | files materialized, code not started | depends on Slice 1 → 9 sequence |
 
-**NEXT action для агента:** STOP. Do **not** materialize GP-S08. Do **not** start the next task automatically. Await explicit assignment.
+**NEXT action для агента:** STOP. Do **not** materialize GP-S09. Do **not** start the next task automatically. Await explicit assignment.
 
 ### Drift Warning
 
@@ -348,7 +349,8 @@ Per-slice C++ writing. **Code Allowed: Yes** після approval поперед�
 
 - [GP-S06 Game State](GP-S06_Game_State.md) — **DONE**
 - [GP-S07 Game Mode](GP-S07_Game_Mode.md) — **DONE**
-- GP-S08+ — not materialized (do not auto-start)
+- [GP-S08 Player Controller](GP-S08_Player_Controller.md) — **DONE**
+- GP-S09+ — not materialized (do not auto-start)
 
 ### Phase 6B — AI Opponent Code Slices (Slice 10, materialized, code not started)
 

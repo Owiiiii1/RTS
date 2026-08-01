@@ -1,0 +1,30 @@
+﻿# Unreal generated
+**/Binaries/
+**/DerivedDataCache/
+**/Intermediate/
+**/Saved/
+
+# Visual Studio
+**/.vs/
+*.sln
+*.slnx
+*.VC.db
+*.VC.opendb
+
+# VS Code
+**/.vscode/
+**/*.code-workspace
+
+# Rider
+**/.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Unreal local user files
+*.opensdf
+*.sdf
+*.suo
+*.user
+*.userprefs

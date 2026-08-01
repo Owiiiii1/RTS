@@ -298,3 +298,95 @@ Status: DONE
 
 ### Stop condition
 GP-S02 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage: **GP-S03 Attribute Sets**. GP-S03 not started in this close-out.
+
+---
+
+## 2026-08-01 — GP-S03 / Attribute Sets
+
+Status: DONE
+
+### Files changed
+- `GP/Source/GPGASRuntime/Public/AttributeSets/GPAttributeMacros.h` — ATTRIBUTE_ACCESSORS helper
+- `GP/Source/GPGASRuntime/Public/AttributeSets/GPPlayerAttributeSet.h`
+- `GP/Source/GPGASRuntime/Private/AttributeSets/GPPlayerAttributeSet.cpp`
+- `GP/Source/GPGASRuntime/Public/AttributeSets/GPUnitAttributeSet.h`
+- `GP/Source/GPGASRuntime/Private/AttributeSets/GPUnitAttributeSet.cpp`
+- `GP/Config/DefaultEngine.ini` — CommonUI `GameViewportClientClassName` → `CommonGameViewportClient`
+- `Docs/Development/Claude_Tasks/GP-S03_Attribute_Sets.md` — closed DONE; Attribute Picker / ShowDebug deferred to GP-S04
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S03; NEXT = GP-S04
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### Documentation contradictions reviewed (pre-code)
+- **Player attributes:** stage prompt + task + TDD/13 + TDD/07 CANONICAL agree (`OrbitalFerronite`, `FerroniteScore`, `MaxUnits`, `CurrentUnits`). TDD/02 AttributeSets block still lists pre-pivot `Resource`/`MaxResource` — treated as stale leftover, not implemented.
+- **Unit attributes:** stage prompt + task + TDD/13 agree (includes `Damage`, `AttackRange`, `AttackSpeed`, `MoveSpeed`, `CarriedFerronite`). TDD/02 lists older set (`MaxArmor`, `Critical*`, `CaptureProgress`) — stale; not implemented.
+- **Damage:** present in task/TDD/13/stage prompt → implemented.
+- **MaxCargo:** not an MVP AttributeSet member; TDD/13 caps carry via WorkerCarryCapacity later. Stage prompt: floor clamp only (`CarriedFerronite >= 0`); upper clamp deferred.
+- **Unit replication:** TDD/13 says Mixed (per ASC mode) / standard GAS → all unit attrs use `COND_None` + `REPNOTIFY_Always`. Player attrs use explicit OwnerOnly / None per TDD/13 table.
+
+### What was done
+- Implemented clean `UGP_PlayerAttributeSet` and `UGP_UnitAttributeSet` with `FGameplayAttributeData`, accessors, `OnRep_*` + `GAMEPLAYATTRIBUTE_REPNOTIFY`, and explicit `DOREPLIFETIME_CONDITION_NOTIFY` (`REPNOTIFY_Always`).
+- `UGP_UnitAttributeSet::PreAttributeChange`: Health `[0, MaxHealth]`; MaxHealth `>= 0`; CarriedFerronite `>= 0`.
+- Defaults remain 0 (no hardcoded balance values).
+- Builds Passed on UE 5.8 for Editor Development, Game Development, Shipping.
+- Operator Editor opened / GPGASRuntime startup / PIE: **PASSED**.
+- Operator found CommonUI warning: `LogUIActionRouter: Using CommonUI without a CommonGameViewportClient derived game viewport client`.
+- Fixed via `DefaultEngine.ini` `[/Script/Engine.Engine]` → `GameViewportClientClassName=/Script/CommonUI.CommonGameViewportClient` (stock class; no custom subclass; did not disable `CommonUI.Debug.CheckGameViewportClientValid`).
+- Rebuilt Editor/Dev/Shipping after viewport config change.
+
+### What was intentionally not done
+- No ASC subclass (GP-S04).
+- No debug actor, temporary Gameplay Effect, Blueprint, DataAsset, test maps.
+- No abilities, RPC, MMC, damage logic.
+- No custom `UGameViewportClient` subclass.
+- Did not set `CommonUI.Debug.CheckGameViewportClientValid=0`.
+- No ASC / Attribute Picker / ShowDebug runtime validation in this slice (deferred to GP-S04).
+- GP-S04 not started.
+
+### Attribute inventory + replication
+| Set | Attribute | Condition |
+| --- | --- | --- |
+| Player | OrbitalFerronite | COND_OwnerOnly |
+| Player | MaxUnits | COND_OwnerOnly |
+| Player | CurrentUnits | COND_OwnerOnly |
+| Player | FerroniteScore | COND_None |
+| Unit | Health, MaxHealth, Armor, DamageResistance, AttackCooldown, Damage, AttackRange, AttackSpeed, MoveSpeed, CarriedFerronite | COND_None |
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor restart (operator) → **PASSED**
+- GPGASRuntime module startup (operator) → **PASSED**
+- PIE (operator) → **PASSED**
+- CommonUI viewport fix validated (operator) → **PASSED** (`LogUIActionRouter` CommonGameViewportClient error **ABSENT**)
+- TSR / AutomationTest / MotionVectorSimulation messages: non-blocking engine/plugin warnings, not GP-S03 scope
+- Attribute Picker / ShowDebug AbilitySystem: **deferred to GP-S04** (no ASC)
+- Notes: Tech lead accepted. Operator accepted.
+
+### Manual Unreal Editor steps for operator (no ASC)
+1. Restart Editor / reopen `GP/GP.uproject` (UE 5.8.1) so `DefaultEngine.ini` viewport class is picked up.
+2. Confirm no module/load errors for `GPGASRuntime`.
+3. Start PIE; confirm Output Log has **no** `LogUIActionRouter` error about CommonGameViewportClient.
+4. Attribute Picker / ShowDebug AbilitySystem: **deferred to GP-S04**.
+
+### Acceptance checklist
+- [x] Both AttributeSets compile with full GAS replication boilerplate
+- [x] Explicit DOREPLIFETIME_CONDITION_NOTIFY per attribute
+- [x] No hardcoded balance values
+- [x] PreAttributeChange clamps as specified
+- [x] Three builds PASSED
+- [x] Editor restart (operator) PASSED
+- [x] Modules LOADED / GPGASRuntime startup (operator) PASSED
+- [x] PIE PASSED (operator)
+- [x] CommonUI GameViewportClientClassName set to stock CommonGameViewportClient
+- [x] CommonUI viewport fix validated — LogUIActionRouter error ABSENT
+- [x] Attribute Picker / ShowDebug — **deferred to GP-S04** (accepted for GP-S03 close)
+- [x] Tech lead accepted GP-S03
+- [x] Operator accepted GP-S03
+
+### Risks / open questions
+- TDD/02 §AttributeSets remains stale pre-pivot vs TDD/13/task; recommend docs sync in a later docs-only pass (not blocking GP-S03 per stage prompt + TDD/13 canon).
+- Unit attr visibility still depends on later ASC replication mode (Mixed/Minimal/Full) per actor.
+
+### Stop condition
+GP-S03 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage: **GP-S04 AbilitySystemComponent Subclass**. GP-S04 not started in this close-out.

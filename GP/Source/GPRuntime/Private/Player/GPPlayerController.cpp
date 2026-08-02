@@ -5,14 +5,19 @@
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
 #include "Camera/GPCameraPawn.h"
+#include "CollisionQueryParams.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "InputAction.h"
 #include "InputActionValue.h"
+#include "InputCoreTypes.h"
 #include "InputMappingContext.h"
+#include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
+#include "Units/GPUnitBase.h"
 
 AGP_PlayerController::AGP_PlayerController()
 {
@@ -30,6 +35,11 @@ AGP_PlayerController::AGP_PlayerController()
 		TEXT("/Game/GrimProtocol/Input/Camera/IA_Camera_Rotate.IA_Camera_Rotate")));
 	CameraRotateToggleAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(
 		TEXT("/Game/GrimProtocol/Input/Camera/IA_Camera_RotateToggle.IA_Camera_RotateToggle")));
+
+	SelectionMappingContext = TSoftObjectPtr<UInputMappingContext>(FSoftObjectPath(
+		TEXT("/Game/GrimProtocol/Input/Selection/IMC_GP_Selection.IMC_GP_Selection")));
+	SelectionAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(
+		TEXT("/Game/GrimProtocol/Input/Selection/IA_Select.IA_Select")));
 }
 
 UGP_AbilitySystemComponent* AGP_PlayerController::GetGPAbilitySystemComponent() const
@@ -71,13 +81,19 @@ void AGP_PlayerController::BeginPlay()
 void AGP_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	bCameraRotateHeld = false;
+	bSelectionPressActive = false;
+	SelectionPressScreenPosition = FVector2D::ZeroVector;
 
 	if (AGP_CameraPawn* CameraPawn = GetCameraPawn())
 	{
 		CameraPawn->SetRotateActive(false);
 	}
 
+	RemoveSelectionInputMapping();
 	RemoveCameraInputMapping();
+
+	LoadedSelectionMappingContext = nullptr;
+	LoadedSelectionAction = nullptr;
 
 	LoadedCameraMappingContext = nullptr;
 	LoadedCameraPanAction = nullptr;
@@ -163,16 +179,12 @@ void AGP_PlayerController::BeginPlayingState()
 	SetInputMode(InputMode);
 
 	InitializeCameraInput();
+	InitializeSelectionInput();
 }
 
 void AGP_PlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
-
-	if (bCameraInputBindingsInstalled)
-	{
-		return;
-	}
 
 	UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent);
 	if (EnhancedInputComponent == nullptr)
@@ -182,9 +194,19 @@ void AGP_PlayerController::SetupInputComponent()
 		return;
 	}
 
-	LoadCameraInputAssets();
-	BindCameraInputActions(*EnhancedInputComponent);
-	bCameraInputBindingsInstalled = true;
+	if (!bCameraInputBindingsInstalled)
+	{
+		LoadCameraInputAssets();
+		BindCameraInputActions(*EnhancedInputComponent);
+		bCameraInputBindingsInstalled = true;
+	}
+
+	if (!bSelectionInputBindingsInstalled)
+	{
+		LoadSelectionInputAssets();
+		BindSelectionInputActions(*EnhancedInputComponent);
+		bSelectionInputBindingsInstalled = true;
+	}
 }
 
 void AGP_PlayerController::TryInitializeLocalPawn(APawn* InPawn)
@@ -401,6 +423,343 @@ void AGP_PlayerController::RemoveCameraInputMapping()
 	}
 
 	bCameraMappingContextAdded = false;
+}
+
+void AGP_PlayerController::LoadSelectionInputAssets()
+{
+	LoadedSelectionAction = SelectionAction.LoadSynchronous();
+	if (LoadedSelectionAction == nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_PlayerController: missing IA_Select at '%s'."),
+			*SelectionAction.ToSoftObjectPath().ToString());
+	}
+}
+
+void AGP_PlayerController::BindSelectionInputActions(UEnhancedInputComponent& EnhancedInput)
+{
+	if (LoadedSelectionAction == nullptr)
+	{
+		return;
+	}
+
+	EnhancedInput.BindAction(
+		LoadedSelectionAction,
+		ETriggerEvent::Started,
+		this,
+		&AGP_PlayerController::OnSelectionStarted);
+	EnhancedInput.BindAction(
+		LoadedSelectionAction,
+		ETriggerEvent::Completed,
+		this,
+		&AGP_PlayerController::OnSelectionCompleted);
+	EnhancedInput.BindAction(
+		LoadedSelectionAction,
+		ETriggerEvent::Canceled,
+		this,
+		&AGP_PlayerController::OnSelectionCanceled);
+}
+
+void AGP_PlayerController::InitializeSelectionInput()
+{
+	if (!IsLocalController() || bSelectionMappingContextAdded)
+	{
+		return;
+	}
+
+	ULocalPlayer* LocalPlayer = GetLocalPlayer();
+	if (LocalPlayer == nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_PlayerController::InitializeSelectionInput: LocalPlayer is unavailable."));
+		return;
+	}
+
+	UEnhancedInputLocalPlayerSubsystem* Subsystem =
+		LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
+	if (Subsystem == nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_PlayerController::InitializeSelectionInput: Enhanced Input subsystem is unavailable."));
+		return;
+	}
+
+	LoadedSelectionMappingContext = SelectionMappingContext.LoadSynchronous();
+	if (LoadedSelectionMappingContext == nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_PlayerController: missing IMC_GP_Selection at '%s'."),
+			*SelectionMappingContext.ToSoftObjectPath().ToString());
+		return;
+	}
+
+	Subsystem->AddMappingContext(LoadedSelectionMappingContext, SelectionMappingPriority);
+	bSelectionMappingContextAdded = true;
+}
+
+void AGP_PlayerController::RemoveSelectionInputMapping()
+{
+	if (!bSelectionMappingContextAdded)
+	{
+		return;
+	}
+
+	if (IsLocalController())
+	{
+		if (ULocalPlayer* LocalPlayer = GetLocalPlayer())
+		{
+			if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+					LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+			{
+				if (LoadedSelectionMappingContext != nullptr)
+				{
+					Subsystem->RemoveMappingContext(LoadedSelectionMappingContext);
+				}
+			}
+		}
+	}
+
+	bSelectionMappingContextAdded = false;
+}
+
+void AGP_PlayerController::OnSelectionStarted(const FInputActionValue& Value)
+{
+	(void)Value;
+
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	float MouseX = 0.0f;
+	float MouseY = 0.0f;
+	if (!GetMousePosition(MouseX, MouseY))
+	{
+		bSelectionPressActive = false;
+		SelectionPressScreenPosition = FVector2D::ZeroVector;
+		UE_LOG(LogTemp, Warning,
+			TEXT("AGP_PlayerController::OnSelectionStarted: GetMousePosition failed."));
+		return;
+	}
+
+	SelectionPressScreenPosition = FVector2D(MouseX, MouseY);
+	bSelectionPressActive = true;
+}
+
+void AGP_PlayerController::OnSelectionCompleted(const FInputActionValue& Value)
+{
+	(void)Value;
+
+	if (!IsLocalController() || !bSelectionPressActive)
+	{
+		return;
+	}
+
+	const FVector2D PressPosition = SelectionPressScreenPosition;
+	bSelectionPressActive = false;
+	SelectionPressScreenPosition = FVector2D::ZeroVector;
+
+	float MouseX = 0.0f;
+	float MouseY = 0.0f;
+	if (!GetMousePosition(MouseX, MouseY))
+	{
+		return;
+	}
+
+	const FVector2D ReleasePosition(MouseX, MouseY);
+	const float PixelDistance = FVector2D::Distance(PressPosition, ReleasePosition);
+	if (PixelDistance > SelectionDragThresholdPixels)
+	{
+		UE_LOG(LogTemp, Verbose,
+			TEXT("GP Selection: Result=DragDeferredToB2b Distance=%.1f Threshold=%.1f"),
+			PixelDistance, SelectionDragThresholdPixels);
+		return;
+	}
+
+	ProcessSelectionClickAtScreenPosition(ReleasePosition);
+}
+
+void AGP_PlayerController::OnSelectionCanceled(const FInputActionValue& Value)
+{
+	(void)Value;
+
+	bSelectionPressActive = false;
+	SelectionPressScreenPosition = FVector2D::ZeroVector;
+}
+
+void AGP_PlayerController::ProcessSelectionClickAtScreenPosition(const FVector2D& ScreenPosition)
+{
+	if (!IsLocalController() || SelectionComponent == nullptr)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	const AGP_PlayerState* GPPlayerState = GetPlayerState<AGP_PlayerState>();
+	if (GPPlayerState == nullptr)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP Selection: Result=BlockedMissingPlayerState"));
+		return;
+	}
+
+	const int32 LocalTeamId = GPPlayerState->GetTeamId();
+	if (LocalTeamId < 1)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP Selection: Result=BlockedUnassignedTeam LocalTeam=%d"),
+			LocalTeamId);
+		return;
+	}
+
+	FVector WorldOrigin = FVector::ZeroVector;
+	FVector WorldDirection = FVector::ZeroVector;
+	if (!DeprojectScreenPositionToWorld(
+			ScreenPosition.X,
+			ScreenPosition.Y,
+			WorldOrigin,
+			WorldDirection))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("AGP_PlayerController::ProcessSelectionClickAtScreenPosition: deproject failed."));
+		return;
+	}
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(GPSelectionClick), /*bTraceComplex=*/false);
+	QueryParams.bReturnPhysicalMaterial = false;
+	if (APawn* ControlledPawn = GetPawn())
+	{
+		QueryParams.AddIgnoredActor(ControlledPawn);
+	}
+
+	const FVector TraceEnd = WorldOrigin + (WorldDirection * SelectionTraceDistance);
+	FHitResult Hit;
+	World->LineTraceSingleByChannel(
+		Hit,
+		WorldOrigin,
+		TraceEnd,
+		ECC_Visibility,
+		QueryParams);
+
+	AActor* HitActor = Hit.GetActor();
+	AGP_UnitBase* HitUnit = Cast<AGP_UnitBase>(HitActor);
+	if (HitUnit == nullptr)
+	{
+		SelectionComponent->ClearAllSelectionState();
+		LogSelectionClickResult(TEXT("Clear"), HitActor, /*bHasHitTeam=*/false, 0, LocalTeamId);
+		return;
+	}
+
+	const int32 HitTeamId = HitUnit->GetTeamId();
+	if (HitTeamId < 0)
+	{
+		UE_LOG(LogTemp, Verbose,
+			TEXT("GP Selection: Result=BlockedUnassignedUnit Hit=%s HitTeam=%d"),
+			*GetNameSafe(HitUnit), HitTeamId);
+		LogSelectionClickResult(
+			TEXT("BlockedUnassignedUnit"), HitUnit, /*bHasHitTeam=*/true, HitTeamId, LocalTeamId);
+		return;
+	}
+
+	const bool bFriendly = (HitTeamId == LocalTeamId);
+	const bool bNeutral = HitUnit->IsNeutral();
+	const bool bSelectable = HitUnit->IsGameplaySelectable();
+	const bool bInspectable = HitUnit->IsGameplayInspectable();
+
+	if (bFriendly && bSelectable)
+	{
+		// Selection mutators do not clear inspect; clear first (may broadcast separately).
+		if (SelectionComponent->GetInspectedTarget() != nullptr)
+		{
+			SelectionComponent->ClearInspectedTarget();
+		}
+
+		const TCHAR* ResultTag = TEXT("Replace");
+		if (IsControlModifierDown())
+		{
+			SelectionComponent->ToggleUnitSelection(HitUnit);
+			ResultTag = TEXT("Toggle");
+		}
+		else if (IsShiftModifierDown())
+		{
+			SelectionComponent->AddUnitToSelection(HitUnit);
+			ResultTag = TEXT("Add");
+		}
+		else
+		{
+			SelectionComponent->ReplaceSelectionWithUnit(HitUnit);
+		}
+
+		LogSelectionClickResult(ResultTag, HitUnit, /*bHasHitTeam=*/true, HitTeamId, LocalTeamId);
+		return;
+	}
+
+	if (bFriendly && !bSelectable)
+	{
+		if (bInspectable)
+		{
+			SelectionComponent->SetInspectedTarget(HitUnit);
+			LogSelectionClickResult(
+				TEXT("Inspect"), HitUnit, /*bHasHitTeam=*/true, HitTeamId, LocalTeamId);
+		}
+		else
+		{
+			LogSelectionClickResult(
+				TEXT("NoOp"), HitUnit, /*bHasHitTeam=*/true, HitTeamId, LocalTeamId);
+		}
+		return;
+	}
+
+	// Enemy (assigned, not local) or Neutral
+	if ((bNeutral || HitTeamId != LocalTeamId) && bInspectable)
+	{
+		SelectionComponent->SetInspectedTarget(HitUnit);
+		LogSelectionClickResult(
+			TEXT("Inspect"), HitUnit, /*bHasHitTeam=*/true, HitTeamId, LocalTeamId);
+		return;
+	}
+
+	LogSelectionClickResult(TEXT("NoOp"), HitUnit, /*bHasHitTeam=*/true, HitTeamId, LocalTeamId);
+}
+
+void AGP_PlayerController::LogSelectionClickResult(
+	const TCHAR* ResultTag,
+	const AActor* HitActor,
+	bool bHasHitTeam,
+	int32 HitTeamId,
+	int32 LocalTeamId) const
+{
+	if (SelectionComponent == nullptr)
+	{
+		return;
+	}
+
+	const AActor* Inspected = SelectionComponent->GetInspectedTarget();
+	const FString HitTeamText = bHasHitTeam ? FString::FromInt(HitTeamId) : FString(TEXT("None"));
+
+	UE_LOG(LogTemp, Log,
+		TEXT("GP Selection: LocalTeam=%d Hit=%s HitTeam=%s SelectedCount=%d Inspected=%s Result=%s"),
+		LocalTeamId,
+		*GetNameSafe(HitActor),
+		*HitTeamText,
+		SelectionComponent->GetSelectionCount(),
+		*GetNameSafe(Inspected),
+		ResultTag);
+}
+
+bool AGP_PlayerController::IsControlModifierDown() const
+{
+	return IsInputKeyDown(EKeys::LeftControl) || IsInputKeyDown(EKeys::RightControl);
+}
+
+bool AGP_PlayerController::IsShiftModifierDown() const
+{
+	return IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift);
 }
 
 AGP_CameraPawn* AGP_PlayerController::GetCameraPawn() const

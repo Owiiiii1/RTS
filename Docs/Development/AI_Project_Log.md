@@ -1958,3 +1958,35 @@ Status: **PHASE_A_DONE_INTEGRATION_PENDING**
 
 ### Stop condition
 **PHASE_A_DONE_INTEGRATION_PENDING.** Merge checkpoint independently. Do **not** mark GP-S16 DONE. Do **not** start GP-S17 or full GP-S18.
+
+---
+
+## 2026-08-02 — GP-S16 / Selection Phase B — input integration analysis checkpoint
+
+Status: **PHASE_A_DONE_SPLIT_REQUIRED**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — Phase B analysis finalized; approved split locked
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase B analysis **completed** on `feature/gp-s16-selection-input` (base = main merge GP-S16 shell `23941cc`).
+- Dependencies reviewed: abstract empty `AGP_UnitBase`; no TeamId; no CapabilityTags contract; no concrete selectable units; no highlight/UI; marquee filter contract incomplete.
+- Result: **SPLIT_REQUIRED**.
+- Phase B1 recommended next: container-only mutation API + OD path lock (no assets in B1).
+- Click/marquee blocked by UnitBase integration contracts until separate prerequisite + Phase B2.
+- Soft paths OD-locked:
+  `/Game/GrimProtocol/Input/Selection/IA_Select`,
+  `/Game/GrimProtocol/Input/Selection/IA_Marquee`,
+  `/Game/GrimProtocol/Input/Selection/IMC_GP_Selection`.
+- IMC architecture: separate `IMC_GP_Selection`; do not modify `IMC_GP_Camera`.
+- Rejected: “any `AGP_UnitBase` selectable”; temporary test Blueprint/actor; PC direct `SelectedUnits` mutation.
+
+### What was intentionally not done
+- **No C++**, no Input Actions/IMC assets, no config/maps changes.
+- README / DOCUMENTATION_INDEX / TDD unchanged.
+- Phase B1 **not** started in this pass.
+- GP-S17 and full GP-S18 **not** started.
+
+### Stop condition
+**PHASE_A_DONE_SPLIT_REQUIRED.** Documentation checkpoint commit/push on feature branch only. Do **not** merge to main. Await tech-lead assignment for Phase B1. Do **not** create selection assets until Phase B2.

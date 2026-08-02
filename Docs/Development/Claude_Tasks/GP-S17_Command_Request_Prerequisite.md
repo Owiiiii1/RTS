@@ -2,12 +2,24 @@
 (Canonical `FGP_CommandRequest` contract — analysis only)
 
 ## Status
-**Status: ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**Status: IMPLEMENTATION_DONE**
 
-Docs-only finalize. **No** struct code in this pass.
-GP-S19 **full implementation not started** — pull-forward of the **canonical request type contract only**.
+Canonical header **implemented and operator-validated**:
+`GP/Source/GPRuntime/Public/Command/GPCommandRequest.h`
+
+- reflected `USTRUCT(BlueprintType)` `FGP_CommandRequest`
+- exact five `UPROPERTY` fields (`CommandTag`, `IssuingUnits`, `TargetLocation`, `TargetActor`, `bQueue`)
+- **no** NetSerialize / helpers / validation methods / `.cpp`
+- GPEditor / GP Development / GP Shipping — **PASSED**
+- UHT — **PASSED**
+- Blueprint reflection validation — **PASSED** (`GP Command Request` variable type; all five fields visible; BP compiles; temp BP variable discarded; no assets saved)
+- CommandComponent / PlayerController / Selection / input / RPC **not** integrated
+- Invariants remain **documented** for future server validation (not coded here)
+- Ready to be consumed by GP-S17 Phase B **after merge**
+
+GP-S19 **full implementation not started**.
 GP-S17 Phase A remains **PHASE_A_DONE**.
-Phase B (`BuildSmartCommand`) remains blocked until this struct exists in code.
+Phase B **not started**.
 
 ---
 
@@ -218,7 +230,18 @@ void Server_RequestCommand(FGP_CommandRequest Request);
 
 ---
 
+## Operator validation (passed)
+
+| Check | Result |
+| --- | --- |
+| Blueprint type `GP Command Request` | **PASS** |
+| Blueprint compiles with struct variable | **PASS** |
+| Fields visible (Command Tag, Issuing Units, Target Location, Target Actor, Queue) | **PASS** |
+| Reflection / UHT warnings | **NONE** |
+| PIE / camera / selection regression | **NONE** |
+| Temp Blueprint variable / assets saved | **NO** |
+
 ## Stop condition
-**ANALYSIS_READY_IMPLEMENTATION_PENDING.**
-Contract locked. Await explicit **struct-only** implementation assignment.
-Do **not** start Phase B / full GP-S19 / command execution from this finalize.
+**IMPLEMENTATION_DONE.**
+Canonical request type ready for merge. Next: GP-S17 Phase B analysis/implementation planning after merge.
+Do **not** start Phase B / RPC / input / full GP-S19 / command execution from this finalize.

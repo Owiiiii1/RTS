@@ -40,10 +40,12 @@ Phase A CommandComponent **shell complete** and operator-validated:
 - Standalone **PASS**; 2-player listen-server **PASS**
 - Camera / selection / marquee / control groups / debug boxes **unchanged**
 
-Phase B+ **blocked** until canonical `FGP_CommandRequest` exists.
-Request contract analysis: see `GP-S17_Command_Request_Prerequisite.md`
-(`Status: ANALYSIS_READY_IMPLEMENTATION_PENDING`).
-GP-S18 / full GP-S19 implementation **not started** (S19-scope pull-forward of request type only).
+Canonical `FGP_CommandRequest` prerequisite **implemented and validated**: see
+`GP-S17_Command_Request_Prerequisite.md`
+(`Status: IMPLEMENTATION_DONE`).
+Phase B dependency **resolved after merge**.
+Phase B itself **not started** — no BuildSmartCommand / input / RPC / execution yet.
+GP-S18 / full GP-S19 implementation **not started**.
 Executable Move **not** in Phase A.
 
 ---
@@ -54,7 +56,7 @@ Executable Move **not** in Phase A.
 | Artifact | State |
 | --- | --- |
 | `UGP_CommandComponent` | **Phase A shell present** (`Command/GPCommandComponent`) |
-| `FGP_CommandRequest` | **Absent** |
+| `FGP_CommandRequest` | **Implemented + validated** (`Command/GPCommandRequest.h`) — Phase B integration not started |
 | GP-S17 Claude task file | Present |
 | `IA_Command` / `IMC_GP_Commands` | **Absent** |
 | `Server_RequestCommand` / `Client_NotifyCommandRejected` | **Absent** |
@@ -408,8 +410,7 @@ Shell has no user-facing command behavior. Operator validation is **minimal**.
 | Extra assets / maps | **NO** |
 
 ## Stop Condition
-Status **PHASE_A_DONE**.
-Phase A complete.
-Next: implement canonical `FGP_CommandRequest` per `GP-S17_Command_Request_Prerequisite.md` (struct only), then Phase B.
-Do **not** start Phase B / input / RPC / Move until the request type lands.
-Do **not** start GP-S18 / full GP-S19 from the request pull-forward.
+Status **PHASE_A_DONE** (request prerequisite **IMPLEMENTATION_DONE** separately).
+Phase A complete. Canonical `FGP_CommandRequest` implemented and Blueprint-validated.
+After merge, next step is GP-S17 Phase B analysis/implementation planning — **not** started here.
+Do **not** start BuildSmartCommand / input / RPC / Move / GP-S18 / full GP-S19 from this finalize.

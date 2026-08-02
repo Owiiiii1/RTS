@@ -10,6 +10,7 @@ class UCameraComponent;
 class USceneComponent;
 class USpringArmComponent;
 class UGP_CameraConfigDataAsset;
+class AGP_CameraBoundsVolume;
 struct FStreamableHandle;
 
 /**
@@ -53,6 +54,9 @@ private:
 	void ClampToBounds(const UGP_CameraConfigDataAsset& Config);
 	void ResetFrameInput();
 
+	void FindCameraBoundsVolume();
+	FBox ResolveCameraBounds(const UGP_CameraConfigDataAsset& Config);
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Camera", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USceneComponent> RootScene;
 
@@ -79,4 +83,7 @@ private:
 	float CurrentArmLength = 0.0f;
 	float TargetArmLength = 0.0f;
 	float CurrentYaw = 0.0f;
+
+	TWeakObjectPtr<AGP_CameraBoundsVolume> CameraBoundsVolume;
+	bool bInvalidCameraBoundsWarningLogged = false;
 };

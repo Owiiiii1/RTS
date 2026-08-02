@@ -1411,3 +1411,131 @@ Status: **DONE**
 
 ### Stop condition
 GP-S13 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S14 AGP_CameraBoundsVolume**. GP-S14 not started; task file not materialized. Full live camera movement validation deferred until PC/Input wiring.
+
+---
+
+## 2026-08-02 — GP-S14 / Camera Bounds Volume — specification pass
+
+Status: **BLOCKED** (OD locks required; C++ not started; no map/assets/CameraPawn/integration changes)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S14_Camera_Bounds_Volume.md` — created full OD-1…OD-30 BLOCKED specification
+- `Docs/Development/Claude_Tasks/README.md` — GP-S14 = BLOCKED; GP-S15 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S14 specification BLOCKED
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Specification-only pass for `AGP_CameraBoundsVolume` (optional level-placed camera bounds actor).
+- Disk audit: no BoundsVolume class/assets; no `UBoxComponent` usages in GPRuntime; CameraPawn clamps only `Config.FallbackBounds` (XYZ).
+- Documented TDD/11 contract vs conflicts: intersect vs replace; XY vs GP-S13 XYZ; missing-volume Warning; **no dedicated CameraPawn-wiring slice after S14**.
+- Primary blocker: OD-19 — actor-only GP-S14 vs include CameraPawn discovery/clamp integration.
+
+### Blocking tech-lead decisions
+See task Blocking OD checklist — especially OD-19 (integration ownership), OD-1/3/8/12/13/14/18/20/21/23.
+
+### What was intentionally not done
+- **No C++**, no Blueprint, no `.uasset`/`.umap`, no CameraPawn / PC / GameMode / Config / Build.cs / Input changes.
+- No builds.
+- No commit / push.
+- No GP-S15.
+
+### Stop condition
+BLOCKED. Await tech-lead OD locks → SPEC_READY rewrite / implementation assignment. Do **not** start GP-S15.
+
+---
+
+## 2026-08-02 — GP-S14 / Camera Bounds Volume — tech-lead resolution → SPEC_READY
+
+Status: **SPEC_READY** (OD-1…OD-33 locked; C++ not started; no map/assets/Input/Build.cs changes)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S14_Camera_Bounds_Volume.md` — BLOCKED removed; OD-1…OD-33 RESOLVED; actor + CameraPawn integration locked
+- `Docs/Development/Claude_Tasks/README.md` — GP-S14 = SPEC_READY; GP-S15 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S14 specification ready; NEXT = S14 implementation after explicit approval
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Applied tech-lead locks for `AGP_CameraBoundsVolume` + minimal CameraPawn integration:
+  - `AActor` + `UBoxComponent` root; NoCollision; Static; hidden in game
+  - default BoxExtent `(50000, 50000, 3000)` at origin
+  - axis-aligned only (rotation > 0.1° = validation Error); scale zero/negative = Error
+  - Editor-only `IsDataValid`; `GetCameraBounds()` C++ only
+  - zero-or-one volume contract; >1 → first + one Warning
+  - CameraPawn: one-time `TActorIterator` discovery; `TWeakObjectPtr` cache; live FBox read
+  - volume bounds override Config FallbackBounds when valid; XYZ clamp retained
+  - missing volume silent; invalid volume FBox → one Warning + fallback
+- Exact planned BoundsVolume API and CameraPawn change list recorded.
+
+### What was intentionally not done
+- **No C++**, no Blueprint, no `.uasset`/`.umap`, no Input / PlayerController / GameMode / Build.cs / config changes.
+- No builds.
+- No commit / push.
+- No GP-S15 (not started; task file not materialized).
+
+### Stop condition
+SPEC_READY. Await explicit **GP-S14 implementation** assignment before C++. Do **not** start GP-S15.
+
+---
+
+## 2026-08-02 — GP-S14 / Camera Bounds Volume — implementation
+
+Status: **DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Camera/GPCameraBoundsVolume.h` — new
+- `GP/Source/GPRuntime/Private/Camera/GPCameraBoundsVolume.cpp` — new
+- `GP/Source/GPRuntime/Public/Camera/GPCameraPawn.h` — minimal discovery/resolve members
+- `GP/Source/GPRuntime/Private/Camera/GPCameraPawn.cpp` — BeginPlay discovery + ResolveCameraBounds clamp
+- `Docs/Development/Claude_Tasks/GP-S14_Camera_Bounds_Volume.md` — closed DONE
+- `Docs/Development/Claude_Tasks/README.md` — GP-S14 DONE; S15+ not auto-materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S14; NEXT = GP-S15 (TDD/13; task file not created)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Implemented `AGP_CameraBoundsVolume : AActor` — BoundsBox root; NoCollision; overlap disabled; navigation disabled; Static mobility; HiddenInGame.
+- Default BoxExtent `50000/50000/3000`; axis-aligned only.
+- Editor `IsDataValid`: zero/negative scale invalid; non-zero rotation above 0.1° invalid; extent/FBox Errors.
+- World bounds from `CalcBounds(GetComponentTransform()).GetBox()`.
+- No Tick; non-replicated; no RPC.
+- CameraPawn integration included: one-time `TActorIterator` discovery; weak cached reference.
+- 0 volumes → Config FallbackBounds; 1 volume → volume bounds; >1 → first + one Warning.
+- Invalid volume bounds → one Warning + fallback.
+- XYZ clamp retained; CameraPawn movement/input math unchanged.
+- `GPRuntime.Build.cs` unchanged.
+- Compile deviation: `SetCanBeDamaged(false)` (UE 5.8 private `bCanBeDamaged`).
+
+### What was intentionally not done
+- No CameraConfigDataAsset / PlayerController / GameMode / MatchAssetLoader / Build.cs / config / maps / Content / Input changes.
+- No GP-S15 (not started; task file not created).
+- Full live camera clamp validation remains deferred until GP-S15 input wiring.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor / module load (operator) → **PASSED**
+- Class Viewer finds `GP_CameraBoundsVolume` (operator) → **PASSED**
+- BoundsBox root/settings (operator) → **PASSED**
+- Extent editing (operator) → **PASSED**
+- HiddenInGame PIE (operator) → **PASSED**
+- GP-S14 related errors → **ABSENT**
+- Temporary actor deleted → **confirmed**
+- Map not saved → **confirmed**
+- No tracked Content/map changes → **confirmed**
+- Blocking errors → **NONE**
+- Full live camera clamp validation → **deferred** until GP-S15 (accepted; not a blocker)
+- Notes: Tech lead accepted. Operator accepted.
+- GP-S15 → **not started**
+
+### Acceptance checklist
+- [x] Compiles (three targets) PASSED
+- [x] BoundsVolume + CameraPawn integration implemented
+- [x] No Input / maps / assets / Build.cs / PC / GameMode
+- [x] Editor / Class Viewer / temp place / PIE (operator) PASSED
+- [x] Temporary actor deleted; map not saved; no tracked Content/map changes
+- [x] Full live clamp validation deferred (accepted)
+- [x] Tech lead accepted GP-S14
+- [x] Operator accepted GP-S14
+
+### Stop condition
+GP-S14 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S15 IMC_GP_Camera + IA_Camera_* assets, PlayerController binding**. GP-S15 not started; task file not materialized. Full live camera clamp validation deferred until GP-S15.

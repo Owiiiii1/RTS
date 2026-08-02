@@ -3,10 +3,12 @@
 #include "Camera/GPCameraPawn.h"
 
 #include "Camera/CameraComponent.h"
+#include "Camera/GPCameraBoundsVolume.h"
 #include "Camera/GPCameraConfigDataAsset.h"
 #include "Components/SceneComponent.h"
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
+#include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
 
@@ -66,6 +68,7 @@ void AGP_CameraPawn::BeginPlay()
 	SpringArm->TargetArmLength = CurrentArmLength;
 
 	ApplyPitch(*Config);
+	FindCameraBoundsVolume();
 	ClampToBounds(*Config);
 
 	if (!ConfigRef.IsNull())
@@ -401,9 +404,74 @@ void AGP_CameraPawn::ApplyPan(
 	SetActorLocation(NewLocation, false);
 }
 
+void AGP_CameraPawn::FindCameraBoundsVolume()
+{
+	CameraBoundsVolume.Reset();
+
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	int32 VolumeCount = 0;
+	for (TActorIterator<AGP_CameraBoundsVolume> It(World); It; ++It)
+	{
+		AGP_CameraBoundsVolume* Volume = *It;
+		if (Volume == nullptr)
+		{
+			continue;
+		}
+
+		++VolumeCount;
+		if (VolumeCount == 1)
+		{
+			CameraBoundsVolume = Volume;
+		}
+	}
+
+	if (VolumeCount > 1)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("Found multiple GP_CameraBoundsVolume actors. Using the first actor found. The level should contain at most one."));
+	}
+}
+
+FBox AGP_CameraPawn::ResolveCameraBounds(const UGP_CameraConfigDataAsset& Config)
+{
+	if (CameraBoundsVolume.IsValid())
+	{
+		const FBox VolumeBounds = CameraBoundsVolume->GetCameraBounds();
+		const bool bVolumeBoundsValid =
+			VolumeBounds.IsValid
+			&& VolumeBounds.Min.X < VolumeBounds.Max.X
+			&& VolumeBounds.Min.Y < VolumeBounds.Max.Y
+			&& VolumeBounds.Min.Z < VolumeBounds.Max.Z;
+
+		if (bVolumeBoundsValid)
+		{
+			return VolumeBounds;
+		}
+
+		if (!bInvalidCameraBoundsWarningLogged)
+		{
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("AGP_CameraPawn: CameraBoundsVolume '%s' returned invalid FBox. Using Config FallbackBounds."),
+				*GetNameSafe(CameraBoundsVolume.Get()));
+			bInvalidCameraBoundsWarningLogged = true;
+		}
+	}
+
+	return Config.FallbackBounds;
+}
+
 void AGP_CameraPawn::ClampToBounds(const UGP_CameraConfigDataAsset& Config)
 {
-	const FBox& Bounds = Config.FallbackBounds;
+	const FBox Bounds = ResolveCameraBounds(Config);
 	if (!Bounds.IsValid)
 	{
 		return;

@@ -2221,3 +2221,55 @@ Status: **TEAM_ASSIGNMENT_DONE_B2A_PENDING** (B2 doc) / parent **TEAM_ASSIGNMENT
 
 ### Stop condition
 Team-assignment checkpoint commit/push on feature branch only. Do **not** merge to main here. Do **not** start B2a from this pass.
+
+## 2026-08-02 — GP-S16 / Phase B2a — click selection implementation
+
+Status: **B2A_CODE_READY_VALIDATION_PENDING** (superseded by validation entry below)
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Content/GrimProtocol/Input/Selection/IA_Select.uasset`
+- `GP/Content/GrimProtocol/Input/Selection/IMC_GP_Selection.uasset`
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_B2_Input_Integration.md`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- B2a click selection implementation completed on `feature/gp-s16-b2a-click-selection` (base = main merge team assignment `58b929f`).
+- Selection assets created: Boolean `IA_Select`; `IMC_GP_Selection` maps LMB → IA_Select.
+- Input lifecycle: soft paths, LoadSynchronous, separate binding guard, BeginPlayingState add at priority **110**, EndPlay remove; camera priority **100** unchanged.
+- Click classification: friendly replace/add/toggle; enemy/neutral inspect; ground clear; unassigned fail-closed; 8px drag deferred to B2b.
+- Trace: deproject + Visibility line trace at release screen position; ignore CameraPawn; no RPC; local-only.
+- Diagnostic one-shot `GP Selection:` LogTemp line per processed click.
+- B2b / GP-S17 / full GP-S18 **not** started.
+
+### Builds / validation
+- Builds: GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED** (implementation pass; C++ unchanged at finalization).
+- Operator validation **pending** at that time.
+
+### Stop condition
+**B2A_CODE_READY_VALIDATION_PENDING.** Await operator PIE validation. No commit/push in implementation pass.
+
+## 2026-08-02 — GP-S16 / Phase B2a — operator validation + finalize
+
+Status: **B2A_DONE_B2B_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_B2_Input_Integration.md` — `B2A_DONE_B2B_PENDING`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — `PHASE_B2A_DONE_PHASE_B2B_PENDING`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- Prior B2a C++ + selection assets included in the same commit (implementation preserved; no C++ edits at finalization)
+
+### What was done
+- B2a operator validation **passed**: click replace, Shift add, Ctrl toggle, Ctrl-over-Shift precedence, enemy/neutral inspect, friendly clears inspect, ground clear.
+- Drag ≤8 px remains click; drag >8 px correctly deferred without selection mutation (marquee intentionally absent in B2a).
+- Camera regression **absent**; selection assets load correctly; no map saved; no additional assets.
+- Listen-server host/client classification **passed**; local selection isolation **passed**; no related replication warnings.
+- B2a ready for merge. B2b **not** started. GP-S17 / full GP-S18 **not** started. GP-S16 overall remains **NOT DONE**.
+
+### Builds / validation
+- Retained from implementation (C++ unchanged): GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+
+### Stop condition
+Commit/push `feature/gp-s16-b2a-click-selection` only. Do **not** merge to main. Do **not** start B2b, GP-S17, or full GP-S18.

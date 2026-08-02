@@ -2,18 +2,62 @@
 (Click select / inspect / marquee — blocked by team assignment)
 
 ## Status
-**Status: TEAM_ASSIGNMENT_DONE_B2A_PENDING**
+**Status: B2A_DONE_B2B_PENDING**
 
-GameMode playable TeamId allocator **implemented and operator-validated**.
-TeamId blocker **resolved**.
-B2a click selection is now **technically unblocked**.
-B2a code **has not started**. B2b marquee **has not started**.
+TeamId prerequisite **merged**.
+B2a click selection / inspect **implemented and operator-validated**.
+B2a is **complete**.
+B2b marquee **has not started** (owns candidate resolution + rectangle visualization).
+Absence of drag-selection in B2a is **expected**.
 GP-S16 overall remains **NOT DONE**. Do **not** start GP-S17 or full GP-S18.
 
 Parent GP-S16 selection status:
-**`TEAM_ASSIGNMENT_DONE_PHASE_B2A_PENDING`**
+**`PHASE_B2A_DONE_PHASE_B2B_PENDING`**
 
-### Team assignment (implemented)
+### B2a implemented (complete)
+
+| Item | Detail |
+| --- | --- |
+| Assets | `IA_Select` (Boolean), `IMC_GP_Selection` (LMB → IA_Select) |
+| Soft paths | `/Game/GrimProtocol/Input/Selection/IA_Select.IA_Select`, `.../IMC_GP_Selection.IMC_GP_Selection` |
+| IMC priority | Selection **110**; Camera **100** unchanged |
+| Lifecycle | Separate soft-load / bind / BeginPlayingState add / EndPlay remove; local only |
+| Press/release | Started stores screen pos; Completed click if distance ≤ **8 px**; else `DragDeferredToB2b` |
+| Canceled | Clears pending press only |
+| Trace | `DeprojectScreenPositionToWorld` + `LineTraceSingleByChannel(ECC_Visibility)`; ignore controlled pawn; distance `1000000`; complex=false |
+| Modifiers | Ctrl / Shift via `IsInputKeyDown` (both left/right); Ctrl wins |
+| Friendly selectable | Replace / Shift Add / Ctrl Toggle; clear inspect first (may double-broadcast) |
+| Enemy/neutral inspectable | `SetInspectedTarget`; selection unchanged; modifiers ignored |
+| Ground / non-unit | `ClearAllSelectionState` |
+| Unassigned unit (`TeamId < 0`) | Fail closed; no clear |
+| Unassigned local player | Fail closed; no invent TeamId |
+| Diagnostics | One-shot `LogTemp` line per processed click |
+| No RPC / local-only | Yes |
+| `IA_Marquee` | **Not** created (B2b) |
+
+### B2a operator validation (passed)
+
+| Check | Result |
+| --- | --- |
+| Plain friendly click / replace | **PASS** |
+| Shift add | **PASS** |
+| Ctrl toggle | **PASS** |
+| Shift+Ctrl uses Ctrl precedence | **PASS** |
+| Enemy inspect | **PASS** |
+| Neutral inspect | **PASS** |
+| Friendly click clears inspected target | **PASS** |
+| Ground / non-unit clear | **PASS** |
+| Drag below 8 px behaves as click | **PASS** |
+| Drag above 8 px: no selection mutation; deferred to B2b | **PASS** |
+| Camera pan / zoom / rotation regression | **NONE** |
+| Selection asset load errors | **NONE** |
+| 2-player host classification | **PASS** |
+| 2-player client classification | **PASS** |
+| Local selection isolation | **PASS** |
+| Selection / replication warnings | **NONE** |
+| Map saved / additional assets | **NO** |
+
+### Team assignment (merged; prior validation)
 
 | Item | Detail |
 | --- | --- |
@@ -27,21 +71,7 @@ Parent GP-S16 selection status:
 | Monotonic / no reuse | Logout does not decrement; no renumber |
 | Transport | Existing PlayerState TeamId replication (no RPC) |
 
-### Operator validation (passed)
-
-| Check | Result |
-| --- | --- |
-| Standalone player TeamId `1` | **PASS** |
-| Listen-server host TeamId `1` | **PASS** |
-| Remote client TeamId `2` | **PASS** |
-| TeamIds unique | **PASS** |
-| Repeated PIE resets allocator to `1`/`2` | **PASS** |
-| PlayerState / TeamId replication warnings | **NONE** |
-| Camera regression | **NONE** |
-| Match-flow regression | **NONE** |
-| Map saved / assets created | **NO** |
-
-Next input packaging remains **SPLIT_CLICK_THEN_MARQUEE** (B2a → B2b).
+Next input packaging remains **SPLIT_CLICK_THEN_MARQUEE** — B2a **done**, B2b **pending**.
 
 ---
 
@@ -54,7 +84,8 @@ Next input packaging remains **SPLIT_CLICK_THEN_MARQUEE** (B2a → B2b).
 | Selectable UnitBase prerequisite | **Merged** |
 | Phase B2 analysis | **Complete** (this doc) |
 | Player TeamId assignment | **DONE** (operator-validated) |
-| Phase B2 code / assets | **Not started** |
+| Phase B2a click / inspect | **DONE** (operator-validated) |
+| Phase B2b marquee | **Not started** |
 | GP-S17 / full GP-S18 | Not started |
 
 ---
@@ -236,6 +267,6 @@ Do **not** start B2a/B2b/GP-S17/full GP-S18 from this finalize pass.
 
 ## Stop condition
 
-**TEAM_ASSIGNMENT_DONE_B2A_PENDING.** Team-assignment prerequisite ready for merge.
-Do **not** start B2a / B2b / GP-S17 / full GP-S18 from this finalize pass.
+**B2A_CODE_READY_VALIDATION_PENDING.** Await operator PIE validation of click select/inspect/clear.
+Do **not** start B2b / GP-S17 / full GP-S18.
 Do **not** mark GP-S16 DONE.

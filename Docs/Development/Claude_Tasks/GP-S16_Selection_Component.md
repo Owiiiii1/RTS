@@ -28,18 +28,17 @@ Local-only selection state component owned by `AGP_PlayerController`:
 - **no** gameplay-state mutation
 
 ## Status
-**Status: TEAM_ASSIGNMENT_DONE_PHASE_B2A_PENDING**
+**Status: PHASE_B2A_DONE_PHASE_B2B_PENDING**
 
 Phase A **merged**.
 Phase B1 **merged**.
 Selectable UnitBase prerequisite **merged**.
-Phase B2 analysis **merged**.
-TeamId assignment **implemented and operator-validated** — see
+TeamId assignment **merged**.
+Phase B2a click/inspect **implemented and operator-validated** — see
 `GP-S16_Phase_B2_Input_Integration.md`
-(`Status: TEAM_ASSIGNMENT_DONE_B2A_PENDING`).
+(`Status: B2A_DONE_B2B_PENDING`).
 
-Phase B2a click/inspect input **pending** (technically unblocked).
-Phase B2b marquee **pending**.
+Phase B2b marquee **pending** (not started).
 
 **GP-S16 overall is NOT DONE.** Do **not** set `Status: DONE`.
 GP-S17 / full GP-S18 **not started**.
@@ -70,19 +69,19 @@ Rules:
 - `SetSelectionFromUnits` copies and canonicalizes input; does not retain the caller's array
 - `IsUnitSelected` is const, null-safe, non-mutating
 
-Locked asset paths remain documentation-only (not created):
+Selection input assets (B2a):
 
 ```text
-/Game/GrimProtocol/Input/Selection/IA_Select
-/Game/GrimProtocol/Input/Selection/IA_Marquee
-/Game/GrimProtocol/Input/Selection/IMC_GP_Selection
+/Game/GrimProtocol/Input/Selection/IA_Select          (created)
+/Game/GrimProtocol/Input/Selection/IMC_GP_Selection  (created)
+/Game/GrimProtocol/Input/Selection/IA_Marquee        (deferred — B2b)
 ```
 
 ### Still blocked / deferred
 
-- Player TeamId assignment — **DONE** (operator-validated); B2a pending
-- Phase B2a click/inspect input — after team assignment
-- Phase B2b marquee + rectangle visualization — after B2a
+- Player TeamId assignment — **DONE** (operator-validated)
+- Phase B2a click/inspect input — **DONE** (operator-validated)
+- Phase B2b marquee + rectangle visualization — **pending** (not started)
 - Temporary test Blueprint / “any UnitBase selectable” / `-1→1` fallback — rejected
 - GP-S17 / full GP-S18 — not started
 
@@ -642,4 +641,4 @@ Do **not** start GP-S17. Do **not** implement full GP-S18 under this analysis.
 TDD/13, TDD/04, TDD/09, TDD/12, TDD/15, GDD/09, GP-0202, ADR-0006, GP-S15, Naming_Conventions, STYLE, CONTRIBUTING.
 
 ## Stop Condition
-Status **TEAM_ASSIGNMENT_DONE_PHASE_B2A_PENDING**. Team-assignment prerequisite ready for merge. Phase B2a is technically unblocked but **not started**. Do **not** start B2a / B2b / GP-S17 / full GP-S18 here. Do **not** mark GP-S16 DONE.
+Status **PHASE_B2A_CODE_READY_VALIDATION_PENDING**. Await operator validation of B2a click select/inspect. Do **not** start B2b / GP-S17 / full GP-S18. Do **not** mark GP-S16 DONE.

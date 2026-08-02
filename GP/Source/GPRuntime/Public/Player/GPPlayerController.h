@@ -17,7 +17,7 @@ struct FInputActionValue;
 /**
  * Network-correct PlayerController.
  * Forwards Enhanced Input camera intents to possessed AGP_CameraPawn; queries ASC from PlayerState.
- * Owns local UGP_SelectionComponent state shell. Does not own camera math, ASC creation, or UI.
+ * Owns local UGP_SelectionComponent and Phase B2a click select/inspect policy.
  */
 UCLASS()
 class GPRUNTIME_API AGP_PlayerController : public APlayerController
@@ -55,6 +55,26 @@ private:
 	void LoadCameraInputAssets();
 	void BindCameraInputActions(UEnhancedInputComponent& EnhancedInput);
 
+	void InitializeSelectionInput();
+	void RemoveSelectionInputMapping();
+	void LoadSelectionInputAssets();
+	void BindSelectionInputActions(UEnhancedInputComponent& EnhancedInput);
+
+	void OnSelectionStarted(const FInputActionValue& Value);
+	void OnSelectionCompleted(const FInputActionValue& Value);
+	void OnSelectionCanceled(const FInputActionValue& Value);
+
+	void ProcessSelectionClickAtScreenPosition(const FVector2D& ScreenPosition);
+	void LogSelectionClickResult(
+		const TCHAR* ResultTag,
+		const AActor* HitActor,
+		bool bHasHitTeam,
+		int32 HitTeamId,
+		int32 LocalTeamId) const;
+
+	bool IsControlModifierDown() const;
+	bool IsShiftModifierDown() const;
+
 	AGP_CameraPawn* GetCameraPawn() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Selection", meta = (AllowPrivateAccess = "true"))
@@ -81,6 +101,12 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Camera|Input")
 	TSoftObjectPtr<UInputAction> CameraRotateToggleAction;
 
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Selection|Input")
+	TSoftObjectPtr<UInputMappingContext> SelectionMappingContext;
+
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Selection|Input")
+	TSoftObjectPtr<UInputAction> SelectionAction;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> LoadedCameraMappingContext;
 
@@ -96,14 +122,28 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> LoadedCameraRotateToggleAction;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UInputMappingContext> LoadedSelectionMappingContext;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> LoadedSelectionAction;
+
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */
 	TWeakObjectPtr<APawn> LastInitializedLocalPawn;
 	TWeakObjectPtr<APlayerState> LastInitializedPlayerState;
 	TWeakObjectPtr<UGP_AbilitySystemComponent> LastNotifiedAbilitySystemComponent;
 
 	static constexpr int32 CameraMappingPriority = 100;
+	static constexpr int32 SelectionMappingPriority = 110;
+	static constexpr float SelectionDragThresholdPixels = 8.0f;
+	static constexpr float SelectionTraceDistance = 1000000.0f;
 
 	bool bCameraMappingContextAdded = false;
 	bool bCameraInputBindingsInstalled = false;
 	bool bCameraRotateHeld = false;
+
+	bool bSelectionMappingContextAdded = false;
+	bool bSelectionInputBindingsInstalled = false;
+	bool bSelectionPressActive = false;
+	FVector2D SelectionPressScreenPosition = FVector2D::ZeroVector;
 };

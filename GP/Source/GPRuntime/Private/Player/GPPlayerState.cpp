@@ -4,6 +4,7 @@
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPPlayerAttributeSet.h"
 #include "GameFramework/Controller.h"
+#include "Net/UnrealNetwork.h"
 
 AGP_PlayerState::AGP_PlayerState()
 {
@@ -14,6 +15,13 @@ AGP_PlayerState::AGP_PlayerState()
 	AbilitySystemComponent->SetProjectReplicationMode(EGameplayEffectReplicationMode::Mixed);
 
 	PlayerAttributeSet = CreateDefaultSubobject<UGP_PlayerAttributeSet>(TEXT("PlayerAttributeSet"));
+}
+
+void AGP_PlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME_CONDITION_NOTIFY(AGP_PlayerState, TeamId, COND_None, REPNOTIFY_OnChanged);
 }
 
 UAbilitySystemComponent* AGP_PlayerState::GetAbilitySystemComponent() const
@@ -29,6 +37,30 @@ UGP_AbilitySystemComponent* AGP_PlayerState::GetGPAbilitySystemComponent() const
 const UGP_PlayerAttributeSet* AGP_PlayerState::GetPlayerAttributeSet() const
 {
 	return PlayerAttributeSet;
+}
+
+int32 AGP_PlayerState::GetTeamId() const
+{
+	return TeamId;
+}
+
+void AGP_PlayerState::SetTeamId(int32 NewTeamId)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (TeamId == NewTeamId)
+	{
+		return;
+	}
+
+	TeamId = NewTeamId;
+}
+
+void AGP_PlayerState::OnRep_TeamId()
+{
 }
 
 void AGP_PlayerState::BeginPlay()

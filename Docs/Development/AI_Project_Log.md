@@ -2072,3 +2072,57 @@ Status: **READY_FOR_IMPLEMENTATION** (prerequisite task) / parent GP-S16 **PHASE
 
 ### Stop condition
 Documentation checkpoint commit/push on feature branch only. Do **not** merge to main here. Await tech-lead **implementation** assignment. Do **not** start Phase B2 until prerequisite code is merged and validated.
+
+## 2026-08-02 — GP-S16 / Selectable UnitBase prerequisite — implementation
+
+Status: **CODE_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Player/GPPlayerState.h` / `.cpp` — TeamId + replication
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h` / `.cpp` — TeamId + interim CapabilityTags queries
+- `GP/Source/GPRuntime/Public/Units/GPUnit.h` / `.cpp` — created concrete unit
+- `Docs/Development/Claude_Tasks/GP-S16_Selectable_UnitBase_Prerequisite.md`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Selectable UnitBase implementation completed on `feature/gp-s16-selectable-unitbase-implementation` (base = main merge design `9758f26`).
+- TeamId replication added on PlayerState and UnitBase (`COND_None`, authority-only setters, empty OnRep hooks).
+- Interim capability queries added via `FGPGameplayTags` native handles (exact match).
+- Concrete `AGP_Unit` added: capsule `42x88`, Visibility block, mesh `/Engine/BasicShapes/Cylinder.Cylinder`.
+- No input assets/maps; SelectionComponent / PlayerController unchanged.
+- Phase B2 / GP-S17 / full GP-S18 **not** started.
+
+### Builds / validation
+- Builds: see implementation REPORT (GPEditor Dev / GP Dev / GP Shipping + UHT).
+- Operator validation **pending** (place unit, Visibility trace, TeamId listen-server, capability defaults).
+
+### Stop condition
+**CODE_READY_VALIDATION_PENDING** at implementation time; operator validation recorded in following entry.
+
+## 2026-08-02 — GP-S16 / Selectable UnitBase prerequisite — closed DONE
+
+Status: **DONE** (prerequisite) / parent GP-S16 **PHASE_B1_DONE_UNITBASE_PREREQUISITE_DONE_PHASE_B2_PENDING**
+
+### Files changed
+- `GPPlayerState` / `GPUnitBase` / `GPUnit` (implementation retained)
+- `Docs/Development/Claude_Tasks/GP-S16_Selectable_UnitBase_Prerequisite.md` — DONE
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — Phase B2 pending
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Selectable UnitBase prerequisite **operator validation passed**.
+- Placeable `AGP_Unit` confirmed (visible cylinder, capsule Visibility collision, capability defaults).
+- 2-player listen-server PIE passed; no prerequisite-related replication errors.
+- Unrelated editor/config warnings observed and recorded (MotionVectorSimulation, MVVM ClassViewer parents, GameplayCueNotifyPaths) — **not fixed** in this task.
+- Prerequisite ready for merge (feature branch).
+- Builds retained from implementation: GPEditor Dev / GP Dev / GP Shipping / UHT **PASSED** (C++ unchanged in finalize).
+
+### What was intentionally not done
+- No map save; no assets created.
+- No renderer / MVVM / GameplayCue / plugin / project-settings changes.
+- Phase B2 / GP-S17 / full GP-S18 **not** started.
+- GP-S16 overall remains **NOT DONE**.
+
+### Stop condition
+**DONE** prerequisite checkpoint. Push feature branch only. Do **not** merge to main here. Do **not** start Phase B2 from this pass.

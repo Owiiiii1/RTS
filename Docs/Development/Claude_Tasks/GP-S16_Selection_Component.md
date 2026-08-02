@@ -28,20 +28,18 @@ Local-only selection state component owned by `AGP_PlayerController`:
 - **no** gameplay-state mutation
 
 ## Status
-**Status: PHASE_B1_DONE_UNITBASE_PREREQUISITE_READY**
+**Status: PHASE_B1_DONE_UNITBASE_PREREQUISITE_DONE_PHASE_B2_PENDING**
 
 Phase A local selection state shell **merged**.
 Phase B input integration analysis **merged**.
-Phase B1 container-only mutation API **merged** (`aac4470` Merge GP-S16 selection mutation API).
-Selectable UnitBase prerequisite **architecture analysis complete and approved** — see
-`GP-S16_Selectable_UnitBase_Prerequisite.md` (`Status: READY_FOR_IMPLEMENTATION`).
+Phase B1 container-only mutation API **merged**.
+Selectable UnitBase prerequisite **implemented and operator-validated** — see
+`GP-S16_Selectable_UnitBase_Prerequisite.md` (`Status: DONE`).
 
-**Prerequisite implementation has not started.**
 **GP-S16 overall is NOT DONE.** Do **not** set `Status: DONE`.
-No operator-visible selection yet.
-No input assets created.
-
-Phase B2 remains **blocked** until the selectable UnitBase prerequisite code is **merged and validated**.
+Phase B2 input / click / marquee integration is now **technically unblocked**.
+Phase B2 **not started**.
+No input assets or cursor selection exist yet.
 
 ### Phase B1 completed
 
@@ -85,7 +83,7 @@ Locked asset paths remain documentation-only (not created):
 
 ### Approved remaining split
 
-#### Prerequisite (separate tech-lead task) — READY_FOR_IMPLEMENTATION
+#### Prerequisite — DONE (Phase B2 pending)
 
 See `Docs/Development/Claude_Tasks/GP-S16_Selectable_UnitBase_Prerequisite.md`.
 
@@ -635,4 +633,4 @@ Do **not** start GP-S17. Do **not** implement full GP-S18 under this analysis.
 TDD/13, TDD/04, TDD/09, TDD/12, TDD/15, GDD/09, GP-0202, ADR-0006, GP-S15, Naming_Conventions, STYLE, CONTRIBUTING.
 
 ## Stop Condition
-Status **PHASE_B1_DONE_UNITBASE_PREREQUISITE_READY**. Selectable UnitBase prerequisite architecture approved (`READY_FOR_IMPLEMENTATION`). Implementation **not started** in the analysis checkpoint. Do **not** start Phase B2 until prerequisite code is merged and validated. Do **not** start GP-S17 or full GP-S18. Do **not** mark GP-S16 DONE.
+Status **PHASE_B1_DONE_UNITBASE_PREREQUISITE_DONE_PHASE_B2_PENDING**. Selectable UnitBase prerequisite DONE and operator-validated. Phase B2 is technically unblocked but **not started**. Do **not** mark GP-S16 DONE. Do **not** start GP-S17 or full GP-S18 here.

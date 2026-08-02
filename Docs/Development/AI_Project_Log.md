@@ -1279,3 +1279,135 @@ Status: **DONE**
 
 ### Stop condition
 GP-S12 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S13 AGP_CameraPawn** (Pan/Zoom/Rotate/Edge-scroll, soft-ref Config + AsyncLoad). GP-S13 not started; task file not materialized.
+
+---
+
+## 2026-08-02 — GP-S13 / Camera Pawn — specification pass
+
+Status: **BLOCKED** (OD locks required; C++ not started; no assets/maps/config/input/Build.cs changes)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S13_Camera_Pawn.md` — created full OD-1…OD-40 BLOCKED specification
+- `Docs/Development/Claude_Tasks/README.md` — GP-S13 = BLOCKED; GP-S14 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S13 specification BLOCKED; NEXT = S13 implementation after SPEC_READY + explicit assignment
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Specification-only pass for `AGP_CameraPawn` (local RTS camera movement).
+- Disk audit: no CameraPawn / BoundsVolume / Input Actions / IMC / camera `.uasset`; Config DA present; PC scaffold has no camera bindings; GameMode has no DefaultPawnClass override; MatchAssetLoader remains match path-list preload only.
+- Documented conflicts: STYLE `Player/` vs proposed `Camera/` paths; self-load vs MatchAssetLoader; CDO vs freeze fallback; actor vs RootScene yaw; edge-scroll falloff wording; wheel zoom sign; pitch Lerp argument order (TDD step 8 vs field table); Tick pan↔rotate order; bounds XY vs FBox Z; log category; operator harness without wiring.
+- Locked only non-conflicting items (base class APawn, public intent API names, non-replication, component hierarchy intent, pan world/speed formulas, zoom FInterpTo, OD-40 out-of-scope). Remaining ODs marked BLOCKED for tech lead.
+
+### Blocking tech-lead decisions
+See task file Blocking OD checklist: OD-2, OD-6, OD-8…OD-10, OD-14, OD-18, OD-19, OD-21, OD-23, OD-24, OD-28/37, OD-29, OD-32, OD-34…OD-36, OD-39 (and related async/EndPlay).
+
+### What was intentionally not done
+- **No C++**, no Blueprint, no `.uasset`, no PlayerController / GameMode / MatchAssetLoader / CameraConfig / Build.cs / config / maps / Input changes.
+- No builds.
+- No commit / push.
+- No GP-S14 (not started; task file not materialized).
+
+### Stop condition
+BLOCKED. Await tech-lead OD locks → SPEC_READY rewrite / implementation assignment. Do **not** start GP-S14.
+
+---
+
+## 2026-08-02 — GP-S13 / Camera Pawn — tech-lead resolution → SPEC_READY
+
+Status: **SPEC_READY** (OD-1…OD-40 locked; C++ not started; no assets/maps/config/input/Build.cs changes)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S13_Camera_Pawn.md` — BLOCKED removed; OD-1…OD-40 RESOLVED; locked API/behavior
+- `Docs/Development/Claude_Tasks/README.md` — GP-S13 = SPEC_READY; GP-S14 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S13 specification ready; NEXT = S13 implementation after explicit approval
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Applied tech-lead locks for `AGP_CameraPawn`:
+  - `APawn`, non-replicated (`bReplicates=false`, no RPC/replicated props)
+  - RootScene → SpringArm → Camera; collision/lag off
+  - CDO fallback via `GetDefault<UGP_CameraConfigDataAsset>()`
+  - self async load via StreamableManager (not MatchAssetLoader)
+  - `TSharedPtr<FStreamableHandle>` + CreateUObject callback + EndPlay cancel
+  - positive wheel zooms in (`TargetArmLength -= …`)
+  - RootScene owns yaw; SpringArm owns pitch
+  - exact edge threshold/falloff formula; FallbackBounds XYZ clamp
+  - Tick order: rotate before pan (same-frame yaw)
+  - no PlayerController / Input / GameMode / map / `.uasset` wiring
+- Exact planned API recorded in task file.
+
+### What was intentionally not done
+- **No C++**, no Blueprint, no `.uasset`, no PlayerController / GameMode / MatchAssetLoader / CameraConfig / Build.cs / config / maps / Input changes.
+- No builds.
+- No commit / push.
+- No GP-S14 (not started; task file not materialized).
+
+### Stop condition
+SPEC_READY. Await explicit **GP-S13 implementation** assignment before C++. Do **not** start GP-S14.
+
+---
+
+## 2026-08-02 — GP-S13 / Camera Pawn — implementation
+
+Status: **DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Camera/GPCameraPawn.h` — new
+- `GP/Source/GPRuntime/Private/Camera/GPCameraPawn.cpp` — new
+- `Docs/Development/Claude_Tasks/GP-S13_Camera_Pawn.md` — closed DONE
+- `Docs/Development/Claude_Tasks/README.md` — GP-S13 DONE; S14+ not auto-materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S13; NEXT = GP-S14 (TDD/13; task file not created)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Implemented `AGP_CameraPawn : APawn` — non-replicated local presentation pawn.
+- Components: RootScene → SpringArm → Camera.
+- Tick movement guarded by `IsLocallyControlled()`.
+- CDO config fallback; optional self-owned async `ConfigRef` loading via StreamableManager.
+- MatchAssetLoader unchanged.
+- Handle callback uses `CreateUObject`; EndPlay cancels active handle.
+- Public C++ intent API: `SetPanInput` / `AddZoomInput` / `AddRotateInput` / `SetRotateActive`.
+- Edge-scroll formula + pan smoothing implemented.
+- Positive wheel input zooms in; pitch driven by zoom fraction; RootScene owns yaw.
+- `FallbackBounds` clamps XYZ.
+- Compile fixes: `struct FStreamableHandle` forward-decl; explicit destructor for incomplete handle type.
+- `GPRuntime.Build.cs` unchanged.
+
+### What was intentionally not done
+- No PlayerController / GameMode / MatchAssetLoader / CameraConfig / Build.cs / config / maps / Input / `.uasset` changes.
+- No GP-S14 (not started; task file not created).
+- Full live camera movement validation remains deferred until PC/Input wiring.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor / module load (operator) → **PASSED**
+- Class Viewer finds `GP_CameraPawn` (operator) → **PASSED**
+- Component hierarchy RootScene → SpringArm → Camera (operator) → **PASSED**
+- SpringArm settings (operator) → **PASSED**
+- Camera settings (operator) → **PASSED**
+- PIE (operator) → **PASSED**
+- GP-S13 related errors → **ABSENT**
+- Temporary Blueprint deleted → **confirmed**
+- No tracked Content/map/config changes → **confirmed**
+- Blocking errors → **NONE**
+- Full live pan/zoom/rotate/edge-scroll validation → **deferred** until PlayerController / Enhanced Input wiring (accepted; not a blocker)
+- Notes: Tech lead accepted. Operator accepted.
+- GP-S14 → **not started**
+
+### Acceptance checklist
+- [x] Compiles (three targets) PASSED
+- [x] Locked OD behavior contracts implemented
+- [x] No PC / Input / GameMode / MatchAssetLoader / AssetManager config / `.uasset` / Build.cs
+- [x] Editor / module load (operator) PASSED
+- [x] Class Viewer + component hierarchy/settings (operator) PASSED
+- [x] PIE PASSED (operator)
+- [x] GP-S13 related errors ABSENT
+- [x] Temporary Blueprint deleted; no tracked Content/map/config changes
+- [x] Full live movement validation deferred (accepted)
+- [x] Tech lead accepted GP-S13
+- [x] Operator accepted GP-S13
+
+### Stop condition
+GP-S13 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S14 AGP_CameraBoundsVolume**. GP-S14 not started; task file not materialized. Full live camera movement validation deferred until PC/Input wiring.

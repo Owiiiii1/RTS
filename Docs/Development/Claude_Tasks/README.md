@@ -8,7 +8,7 @@
 
 > Стан станом на 2026-08-01 (після SETUP-001 + DOCS-001). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: `git log -- GP/Source/`, наявність файлів зі `Files Touched` поточної slice, заповненість секції `Output` у task-файлі, та [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md).
 
-**Поточна фаза:** Phase 6B — Slice 2 / Camera. GP-S12 **DONE**. Наступний етап автоматично не починати.
+**Поточна фаза:** Phase 6B — Slice 3 / Camera. GP-S13 **DONE**. Наступний етап автоматично не починати.
 
 **Status of materialized slices:**
 
@@ -25,11 +25,12 @@
 | GP-S09 AGP_PlayerState | **DONE** | [`GP-S09_Player_State.md`](GP-S09_Player_State.md) |
 | GP-S10 UGP_MatchAssetLoader | **DONE** | [`GP-S10_Match_Asset_Loader.md`](GP-S10_Match_Asset_Loader.md) |
 | GP-S11 AGP_LobbyState | **DONE** | [`GP-S11_Lobby_State.md`](GP-S11_Lobby_State.md) |
-| **GP-S12 UGP_CameraConfigDataAsset** | **DONE** | [`GP-S12_Camera_Config_Data_Asset.md`](GP-S12_Camera_Config_Data_Asset.md) — operator Editor validation PASSED; tech lead + operator accepted |
-| GP-S13+ | not materialized | do not create / start until explicitly assigned |
+| GP-S12 UGP_CameraConfigDataAsset | **DONE** | [`GP-S12_Camera_Config_Data_Asset.md`](GP-S12_Camera_Config_Data_Asset.md) |
+| **GP-S13 AGP_CameraPawn** | **DONE** | [`GP-S13_Camera_Pawn.md`](GP-S13_Camera_Pawn.md) — operator Editor validation PASSED; tech lead + operator accepted; live movement deferred to PC/Input |
+| GP-S14+ | not materialized | do not create / start until explicitly assigned |
 | GP-S54..S56 (Slice 10, AI Opponent) | files materialized, code not started | depends on Slice 1 → 9 sequence |
 
-**NEXT action для агента:** STOP. GP-S12 closed. Do **not** start GP-S13. Do **not** materialize GP-S13+. Wait for explicit assignment.
+**NEXT action для агента:** STOP. GP-S13 closed. Do **not** start GP-S14. Do **not** materialize GP-S14+. Wait for explicit assignment.
 
 ### Drift Warning
 

@@ -34,18 +34,18 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S11 DONE** |
-| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`, `AGP_GameMode`, `AGP_PlayerController`, `AGP_PlayerState`, `UGP_MatchAssetLoader`, `AGP_LobbyState`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
-| Last closed stage | **GP-S11** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S12 DONE** |
+| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`, `AGP_GameMode`, `AGP_PlayerController`, `AGP_PlayerState`, `UGP_MatchAssetLoader`, `AGP_LobbyState`, `UGP_CameraConfigDataAsset`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
+| Last closed stage | **GP-S12** |
 | Current stage | **none** |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** none (GP-S11 closed).
+**Current:** none (GP-S12 closed).
 
-**NEXT:** GP-S12 UGP_CameraConfigDataAsset per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order. Task file **not** created. Do **not** start GP-S12 until explicitly assigned.
+**NEXT:** GP-S13 AGP_CameraPawn (Pan/Zoom/Rotate/Edge-scroll, soft-ref Config + AsyncLoad) per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order. Task file **not** created. Do **not** start GP-S13 until explicitly assigned.
 
 Per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order (Slice 2 — Match Flow + Asset Loader).
 
@@ -62,7 +62,8 @@ Per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Imple
 9. GP-S09 AGP_PlayerState (+ASC + AttributeSet) — **DONE**
 10. GP-S10 UGP_MatchAssetLoader — **DONE**
 11. GP-S11 AGP_LobbyState — **DONE**
-12. GP-S12 UGP_CameraConfigDataAsset — not started / task file not materialized
+12. GP-S12 UGP_CameraConfigDataAsset — **DONE**
+13. GP-S13 AGP_CameraPawn — not started / task file not materialized
 
 ---
 
@@ -144,4 +145,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S11 are closed. Current stage: **none**. NEXT per TDD/13 = GP-S12 UGP_CameraConfigDataAsset — **not started**; task file **not** materialized.
+SETUP-001, DOCS-001, GP-S01…GP-S12 are closed. Current stage: **none**. NEXT per TDD/13 = GP-S13 AGP_CameraPawn — **not started**; task file **not** materialized.

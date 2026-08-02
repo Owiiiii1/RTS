@@ -1170,3 +1170,112 @@ Status: **DONE**
 
 ### Stop condition
 GP-S11 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S12 UGP_CameraConfigDataAsset**. GP-S12 not started; task file not materialized.
+
+---
+
+## 2026-08-02 — GP-S12 / Camera Config Data Asset — specification pass
+
+Status: **BLOCKED** (fields / PrimaryAsset identity / Blueprint / visibility / IsDataValid / FBox / .uasset / pitch clamps need tech-lead locks; C++ not started; no .uasset)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S12_Camera_Config_Data_Asset.md` — created full OD-1…OD-26 BLOCKED specification
+- `Docs/Development/Claude_Tasks/README.md` — GP-S12 = BLOCKED; GP-S13 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S12 specification BLOCKED
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Specification-only pass for `UGP_CameraConfigDataAsset` (RTS camera tuning schema).
+- Disk audit: no DA classes, no CameraPawn/Bounds/Config, no AssetManager/PrimaryAsset ini, no Content DataAssets, no camera `.uasset`.
+- Verified UE 5.8: `UObject::IsDataValid(FDataValidationContext&)` in CoreUObject under `WITH_EDITOR`; default `UPrimaryDataAsset::GetPrimaryAssetId` uses native class name as type (not TDD/11 `GP_CameraConfig`).
+- Documented conflicts: TDD/11 full schema + PrimaryAssetType registration vs GP-S10 PrimaryAsset deferral + TDD/10 missing Camera row; Blueprint/public-field style; `.uasset` creation; FBox vs XY; strict vs inclusive arm-length validation.
+
+### Blocking tech-lead decisions
+Lock field list, PrimaryAssetId/config, Blueprint exposure, field visibility, IsDataValid, FallbackBounds type, `.uasset` instance, arm-length inequalities, pitch clamp metadata (see task checklist).
+
+### What was intentionally not done
+- **No C++**, no `.uasset`, no AssetManager/config/uproject/Build.cs/CameraPawn/Input changes.
+- No commit / push.
+- No GP-S13.
+
+### Stop condition
+BLOCKED. Await tech-lead OD locks → SPEC_READY rewrite / implementation assignment. Do **not** start GP-S13.
+
+---
+
+## 2026-08-02 — GP-S12 / Camera Config Data Asset — tech-lead resolution → SPEC_READY
+
+Status: **SPEC_READY** (OD-1…OD-26 locked; C++ not started; no .uasset)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S12_Camera_Config_Data_Asset.md` — BLOCKED removed; OD-1…OD-26 RESOLVED; locked schema/API/validation
+- `Docs/Development/Claude_Tasks/README.md` — GP-S12 = SPEC_READY; GP-S13 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S12 specification ready; NEXT = GP-S12 implementation after explicit approval
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Applied final tech-lead locks: `UPrimaryDataAsset`; full flat 19-field TDD/11 schema; BlueprintType; public `EditDefaultsOnly` + `BlueprintReadOnly`; Editor-only `IsDataValid`; strict `MinArmLength < DefaultArmLength < MaxArmLength`; `FBox FallbackBounds`; no `GetPrimaryAssetId` override; no PrimaryAsset registration/config; no asset instance; no Build.cs/config/CameraPawn changes.
+
+### What was intentionally not done
+- **No C++**, no `.uasset`, no AssetManager/config/uproject/Build.cs changes, no builds, no commit/push.
+- No GP-S13.
+
+### Stop condition
+SPEC_READY. Await explicit **GP-S12 implementation** assignment before C++. Do **not** start GP-S13.
+
+---
+
+## 2026-08-02 — GP-S12 / Camera Config Data Asset — implementation
+
+Status: **DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Camera/GPCameraConfigDataAsset.h` — new
+- `GP/Source/GPRuntime/Private/Camera/GPCameraConfigDataAsset.cpp` — new
+- `Docs/Development/Claude_Tasks/GP-S12_Camera_Config_Data_Asset.md` — closed DONE
+- `Docs/Development/Claude_Tasks/README.md` — GP-S12 DONE; S13+ not auto-materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S12; NEXT = GP-S13 (TDD/13; task file not created)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Implemented `UGP_CameraConfigDataAsset : UPrimaryDataAsset` with exact 19 TDD/11 fields/defaults.
+- `BlueprintType`; public `EditDefaultsOnly` + `BlueprintReadOnly`; categories/metadata/Units as locked.
+- Editor-only `IsDataValid`: Super first; strict Min < Default < Max; FBox IsValid + Min < Max XYZ; two warnings only.
+- No `GetPrimaryAssetId`; no AssetManager/config; no `.uasset`; no CameraPawn/Input/MatchAssetLoader.
+- Include: `Engine/DataAsset.h` (UE 5.8; planned `Engine/PrimaryDataAsset.h` does not exist).
+- `GPRuntime.Build.cs` unchanged.
+
+### What was intentionally not done
+- No permanent Data Asset instance / config / uproject / Build.cs / CameraPawn / Input changes.
+- No GP-S13 (not started; task file not created).
+- PrimaryAsset registration remains deferred.
+- CameraPawn soft-ref integration remains deferred to later slice.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Editor / module load (operator) → **PASSED**
+- `GP_CameraConfigDataAsset` found in Class Viewer (operator) → **PASSED**
+- `GP_CameraConfigDataAsset` found in Data Asset picker (operator) → **PASSED**
+- PIE (operator) → **PASSED**
+- GP-S12 related errors → **ABSENT**
+- No permanent Data Asset instance created → **confirmed**
+- Blocking errors → **NONE**
+- Notes: Tech lead accepted. Operator accepted.
+- Output Log render-thread warnings (`grass.GrassMap.UseRuntimeGeneration`, `grass.Enable`, `r.MotionVectorSimulation`) → **unrelated engine/render warnings**; not GP-S12 defects; not fixed in this stage
+- PrimaryAsset registration → **deferred**
+- CameraPawn soft-ref integration → **deferred**
+
+### Acceptance checklist
+- [x] Compiles (three targets) PASSED
+- [x] UPrimaryDataAsset + 19 fields + Editor IsDataValid
+- [x] No CameraPawn / Input / MatchAssetLoader / AssetManager / `.uasset` / Build.cs
+- [x] Editor / module load (operator) PASSED
+- [x] Class Viewer + Data Asset picker (operator) PASSED
+- [x] PIE PASSED (operator)
+- [x] GP-S12 related errors ABSENT
+- [x] Tech lead accepted GP-S12
+- [x] Operator accepted GP-S12
+
+### Stop condition
+GP-S12 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S13 AGP_CameraPawn** (Pan/Zoom/Rotate/Edge-scroll, soft-ref Config + AsyncLoad). GP-S13 not started; task file not materialized.

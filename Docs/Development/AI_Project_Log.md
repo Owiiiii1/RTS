@@ -2562,3 +2562,58 @@ Status: **ANALYSIS_READY_FIRST_CHECKPOINT_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s17-command-component-analysis` only. Do **not** merge to main. Do **not** implement Phase A / CommandComponent / CommandRequest / IA/IMC / RPC / Move. Do **not** start GP-S18 / GP-S19.
+
+## 2026-08-02 — GP-S17 / Phase A — CommandComponent shell implementation
+
+Status: **PHASE_A_CODE_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Command/GPCommandComponent.h` (created)
+- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp` (created)
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h` — CommandComponent subobject + getter
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp` — CreateDefaultSubobject
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md` — `PHASE_A_CODE_READY_VALIDATION_PENDING`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase A on `feature/gp-s17-phase-a-command-component-shell` (base = `main` `40ba905`).
+- `UGP_CommandComponent` ownership shell: no tick, `SetIsReplicatedByDefault(false)`, no RPC/request/delegates/selection/command API.
+- PC owns default subobject + `GetCommandComponent()` (mirrors SelectionComponent accessor style).
+- No construction log (operator confirms via Editor inspection).
+- SelectionComponent / Camera / input / UnitBase / Build.cs / assets / maps / config unchanged.
+- Phase B blocked by canonical `FGP_CommandRequest` pull-forward. GP-S18 / GP-S19 **not** started.
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED** (UHT via compile path)
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- Operator validation **pending**.
+
+### Stop condition
+**PHASE_A_CODE_READY_VALIDATION_PENDING.** No commit/push in implementation pass. Await operator validation. Do **not** start Phase B / GP-S18 / GP-S19.
+
+## 2026-08-02 — GP-S17 / Phase A — completion checkpoint
+
+Status: **PHASE_A_DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Command/GPCommandComponent.h` (created)
+- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp` (created)
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md` — `PHASE_A_DONE`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase A shell: `UGP_CommandComponent` (`UActorComponent`), constructor-only, tick off, non-replicated; PC default subobject + C++ getter; no selection cache / public command API / RPC / input / execution.
+- Build matrix **PASSED** (Editor/Dev/Shipping; UHT via compile path). C++ unchanged at finalize — rebuilds not repeated.
+- Operator validation **passed**: runtime presence via console `DisplayAll` (`...GP_PlayerController_0.CommandComponent`); Standalone + 2P listen-server; camera/selection/marquee/control groups/debug boxes no regression; selection local-only; no RPC/replication warnings; no RMB/movement (expected); no extra assets/maps.
+- Next prerequisite: canonical `FGP_CommandRequest` contract pull-forward before Phase B.
+- GP-S18 / GP-S19 implementation **not** started.
+
+### Builds / validation
+- Retained from implementation: GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+- Operator validation — **PASSED**.
+
+### Stop condition
+Commit/push `feature/gp-s17-phase-a-command-component-shell` only. Do **not** merge to main. Do **not** start Phase B / request struct / RMB / RPC / Move / GP-S18 / GP-S19.

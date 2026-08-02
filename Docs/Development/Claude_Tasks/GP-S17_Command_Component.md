@@ -43,10 +43,12 @@ Phase A CommandComponent **shell complete** and operator-validated:
 Canonical `FGP_CommandRequest` prerequisite **implemented and validated**: see
 `GP-S17_Command_Request_Prerequisite.md`
 (`Status: IMPLEMENTATION_DONE`).
-Phase B dependency **resolved after merge**.
-Phase B itself **not started** — no BuildSmartCommand / input / RPC / execution yet.
+
+**Phase B Status: ANALYSIS_READY_IMPLEMENTATION_PENDING** — see
+`GP-S17_Phase_B_Smart_Command.md`.
+Phase B = local `BuildSmartCommand` only (no input / RPC / execution).
 GP-S18 / full GP-S19 implementation **not started**.
-Executable Move **not** in Phase A.
+Executable Move **not** in Phase A/B.
 
 ---
 
@@ -409,8 +411,18 @@ Shell has no user-facing command behavior. Operator validation is **minimal**.
 | RPC / replication warnings | **NONE** |
 | Extra assets / maps | **NO** |
 
+## Phase B analysis (summary)
+
+Locked in `GP-S17_Phase_B_Smart_Command.md`
+(`Status: ANALYSIS_READY_IMPLEMENTATION_PENDING`):
+
+- API: `bool BuildSmartCommand(AActor*, const FVector&, bool bQueue, FGP_CommandRequest&) const`
+- Public C++; const; **no** UFUNCTION / Blueprint / overloads / target-context struct
+- Selection: owner PC → `GetSelectionComponent()` → `GetSelectedUnits()`; temp normalize array OK; **no** persistent cache
+- Mapping: null→Move; enemy/neutral/unassigned UnitBase→Attack speculative; friendly→Move (actor cleared); Resource.Node→Mine if accessor confirmed; unknown→Move; no Interact
+- Capability: no local filter; OutRequest always reset; failure → default only
+
 ## Stop Condition
-Status **PHASE_A_DONE** (request prerequisite **IMPLEMENTATION_DONE** separately).
-Phase A complete. Canonical `FGP_CommandRequest` implemented and Blueprint-validated.
-After merge, next step is GP-S17 Phase B analysis/implementation planning — **not** started here.
-Do **not** start BuildSmartCommand / input / RPC / Move / GP-S18 / full GP-S19 from this finalize.
+Status **PHASE_A_DONE** + Phase B **ANALYSIS_READY_IMPLEMENTATION_PENDING**.
+Do **not** implement BuildSmartCommand / input / RPC / Move / GP-S18 / full GP-S19 from this finalize.
+Await Phase B implementation assignment.

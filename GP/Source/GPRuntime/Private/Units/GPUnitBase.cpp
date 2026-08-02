@@ -2,8 +2,50 @@
 
 #include "Units/GPUnitBase.h"
 
+#include "Command/GPUnitCommand.h"
+#include "Engine/EngineBaseTypes.h"
+#include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 #include "Tags/GPGameplayTags.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogGPUnitCommand, Log, All);
+
+namespace GPUnitCommandPrivate
+{
+	static const TCHAR* NetModeToString(ENetMode NetMode)
+	{
+		switch (NetMode)
+		{
+		case NM_Standalone:
+			return TEXT("Standalone");
+		case NM_DedicatedServer:
+			return TEXT("DedicatedServer");
+		case NM_ListenServer:
+			return TEXT("ListenServer");
+		case NM_Client:
+			return TEXT("Client");
+		default:
+			return TEXT("Unknown");
+		}
+	}
+
+	static const TCHAR* RoleToString(ENetRole Role)
+	{
+		switch (Role)
+		{
+		case ROLE_None:
+			return TEXT("None");
+		case ROLE_SimulatedProxy:
+			return TEXT("SimulatedProxy");
+		case ROLE_AutonomousProxy:
+			return TEXT("AutonomousProxy");
+		case ROLE_Authority:
+			return TEXT("Authority");
+		default:
+			return TEXT("Unknown");
+		}
+	}
+}
 
 AGP_UnitBase::AGP_UnitBase()
 {
@@ -82,6 +124,28 @@ bool AGP_UnitBase::IsSelectionTypeUnit() const
 bool AGP_UnitBase::IsSelectionTypeBuilding() const
 {
 	return HasCapabilityTag(FGPGameplayTags::Get().Selection_Type_Building);
+}
+
+void AGP_UnitBase::ReceiveCommand(const FGP_UnitCommand& Command)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	const UWorld* World = GetWorld();
+	const ENetMode NetMode = World != nullptr ? World->GetNetMode() : NM_MAX;
+
+	UE_LOG(LogGPUnitCommand, Log,
+		TEXT("GP UnitCommand Received: Unit=%s Team=%d Tag=%s TargetActor=%s Loc=%s Queue=%s Role=%s NetMode=%s"),
+		*GetName(),
+		GetTeamId(),
+		*Command.CommandTag.ToString(),
+		*GetNameSafe(Command.TargetActor),
+		*Command.TargetLocation.ToCompactString(),
+		Command.bQueue ? TEXT("true") : TEXT("false"),
+		GPUnitCommandPrivate::RoleToString(GetLocalRole()),
+		GPUnitCommandPrivate::NetModeToString(NetMode));
 }
 
 void AGP_UnitBase::OnRep_TeamId()

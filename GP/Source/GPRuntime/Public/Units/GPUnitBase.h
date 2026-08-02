@@ -7,6 +7,8 @@
 #include "GameplayTagContainer.h"
 #include "GPUnitBase.generated.h"
 
+struct FGP_UnitCommand;
+
 /**
  * Abstract replicated unit ancestor.
  * Provides TeamId + interim CapabilityTags for selection eligibility facts.
@@ -21,6 +23,12 @@ public:
 	AGP_UnitBase();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/**
+	 * Server delivery boundary for a validated unit command (GP-S17 Phase E).
+	 * Base implementation: authority guard + diagnostic log only. No gameplay execution.
+	 */
+	virtual void ReceiveCommand(const FGP_UnitCommand& Command);
 
 	UFUNCTION(BlueprintPure, Category = "GP|Team")
 	int32 GetTeamId() const;

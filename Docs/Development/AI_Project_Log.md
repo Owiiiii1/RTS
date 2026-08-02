@@ -2952,3 +2952,63 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s17-phase-e-command-dispatch-analysis` only. Do **not** merge to main. Do **not** add dispatch/receiver/execution from this pass.
+
+## 2026-08-02 — GP-S17 / Phase E — command dispatch implementation
+
+Status: **CODE_READY_NETWORK_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Command/GPUnitCommand.h` — new
+- `GP/Source/GPRuntime/Public/Command/GPCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_E_Command_Dispatch.md` — `CODE_READY_NETWORK_VALIDATION_PENDING`
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase E on `feature/gp-s17-phase-e-command-dispatch-implementation` (base = `main` `4e791d1`).
+- Per-unit payload `FGP_UnitCommand` (plain C++, `GPRUNTIME_API`); server `DispatchValidatedCommand`; `AGP_UnitBase::ReceiveCommand` authority + diagnostic log.
+- RPC after Accepted calls dispatch; aggregate `GP CommandDispatch` summary; per-unit `GP UnitCommand Received`.
+- No gameplay effect / movement / AI / GAS / queue / command state. Validator purity retained.
+- Operator Standalone/2P validation **pending**. GP-S17 not marked DONE.
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED** (UHT via compile path)
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- Operator network validation — **pending**
+
+### Stop condition
+**CODE_READY_NETWORK_VALIDATION_PENDING.** No commit/push in this implementation pass. Do **not** merge to main. Do **not** start Move/execution/GP-S18/S19.
+
+## 2026-08-02 — GP-S17 / Phase E — completion checkpoint (GP-S17 close)
+
+Status: **CODE_DONE_NETWORK_VALIDATED** / GP-S17 **DONE_WITH_EXECUTION_DEFERRED**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Command/GPUnitCommand.h` — new
+- `GP/Source/GPRuntime/Public/Command/GPCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_E_Command_Dispatch.md` — `CODE_DONE_NETWORK_VALIDATED`
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md` — `DONE_WITH_EXECUTION_DEFERRED`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Full client→server→unit delivery path complete on `feature/gp-s17-phase-e-command-dispatch-implementation` (base = `main` `4e791d1`).
+- Operator-validated: remote client Team 2 Move (Accepted + Received Authority + Dispatch 1/1/0); host Team 1 multi Move (2 Received, Dispatch 2/2/0); Attack payload with enemy TargetActor + authoritative location (target not dispatched).
+- No execution by design: no movement / AI / GAS / queue / unit state mutation; no duplicate Received; no RPC warnings in supplied excerpt.
+- Queue=true / Mine / Standalone: NOT CAPTURED or DEFERRED (see Phase E matrix).
+- Final GP-S17 status: **DONE_WITH_EXECUTION_DEFERRED**. Next: GP-S18; GP-S20–S22 Move (TDD/13).
+
+### Builds / validation
+- Retained: GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+- Operator delivery validation — **CODE_DONE_NETWORK_VALIDATED**.
+
+### Stop condition
+Commit/push `feature/gp-s17-phase-e-command-dispatch-implementation` only. Do **not** merge to main. Do **not** start Move / AI / GAS / Attack/Mine execution / queue / Client RPC from this close-out.

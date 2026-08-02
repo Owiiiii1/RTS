@@ -919,6 +919,38 @@ void AGP_PlayerController::Server_RequestCommand_Implementation(const FGP_Comman
 		*ValidatedRequest.TargetLocation.ToCompactString(),
 		ValidatedRequest.bQueue ? TEXT("true") : TEXT("false"),
 		GPCommandServerPrivate::NetModeToString(GetNetMode()));
+
+	const int32 RequestedUnits = ValidatedRequest.IssuingUnits.Num();
+	const int32 DeliveredUnits = CommandComponent->DispatchValidatedCommand(ValidatedRequest);
+	const int32 SkippedUnits = RequestedUnits - DeliveredUnits;
+
+	if (DeliveredUnits == 0)
+	{
+		UE_LOG(LogGPCommandServer, Warning,
+			TEXT("GP CommandDispatch: PC=%s Team=%d Tag=%s RequestedUnits=%d DeliveredUnits=0 SkippedUnits=%d TargetActor=%s Queue=%s NetMode=%s"),
+			*GetName(),
+			TeamId,
+			*ValidatedRequest.CommandTag.ToString(),
+			RequestedUnits,
+			SkippedUnits,
+			*GetNameSafe(ValidatedRequest.TargetActor),
+			ValidatedRequest.bQueue ? TEXT("true") : TEXT("false"),
+			GPCommandServerPrivate::NetModeToString(GetNetMode()));
+	}
+	else
+	{
+		UE_LOG(LogGPCommandServer, Log,
+			TEXT("GP CommandDispatch: PC=%s Team=%d Tag=%s RequestedUnits=%d DeliveredUnits=%d SkippedUnits=%d TargetActor=%s Queue=%s NetMode=%s"),
+			*GetName(),
+			TeamId,
+			*ValidatedRequest.CommandTag.ToString(),
+			RequestedUnits,
+			DeliveredUnits,
+			SkippedUnits,
+			*GetNameSafe(ValidatedRequest.TargetActor),
+			ValidatedRequest.bQueue ? TEXT("true") : TEXT("false"),
+			GPCommandServerPrivate::NetModeToString(GetNetMode()));
+	}
 }
 
 void AGP_PlayerController::OnSelectionStarted(const FInputActionValue& Value)

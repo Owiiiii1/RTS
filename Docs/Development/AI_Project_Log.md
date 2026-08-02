@@ -2617,3 +2617,29 @@ Status: **PHASE_A_DONE**
 
 ### Stop condition
 Commit/push `feature/gp-s17-phase-a-command-component-shell` only. Do **not** merge to main. Do **not** start Phase B / request struct / RMB / RPC / Move / GP-S18 / GP-S19.
+
+## 2026-08-02 — GP-S17 / Command Request prerequisite — analysis finalize
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Request_Prerequisite.md` — created / finalized
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md` — link to request prerequisite
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Finalized canonical `FGP_CommandRequest` contract on `feature/gp-s17-command-request-prerequisite-analysis` (base = `main` `ebe64c8`).
+- Header/module: `GPRuntime` `Command/GPCommandRequest.h`; `USTRUCT(BlueprintType)`; no MVP NetSerialize.
+- Exact five `UPROPERTY` fields: `CommandTag`, `IssuingUnits` (`TObjectPtr` array, cap 24), `TargetLocation`, `TargetActor`, `bQueue`.
+- Invariants: `GP.Command` tag; normalize 1–24; drop null/stale; dedupe first-occurrence; no client TeamId/owner/capabilities; target shape by tag; no target-kind enum.
+- Queue: `false`=replace; `true`=reserved intent — must not silently imply full queue until documented reject/downgrade policy.
+- Trust: client intent only; server validates ownership/capability/legality/FoW/nav/etc.
+- Full GP-S19 **not** started; future S19 must reuse this type.
+- Next checkpoint: **struct only** (one header, five fields, UHT/builds; no PC/CommandComponent/RPC/input).
+- Docs-only. No C++ / assets / maps / config / Build.cs / `.uproject` / TDD / DOCUMENTATION_INDEX.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+### Stop condition
+Commit/push `feature/gp-s17-command-request-prerequisite-analysis` only. Do **not** merge to main. Do **not** create struct code / NetSerialize / Phase B / full GP-S19 from this finalize.

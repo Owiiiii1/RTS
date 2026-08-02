@@ -40,8 +40,10 @@ Phase A CommandComponent **shell complete** and operator-validated:
 - Standalone **PASS**; 2-player listen-server **PASS**
 - Camera / selection / marquee / control groups / debug boxes **unchanged**
 
-Phase B+ **blocked** by canonical `FGP_CommandRequest` pull-forward (GP-S19 scope).
-GP-S18 / GP-S19 implementation **not started**.
+Phase B+ **blocked** until canonical `FGP_CommandRequest` exists.
+Request contract analysis: see `GP-S17_Command_Request_Prerequisite.md`
+(`Status: ANALYSIS_READY_IMPLEMENTATION_PENDING`).
+GP-S18 / full GP-S19 implementation **not started** (S19-scope pull-forward of request type only).
 Executable Move **not** in Phase A.
 
 ---
@@ -407,6 +409,7 @@ Shell has no user-facing command behavior. Operator validation is **minimal**.
 
 ## Stop Condition
 Status **PHASE_A_DONE**.
-Phase A complete. Next prerequisite: canonical `FGP_CommandRequest` pull-forward before Phase B.
-Do **not** start Phase B / request struct / input / RPC / Move from this finalize.
-Do **not** start GP-S18 / GP-S19 implementation from this pass.
+Phase A complete.
+Next: implement canonical `FGP_CommandRequest` per `GP-S17_Command_Request_Prerequisite.md` (struct only), then Phase B.
+Do **not** start Phase B / input / RPC / Move until the request type lands.
+Do **not** start GP-S18 / full GP-S19 from the request pull-forward.

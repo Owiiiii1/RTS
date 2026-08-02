@@ -2870,3 +2870,62 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s17-phase-d-server-submission-analysis` only. Do **not** merge to main. Do **not** add RPC / validator / execution from this pass.
+
+## 2026-08-02 — GP-S17 / Phase D — server submission implementation
+
+Status: **CODE_READY_NETWORK_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Command/GPCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_D_Server_Submission.md` — `CODE_READY_NETWORK_VALIDATION_PENDING`
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase D on `feature/gp-s17-phase-d-server-submission-implementation` (base = `main` `4fbe88b`).
+- `EGP_CommandRejectReason` + `ValidateAndNormalizeCommand` on non-replicated CommandComponent (owner PC → PS → TeamId).
+- `Server_RequestCommand(const FGP_CommandRequest&)` Reliable, no WithValidation; called after local BuildSmartCommand + diagnostic log.
+- Whitelist Move/Attack/Mine; team-commandability prune; aggregate UnauthorizedUnits Warning; location ContainsNaN/IsFinite/≤1e7; preserve bQueue; Accept/Reject `LogGPCommandServer`.
+- No dispatch/execution/movement/Client RPC/rate limiter. Request struct / tags / UnitBase / PlayerState / Build.cs unchanged.
+- Operator network validation **pending**.
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED** (UHT via compile path; const& USTRUCT RPC OK)
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- Operator 2P/network validation — **pending**
+
+### Stop condition
+**CODE_READY_NETWORK_VALIDATION_PENDING.** No commit/push in this implementation pass. Do **not** merge to main. Do **not** start dispatch / execution / GP-S18/S19.
+
+## 2026-08-02 — GP-S17 / Phase D — completion checkpoint
+
+Status: **CODE_DONE_NETWORK_VALIDATED**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Command/GPCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_D_Server_Submission.md` — `CODE_DONE_NETWORK_VALIDATED`
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase D complete on `feature/gp-s17-phase-d-server-submission-implementation` (base = `main` `4fbe88b`).
+- Reliable `Server_RequestCommand(const FGP_CommandRequest&)`; USTRUCT RPC serialization UHT + runtime 2P **PASSED**.
+- Server validator/normalize; listen-host Move/Attack Accepted; Queue=true preserved (no execution); Attack TargetLocation server-normalized to actor.
+- Remote client Team=2 / `GP_PlayerController_1` → server Accepted; host Team=1 / `GP_PlayerController_0` isolated.
+- No dispatch / movement / AI / receiver / queue execution. No RPC-related errors/warnings in provided log.
+- Resource Mine network log pair **DEFERRED**. Malicious-input operator matrix **DEFERRED** (no permanent hook).
+- Next stage: command dispatch/receiver **analysis** — not immediate movement. Full GP-S18/S19 **not** started.
+
+### Builds / validation
+- Retained: GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+- Operator network validation — **CODE_DONE_NETWORK_VALIDATED** (matrix in Phase D doc).
+
+### Stop condition
+Commit/push `feature/gp-s17-phase-d-server-submission-implementation` only. Do **not** merge to main. Do **not** start dispatch / movement / AI / Client RPC / permanent malicious hooks / GP-S18/S19.

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Command/GPCommandRequest.h"
 #include "GameFramework/PlayerController.h"
 #include "GPPlayerController.generated.h"
 
@@ -34,6 +35,10 @@ public:
 
 	UGP_SelectionComponent* GetSelectionComponent() const;
 	UGP_CommandComponent* GetCommandComponent() const;
+
+	/** Phase D: submit candidate command for authoritative validate/normalize. No execution. */
+	UFUNCTION(Server, Reliable)
+	void Server_RequestCommand(const FGP_CommandRequest& Request);
 
 protected:
 	virtual void BeginPlay() override;

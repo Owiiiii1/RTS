@@ -29,6 +29,57 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPCommandInput, Log, All);
 
+namespace GPCommandServerPrivate
+{
+	static const TCHAR* RejectReasonToString(EGP_CommandRejectReason Reason)
+	{
+		switch (Reason)
+		{
+		case EGP_CommandRejectReason::None:
+			return TEXT("None");
+		case EGP_CommandRejectReason::InvalidController:
+			return TEXT("InvalidController");
+		case EGP_CommandRejectReason::InvalidPlayerState:
+			return TEXT("InvalidPlayerState");
+		case EGP_CommandRejectReason::InvalidRequestingTeam:
+			return TEXT("InvalidRequestingTeam");
+		case EGP_CommandRejectReason::InvalidCommandTag:
+			return TEXT("InvalidCommandTag");
+		case EGP_CommandRejectReason::UnsupportedCommandTag:
+			return TEXT("UnsupportedCommandTag");
+		case EGP_CommandRejectReason::NoCommandableUnits:
+			return TEXT("NoCommandableUnits");
+		case EGP_CommandRejectReason::InvalidTarget:
+			return TEXT("InvalidTarget");
+		case EGP_CommandRejectReason::FriendlyAttackTarget:
+			return TEXT("FriendlyAttackTarget");
+		case EGP_CommandRejectReason::InvalidResourceTarget:
+			return TEXT("InvalidResourceTarget");
+		case EGP_CommandRejectReason::InvalidTargetLocation:
+			return TEXT("InvalidTargetLocation");
+		default:
+			return TEXT("Unknown");
+		}
+	}
+
+	static const TCHAR* NetModeToString(ENetMode NetMode)
+	{
+		switch (NetMode)
+		{
+		case NM_Standalone:
+			return TEXT("Standalone");
+		case NM_DedicatedServer:
+			return TEXT("DedicatedServer");
+		case NM_ListenServer:
+			return TEXT("ListenServer");
+		case NM_Client:
+			return TEXT("Client");
+		default:
+			return TEXT("Unknown");
+		}
+	}
+}
+
 AGP_PlayerController::AGP_PlayerController()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -815,6 +866,59 @@ void AGP_PlayerController::OnCommandInputStarted(const FInputActionValue& Value)
 		LocalTeamId,
 		NetModeText,
 		RoleText);
+
+	Server_RequestCommand(Request);
+}
+
+void AGP_PlayerController::Server_RequestCommand_Implementation(const FGP_CommandRequest& Request)
+{
+	if (CommandComponent == nullptr)
+	{
+		UE_LOG(LogGPCommandServer, Warning,
+			TEXT("GP CommandServer Rejected: PC=%s Team=invalid Reason=InvalidController Tag=%s ReceivedUnits=%d NetMode=%s"),
+			*GetName(),
+			*Request.CommandTag.ToString(),
+			Request.IssuingUnits.Num(),
+			GPCommandServerPrivate::NetModeToString(GetNetMode()));
+		return;
+	}
+
+	const int32 ReceivedUnits = Request.IssuingUnits.Num();
+	FGP_CommandRequest ValidatedRequest;
+	EGP_CommandRejectReason RejectReason = EGP_CommandRejectReason::None;
+
+	if (!CommandComponent->ValidateAndNormalizeCommand(Request, ValidatedRequest, RejectReason))
+	{
+		const AGP_PlayerState* GPPlayerState = GetPlayerState<AGP_PlayerState>();
+		const FString TeamText = GPPlayerState != nullptr
+			? FString::FromInt(GPPlayerState->GetTeamId())
+			: FString(TEXT("invalid"));
+
+		UE_LOG(LogGPCommandServer, Log,
+			TEXT("GP CommandServer Rejected: PC=%s Team=%s Reason=%s Tag=%s ReceivedUnits=%d NetMode=%s"),
+			*GetName(),
+			*TeamText,
+			GPCommandServerPrivate::RejectReasonToString(RejectReason),
+			*Request.CommandTag.ToString(),
+			ReceivedUnits,
+			GPCommandServerPrivate::NetModeToString(GetNetMode()));
+		return;
+	}
+
+	const AGP_PlayerState* GPPlayerState = GetPlayerState<AGP_PlayerState>();
+	const int32 TeamId = GPPlayerState != nullptr ? GPPlayerState->GetTeamId() : -1;
+
+	UE_LOG(LogGPCommandServer, Log,
+		TEXT("GP CommandServer Accepted: PC=%s Team=%d Tag=%s ReceivedUnits=%d AcceptedUnits=%d TargetActor=%s Loc=%s Queue=%s NetMode=%s"),
+		*GetName(),
+		TeamId,
+		*ValidatedRequest.CommandTag.ToString(),
+		ReceivedUnits,
+		ValidatedRequest.IssuingUnits.Num(),
+		*GetNameSafe(ValidatedRequest.TargetActor),
+		*ValidatedRequest.TargetLocation.ToCompactString(),
+		ValidatedRequest.bQueue ? TEXT("true") : TEXT("false"),
+		GPCommandServerPrivate::NetModeToString(GetNetMode()));
 }
 
 void AGP_PlayerController::OnSelectionStarted(const FInputActionValue& Value)

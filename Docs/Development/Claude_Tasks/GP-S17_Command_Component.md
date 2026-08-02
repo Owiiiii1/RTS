@@ -50,11 +50,13 @@ operator-checked cases (see Phase C matrix; Neutral/Unknown **NOT AVAILABLE**,
 
 **Phase C Status: CODE_DONE_OPERATOR_VALIDATED** — see
 `GP-S17_Phase_C_Command_Input.md`.
-Phase C complete: local RMB → Visibility trace → `BuildSmartCommand` → diagnostic log.
-Request remains local-only — **no** RPC / execution / movement.
-Next stage = separate analysis checkpoint for server submission / RPC — **not** started here.
+
+**Phase D Status: ANALYSIS_READY_IMPLEMENTATION_PENDING** — see
+`GP-S17_Phase_D_Server_Submission.md`.
+Phase D = `Server_RequestCommand` on PC + authoritative validate/normalize + server logs.
+**No** dispatch / execution / movement in Phase D.
 GP-S18 / full GP-S19 implementation **not started**.
-Executable Move **not** in Phase A/B/C.
+Executable Move **not** in Phase A–D.
 
 ---
 
@@ -253,7 +255,8 @@ Blocked until S19 request pull-forward. Local build only; no RPC.
 Separate Commands IMC; local classification; no execution.
 
 ### Phase D — RPC and server ownership validation
-`Server_RequestCommand` + TeamId checks; no fake Move.
+`Server_RequestCommand` (PC, Reliable) + `ValidateAndNormalizeCommand` on CommandComponent;
+prune unauthorized units; whitelist Move/Attack/Mine; server logs; **no** dispatch/Move.
 
 ### Phase E — Executable Move (deferred)
 Owner: GP-S20–S22 (+ unit command receiver). **Not** first GP-S17 checkpoint.
@@ -440,7 +443,20 @@ See `GP-S17_Phase_C_Command_Input.md`
 - Phase B functional mapping confirmed for checked cases; Phase C **complete**
 - Next: separate analysis for server submission / RPC — **do not** start RPC here
 
+## Phase D analysis (summary)
+
+Final contract locked in `GP-S17_Phase_D_Server_Submission.md`
+(`Status: ANALYSIS_READY_IMPLEMENTATION_PENDING`):
+
+- RPC: `AGP_PlayerController::Server_RequestCommand(const FGP_CommandRequest&)` — Reliable, no WithValidation
+- Flow: local BuildSmartCommand → local log → RPC; no client-side validator bypass
+- Validator: `UGP_CommandComponent::ValidateAndNormalizeCommand(Client, Out, Reason)` — owner-derived PC/PS/TeamId; non-replicated component
+- Normalize: whitelist Move/Attack/Mine; team-commandability prune+Warning; cap 24; target shape; location finite/≤1e7; preserve `bQueue` intent
+- Attack neutral TeamId `0`/`-1` allowed; friendly Attack reject; actor cmds use authoritative actor location
+- Server Accept/Reject logs (`LogGPCommandServer`); no client ack; no rate limiter; **execution deferred**
+- Request struct changes: **NO**
+
 ## Stop Condition
-Status **PHASE_A_DONE** + Phase B **CODE_DONE** (checked cases via Phase C) + Phase C **CODE_DONE_OPERATOR_VALIDATED**.
-Await separate server-submission / RPC analysis assignment.
-Do **not** start RPC / Move / GP-S18 / full GP-S19 from this close-out.
+Status Phase A–C **DONE** + Phase D **ANALYSIS_READY_IMPLEMENTATION_PENDING**.
+Do **not** implement Phase D RPC/validator / Move / GP-S18 / full GP-S19 from this analysis.
+Await Phase D implementation assignment.

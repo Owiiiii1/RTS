@@ -2848,3 +2848,25 @@ Status: **CODE_DONE_OPERATOR_VALIDATED**
 
 ### Stop condition
 Commit/push `feature/gp-s17-phase-c-command-input-implementation` only. Do **not** merge to main. Do **not** start RPC / server validation / execution / GP-S18/S19.
+
+## 2026-08-02 — GP-S17 / Phase D — server submission analysis
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_D_Server_Submission.md` — created (final contract)
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md` — Phase D status
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase D final analysis on `feature/gp-s17-phase-d-server-submission-analysis` (base = `main` `2d0f7c3`).
+- RPC owner: `AGP_PlayerController::Server_RequestCommand` (Reliable, no WithValidation); CommandComponent remains non-replicated.
+- Validator boundary: `ValidateAndNormalizeCommand` on CommandComponent (owner-derived PC/PS/TeamId; no controller arg).
+- Normalization: exact Move/Attack/Mine whitelist; team-commandability prune+Warning; cap 24; target/location/`bQueue` intent policies; Accept/Reject `LogGPCommandServer` only.
+- Execution / dispatch / movement / client ack / rate limiter **deferred**. Request struct changes **NO**. Docs-only.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+### Stop condition
+Commit/push `feature/gp-s17-phase-d-server-submission-analysis` only. Do **not** merge to main. Do **not** add RPC / validator / execution from this pass.

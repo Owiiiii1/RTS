@@ -1990,3 +1990,32 @@ Status: **PHASE_A_DONE_SPLIT_REQUIRED**
 
 ### Stop condition
 **PHASE_A_DONE_SPLIT_REQUIRED.** Documentation checkpoint commit/push on feature branch only. Do **not** merge to main. Await tech-lead assignment for Phase B1. Do **not** create selection assets until Phase B2.
+
+## 2026-08-02 — GP-S16 / Selection Phase B1 — container mutation API
+
+Status: **PHASE_B1_DONE_UNITBASE_PREREQUISITE_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Player/GPSelectionComponent.h`
+- `GP/Source/GPRuntime/Private/Player/GPSelectionComponent.cpp`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase B1 **completed** on `feature/gp-s16-selection-mutation-api` (base = main merge analysis `7d3fd69`).
+- Container-only mutation API added: `ReplaceSelectionWithUnit`, `AddUnitToSelection`, `RemoveUnitFromSelection`, `ToggleUnitSelection`, `SetSelectionFromUnits`, `IsUnitSelected`.
+- API and notification contracts validated (local-only, ordered/dedupe/cap 24, ≤1 broadcast per op, no eligibility validation).
+- Technical validation: GPEditor Development / GP Development / GP Shipping / UHT — **PASSED**.
+- Checkpoint ready for merge (feature branch only; do not auto-merge here).
+- Next prerequisite: minimal selectable UnitBase integration (separate tech-lead task).
+- Boundary: `UGP_SelectionComponent` canonicalizes storage but does **not** determine gameplay eligibility.
+- No feature/input/assets expansion; no hit-test; PlayerController unchanged.
+
+### What was intentionally not done
+- No IA/IMC assets, config, maps, concrete units, cursor trace, marquee world resolve.
+- README / DOCUMENTATION_INDEX / TDD unchanged.
+- Phase B2 / GP-S17 / full GP-S18 **not** started.
+- GP-S16 overall remains **NOT DONE**.
+
+### Stop condition
+**PHASE_B1_DONE_UNITBASE_PREREQUISITE_PENDING.** Merge checkpoint independently when ready. Do **not** start Phase B2, GP-S17, or full GP-S18 from this branch.

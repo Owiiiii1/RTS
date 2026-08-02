@@ -34,18 +34,18 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S13 DONE** |
-| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`, `AGP_GameMode`, `AGP_PlayerController`, `AGP_PlayerState`, `UGP_MatchAssetLoader`, `AGP_LobbyState`, `UGP_CameraConfigDataAsset`, `AGP_CameraPawn`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
-| Last closed stage | **GP-S13** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S14 DONE** |
+| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`, `AGP_GameMode`, `AGP_PlayerController`, `AGP_PlayerState`, `UGP_MatchAssetLoader`, `AGP_LobbyState`, `UGP_CameraConfigDataAsset`, `AGP_CameraPawn`, `AGP_CameraBoundsVolume`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
+| Last closed stage | **GP-S14** |
 | Current stage | **none** |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** none (GP-S13 closed).
+**Current:** none (GP-S14 closed).
 
-**NEXT:** GP-S14 AGP_CameraBoundsVolume per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order. Task file **not** created. Do **not** start GP-S14 until explicitly assigned.
+**NEXT:** GP-S15 IMC_GP_Camera + IA_Camera_* assets, PlayerController binding per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order. Task file **not** created. Do **not** start GP-S15 until explicitly assigned.
 
 Per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order (Slice 3 — Camera).
 
@@ -64,7 +64,8 @@ Per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Imple
 11. GP-S11 AGP_LobbyState — **DONE**
 12. GP-S12 UGP_CameraConfigDataAsset — **DONE**
 13. GP-S13 AGP_CameraPawn — **DONE**
-14. GP-S14 AGP_CameraBoundsVolume — not started / task file not materialized
+14. GP-S14 AGP_CameraBoundsVolume — **DONE**
+15. GP-S15 IMC_GP_Camera + IA_Camera_* / PlayerController binding — not started / task file not materialized
 
 ---
 
@@ -146,4 +147,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S13 are closed. Current stage: **none**. NEXT per TDD/13 = GP-S14 AGP_CameraBoundsVolume — **not started**; task file **not** materialized.
+SETUP-001, DOCS-001, GP-S01…GP-S14 are closed. Current stage: **none**. NEXT per TDD/13 = GP-S15 IMC_GP_Camera + IA_Camera_* assets, PlayerController binding — **not started**; task file **not** materialized.

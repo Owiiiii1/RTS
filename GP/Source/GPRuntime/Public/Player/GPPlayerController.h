@@ -8,6 +8,7 @@
 
 class UGP_AbilitySystemComponent;
 class AGP_CameraPawn;
+class UGP_SelectionComponent;
 class UInputAction;
 class UInputMappingContext;
 class UEnhancedInputComponent;
@@ -16,7 +17,7 @@ struct FInputActionValue;
 /**
  * Network-correct PlayerController.
  * Forwards Enhanced Input camera intents to possessed AGP_CameraPawn; queries ASC from PlayerState.
- * Does not own camera math, ASC creation, selection, or UI.
+ * Owns local UGP_SelectionComponent state shell. Does not own camera math, ASC creation, or UI.
  */
 UCLASS()
 class GPRUNTIME_API AGP_PlayerController : public APlayerController
@@ -28,6 +29,8 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "GP|AbilitySystem")
 	UGP_AbilitySystemComponent* GetGPAbilitySystemComponent() const;
+
+	UGP_SelectionComponent* GetSelectionComponent() const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -53,6 +56,9 @@ private:
 	void BindCameraInputActions(UEnhancedInputComponent& EnhancedInput);
 
 	AGP_CameraPawn* GetCameraPawn() const;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Selection", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UGP_SelectionComponent> SelectionComponent;
 
 	void OnCameraPan(const FInputActionValue& Value);
 	void OnCameraZoom(const FInputActionValue& Value);

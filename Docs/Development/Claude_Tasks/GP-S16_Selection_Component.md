@@ -5,15 +5,15 @@
 Slice 4 — Selection + Smart Commands (TDD/13: after GP-S15 Camera Input; before GP-S17 CommandComponent / GP-S18 UnitBase)
 
 ## Code Allowed
-**No** on this pass. Specification / dependency analysis only.
+**Yes** — Phase A pure C++ state shell (this pass).
 
 ## Asset Changes Allowed
 **No** on this pass. No Input Actions, IMC, maps, or Content changes.
 
 ## Depends On
 - GP-S15 **DONE** — `AGP_PlayerController` Enhanced Input + camera lifecycle
+- UnitBase prerequisite **merged** — compile-safe `AGP_UnitBase` UCLASS
 - TDD/04 Detailed Selection Rules (GP-0202), TDD/13, TDD/09, TDD/12, TDD/15 (FoW deferred), ADR-0006
-- Canonical storage type `AGP_UnitBase` — **does not exist on disk yet** (scheduled GP-S18)
 
 ## Goal
 Local-only selection state component owned by `AGP_PlayerController`:
@@ -28,49 +28,55 @@ Local-only selection state component owned by `AGP_PlayerController`:
 - **no** gameplay-state mutation
 
 ## Status
-**BLOCKED_BY_GP-S18**
+**PHASE_A_DONE_INTEGRATION_PENDING**
 
-Specification complete. GP-S16 **code not started**. Final verdict: **BLOCKED_BY_GP-S18** (see §16).
+Phase A local state shell **completed** and technically accepted (builds + API audit). Checkpoint ready for merge.
 
-### Dependency reason (locked)
+**GP-S16 overall is NOT DONE.** Actual selection integration remains pending. No operator-visible actor selection exists yet.
 
-- Canonical storage: `TArray<TWeakObjectPtr<AGP_UnitBase>>` (and control groups of the same element type)
-- `AGP_UnitBase` UCLASS is **absent** on disk
-- Forward declaration of an unknown UCLASS is **not** sufficient for a UHT-reflected `UPROPERTY`
-- Replacing storage with `AActor` is **rejected** as a violation of canonical architecture
-- Fake interface / placeholder duplicate UnitBase class is **forbidden**
-- GP-S16 code does **not** start until a compile-safe `AGP_UnitBase` exists
+Still absent / deferred (unchanged):
 
-### Approved resolution
+- no Input Actions / IMC
+- no hit-testing
+- no team / capability filtering
+- no highlight
+- no UI rectangle
+- no FoW integration
+- no camera focus
+- no death delegate integration
+- no building / unit rules enforcement
+- no double-click selection
 
-- Temporarily **suspend** GP-S16 implementation
-- Next technical prerequisite: **minimal compile-safe scaffold** of `AGP_UnitBase`
-- That prerequisite does **not** automatically authorize full GP-S18 (highlight MID flow, full unit integration)
-- Exact prerequisite scope will be issued in a **separate tech-lead task**
-- After compile-safe `AGP_UnitBase` exists, **return to GP-S16**
-- **Do not** start GP-S17
+Do **not** set `Status: DONE` until integration acceptance.
 
-### Availability split (after UnitBase scaffold only)
+### Phase A implemented
 
-**Immediately available for GP-S16 code (once UnitBase scaffold exists):**
+- Exact storage: `TArray<TWeakObjectPtr<AGP_UnitBase>> SelectedUnits`; `TWeakObjectPtr<AActor> InspectedTarget`
+- Max selection **24**; control groups **1..9** (non-UPROPERTY `TStaticArray` of unit arrays)
+- Local-only mutation (`AGP_PlayerController` + `IsLocalController`)
+- No replication / RPC / component tick
+- Default subobject on `AGP_PlayerController` + `GetSelectionComponent()`
+- Marquee **state only** (`Begin/Update/End/Cancel`); `EndMarquee` keeps last coords, no hit-test
+- Duplicate / invalid pruning + clamp
+- One native multicast `FGPOnSelectionChanged`
+- No input assets; no hit-testing; no filtering / highlight / UI / FoW
+- GP-S17 **not** started; full GP-S18 **not** started
 
-- typed local containers (`SelectedUnits`, control groups, `InspectedTarget`)
-- component lifecycle on `AGP_PlayerController`
-- selection delegates
-- marquee **state** storage (screen-space begin/update/end/cancel)
-- control-group container logic
-- weak pointer pruning / clear helpers
-- no tick
-- no replication
+### Deferred integration (not Phase A)
 
-**Still deferred until full GP-S18 integration:**
-
-- selection / inspect highlight (`SetSelectionHighlight`)
-- death delegate subscribe/unsubscribe
-- UnitDefinition matching (double-click same definition)
-- capability filtering (`Selectable` / `Inspectable` from definitions)
-- team filtering contract
-- building / unit classification enforcement on live actors
+- Filling selection from actual cursor hits
+- Team ownership filtering
+- Capability tags filtering
+- Unit/building mixing rules
+- Building single-only rule
+- Selection highlight
+- Death delegate
+- Double-click same UnitDefinition
+- Marquee world resolution and closest-24
+- Control-group camera focus
+- FoW visibility
+- UI rectangle
+- Input Actions / IMC
 
 ---
 
@@ -449,4 +455,4 @@ TDD/13, TDD/04, TDD/09, TDD/12, TDD/15, GDD/09, GP-0202, ADR-0006, GP-S15, Namin
 
 ## Stop Condition
 
-Status **BLOCKED_BY_GP-S18**. Documentation checkpoint complete. Do **not** write GP-S16 C++ / create assets / change config/maps. Do **not** start GP-S17. Do **not** start full GP-S18. Await separate tech-lead prerequisite task for minimal compile-safe `AGP_UnitBase` scaffold, then return to GP-S16.
+Status **PHASE_A_DONE_INTEGRATION_PENDING**. Phase A checkpoint complete. Do **not** create input assets / hit-testing / highlight / UI. Do **not** mark GP-S16 overall DONE. Do **not** start GP-S17 or full GP-S18. Await merge to `main`, then a separate integration assignment.

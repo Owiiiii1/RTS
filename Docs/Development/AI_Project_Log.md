@@ -2692,3 +2692,27 @@ Status: **IMPLEMENTATION_DONE**
 
 ### Stop condition
 Commit/push `feature/gp-s17-command-request-prerequisite-implementation` only. Do **not** merge to main. Do **not** start Phase B / full GP-S19.
+
+## 2026-08-02 — GP-S17 / Phase B — BuildSmartCommand analysis finalize
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_B_Smart_Command.md` — created / finalized
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md` — Phase B Status `ANALYSIS_READY_IMPLEMENTATION_PENDING`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Finalized Phase B contract on `feature/gp-s17-phase-b-smart-command-analysis` (base = `main` `49e9d32`).
+- Exact API: public const `BuildSmartCommand(AActor*, const FVector&, bool, FGP_CommandRequest&)`; no UFUNCTION/BP/overloads/context struct; OutRequest always reset; failure → default only.
+- Selection read: owner PC → SelectionComponent → GetSelectedUnits; temp normalize OK; no persistent cache.
+- Mapping table locked; unassigned target = neutral → speculative Attack; no Interact; Mine only if Resource.Node accessor confirmed (candidate: UnitBase `HasCapabilityTag`); else BLOCKED — no invented interface.
+- Capability: no local filter. 24: first valid unique. Server-only: ownership/capability/legality/FoW/nav/dispatch.
+- Next checkpoint: BuildSmartCommand local construction only (CommandComponent.h/.cpp + docs/builds).
+- Docs-only. No C++ / assets / maps / config / tags / Selection / UnitBase / CommandRequest changes.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+### Stop condition
+Commit/push `feature/gp-s17-phase-b-smart-command-analysis` only. Do **not** merge to main. Do **not** implement BuildSmartCommand / input / RPC / execution.

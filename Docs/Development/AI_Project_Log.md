@@ -2126,3 +2126,46 @@ Status: **DONE** (prerequisite) / parent GP-S16 **PHASE_B1_DONE_UNITBASE_PREREQU
 
 ### Stop condition
 **DONE** prerequisite checkpoint. Push feature branch only. Do **not** merge to main here. Do **not** start Phase B2 from this pass.
+
+## 2026-08-02 — GP-S16 / Phase B2 — input integration analysis
+
+Status: **PHASE_B2_BLOCKED_TEAM_ASSIGNMENT**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_B2_Input_Integration.md` — created
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — status BLOCKED_TEAM_ASSIGNMENT
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase B2 implementation analysis completed on `feature/gp-s16-selection-input-integration` (base = main merge UnitBase prereq `d120706`).
+- Team-assignment finding: `SetTeamId` has **zero call sites**; players remain `TeamId = -1`; 2P friendly/enemy classification does **not** work yet.
+- Click flow documented (PC policy + Visibility trace + B1 mutations); inspect API sufficient.
+- Marquee split verdict: after teams unlock → **SPLIT_CLICK_THEN_MARQUEE** (B2a then B2b).
+- Rejected hidden `-1 → 1` fallback.
+- **No C++ / assets / config / maps changed.**
+- GP-S17 / full GP-S18 **not** started.
+
+### Stop condition
+**PHASE_B2_BLOCKED_TEAM_ASSIGNMENT** at analysis time; final documentation checkpoint follows.
+
+## 2026-08-02 — GP-S16 / Phase B2 — team assignment blocker checkpoint
+
+Status: **BLOCKED_BY_TEAM_ASSIGNMENT** (B2 task) / parent **PHASE_B2_BLOCKED_TEAM_ASSIGNMENT**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_B2_Input_Integration.md` — blocker + B2a/B2b locks
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — parent status
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase B2 analysis **completed** and documentation checkpoint finalized on `feature/gp-s16-selection-input-integration`.
+- Zero `AGP_PlayerState::SetTeamId` call sites found; unassigned equality rejected; `-1→1` fallback forbidden.
+- Team-assignment prerequisite required: GameMode server-authoritative unique playable TeamIds from `1`.
+- B2 split locked: **B2a** click/inspect; **B2b** marquee (separate reviewed checkpoints).
+- Input asset paths and IMC priorities locked (`Selection 110` / `Camera 100`); assets **not** created.
+- **No code / assets / config / maps changed.**
+- GP-S17 / full GP-S18 **not** started.
+- GP-S16 overall remains **NOT DONE**.
+
+### Stop condition
+Documentation checkpoint commit/push on feature branch only. Do **not** merge to main. Await tech-lead **GameMode TeamId assignment** slice before B2a.

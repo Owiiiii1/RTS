@@ -28,18 +28,22 @@ Local-only selection state component owned by `AGP_PlayerController`:
 - **no** gameplay-state mutation
 
 ## Status
-**Status: PHASE_B1_DONE_UNITBASE_PREREQUISITE_DONE_PHASE_B2_PENDING**
+**Status: PHASE_B2_BLOCKED_TEAM_ASSIGNMENT**
 
-Phase A local selection state shell **merged**.
-Phase B input integration analysis **merged**.
-Phase B1 container-only mutation API **merged**.
-Selectable UnitBase prerequisite **implemented and operator-validated** — see
-`GP-S16_Selectable_UnitBase_Prerequisite.md` (`Status: DONE`).
+Phase A **merged**.
+Phase B1 **merged**.
+Selectable UnitBase prerequisite **merged**.
+Phase B2 **analysis complete** — see `GP-S16_Phase_B2_Input_Integration.md`
+(`Status: BLOCKED_BY_TEAM_ASSIGNMENT`).
+
+**Verdict: `BLOCKED_BY_TEAM_ASSIGNMENT`.**
+Zero `AGP_PlayerState::SetTeamId` call sites; host/client stay `-1`.
+Next required slice: **GameMode server-authoritative playable TeamId assignment**.
+After that: **B2a click/inspect**, then **B2b marquee** (separate checkpoints).
 
 **GP-S16 overall is NOT DONE.** Do **not** set `Status: DONE`.
-Phase B2 input / click / marquee integration is now **technically unblocked**.
-Phase B2 **not started**.
-No input assets or cursor selection exist yet.
+Phase B2 code / input assets **not started**.
+GP-S17 / full GP-S18 **not started**.
 
 ### Phase B1 completed
 
@@ -77,8 +81,10 @@ Locked asset paths remain documentation-only (not created):
 
 ### Still blocked / deferred
 
-- Phase B2 click/marquee/input wiring — after minimal selectable UnitBase integration
-- Temporary test Blueprint / “any UnitBase selectable” — rejected
+- **Player TeamId assignment** (GameMode PostLogin / start path) — blocks Phase B2
+- Phase B2a click/inspect input — after team assignment
+- Phase B2b marquee + rectangle visualization — after B2a
+- Temporary test Blueprint / “any UnitBase selectable” / `-1→1` fallback — rejected
 - GP-S17 / full GP-S18 — not started
 
 ### Approved remaining split
@@ -95,9 +101,13 @@ Approved scope (implementation pending):
 - eligibility in PlayerController/input policy — **not** in `UGP_SelectionComponent`
 - **Not** automatically full GP-S18
 
-#### Phase B2 — only after prerequisite
+#### Phase B2 — blocked until player TeamId assignment
 
-Enhanced Input assets at locked paths; PC bindings; click trace; ground clear; validated select/inspect; drag threshold; marquee world resolution; operator PIE validation.
+See `GP-S16_Phase_B2_Input_Integration.md`.
+
+1. Minimal GameMode team assignment (playable TeamIds on connect)
+2. B2a: `IMC_GP_Selection` + click select/inspect/clear + modifiers + diagnostic log
+3. B2b: marquee resolve + minimal rectangle visualization
 
 #### IMC architecture lock (unchanged)
 
@@ -633,4 +643,4 @@ Do **not** start GP-S17. Do **not** implement full GP-S18 under this analysis.
 TDD/13, TDD/04, TDD/09, TDD/12, TDD/15, GDD/09, GP-0202, ADR-0006, GP-S15, Naming_Conventions, STYLE, CONTRIBUTING.
 
 ## Stop Condition
-Status **PHASE_B1_DONE_UNITBASE_PREREQUISITE_DONE_PHASE_B2_PENDING**. Selectable UnitBase prerequisite DONE and operator-validated. Phase B2 is technically unblocked but **not started**. Do **not** mark GP-S16 DONE. Do **not** start GP-S17 or full GP-S18 here.
+Status **PHASE_B2_BLOCKED_TEAM_ASSIGNMENT**. Phase B2 analysis documentation checkpoint complete. Next required slice: GameMode TeamId assignment. Do **not** implement selection input/assets until then. Do **not** use `-1→1` fallback. Do **not** start GP-S17 or full GP-S18. Do **not** mark GP-S16 DONE.

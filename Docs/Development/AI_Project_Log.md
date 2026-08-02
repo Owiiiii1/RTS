@@ -2643,3 +2643,52 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s17-command-request-prerequisite-analysis` only. Do **not** merge to main. Do **not** create struct code / NetSerialize / Phase B / full GP-S19 from this finalize.
+
+## 2026-08-02 — GP-S17 / Command Request prerequisite — implementation
+
+Status: **CODE_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Command/GPCommandRequest.h` (created)
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Request_Prerequisite.md` — `CODE_READY_VALIDATION_PENDING`
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md` — request type present; Phase B unblocked after merge
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Struct-only implementation on `feature/gp-s17-command-request-prerequisite-implementation` (base = `main` `db9bc03`).
+- `FGP_CommandRequest`: `USTRUCT(BlueprintType)`, five `UPROPERTY` fields, defaults; no NetSerialize; no helpers/validation; no `.cpp`.
+- No CommandComponent / PlayerController / Selection / Build.cs / input / RPC / execution changes.
+- Full GP-S19 **not** started. Phase B **not** started (unblocked after merge).
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED** (UHT via compile path)
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- Operator/tech validation **pending** as needed.
+
+### Stop condition
+**CODE_READY_VALIDATION_PENDING.** No commit/push in implementation pass. Do **not** start Phase B / RPC / input / full GP-S19.
+
+## 2026-08-02 — GP-S17 / Command Request prerequisite — completion
+
+Status: **IMPLEMENTATION_DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Command/GPCommandRequest.h` (created)
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Request_Prerequisite.md` — `IMPLEMENTATION_DONE`
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md` — prerequisite validated; Phase B still not started
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Canonical `FGP_CommandRequest`: `USTRUCT(BlueprintType)`, five fields (`CommandTag`, `IssuingUnits`, `TargetLocation`, `TargetActor`, `bQueue`); no NetSerialize/helpers/validation/`.cpp`.
+- Builds retained **PASSED** (Editor/Dev/Shipping + UHT). C++ unchanged at finalize.
+- Operator validation **passed**: Blueprint type `GP Command Request`; all five fields visible; BP compiles; no UHT warnings; PIE OK; camera/selection no regression; temp BP variable removed; no assets saved; no integration changes.
+- Next step after merge: GP-S17 Phase B analysis/implementation planning.
+- Full GP-S19 / Phase B / BuildSmartCommand / input / RPC / execution **not** started.
+
+### Builds / validation
+- Retained: GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+- Blueprint reflection validation — **PASSED**.
+
+### Stop condition
+Commit/push `feature/gp-s17-command-request-prerequisite-implementation` only. Do **not** merge to main. Do **not** start Phase B / full GP-S19.

@@ -53,11 +53,13 @@ operator-checked cases (see Phase C matrix; Neutral/Unknown **NOT AVAILABLE**,
 
 **Phase D Status: CODE_DONE_NETWORK_VALIDATED** — see
 `GP-S17_Phase_D_Server_Submission.md`.
-Phase D complete: local request crosses `Server_RequestCommand`; authoritative normalize confirmed in 2P (host Team1 / remote Team2).
-Execution remains intentionally absent.
-Next stage = command dispatch / receiver **analysis** — not immediate movement.
-GP-S18 / full GP-S19 implementation **not started**.
-Executable Move **not** in Phase A–D.
+
+**Phase E Status: ANALYSIS_READY_IMPLEMENTATION_PENDING** — see
+`GP-S17_Phase_E_Command_Dispatch.md`.
+Phase E = server dispatch + `AGP_UnitBase` receiver boundary (log only).
+**No** Move / Attack / Mine / GAS / queue execution in Phase E.
+After Phase E validation, GP-S17 may close as `DONE_WITH_EXECUTION_DEFERRED`.
+GP-S18 / full GP-S19 / Move execution (GP-S20+) **not started**.
 
 ---
 
@@ -259,8 +261,12 @@ Separate Commands IMC; local classification; no execution.
 `Server_RequestCommand` (PC, Reliable) + `ValidateAndNormalizeCommand` on CommandComponent;
 prune unauthorized units; whitelist Move/Attack/Mine; server logs; **no** dispatch/Move.
 
-### Phase E — Executable Move (deferred)
-Owner: GP-S20–S22 (+ unit command receiver). **Not** first GP-S17 checkpoint.
+### Phase E — Dispatch + unit receiver boundary
+`DispatchValidatedCommand` + `FGP_UnitCommand` + `AGP_UnitBase::ReceiveCommand` (log only).
+**No** gameplay execution.
+
+### Post–GP-S17 — Executable Move / Attack / Mine (deferred)
+Owner: GP-S20–S22 (+ unit movement/combat/mining). Not Phase E.
 
 ---
 
@@ -456,7 +462,21 @@ See `GP-S17_Phase_D_Server_Submission.md`
 - Execution / dispatch / movement remain intentionally absent
 - Next: separate command dispatch / receiver analysis — **not** immediate movement
 
+## Phase E analysis (summary)
+
+Final contract locked in `GP-S17_Phase_E_Command_Dispatch.md`
+(`Status: ANALYSIS_READY_IMPLEMENTATION_PENDING`):
+
+- Dispatch: `UGP_CommandComponent::DispatchValidatedCommand` → delivered receiver-call count
+- RPC flow: Validate → Accepted log → Dispatch → Dispatch summary → return
+- Payload: plain `FGP_UnitCommand` (`GPUnitCommand.h`) — one shared immutable instance per request
+- Receiver: `virtual void AGP_UnitBase::ReceiveCommand(const FGP_UnitCommand&)` — void, authority + Received log, stateless
+- Unit guards only: `IsValid` + `HasAuthority` (no re-validate TeamId/target/location)
+- Build.cs **NO**; request struct **NO**; execution deferred
+- After Phase E validation: GP-S17 → `DONE_WITH_EXECUTION_DEFERRED`
+- Next roadmap (TDD/13): GP-S18 unit layer; GP-S20–S22 movement execution via ReceiveCommand → MovementComponent
+
 ## Stop Condition
-Status Phase A–C **DONE** + Phase D **CODE_DONE_NETWORK_VALIDATED**.
-Await command dispatch / receiver analysis assignment.
-Do **not** start dispatch / Move / GP-S18 / full GP-S19 from this close-out.
+Status Phase A–D **DONE** + Phase E **ANALYSIS_READY_IMPLEMENTATION_PENDING**.
+Do **not** implement Phase E dispatch/receiver / Move / GP-S18 / GP-S19 from this analysis.
+Await Phase E implementation assignment.

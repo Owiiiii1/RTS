@@ -2929,3 +2929,26 @@ Status: **CODE_DONE_NETWORK_VALIDATED**
 
 ### Stop condition
 Commit/push `feature/gp-s17-phase-d-server-submission-implementation` only. Do **not** merge to main. Do **not** start dispatch / movement / AI / Client RPC / permanent malicious hooks / GP-S18/S19.
+
+## 2026-08-02 — GP-S17 / Phase E — command dispatch analysis
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_E_Command_Dispatch.md` — created (final contract)
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md` — Phase E status
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase E final analysis on `feature/gp-s17-phase-e-command-dispatch-analysis` (base = `main` `8680951`).
+- Dispatch owner: `UGP_CommandComponent::DispatchValidatedCommand` (PC remains RPC entry; validator stays pure).
+- Per-unit payload: plain `FGP_UnitCommand` in `Public/Command/GPUnitCommand.h` (Tag/Loc/Actor*/bQueue; no IssuingUnits).
+- UnitBase receiver: `virtual void ReceiveCommand(const FGP_UnitCommand&)` — authority + Received log; stateless; no execution.
+- GP-S17 planned completion after Phase E: `DONE_WITH_EXECUTION_DEFERRED`. Execution deferred (TDD/13: GP-S20–S22 Move path; Attack/Mine later).
+- Docs-only. No C++ / assets / dispatch/receiver code.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+### Stop condition
+Commit/push `feature/gp-s17-phase-e-command-dispatch-analysis` only. Do **not** merge to main. Do **not** add dispatch/receiver/execution from this pass.

@@ -44,9 +44,11 @@ Canonical `FGP_CommandRequest` prerequisite **implemented and validated**: see
 `GP-S17_Command_Request_Prerequisite.md`
 (`Status: IMPLEMENTATION_DONE`).
 
-**Phase B Status: ANALYSIS_READY_IMPLEMENTATION_PENDING** — see
+**Phase B Status: CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED** — see
 `GP-S17_Phase_B_Smart_Command.md`.
-Phase B = local `BuildSmartCommand` only (no input / RPC / execution).
+`BuildSmartCommand` code complete; Standalone/2P regression-safe.
+**Not** yet invoked by RMB or any real caller — functional request-content validation deferred.
+Next stage must provide a real caller before claiming functional validation.
 GP-S18 / full GP-S19 implementation **not started**.
 Executable Move **not** in Phase A/B.
 
@@ -411,18 +413,16 @@ Shell has no user-facing command behavior. Operator validation is **minimal**.
 | RPC / replication warnings | **NONE** |
 | Extra assets / maps | **NO** |
 
-## Phase B analysis (summary)
+## Phase B implementation (summary)
 
-Locked in `GP-S17_Phase_B_Smart_Command.md`
-(`Status: ANALYSIS_READY_IMPLEMENTATION_PENDING`):
+See `GP-S17_Phase_B_Smart_Command.md`
+(`Status: CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED`):
 
-- API: `bool BuildSmartCommand(AActor*, const FVector&, bool bQueue, FGP_CommandRequest&) const`
-- Public C++; const; **no** UFUNCTION / Blueprint / overloads / target-context struct
-- Selection: owner PC → `GetSelectionComponent()` → `GetSelectedUnits()`; temp normalize array OK; **no** persistent cache
-- Mapping: null→Move; enemy/neutral/unassigned UnitBase→Attack speculative; friendly→Move (actor cleared); Resource.Node→Mine if accessor confirmed; unknown→Move; no Interact
-- Capability: no local filter; OutRequest always reset; failure → default only
+- `BuildSmartCommand` code complete — public const C++; no UFUNCTION
+- Regression validation **passed** (Standalone + 2P; camera/selection/marquee/CG/debug boxes)
+- Functional branch validation **deferred** until real caller
+- No input / RPC / execution; no permanent validation hook
 
 ## Stop Condition
-Status **PHASE_A_DONE** + Phase B **ANALYSIS_READY_IMPLEMENTATION_PENDING**.
-Do **not** implement BuildSmartCommand / input / RPC / Move / GP-S18 / full GP-S19 from this finalize.
-Await Phase B implementation assignment.
+Status **PHASE_A_DONE** + Phase B **CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED**.
+Next: caller integration analysis (still no execution). Do **not** start RMB/RPC/Move/GP-S18/full GP-S19 from this finalize.

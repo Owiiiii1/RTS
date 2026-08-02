@@ -2716,3 +2716,55 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s17-phase-b-smart-command-analysis` only. Do **not** merge to main. Do **not** implement BuildSmartCommand / input / RPC / execution.
+
+## 2026-08-02 — GP-S17 / Phase B — BuildSmartCommand implementation
+
+Status: **CODE_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Command/GPCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_B_Smart_Command.md`
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase B on `feature/gp-s17-phase-b-smart-command-implementation` (base = `main` `a25a368`).
+- `BuildSmartCommand`: local speculative request from SelectionComponent + target context; OutRequest reset; normalize IssuingUnits (prune/dedupe/cap 24); tags via `FGPGameplayTags`.
+- Mine **implemented** for `AGP_UnitBase::HasCapabilityTag(Resource_Node)`; Mine for non-UnitBase **deferred** (no accessor).
+- No PC/Selection/Request/tags/Build.cs/input/RPC/execution changes. No permanent test hook. No automation test module on disk.
+- Operator runtime validation **pending** until Phase C caller (or temporary invoke removed before commit).
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED** (UHT via compile path)
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- Operator runtime validation **pending** (no permanent caller).
+
+### Stop condition
+**CODE_READY_VALIDATION_PENDING.** No commit/push in implementation pass. Do **not** start Phase C / RPC / execution.
+
+## 2026-08-02 — GP-S17 / Phase B — completion checkpoint
+
+Status: **CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Command/GPCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_B_Smart_Command.md` — `CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED`
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase B `BuildSmartCommand` complete: local speculative request from selection + target context; prune/dedupe/cap 24; Move/Attack/Mine(UnitBase Resource.Node); non-UnitBase Mine deferred; no cache/input/RPC/execution/permanent hook.
+- Builds/UHT retained **PASSED** (C++ unchanged at finalize).
+- Regression validation **passed**: Standalone + 2P; camera/click/marquee/control groups/debug boxes OK; no unexpected RMB/movement; no new warnings; no assets/maps.
+- Functional request-content validation (Move/Attack/Mine/dedupe/cap) **deferred** until real caller.
+- Next stage: caller integration analysis — still **no** execution. Full GP-S18/S19 **not** started.
+
+### Builds / validation
+- Retained: GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+- Regression — **PASSED**. Functional branch runtime — **DEFERRED**.
+
+### Stop condition
+Commit/push `feature/gp-s17-phase-b-smart-command-implementation` only. Do **not** merge to main. Do **not** start RMB/RPC/execution/permanent hooks/full GP-S18/S19.

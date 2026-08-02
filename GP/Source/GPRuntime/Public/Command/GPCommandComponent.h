@@ -30,6 +30,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogGPCommandServer, Log, All);
  * Local command orchestration.
  * Phase B: BuildSmartCommand builds speculative FGP_CommandRequest from selection.
  * Phase D: ValidateAndNormalizeCommand authoritative server normalize (no execution).
+ * Phase E: DispatchValidatedCommand delivers to unit receivers (no gameplay execution).
  * No tick, replication, input, or command execution.
  */
 UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))
@@ -60,4 +61,11 @@ public:
 		const FGP_CommandRequest& ClientRequest,
 		FGP_CommandRequest& OutValidatedRequest,
 		EGP_CommandRejectReason& OutRejectReason) const;
+
+	/**
+	 * Server-only synchronous delivery of a validated request to issuing units (Phase E).
+	 * Calls AGP_UnitBase::ReceiveCommand once per valid authority unit.
+	 * Returns delivered receiver invocation count. Does not execute gameplay.
+	 */
+	int32 DispatchValidatedCommand(const FGP_CommandRequest& ValidatedRequest) const;
 };

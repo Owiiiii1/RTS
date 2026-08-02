@@ -3,6 +3,7 @@
 #include "Command/GPCommandComponent.h"
 
 #include "Command/GPCommandRequest.h"
+#include "Command/GPUnitCommand.h"
 #include "Player/GPPlayerController.h"
 #include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
@@ -345,4 +346,38 @@ bool UGP_CommandComponent::ValidateAndNormalizeCommand(
 	OutValidatedRequest.bQueue = ClientRequest.bQueue;
 	OutRejectReason = EGP_CommandRejectReason::None;
 	return true;
+}
+
+int32 UGP_CommandComponent::DispatchValidatedCommand(const FGP_CommandRequest& ValidatedRequest) const
+{
+	const AActor* OwnerActor = GetOwner();
+	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
+	{
+		UE_LOG(LogGPCommandServer, Warning,
+			TEXT("GP CommandDispatch: skipped — owner missing authority (Owner=%s)"),
+			*GetNameSafe(OwnerActor));
+		return 0;
+	}
+
+	FGP_UnitCommand UnitCommand;
+	UnitCommand.CommandTag = ValidatedRequest.CommandTag;
+	UnitCommand.TargetLocation = ValidatedRequest.TargetLocation;
+	UnitCommand.TargetActor = ValidatedRequest.TargetActor.Get();
+	UnitCommand.bQueue = ValidatedRequest.bQueue;
+
+	int32 DeliveredUnits = 0;
+
+	for (const TObjectPtr<AGP_UnitBase>& UnitPtr : ValidatedRequest.IssuingUnits)
+	{
+		AGP_UnitBase* Unit = UnitPtr.Get();
+		if (!IsValid(Unit) || !Unit->HasAuthority())
+		{
+			continue;
+		}
+
+		Unit->ReceiveCommand(UnitCommand);
+		++DeliveredUnits;
+	}
+
+	return DeliveredUnits;
 }

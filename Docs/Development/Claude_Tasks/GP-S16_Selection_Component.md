@@ -28,21 +28,23 @@ Local-only selection state component owned by `AGP_PlayerController`:
 - **no** gameplay-state mutation
 
 ## Status
-**Status: PHASE_B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING**
+**Status: PHASE_B2_DONE_NEXT_PHASE_PENDING**
 
 Phase A **merged**.
 Phase B1 **merged**.
 Selectable UnitBase prerequisite **merged**.
 TeamId assignment **merged**.
-Phase B2a click/inspect **merged** into main and operator-validated — see
-`GP-S16_Phase_B2_Input_Integration.md`.
-
-Phase B2b marquee **architecture complete** (docs-only checkpoint);
-**implementation pending** — see
+Phase B2a click/inspect **merged** and operator-validated.
+Phase B2b marquee **implemented and operator-validated** — see
 `GP-S16_Phase_B2_Input_Integration.md`
-(`Status: B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING`).
+(`Status: B2B_DONE`).
 
-**GP-S16 overall is NOT DONE.** Do **not** set `Status: DONE`.
+Phase B input integration (**B2a + B2b**) is **complete**.
+Temporary local debug selection/inspect bounds boxes remain for developer validation;
+production selection highlight remains **deferred**.
+
+**GP-S16 overall is NOT DONE.** Next phase follows the existing GP-S16 plan.
+Do **not** set GP-S16 `Status: DONE`.
 GP-S17 / full GP-S18 **not started**.
 
 ### Phase B1 completed
@@ -83,9 +85,11 @@ Selection input assets:
 
 - Player TeamId assignment — **DONE** (operator-validated)
 - Phase B2a click/inspect input — **DONE** (merged + operator-validated)
-- Phase B2b marquee architecture — **READY** (implementation pending)
-- Phase B2b marquee + rectangle visualization code — **not started**
+- Phase B2b marquee architecture — **merged**
+- Phase B2b marquee + rectangle visualization — **DONE** (operator-validated)
+- Phase B input integration — **complete**
 - Temporary test Blueprint / “any UnitBase selectable” / `-1→1` fallback — rejected
+- Next GP-S16 phase — per existing plan (pending)
 - GP-S17 / full GP-S18 — not started
 
 ### Approved remaining split
@@ -644,7 +648,7 @@ Do **not** start GP-S17. Do **not** implement full GP-S18 under this analysis.
 TDD/13, TDD/04, TDD/09, TDD/12, TDD/15, GDD/09, GP-0202, ADR-0006, GP-S15, Naming_Conventions, STYLE, CONTRIBUTING.
 
 ## Stop Condition
-Status **PHASE_B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING**.
-B2b architecture complete; B2b implementation not started.
-Do **not** mark GP-S16 DONE. Do **not** start GP-S17 / full GP-S18.
-Await separate reviewed B2b implementation assignment.
+Status **PHASE_B2_DONE_NEXT_PHASE_PENDING**.
+Phase B (B2a + B2b) complete and validated.
+Do **not** mark entire GP-S16 DONE. Do **not** start GP-S17 / full GP-S18.
+Await next phase assignment from the existing GP-S16 plan.

@@ -8,6 +8,7 @@
 
 class UGP_AbilitySystemComponent;
 class AGP_CameraPawn;
+class UGP_MarqueeSelectionWidget;
 class UGP_SelectionComponent;
 class UInputAction;
 class UInputMappingContext;
@@ -17,7 +18,7 @@ struct FInputActionValue;
 /**
  * Network-correct PlayerController.
  * Forwards Enhanced Input camera intents to possessed AGP_CameraPawn; queries ASC from PlayerState.
- * Owns local UGP_SelectionComponent and Phase B2a click select/inspect policy.
+ * Owns local UGP_SelectionComponent and Phase B2 click/marquee select/inspect policy.
  */
 UCLASS()
 class GPRUNTIME_API AGP_PlayerController : public APlayerController
@@ -35,6 +36,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void OnUnPossess() override;
 	virtual void AcknowledgePossession(APawn* InPawn) override;
@@ -71,6 +73,27 @@ private:
 		bool bHasHitTeam,
 		int32 HitTeamId,
 		int32 LocalTeamId) const;
+
+	void EnsureMarqueeWidget();
+	void HideMarqueeWidget();
+	void DestroyMarqueeWidget();
+
+	void UpdatePendingSelectionDrag();
+	void BeginActiveMarquee(const FVector2D& CurrentScreenPosition);
+	void UpdateActiveMarquee(const FVector2D& CurrentScreenPosition);
+	void CompleteActiveMarquee(const FVector2D& ReleaseScreenPosition);
+	void CancelActiveMarquee(bool bLogCanceled);
+
+	void ResolveAndApplyMarqueeSelection(
+		const FVector2D& ScreenStart,
+		const FVector2D& ScreenEnd);
+
+	/**
+	 * Temporary developer validation visualization (green selected / yellow inspected wireframe).
+	 * Must be replaced by production selection highlight in a later UI/visual slice.
+	 * Local-only; reads SelectionComponent only; no world scan / RPC / unit mutation.
+	 */
+	void DrawLocalSelectionDebugVisualization() const;
 
 	bool IsControlModifierDown() const;
 	bool IsShiftModifierDown() const;
@@ -128,6 +151,9 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> LoadedSelectionAction;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UGP_MarqueeSelectionWidget> MarqueeWidget;
+
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */
 	TWeakObjectPtr<APawn> LastInitializedLocalPawn;
 	TWeakObjectPtr<APlayerState> LastInitializedPlayerState;
@@ -137,6 +163,7 @@ private:
 	static constexpr int32 SelectionMappingPriority = 110;
 	static constexpr float SelectionDragThresholdPixels = 8.0f;
 	static constexpr float SelectionTraceDistance = 1000000.0f;
+	static constexpr int32 MarqueeWidgetZOrder = 1000;
 
 	bool bCameraMappingContextAdded = false;
 	bool bCameraInputBindingsInstalled = false;
@@ -145,5 +172,6 @@ private:
 	bool bSelectionMappingContextAdded = false;
 	bool bSelectionInputBindingsInstalled = false;
 	bool bSelectionPressActive = false;
+	bool bMarqueeActive = false;
 	FVector2D SelectionPressScreenPosition = FVector2D::ZeroVector;
 };

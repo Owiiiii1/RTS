@@ -2,21 +2,68 @@
 (Click select / inspect / marquee — blocked by team assignment)
 
 ## Status
-**Status: B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING**
+**Status: B2B_DONE**
 
-B2b **architecture checkpoint complete** (docs-only finalize).
-B2b **implementation not started**.
-No C++ `UGP_MarqueeSelectionWidget` exists yet.
-No `GPRuntime.Build.cs` Slate/SlateCore dependency changes yet.
-No `IA_Marquee` (rejected).
-Operator validation **not applicable** until implementation.
-
-TeamId prerequisite **merged**.
-B2a click selection / inspect **merged** into main (`9bf7f4d`) and operator-validated.
-GP-S16 overall remains **NOT DONE**. Do **not** start GP-S17 or full GP-S18.
+Phase B2 architecture **merged**.
+B2a **merged** and operator-validated.
+B2b marquee **implemented and operator-validated** — **complete**.
+`IA_Select` reused; `IA_Marquee` **absent** (rejected).
+GP-S16 overall remains **NOT DONE** (later GP-S16 phases may remain). Do **not** start GP-S17 or full GP-S18.
 
 Parent GP-S16 selection status:
-**`PHASE_B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING`**
+**`PHASE_B2_DONE_NEXT_PHASE_PENDING`**
+
+### B2b operator validation (passed)
+
+| Check | Result |
+| --- | --- |
+| Marquee rectangle aligned with cursor | **PASS** |
+| Drag all directions | **PASS** |
+| DPI drift | **NONE** |
+| Rectangle hidden after release/cancel | **PASS** |
+| Selected green / inspected yellow debug boxes | **PASS** |
+| Click + marquee update boxes | **PASS** |
+| Enemy/neutral excluded from friendly selection | **PASS** |
+| Replace / Shift Add / Ctrl Toggle / Ctrl precedence | **PASS** |
+| Empty Replace clears; empty Shift/Ctrl no-op | **PASS** |
+| Fast-release fallback | **PASS** |
+| B2a / camera regression | **NONE** |
+| Tick / log spam | **NONE** |
+| Standalone | **PASS** |
+| 2-player listen-server + local isolation | **PASS** |
+| Replication / RPC warnings | **NONE** |
+| Maps saved / assets created | **NO** |
+
+### B2b validation remediation (coordinate + temp boxes) — done
+
+| Item | Detail |
+| --- | --- |
+| Marquee visual defect | Rectangle offset vs cursor; candidate selection coordinates were correct |
+| Cause | Paint treated viewport-local **physical** pixels as Slate-local via `LocalToAbsolute`/`AbsoluteToLocal` |
+| Fix | `Local = ScreenPixels / max(GetViewportScale(), KINDA_SMALL_NUMBER)`; full-viewport anchors; no desktop absolute path |
+| Contract | PC stores viewport-local physical pixels; widget converts via DPI scale — verified |
+| Temp debug boxes | Local-only `DrawDebugBox` — selected **green**, inspected UnitBase **yellow** (validation-only; production highlight deferred) |
+
+### B2b implemented (this pass)
+
+| Item | Detail |
+| --- | --- |
+| Input | Reuse `IA_Select`; gated marquee Tick while press; idle Tick may draw bounded local debug boxes only |
+| Threshold | PressPending → MarqueeActive when distance > **8 px**; fast-release fallback on Completed |
+| Widget | Pure C++ `UGP_MarqueeSelectionWidget` (`NativePaint`, HitTestInvisible, local-only) |
+| Sources | `GPRuntime/.../UI/GPMarqueeSelectionWidget.h/.cpp`; PC + `GPRuntime.Build.cs` |
+| Dependencies | Private `Slate` / `SlateCore`; public `UMG` unchanged |
+| DPI | PC stores viewport-local **physical** pixels (`GetMousePosition`); widget paints `pixels / GetViewportScale()` as Slate local — **no** `AbsoluteToLocal` |
+| Candidates | `TActorIterator<AGP_UnitBase>`; project actor location; center-in-AABB; sort `GetPathName()` |
+| Eligibility | LocalTeam ≥ 1; same TeamId; `IsGameplaySelectable()`; no FoW/LOS/render heuristics |
+| Modifiers | Replace / Shift Add / Ctrl Toggle (Ctrl wins); empty Replace clears; empty Shift/Ctrl no-op |
+| Cap | `SetSelectionFromUnits` → SelectionComponent dedupe/cap **24** |
+| Component | Existing `Begin/Update/End/CancelMarquee` unwired → wired; API unchanged |
+| Inspect | Clear before apply (may double-broadcast); empty Shift/Ctrl leave inspect |
+| MP | Local-only; no RPC; no replicated marquee/selection |
+| Perf | Marquee actor scan once on release; debug boxes iterate ≤24 selected (+ optional inspect) |
+| Logging | One-shot `GP Marquee: ... Result=Applied\|NoOpEmpty\|BlockedUnassignedTeam\|Canceled` |
+| `IA_Marquee` / HUD / BP widget | **Not** created |
 
 ### B2a implemented (complete)
 
@@ -26,7 +73,7 @@ Parent GP-S16 selection status:
 | Soft paths | `/Game/GrimProtocol/Input/Selection/IA_Select.IA_Select`, `.../IMC_GP_Selection.IMC_GP_Selection` |
 | IMC priority | Selection **110**; Camera **100** unchanged |
 | Lifecycle | Separate soft-load / bind / BeginPlayingState add / EndPlay remove; local only |
-| Press/release | Started stores screen pos; Completed click if distance ≤ **8 px**; else `DragDeferredToB2b` |
+| Press/release | Started stores screen pos; Completed click if distance ≤ **8 px**; else B2b marquee |
 | Canceled | Clears pending press only |
 | Trace | `DeprojectScreenPositionToWorld` + `LineTraceSingleByChannel(ECC_Visibility)`; ignore controlled pawn; distance `1000000`; complex=false |
 | Modifiers | Ctrl / Shift via `IsInputKeyDown` (both left/right); Ctrl wins |
@@ -75,7 +122,7 @@ Parent GP-S16 selection status:
 | Monotonic / no reuse | Logout does not decrement; no renumber |
 | Transport | Existing PlayerState TeamId replication (no RPC) |
 
-Next input packaging remains **SPLIT_CLICK_THEN_MARQUEE** — B2a **done**, B2b architecture **ready**, implementation **pending**.
+Phase B2 input integration (**B2a + B2b**) is **complete**. GP-S16 overall still **NOT DONE**.
 
 ---
 
@@ -89,8 +136,8 @@ Next input packaging remains **SPLIT_CLICK_THEN_MARQUEE** — B2a **done**, B2b 
 | Phase B2 analysis | **Complete** (this doc) |
 | Player TeamId assignment | **DONE** (operator-validated) |
 | Phase B2a click / inspect | **DONE** (operator-validated) |
-| Phase B2b marquee architecture | **Ready** (this checkpoint) |
-| Phase B2b marquee implementation | **Not started** |
+| Phase B2b marquee architecture | **Merged** |
+| Phase B2b marquee implementation | **DONE** (operator-validated) |
 | GP-S17 / full GP-S18 | Not started |
 
 ---
@@ -324,11 +371,12 @@ GP/Source/GPRuntime/Private/UI/GPMarqueeSelectionWidget.cpp
 
 | Rule | Value |
 | --- | --- |
-| Cursor API | Same as B2a: `GetMousePosition` (viewport pixel space) |
-| Projection | `ProjectWorldLocationToScreen` into the **same** viewport pixel space |
-| Widget layout | Full-viewport anchors; size from viewport geometry |
-| Paint mapping | Convert absolute screen corners → widget local via `FGeometry` (`AbsoluteToLocal` / paint geometry) |
-| Scaling | Prefer viewport geometry over inventing a second DPI path; keep press/current/project in one space |
+| Cursor API | Same as B2a: `GetMousePosition` — viewport-local **physical** pixels |
+| Projection | `ProjectWorldLocationToScreen` into the **same** physical viewport pixel space (selection unchanged) |
+| Widget layout | Full-viewport anchors via `SetAnchorsInViewport(0,0,1,1)` on pure C++ overlay |
+| Stored rect | Physical pixels from PC — **not** desktop-absolute |
+| Paint mapping | `Local = ScreenPixels / max(GetViewportScale(), KINDA_SMALL_NUMBER)` then draw in widget local space |
+| Forbidden | `AbsoluteToLocal(raw GetMousePosition)` / desktop window offset / magic constants |
 
 ### 5) Candidate resolution
 
@@ -473,17 +521,16 @@ No per-Tick / per-candidate spam. `LogTemp` Log level for applied; Verbose for h
 
 ## Exact next steps
 
-1. Review/merge this B2b architecture checkpoint.
-2. Assign **B2b implementation** (separate reviewed task) using the checklist above.
-3. Do **not** start GP-S17 or full GP-S18.
+1. Merge this B2b feature branch when ready.
+2. Continue with the next phase defined by the existing GP-S16 plan (not GP-S17 / full GP-S18 unless that plan says so).
+3. Keep temporary debug boxes until a later production highlight slice replaces them.
 
 ---
 
 ## Stop condition
 
-**B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING.**
-Architecture checkpoint complete and ready for merge review.
-Do **not** implement marquee / create widgets / create `IA_Marquee` / change C++ / Build.cs from this docs pass.
-Do **not** mark GP-S16 DONE.
-Do **not** start GP-S17 / full GP-S18.
-Await separate reviewed **B2b implementation** assignment.
+**B2B_DONE.**
+Phase B2 (click + marquee) complete and operator-validated.
+Do **not** mark entire GP-S16 DONE solely because B2 is done.
+Do **not** start GP-S17 / full GP-S18 from this finalize.
+Do **not** create `IA_Marquee` / HUD / BP widget / production highlight here.

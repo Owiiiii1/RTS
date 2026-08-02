@@ -24,5 +24,11 @@ public class GPRuntime : ModuleRules
 			"UMG",
 			"GPGASRuntime"
 		});
+
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"Slate",
+			"SlateCore"
+		});
 	}
 }

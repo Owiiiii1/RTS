@@ -2019,3 +2019,56 @@ Status: **PHASE_B1_DONE_UNITBASE_PREREQUISITE_PENDING**
 
 ### Stop condition
 **PHASE_B1_DONE_UNITBASE_PREREQUISITE_PENDING.** Merge checkpoint independently when ready. Do **not** start Phase B2, GP-S17, or full GP-S18 from this branch.
+
+## 2026-08-02 — GP-S16 / Selectable UnitBase prerequisite — architecture analysis
+
+Status: **PHASE_B1_DONE_UNITBASE_PREREQUISITE_READY**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S16_Selectable_UnitBase_Prerequisite.md` — created (analysis)
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — status READY
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Prerequisite analysis completed on `feature/gp-s16-selectable-unitbase-prerequisite` (base = main merge mutation API `aac4470`).
+- Team contract: replicated `int32 TeamId` on **both** `AGP_PlayerState` and `AGP_UnitBase`; reject GenericTeam-only and PlayerState-only ownership paths for unpossessed units.
+- Capability contract: interim `FGameplayTagContainer` on UnitBase + query helpers; tags already registered in GPGASRuntime; Build.cs change not required.
+- Concrete actor: production-oriented `AGP_Unit` with capsule collision (keep UnitBase Abstract); reject temp TestUnit / validation-only BP.
+- Eligibility owner: PlayerController/input layer; SelectionComponent remains container-only.
+- FoW out of scope; temporary all-relevant-visible rule for Phase B2 until FoW.
+- Verdict: **OPTION 1 READY** (not blocked; not split).
+
+### What was intentionally not done
+- **No C++**, no Blueprint/assets/maps, no Build.cs/config/.uproject changes.
+- Phase B2 / GP-S17 / full GP-S18 **not** started.
+- No commit/push in this analysis pass.
+- README / DOCUMENTATION_INDEX unchanged.
+
+### Stop condition
+**PHASE_B1_DONE_UNITBASE_PREREQUISITE_READY.** Architecture analysis recorded; final documentation checkpoint follows.
+
+## 2026-08-02 — GP-S16 / Selectable UnitBase prerequisite — architecture approved
+
+Status: **READY_FOR_IMPLEMENTATION** (prerequisite task) / parent GP-S16 **PHASE_B1_DONE_UNITBASE_PREREQUISITE_READY**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S16_Selectable_UnitBase_Prerequisite.md` — approved implementation scope locked
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — parent status kept READY; implementation not started
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Selectable UnitBase prerequisite architecture **approved** (documentation checkpoint).
+- Team contract selected: replicated `int32 TeamId` on `AGP_PlayerState` and `AGP_UnitBase` (`-1` / `0` / `1+`).
+- Interim capability contract selected: `CapabilityTags` CDO-only on UnitBase + stable query API; UnitDefinition remains future canonical source.
+- Concrete strategy selected: production-oriented `AGP_Unit` (capsule root, Visibility collision, engine/basic visible primitive).
+- Eligibility responsibility locked to PlayerController/input policy; SelectionComponent remains container-only.
+- Implementation **pending** (explicit next coding assignment).
+- **No code / assets / config / maps changed** in this checkpoint.
+
+### What was intentionally not done
+- No C++ / Build.cs / assets / maps / `.uproject` / TDD / README / DOCUMENTATION_INDEX changes.
+- Phase B2 / GP-S17 / full GP-S18 **not** started.
+- Prerequisite implementation **not** started.
+
+### Stop condition
+Documentation checkpoint commit/push on feature branch only. Do **not** merge to main here. Await tech-lead **implementation** assignment. Do **not** start Phase B2 until prerequisite code is merged and validated.

@@ -28,17 +28,20 @@ Local-only selection state component owned by `AGP_PlayerController`:
 - **no** gameplay-state mutation
 
 ## Status
-**Status: PHASE_B1_DONE_UNITBASE_PREREQUISITE_PENDING**
+**Status: PHASE_B1_DONE_UNITBASE_PREREQUISITE_READY**
 
 Phase A local selection state shell **merged**.
-Phase B input integration analysis **merged** (`7d3fd69` Merge GP-S16 input integration analysis).
-Phase B1 container-only mutation API **completed**.
-Technical validation **passed** (GPEditor Development, GP Development, GP Shipping, UHT).
+Phase B input integration analysis **merged**.
+Phase B1 container-only mutation API **merged** (`aac4470` Merge GP-S16 selection mutation API).
+Selectable UnitBase prerequisite **architecture analysis complete and approved** — see
+`GP-S16_Selectable_UnitBase_Prerequisite.md` (`Status: READY_FOR_IMPLEMENTATION`).
 
+**Prerequisite implementation has not started.**
 **GP-S16 overall is NOT DONE.** Do **not** set `Status: DONE`.
 No operator-visible selection yet.
-Phase B2 remains **blocked** by minimal selectable UnitBase integration.
 No input assets created.
+
+Phase B2 remains **blocked** until the selectable UnitBase prerequisite code is **merged and validated**.
 
 ### Phase B1 completed
 
@@ -82,9 +85,17 @@ Locked asset paths remain documentation-only (not created):
 
 ### Approved remaining split
 
-#### Prerequisite (separate tech-lead task)
+#### Prerequisite (separate tech-lead task) — READY_FOR_IMPLEMENTATION
 
-Minimal selectable UnitBase integration (`TeamId`, CapabilityTags access, concrete operator-testable unit path, friendly select vs inspect). **Not** automatically full GP-S18.
+See `Docs/Development/Claude_Tasks/GP-S16_Selectable_UnitBase_Prerequisite.md`.
+
+Approved scope (implementation pending):
+
+- replicated `TeamId` on `AGP_PlayerState` and `AGP_UnitBase`
+- interim `CapabilityTags` + stable query API on UnitBase (UnitDefinition migration later)
+- concrete production-oriented `AGP_Unit` (capsule + Visibility collision + visible primitive)
+- eligibility in PlayerController/input policy — **not** in `UGP_SelectionComponent`
+- **Not** automatically full GP-S18
 
 #### Phase B2 — only after prerequisite
 
@@ -624,5 +635,4 @@ Do **not** start GP-S17. Do **not** implement full GP-S18 under this analysis.
 TDD/13, TDD/04, TDD/09, TDD/12, TDD/15, GDD/09, GP-0202, ADR-0006, GP-S15, Naming_Conventions, STYLE, CONTRIBUTING.
 
 ## Stop Condition
-
-Status **PHASE_A_DONE_SPLIT_REQUIRED**. Phase B analysis documentation checkpoint complete. Do **not** write C++ / create IA/IMC / change config/maps in this pass. Do **not** mark GP-S16 DONE. Do **not** start Phase B1 / GP-S17 / full GP-S18 here. Await tech-lead assignment for Phase B1 implementation.
+Status **PHASE_B1_DONE_UNITBASE_PREREQUISITE_READY**. Selectable UnitBase prerequisite architecture approved (`READY_FOR_IMPLEMENTATION`). Implementation **not started** in the analysis checkpoint. Do **not** start Phase B2 until prerequisite code is merged and validated. Do **not** start GP-S17 or full GP-S18. Do **not** mark GP-S16 DONE.

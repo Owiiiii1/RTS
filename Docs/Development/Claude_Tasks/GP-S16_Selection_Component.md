@@ -28,17 +28,19 @@ Local-only selection state component owned by `AGP_PlayerController`:
 - **no** gameplay-state mutation
 
 ## Status
-**Status: PHASE_B2A_DONE_PHASE_B2B_PENDING**
+**Status: PHASE_B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING**
 
 Phase A **merged**.
 Phase B1 **merged**.
 Selectable UnitBase prerequisite **merged**.
 TeamId assignment **merged**.
-Phase B2a click/inspect **implemented and operator-validated** — see
-`GP-S16_Phase_B2_Input_Integration.md`
-(`Status: B2A_DONE_B2B_PENDING`).
+Phase B2a click/inspect **merged** into main and operator-validated — see
+`GP-S16_Phase_B2_Input_Integration.md`.
 
-Phase B2b marquee **pending** (not started).
+Phase B2b marquee **architecture complete** (docs-only checkpoint);
+**implementation pending** — see
+`GP-S16_Phase_B2_Input_Integration.md`
+(`Status: B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING`).
 
 **GP-S16 overall is NOT DONE.** Do **not** set `Status: DONE`.
 GP-S17 / full GP-S18 **not started**.
@@ -69,19 +71,20 @@ Rules:
 - `SetSelectionFromUnits` copies and canonicalizes input; does not retain the caller's array
 - `IsUnitSelected` is const, null-safe, non-mutating
 
-Selection input assets (B2a):
+Selection input assets:
 
 ```text
-/Game/GrimProtocol/Input/Selection/IA_Select          (created)
+/Game/GrimProtocol/Input/Selection/IA_Select          (created — reused by B2b)
 /Game/GrimProtocol/Input/Selection/IMC_GP_Selection  (created)
-/Game/GrimProtocol/Input/Selection/IA_Marquee        (deferred — B2b)
+/Game/GrimProtocol/Input/Selection/IA_Marquee        (rejected — do not create)
 ```
 
 ### Still blocked / deferred
 
 - Player TeamId assignment — **DONE** (operator-validated)
-- Phase B2a click/inspect input — **DONE** (operator-validated)
-- Phase B2b marquee + rectangle visualization — **pending** (not started)
+- Phase B2a click/inspect input — **DONE** (merged + operator-validated)
+- Phase B2b marquee architecture — **READY** (implementation pending)
+- Phase B2b marquee + rectangle visualization code — **not started**
 - Temporary test Blueprint / “any UnitBase selectable” / `-1→1` fallback — rejected
 - GP-S17 / full GP-S18 — not started
 
@@ -641,4 +644,7 @@ Do **not** start GP-S17. Do **not** implement full GP-S18 under this analysis.
 TDD/13, TDD/04, TDD/09, TDD/12, TDD/15, GDD/09, GP-0202, ADR-0006, GP-S15, Naming_Conventions, STYLE, CONTRIBUTING.
 
 ## Stop Condition
-Status **PHASE_B2A_CODE_READY_VALIDATION_PENDING**. Await operator validation of B2a click select/inspect. Do **not** start B2b / GP-S17 / full GP-S18. Do **not** mark GP-S16 DONE.
+Status **PHASE_B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING**.
+B2b architecture complete; B2b implementation not started.
+Do **not** mark GP-S16 DONE. Do **not** start GP-S17 / full GP-S18.
+Await separate reviewed B2b implementation assignment.

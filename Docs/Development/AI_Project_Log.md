@@ -2273,3 +2273,49 @@ Status: **B2A_DONE_B2B_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s16-b2a-click-selection` only. Do **not** merge to main. Do **not** start B2b, GP-S17, or full GP-S18.
+
+## 2026-08-02 — GP-S16 / Phase B2b — marquee architecture analysis
+
+Status: **B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING** (docs-only architecture; finalized below)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_B2_Input_Integration.md`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- B2b architecture analysis on `feature/gp-s16-b2b-marquee-selection` (base = main merge B2a `9bf7f4d`).
+- Confirmed B2a lifecycle: `IA_Select` Started/Completed/Canceled; 8px threshold; drag currently deferred; PC tick enabled but unused for selection; SelectionComponent marquee APIs unwired; no HUD/widgets.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+## 2026-08-02 — GP-S16 / Phase B2b — architecture checkpoint finalize
+
+Status: **B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_B2_Input_Integration.md`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### Locked decisions (preserved)
+- B2a merged in main (`9bf7f4d`); existing `IA_Select` reused; **`IA_Marquee` rejected**.
+- Cursor updates: gated `PlayerController::Tick` only while press/marquee active; **no** idle actor scans.
+- Widget: pure C++ `UGP_MarqueeSelectionWidget`; `NativePaint`; local-only; `HitTestInvisible`; **no** HUD subclass; **no** Blueprint widget asset.
+- Implementation will add private `Slate` / `SlateCore` to `GPRuntime.Build.cs` (not changed in this docs checkpoint).
+- Coordinates: cursor + projected actor point share viewport space; widget uses geometry `AbsoluteToLocal`.
+- Candidates: `AGP_UnitBase`; scan **once on release**; selection point = projected actor location; inclusion = center-point inside screen AABB.
+- Deterministic sort by `GetPathName()`; cap **24** via SelectionComponent.
+- Eligibility: LocalTeam >= 1; same TeamId; `IsGameplaySelectable()`; no enemy/neutral/unassigned; no FoW/LOS/render heuristics.
+- Modifiers: Replace / Shift-add / Ctrl-toggle; Ctrl wins; empty Replace clears; empty Shift/Ctrl no-op.
+- SelectionComponent API **sufficient**; prefer one final `SetSelectionFromUnits`; inspect clear may be a separate legitimate notification.
+- State machine: Idle → PressPending → MarqueeActive → Complete/Cancel → Idle.
+- Cancel / focus loss / EndPlay: **no** selection mutation.
+- Multiplayer: no RPC / no replicated marquee or selection; host and remote client independent local widget/state.
+- Logging: one-shot completion/cancel only; Tick updates cursor/widget only; O(N) scan on release; spatial indexing deferred.
+- No C++ widget / Build.cs / assets yet; operator validation N/A until implementation.
+- B2b implementation / GP-S17 / full GP-S18 **not** started. GP-S16 overall **NOT DONE**.
+
+### Stop condition
+Commit/push `feature/gp-s16-b2b-marquee-selection` only. Do **not** merge to main. Do **not** implement marquee, change C++/Build.cs, or create `IA_Marquee`/assets.

@@ -1806,3 +1806,65 @@ Status: **BLOCKED_BY_GP-S18**
 
 ### Stop condition
 **BLOCKED_BY_GP-S18** documentation checkpoint. Await separate tech-lead UnitBase scaffold task. Do **not** write GP-S16 code. Do **not** start GP-S17 or full GP-S18.
+
+---
+
+## 2026-08-02 — GP-S16 / UnitBase prerequisite scaffold
+
+Status: **CODE_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h` — new
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp` — new
+- `Docs/Development/Claude_Tasks/GP-S16_UnitBase_Prerequisite.md` — created
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Minimal UnitBase prerequisite started on `feature/gp-s16-unitbase-prerequisite` (base = main merge GP-S16 dependency checkpoint `d0b53ea`).
+- Real abstract replicated `AGP_UnitBase : APawn` shell added (`Abstract`, `Blueprintable`).
+- Constructor: no tick; `bReplicates=true`; `SetReplicateMovement(true)`.
+- No gameplay behavior (no ASC/attributes/tags/highlight/commands/death/definitions).
+- Purpose: UHT-compatible typed selection storage for future `UGP_SelectionComponent`.
+- `GPRuntime.Build.cs` unchanged (Engine already present).
+
+### What was intentionally not done
+- GP-S16 SelectionComponent implementation **not** started.
+- GP-S17 **not** started.
+- Full GP-S18 **not** started.
+- No README / DOCUMENTATION_INDEX close-out.
+- No assets/config/maps.
+- No commit / push in this pass.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- UHT → `AGP_UnitBase` generated / linked (Module.GPRuntime.gen.cpp + GPUnitBase.cpp)
+- Operator / Class Viewer validation → **pending**
+
+### Stop condition
+**CODE_READY_VALIDATION_PENDING.** Three builds PASSED. Await operator/tech-lead validation. Do **not** implement GP-S16 SelectionComponent. Do **not** start GP-S17 or full GP-S18.
+
+---
+
+## 2026-08-02 — GP-S16 / UnitBase prerequisite — closed DONE
+
+Status: **DONE** (dependency prerequisite only — not GP-S18)
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `Docs/Development/Claude_Tasks/GP-S16_UnitBase_Prerequisite.md` — closed DONE
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- UnitBase prerequisite **completed**.
+- Tech build validation passed (GPEditor Dev / GP Dev / GP Shipping + UHT).
+- Purpose: UHT-compatible typed storage for future GP-S16 `UGP_SelectionComponent`.
+- No gameplay systems included (no ASC/attributes/tags/highlight/commands/death).
+- GP-S16 remains blocked only until this prerequisite is merged into `main`.
+- GP-S17 / full GP-S18 **not** started.
+- README / DOCUMENTATION_INDEX / GP-S16 SelectionComponent spec status unchanged.
+
+### Stop condition
+Prerequisite closed as DONE. Merge to `main` unblocks typed GP-S16 implementation assignment. Do **not** start GP-S17 or full GP-S18 from this branch.

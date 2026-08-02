@@ -1539,3 +1539,242 @@ Status: **DONE**
 
 ### Stop condition
 GP-S14 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S15 IMC_GP_Camera + IA_Camera_* assets, PlayerController binding**. GP-S15 not started; task file not materialized. Full live camera clamp validation deferred until GP-S15.
+
+---
+
+## 2026-08-02 — GP-S15 / Camera Enhanced Input — specification pass
+
+Status: **BLOCKED** (OD locks required; no C++/assets/maps/config started)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S15_Camera_Input.md` — created full OD-1…OD-40 BLOCKED specification
+- `Docs/Development/Claude_Tasks/README.md` — GP-S15 = BLOCKED; GP-S16 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S15 specification BLOCKED
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Specification-only pass for camera Enhanced Input + PlayerController binding + working PIE camera.
+- Disk audit: PC scaffold has no bindings; CameraPawn non-replicated + intent API ready; GameMode sets PC class but not DefaultPawnClass; EnhancedInput plugin + Build.cs dependency already present; DefaultInput.ini already Enhanced + permanent capture; Content has no IA/IMC/BP/maps; no GlobalDefaultGameMode; GameDefaultMap = Engine OpenWorld.
+- Primary blockers documented: possession of non-replicated CameraPawn (OD-13/14); project/map activation of AGP_GameMode/PC (OD-16/18); asset reference + binary `.uasset` creation workflow (OD-10/11/33).
+
+### Blocking tech-lead decisions
+See task Blocking OD checklist — especially OD-13/14, OD-16/18/37, OD-10/11/33/34, wheel sign, cursor/input mode, acceptance multiplayer modes.
+
+### What was intentionally not done
+- **No C++**, no IA/IMC, no Blueprint, no `.uasset`/`.umap`, no PC/CameraPawn/GameMode/config changes.
+- No builds.
+- No commit / push.
+- No GP-S16.
+
+### Stop condition
+BLOCKED. Await tech-lead OD locks → SPEC_READY rewrite / implementation assignment. Do **not** start GP-S16.
+
+---
+
+## 2026-08-02 — GP-S15 / Camera Enhanced Input — tech-lead resolution → SPEC_READY
+
+Status: **SPEC_READY** (OD-1…OD-42 locked; C++/assets/config not started)
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S15_Camera_Input.md` — BLOCKED removed; OD-1…OD-42 RESOLVED
+- `Docs/Development/Claude_Tasks/README.md` — GP-S15 = SPEC_READY; GP-S16 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = GP-S15 specification ready; NEXT = S15 implementation after explicit approval
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Applied tech-lead locks for working RTS camera input:
+  - Normal GameMode spawn/possess; `DefaultPawnClass = AGP_CameraPawn`
+  - CameraPawn revision: **replicated owner-only shell, non-replicated camera state** (`bReplicates=true`, `bOnlyRelevantToOwner=true`, no movement/property/RPC replication)
+  - `GlobalDefaultGameMode=/Script/GPRuntime.GP_GameMode` via `DefaultGame.ini` (no map change)
+  - Pure C++ PlayerController; soft asset paths + one-time `LoadSynchronous`
+  - IMC priority 100; cursor `GameAndUI` + visible cursor; permanent capture unchanged
+  - Operator creates five IA/IMC assets; Cursor implements C++
+  - Acceptance: Standalone PIE + 2-player listen-server PIE; dedicated server build-only
+
+### What was intentionally not done
+- **No C++**, no `.uasset`, no Build.cs/config/maps changes, no builds, no commit/push.
+- No GP-S16 (not started; task file not materialized).
+
+### Stop condition
+SPEC_READY. Await explicit **GP-S15 implementation** assignment before C++/assets/config. Do **not** start GP-S16.
+
+---
+
+## 2026-08-02 — GP-S15 / Camera Enhanced Input — Phase A (code/config)
+
+Status: **CODE_READY_ASSETS_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h` — camera Enhanced Input soft refs, transient loaded ptrs, EndPlay, private input API
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp` — soft-path load, bind, mapping lifecycle, cursor/input mode, forward to CameraPawn
+- `GP/Source/GPRuntime/Private/Camera/GPCameraPawn.cpp` — owner-only replicated shell; movement/state remain non-replicated
+- `GP/Source/GPRuntime/Private/Game/GPGameMode.cpp` — `DefaultPawnClass = AGP_CameraPawn`
+- `GP/Config/DefaultGame.ini` — `GlobalDefaultGameMode=/Script/GPRuntime.GP_GameMode`
+- `Docs/Development/Claude_Tasks/GP-S15_Camera_Input.md` — status CODE_READY_ASSETS_PENDING
+- `Docs/Development/Claude_Tasks/README.md` — cursor updated
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Current stage = assets/operator setup pending
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- PlayerController Enhanced Input wiring (pure C++):
+  - Soft paths for IMC + four IA under `/Game/GrimProtocol/Input/Camera/`
+  - One-time `LoadSynchronous` into transient `TObjectPtr`s
+  - Bindings: Pan/Zoom/Rotate Triggered; RotateToggle Started/Completed/Canceled
+  - Mapping priority `100`; add in local `BeginPlayingState`; remove in `EndPlay`
+  - Cursor visible + `FInputModeGameAndUI` (`HideCursorDuringCapture=false`, `LockAlways`)
+  - Forward only: `SetPanInput` / `AddZoomInput` / `AddRotateInput` / `SetRotateActive`
+  - OnUnPossess clears rotate hold; does not remove mapping
+  - OnLocalPawnReady Warning if pawn is not `AGP_CameraPawn`
+- CameraPawn: `bReplicates=true`, `bOnlyRelevantToOwner=true`, `SetReplicateMovement(false)`; no replicated camera props/RPC; Tick `IsLocallyControlled` guard unchanged
+- GameMode `DefaultPawnClass` set; existing PC/PS/GS classes preserved
+- `GlobalDefaultGameMode` set; GameDefaultMap / EditorStartupMap untouched
+- Build.cs unchanged (EnhancedInput already present); plugin enabled in `.uproject`
+- DefaultInput.ini unchanged (permanent capture already configured)
+
+### What was intentionally not done
+- No five `.uasset` created (operator Phase B)
+- No `.umap` / Blueprint / Data Asset / Python / commandlets
+- No GP-S16
+- No commit / push
+- No PIE functional validation (blocked on missing assets)
+
+### Soft asset paths
+```
+/Game/GrimProtocol/Input/Camera/IMC_GP_Camera.IMC_GP_Camera
+/Game/GrimProtocol/Input/Camera/IA_Camera_Pan.IA_Camera_Pan
+/Game/GrimProtocol/Input/Camera/IA_Camera_Zoom.IA_Camera_Zoom
+/Game/GrimProtocol/Input/Camera/IA_Camera_Rotate.IA_Camera_Rotate
+/Game/GrimProtocol/Input/Camera/IA_Camera_RotateToggle.IA_Camera_RotateToggle
+```
+
+### Assets confirmed absent
+- `GP/Content/GrimProtocol/Input/Camera/IA_Camera_Pan.uasset`
+- `GP/Content/GrimProtocol/Input/Camera/IA_Camera_Zoom.uasset`
+- `GP/Content/GrimProtocol/Input/Camera/IA_Camera_Rotate.uasset`
+- `GP/Content/GrimProtocol/Input/Camera/IA_Camera_RotateToggle.uasset`
+- `GP/Content/GrimProtocol/Input/Camera/IMC_GP_Camera.uasset`
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- PIE functional validation → **pending** (assets required)
+- DONE_CANDIDATE → **not set** (five assets pending)
+
+### Acceptance checklist (Phase A)
+- [x] PlayerController Enhanced Input code implemented
+- [x] Soft asset paths set; synchronous one-time load
+- [x] Action bindings + priority 100
+- [x] Mapping add BeginPlayingState / remove EndPlay
+- [x] Cursor/input mode implemented
+- [x] CameraPawn owner-only replicated shell; state/movement non-replicated
+- [x] GameMode DefaultPawnClass set
+- [x] GlobalDefaultGameMode set
+- [x] Build.cs unchanged; DefaultInput.ini unchanged
+- [x] Three builds PASSED
+- [x] Five `.uasset` absent and pending operator creation
+- [ ] PIE functional validation
+- [x] GP-S16 not started
+
+### Stop condition
+**CODE_READY_ASSETS_PENDING.** Operator creates five Enhanced Input assets at locked paths, then PIE Standalone + 2P listen-server validation. Do **not** set DONE_CANDIDATE. Do **not** start GP-S16. No commit/push in this pass.
+
+---
+
+## 2026-08-02 — GP-S15 / Enhanced Input tick fix
+
+Status: **INPUT_FIX_CANDIDATE** (stage remains CODE_READY_ASSETS_PENDING; not DONE)
+
+### Files changed
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp` — `PrimaryActorTick.bCanEverTick = true`
+- `Docs/Development/Claude_Tasks/GP-S15_Camera_Input.md` — PlayerController tick rationale
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### Enhanced Input regression root cause
+- `AGP_PlayerController` had `PrimaryActorTick.bCanEverTick = false`.
+- Temporary diagnostic tick made input work; restoring `false` broke handlers again.
+- IMC, Input Actions, bindings, `EnhancedPlayerInput`, and `EnhancedInputComponent` were already correct.
+- Production fix: keep standard PlayerController tick enabled (`bCanEverTick = true`).
+- No custom `PlayerTick` implementation; uses `APlayerController::PlayerTick` via normal actor tick lifecycle.
+- Temporary GP-S15 DIAG / MAP / RAW / STATE code remains removed.
+
+### What was intentionally not done
+- No stage promotion to DONE / DONE_CANDIDATE.
+- No asset / map / config / CameraPawn / GameMode changes.
+- No commit / push.
+- No GP-S16.
+- Operator PIE validation still pending.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Operator PIE re-validation → **pending**
+
+### Stop condition
+**INPUT_FIX_CANDIDATE.** Operator re-validates camera input in PIE. Do **not** set DONE. Do **not** start GP-S16. No commit/push in this pass.
+
+---
+
+## 2026-08-02 — GP-S15 / Camera Enhanced Input — closed DONE
+
+Status: **DONE**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h` — camera Enhanced Input soft refs, transient loaded ptrs, EndPlay, private input API
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp` — soft-path load, bind, mapping lifecycle, cursor/input mode, forward to CameraPawn; `PrimaryActorTick.bCanEverTick = true`
+- `GP/Source/GPRuntime/Private/Camera/GPCameraPawn.cpp` — owner-only replicated shell; movement/state remain non-replicated
+- `GP/Source/GPRuntime/Private/Game/GPGameMode.cpp` — `DefaultPawnClass = AGP_CameraPawn`
+- `GP/Config/DefaultGame.ini` — `GlobalDefaultGameMode=/Script/GPRuntime.GP_GameMode`
+- Five Input assets (LFS):
+  - `GP/Content/GrimProtocol/Input/Camera/IA_Camera_Pan.uasset`
+  - `GP/Content/GrimProtocol/Input/Camera/IA_Camera_Zoom.uasset`
+  - `GP/Content/GrimProtocol/Input/Camera/IA_Camera_Rotate.uasset`
+  - `GP/Content/GrimProtocol/Input/Camera/IA_Camera_RotateToggle.uasset`
+  - `GP/Content/GrimProtocol/Input/Camera/IMC_GP_Camera.uasset`
+- `Docs/Development/Claude_Tasks/GP-S15_Camera_Input.md` — closed DONE
+- `Docs/Development/Claude_Tasks/README.md` — GP-S15 DONE; GP-S16 not materialized
+- `Docs/Development/DOCUMENTATION_INDEX.md` — Last closed = GP-S15; NEXT = GP-S16 UGP_SelectionComponent…
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Enhanced Input implementation on pure C++ `AGP_PlayerController` (soft refs, one-time sync load, transient resolved pointers).
+- Five committed canonical IA/IMC assets; mapping priority 100; cursor GameAndUI + LockAlways.
+- GameMode activation: `DefaultPawnClass` + `GlobalDefaultGameMode`.
+- CameraPawn replication correction: owner-only shell; camera transform/state not replicated; no movement replication; no RPC.
+- PlayerController tick root cause and final fix: `PrimaryActorTick.bCanEverTick = true`; no custom `PlayerTick`; no diagnostic code remains.
+- Asset rename incident: underscore-less initial names restored to canonical; Editor restart after redirector cleanup; final tree has canonical names only.
+
+### Operator validation
+- Standalone PIE: WASD/arrows pan, edge-scroll, wheel zoom (up=in/down=out), MMB+MouseX rotate, cursor visible — **PASSED**
+- Missing IA/IMC / GP-S15 errors — **ABSENT**
+- 2-player listen-server: separate independent cameras; controls in server + client windows — **PASSED**
+- Possession/network errors — **ABSENT**
+- Fallback bounds + temporary BoundsVolume clamp — **PASSED**; temp actor deleted; map not committed
+
+### What was intentionally not done
+- No permanent map / BoundsVolume placement / GameMode Override in maps
+- No Build.cs / DefaultInput.ini / `.uproject` changes
+- No CameraPawn header / BoundsVolume / CameraConfig / PS / GS / MatchAssetLoader changes
+- No GP-S16 task/code
+- No merge to `main`
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- Notes: Tech lead accepted. Operator accepted.
+
+### Acceptance checklist
+- [x] Compiles (three targets) PASSED
+- [x] Five Input assets committed (canonical names only)
+- [x] Standalone + 2P listen-server PIE PASSED
+- [x] Independent cameras PASSED
+- [x] Bounds clamp PASSED; no permanent map changes
+- [x] Tick-enabled PC; no custom PlayerTick; no DIAG code
+- [x] Tech lead accepted GP-S15
+- [x] Operator accepted GP-S15
+- [x] GP-S16 not started
+
+### Stop condition
+GP-S15 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S16 UGP_SelectionComponent (SelectedUnits, InspectedTarget, marquee, control groups)**. GP-S16 not started; task file not materialized.

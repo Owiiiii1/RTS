@@ -28,7 +28,7 @@ Local-only selection state component owned by `AGP_PlayerController`:
 - **no** gameplay-state mutation
 
 ## Status
-**Status: PHASE_C_DONE_NEXT_CHECKPOINT_PENDING**
+**Status: DONE_WITH_DEFERRED_INTEGRATIONS**
 
 Phase A **DONE**.
 Phase B1 **DONE**.
@@ -40,13 +40,17 @@ Phase C control-groups input **DONE** — see
 `GP-S16_Phase_C_Control_Groups_Input.md`
 (`Status: PHASE_C_DONE`).
 
-Core selection + marquee + control-groups **input** is complete.
-Temporary debug boxes remain until production highlight.
-C2 double-tap camera focus **deferred** (`FocusOnLocation` absent).
-Production highlight / debug-box cleanup **deferred**.
+**Core GP-S16 complete** and operator-validated:
+local-only `UGP_SelectionComponent`, `SelectedUnits`, `InspectedTarget`,
+mutation API, click + marquee, control groups 1–9
+(assign / append / recall / append-recall), cap 24, team filtering,
+delegates/state maintenance, local multiplayer isolation, no RPC /
+selection replication.
 
-**GP-S16 overall is NOT DONE** — do **not** auto-mark DONE.
-Next checkpoint requires a separate reviewed decision.
+Deferred remainder does **not** reopen GP-S16 and does **not** block GP-S17.
+See `GP-S16_Deferred_Integrations.md`.
+
+Temporary debug boxes remain as developer visualization until production highlight.
 GP-S17 / full GP-S18 **not started**.
 
 ### Phase B1 completed
@@ -83,27 +87,30 @@ Selection input assets:
 /Game/GrimProtocol/Input/Selection/IA_Marquee        (rejected — do not create)
 ```
 
-### Still blocked / deferred
+### Deferred integrations (do not block DONE / GP-S17)
 
-- Player TeamId assignment — **DONE** (operator-validated)
-- Phase B2a click/inspect input — **DONE** (merged + operator-validated)
-- Phase B2b marquee — **DONE** (merged + operator-validated)
-- Phase B input integration — **complete**
-- Phase C control-groups input — **DONE** (operator-validated)
-- Phase C2 double-tap camera focus — deferred (`FocusOnLocation` absent)
-- Production highlight + removal of temporary debug boxes — deferred
-- Esc clear binding — optional follow-up (ground clear already works)
-- Next GP-S16 checkpoint — separate reviewed decision (pending)
-- Temporary test Blueprint / “any UnitBase selectable” / `-1→1` fallback — rejected
-- GP-S17 / full GP-S18 — not started
+See `GP-S16_Deferred_Integrations.md` for ownership.
+
+| Item | Owner |
+| --- | --- |
+| C2 double-tap camera focus | Camera follow-up / GP-S16-C2 |
+| Production highlight + debug-box removal | GP-S18b or visual selection slice |
+| OnDeath pruning / building mix / same-definition double-click / closest-24 polish | Full UnitBase / definitions integration |
+| FoW filtering | FoW slice |
+| Optional Esc clear | Optional UX follow-up |
+| Control-group persistence | Out of MVP |
+
+Temporary test Blueprint / “any UnitBase selectable” / `-1→1` fallback — **rejected**.
+GP-S17 / full GP-S18 — **not started**.
 
 ### Approved remaining split
+*(Historical analysis below; superseded by Status `DONE_WITH_DEFERRED_INTEGRATIONS`.)*
 
-#### Prerequisite — DONE (Phase B2 pending)
+#### Prerequisite — DONE (historical)
 
 See `Docs/Development/Claude_Tasks/GP-S16_Selectable_UnitBase_Prerequisite.md`.
 
-Approved scope (implementation pending):
+Approved scope (was implementation-pending at analysis time; later completed):
 
 - replicated `TeamId` on `AGP_PlayerState` and `AGP_UnitBase`
 - interim `CapabilityTags` + stable query API on UnitBase (UnitDefinition migration later)
@@ -653,8 +660,8 @@ Do **not** start GP-S17. Do **not** implement full GP-S18 under this analysis.
 TDD/13, TDD/04, TDD/09, TDD/12, TDD/15, GDD/09, GP-0202, ADR-0006, GP-S15, Naming_Conventions, STYLE, CONTRIBUTING.
 
 ## Stop Condition
-Status **PHASE_C_DONE_NEXT_CHECKPOINT_PENDING**.
-Phase C complete. Core click + marquee + control-group input complete.
-Do **not** mark entire GP-S16 DONE automatically.
-Do **not** start C2 / GP-S17 / full GP-S18.
-Await separate reviewed decision for the next GP-S16 checkpoint.
+Status **DONE_WITH_DEFERRED_INTEGRATIONS**.
+Core GP-S16 acceptance scope complete and operator-validated.
+Deferred items tracked in `GP-S16_Deferred_Integrations.md`; they do **not** block GP-S17.
+Do **not** start C2 / GP-S17 / full GP-S18 from this closure pass.
+Do **not** remove temporary debug boxes until production highlight.

@@ -2513,3 +2513,29 @@ Status: **PHASE_C_DONE** (parent **PHASE_C_DONE_NEXT_CHECKPOINT_PENDING**)
 
 ### Stop condition
 Commit/push `feature/gp-s16-phase-c-control-groups-implementation` only. Do **not** merge to main. Do **not** start C2 / Esc / highlight / GP-S17 / full GP-S18.
+
+## 2026-08-02 — GP-S16 / completion boundary finalize
+
+Status: **DONE_WITH_DEFERRED_INTEGRATIONS**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — closed `DONE_WITH_DEFERRED_INTEGRATIONS`
+- `Docs/Development/Claude_Tasks/GP-S16_Deferred_Integrations.md` — created (ownership map)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Final GP-S16 completion checkpoint on `feature/gp-s16-completion-boundary` (base = `main` `f0c8b92`).
+- Phase A complete; B1 complete; B2a complete; B2b complete; Phase C complete.
+- Core acceptance scope fulfilled: local-only SelectionComponent, SelectedUnits, InspectedTarget, mutation API, click + marquee, control groups 1–9 (assign/append/recall/append-recall), cap 24, team filtering, local MP isolation, delegates/state, operator validation, no RPC, no selection replication.
+- Status set to **`DONE_WITH_DEFERRED_INTEGRATIONS`**.
+- Deferred integrations documented separately in `GP-S16_Deferred_Integrations.md` (C2 camera focus; production highlight + debug-box removal; UnitBase/definitions rules; FoW; optional Esc; out-of-MVP persistence).
+- Temporary debug boxes **remain** until production highlight.
+- GP-S17 **unblocked** but **not started**. Full GP-S18 **not started**.
+- Docs-only. No C++ / assets / maps / config / Build.cs / `.uproject`. B2 / Phase C DONE docs / README / DOCUMENTATION_INDEX unchanged.
+
+### Builds / validation
+- Documentation-only; no builds required.
+- Prior Phase C operator validation and builds retained on `main` (`f0c8b92`).
+
+### Stop condition
+Commit/push `feature/gp-s16-completion-boundary` only. Do **not** merge to main. Do **not** start C2 / GP-S17 / full GP-S18. Do **not** implement deferred items.

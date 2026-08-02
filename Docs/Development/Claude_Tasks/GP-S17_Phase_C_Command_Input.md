@@ -1,14 +1,15 @@
 # GP-S17 Phase C — Command Input
-(RMB → local BuildSmartCommand — final analysis contract)
+(RMB → local BuildSmartCommand — implementation)
 
 ## Status
-**Status: ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**Status: CODE_DONE_OPERATOR_VALIDATED**
 
-Docs-only checkpoint. **No** C++ / assets / maps / config in this pass.
-Depends on: Phase B `BuildSmartCommand` (`CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED`).
-Phase B **real functional validation** is performed through this Phase C caller.
-Phase C does **not** send the request to the server and does **not** execute commands.
-Does **not** start full GP-S18 / GP-S19.
+Phase C local RMB command input **works**.
+`BuildSmartCommand` is invoked through a real PlayerController caller.
+Request-content validation completed for **operator-checked** cases (matrix below).
+Resource Mine validated via temporary `AGP_UnitBase` Blueprint with `GP.Resource.Node`; temporary asset **removed**; map **not** saved.
+Request remains **local-only**: **no** RPC, **no** execution, **no** movement.
+Does **not** start full GP-S18 / GP-S19 / server submission.
 
 ---
 
@@ -17,267 +18,135 @@ Does **not** start full GP-S18 / GP-S19.
 | Layer | Responsibility |
 | --- | --- |
 | `AGP_PlayerController` | Soft-load IA/IMC; Enhanced Input bind; cursor deproject/trace; call `BuildSmartCommand`; one-shot diagnostic log |
-| `UGP_CommandComponent` | Build request only |
+| `UGP_CommandComponent` | Build request only — **unchanged** semantics |
 
-`UGP_CommandComponent` must **not** access:
-
-- Enhanced Input subsystem
-- mouse position
-- cursor trace
-- input mapping contexts
-
-Matches existing camera / selection architecture. Do **not** move bindings into CommandComponent.
+CommandComponent has **no** access to Enhanced Input, mouse, cursor trace, or IMCs.
 
 ---
 
-## 2. Canonical Input Action / IMC
-
-### Input Action
+## 2. Assets (created)
 
 | Item | Value |
 | --- | --- |
-| Name | `IA_Command` |
-| Soft path | `/Game/GrimProtocol/Input/Commands/IA_Command.IA_Command` |
-| Content path | `GP/Content/GrimProtocol/Input/Commands/IA_Command.uasset` |
-| Value type | Boolean / Digital |
-| Key | Right Mouse Button |
-| Trigger | `ETriggerEvent::Started` |
+| Creation method | `Tools/CreateCommandInputAssets.py` via `UnrealEditor-Cmd -ExecutePythonScript` |
+| IA | `/Game/GrimProtocol/Input/Commands/IA_Command` — Boolean |
+| IMC | `/Game/GrimProtocol/Input/Commands/IMC_GP_Commands` |
+| Disk | `GP/Content/GrimProtocol/Input/Commands/IA_Command.uasset` |
+| Disk | `GP/Content/GrimProtocol/Input/Commands/IMC_GP_Commands.uasset` |
+| Mapping property | **`DefaultKeyMappings`** (UE 5.8) |
+| Mapping | RightMouseButton → `IA_Command` (count = 1) |
+| Registration priority | **120** |
+| Reload-verified | YES — `DefaultKeyMappings count=1`, action=`IA_Command`, key=`RightMouseButton` |
 
-**Rationale:** one command per press; no spam while RMB is held.
+No Blueprint wrapper. No Shift chord in IMC.
 
-### Input Mapping Context
+---
+
+## 3. Context lifecycle (implemented)
+
+Parallel to camera/selection on `AGP_PlayerController` only:
+
+| Step | Method |
+| --- | --- |
+| Soft paths | Constructor → `CommandMappingContext` / `CommandAction` |
+| Load + bind | `SetupInputComponent` → `LoadCommandInputAssets` + `BindCommandInputActions`; `bCommandActionBindingInstalled` |
+| Add context | Local `BeginPlayingState` → `InitializeCommandInput` (priority 120) |
+| Duplicate guard | `bCommandMappingContextAdded` |
+| Local gate | `IsLocalController()` — non-local never adds |
+| Remove | `EndPlay` → `RemoveCommandInputMapping` + clear loaded ptrs |
+
+No alternate input bootstrap.
+
+---
+
+## 4. Binding / handler
+
+```cpp
+EnhancedInput.BindAction(
+    LoadedCommandAction,
+    ETriggerEvent::Started,
+    this,
+    &AGP_PlayerController::OnCommandInputStarted);
+```
 
 | Item | Value |
 | --- | --- |
-| Name | `IMC_GP_Commands` |
-| Soft path | `/Game/GrimProtocol/Input/Commands/IMC_GP_Commands.IMC_GP_Commands` |
-| Content path | `GP/Content/GrimProtocol/Input/Commands/IMC_GP_Commands.uasset` |
-| Priority | **120** (Camera **100**, Selection **110**) |
-| Mapping property | **`DefaultKeyMappings`** (UE 5.8; not deprecated `mappings`) |
-| Mapping | RMB → `IA_Command` |
-
-Do **not** add RMB to Camera or Selection IMCs.
+| Handler | `OnCommandInputStarted` |
+| Event | `ETriggerEvent::Started` only |
+| Local guard | `IsLocalController()` + `CommandComponent != nullptr` |
 
 ---
 
-## 3. Mapping-context lifecycle (confirmed existing pattern)
+## 5. Trace / queue / build
 
-Canonical bootstrap is **only** `AGP_PlayerController` — same pattern as camera/selection. **No** alternate input bootstrap / loader.
+Reuse of selection click path:
 
-| Step | Existing camera/selection method | Phase C parallel |
-| --- | --- | --- |
-| Soft paths | Constructor assigns `TSoftObjectPtr` soft paths | `CommandMappingContext`, `CommandAction` soft paths |
-| Load + bind | `SetupInputComponent` → `Load*InputAssets` + `Bind*InputActions`; one-shot bind flags (`b*BindingInstalled`) | `LoadCommandInputAssets` + `BindCommandInputActions`; `bCommandActionBindingInstalled` |
-| Add context | Local-only `BeginPlayingState` → `InitializeCameraInput` / `InitializeSelectionInput` | `InitializeCommandInput` from same local `BeginPlayingState` |
-| Local gate | `IsLocalController()` before add | Same — never add for server non-local PC |
-| Duplicate guard | `bCameraMappingContextAdded` / `bSelectionMappingContextAdded` | `bCommandMappingContextAdded` |
-| Remove | `EndPlay` → `Remove*InputMapping` + clear loaded ptrs | `RemoveCommandInputMapping` + clear |
-
-Confirmed call sites today:
-
-- Soft defaults: constructor
-- Bind: `SetupInputComponent`
-- Add IMC: `BeginPlayingState` when `IsLocalController()` (after cursor/`GameAndUI` setup)
-- Remove: `EndPlay`
-
-Priority 120 must not alter Camera/Selection bindings (different keys; higher priority only among overlapping actions).
+1. `GetMousePosition` → `DeprojectScreenPositionToWorld`
+2. `LineTraceSingleByChannel(ECC_Visibility)`, simple, distance `SelectionTraceDistance` (`1e6`)
+3. Ignore possessed pawn
+4. Miss → silent return (no `BuildSmartCommand`)
+5. Hit → `TargetActor` / `TargetLocation = ImpactPoint`
+6. `bQueue = IsShiftModifierDown()`
+7. Local `FGP_CommandRequest` + `CommandComponent->BuildSmartCommand(...)`
+8. Failure → silent return
+9. Success → one diagnostic log; **no** RPC / execution / stored request
 
 ---
 
-## 4. Input conflict policy
+## 6. Diagnostic log
 
-| Input | Role | Phase C |
-| --- | --- | --- |
-| LMB | Selection / marquee | Unchanged |
-| MMB | Camera rotate toggle | Unchanged |
-| RMB | Command | **New** (`IA_Command`) |
-| WASD / wheel | Camera pan/zoom | Unchanged |
-| Digits | Control groups | Unchanged |
-| Esc / cancel | — | **Out of scope** |
-| Drag-command | — | **Out of scope** |
-
-Existing RMB usage: **none**. Camera rotate remains MMB.
-
----
-
-## 5. Cursor trace (canonical)
-
-1. Local PlayerController only.
-2. `GetMousePosition` + `DeprojectScreenPositionToWorld` (existing selection style).
-3. `LineTraceSingleByChannel`.
-4. Channel: `ECC_Visibility`.
-5. Complexity: simple (`false`) — existing project policy.
-6. Distance: `1e6` (`SelectionTraceDistance` / shared constant).
-7. Ignore: possessed pawn if present.
-8. **Hit:** `TargetActor = Hit.GetActor()`, `TargetLocation = Hit.ImpactPoint`.
-9. **Miss:** silent no-op; **do not** call `BuildSmartCommand`.
-
-**Not added:** ground-plane fallback; new collision channel; config changes; custom trace subsystem.
-
----
-
-## 6. UI policy (Phase C limit)
-
-- No CommonUI / input-capture gate in Phase C.
-- Command input behaves like current selection input (no cursor-over-UI helper today).
-- Modal / UI blocking = future integration checkpoint.
-- No new UI abstraction.
-
-This is **not** final production behavior for RMB over UI.
-
----
-
-## 7. Queue modifier
-
-| Item | Policy |
+| Item | Value |
 | --- | --- |
-| Source | Existing `IsShiftModifierDown()` |
-| Value | `bQueue = IsShiftModifierDown()` |
-| New Shift IA | **No** |
-| Queue execution | **Deferred** — Phase C only passes intent into request + diagnostic log |
+| Category | `LogGPCommandInput` (`DEFINE_LOG_CATEGORY_STATIC` in `GPPlayerController.cpp`) |
+| Format | `GP CommandInput: Tag=… Units=… TargetActor=… Loc=… Queue=true\|false LocalTeam=… NetMode=… Role=…` |
+| Frequency | One log per successful build only |
+
+No LastBuiltRequest / delegate / replicated state / screen messages.
 
 ---
 
-## 8. Exact call flow
+## 7. Builds
 
-```text
-IA_Command Started
-→ verify local controller
-→ cursor Visibility trace
-→ trace miss: return
-→ obtain TargetActor / TargetLocation
-→ bQueue = IsShiftModifierDown()
-→ CommandComponent->BuildSmartCommand(...)
-→ failure: return
-→ log built request
-→ stop
-```
-
-After successful build there is **no**:
-
-- RPC
-- server validation
-- dispatch
-- movement
-- AI
-- execution
-
----
-
-## 9. Request diagnostic
-
-One diagnostic entry per **successful** RMB build:
-
-```text
-GP CommandInput: Tag=<tag> Units=<count> TargetActor=<name|None> Loc=<vector> Queue=<0|1> LocalTeam=<id> NetMode=<mode> Role=<role>
-```
-
-| Rule | Value |
+| Target | Result |
 | --- | --- |
-| `LastBuiltRequest` | **NO** |
-| Delegate | **NO** |
-| Replicated state | **NO** |
-| Per-frame / hold spam | **NO** |
-| Normal failures as Warning | **NO** |
-| Host/client distinguish | `LocalTeam` + `NetMode`/`Role` in same line |
-
-### Log category (confirmed)
-
-Project has **no** named `LogGP` (or similar) category; PlayerController diagnostics use `LogTemp` (`GP ControlGroup:`, selection logs).
-
-**Phase C:** `UE_LOG(LogTemp, Log, TEXT("GP CommandInput: ..."))` — matches existing PC style. Do **not** invent a scattered new category without a project-wide log header; a dedicated category is optional later, not required for Phase C.
+| GPEditor Win64 Development | **PASSED** (UHT via compile path) |
+| GP Win64 Development | **PASSED** |
+| GP Win64 Shipping | **PASSED** |
 
 ---
 
-## 10. Failure policy
+## 8. Operator validation
 
-Silent no-op when:
-
-- non-local controller
-- cursor trace miss
-- no selection
-- missing PlayerState / team
-- missing CommandComponent
-- `BuildSmartCommand == false`
-
-Allowed: Verbose / VeryVerbose developer diagnostics only.
-
-**Forbidden:** on-screen messages; warning spam; Error for normal empty selection.
-
----
-
-## 11. Functional validation matrix
-
-| # | Case | Expected |
-| --- | --- | --- |
-| 1 | No selection + RMB ground | No command log |
-| 2 | One friendly selected + RMB ground | `Command_Move`; Units=1; TargetActor null; unit does **not** move |
-| 3 | Multiple selected + RMB ground | `Command_Move`; Units = selection count |
-| 4 | Enemy `UnitBase` | `Command_Attack`; target actor kept |
-| 5 | Friendly `UnitBase` | `Command_Move`; TargetActor null |
-| 6 | Neutral / unassigned `UnitBase` | Speculative `Command_Attack` |
-| 7 | `UnitBase` with `GP.Resource.Node` | `Command_Mine` |
-| 8 | Unknown non-unit actor | `Command_Move`; TargetActor null |
-| 9 | Shift + RMB | Queue=true |
-| 10 | RMB without Shift | Queue=false |
-| 11 | 2P Listen Server | Host log = host selection only; client = client only; LocalTeam + net context distinguishable |
-| 12 | All cases | No RPC; no unit movement; no command execution |
-
-Regression: camera / selection / marquee / control groups / MMB rotate unchanged.
-
----
-
-## 12. Exact next implementation checkpoint
-
-**GP-S17 Phase C — local RMB command caller**
-
-### Allowed
-
-- Create `IA_Command` + `IMC_GP_Commands` (`DefaultKeyMappings`, RMB)
-- Wire into existing local-controller input lifecycle on `AGP_PlayerController`
-- Visibility cursor trace
-- Call `BuildSmartCommand`
-- One diagnostic log entry
-- Docs; builds/UHT; operator validation
-
-### Forbidden
-
-- RPC / server validation / command dispatch
-- Movement / AI / NavMesh / unit receiver
-- Queue execution
-- `LastBuiltRequest` / delegates / replicated request state
-- Production UI feedback / CommonUI redesign
-- Collision / config / Build.cs / `.uproject` / native tags / CommandComponent API changes / request struct changes
-
-### Expected C++
-
-- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-
-No new input loader. Soft refs + Initialize/Remove/Load/Bind parallel to selection.
-
-### Expected assets
-
-- `GP/Content/GrimProtocol/Input/Commands/IA_Command.uasset`
-- `GP/Content/GrimProtocol/Input/Commands/IMC_GP_Commands.uasset`
-
-### Asset creation policy
-
-Choose existing safe workflow at implementation time:
-
-- approved Unreal Editor automation, **or**
-- operator creation in Editor
-
-UE 5.8: mapping must live in **`DefaultKeyMappings`**; open/verify asset after create; file existence alone is insufficient.
-
-**Asset creation is not performed in this analysis checkpoint.**
+| Case | Result |
+| --- | --- |
+| Standalone PIE | **PASS** |
+| No selection + RMB | **PASS** (no command log) |
+| Single friendly + RMB ground → Move | **PASS** |
+| Multi select + RMB ground → Move | **PASS** |
+| Shift + RMB → Queue=true | **PASS** |
+| RMB without Shift → Queue=false | **PASS** |
+| Enemy UnitBase → Attack | **PASS** |
+| Friendly UnitBase target → Move (TargetActor cleared) | **PASS** |
+| Neutral / unassigned UnitBase → speculative Attack | **NOT AVAILABLE** |
+| Resource.Node UnitBase → Mine | **PASS** (temporary BP with `GP.Resource.Node`; removed after) |
+| Unknown non-unit actor → Move fallback | **NOT AVAILABLE** |
+| 2P Listen Server isolation | **VALIDATION_PENDING** |
+| One log per click | **PASS** |
+| RMB hold spam | **NONE** |
+| Unexpected unit movement | **NONE** |
+| RPC / network command effect | **NONE** |
+| LMB selection regression | **NONE** |
+| Marquee regression | **NONE** |
+| MMB camera regression | **NONE** |
+| Control groups regression | **NONE** |
+| Unexpected log errors/warnings | **NONE** |
+| Temporary `BP_TestResourceNode` residual | **NONE** (removed) |
+| Temporary map changes saved | **NO** |
+| Residual test assets | **NONE** |
 
 ---
 
 ## Stop condition
-
-**ANALYSIS_READY_IMPLEMENTATION_PENDING.**
-
-Await Phase C implementation assignment.
-Do **not** create IA/IMC, bindings, RPC, or execution from this analysis.
-Do **not** merge to main from this analysis branch alone.
+**CODE_DONE_OPERATOR_VALIDATED.**
+Phase C complete. Next stage = separate analysis checkpoint for server submission / RPC.
+Do **not** start RPC / execution / movement / GP-S18 / GP-S19 from this close-out.

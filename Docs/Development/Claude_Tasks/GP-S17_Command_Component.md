@@ -44,13 +44,15 @@ Canonical `FGP_CommandRequest` prerequisite **implemented and validated**: see
 `GP-S17_Command_Request_Prerequisite.md`
 (`Status: IMPLEMENTATION_DONE`).
 
-**Phase B Status: CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED** — see
-`GP-S17_Phase_B_Smart_Command.md`.
+**Phase B Status: CODE_DONE** — functional mapping confirmed via Phase C for
+operator-checked cases (see Phase C matrix; Neutral/Unknown **NOT AVAILABLE**,
+2P **VALIDATION_PENDING**). Doc: `GP-S17_Phase_B_Smart_Command.md`.
 
-**Phase C Status: ANALYSIS_READY_IMPLEMENTATION_PENDING** — see
+**Phase C Status: CODE_DONE_OPERATOR_VALIDATED** — see
 `GP-S17_Phase_C_Command_Input.md`.
-Phase C = RMB Enhanced Input on PC → Visibility trace → `BuildSmartCommand` → development log.
-**No** RPC / execution in Phase C.
+Phase C complete: local RMB → Visibility trace → `BuildSmartCommand` → diagnostic log.
+Request remains local-only — **no** RPC / execution / movement.
+Next stage = separate analysis checkpoint for server submission / RPC — **not** started here.
 GP-S18 / full GP-S19 implementation **not started**.
 Executable Move **not** in Phase A/B/C.
 
@@ -425,20 +427,20 @@ See `GP-S17_Phase_B_Smart_Command.md`
 - Functional branch validation **deferred** until real caller
 - No input / RPC / execution; no permanent validation hook
 
-## Phase C analysis (summary)
+## Phase C completion (summary)
 
-Final contract locked in `GP-S17_Phase_C_Command_Input.md`
-(`Status: ANALYSIS_READY_IMPLEMENTATION_PENDING`):
+See `GP-S17_Phase_C_Command_Input.md`
+(`Status: CODE_DONE_OPERATOR_VALIDATED`):
 
-- Owner: `AGP_PlayerController` — Enhanced Input + Visibility cursor trace + `BuildSmartCommand` call
-- CommandComponent has **no** input/cursor/trace access
-- Assets: `IA_Command` + `IMC_GP_Commands` (Boolean, RMB, Started, `DefaultKeyMappings`, priority 120)
-- Lifecycle: same PC soft-load / `SetupInputComponent` bind / local `BeginPlayingState` add / `EndPlay` remove; duplicate guards; local-only
-- `bQueue = IsShiftModifierDown()`; one-shot `LogTemp` `GP CommandInput:` log (include LocalTeam + NetMode/Role)
-- Phase B functional validation runs via Phase C caller; Phase C **no** server send / **no** execution
-- Next checkpoint: Phase C local RMB command caller (PC + assets only)
+- `IA_Command` + `IMC_GP_Commands` (`DefaultKeyMappings` RMB, priority 120)
+- `OnCommandInputStarted` → Visibility trace → `BuildSmartCommand` → `LogGPCommandInput`
+- Operator-validated: Move (single/multi), Attack (enemy), friendly Move clear, Mine (temp Resource.Node BP), Shift queue, no-selection no-op, one log/click, no movement/RPC, no selection/camera/CG regressions
+- Neutral Attack / unknown-actor fallback: **NOT AVAILABLE**; 2P isolation: **VALIDATION_PENDING**
+- Temporary Mine test BP removed; map not saved
+- Phase B functional mapping confirmed for checked cases; Phase C **complete**
+- Next: separate analysis for server submission / RPC — **do not** start RPC here
 
 ## Stop Condition
-Status **PHASE_A_DONE** + Phase B **CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED** + Phase C **ANALYSIS_READY_IMPLEMENTATION_PENDING**.
-Do **not** implement Phase C / RPC / Move / GP-S18 / full GP-S19 from this analysis.
-Await Phase C implementation assignment.
+Status **PHASE_A_DONE** + Phase B **CODE_DONE** (checked cases via Phase C) + Phase C **CODE_DONE_OPERATOR_VALIDATED**.
+Await separate server-submission / RPC analysis assignment.
+Do **not** start RPC / Move / GP-S18 / full GP-S19 from this close-out.

@@ -2,17 +2,21 @@
 (Click select / inspect / marquee — blocked by team assignment)
 
 ## Status
-**Status: B2A_DONE_B2B_PENDING**
+**Status: B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING**
+
+B2b **architecture checkpoint complete** (docs-only finalize).
+B2b **implementation not started**.
+No C++ `UGP_MarqueeSelectionWidget` exists yet.
+No `GPRuntime.Build.cs` Slate/SlateCore dependency changes yet.
+No `IA_Marquee` (rejected).
+Operator validation **not applicable** until implementation.
 
 TeamId prerequisite **merged**.
-B2a click selection / inspect **implemented and operator-validated**.
-B2a is **complete**.
-B2b marquee **has not started** (owns candidate resolution + rectangle visualization).
-Absence of drag-selection in B2a is **expected**.
+B2a click selection / inspect **merged** into main (`9bf7f4d`) and operator-validated.
 GP-S16 overall remains **NOT DONE**. Do **not** start GP-S17 or full GP-S18.
 
 Parent GP-S16 selection status:
-**`PHASE_B2A_DONE_PHASE_B2B_PENDING`**
+**`PHASE_B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING`**
 
 ### B2a implemented (complete)
 
@@ -33,7 +37,7 @@ Parent GP-S16 selection status:
 | Unassigned local player | Fail closed; no invent TeamId |
 | Diagnostics | One-shot `LogTemp` line per processed click |
 | No RPC / local-only | Yes |
-| `IA_Marquee` | **Not** created (B2b) |
+| `IA_Marquee` | **Rejected** — do not create; B2b reuses `IA_Select` |
 
 ### B2a operator validation (passed)
 
@@ -71,7 +75,7 @@ Parent GP-S16 selection status:
 | Monotonic / no reuse | Logout does not decrement; no renumber |
 | Transport | Existing PlayerState TeamId replication (no RPC) |
 
-Next input packaging remains **SPLIT_CLICK_THEN_MARQUEE** — B2a **done**, B2b **pending**.
+Next input packaging remains **SPLIT_CLICK_THEN_MARQUEE** — B2a **done**, B2b architecture **ready**, implementation **pending**.
 
 ---
 
@@ -85,7 +89,8 @@ Next input packaging remains **SPLIT_CLICK_THEN_MARQUEE** — B2a **done**, B2b 
 | Phase B2 analysis | **Complete** (this doc) |
 | Player TeamId assignment | **DONE** (operator-validated) |
 | Phase B2a click / inspect | **DONE** (operator-validated) |
-| Phase B2b marquee | **Not started** |
+| Phase B2b marquee architecture | **Ready** (this checkpoint) |
+| Phase B2b marquee implementation | **Not started** |
 | GP-S17 / full GP-S18 | Not started |
 
 ---
@@ -159,25 +164,21 @@ Scope:
 
 ### B2b — marquee
 
-Scope:
+Scope (architecture locked in **B2b architecture lock** below; implementation pending):
 
-- `IA_Marquee` only if final implementation still requires a separate action
-- Screen rectangle
-- Candidate resolution
-- Friendly / selectable filtering
-- Modifier integration
-- Cap / order behavior
-- Production-safe rectangle visualization
-- Operator validation
+- Reuse `IA_Select` — **no** `IA_Marquee`
+- Screen rectangle widget
+- Candidate resolution + eligibility filter
+- Modifier integration + cap / order
+- Operator validation after implementation
 
 ---
 
-## Input contract lock (assets not created)
+## Input contract lock (B2a assets exist; B2b creates none)
 
 ```text
-/Game/GrimProtocol/Input/Selection/IA_Select
-/Game/GrimProtocol/Input/Selection/IA_Marquee
-/Game/GrimProtocol/Input/Selection/IMC_GP_Selection
+/Game/GrimProtocol/Input/Selection/IA_Select          (exists — reused by B2b)
+/Game/GrimProtocol/Input/Selection/IMC_GP_Selection  (exists)
 ```
 
 | Lock | Value |
@@ -187,12 +188,13 @@ Scope:
 | Contexts | Separate (`IMC_GP_Selection` ≠ `IMC_GP_Camera`) |
 | Lifecycle | Mirror camera: soft refs → `LoadSynchronous` → bind `SetupInputComponent` → add local `BeginPlayingState` → remove `EndPlay` |
 | Controller | Local only |
-| Hit path | PlayerController cursor trace — **no** actor `OnClicked` delegates |
-| Trace channel | `ECC_Visibility` |
+| Hit path | PlayerController cursor trace / projection — **no** actor `OnClicked` delegates |
+| Trace channel (click) | `ECC_Visibility` |
 | RPC | None |
 | Selection state | Non-replicated |
+| `IA_Marquee` | **Rejected** — do not create |
 
-No assets are created in this checkpoint.
+B2b architecture checkpoint creates **no** assets.
 
 ---
 
@@ -255,18 +257,233 @@ Fail closed:
 
 ---
 
+## B2b architecture lock (analysis complete — implementation pending)
+
+Base verified: `main` contains `9bf7f4d` Merge GP-S16 B2a click selection.
+Analysis branch: `feature/gp-s16-b2b-marquee-selection`.
+**No C++ / Build.cs / assets / maps / config changed in this checkpoint.**
+
+### Existing B2a facts (must preserve)
+
+| Fact | Source |
+| --- | --- |
+| `IA_Select` Boolean + `IMC_GP_Selection` LMB; priority **110** | Assets + PC |
+| Started stores press via `GetMousePosition`; Completed compares release; threshold **8.0f** | `AGP_PlayerController` |
+| Drag `>8` currently logs `DragDeferredToB2b` and returns (no mutation) | `OnSelectionCompleted` |
+| Canceled clears press only | `OnSelectionCanceled` |
+| `PrimaryActorTick.bCanEverTick = true`; **no** `Tick` override today | PC ctor |
+| SelectionComponent marquee APIs exist but are **unwired** from PC | `Begin/Update/End/CancelMarquee` |
+| Marquee APIs do **not** broadcast `OnSelectionChanged` | SelectionComponent |
+| No HUD / widget / overlay classes in `GPRuntime` / `GPUIRuntime` | Source scan |
+| `GPRuntime.Build.cs` already has public `UMG`; **no** `Slate` / `SlateCore` listed | Build.cs |
+| `HUDClass` unset on `AGP_GameMode` | GameMode ctor |
+| Camera: `AGP_CameraPawn` spring-arm + camera; PC uses `DeprojectScreenPositionToWorld` for click | CameraPawn / PC |
+
+### 1) Input update mechanism
+
+| Decision | Value |
+| --- | --- |
+| `IA_Marquee` | **Rejected** — reuse `IA_Select` |
+| Press / release | Existing `Started` / `Completed` / `Canceled` |
+| Cursor while held | Override `AGP_PlayerController::Tick` |
+| Why Tick | Controller tick already enabled for Enhanced Input; no mid-hold Triggered needed; minimal new surface |
+| Tick work while LMB held / marquee active | `GetMousePosition` → threshold / `UpdateMarquee` → widget geometry only |
+| Idle Tick | No selection work (no trace, no candidate scan) |
+| Do **not** disable | `PrimaryActorTick.bCanEverTick` |
+
+### 2) Rectangle visualization
+
+| Decision | Value |
+| --- | --- |
+| Approach | Pure C++ `UUserWidget` subclass; `CreateWidget` — **no** Widget Blueprint asset |
+| AHUD / DebugCanvas / on-screen debug | **Rejected** |
+| Visibility | Added only for **local** controller; `Collapsed` / hidden when inactive |
+| Input | `ESlateVisibility::HitTestInvisible` — must not capture mouse |
+| Draw | `NativePaint`: translucent fill + border in screen/widget space |
+| Class | `UGP_MarqueeSelectionWidget` |
+
+**Proposed new source files (implementation pass only):**
+
+```text
+GP/Source/GPRuntime/Public/UI/GPMarqueeSelectionWidget.h
+GP/Source/GPRuntime/Private/UI/GPMarqueeSelectionWidget.cpp
+```
+
+**Also modify (implementation):** `GPPlayerController.h/.cpp`, `GPRuntime.Build.cs`
+**Do not modify:** `GPSelectionComponent`, GameMode, PlayerState, UnitBase, Unit, camera, maps, config, `.uproject`.
+
+### 3) Build.cs dependency decision
+
+| Module | Decision |
+| --- | --- |
+| `UMG` | Already public — keep |
+| `Slate`, `SlateCore` | **Add** as `PrivateDependencyModuleNames` for `NativePaint` / Slate geometry includes |
+| Move widget to `GPUIRuntime` | **Rejected** for this slice (selection stack stays in `GPRuntime`) |
+
+### 4) DPI / coordinate space
+
+| Rule | Value |
+| --- | --- |
+| Cursor API | Same as B2a: `GetMousePosition` (viewport pixel space) |
+| Projection | `ProjectWorldLocationToScreen` into the **same** viewport pixel space |
+| Widget layout | Full-viewport anchors; size from viewport geometry |
+| Paint mapping | Convert absolute screen corners → widget local via `FGeometry` (`AbsoluteToLocal` / paint geometry) |
+| Scaling | Prefer viewport geometry over inventing a second DPI path; keep press/current/project in one space |
+
+### 5) Candidate resolution
+
+| Option | Verdict |
+| --- | --- |
+| A — iterate `AGP_UnitBase` + project point | **Accepted** |
+| B — frustum / world overlap | Rejected (complexity / terrain / collision coupling) |
+| C — `AHUD::GetActorsInSelectionRectangle` | Rejected (requires HUD/Canvas; project has no HUD; bounds semantics differ) |
+
+**Algorithm (once on release only):**
+
+1. Build axis-aligned `FBox2D` from marquee start/current (min/max; order-independent).
+2. `TActorIterator<AGP_UnitBase>` (or equivalent world iteration).
+3. Skip invalid / pending-kill.
+4. Eligibility filter (below).
+5. `ProjectWorldLocationToScreen(Unit->GetActorLocation(), ScreenPos)`.
+6. Include if projected point is inside the rectangle (inclusive edges).
+
+**Selection point:** actor location. For `AGP_Unit`, root capsule means this is the capsule center — acceptable RTS center-point rule for this slice.
+
+**Inclusion rule:** **center-point inside rectangle** (not projected bounds overlap). Partial silhouette without center inside = **not** selected. Predictable foundational semantics; bounds-overlap may be revisited later.
+
+### 6) Deterministic ordering
+
+| Rule | Value |
+| --- | --- |
+| World iterator order | **Not** trusted |
+| Sort key | Ascending `GetPathName()` after eligibility + inclusion |
+| Cap | `UGP_SelectionComponent` `PruneAndClamp` / `SetSelectionFromUnits` keeps first **24** of submitted array |
+| Over-cap | Submit sorted array; component clamps; one-shot log includes `Eligible` and post-apply `SelectedCount` / note truncation when `Eligible > 24` on Replace path |
+
+### 7) Eligibility filters
+
+Include only when **all** true:
+
+- Local `AGP_PlayerState::GetTeamId() >= 1` (else fail-closed; no marquee apply)
+- `Unit.TeamId == LocalTeamId`
+- `Unit.IsGameplaySelectable() == true`
+
+Exclude: enemy, neutral, `TeamId < 0`, non-selectable, invalid/pending-kill.
+**Do not** use `WasRecentlyRendered`, occlusion, or LOS.
+FoW absent: all relevant replicated units treated as visible.
+Inspected enemy is never added (fails team/selectable filter).
+
+### 8) Modifier semantics (on Completed marquee)
+
+Ctrl wins over Shift (same key reads as B2a).
+
+| Modifier | Behavior |
+| --- | --- |
+| None | Build sorted eligible array → `SetSelectionFromUnits`. Empty → `ClearSelection`. Always `ClearInspectedTarget`. |
+| Shift | Empty eligible → **no-op** (selection + inspect unchanged). Else clear inspect, then append sorted new units onto a copy of current selection → single `SetSelectionFromUnits`. |
+| Ctrl | Empty eligible → **no-op**. Else clear inspect; start from current selection; for each sorted eligible unit toggle membership (Option 1 ≡ Option 2 on a unique set); single `SetSelectionFromUnits`. |
+
+**Broadcast minimization:** prefer **one** selection mutation call after building the final array. Separate `ClearInspectedTarget` may produce a second legitimate broadcast (same B2a pattern) — document; do **not** change SelectionComponent solely to merge broadcasts.
+
+### 9) Empty rectangle / empty eligible
+
+| Case | Result |
+| --- | --- |
+| Replace + empty eligible | Clear selection + clear inspect |
+| Shift + empty | No-op |
+| Ctrl + empty | No-op |
+| Marquee active then Cancel | No selection mutation |
+
+### 10) SelectionComponent API sufficiency
+
+| API | Role in B2b |
+| --- | --- |
+| `BeginMarquee` / `UpdateMarquee` / `EndMarquee` / `CancelMarquee` | Rectangle state only (already no notify) |
+| `SetSelectionFromUnits` | Primary apply path (dedupe + cap + single notify if changed) |
+| `ClearSelection` / `ClearInspectedTarget` | Empty replace + inspect cleanup |
+| `AddUnitToSelection` / `ToggleUnitSelection` | Available but **avoid** in loops (multi-broadcast) |
+
+**Decision:** SelectionComponent API is **sufficient** — **do not change** it in B2b unless a proven gap appears.
+Marquee active flag is **not** required to fire `OnSelectionChanged`; widget is driven by PC.
+
+### 11) State machine
+
+```text
+Idle
+  → Started: PressPending (store press; no widget)
+  → Tick while PressPending: if distance > 8px → MarqueeActive
+       (BeginMarquee(press); show widget)
+  → Tick while MarqueeActive: UpdateMarquee(current); update widget
+  → Completed while PressPending (≤8px): existing B2a click path unchanged
+  → Completed while MarqueeActive: resolve → apply modifiers → EndMarquee → hide widget
+  → Canceled / focus-loss policy / EndPlay: CancelMarquee → hide widget; no selection mutation
+  → Idle
+```
+
+| Edge case | Policy |
+| --- | --- |
+| Cursor leaves viewport | Clamp or keep last valid `GetMousePosition`; do not cancel solely for leaving |
+| Viewport / app focus loss | Prefer CancelMarquee (no apply) if press/marquee active |
+| PIE stop / EndPlay | CancelMarquee; destroy/hide widget; clear press flags |
+| Unpossess / non-local | No widget; no scan; existing local guards |
+| Widget create failure | Concise Error log; CancelMarquee; do not crash; click path remains |
+| Release after marquee | **Must apply** marquee (replace deferred-only log) |
+
+### 12) Multiplayer
+
+- Local controller only for Tick marquee work, widget, and world scan
+- No RPC; no replicated marquee; no replicated selection
+- Host and remote client: independent widgets/state
+- Server remote PlayerControllers: no widget, no scan
+- Candidates may be replicated actors; selection remains local-only
+
+### 13) Logging (one-shot on complete/cancel)
+
+```text
+GP Marquee: LocalTeam=1 Rect=(x1,y1)-(x2,y2) Candidates=5 Eligible=3 SelectedCount=3 Modifier=Replace Result=Applied
+```
+
+Cancel: `Result=Canceled`.
+No per-Tick / per-candidate spam. `LogTemp` Log level for applied; Verbose for harmless no-ops if needed.
+
+### 14) Performance boundary
+
+| Rule | Value |
+| --- | --- |
+| Actor scan | **Once** on marquee Completed |
+| Tick | Cursor + rectangle UI only |
+| Cost | O(N units) on release — acceptable for foundational unit counts |
+| Future | Spatial index deferred |
+| Revisit threshold | When release hitch becomes measurable (order-of-magnitude: hundreds+ units / profiling) — not implemented now |
+
+### 15) Implementation checklist (next reviewed task)
+
+1. Add `Slate` / `SlateCore` private deps to `GPRuntime.Build.cs`.
+2. Add `UGP_MarqueeSelectionWidget` (NativePaint; HitTestInvisible; no BP asset).
+3. Extend `AGP_PlayerController`: Tick gate, marquee state, widget lifecycle, release resolve.
+4. Wire `Begin/Update/End/CancelMarquee`; replace `DragDeferredToB2b` early-return with marquee complete path.
+5. Preserve ≤8 px B2a click path exactly.
+6. Eligibility + center-point inclusion + `GetPathName` sort + modifier apply via `SetSelectionFromUnits`.
+7. One-shot `GP Marquee:` log.
+8. Local-only / EndPlay / cancel policies.
+9. Builds: GPEditor Dev, GP Dev, GP Shipping; no map save; no `IA_Marquee`.
+10. Operator validation; then finalize.
+
+---
+
 ## Exact next steps
 
-1. Merge this team-assignment prerequisite.
-2. Assign **B2a** click/inspect input (separate reviewed task).
-3. Then **B2b** marquee.
-
-Do **not** start B2a/B2b/GP-S17/full GP-S18 from this finalize pass.
+1. Review/merge this B2b architecture checkpoint.
+2. Assign **B2b implementation** (separate reviewed task) using the checklist above.
+3. Do **not** start GP-S17 or full GP-S18.
 
 ---
 
 ## Stop condition
 
-**B2A_CODE_READY_VALIDATION_PENDING.** Await operator PIE validation of click select/inspect/clear.
-Do **not** start B2b / GP-S17 / full GP-S18.
+**B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING.**
+Architecture checkpoint complete and ready for merge review.
+Do **not** implement marquee / create widgets / create `IA_Marquee` / change C++ / Build.cs from this docs pass.
 Do **not** mark GP-S16 DONE.
+Do **not** start GP-S17 / full GP-S18.
+Await separate reviewed **B2b implementation** assignment.

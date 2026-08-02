@@ -2169,3 +2169,55 @@ Status: **BLOCKED_BY_TEAM_ASSIGNMENT** (B2 task) / parent **PHASE_B2_BLOCKED_TEA
 
 ### Stop condition
 Documentation checkpoint commit/push on feature branch only. Do **not** merge to main. Await tech-lead **GameMode TeamId assignment** slice before B2a.
+
+## 2026-08-02 — GP-S16 / Team Assignment Prerequisite — implementation
+
+Status: **TEAM_ASSIGNMENT_CODE_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Game/GPGameMode.h`
+- `GP/Source/GPRuntime/Private/Game/GPGameMode.cpp`
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_B2_Input_Integration.md`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- GameMode team allocator implemented on `feature/gp-s16-team-assignment-prerequisite` (base = main merge B2 analysis `df50516`).
+- Authority-only `PostLogin` → `AssignPlayableTeamId` before `TryStartMatch`.
+- Expected IDs: Standalone first player `1`; 2P listen-server host `1` / remote `2`.
+- Monotonic reconnect policy: no reuse / renumber on logout; new login gets next id unless preassigned `>= 1` preserved.
+- PlayerState / PC / SelectionComponent / units unchanged; no RPC; existing TeamId replication is transport.
+- No input/assets/maps; B2a / B2b **not** started.
+- GP-S17 / full GP-S18 **not** started.
+
+### Builds / validation
+- Builds: see implementation REPORT (GPEditor Dev / GP Dev / GP Shipping + UHT).
+- Operator validation **pending**.
+
+### Stop condition
+**TEAM_ASSIGNMENT_CODE_READY_VALIDATION_PENDING** at implementation time; operator validation recorded in following entry.
+
+## 2026-08-02 — GP-S16 / Team Assignment Prerequisite — closed DONE
+
+Status: **TEAM_ASSIGNMENT_DONE_B2A_PENDING** (B2 doc) / parent **TEAM_ASSIGNMENT_DONE_PHASE_B2A_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Game/GPGameMode.h`
+- `GP/Source/GPRuntime/Private/Game/GPGameMode.cpp`
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_B2_Input_Integration.md`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- GameMode TeamId allocator **operator validation passed**.
+- Standalone received TeamId `1`; listen-server host/client received `1`/`2`.
+- Allocator resets with new GameMode instance on repeated PIE (`1`/`2` again).
+- No replication, camera, or match-flow regressions.
+- Team-assignment prerequisite ready for merge (feature branch).
+- Builds retained: GPEditor Dev / GP Dev / GP Shipping / UHT **PASSED** (C++ unchanged in finalize).
+- B2a / B2b **not** started.
+- GP-S17 / full GP-S18 **not** started.
+- GP-S16 overall remains **NOT DONE**.
+
+### Stop condition
+Team-assignment checkpoint commit/push on feature branch only. Do **not** merge to main here. Do **not** start B2a from this pass.

@@ -51,6 +51,12 @@ protected:
 	static bool IsWinReasonBranchTag(const FGameplayTag& Tag);
 
 private:
+	/** Server-only monotonic allocator for playable TeamIds (starts at 1). Not replicated. */
+	void AssignPlayableTeamId(APlayerController* NewPlayer);
+
 	FTimerHandle MatchCountdownHandle;
 	bool bTimeoutEvaluationTriggered = false;
+
+	/** Next playable TeamId to assign (1+). Never reused; not decremented on logout. */
+	int32 NextPlayableTeamId = 1;
 };

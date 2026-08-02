@@ -28,21 +28,20 @@ Local-only selection state component owned by `AGP_PlayerController`:
 - **no** gameplay-state mutation
 
 ## Status
-**Status: PHASE_B2_BLOCKED_TEAM_ASSIGNMENT**
+**Status: TEAM_ASSIGNMENT_DONE_PHASE_B2A_PENDING**
 
 Phase A **merged**.
 Phase B1 **merged**.
 Selectable UnitBase prerequisite **merged**.
-Phase B2 **analysis complete** — see `GP-S16_Phase_B2_Input_Integration.md`
-(`Status: BLOCKED_BY_TEAM_ASSIGNMENT`).
+Phase B2 analysis **merged**.
+TeamId assignment **implemented and operator-validated** — see
+`GP-S16_Phase_B2_Input_Integration.md`
+(`Status: TEAM_ASSIGNMENT_DONE_B2A_PENDING`).
 
-**Verdict: `BLOCKED_BY_TEAM_ASSIGNMENT`.**
-Zero `AGP_PlayerState::SetTeamId` call sites; host/client stay `-1`.
-Next required slice: **GameMode server-authoritative playable TeamId assignment**.
-After that: **B2a click/inspect**, then **B2b marquee** (separate checkpoints).
+Phase B2a click/inspect input **pending** (technically unblocked).
+Phase B2b marquee **pending**.
 
 **GP-S16 overall is NOT DONE.** Do **not** set `Status: DONE`.
-Phase B2 code / input assets **not started**.
 GP-S17 / full GP-S18 **not started**.
 
 ### Phase B1 completed
@@ -81,7 +80,7 @@ Locked asset paths remain documentation-only (not created):
 
 ### Still blocked / deferred
 
-- **Player TeamId assignment** (GameMode PostLogin / start path) — blocks Phase B2
+- Player TeamId assignment — **DONE** (operator-validated); B2a pending
 - Phase B2a click/inspect input — after team assignment
 - Phase B2b marquee + rectangle visualization — after B2a
 - Temporary test Blueprint / “any UnitBase selectable” / `-1→1` fallback — rejected
@@ -643,4 +642,4 @@ Do **not** start GP-S17. Do **not** implement full GP-S18 under this analysis.
 TDD/13, TDD/04, TDD/09, TDD/12, TDD/15, GDD/09, GP-0202, ADR-0006, GP-S15, Naming_Conventions, STYLE, CONTRIBUTING.
 
 ## Stop Condition
-Status **PHASE_B2_BLOCKED_TEAM_ASSIGNMENT**. Phase B2 analysis documentation checkpoint complete. Next required slice: GameMode TeamId assignment. Do **not** implement selection input/assets until then. Do **not** use `-1→1` fallback. Do **not** start GP-S17 or full GP-S18. Do **not** mark GP-S16 DONE.
+Status **TEAM_ASSIGNMENT_DONE_PHASE_B2A_PENDING**. Team-assignment prerequisite ready for merge. Phase B2a is technically unblocked but **not started**. Do **not** start B2a / B2b / GP-S17 / full GP-S18 here. Do **not** mark GP-S16 DONE.

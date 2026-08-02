@@ -28,29 +28,25 @@ Local-only selection state component owned by `AGP_PlayerController`:
 - **no** gameplay-state mutation
 
 ## Status
-**Status: PHASE_C_ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**Status: PHASE_C_DONE_NEXT_CHECKPOINT_PENDING**
 
-Phase A **merged**.
-Phase B1 **merged**.
-Selectable UnitBase prerequisite **merged**.
-TeamId assignment **merged**.
-Phase B2a click/inspect **merged** and operator-validated.
-Phase B2b marquee **merged** and operator-validated — see
-`GP-S16_Phase_B2_Input_Integration.md`
-(`Status: B2B_DONE`).
-
-Phase B input integration (**B2a + B2b**) is **complete**.
-
-**Next checkpoint:** Phase C — Control Groups Input — see
+Phase A **DONE**.
+Phase B1 **DONE**.
+Selectable UnitBase prerequisite **DONE**.
+TeamId assignment **DONE**.
+Phase B2a click/inspect **DONE**.
+Phase B2b marquee **DONE**.
+Phase C control-groups input **DONE** — see
 `GP-S16_Phase_C_Control_Groups_Input.md`
-(`Status: PHASE_C_ANALYSIS_READY_IMPLEMENTATION_PENDING`).
-Implementation **not started**.
+(`Status: PHASE_C_DONE`).
 
-Temporary local debug selection/inspect bounds boxes remain until production highlight;
-they are **not** part of Phase C scope and are **not** production visualization.
-Production selection highlight remains **deferred**.
+Core selection + marquee + control-groups **input** is complete.
+Temporary debug boxes remain until production highlight.
+C2 double-tap camera focus **deferred** (`FocusOnLocation` absent).
+Production highlight / debug-box cleanup **deferred**.
 
-**GP-S16 overall is NOT DONE.** Do **not** set GP-S16 `Status: DONE`.
+**GP-S16 overall is NOT DONE** — do **not** auto-mark DONE.
+Next checkpoint requires a separate reviewed decision.
 GP-S17 / full GP-S18 **not started**.
 
 ### Phase B1 completed
@@ -93,10 +89,11 @@ Selection input assets:
 - Phase B2a click/inspect input — **DONE** (merged + operator-validated)
 - Phase B2b marquee — **DONE** (merged + operator-validated)
 - Phase B input integration — **complete**
-- Phase C control-groups input — **analysis ready**; implementation pending
+- Phase C control-groups input — **DONE** (operator-validated)
 - Phase C2 double-tap camera focus — deferred (`FocusOnLocation` absent)
 - Production highlight + removal of temporary debug boxes — deferred
 - Esc clear binding — optional follow-up (ground clear already works)
+- Next GP-S16 checkpoint — separate reviewed decision (pending)
 - Temporary test Blueprint / “any UnitBase selectable” / `-1→1` fallback — rejected
 - GP-S17 / full GP-S18 — not started
 
@@ -656,7 +653,8 @@ Do **not** start GP-S17. Do **not** implement full GP-S18 under this analysis.
 TDD/13, TDD/04, TDD/09, TDD/12, TDD/15, GDD/09, GP-0202, ADR-0006, GP-S15, Naming_Conventions, STYLE, CONTRIBUTING.
 
 ## Stop Condition
-Status **PHASE_C_ANALYSIS_READY_IMPLEMENTATION_PENDING**.
-Next checkpoint locked: Phase C control-groups input (see `GP-S16_Phase_C_Control_Groups_Input.md`).
-Do **not** implement Phase C in this determination pass.
-Do **not** mark entire GP-S16 DONE. Do **not** start GP-S17 / full GP-S18.
+Status **PHASE_C_DONE_NEXT_CHECKPOINT_PENDING**.
+Phase C complete. Core click + marquee + control-group input complete.
+Do **not** mark entire GP-S16 DONE automatically.
+Do **not** start C2 / GP-S17 / full GP-S18.
+Await separate reviewed decision for the next GP-S16 checkpoint.

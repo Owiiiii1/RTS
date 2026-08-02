@@ -61,10 +61,12 @@ private:
 	void RemoveSelectionInputMapping();
 	void LoadSelectionInputAssets();
 	void BindSelectionInputActions(UEnhancedInputComponent& EnhancedInput);
+	void BindControlGroupInputActions(UEnhancedInputComponent& EnhancedInput);
 
 	void OnSelectionStarted(const FInputActionValue& Value);
 	void OnSelectionCompleted(const FInputActionValue& Value);
 	void OnSelectionCanceled(const FInputActionValue& Value);
+	void OnControlGroupStarted(const FInputActionValue& Value);
 
 	void ProcessSelectionClickAtScreenPosition(const FVector2D& ScreenPosition);
 	void LogSelectionClickResult(
@@ -130,6 +132,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Selection|Input")
 	TSoftObjectPtr<UInputAction> SelectionAction;
 
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Selection|Input")
+	TSoftObjectPtr<UInputAction> ControlGroupAction;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> LoadedCameraMappingContext;
 
@@ -152,6 +157,9 @@ private:
 	TObjectPtr<UInputAction> LoadedSelectionAction;
 
 	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> LoadedControlGroupAction;
+
+	UPROPERTY(Transient)
 	TObjectPtr<UGP_MarqueeSelectionWidget> MarqueeWidget;
 
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */
@@ -170,7 +178,8 @@ private:
 	bool bCameraRotateHeld = false;
 
 	bool bSelectionMappingContextAdded = false;
-	bool bSelectionInputBindingsInstalled = false;
+	bool bSelectionActionBindingInstalled = false;
+	bool bControlGroupActionBindingInstalled = false;
 	bool bSelectionPressActive = false;
 	bool bMarqueeActive = false;
 	FVector2D SelectionPressScreenPosition = FVector2D::ZeroVector;

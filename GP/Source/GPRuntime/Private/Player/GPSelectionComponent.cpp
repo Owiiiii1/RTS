@@ -48,6 +48,11 @@ bool UGP_SelectionComponent::HasSelection() const
 	return GetSelectionCount() > 0;
 }
 
+bool UGP_SelectionComponent::IsUnitSelected(const AGP_UnitBase* Unit) const
+{
+	return FindSelectedUnitIndex(Unit) != INDEX_NONE;
+}
+
 bool UGP_SelectionComponent::IsMarqueeActive() const
 {
 	return bMarqueeActive;
@@ -147,6 +152,150 @@ void UGP_SelectionComponent::SetInspectedTarget(AActor* NewTarget)
 
 	InspectedTarget = NewTarget;
 	NotifySelectionChanged();
+}
+
+void UGP_SelectionComponent::ReplaceSelectionWithUnit(AGP_UnitBase* Unit)
+{
+	if (!IsLocalSelectionContext())
+	{
+		return;
+	}
+
+	TArray<TWeakObjectPtr<AGP_UnitBase>> Previous = SelectedUnits;
+	PruneAndClampUnitArray(Previous);
+
+	SelectedUnits.Reset();
+	if (IsValid(Unit))
+	{
+		SelectedUnits.Add(Unit);
+	}
+
+	if (!AreWeakUnitArraysEqual(Previous, SelectedUnits))
+	{
+		NotifySelectionChanged();
+	}
+}
+
+bool UGP_SelectionComponent::AddUnitToSelection(AGP_UnitBase* Unit)
+{
+	if (!IsLocalSelectionContext())
+	{
+		return false;
+	}
+
+	TArray<TWeakObjectPtr<AGP_UnitBase>> Previous = SelectedUnits;
+	PruneAndClampUnitArray(Previous);
+
+	PruneAndClampUnitArray(SelectedUnits);
+
+	bool bAdded = false;
+	if (IsValid(Unit)
+		&& FindSelectedUnitIndex(Unit) == INDEX_NONE
+		&& SelectedUnits.Num() < MaxSelectionCount)
+	{
+		SelectedUnits.Add(Unit);
+		bAdded = true;
+	}
+
+	if (!AreWeakUnitArraysEqual(Previous, SelectedUnits))
+	{
+		NotifySelectionChanged();
+	}
+
+	return bAdded;
+}
+
+bool UGP_SelectionComponent::RemoveUnitFromSelection(AGP_UnitBase* Unit)
+{
+	if (!IsLocalSelectionContext())
+	{
+		return false;
+	}
+
+	TArray<TWeakObjectPtr<AGP_UnitBase>> Previous = SelectedUnits;
+	PruneAndClampUnitArray(Previous);
+
+	PruneAndClampUnitArray(SelectedUnits);
+
+	bool bRemoved = false;
+	if (IsValid(Unit))
+	{
+		const int32 Index = FindSelectedUnitIndex(Unit);
+		if (Index != INDEX_NONE)
+		{
+			SelectedUnits.RemoveAt(Index);
+			bRemoved = true;
+		}
+	}
+
+	if (!AreWeakUnitArraysEqual(Previous, SelectedUnits))
+	{
+		NotifySelectionChanged();
+	}
+
+	return bRemoved;
+}
+
+bool UGP_SelectionComponent::ToggleUnitSelection(AGP_UnitBase* Unit)
+{
+	if (!IsLocalSelectionContext() || !IsValid(Unit))
+	{
+		return false;
+	}
+
+	TArray<TWeakObjectPtr<AGP_UnitBase>> Previous = SelectedUnits;
+	PruneAndClampUnitArray(Previous);
+
+	PruneAndClampUnitArray(SelectedUnits);
+
+	const int32 Index = FindSelectedUnitIndex(Unit);
+	if (Index != INDEX_NONE)
+	{
+		SelectedUnits.RemoveAt(Index);
+		if (!AreWeakUnitArraysEqual(Previous, SelectedUnits))
+		{
+			NotifySelectionChanged();
+		}
+		return false;
+	}
+
+	if (SelectedUnits.Num() >= MaxSelectionCount)
+	{
+		if (!AreWeakUnitArraysEqual(Previous, SelectedUnits))
+		{
+			NotifySelectionChanged();
+		}
+		return false;
+	}
+
+	SelectedUnits.Add(Unit);
+	if (!AreWeakUnitArraysEqual(Previous, SelectedUnits))
+	{
+		NotifySelectionChanged();
+	}
+	return true;
+}
+
+void UGP_SelectionComponent::SetSelectionFromUnits(
+	const TArray<TWeakObjectPtr<AGP_UnitBase>>& Units)
+{
+	if (!IsLocalSelectionContext())
+	{
+		return;
+	}
+
+	TArray<TWeakObjectPtr<AGP_UnitBase>> Previous = SelectedUnits;
+	PruneAndClampUnitArray(Previous);
+
+	TArray<TWeakObjectPtr<AGP_UnitBase>> Incoming = Units;
+	PruneAndClampUnitArray(Incoming);
+
+	SelectedUnits = MoveTemp(Incoming);
+
+	if (!AreWeakUnitArraysEqual(Previous, SelectedUnits))
+	{
+		NotifySelectionChanged();
+	}
 }
 
 void UGP_SelectionComponent::BeginMarquee(const FVector2D& ScreenStart)
@@ -420,6 +569,24 @@ bool UGP_SelectionComponent::TryResolveControlGroupIndex(int32 GroupNumber, int3
 
 	OutIndex = GroupNumber - 1;
 	return true;
+}
+
+int32 UGP_SelectionComponent::FindSelectedUnitIndex(const AGP_UnitBase* Unit) const
+{
+	if (Unit == nullptr)
+	{
+		return INDEX_NONE;
+	}
+
+	for (int32 Index = 0; Index < SelectedUnits.Num(); ++Index)
+	{
+		if (SelectedUnits[Index].Get() == Unit)
+		{
+			return Index;
+		}
+	}
+
+	return INDEX_NONE;
 }
 
 bool UGP_SelectionComponent::AreWeakUnitArraysEqual(

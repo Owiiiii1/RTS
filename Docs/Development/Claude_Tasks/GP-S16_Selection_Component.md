@@ -5,7 +5,7 @@
 Slice 4 — Selection + Smart Commands (TDD/13: after GP-S15 Camera Input; before GP-S17 CommandComponent / GP-S18 UnitBase)
 
 ## Code Allowed
-**Yes** — Phase A pure C++ state shell (this pass).
+**Yes** — Phase B1 container mutation API on `UGP_SelectionComponent` only.
 
 ## Asset Changes Allowed
 **No** on this pass. No Input Actions, IMC, maps, or Content changes.
@@ -28,60 +28,21 @@ Local-only selection state component owned by `AGP_PlayerController`:
 - **no** gameplay-state mutation
 
 ## Status
-**Status: PHASE_A_DONE_SPLIT_REQUIRED**
+**Status: PHASE_B1_DONE_UNITBASE_PREREQUISITE_PENDING**
 
-Phase A local selection **state shell completed and already merged** (`23941cc` Merge GP-S16 selection state shell).
-Phase B input/hit-test/marquee **analysis completed** (documentation checkpoint only).
+Phase A local selection state shell **merged**.
+Phase B input integration analysis **merged** (`7d3fd69` Merge GP-S16 input integration analysis).
+Phase B1 container-only mutation API **completed**.
+Technical validation **passed** (GPEditor Development, GP Development, GP Shipping, UHT).
 
-**Verdict: SPLIT_REQUIRED** — see §Phase B Input Integration Analysis and §Approved split below.
 **GP-S16 overall is NOT DONE.** Do **not** set `Status: DONE`.
+No operator-visible selection yet.
+Phase B2 remains **blocked** by minimal selectable UnitBase integration.
+No input assets created.
 
-### Why Phase B operator-visible selection cannot ship correctly now
+### Phase B1 completed
 
-- `AGP_UnitBase` is still an empty abstract scaffold
-- `TeamId` absent
-- CapabilityTags access contract absent on UnitBase
-- Concrete selectable units absent in Content
-- Highlight / UI selection feedback absent
-- Marquee owned/selectable/building filtering contract absent
-- Rule “any `AGP_UnitBase` is selectable” is **rejected**
-- Temporary test Blueprint/actor path is **rejected**
-- Direct mutation of `SelectedUnits` from `AGP_PlayerController` is **forbidden** (must go through `UGP_SelectionComponent` APIs)
-
-### Phase A implemented (merged)
-
-- Exact storage: `TArray<TWeakObjectPtr<AGP_UnitBase>> SelectedUnits`; `TWeakObjectPtr<AActor> InspectedTarget`
-- Max selection **24**; control groups **1..9** (non-UPROPERTY `TStaticArray` of unit arrays)
-- Local-only mutation (`AGP_PlayerController` + `IsLocalController`)
-- No replication / RPC / component tick
-- Default subobject on `AGP_PlayerController` + `GetSelectionComponent()`
-- Marquee **state only** (`Begin/Update/End/Cancel`); `EndMarquee` keeps last coords, no hit-test
-- Duplicate / invalid pruning + clamp
-- One native multicast `FGPOnSelectionChanged`
-- No input assets; no hit-testing; no filtering / highlight / UI / FoW
-- GP-S17 **not** started; full GP-S18 **not** started
-
-### Deferred integration (not Phase A; blocked for Phase B2 until prerequisite)
-
-- Filling selection from actual cursor hits
-- Team ownership filtering
-- Capability tags filtering
-- Unit/building mixing rules
-- Building single-only rule
-- Selection highlight
-- Death delegate
-- Double-click same UnitDefinition
-- Marquee world resolution and closest-24
-- Control-group camera focus
-- FoW visibility
-- UI rectangle
-- Input Actions / IMC creation (paths locked; assets deferred to Phase B2)
-
-### Approved split
-
-#### Phase B1 — approved next stage (container-only)
-
-Container-only mutation API on `UGP_SelectionComponent`:
+Public container-only mutation API on `UGP_SelectionComponent`:
 
 - `ReplaceSelectionWithUnit`
 - `AddUnitToSelection`
@@ -90,19 +51,22 @@ Container-only mutation API on `UGP_SelectionComponent`:
 - `SetSelectionFromUnits`
 - `IsUnitSelected`
 
-B1 requirements:
+Rules:
 
-- Canonical `AGP_UnitBase` typed storage
-- Local-controller guard
-- Cap 24
-- Duplicate removal
-- Ordered storage
-- Correct notification semantics
-- **No** team / capability / building validation
-- **No** cursor hit
-- **No** input assets created in B1
+- Canonical `AGP_UnitBase` typed storage; ordered; deduplicated; first-occurrence wins; capped at **24**
+- Mutations local-only (`IsLocalSelectionContext`); non-local = silent no-op
+- Broadcast at most once per public call via `NotifySelectionChanged`, and only when observable valid selection changes
+- Stale-storage cleanup without observable valid-selection change does **not** broadcast
+- Inspect target unchanged by selection mutators
+- `UGP_SelectionComponent` canonicalizes storage but **does not determine gameplay eligibility**
+- No TeamId / CapabilityTags / building / FoW / ownership validation
+- No cursor hit-test; no input assets; no highlight; no camera; no RPC/replication
+- `AGP_PlayerController` still must **not** mutate `SelectedUnits` arrays directly
+- Toggle: returns true iff Unit selected after call; no replace-on-cap
+- `SetSelectionFromUnits` copies and canonicalizes input; does not retain the caller's array
+- `IsUnitSelected` is const, null-safe, non-mutating
 
-B1 may permanently lock soft Object Paths (OD) — assets still **not** created in B1:
+Locked asset paths remain documentation-only (not created):
 
 ```text
 /Game/GrimProtocol/Input/Selection/IA_Select
@@ -110,35 +74,27 @@ B1 may permanently lock soft Object Paths (OD) — assets still **not** created 
 /Game/GrimProtocol/Input/Selection/IMC_GP_Selection
 ```
 
-#### Prerequisite after B1 (separate tech-lead task)
+### Still blocked / deferred
 
-Minimal selectable UnitBase integration:
+- Phase B2 click/marquee/input wiring — after minimal selectable UnitBase integration
+- Temporary test Blueprint / “any UnitBase selectable” — rejected
+- GP-S17 / full GP-S18 — not started
 
-- `TeamId` contract
-- CapabilityTags access contract
-- Concrete operator-testable unit path
-- Classification required for friendly select vs inspect
-- Exact scope only by separate tech-lead task
-- **Not** automatically full GP-S18
+### Approved remaining split
+
+#### Prerequisite (separate tech-lead task)
+
+Minimal selectable UnitBase integration (`TeamId`, CapabilityTags access, concrete operator-testable unit path, friendly select vs inspect). **Not** automatically full GP-S18.
 
 #### Phase B2 — only after prerequisite
 
-- Enhanced Input assets at locked paths
-- PC bindings
-- Click trace
-- Ground clear
-- Validated select / inspect
-- Drag threshold
-- Marquee world resolution
-- Operator PIE validation
+Enhanced Input assets at locked paths; PC bindings; click trace; ground clear; validated select/inspect; drag threshold; marquee world resolution; operator PIE validation.
 
-#### IMC architecture lock
+#### IMC architecture lock (unchanged)
 
-- Separate `IMC_GP_Selection`
-- Do **not** modify `IMC_GP_Camera`
-- Later lifecycle mirrors camera: soft references; `LoadSynchronous`; bind in `SetupInputComponent`; add in `BeginPlayingState`; remove in `EndPlay`
-- Mapping priority **not** approved yet
-- UI / modal gating deferred
+- Separate `IMC_GP_Selection`; do **not** modify `IMC_GP_Camera`
+- Later lifecycle mirrors camera (soft refs / `LoadSynchronous` / `SetupInputComponent` / `BeginPlayingState` / `EndPlay`)
+- Mapping priority not approved; UI/modal gating deferred
 - No 9 separate Input Actions for control groups unless later proven necessary
 
 ---

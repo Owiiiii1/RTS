@@ -2429,3 +2429,87 @@ Status: **PHASE_C_ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s16-phase-c-control-groups-analysis` only. Do **not** merge to main. Do **not** implement Phase C / C2 / GP-S17 / full GP-S18 from this pass.
+
+## 2026-08-02 — GP-S16 / Phase C — control groups input implementation
+
+Status: **PHASE_C_CODE_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Content/GrimProtocol/Input/Selection/IA_ControlGroup.uasset` (created, Axis1D)
+- `GP/Content/GrimProtocol/Input/Selection/IMC_GP_Selection.uasset` (digits 1–9 + Scalar; IA_Select LMB preserved)
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_C_Control_Groups_Input.md`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase C implementation on `feature/gp-s16-phase-c-control-groups-implementation` (base = main merge Phase C analysis `81aca3f`).
+- Single `IA_ControlGroup` Axis1D; IMC maps One..Nine with Scalar 1..9; Ctrl/Shift read in PC; Started-only binding; independent bind guards.
+- Ops: Ctrl+Shift append-to-group; Ctrl assign; Shift append-recall; bare recall. Inspect clear on recall always; append-recall only if selection changed.
+- SelectionComponent unchanged. C2 / Esc / highlight / GP-S17 / full GP-S18 **not** started. Temp debug boxes kept. GP-S16 overall **NOT DONE**.
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED**
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- UHT — **PASSED**
+- Operator validation **pending**.
+
+### Stop condition
+**PHASE_C_CODE_READY_VALIDATION_PENDING.** Await operator PIE validation. No commit/push in implementation pass.
+
+## 2026-08-02 — GP-S16 / Phase C — input event remediation
+
+Status: **PHASE_C_CODE_READY_VALIDATION_PENDING** / remediation **PHASE_C_INPUT_EVENT_FIX_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Content/GrimProtocol/Input/Selection/IMC_GP_Selection.uasset` — `DefaultKeyMappings` now includes digits 1–9
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h` — independent bind guards renamed
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp` — load/bind diagnostics + raw Axis1D log
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_C_Control_Groups_Input.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Initial operator validation failed: no `OnControlGroupStarted` events.
+- Root cause: UE 5.8 IMC runtime reads `DefaultKeyMappings`; prior automation wrote only deprecated `mappings`.
+- Fixed saved IMC: LMB→IA_Select + One..Nine→IA_ControlGroup with Scalar 1..9 (reload-verified).
+- Added one-shot selection-input load/bind diagnostics and `GP ControlGroup Raw:` on Started.
+- SelectionComponent unchanged. C2/Esc not implemented. Repeat validation **pending**.
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED**
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- UHT — **PASSED**
+- Operator re-validation **pending**.
+
+## 2026-08-02 — GP-S16 / Phase C — completion checkpoint (operator-validated)
+
+Status: **PHASE_C_DONE** (parent **PHASE_C_DONE_NEXT_CHECKPOINT_PENDING**)
+
+### Files changed
+- `GP/Content/GrimProtocol/Input/Selection/IA_ControlGroup.uasset` (created)
+- `GP/Content/GrimProtocol/Input/Selection/IMC_GP_Selection.uasset` — `DefaultKeyMappings` LMB + One..Nine / Scalar 1..9
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp` — finalize: remove temporary remediation diagnostics
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_C_Control_Groups_Input.md` — `PHASE_C_DONE`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — `PHASE_C_DONE_NEXT_CHECKPOINT_PENDING`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase C control-groups input **implemented** (single `IA_ControlGroup` Axis1D; Started-only; modifier precedence; local-only; no RPC).
+- Initial operator validation **failed** (no control-group events; click/marquee OK).
+- Root cause: automation wrote deprecated IMC `mappings`; UE 5.8 runtime reads **`DefaultKeyMappings`**.
+- Remediation: rewrite saved `DefaultKeyMappings` (LMB + One..Nine / Scalar); reload-verified.
+- Operator validation **passed**: Assign / Recall / AppendToGroup / AppendRecall; raw Axis1D; no hold spam; no click/marquee regression; local-only.
+- Diagnostic cleanup: keep one-shot `GP ControlGroup: Group=N Operation=... Before=X After=Y`; remove `GP SelectionInput` / `GP SelectionInput Bind` / `GP ControlGroup Raw`.
+- C2 double-tap focus **deferred** (`FocusOnLocation` absent). Esc / production highlight **not** started. Temp debug boxes kept.
+- GP-S16 overall **NOT DONE**. Next checkpoint = separate reviewed decision. GP-S17 / full GP-S18 **not** started.
+
+### Builds / validation
+- Implementation + remediation builds retained **PASSED**; post-cleanup rebuilds recorded in finalize REPORT.
+- Operator validation — **PASSED**.
+
+### Stop condition
+Commit/push `feature/gp-s16-phase-c-control-groups-implementation` only. Do **not** merge to main. Do **not** start C2 / Esc / highlight / GP-S17 / full GP-S18.

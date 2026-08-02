@@ -45,6 +45,8 @@ AGP_PlayerController::AGP_PlayerController()
 		TEXT("/Game/GrimProtocol/Input/Selection/IMC_GP_Selection.IMC_GP_Selection")));
 	SelectionAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(
 		TEXT("/Game/GrimProtocol/Input/Selection/IA_Select.IA_Select")));
+	ControlGroupAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(
+		TEXT("/Game/GrimProtocol/Input/Selection/IA_ControlGroup.IA_ControlGroup")));
 }
 
 UGP_AbilitySystemComponent* AGP_PlayerController::GetGPAbilitySystemComponent() const
@@ -102,6 +104,7 @@ void AGP_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 	LoadedSelectionMappingContext = nullptr;
 	LoadedSelectionAction = nullptr;
+	LoadedControlGroupAction = nullptr;
 
 	LoadedCameraMappingContext = nullptr;
 	LoadedCameraPanAction = nullptr;
@@ -236,11 +239,18 @@ void AGP_PlayerController::SetupInputComponent()
 		bCameraInputBindingsInstalled = true;
 	}
 
-	if (!bSelectionInputBindingsInstalled)
+	LoadSelectionInputAssets();
+
+	if (!bSelectionActionBindingInstalled)
 	{
-		LoadSelectionInputAssets();
 		BindSelectionInputActions(*EnhancedInputComponent);
-		bSelectionInputBindingsInstalled = true;
+		bSelectionActionBindingInstalled = true;
+	}
+
+	if (!bControlGroupActionBindingInstalled)
+	{
+		BindControlGroupInputActions(*EnhancedInputComponent);
+		bControlGroupActionBindingInstalled = true;
 	}
 }
 
@@ -469,7 +479,16 @@ void AGP_PlayerController::LoadSelectionInputAssets()
 			TEXT("AGP_PlayerController: missing IA_Select at '%s'."),
 			*SelectionAction.ToSoftObjectPath().ToString());
 	}
+
+	LoadedControlGroupAction = ControlGroupAction.LoadSynchronous();
+	if (LoadedControlGroupAction == nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_PlayerController: missing IA_ControlGroup at '%s'."),
+			*ControlGroupAction.ToSoftObjectPath().ToString());
+	}
 }
+
 
 void AGP_PlayerController::BindSelectionInputActions(UEnhancedInputComponent& EnhancedInput)
 {
@@ -493,6 +512,20 @@ void AGP_PlayerController::BindSelectionInputActions(UEnhancedInputComponent& En
 		ETriggerEvent::Canceled,
 		this,
 		&AGP_PlayerController::OnSelectionCanceled);
+}
+
+void AGP_PlayerController::BindControlGroupInputActions(UEnhancedInputComponent& EnhancedInput)
+{
+	if (LoadedControlGroupAction == nullptr)
+	{
+		return;
+	}
+
+	EnhancedInput.BindAction(
+		LoadedControlGroupAction,
+		ETriggerEvent::Started,
+		this,
+		&AGP_PlayerController::OnControlGroupStarted);
 }
 
 void AGP_PlayerController::InitializeSelectionInput()
@@ -638,6 +671,92 @@ void AGP_PlayerController::OnSelectionCanceled(const FInputActionValue& Value)
 	CancelActiveMarquee(/*bLogCanceled=*/true);
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
+}
+
+void AGP_PlayerController::OnControlGroupStarted(const FInputActionValue& Value)
+{
+	if (!IsLocalController() || SelectionComponent == nullptr)
+	{
+		return;
+	}
+
+	const float AxisValue = Value.Get<float>();
+	const int32 GroupNumber = FMath::RoundToInt(AxisValue);
+	if (GroupNumber < 1 || GroupNumber > 9)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP ControlGroup: Result=InvalidGroup Axis=%.3f"),
+			AxisValue);
+		return;
+	}
+
+	const int32 BeforeCount = SelectionComponent->GetSelectionCount();
+	const bool bCtrl = IsControlModifierDown();
+	const bool bShift = IsShiftModifierDown();
+
+	const TCHAR* OperationTag = TEXT("Recall");
+	if (bCtrl && bShift)
+	{
+		SelectionComponent->AppendToControlGroup(GroupNumber);
+		OperationTag = TEXT("AppendToGroup");
+	}
+	else if (bCtrl)
+	{
+		SelectionComponent->AssignControlGroup(GroupNumber);
+		OperationTag = TEXT("Assign");
+	}
+	else if (bShift)
+	{
+		TArray<TWeakObjectPtr<AGP_UnitBase>> BeforeSelection =
+			SelectionComponent->GetSelectedUnits();
+		SelectionComponent->AppendControlGroupToSelection(GroupNumber);
+		const TArray<TWeakObjectPtr<AGP_UnitBase>>& AfterSelection =
+			SelectionComponent->GetSelectedUnits();
+
+		auto AreSelectionIdentitiesEqual =
+			[](const TArray<TWeakObjectPtr<AGP_UnitBase>>& A,
+				const TArray<TWeakObjectPtr<AGP_UnitBase>>& B) -> bool
+		{
+			if (A.Num() != B.Num())
+			{
+				return false;
+			}
+
+			for (int32 Index = 0; Index < A.Num(); ++Index)
+			{
+				if (A[Index].Get() != B[Index].Get())
+				{
+					return false;
+				}
+			}
+
+			return true;
+		};
+
+		if (!AreSelectionIdentitiesEqual(BeforeSelection, AfterSelection)
+			&& SelectionComponent->GetInspectedTarget() != nullptr)
+		{
+			SelectionComponent->ClearInspectedTarget();
+		}
+
+		OperationTag = TEXT("AppendRecall");
+	}
+	else
+	{
+		if (SelectionComponent->GetInspectedTarget() != nullptr)
+		{
+			SelectionComponent->ClearInspectedTarget();
+		}
+		SelectionComponent->RecallControlGroup(GroupNumber);
+		OperationTag = TEXT("Recall");
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("GP ControlGroup: Group=%d Operation=%s Before=%d After=%d"),
+		GroupNumber,
+		OperationTag,
+		BeforeCount,
+		SelectionComponent->GetSelectionCount());
 }
 
 void AGP_PlayerController::DrawLocalSelectionDebugVisualization() const

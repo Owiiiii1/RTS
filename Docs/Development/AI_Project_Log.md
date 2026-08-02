@@ -1778,3 +1778,31 @@ Status: **DONE**
 
 ### Stop condition
 GP-S15 closed as DONE. Tech lead accepted. Operator accepted. Next allowed stage per TDD/13: **GP-S16 UGP_SelectionComponent (SelectedUnits, InspectedTarget, marquee, control groups)**. GP-S16 not started; task file not materialized.
+
+---
+
+## 2026-08-02 — GP-S16 / Selection Component — specification pass
+
+Status: **BLOCKED_BY_GP-S18**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — created / finalized (docs-only checkpoint)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- GP-S16 specification pass **completed** on `feature/gp-s16-selection-component` (base = main merge GP-S15 `6d4b5a4`).
+- Result: **BLOCKED_BY_GP-S18**.
+- Canonical placement locked: `UGP_SelectionComponent` on `AGP_PlayerController`, local-only, no tick/replication/RPC.
+- Dependency: typed storage `TArray<TWeakObjectPtr<AGP_UnitBase>>` requires missing `AGP_UnitBase` UCLASS; forward declaration insufficient for UHT-reflected property.
+- `AActor` fallback **rejected** as non-canonical; fake interface / placeholder UnitBase forbidden.
+- Approved resolution: suspend GP-S16; require separate tech-lead task for **minimal compile-safe UnitBase scaffold** (not full GP-S18); then return to GP-S16; do not start GP-S17.
+- Split documented: state shell available after UnitBase scaffold; highlight / death / UnitDefinition / capability / team / building-unit classification deferred to full GP-S18 integration.
+
+### What was intentionally not done
+- **No C++**, no assets/config/maps.
+- README / DOCUMENTATION_INDEX / TDD / implementation order **not** changed.
+- GP-S15 documentation unchanged.
+- GP-S17 not started; full GP-S18 code not started; prerequisite scaffold **not** started in this pass.
+
+### Stop condition
+**BLOCKED_BY_GP-S18** documentation checkpoint. Await separate tech-lead UnitBase scaffold task. Do **not** write GP-S16 code. Do **not** start GP-S17 or full GP-S18.

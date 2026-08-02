@@ -8,6 +8,7 @@
 
 class UGP_AbilitySystemComponent;
 class AGP_CameraPawn;
+class UGP_CommandComponent;
 class UGP_MarqueeSelectionWidget;
 class UGP_SelectionComponent;
 class UInputAction;
@@ -18,7 +19,7 @@ struct FInputActionValue;
 /**
  * Network-correct PlayerController.
  * Forwards Enhanced Input camera intents to possessed AGP_CameraPawn; queries ASC from PlayerState.
- * Owns local UGP_SelectionComponent and Phase B2 click/marquee select/inspect policy.
+ * Owns local UGP_SelectionComponent / Phase B2 select policy and Phase A UGP_CommandComponent shell.
  */
 UCLASS()
 class GPRUNTIME_API AGP_PlayerController : public APlayerController
@@ -32,6 +33,7 @@ public:
 	UGP_AbilitySystemComponent* GetGPAbilitySystemComponent() const;
 
 	UGP_SelectionComponent* GetSelectionComponent() const;
+	UGP_CommandComponent* GetCommandComponent() const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -104,6 +106,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Selection", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_SelectionComponent> SelectionComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Commands", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UGP_CommandComponent> CommandComponent;
 
 	void OnCameraPan(const FInputActionValue& Value);
 	void OnCameraZoom(const FInputActionValue& Value);

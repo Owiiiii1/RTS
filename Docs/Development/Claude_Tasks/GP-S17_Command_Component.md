@@ -5,10 +5,10 @@
 Slice 4 — Selection + Smart Commands (TDD/13: after GP-S16; before full GP-S18 / GP-S19 as currently ordered)
 
 ## Code Allowed
-**No** on this analysis pass. Documentation only.
+**Yes** — Phase A CommandComponent ownership shell + PC subobject/getter only.
 
 ## Asset Changes Allowed
-**No** on this analysis pass.
+**No** on this Phase A pass.
 
 ## Depends On
 - GP-S16 **DONE_WITH_DEFERRED_INTEGRATIONS** (selection state + click/marquee/control-group input)
@@ -27,13 +27,22 @@ Expanded from TDD/04:
 - **Not** client-authoritative movement
 
 ## Status
-**Status: ANALYSIS_READY_FIRST_CHECKPOINT_PENDING**
+**Status: PHASE_A_DONE**
 
-First implementation checkpoint (locked): **Phase A — CommandComponent shell**.
+Phase A CommandComponent **shell complete** and operator-validated:
 
-GP-S17 implementation **not started**.
-GP-S18 / GP-S19 **not started** (names unchanged; not begun).
-No code / assets / maps / config changed in this analysis finalize.
+- `UGP_CommandComponent` ownership shell under `GPRuntime` `Command/`
+- PC-owned default subobject + C++ `GetCommandComponent()`
+- non-replicated; tick off
+- **no** request struct / input / RPC / execution
+- **no** selected-units cache on CommandComponent
+- Runtime presence verified via console object path on `GP_PlayerController`
+- Standalone **PASS**; 2-player listen-server **PASS**
+- Camera / selection / marquee / control groups / debug boxes **unchanged**
+
+Phase B+ **blocked** by canonical `FGP_CommandRequest` pull-forward (GP-S19 scope).
+GP-S18 / GP-S19 implementation **not started**.
+Executable Move **not** in Phase A.
 
 ---
 
@@ -42,9 +51,9 @@ No code / assets / maps / config changed in this analysis finalize.
 ### Existing GP-S17 artifacts
 | Artifact | State |
 | --- | --- |
-| `UGP_CommandComponent` | **Absent** |
+| `UGP_CommandComponent` | **Phase A shell present** (`Command/GPCommandComponent`) |
 | `FGP_CommandRequest` | **Absent** |
-| GP-S17 Claude task file | **Created by this analysis** |
+| GP-S17 Claude task file | Present |
 | `IA_Command` / `IMC_GP_Commands` | **Absent** |
 | `Server_RequestCommand` / `Client_NotifyCommandRejected` | **Absent** |
 | `AGP_UnitBase::ReceiveCommand` | **Absent** |
@@ -54,7 +63,7 @@ No code / assets / maps / config changed in this analysis finalize.
 | Fact | State |
 | --- | --- |
 | Hosts SelectionComponent | Yes (`CreateDefaultSubobject` + getter) |
-| Hosts CommandComponent | **No** |
+| Hosts CommandComponent | **Yes** (Phase A shell + getter) |
 | Input IMCs | Camera (100), Selection (110) only |
 | LMB click / marquee lifecycle | Present (local-only) |
 | RMB / command input | **None** — safe to add later via separate IMC (do not pollute Camera/Selection) |
@@ -381,9 +390,23 @@ Shell has no user-facing command behavior. Operator validation is **minimal**.
 
 ---
 
+## Operator validation (Phase A — passed)
+
+| Check | Result |
+| --- | --- |
+| Standalone launch | **PASS** |
+| CommandComponent on runtime `GP_PlayerController` | **PASS** (`DisplayAll` path `...GP_PlayerController_0.CommandComponent`) |
+| Camera regression | **NONE** |
+| Click / marquee / control groups | **NONE** |
+| Debug boxes (temp selection viz) | **PASS** |
+| RMB / unit movement | Absent (expected) |
+| 2P host/client | **PASS** |
+| Selection local-only | **PASS** |
+| RPC / replication warnings | **NONE** |
+| Extra assets / maps | **NO** |
+
 ## Stop Condition
-Status **ANALYSIS_READY_FIRST_CHECKPOINT_PENDING**.
-Analysis finalized. First implementation checkpoint locked as **Phase A — CommandComponent shell**.
-Do **not** implement code/assets in this pass.
-Do **not** start GP-S18 / GP-S19 / Move execution from this analysis.
-Await explicit Phase A implementation assignment.
+Status **PHASE_A_DONE**.
+Phase A complete. Next prerequisite: canonical `FGP_CommandRequest` pull-forward before Phase B.
+Do **not** start Phase B / request struct / input / RPC / Move from this finalize.
+Do **not** start GP-S18 / GP-S19 implementation from this pass.

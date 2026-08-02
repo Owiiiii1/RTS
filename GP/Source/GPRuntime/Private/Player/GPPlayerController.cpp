@@ -8,6 +8,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Camera/GPCameraPawn.h"
 #include "CollisionQueryParams.h"
+#include "Command/GPCommandComponent.h"
 #include "DrawDebugHelpers.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -29,6 +30,7 @@ AGP_PlayerController::AGP_PlayerController()
 	PrimaryActorTick.bCanEverTick = true;
 
 	SelectionComponent = CreateDefaultSubobject<UGP_SelectionComponent>(TEXT("SelectionComponent"));
+	CommandComponent = CreateDefaultSubobject<UGP_CommandComponent>(TEXT("CommandComponent"));
 
 	CameraMappingContext = TSoftObjectPtr<UInputMappingContext>(FSoftObjectPath(
 		TEXT("/Game/GrimProtocol/Input/Camera/IMC_GP_Camera.IMC_GP_Camera")));
@@ -69,6 +71,11 @@ UGP_AbilitySystemComponent* AGP_PlayerController::GetGPAbilitySystemComponent() 
 UGP_SelectionComponent* AGP_PlayerController::GetSelectionComponent() const
 {
 	return SelectionComponent;
+}
+
+UGP_CommandComponent* AGP_PlayerController::GetCommandComponent() const
+{
+	return CommandComponent;
 }
 
 void AGP_PlayerController::BeginPlay()

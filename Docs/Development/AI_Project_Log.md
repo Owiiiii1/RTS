@@ -2768,3 +2768,26 @@ Status: **CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED**
 
 ### Stop condition
 Commit/push `feature/gp-s17-phase-b-smart-command-implementation` only. Do **not** merge to main. Do **not** start RMB/RPC/execution/permanent hooks/full GP-S18/S19.
+
+## 2026-08-02 — GP-S17 / Phase C — command input analysis
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_C_Command_Input.md` — created (final contract)
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md` — Phase C status
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase C final analysis on `feature/gp-s17-phase-c-command-input-analysis` (base = `main` `ae469cf`).
+- Locked PC-owned RMB input: `IA_Command` + `IMC_GP_Commands` (Boolean, RMB, Started, `DefaultKeyMappings`, priority 120).
+- Confirmed existing PC lifecycle: ctor soft paths → `SetupInputComponent` load/bind → local `BeginPlayingState` `Initialize*Input` → `EndPlay` remove; duplicate `b*MappingContextAdded` guards; non-local never adds IMC.
+- RMB free (MMB rotate); Visibility deproject+trace; miss no-op; `bQueue = IsShiftModifierDown()`; one-shot `LogTemp` `GP CommandInput:` (LocalTeam + NetMode/Role); no LastBuiltRequest/delegate/RPC/execution.
+- UI gate deferred (same as selection). Functional matrix includes Shift queue + 2P isolation.
+- Phase B real functional validation deferred to Phase C caller. Docs-only. Full GP-S18/S19 **not** started.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+### Stop condition
+Commit/push `feature/gp-s17-phase-c-command-input-analysis` only. Do **not** merge to main. Do **not** create IA/IMC / bindings / RPC / execution from this pass.

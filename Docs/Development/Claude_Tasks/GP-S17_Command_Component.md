@@ -46,11 +46,13 @@ Canonical `FGP_CommandRequest` prerequisite **implemented and validated**: see
 
 **Phase B Status: CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED** — see
 `GP-S17_Phase_B_Smart_Command.md`.
-`BuildSmartCommand` code complete; Standalone/2P regression-safe.
-**Not** yet invoked by RMB or any real caller — functional request-content validation deferred.
-Next stage must provide a real caller before claiming functional validation.
+
+**Phase C Status: ANALYSIS_READY_IMPLEMENTATION_PENDING** — see
+`GP-S17_Phase_C_Command_Input.md`.
+Phase C = RMB Enhanced Input on PC → Visibility trace → `BuildSmartCommand` → development log.
+**No** RPC / execution in Phase C.
 GP-S18 / full GP-S19 implementation **not started**.
-Executable Move **not** in Phase A/B.
+Executable Move **not** in Phase A/B/C.
 
 ---
 
@@ -423,6 +425,20 @@ See `GP-S17_Phase_B_Smart_Command.md`
 - Functional branch validation **deferred** until real caller
 - No input / RPC / execution; no permanent validation hook
 
+## Phase C analysis (summary)
+
+Final contract locked in `GP-S17_Phase_C_Command_Input.md`
+(`Status: ANALYSIS_READY_IMPLEMENTATION_PENDING`):
+
+- Owner: `AGP_PlayerController` — Enhanced Input + Visibility cursor trace + `BuildSmartCommand` call
+- CommandComponent has **no** input/cursor/trace access
+- Assets: `IA_Command` + `IMC_GP_Commands` (Boolean, RMB, Started, `DefaultKeyMappings`, priority 120)
+- Lifecycle: same PC soft-load / `SetupInputComponent` bind / local `BeginPlayingState` add / `EndPlay` remove; duplicate guards; local-only
+- `bQueue = IsShiftModifierDown()`; one-shot `LogTemp` `GP CommandInput:` log (include LocalTeam + NetMode/Role)
+- Phase B functional validation runs via Phase C caller; Phase C **no** server send / **no** execution
+- Next checkpoint: Phase C local RMB command caller (PC + assets only)
+
 ## Stop Condition
-Status **PHASE_A_DONE** + Phase B **CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED**.
-Next: caller integration analysis (still no execution). Do **not** start RMB/RPC/Move/GP-S18/full GP-S19 from this finalize.
+Status **PHASE_A_DONE** + Phase B **CODE_DONE_FUNCTIONAL_VALIDATION_DEFERRED** + Phase C **ANALYSIS_READY_IMPLEMENTATION_PENDING**.
+Do **not** implement Phase C / RPC / Move / GP-S18 / full GP-S19 from this analysis.
+Await Phase C implementation assignment.

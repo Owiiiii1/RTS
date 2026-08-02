@@ -85,6 +85,70 @@ void AGP_GameMode::BeginPlay()
 		ExpectedHumanPlayers, MatchDurationSeconds);
 }
 
+void AGP_GameMode::AssignPlayableTeamId(APlayerController* NewPlayer)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (NewPlayer == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AGP_GameMode::AssignPlayableTeamId: null PlayerController."));
+		return;
+	}
+
+	AGP_PlayerState* GPPlayerState = NewPlayer->GetPlayerState<AGP_PlayerState>();
+	if (GPPlayerState == nullptr)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("AGP_GameMode::AssignPlayableTeamId: missing AGP_PlayerState on '%s'."),
+			*GetNameSafe(NewPlayer));
+		return;
+	}
+
+	const int32 ExistingTeamId = GPPlayerState->GetTeamId();
+	if (ExistingTeamId >= 1)
+	{
+		if (ExistingTeamId < MAX_int32)
+		{
+			NextPlayableTeamId = FMath::Max(NextPlayableTeamId, ExistingTeamId + 1);
+		}
+
+		UE_LOG(LogTemp, Verbose,
+			TEXT("AGP_GameMode::AssignPlayableTeamId: Player='%s' already has playable TeamId=%d; preserved."),
+			*GetNameSafe(NewPlayer), ExistingTeamId);
+		return;
+	}
+
+	// ExistingTeamId is -1 (unassigned) or 0 (neutral) — assign next playable id.
+	if (NextPlayableTeamId < 1 || NextPlayableTeamId >= MAX_int32)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_GameMode::AssignPlayableTeamId: allocator exhausted (NextPlayableTeamId=%d); Player='%s' left unassigned."),
+			NextPlayableTeamId, *GetNameSafe(NewPlayer));
+		return;
+	}
+
+	const int32 AssignedTeamId = NextPlayableTeamId;
+	++NextPlayableTeamId;
+
+	GPPlayerState->SetTeamId(AssignedTeamId);
+
+	const int32 ConfirmedTeamId = GPPlayerState->GetTeamId();
+	if (ConfirmedTeamId != AssignedTeamId)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("AGP_GameMode::AssignPlayableTeamId: assignment failed for Player='%s' (expected=%d, actual=%d)."),
+			*GetNameSafe(NewPlayer), AssignedTeamId, ConfirmedTeamId);
+		return;
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("AGP_GameMode::AssignPlayableTeamId: Player='%s' assigned TeamId=%d."),
+		*GetNameSafe(NewPlayer), ConfirmedTeamId);
+}
+
 void AGP_GameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
@@ -93,6 +157,8 @@ void AGP_GameMode::PostLogin(APlayerController* NewPlayer)
 	{
 		return;
 	}
+
+	AssignPlayableTeamId(NewPlayer);
 
 	const int32 HumanCount = GetConnectedHumanPlayerCount();
 	UE_LOG(LogTemp, Log,

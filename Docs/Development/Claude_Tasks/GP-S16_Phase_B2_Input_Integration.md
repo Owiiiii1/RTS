@@ -2,33 +2,46 @@
 (Click select / inspect / marquee — blocked by team assignment)
 
 ## Status
-**Status: BLOCKED_BY_TEAM_ASSIGNMENT**
+**Status: TEAM_ASSIGNMENT_DONE_B2A_PENDING**
 
-Documentation checkpoint **approved**. Implementation **not started**.
-No C++ / assets / maps / config changed in this pass.
+GameMode playable TeamId allocator **implemented and operator-validated**.
+TeamId blocker **resolved**.
+B2a click selection is now **technically unblocked**.
+B2a code **has not started**. B2b marquee **has not started**.
 GP-S16 overall remains **NOT DONE**. Do **not** start GP-S17 or full GP-S18.
 
 Parent GP-S16 selection status:
-**`PHASE_B2_BLOCKED_TEAM_ASSIGNMENT`**
+**`TEAM_ASSIGNMENT_DONE_PHASE_B2A_PENDING`**
 
-### Verdict
+### Team assignment (implemented)
 
-**`BLOCKED_BY_TEAM_ASSIGNMENT`**
-
-| Finding | Lock |
+| Item | Detail |
 | --- | --- |
-| `AGP_PlayerState::SetTeamId` | Exists (authority-only) |
-| Actual call sites | **None** |
-| `AGP_GameMode::PostLogin` | Does **not** assign teams |
-| Listen-server host TeamId | Remains `-1` |
-| Remote client TeamId | Remains `-1` |
-| `-1 == -1` as friendly | **Forbidden** |
-| Hidden fallback `-1 → 1` | **Forbidden** |
-| Phase B2 with unassigned local team | Must **fail closed** — no selection |
+| Allocator | `AGP_GameMode::NextPlayableTeamId` (server-only, starts at `1`) |
+| Helper | `AssignPlayableTeamId(APlayerController*)` |
+| Assignment point | `PostLogin` **before** `TryStartMatch` |
+| Order | `Super::PostLogin` → authority → assign → count log → `TryStartMatch` |
+| Playable IDs | Start at `1` |
+| Neutral / unassigned | `0` / `-1` receive next playable |
+| Preassigned `>= 1` | Preserved; allocator advances past it |
+| Monotonic / no reuse | Logout does not decrement; no renumber |
+| Transport | Existing PlayerState TeamId replication (no RPC) |
 
-**Required next prerequisite:** server-authoritative playable TeamId assignment.
+### Operator validation (passed)
 
-After that unlock, input packaging is locked as **SPLIT_CLICK_THEN_MARQUEE** (B2a → B2b).
+| Check | Result |
+| --- | --- |
+| Standalone player TeamId `1` | **PASS** |
+| Listen-server host TeamId `1` | **PASS** |
+| Remote client TeamId `2` | **PASS** |
+| TeamIds unique | **PASS** |
+| Repeated PIE resets allocator to `1`/`2` | **PASS** |
+| PlayerState / TeamId replication warnings | **NONE** |
+| Camera regression | **NONE** |
+| Match-flow regression | **NONE** |
+| Map saved / assets created | **NO** |
+
+Next input packaging remains **SPLIT_CLICK_THEN_MARQUEE** (B2a → B2b).
 
 ---
 
@@ -40,7 +53,7 @@ After that unlock, input packaging is locked as **SPLIT_CLICK_THEN_MARQUEE** (B2
 | Phase B1 mutation API | **Merged** |
 | Selectable UnitBase prerequisite | **Merged** |
 | Phase B2 analysis | **Complete** (this doc) |
-| Player TeamId assignment | **Missing** ← blocks B2 |
+| Player TeamId assignment | **DONE** (operator-validated) |
 | Phase B2 code / assets | **Not started** |
 | GP-S17 / full GP-S18 | Not started |
 
@@ -211,22 +224,18 @@ Fail closed:
 
 ---
 
-## Exact next coding assignment
+## Exact next steps
 
-**GameMode TeamId assignment slice only** (see approved prerequisite above).
+1. Merge this team-assignment prerequisite.
+2. Assign **B2a** click/inspect input (separate reviewed task).
+3. Then **B2b** marquee.
 
-Do **not** in that slice:
-
-- Create selection IA/IMC assets
-- Implement cursor trace / click / marquee
-- Start GP-S17 or full GP-S18
+Do **not** start B2a/B2b/GP-S17/full GP-S18 from this finalize pass.
 
 ---
 
 ## Stop condition
 
-**BLOCKED_BY_TEAM_ASSIGNMENT.** Documentation checkpoint complete.
-Await tech-lead assignment for server-authoritative playable TeamId allocation.
-Do **not** implement Phase B2 input until that prerequisite merges.
-Do **not** use `-1 → 1` fallback.
+**TEAM_ASSIGNMENT_DONE_B2A_PENDING.** Team-assignment prerequisite ready for merge.
+Do **not** start B2a / B2b / GP-S17 / full GP-S18 from this finalize pass.
 Do **not** mark GP-S16 DONE.

@@ -51,10 +51,11 @@ operator-checked cases (see Phase C matrix; Neutral/Unknown **NOT AVAILABLE**,
 **Phase C Status: CODE_DONE_OPERATOR_VALIDATED** — see
 `GP-S17_Phase_C_Command_Input.md`.
 
-**Phase D Status: ANALYSIS_READY_IMPLEMENTATION_PENDING** — see
+**Phase D Status: CODE_DONE_NETWORK_VALIDATED** — see
 `GP-S17_Phase_D_Server_Submission.md`.
-Phase D = `Server_RequestCommand` on PC + authoritative validate/normalize + server logs.
-**No** dispatch / execution / movement in Phase D.
+Phase D complete: local request crosses `Server_RequestCommand`; authoritative normalize confirmed in 2P (host Team1 / remote Team2).
+Execution remains intentionally absent.
+Next stage = command dispatch / receiver **analysis** — not immediate movement.
 GP-S18 / full GP-S19 implementation **not started**.
 Executable Move **not** in Phase A–D.
 
@@ -443,20 +444,19 @@ See `GP-S17_Phase_C_Command_Input.md`
 - Phase B functional mapping confirmed for checked cases; Phase C **complete**
 - Next: separate analysis for server submission / RPC — **do not** start RPC here
 
-## Phase D analysis (summary)
+## Phase D completion (summary)
 
-Final contract locked in `GP-S17_Phase_D_Server_Submission.md`
-(`Status: ANALYSIS_READY_IMPLEMENTATION_PENDING`):
+See `GP-S17_Phase_D_Server_Submission.md`
+(`Status: CODE_DONE_NETWORK_VALIDATED`):
 
-- RPC: `AGP_PlayerController::Server_RequestCommand(const FGP_CommandRequest&)` — Reliable, no WithValidation
-- Flow: local BuildSmartCommand → local log → RPC; no client-side validator bypass
-- Validator: `UGP_CommandComponent::ValidateAndNormalizeCommand(Client, Out, Reason)` — owner-derived PC/PS/TeamId; non-replicated component
-- Normalize: whitelist Move/Attack/Mine; team-commandability prune+Warning; cap 24; target shape; location finite/≤1e7; preserve `bQueue` intent
-- Attack neutral TeamId `0`/`-1` allowed; friendly Attack reject; actor cmds use authoritative actor location
-- Server Accept/Reject logs (`LogGPCommandServer`); no client ack; no rate limiter; **execution deferred**
-- Request struct changes: **NO**
+- RPC: `Server_RequestCommand(const FGP_CommandRequest&)` — Reliable, no WithValidation; UHT + 2P serialization **PASSED**
+- Operator-validated: listen-host Move/Attack; Queue preserve; remote client Team2 → server Accepted; host/client PC+Team isolation; actor TargetLocation server-normalized on Attack
+- Resource Mine network log pair **DEFERRED**; malicious-input matrix **DEFERRED** (no permanent hook)
+- Local request now crosses server RPC; authoritative normalization confirmed in 2P
+- Execution / dispatch / movement remain intentionally absent
+- Next: separate command dispatch / receiver analysis — **not** immediate movement
 
 ## Stop Condition
-Status Phase A–C **DONE** + Phase D **ANALYSIS_READY_IMPLEMENTATION_PENDING**.
-Do **not** implement Phase D RPC/validator / Move / GP-S18 / full GP-S19 from this analysis.
-Await Phase D implementation assignment.
+Status Phase A–C **DONE** + Phase D **CODE_DONE_NETWORK_VALIDATED**.
+Await command dispatch / receiver analysis assignment.
+Do **not** start dispatch / Move / GP-S18 / full GP-S19 from this close-out.

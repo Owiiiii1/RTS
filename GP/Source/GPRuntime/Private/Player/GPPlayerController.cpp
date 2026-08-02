@@ -12,10 +12,13 @@
 #include "InputAction.h"
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
+#include "Player/GPSelectionComponent.h"
 
 AGP_PlayerController::AGP_PlayerController()
 {
 	PrimaryActorTick.bCanEverTick = true;
+
+	SelectionComponent = CreateDefaultSubobject<UGP_SelectionComponent>(TEXT("SelectionComponent"));
 
 	CameraMappingContext = TSoftObjectPtr<UInputMappingContext>(FSoftObjectPath(
 		TEXT("/Game/GrimProtocol/Input/Camera/IMC_GP_Camera.IMC_GP_Camera")));
@@ -44,6 +47,11 @@ UGP_AbilitySystemComponent* AGP_PlayerController::GetGPAbilitySystemComponent() 
 	}
 
 	return Cast<UGP_AbilitySystemComponent>(ASI->GetAbilitySystemComponent());
+}
+
+UGP_SelectionComponent* AGP_PlayerController::GetSelectionComponent() const
+{
+	return SelectionComponent;
 }
 
 void AGP_PlayerController::BeginPlay()

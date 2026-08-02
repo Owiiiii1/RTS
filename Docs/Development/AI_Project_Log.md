@@ -1868,3 +1868,93 @@ Status: **DONE** (dependency prerequisite only — not GP-S18)
 
 ### Stop condition
 Prerequisite closed as DONE. Merge to `main` unblocks typed GP-S16 implementation assignment. Do **not** start GP-S17 or full GP-S18 from this branch.
+
+---
+
+## 2026-08-02 — GP-S16 / Selection Component — Phase A implementation
+
+Status: **CODE_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Player/GPSelectionComponent.h` — new
+- `GP/Source/GPRuntime/Private/Player/GPSelectionComponent.cpp` — new
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h` — SelectionComponent subobject + getter
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp` — CreateDefaultSubobject
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — status CODE_READY_VALIDATION_PENDING
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- GP-S16 implementation resumed after UnitBase prerequisite merge (`130a298`).
+- Pure local state shell: typed SelectedUnits / InspectedTarget / marquee state / control groups 1..9.
+- Cap 24; prune+dedupe; one native `FGPOnSelectionChanged`; no tick/replication/RPC.
+- No assets / input / hit-testing / highlight / UI / FoW / gameplay filtering.
+- Validation pending (three builds + operator).
+
+### What was intentionally not done
+- No IA/IMC, no cursor hit resolve, no GP-S17, no full GP-S18.
+- README / DOCUMENTATION_INDEX not marked DONE.
+- No commit / push in this pass.
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED**
+- GP Win64 Development → **PASSED**
+- GP Win64 Shipping → **PASSED**
+- UHT → SelectionComponent + PlayerController gen compiled
+- Operator PIE / Class Viewer → **pending**
+
+### Stop condition
+**CODE_READY_VALIDATION_PENDING.** Three builds PASSED. Await operator/tech-lead validation. Do **not** start GP-S17 or full GP-S18.
+
+---
+
+## 2026-08-02 — GP-S16 / Selection Component — Phase A API audit
+
+Status: **PHASE_A_READY_CHECKPOINT_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Private/Player/GPSelectionComponent.cpp` — notify/prune/recall audit fixes
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — status PHASE_A_READY_CHECKPOINT_PENDING
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase A API audit completed (local-context, notify semantics, prune/equality, control groups, marquee, PC ownership, reflection surface).
+- Defects found/fixed:
+  - `ClearSelection` / `ClearAllSelectionState` no longer broadcast when only invalid weak entries were present
+  - `PruneInvalidEntries` now broadcasts when pruned selection list or stale inspect changes (group-only prune does not)
+  - Recall timestamp updates only when `GetWorld()` is available (no `FPlatformTime` fallback)
+- No feature expansion (no input/hit-testing/highlight/filtering/assets).
+- Checkpoint pending commit (no commit/push in this pass).
+
+### Build / validation
+- GPEditor Win64 Development → **PASSED** (post-audit)
+- GP Win64 Development → **PASSED** (post-audit)
+- GP Win64 Shipping → **PASSED** (post-audit)
+
+### Stop condition
+**PHASE_A_READY_CHECKPOINT_PENDING.** Do **not** start GP-S17 or full GP-S18. Await checkpoint commit assignment.
+
+---
+
+## 2026-08-02 — GP-S16 / Selection Component — Phase A checkpoint closed
+
+Status: **PHASE_A_DONE_INTEGRATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Player/GPSelectionComponent.h`
+- `GP/Source/GPRuntime/Private/Player/GPSelectionComponent.cpp`
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — PHASE_A_DONE_INTEGRATION_PENDING
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- GP-S16 Phase A **completed** (local selection state shell).
+- API audit passed; three notify/prune/timing defects fixed and retained.
+- Three builds passed (GPEditor Dev / GP Dev / GP Shipping) + UHT.
+- Checkpoint ready for merge.
+- Full GP-S16 integration remains **pending** (no operator-visible actor selection yet).
+- GP-S17 and full GP-S18 **not** started.
+- README / DOCUMENTATION_INDEX unchanged; GP-S16 overall **not** DONE.
+
+### Stop condition
+**PHASE_A_DONE_INTEGRATION_PENDING.** Merge checkpoint independently. Do **not** mark GP-S16 DONE. Do **not** start GP-S17 or full GP-S18.

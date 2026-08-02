@@ -2406,3 +2406,26 @@ Status: **B2B_DONE** (parent **PHASE_B2_DONE_NEXT_PHASE_PENDING**)
 
 ### Stop condition
 Commit/push `feature/gp-s16-b2b-marquee-implementation` only. Do **not** merge to main. Do **not** start next GP-S16 phase / GP-S17 / full GP-S18 from this finalize.
+
+## 2026-08-02 — GP-S16 / next phase determination (post-B2)
+
+Status: **PHASE_C_ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_C_Control_Groups_Input.md` (created)
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — parent status → Phase C analysis
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Verified `main` HEAD `b31078c` Merge GP-S16 B2b marquee selection; working tree clean before docs edits.
+- Completed GP-S16 so far: Phase A, B1, prerequisites, B2a, B2b.
+- Remaining in-plan GP-S16 work: control-group **input** (containers already exist; PC has no binds); double-tap focus deferred; production highlight deferred; temp debug boxes stay until highlight.
+- **Next checkpoint locked: Phase C — Control Groups Input** (`Ctrl+N` assign, `Ctrl+Shift+N` append, `N` recall, `Shift+N` append-recall); prefer IMC digit chords; no 9× IA explosion; no camera focus in C.
+- Subphase: C now; C2 later (double-tap focus when `FocusOnLocation` exists).
+- No C++ / assets / maps / config. Implementation **not** started. GP-S17 / full GP-S18 **not** started. GP-S16 overall **NOT DONE**.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+### Stop condition
+Commit/push `feature/gp-s16-phase-c-control-groups-analysis` only. Do **not** merge to main. Do **not** implement Phase C / C2 / GP-S17 / full GP-S18 from this pass.

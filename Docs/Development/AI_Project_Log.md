@@ -517,7 +517,7 @@ Status: DONE
 | DamageResistance | Target | false (live) |
 
 ### Exact formula
-`return -max(0, max(0,Damage) - max(0,Armor)) * (1 - clamp(DamageResistance,0,1))`  
+`return -max(0, max(0,Damage) - max(0,Armor)) * (1 - clamp(DamageResistance,0,1))`
 Control: 100 / 20 / 0.25 → **-60**.
 
 ### Build / validation
@@ -2319,3 +2319,90 @@ Status: **B2B_ARCHITECTURE_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s16-b2b-marquee-selection` only. Do **not** merge to main. Do **not** implement marquee, change C++/Build.cs, or create `IA_Marquee`/assets.
+
+## 2026-08-02 — GP-S16 / Phase B2b — marquee implementation
+
+Status: **B2B_CODE_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/UI/GPMarqueeSelectionWidget.h` (created)
+- `GP/Source/GPRuntime/Private/UI/GPMarqueeSelectionWidget.cpp` (created)
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Source/GPRuntime/GPRuntime.Build.cs` — private `Slate` / `SlateCore`
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_B2_Input_Integration.md`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- B2b marquee implementation on `feature/gp-s16-b2b-marquee-implementation` (base = main merge B2b architecture `2efa04f`).
+- Pure C++ `UGP_MarqueeSelectionWidget`: `NativePaint` fill+border via runtime `FCoreStyle`; HitTestInvisible; local viewport overlay; no BP/HUD/assets.
+- PC gated Tick while press/marquee; threshold >8 px begins marquee; fast-release fallback; Cancel/EndPlay/UnPossess cleanup without selection mutation.
+- Candidate scan once on release: friendly selectable `AGP_UnitBase`, center-point inclusion, `GetPathName` sort, Replace/Shift/Ctrl via one `SetSelectionFromUnits`; cap 24 in SelectionComponent.
+- Local-only / no RPC / no `IA_Marquee`. SelectionComponent API unchanged.
+- GP-S17 / full GP-S18 **not** started. GP-S16 overall **NOT DONE**.
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED**
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- UHT — **PASSED**
+- Operator validation **pending**.
+
+### Stop condition
+**B2B_CODE_READY_VALIDATION_PENDING.** Await operator PIE validation. No commit/push in implementation pass.
+
+## 2026-08-02 — GP-S16 / Phase B2b — visual coordinate fix + temp debug boxes
+
+Status: **B2B_CODE_READY_VALIDATION_PENDING** / remediation **VISUAL_FIX_AND_DEBUG_BOXES_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Private/UI/GPMarqueeSelectionWidget.cpp` — DPI paint conversion + full-viewport anchors
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h` — `DrawLocalSelectionDebugVisualization`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp` — Tick debug boxes; selection logic unchanged
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_B2_Input_Integration.md`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Marquee rectangle offset root cause: viewport physical pixels painted without `/ GetViewportScale()`.
+- Widget conversion fixed; selection candidate path unchanged.
+- Temporary local-only `DrawDebugBox` visualization: selected = green, inspected UnitBase = yellow; ≤24 selected; no world scan; no unit mutation; no RPC.
+- Production highlight still deferred. GP-S16 overall **NOT DONE**. GP-S17 / full GP-S18 **not** started.
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED**
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- UHT — **PASSED**
+- Operator validation **pending**.
+
+### Stop condition
+No commit/push in remediation pass. Await operator re-validation of marquee visual + debug boxes.
+
+## 2026-08-02 — GP-S16 / Phase B2b — operator validation + finalize
+
+Status: **B2B_DONE** (parent **PHASE_B2_DONE_NEXT_PHASE_PENDING**)
+
+### Files changed
+- `GP/Source/GPRuntime/Public/UI/GPMarqueeSelectionWidget.h` (created)
+- `GP/Source/GPRuntime/Private/UI/GPMarqueeSelectionWidget.cpp` (created)
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Source/GPRuntime/GPRuntime.Build.cs` — private `Slate` / `SlateCore`
+- `Docs/Development/Claude_Tasks/GP-S16_Phase_B2_Input_Integration.md` — `B2B_DONE`
+- `Docs/Development/Claude_Tasks/GP-S16_Selection_Component.md` — `PHASE_B2_DONE_NEXT_PHASE_PENDING`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- B2b marquee implementation completed (reuse `IA_Select`; no `IA_Marquee`; 8px threshold; gated Tick; fast-release fallback).
+- DPI paint fix verified: viewport physical pixels / `GetViewportScale()` → Slate local; rectangle aligned; no DPI drift.
+- Temporary local debug boxes validated: selected green, inspected yellow; validation-only; production highlight deferred.
+- Operator validation **passed**: click + marquee, Replace/Shift/Ctrl, empty semantics, enemy/neutral exclusion, standalone + 2P listen-server isolation, no RPC/replication warnings, no Tick/log spam, no B2a/camera regression, no maps/assets.
+- Phase B input integration (**B2a + B2b**) **complete**. GP-S16 overall **NOT DONE**. Next GP-S16 phase pending per existing plan. GP-S17 / full GP-S18 **not** started.
+
+### Builds / validation
+- Retained from implementation/remediation (C++ unchanged at finalize): GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+
+### Stop condition
+Commit/push `feature/gp-s16-b2b-marquee-implementation` only. Do **not** merge to main. Do **not** start next GP-S16 phase / GP-S17 / full GP-S18 from this finalize.

@@ -4,10 +4,14 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
+#include "Algo/Sort.h"
+#include "Blueprint/UserWidget.h"
 #include "Camera/GPCameraPawn.h"
 #include "CollisionQueryParams.h"
+#include "DrawDebugHelpers.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "EngineUtils.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
@@ -17,6 +21,7 @@
 #include "InputMappingContext.h"
 #include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
+#include "UI/GPMarqueeSelectionWidget.h"
 #include "Units/GPUnitBase.h"
 
 AGP_PlayerController::AGP_PlayerController()
@@ -80,9 +85,12 @@ void AGP_PlayerController::BeginPlay()
 
 void AGP_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	bCameraRotateHeld = false;
+	CancelActiveMarquee(/*bLogCanceled=*/false);
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
+	DestroyMarqueeWidget();
+
+	bCameraRotateHeld = false;
 
 	if (AGP_CameraPawn* CameraPawn = GetCameraPawn())
 	{
@@ -104,6 +112,26 @@ void AGP_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+void AGP_PlayerController::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	// Temporary validation-only boxes; not marquee work and not a world scan.
+	DrawLocalSelectionDebugVisualization();
+
+	if (!bSelectionPressActive)
+	{
+		return;
+	}
+
+	UpdatePendingSelectionDrag();
+}
+
 void AGP_PlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
@@ -123,6 +151,13 @@ void AGP_PlayerController::OnPossess(APawn* InPawn)
 
 void AGP_PlayerController::OnUnPossess()
 {
+	if (bSelectionPressActive || bMarqueeActive)
+	{
+		CancelActiveMarquee(/*bLogCanceled=*/true);
+		bSelectionPressActive = false;
+		SelectionPressScreenPosition = FVector2D::ZeroVector;
+	}
+
 	if (AGP_CameraPawn* CameraPawn = Cast<AGP_CameraPawn>(GetPawn()))
 	{
 		CameraPawn->SetRotateActive(false);
@@ -531,6 +566,14 @@ void AGP_PlayerController::OnSelectionStarted(const FInputActionValue& Value)
 		return;
 	}
 
+	if (bMarqueeActive
+		|| (SelectionComponent != nullptr && SelectionComponent->IsMarqueeActive())
+		|| (MarqueeWidget != nullptr && MarqueeWidget->HasActiveMarqueeRect()))
+	{
+		CancelActiveMarquee(/*bLogCanceled=*/false);
+	}
+	bMarqueeActive = false;
+
 	float MouseX = 0.0f;
 	float MouseY = 0.0f;
 	if (!GetMousePosition(MouseX, MouseY))
@@ -555,10 +598,125 @@ void AGP_PlayerController::OnSelectionCompleted(const FInputActionValue& Value)
 		return;
 	}
 
-	const FVector2D PressPosition = SelectionPressScreenPosition;
+	float MouseX = 0.0f;
+	float MouseY = 0.0f;
+	if (!GetMousePosition(MouseX, MouseY))
+	{
+		CancelActiveMarquee(/*bLogCanceled=*/true);
+		bSelectionPressActive = false;
+		SelectionPressScreenPosition = FVector2D::ZeroVector;
+		return;
+	}
+
+	const FVector2D ReleasePosition(MouseX, MouseY);
+
+	if (bMarqueeActive)
+	{
+		CompleteActiveMarquee(ReleasePosition);
+		return;
+	}
+
+	const float PixelDistance =
+		FVector2D::Distance(SelectionPressScreenPosition, ReleasePosition);
+	if (PixelDistance <= SelectionDragThresholdPixels)
+	{
+		bSelectionPressActive = false;
+		SelectionPressScreenPosition = FVector2D::ZeroVector;
+		ProcessSelectionClickAtScreenPosition(ReleasePosition);
+		return;
+	}
+
+	// Fast-release / low-FPS: Tick may not have crossed the threshold yet.
+	BeginActiveMarquee(ReleasePosition);
+	CompleteActiveMarquee(ReleasePosition);
+}
+
+void AGP_PlayerController::OnSelectionCanceled(const FInputActionValue& Value)
+{
+	(void)Value;
+
+	CancelActiveMarquee(/*bLogCanceled=*/true);
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
+}
 
+void AGP_PlayerController::DrawLocalSelectionDebugVisualization() const
+{
+	// Temporary developer validation visualization.
+	// Must be replaced by production selection highlight in a later UI/visual slice.
+	if (!IsLocalController() || SelectionComponent == nullptr)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	static constexpr float BoundsPadding = 5.0f;
+	static constexpr float BoxThickness = 2.0f;
+	static constexpr float InspectBoxThickness = 2.5f;
+	static constexpr float BoxLifeTime = 0.0f;
+
+	const UGP_SelectionComponent* LocalSelection = SelectionComponent;
+	const TArray<TWeakObjectPtr<AGP_UnitBase>>& SelectedUnits = LocalSelection->GetSelectedUnits();
+
+	TSet<const AGP_UnitBase*> DrawnSelectedUnits;
+	DrawnSelectedUnits.Reserve(SelectedUnits.Num());
+
+	for (const TWeakObjectPtr<AGP_UnitBase>& WeakUnit : SelectedUnits)
+	{
+		const AGP_UnitBase* Unit = WeakUnit.Get();
+		if (!IsValid(Unit))
+		{
+			continue;
+		}
+
+		FVector BoundsOrigin = FVector::ZeroVector;
+		FVector BoundsExtent = FVector::ZeroVector;
+		Unit->GetActorBounds(false, BoundsOrigin, BoundsExtent);
+		BoundsExtent += FVector(BoundsPadding);
+
+		DrawDebugBox(
+			World,
+			BoundsOrigin,
+			BoundsExtent,
+			FColor::Green,
+			/*bPersistentLines=*/false,
+			BoxLifeTime,
+			/*DepthPriority=*/0,
+			BoxThickness);
+
+		DrawnSelectedUnits.Add(Unit);
+	}
+
+	AActor* InspectedActor = LocalSelection->GetInspectedTarget();
+	const AGP_UnitBase* InspectedUnit = Cast<AGP_UnitBase>(InspectedActor);
+	if (!IsValid(InspectedUnit) || DrawnSelectedUnits.Contains(InspectedUnit))
+	{
+		return;
+	}
+
+	FVector BoundsOrigin = FVector::ZeroVector;
+	FVector BoundsExtent = FVector::ZeroVector;
+	InspectedUnit->GetActorBounds(false, BoundsOrigin, BoundsExtent);
+	BoundsExtent += FVector(BoundsPadding);
+
+	DrawDebugBox(
+		World,
+		BoundsOrigin,
+		BoundsExtent,
+		FColor::Yellow,
+		/*bPersistentLines=*/false,
+		BoxLifeTime,
+		/*DepthPriority=*/0,
+		InspectBoxThickness);
+}
+
+void AGP_PlayerController::UpdatePendingSelectionDrag()
+{
 	float MouseX = 0.0f;
 	float MouseY = 0.0f;
 	if (!GetMousePosition(MouseX, MouseY))
@@ -566,25 +724,329 @@ void AGP_PlayerController::OnSelectionCompleted(const FInputActionValue& Value)
 		return;
 	}
 
-	const FVector2D ReleasePosition(MouseX, MouseY);
-	const float PixelDistance = FVector2D::Distance(PressPosition, ReleasePosition);
-	if (PixelDistance > SelectionDragThresholdPixels)
+	const FVector2D CurrentPosition(MouseX, MouseY);
+	if (!bMarqueeActive)
 	{
-		UE_LOG(LogTemp, Verbose,
-			TEXT("GP Selection: Result=DragDeferredToB2b Distance=%.1f Threshold=%.1f"),
-			PixelDistance, SelectionDragThresholdPixels);
+		const float PixelDistance =
+			FVector2D::Distance(SelectionPressScreenPosition, CurrentPosition);
+		if (PixelDistance > SelectionDragThresholdPixels)
+		{
+			BeginActiveMarquee(CurrentPosition);
+		}
 		return;
 	}
 
-	ProcessSelectionClickAtScreenPosition(ReleasePosition);
+	UpdateActiveMarquee(CurrentPosition);
 }
 
-void AGP_PlayerController::OnSelectionCanceled(const FInputActionValue& Value)
+void AGP_PlayerController::BeginActiveMarquee(const FVector2D& CurrentScreenPosition)
 {
-	(void)Value;
+	if (!IsLocalController() || SelectionComponent == nullptr || bMarqueeActive)
+	{
+		return;
+	}
 
+	bMarqueeActive = true;
+	SelectionComponent->BeginMarquee(SelectionPressScreenPosition);
+	SelectionComponent->UpdateMarquee(CurrentScreenPosition);
+
+	EnsureMarqueeWidget();
+	if (MarqueeWidget != nullptr)
+	{
+		MarqueeWidget->SetMarqueeRect(SelectionPressScreenPosition, CurrentScreenPosition);
+	}
+}
+
+void AGP_PlayerController::UpdateActiveMarquee(const FVector2D& CurrentScreenPosition)
+{
+	if (!IsLocalController() || !bMarqueeActive || SelectionComponent == nullptr)
+	{
+		return;
+	}
+
+	SelectionComponent->UpdateMarquee(CurrentScreenPosition);
+	if (MarqueeWidget != nullptr)
+	{
+		MarqueeWidget->SetMarqueeRect(SelectionPressScreenPosition, CurrentScreenPosition);
+	}
+}
+
+void AGP_PlayerController::CompleteActiveMarquee(const FVector2D& ReleaseScreenPosition)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	const FVector2D StartPosition = SelectionPressScreenPosition;
+	UpdateActiveMarquee(ReleaseScreenPosition);
+	ResolveAndApplyMarqueeSelection(StartPosition, ReleaseScreenPosition);
+
+	if (SelectionComponent != nullptr)
+	{
+		SelectionComponent->EndMarquee();
+	}
+
+	HideMarqueeWidget();
+	bMarqueeActive = false;
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
+}
+
+void AGP_PlayerController::CancelActiveMarquee(bool bLogCanceled)
+{
+	const bool bHadMarquee =
+		bMarqueeActive
+		|| (SelectionComponent != nullptr && SelectionComponent->IsMarqueeActive());
+
+	if (SelectionComponent != nullptr && SelectionComponent->IsMarqueeActive())
+	{
+		SelectionComponent->CancelMarquee();
+	}
+
+	HideMarqueeWidget();
+	bMarqueeActive = false;
+
+	if (bLogCanceled && bHadMarquee)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("GP Marquee: Result=Canceled"));
+	}
+}
+
+void AGP_PlayerController::EnsureMarqueeWidget()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	if (MarqueeWidget != nullptr)
+	{
+		if (!MarqueeWidget->IsInViewport())
+		{
+			MarqueeWidget->AddToViewport(MarqueeWidgetZOrder);
+		}
+		MarqueeWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return;
+	}
+
+	MarqueeWidget = CreateWidget<UGP_MarqueeSelectionWidget>(
+		this,
+		UGP_MarqueeSelectionWidget::StaticClass());
+	if (MarqueeWidget == nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_PlayerController::EnsureMarqueeWidget: CreateWidget failed."));
+		return;
+	}
+
+	MarqueeWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	MarqueeWidget->AddToViewport(MarqueeWidgetZOrder);
+}
+
+void AGP_PlayerController::HideMarqueeWidget()
+{
+	if (MarqueeWidget != nullptr)
+	{
+		MarqueeWidget->ClearMarqueeRect();
+	}
+}
+
+void AGP_PlayerController::DestroyMarqueeWidget()
+{
+	if (MarqueeWidget == nullptr)
+	{
+		return;
+	}
+
+	MarqueeWidget->ClearMarqueeRect();
+	MarqueeWidget->RemoveFromParent();
+	MarqueeWidget = nullptr;
+}
+
+void AGP_PlayerController::ResolveAndApplyMarqueeSelection(
+	const FVector2D& ScreenStart,
+	const FVector2D& ScreenEnd)
+{
+	if (!IsLocalController() || SelectionComponent == nullptr)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	const AGP_PlayerState* GPPlayerState = GetPlayerState<AGP_PlayerState>();
+	if (GPPlayerState == nullptr)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP Marquee: Result=BlockedUnassignedTeam LocalTeam=None"));
+		return;
+	}
+
+	const int32 LocalTeamId = GPPlayerState->GetTeamId();
+	if (LocalTeamId < 1)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP Marquee: LocalTeam=%d Rect=(%.1f,%.1f)-(%.1f,%.1f) Candidates=0 SelectedCount=%d Modifier=Replace Result=BlockedUnassignedTeam"),
+			LocalTeamId,
+			ScreenStart.X, ScreenStart.Y,
+			ScreenEnd.X, ScreenEnd.Y,
+			SelectionComponent->GetSelectionCount());
+		return;
+	}
+
+	const float MinX = FMath::Min(ScreenStart.X, ScreenEnd.X);
+	const float MaxX = FMath::Max(ScreenStart.X, ScreenEnd.X);
+	const float MinY = FMath::Min(ScreenStart.Y, ScreenEnd.Y);
+	const float MaxY = FMath::Max(ScreenStart.Y, ScreenEnd.Y);
+
+	TArray<AGP_UnitBase*> EligibleUnits;
+	for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
+	{
+		AGP_UnitBase* Unit = *It;
+		if (!IsValid(Unit))
+		{
+			continue;
+		}
+
+		if (Unit->GetTeamId() != LocalTeamId || !Unit->IsGameplaySelectable())
+		{
+			continue;
+		}
+
+		FVector2D ProjectedScreen = FVector2D::ZeroVector;
+		if (!ProjectWorldLocationToScreen(Unit->GetActorLocation(), ProjectedScreen, false))
+		{
+			continue;
+		}
+
+		if (ProjectedScreen.X < MinX || ProjectedScreen.X > MaxX
+			|| ProjectedScreen.Y < MinY || ProjectedScreen.Y > MaxY)
+		{
+			continue;
+		}
+
+		EligibleUnits.Add(Unit);
+	}
+
+	Algo::Sort(EligibleUnits, [](const AGP_UnitBase* A, const AGP_UnitBase* B)
+	{
+		if (A == nullptr || B == nullptr)
+		{
+			return A != nullptr;
+		}
+		return A->GetPathName() < B->GetPathName();
+	});
+
+	const int32 CandidateCount = EligibleUnits.Num();
+	const bool bCtrl = IsControlModifierDown();
+	const bool bShift = !bCtrl && IsShiftModifierDown();
+	const TCHAR* ModifierTag = TEXT("Replace");
+
+	if (bCtrl)
+	{
+		ModifierTag = TEXT("Toggle");
+		if (CandidateCount == 0)
+		{
+			UE_LOG(LogTemp, Log,
+				TEXT("GP Marquee: LocalTeam=%d Rect=(%.1f,%.1f)-(%.1f,%.1f) Candidates=0 SelectedCount=%d Modifier=Toggle Result=NoOpEmpty"),
+				LocalTeamId,
+				MinX, MinY, MaxX, MaxY,
+				SelectionComponent->GetSelectionCount());
+			return;
+		}
+
+		TArray<TWeakObjectPtr<AGP_UnitBase>> FinalUnits = SelectionComponent->GetSelectedUnits();
+		for (AGP_UnitBase* Candidate : EligibleUnits)
+		{
+			bool bAlreadySelected = false;
+			for (int32 Index = FinalUnits.Num() - 1; Index >= 0; --Index)
+			{
+				if (FinalUnits[Index].Get() == Candidate)
+				{
+					FinalUnits.RemoveAt(Index);
+					bAlreadySelected = true;
+					break;
+				}
+			}
+
+			if (!bAlreadySelected)
+			{
+				FinalUnits.Add(Candidate);
+			}
+		}
+
+		if (SelectionComponent->GetInspectedTarget() != nullptr)
+		{
+			SelectionComponent->ClearInspectedTarget();
+		}
+		SelectionComponent->SetSelectionFromUnits(FinalUnits);
+	}
+	else if (bShift)
+	{
+		ModifierTag = TEXT("Add");
+		if (CandidateCount == 0)
+		{
+			UE_LOG(LogTemp, Log,
+				TEXT("GP Marquee: LocalTeam=%d Rect=(%.1f,%.1f)-(%.1f,%.1f) Candidates=0 SelectedCount=%d Modifier=Add Result=NoOpEmpty"),
+				LocalTeamId,
+				MinX, MinY, MaxX, MaxY,
+				SelectionComponent->GetSelectionCount());
+			return;
+		}
+
+		TArray<TWeakObjectPtr<AGP_UnitBase>> FinalUnits = SelectionComponent->GetSelectedUnits();
+		for (AGP_UnitBase* Candidate : EligibleUnits)
+		{
+			bool bAlreadySelected = false;
+			for (const TWeakObjectPtr<AGP_UnitBase>& Existing : FinalUnits)
+			{
+				if (Existing.Get() == Candidate)
+				{
+					bAlreadySelected = true;
+					break;
+				}
+			}
+
+			if (!bAlreadySelected)
+			{
+				FinalUnits.Add(Candidate);
+			}
+		}
+
+		if (SelectionComponent->GetInspectedTarget() != nullptr)
+		{
+			SelectionComponent->ClearInspectedTarget();
+		}
+		SelectionComponent->SetSelectionFromUnits(FinalUnits);
+	}
+	else
+	{
+		TArray<TWeakObjectPtr<AGP_UnitBase>> FinalUnits;
+		FinalUnits.Reserve(EligibleUnits.Num());
+		for (AGP_UnitBase* Candidate : EligibleUnits)
+		{
+			FinalUnits.Add(Candidate);
+		}
+
+		if (SelectionComponent->GetInspectedTarget() != nullptr)
+		{
+			SelectionComponent->ClearInspectedTarget();
+		}
+		SelectionComponent->SetSelectionFromUnits(FinalUnits);
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("GP Marquee: LocalTeam=%d Rect=(%.1f,%.1f)-(%.1f,%.1f) Candidates=%d SelectedCount=%d Modifier=%s Result=Applied"),
+		LocalTeamId,
+		MinX, MinY, MaxX, MaxY,
+		CandidateCount,
+		SelectionComponent->GetSelectionCount(),
+		ModifierTag);
 }
 
 void AGP_PlayerController::ProcessSelectionClickAtScreenPosition(const FVector2D& ScreenPosition)

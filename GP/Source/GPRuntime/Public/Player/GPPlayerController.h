@@ -65,10 +65,16 @@ private:
 	void BindSelectionInputActions(UEnhancedInputComponent& EnhancedInput);
 	void BindControlGroupInputActions(UEnhancedInputComponent& EnhancedInput);
 
+	void InitializeCommandInput();
+	void RemoveCommandInputMapping();
+	void LoadCommandInputAssets();
+	void BindCommandInputActions(UEnhancedInputComponent& EnhancedInput);
+
 	void OnSelectionStarted(const FInputActionValue& Value);
 	void OnSelectionCompleted(const FInputActionValue& Value);
 	void OnSelectionCanceled(const FInputActionValue& Value);
 	void OnControlGroupStarted(const FInputActionValue& Value);
+	void OnCommandInputStarted(const FInputActionValue& Value);
 
 	void ProcessSelectionClickAtScreenPosition(const FVector2D& ScreenPosition);
 	void LogSelectionClickResult(
@@ -140,6 +146,12 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Selection|Input")
 	TSoftObjectPtr<UInputAction> ControlGroupAction;
 
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Commands|Input")
+	TSoftObjectPtr<UInputMappingContext> CommandMappingContext;
+
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Commands|Input")
+	TSoftObjectPtr<UInputAction> CommandAction;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> LoadedCameraMappingContext;
 
@@ -165,6 +177,12 @@ private:
 	TObjectPtr<UInputAction> LoadedControlGroupAction;
 
 	UPROPERTY(Transient)
+	TObjectPtr<UInputMappingContext> LoadedCommandMappingContext;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> LoadedCommandAction;
+
+	UPROPERTY(Transient)
 	TObjectPtr<UGP_MarqueeSelectionWidget> MarqueeWidget;
 
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */
@@ -174,6 +192,7 @@ private:
 
 	static constexpr int32 CameraMappingPriority = 100;
 	static constexpr int32 SelectionMappingPriority = 110;
+	static constexpr int32 CommandMappingPriority = 120;
 	static constexpr float SelectionDragThresholdPixels = 8.0f;
 	static constexpr float SelectionTraceDistance = 1000000.0f;
 	static constexpr int32 MarqueeWidgetZOrder = 1000;
@@ -185,6 +204,8 @@ private:
 	bool bSelectionMappingContextAdded = false;
 	bool bSelectionActionBindingInstalled = false;
 	bool bControlGroupActionBindingInstalled = false;
+	bool bCommandMappingContextAdded = false;
+	bool bCommandActionBindingInstalled = false;
 	bool bSelectionPressActive = false;
 	bool bMarqueeActive = false;
 	FVector2D SelectionPressScreenPosition = FVector2D::ZeroVector;

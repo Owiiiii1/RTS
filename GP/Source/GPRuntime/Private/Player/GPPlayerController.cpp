@@ -9,10 +9,12 @@
 #include "Camera/GPCameraPawn.h"
 #include "CollisionQueryParams.h"
 #include "Command/GPCommandComponent.h"
+#include "Command/GPCommandRequest.h"
 #include "DrawDebugHelpers.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "EngineUtils.h"
+#include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
@@ -24,6 +26,8 @@
 #include "Player/GPSelectionComponent.h"
 #include "UI/GPMarqueeSelectionWidget.h"
 #include "Units/GPUnitBase.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogGPCommandInput, Log, All);
 
 AGP_PlayerController::AGP_PlayerController()
 {
@@ -49,6 +53,11 @@ AGP_PlayerController::AGP_PlayerController()
 		TEXT("/Game/GrimProtocol/Input/Selection/IA_Select.IA_Select")));
 	ControlGroupAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(
 		TEXT("/Game/GrimProtocol/Input/Selection/IA_ControlGroup.IA_ControlGroup")));
+
+	CommandMappingContext = TSoftObjectPtr<UInputMappingContext>(FSoftObjectPath(
+		TEXT("/Game/GrimProtocol/Input/Commands/IMC_GP_Commands.IMC_GP_Commands")));
+	CommandAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(
+		TEXT("/Game/GrimProtocol/Input/Commands/IA_Command.IA_Command")));
 }
 
 UGP_AbilitySystemComponent* AGP_PlayerController::GetGPAbilitySystemComponent() const
@@ -106,12 +115,16 @@ void AGP_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		CameraPawn->SetRotateActive(false);
 	}
 
+	RemoveCommandInputMapping();
 	RemoveSelectionInputMapping();
 	RemoveCameraInputMapping();
 
 	LoadedSelectionMappingContext = nullptr;
 	LoadedSelectionAction = nullptr;
 	LoadedControlGroupAction = nullptr;
+
+	LoadedCommandMappingContext = nullptr;
+	LoadedCommandAction = nullptr;
 
 	LoadedCameraMappingContext = nullptr;
 	LoadedCameraPanAction = nullptr;
@@ -225,6 +238,7 @@ void AGP_PlayerController::BeginPlayingState()
 
 	InitializeCameraInput();
 	InitializeSelectionInput();
+	InitializeCommandInput();
 }
 
 void AGP_PlayerController::SetupInputComponent()
@@ -258,6 +272,14 @@ void AGP_PlayerController::SetupInputComponent()
 	{
 		BindControlGroupInputActions(*EnhancedInputComponent);
 		bControlGroupActionBindingInstalled = true;
+	}
+
+	LoadCommandInputAssets();
+
+	if (!bCommandActionBindingInstalled)
+	{
+		BindCommandInputActions(*EnhancedInputComponent);
+		bCommandActionBindingInstalled = true;
 	}
 }
 
@@ -595,6 +617,204 @@ void AGP_PlayerController::RemoveSelectionInputMapping()
 	}
 
 	bSelectionMappingContextAdded = false;
+}
+
+void AGP_PlayerController::LoadCommandInputAssets()
+{
+	LoadedCommandAction = CommandAction.LoadSynchronous();
+	if (LoadedCommandAction == nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_PlayerController: missing IA_Command at '%s'."),
+			*CommandAction.ToSoftObjectPath().ToString());
+	}
+}
+
+void AGP_PlayerController::BindCommandInputActions(UEnhancedInputComponent& EnhancedInput)
+{
+	if (LoadedCommandAction == nullptr)
+	{
+		return;
+	}
+
+	EnhancedInput.BindAction(
+		LoadedCommandAction,
+		ETriggerEvent::Started,
+		this,
+		&AGP_PlayerController::OnCommandInputStarted);
+}
+
+void AGP_PlayerController::InitializeCommandInput()
+{
+	if (!IsLocalController() || bCommandMappingContextAdded)
+	{
+		return;
+	}
+
+	ULocalPlayer* LocalPlayer = GetLocalPlayer();
+	if (LocalPlayer == nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_PlayerController::InitializeCommandInput: LocalPlayer is unavailable."));
+		return;
+	}
+
+	UEnhancedInputLocalPlayerSubsystem* Subsystem =
+		LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
+	if (Subsystem == nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_PlayerController::InitializeCommandInput: Enhanced Input subsystem is unavailable."));
+		return;
+	}
+
+	LoadedCommandMappingContext = CommandMappingContext.LoadSynchronous();
+	if (LoadedCommandMappingContext == nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_PlayerController: missing IMC_GP_Commands at '%s'."),
+			*CommandMappingContext.ToSoftObjectPath().ToString());
+		return;
+	}
+
+	Subsystem->AddMappingContext(LoadedCommandMappingContext, CommandMappingPriority);
+	bCommandMappingContextAdded = true;
+}
+
+void AGP_PlayerController::RemoveCommandInputMapping()
+{
+	if (!bCommandMappingContextAdded)
+	{
+		return;
+	}
+
+	if (IsLocalController())
+	{
+		if (ULocalPlayer* LocalPlayer = GetLocalPlayer())
+		{
+			if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+					LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+			{
+				if (LoadedCommandMappingContext != nullptr)
+				{
+					Subsystem->RemoveMappingContext(LoadedCommandMappingContext);
+				}
+			}
+		}
+	}
+
+	bCommandMappingContextAdded = false;
+}
+
+void AGP_PlayerController::OnCommandInputStarted(const FInputActionValue& Value)
+{
+	(void)Value;
+
+	if (!IsLocalController() || CommandComponent == nullptr)
+	{
+		return;
+	}
+
+	float MouseX = 0.0f;
+	float MouseY = 0.0f;
+	if (!GetMousePosition(MouseX, MouseY))
+	{
+		return;
+	}
+
+	FVector WorldOrigin = FVector::ZeroVector;
+	FVector WorldDirection = FVector::ZeroVector;
+	if (!DeprojectScreenPositionToWorld(MouseX, MouseY, WorldOrigin, WorldDirection))
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(GPCommandClick), /*bTraceComplex=*/false);
+	QueryParams.bReturnPhysicalMaterial = false;
+	if (APawn* ControlledPawn = GetPawn())
+	{
+		QueryParams.AddIgnoredActor(ControlledPawn);
+	}
+
+	const FVector TraceEnd = WorldOrigin + (WorldDirection * SelectionTraceDistance);
+	FHitResult Hit;
+	if (!World->LineTraceSingleByChannel(
+			Hit,
+			WorldOrigin,
+			TraceEnd,
+			ECC_Visibility,
+			QueryParams))
+	{
+		return;
+	}
+
+	AActor* TargetActor = Hit.GetActor();
+	const FVector TargetLocation = Hit.ImpactPoint;
+	const bool bQueue = IsShiftModifierDown();
+
+	FGP_CommandRequest Request;
+	if (!CommandComponent->BuildSmartCommand(TargetActor, TargetLocation, bQueue, Request))
+	{
+		return;
+	}
+
+	const AGP_PlayerState* GPPlayerState = GetPlayerState<AGP_PlayerState>();
+	const int32 LocalTeamId = GPPlayerState != nullptr ? GPPlayerState->GetTeamId() : -1;
+
+	const TCHAR* NetModeText = TEXT("Unknown");
+	switch (World->GetNetMode())
+	{
+	case NM_Standalone:
+		NetModeText = TEXT("Standalone");
+		break;
+	case NM_DedicatedServer:
+		NetModeText = TEXT("DedicatedServer");
+		break;
+	case NM_ListenServer:
+		NetModeText = TEXT("ListenServer");
+		break;
+	case NM_Client:
+		NetModeText = TEXT("Client");
+		break;
+	default:
+		break;
+	}
+
+	const TCHAR* RoleText = TEXT("Unknown");
+	switch (GetLocalRole())
+	{
+	case ROLE_None:
+		RoleText = TEXT("None");
+		break;
+	case ROLE_SimulatedProxy:
+		RoleText = TEXT("SimulatedProxy");
+		break;
+	case ROLE_AutonomousProxy:
+		RoleText = TEXT("AutonomousProxy");
+		break;
+	case ROLE_Authority:
+		RoleText = TEXT("Authority");
+		break;
+	default:
+		break;
+	}
+
+	UE_LOG(LogGPCommandInput, Log,
+		TEXT("GP CommandInput: Tag=%s Units=%d TargetActor=%s Loc=%s Queue=%s LocalTeam=%d NetMode=%s Role=%s"),
+		*Request.CommandTag.ToString(),
+		Request.IssuingUnits.Num(),
+		*GetNameSafe(Request.TargetActor),
+		*Request.TargetLocation.ToCompactString(),
+		Request.bQueue ? TEXT("true") : TEXT("false"),
+		LocalTeamId,
+		NetModeText,
+		RoleText);
 }
 
 void AGP_PlayerController::OnSelectionStarted(const FInputActionValue& Value)

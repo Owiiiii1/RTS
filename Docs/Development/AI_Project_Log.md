@@ -2791,3 +2791,60 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s17-phase-c-command-input-analysis` only. Do **not** merge to main. Do **not** create IA/IMC / bindings / RPC / execution from this pass.
+
+## 2026-08-02 — GP-S17 / Phase C — command input implementation
+
+Status: **CODE_READY_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Content/GrimProtocol/Input/Commands/IA_Command.uasset`
+- `GP/Content/GrimProtocol/Input/Commands/IMC_GP_Commands.uasset`
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_C_Command_Input.md` — `CODE_READY_VALIDATION_PENDING`
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase C on `feature/gp-s17-phase-c-command-input-implementation` (base = `main` `169de80`).
+- Created `IA_Command` (Boolean) + `IMC_GP_Commands` via `Tools/CreateCommandInputAssets.py`; reload-verified `DefaultKeyMappings` count=1, RMB→IA_Command.
+- Wired PC lifecycle parallel to selection: soft paths, `SetupInputComponent` bind `Started`→`OnCommandInputStarted`, local `BeginPlayingState` add priority 120, `EndPlay` remove; `bCommandMappingContextAdded` / `bCommandActionBindingInstalled`.
+- Handler: Visibility deproject+trace (reuse selection distance/channel/ignore pawn); miss silent; `bQueue=IsShiftModifierDown()`; `BuildSmartCommand`; one `LogGPCommandInput` line; no stored request / RPC / execution.
+- CommandComponent / Request / tags / Selection / Camera unchanged. Operator validation **pending**.
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED** (UHT via compile path)
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- Operator runtime validation — **pending**
+
+### Stop condition
+**CODE_READY_VALIDATION_PENDING.** No commit/push in this implementation pass. Do **not** merge to main. Do **not** start RPC / execution / full GP-S18/S19.
+
+## 2026-08-02 — GP-S17 / Phase C — completion checkpoint
+
+Status: **CODE_DONE_OPERATOR_VALIDATED**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Content/GrimProtocol/Input/Commands/IA_Command.uasset`
+- `GP/Content/GrimProtocol/Input/Commands/IMC_GP_Commands.uasset`
+- `Docs/Development/Claude_Tasks/GP-S17_Phase_C_Command_Input.md` — `CODE_DONE_OPERATOR_VALIDATED`
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Phase C local RMB command caller complete on `feature/gp-s17-phase-c-command-input-implementation` (base = `main` `169de80`).
+- Assets: `IA_Command` (Boolean) + `IMC_GP_Commands` (`DefaultKeyMappings` RMB→IA_Command, priority 120).
+- Operator validation **PASS** for Standalone: no-selection no-op, single/multi Move, Shift queue true/false, enemy Attack, friendly Move (TargetActor cleared), Resource Mine via temporary `AGP_UnitBase` BP with `GP.Resource.Node`, one log per click; hold spam / movement / RPC / selection/marquee/MMB/CG regressions **NONE**.
+- Neutral Attack / unknown-actor fallback: **NOT AVAILABLE**. 2P Listen Server: **VALIDATION_PENDING**.
+- Temporary Mine test BP removed; map not saved; no residual test assets / Tools.
+- Request remains local-only. **No** RPC / execution / movement. Full GP-S18/S19 **not** started.
+
+### Builds / validation
+- Retained: GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+- Operator validation — **CODE_DONE_OPERATOR_VALIDATED** (matrix above).
+
+### Stop condition
+Commit/push `feature/gp-s17-phase-c-command-input-implementation` only. Do **not** merge to main. Do **not** start RPC / server validation / execution / GP-S18/S19.

@@ -2539,3 +2539,26 @@ Status: **DONE_WITH_DEFERRED_INTEGRATIONS**
 
 ### Stop condition
 Commit/push `feature/gp-s16-completion-boundary` only. Do **not** merge to main. Do **not** start C2 / GP-S17 / full GP-S18. Do **not** implement deferred items.
+
+## 2026-08-02 — GP-S17 / Command Component — analysis finalize
+
+Status: **ANALYSIS_READY_FIRST_CHECKPOINT_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S17_Command_Component.md` — created / finalized (analysis)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Finalized GP-S17 architecture analysis on `feature/gp-s17-command-component-analysis` (base = `main` `e39f53f`).
+- Original goal retained: `UGP_CommandComponent` smart resolve + `Server_RequestCommand` dispatch (TDD/13 / TDD/04).
+- First checkpoint locked: **Phase A — CommandComponent shell** (PC default subobject, non-replicated, no request/input/RPC/execution/selection state/speculative API; no UnitBase/AI/Nav).
+- Dependency-order correction: TDD assigns `FGP_CommandRequest` to GP-S19; Phase B+ blocked until canonical request pull-forward; alternate structs forbidden; Phase A independent of request type; executable Move not first checkpoint (GP-S20–S22).
+- Phase split: A shell → S19 request pull-forward → B BuildSmartCommand → C RMB → D RPC/ownership → E Move deferred. B–D order refinable after request contract; Phase A already safe.
+- Phase A validation boundary: minimal Standalone + 2P listen-server component-presence checks; optional one-shot construction diagnostic only at implementation; no permanent production log required by analysis.
+- Docs-only. GP-S18 / GP-S19 **not** started. DOCUMENTATION_INDEX / TDD / GP-S16 docs unchanged.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+### Stop condition
+Commit/push `feature/gp-s17-command-component-analysis` only. Do **not** merge to main. Do **not** implement Phase A / CommandComponent / CommandRequest / IA/IMC / RPC / Move. Do **not** start GP-S18 / GP-S19.

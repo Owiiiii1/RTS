@@ -22,6 +22,8 @@ class GPRUNTIME_API AGP_PlayerState : public APlayerState, public IAbilitySystem
 public:
 	AGP_PlayerState();
 
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
 	UFUNCTION(BlueprintPure, Category = "GP|AbilitySystem")
@@ -30,9 +32,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Attributes")
 	const UGP_PlayerAttributeSet* GetPlayerAttributeSet() const;
 
+	UFUNCTION(BlueprintPure, Category = "GP|Team")
+	int32 GetTeamId() const;
+
+	/** Authority-only. Silent no-op without authority. */
+	void SetTeamId(int32 NewTeamId);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void ClientInitialize(AController* C) override;
+
+	UFUNCTION()
+	void OnRep_TeamId();
 
 private:
 	void InitializeAbilitySystemActorInfo();
@@ -42,4 +53,8 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Attributes", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_PlayerAttributeSet> PlayerAttributeSet;
+
+	/** -1 unassigned, 0 neutral, 1+ playable teams. */
+	UPROPERTY(ReplicatedUsing = OnRep_TeamId, VisibleInstanceOnly, Category = "GP|Team")
+	int32 TeamId = -1;
 };

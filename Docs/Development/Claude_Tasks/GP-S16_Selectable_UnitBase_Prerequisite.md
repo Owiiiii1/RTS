@@ -2,13 +2,64 @@
 (TeamId + interim CapabilityTags + concrete `AGP_Unit`)
 
 ## Status
-**Status: READY_FOR_IMPLEMENTATION**
+**Status: DONE**
 
-Architecture checkpoint **approved**. Implementation **not started** in this documentation pass.
+Prerequisite **implemented and operator-validated**.
 This is **not** full GP-S18 and **not** GP-S16 Phase B2.
 
 Parent GP-S16 selection status:
-**`PHASE_B1_DONE_UNITBASE_PREREQUISITE_READY`**
+**`PHASE_B1_DONE_UNITBASE_PREREQUISITE_DONE_PHASE_B2_PENDING`**
+
+### Operator validation (passed)
+
+| Check | Result |
+| --- | --- |
+| Editor load | **PASS** |
+| `AGP_Unit` placeable | **PASS** |
+| Cylinder visible | **PASS** |
+| Capsule root / collision | **PASS** |
+| Capability defaults | **PASS** |
+| 2-player listen-server PIE | **PASS** |
+| Prerequisite-related replication warnings | **NONE** |
+| Map saved | **NO** |
+| Assets created | **NO** |
+| Blocking errors | **NONE** |
+
+### Expected limitation (not a failure)
+
+- Mouse click selection is **not** implemented
+- Cursor trace / input belongs to **GP-S16 Phase B2**
+- Absence of mouse selection is **not** a validation failure
+
+### Observed unrelated warnings (not fixed)
+
+These did **not** block validation and did **not** originate from this prerequisite:
+
+- `LogConsoleManager`: `r.MotionVectorSimulation` render-thread warning
+- `LogEditorClassViewer`: missing parent classes for several `MVVMK2Node_LoadSoft*` / `MakeBrush*` editor nodes
+- `LogAbilitySystem`: `GameplayCueNotifyPaths` not configured, fallback to `/Game/`
+
+Do **not** modify renderer, MVVM, GameplayCue config, plugins, or project settings for these.
+
+### Implemented (this pass)
+
+| Item | Detail |
+| --- | --- |
+| `AGP_PlayerState::TeamId` | `int32`, default `-1`, `ReplicatedUsing=OnRep_TeamId`, `COND_None`, authority-only `SetTeamId` |
+| `AGP_UnitBase::TeamId` | `EditInstanceOnly`, replicated same policy; `IsNeutral` (`==0`), `HasAssignedTeam` (`>=0`) |
+| CapabilityTags | `EditDefaultsOnly` interim on UnitBase; **not** replicated; no runtime mutation |
+| Native tags used | `FGPGameplayTags::Capability_Selectable`, `Capability_Inspectable`, `Selection_Type_Unit`, `Selection_Type_Building` |
+| Queries | `GetCapabilityTags`, `HasCapabilityTag` (exact), `IsGameplaySelectable`, `IsGameplayInspectable`, `IsSelectionTypeUnit`, `IsSelectionTypeBuilding` |
+| `AGP_Unit` | Concrete placeable; capsule root `42 x 88`; QueryOnly; object Pawn; **blocks `ECC_Visibility`**; mesh collision off |
+| Engine mesh | `/Engine/BasicShapes/Cylinder.Cylinder` on `VisualMesh` (scale `0.80, 0.80, 1.60`) |
+| Default tags on `AGP_Unit` CDO | Selectable + Inspectable + Selection.Type.Unit |
+| Assets / maps | **None** created |
+| Input / selection / highlight / FoW | **Not** started |
+
+### Interim → UnitDefinition boundary (unchanged)
+
+CapabilityTags on UnitBase remains **interim**. Future UnitDefinition becomes canonical source.
+UnitBase query API remains the stable consumer API. No dual editable sources after migration.
 
 ---
 
@@ -18,7 +69,7 @@ Parent GP-S16 selection status:
 | --- | --- |
 | Compile-safe UnitBase scaffold | **DONE** (abstract empty `AGP_UnitBase`) |
 | GP-S16 Phase A / B1 | **DONE** (selection container + mutation API) |
-| This prerequisite | **Architecture approved → READY_FOR_IMPLEMENTATION** |
+| This prerequisite | **DONE** (operator-validated) |
 | GP-S16 Phase B2 | Blocked until this prerequisite code is **merged and validated** |
 | Full GP-S18 | Separate future stage |
 | GP-S17 | Not started |
@@ -100,8 +151,8 @@ FGameplayTagContainer CapabilityTags;
 ```cpp
 const FGameplayTagContainer& GetCapabilityTags() const;
 bool HasCapabilityTag(FGameplayTag CapabilityTag) const;
-bool IsSelectable() const;
-bool IsInspectable() const;
+bool IsGameplaySelectable() const;
+bool IsGameplayInspectable() const;
 bool IsSelectionTypeUnit() const;
 bool IsSelectionTypeBuilding() const;
 ```
@@ -299,7 +350,6 @@ Rejected paths: GenericTeam-only; team solely via possession/PlayerState owner; 
 
 ## Stop condition
 
-**READY_FOR_IMPLEMENTATION.** Documentation checkpoint only.
-Do **not** write C++ / create assets / change maps in this pass.
-Await explicit tech-lead **implementation** assignment.
-Do **not** start Phase B2 / GP-S17 / full GP-S18 here.
+**DONE.** Prerequisite checkpoint ready for merge (feature branch).
+Do **not** start Phase B2 / GP-S17 / full GP-S18 from this finalize pass.
+Do **not** mark parent GP-S16 as DONE — Phase B2 remains pending.

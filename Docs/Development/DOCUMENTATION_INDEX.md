@@ -34,20 +34,18 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S14 DONE** |
-| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`, `AGP_GameMode`, `AGP_PlayerController`, `AGP_PlayerState`, `UGP_MatchAssetLoader`, `AGP_LobbyState`, `UGP_CameraConfigDataAsset`, `AGP_CameraPawn`, `AGP_CameraBoundsVolume`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
-| Last closed stage | **GP-S14** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S15 DONE** |
+| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`, `AGP_GameMode`, `AGP_PlayerController` + camera Enhanced Input, `AGP_PlayerState`, `UGP_MatchAssetLoader`, `AGP_LobbyState`, `UGP_CameraConfigDataAsset`, `AGP_CameraPawn` owner-only shell, `AGP_CameraBoundsVolume`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
+| Last closed stage | **GP-S15** |
 | Current stage | **none** |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** none (GP-S14 closed).
+**Current:** none (GP-S15 closed as **DONE**).
 
-**NEXT:** GP-S15 IMC_GP_Camera + IA_Camera_* assets, PlayerController binding per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order. Task file **not** created. Do **not** start GP-S15 until explicitly assigned.
-
-Per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order (Slice 3 — Camera).
+**NEXT:** GP-S16 UGP_SelectionComponent (SelectedUnits, InspectedTarget, marquee, control groups) — per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order. Do **not** create GP-S16 task file or start implementation until explicitly assigned.
 
 ### Foundation / Match Flow sequence
 
@@ -65,7 +63,8 @@ Per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Imple
 12. GP-S12 UGP_CameraConfigDataAsset — **DONE**
 13. GP-S13 AGP_CameraPawn — **DONE**
 14. GP-S14 AGP_CameraBoundsVolume — **DONE**
-15. GP-S15 IMC_GP_Camera + IA_Camera_* / PlayerController binding — not started / task file not materialized
+15. GP-S15 Camera Enhanced Input / PlayerController binding — **DONE**
+16. GP-S16 UGP_SelectionComponent (SelectedUnits, InspectedTarget, marquee, control groups) — not started / task file not materialized
 
 ---
 
@@ -147,4 +146,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S14 are closed. Current stage: **none**. NEXT per TDD/13 = GP-S15 IMC_GP_Camera + IA_Camera_* assets, PlayerController binding — **not started**; task file **not** materialized.
+SETUP-001, DOCS-001, GP-S01…GP-S14 are closed. Current stage: **GP-S15 specification ready**. NEXT = GP-S15 implementation after explicit approval. GP-S16 **not** started; task file **not** materialized.

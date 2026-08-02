@@ -29,7 +29,8 @@ AGP_CameraPawn::AGP_CameraPawn()
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = true;
 
-	bReplicates = false;
+	bReplicates = true;
+	bOnlyRelevantToOwner = true;
 	SetReplicateMovement(false);
 
 	RootScene = CreateDefaultSubobject<USceneComponent>(TEXT("RootScene"));

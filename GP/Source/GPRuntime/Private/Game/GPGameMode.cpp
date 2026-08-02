@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Game/GPGameMode.h"
+#include "Camera/GPCameraPawn.h"
 #include "Game/GPGameState.h"
 #include "GameFramework/PlayerController.h"
 #include "Player/GPPlayerController.h"
@@ -13,6 +14,7 @@ AGP_GameMode::AGP_GameMode()
 	GameStateClass = AGP_GameState::StaticClass();
 	PlayerControllerClass = AGP_PlayerController::StaticClass();
 	PlayerStateClass = AGP_PlayerState::StaticClass();
+	DefaultPawnClass = AGP_CameraPawn::StaticClass();
 	PrimaryActorTick.bCanEverTick = false;
 	MatchDurationSeconds = 600.0f;
 	ExpectedHumanPlayers = 2;

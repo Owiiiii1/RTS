@@ -7,11 +7,16 @@
 #include "GPPlayerController.generated.h"
 
 class UGP_AbilitySystemComponent;
+class AGP_CameraPawn;
+class UInputAction;
+class UInputMappingContext;
+class UEnhancedInputComponent;
+struct FInputActionValue;
 
 /**
- * Network-correct PlayerController scaffold.
- * Owns future RTS camera-pawn possession slot; queries ASC from PlayerState via IAbilitySystemInterface.
- * Does not create ASC, CameraPawn, input mappings, selection, or UI.
+ * Network-correct PlayerController.
+ * Forwards Enhanced Input camera intents to possessed AGP_CameraPawn; queries ASC from PlayerState.
+ * Does not own camera math, ASC creation, selection, or UI.
  */
 UCLASS()
 class GPRUNTIME_API AGP_PlayerController : public APlayerController
@@ -26,6 +31,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void OnUnPossess() override;
 	virtual void AcknowledgePossession(APawn* InPawn) override;
@@ -41,8 +47,57 @@ protected:
 	void TryInitializePlayerStateLink();
 
 private:
+	void InitializeCameraInput();
+	void RemoveCameraInputMapping();
+	void LoadCameraInputAssets();
+	void BindCameraInputActions(UEnhancedInputComponent& EnhancedInput);
+
+	AGP_CameraPawn* GetCameraPawn() const;
+
+	void OnCameraPan(const FInputActionValue& Value);
+	void OnCameraZoom(const FInputActionValue& Value);
+	void OnCameraRotate(const FInputActionValue& Value);
+	void OnCameraRotateStarted(const FInputActionValue& Value);
+	void OnCameraRotateStopped(const FInputActionValue& Value);
+
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Camera|Input")
+	TSoftObjectPtr<UInputMappingContext> CameraMappingContext;
+
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Camera|Input")
+	TSoftObjectPtr<UInputAction> CameraPanAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Camera|Input")
+	TSoftObjectPtr<UInputAction> CameraZoomAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Camera|Input")
+	TSoftObjectPtr<UInputAction> CameraRotateAction;
+
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Camera|Input")
+	TSoftObjectPtr<UInputAction> CameraRotateToggleAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputMappingContext> LoadedCameraMappingContext;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> LoadedCameraPanAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> LoadedCameraZoomAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> LoadedCameraRotateAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> LoadedCameraRotateToggleAction;
+
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */
 	TWeakObjectPtr<APawn> LastInitializedLocalPawn;
 	TWeakObjectPtr<APlayerState> LastInitializedPlayerState;
 	TWeakObjectPtr<UGP_AbilitySystemComponent> LastNotifiedAbilitySystemComponent;
+
+	static constexpr int32 CameraMappingPriority = 100;
+
+	bool bCameraMappingContextAdded = false;
+	bool bCameraInputBindingsInstalled = false;
+	bool bCameraRotateHeld = false;
 };

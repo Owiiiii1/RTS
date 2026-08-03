@@ -3160,3 +3160,26 @@ Status: **CODE_DONE_NETWORK_VALIDATED** / GP-S20 **DONE_WITH_COMMAND_INTEGRATION
 
 ### Stop condition
 Commit/push `feature/gp-s20-movement-foundation-implementation` only. Do **not** merge to main. Do **not** start GP-S21 / Held wiring / callbacks / Nav / AI from this close-out.
+
+## 2026-08-03 — GP-S21 / Held Move Integration — analysis
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S21_Held_Move_Integration.md` — created
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — analysis report
+
+### What was done
+- Docs-only GP-S21 analysis on `feature/gp-s21-held-move-integration-analysis` (base = `main` `b676a4a`).
+- Selected owner: `UGP_UnitCommandComponent` sync after Held store → `AGP_MobileUnit::GetUnitMovementComponent()`.
+- Transition matrix: Move→RequestMove; non-Move while moving→Stop; QueueDeferred no-op; RequestMove fail keeps Held.
+- Stop reason: plain `EGP_MovementStopReason` + `StopMove(Reason)` (CommandReplaced vs Manual/EndPlay).
+- Tags: exact `== Command_Move` (Move/Attack/Mine present). Non-mobile → MovementUnavailable.
+- Completion target: `DONE_WITH_COMPLETION_DEFERRED`. GP-S22 remains callbacks/Held clear. No C++/assets.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+### Stop condition
+Commit/push `feature/gp-s21-held-move-integration-analysis` only. Do **not** merge to main. Do **not** implement sync/StopMove reason/GP-S22 from this pass.

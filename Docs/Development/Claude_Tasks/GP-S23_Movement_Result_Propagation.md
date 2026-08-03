@@ -654,23 +654,37 @@ Exact authority + Move tag + serial match clears on Reached or Cancelled. Else i
 | --- | --- |
 | `gp.Movement.TestResult <Serial> <Reached\|Cancelled> [Reason]` | Primary synthetic (no mutation) |
 | `gp.Movement.TestCompletion <Serial>` | Deprecated alias → Reached/None |
-| `gp.Movement.Stop` | Real Manual cancel producer |
+| `gp.Movement.Stop` | Real Manual cancel producer — selects first **moving** authority unit only (no idle fallback) |
 | `gp.Movement.Test` | Structured RequestMove outcome |
 | `gp.UnitCommand.TestRejectedMove` | Command-layer phantom-Held reject path |
 
 ### Builds
-- GPEditor Win64 Development — **PASSED**
-- UHT — **PASSED** (processed with candidate build)
+- GPEditor Win64 Development — **PASSED** (candidate + Stop target fix)
+- UHT — **PASSED** (processed with builds)
 - GP Dev / Shipping — deferred to finalization
 
 ### Operator validation
-**Pending.** See Operator Validation Plan (Reached, Superseded, CommandReplaced, Manual, Rejected via `gp.UnitCommand.TestRejectedMove`, stale TestResult/TestCompletion, remote, multi-unit, EndPlay).
+**CODE_READY_OPERATOR_VALIDATION_PENDING** (Manual retest required after debug Stop target fix).
+
+| Case | Result |
+| --- | --- |
+| Natural Reached | **PASS** |
+| Move→Move Superseded | **PASS** |
+| Move→Attack CommandReplaced | **PASS** |
+| Rejected Move (phantom Held clear) | **PASS** |
+| Stale result | **PASS** |
+| Compatibility alias TestCompletion | **PASS** |
+| EndPlay | **PASS** |
+| Manual Stop (`gp.Movement.Stop`) | **RETEST** — wrong debug target selected idle first authority; production `StopMove` contract not at fault |
+
+Debug fix: `gp.Movement.Stop` now uses `FindFirstAuthorityMovingMobileUnit`; no fallback; logs `ActiveSerialBefore` / `WasMovingBefore` / `Selection=MovingUnit`.
 
 ---
 
 ## Stop condition (candidate)
 
 **CODE_READY_OPERATOR_VALIDATION_PENDING.**
+Manual cancellation requires re-validation after Stop target fix.
 Commit/push `feature/gp-s23-movement-result-implementation` only.
 Do **not** merge to main.
 Do **not** start Attack/Mine/Nav/`Failed`/queue from this candidate.

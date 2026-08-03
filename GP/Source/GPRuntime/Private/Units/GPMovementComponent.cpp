@@ -680,11 +680,11 @@ namespace GPMovementConsolePrivate
 			return;
 		}
 
-		AGP_MobileUnit* MobileUnit = FindFirstAuthorityMobileUnit(World);
+		AGP_MobileUnit* MobileUnit = FindFirstAuthorityMovingMobileUnit(World);
 		if (MobileUnit == nullptr)
 		{
 			UE_LOG(LogGPUnitMovement, Warning,
-				TEXT("GP UnitMovement Console: no authority AGP_MobileUnit found"));
+				TEXT("GP UnitMovement Console: gp.Movement.Stop no moving authority unit"));
 			return;
 		}
 
@@ -697,10 +697,15 @@ namespace GPMovementConsolePrivate
 			return;
 		}
 
+		const uint32 ActiveSerialBefore = Movement->GetActiveMoveSerial();
+		const bool bWasMovingBefore = Movement->IsMoving();
+
 		Movement->StopMove(EGP_MovementStopReason::Manual);
 		UE_LOG(LogGPUnitMovement, Log,
-			TEXT("GP UnitMovement Console: gp.Movement.Stop Unit=%s"),
-			*MobileUnit->GetName());
+			TEXT("GP UnitMovement Console: gp.Movement.Stop Unit=%s ActiveSerialBefore=%u WasMovingBefore=%s Selection=MovingUnit"),
+			*MobileUnit->GetName(),
+			ActiveSerialBefore,
+			bWasMovingBefore ? TEXT("true") : TEXT("false"));
 	}
 
 	static bool ParseResultToken(const FString& Token, EGP_MovementResult& OutResult)
@@ -903,7 +908,7 @@ namespace GPMovementConsolePrivate
 
 	static FAutoConsoleCommandWithWorldAndArgs GMovementStopCommand(
 		TEXT("gp.Movement.Stop"),
-		TEXT("GP-S20/S23: StopMove(Manual) on first authority AGP_MobileUnit."),
+		TEXT("GP-S23: StopMove(Manual) on first moving authority AGP_MobileUnit (no idle fallback)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&MovementStop));
 
 	static FAutoConsoleCommandWithWorldAndArgs GMovementTestResultCommand(

@@ -3380,4 +3380,27 @@ Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Operator — **pending**.
 
 ### Stop condition
-Commit/push `feature/gp-s23-movement-result-implementation` only. Do **not** merge to main.
+Superseded by Stop debug-target fix checkpoint.
+
+## 2026-08-03 — GP-S23 / Movement Result Propagation — Stop debug target fix
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp` — `gp.Movement.Stop` selects moving authority unit only
+- `Docs/Development/Claude_Tasks/GP-S23_Movement_Result_Propagation.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Operator validation found wrong debug target: `gp.Movement.Stop` used first authority unit while a different unit was moving; production `StopMove` contract not the cause.
+- Fixed: select first authority moving unit; no idle fallback; console log includes ActiveSerialBefore / WasMovingBefore / Selection=MovingUnit.
+- PASS so far: Natural Reached, Move→Move, Move→Attack, Rejected Move, stale result, TestCompletion alias, EndPlay.
+- Manual cancellation requires retest.
+
+### Builds / validation
+- GPEditor Development + UHT — **PASSED** (Stop target fix rebuild).
+- Operator — Manual **RETEST**; other listed cases **PASS**.
+
+### Stop condition
+Commit/push same branch only. Do **not** merge to main.

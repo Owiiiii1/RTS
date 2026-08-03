@@ -1,71 +1,95 @@
 # Cursor Work Report
 
 ## Task
-GP-S24 Attack Execution Foundation analysis
+GP-S24 Attack Execution Foundation finalization
 
 ## Status
-ANALYSIS_READY_IMPLEMENTATION_PENDING
+DONE_WITH_DAMAGE_EXECUTION_DEFERRED
 
 ## Branch
-feature/gp-s24-attack-execution-analysis
+feature/gp-s24-attack-execution-implementation
 
 ## Base
-main @ 60169c1cfb6fd7bd1e701e634a14c7a49395327a
+main @ 462f9bba0bc64c5a7da4fdd5eae9207f36524a7f
 
-## Current Code Findings
-- Attack already delivered into Held via GP-S17/S18; GP-S23 stops prior movement then idles.
-- `HandleMovementResult` clears only exact Held Move; Attack Held yields `HeldTagNotMove` today.
-- Team rules live on `AGP_UnitBase::GetTeamId`; server rejects same-team Attack.
-- ASC / `UGP_UnitAttributeSet::AttackRange` exist but are not wired to units.
-- No damage/death/Attack executor exists.
+## Implementation Summary
+Authority-only Attack executor inside `UGP_UnitCommandComponent`: validate → optional approach via GP-S23 movement results (Attack Held serial == movement serial) → Ready without damage. Exact serial guards, self-supersede, range-entry Manual, replacement-safe reset, accept-time reject without phantom Held.
 
-## Selected Architecture
-Attack executor state machine private to `UGP_UnitCommandComponent` (Option A). Rejected separate AttackComponent and generic executor framework for GP-S24 scope.
+## Terminal Cleanup Fix
+DestroyTarget during Approaching previously leaked FinishAttack `StopMove(Manual)` into Held Move `MovementResultIgnored HeldTagNotMove`, and logged FLT_MAX distance. Fixed with `bExpectAttackCleanupStopResult` + `PendingAttackCleanupMovementSerial` consume path and `TryComputeAttackDistance2D` (`Distance=-1`, `DistanceAvailable=false`).
 
-## Attack State Model
-`Idle → Approaching → Ready` (Ready non-terminal). Terminal `Cancelled|Failed` + reason. Accept-time invalid clears Held (no phantom).
+## Final Architecture
+- States: Idle / Approaching / Ready (Ready non-terminal)
+- Tick: authority-only while Attack active; disabled on Idle
+- Result routing: Attack consume-first, then Held Move
+- Distinct Manual paths: range-entry vs terminal cleanup
+- FinishAttack clears only exact Held Attack serial/tag
+- QueueDeferred: no serial, no Attack mutation
+- EndPlay: silent Attack reset + existing HeldCleared; movement unbind first
+- No AttackComponent / GAS / MovementComponent API changes
 
-## Serial Model
-Attack Held serial == approach movement serial. Self-supersede Cancelled/Superseded ignored while still moving on same serial. Allocator never rewound.
+## Operator Validation
+| Case | Result |
+| --- | --- |
+| Out of range Idle→Approaching→Ready | **PASS** |
+| Range-entry Manual consumed as Attack | **PASS** |
+| Ready retains Held Attack | **PASS** |
+| Ready→Approaching on target leave | **PASS** |
+| Moving-target reissue | **PASS** |
+| Same-serial Cancelled/Superseded SelfSupersede | **PASS** |
+| Attack→Move replacement | **PASS** |
+| Attack→Attack retarget; stale-safe | **PASS** |
+| Invalid Self / Friendly / Null; no phantom Held | **PASS** |
+| DestroyTarget Ready | **PASS** |
+| DestroyTarget Approaching + TerminalCleanupStop; no HeldTagNotMove; Distance=-1 | **PASS** |
+| QueueDeferred unchanged | **PASS** |
+| Multi-unit isolation | **PASS** |
+| EndPlay safe | **PASS** |
+| Authority-only Listen Server host | **PASS** |
+| No damage/GAS/Nav/queue execution | **PASS** |
+| Remote Team 2 client-issued Attack | **NOT_RUN_ACCEPTED_BY_USER** |
 
-## Target Validation
-Authority + valid `AGP_UnitBase` target ≠ self + finite location + same world + owner TeamId≥1 + not same team; neutrals allowed (matches current server validate). No health interface.
+## Static Verification
+- Executor only in UnitCommandComponent; Idle/Approaching/Ready
+- Authority Tick; disabled on Idle
+- Attack serial == movement serial; Attack result before Held Move path
+- Range-entry Manual ≠ terminal cleanup Manual; exact-serial cleanup guard
+- Self-supersede same serial; stale cannot mutate newer Held
+- Ready non-terminal; FinishAttack exact Held clear
+- QueueDeferred no serial/Attack mutation; EndPlay silent for movement
+- No FLT_MAX distance; no damage side effects; MovementComponent unchanged
+- No generated files/assets/config in finalization
 
-## Movement Integration
-Out of range → `RequestMove(target XY, owner Z, AttackSerial)`. In-range entry may `StopMove(Manual)` with `bExpectRangeEntryStop`. Result routing: Attack Approaching consume-first inside `HandleMovementResult`, then Held Move path.
-
-## Held Policy
-Retain Attack through Ready. Clear on terminal / accept reject / EndPlay. Replace overwrites Held then resets executor; old callbacks must not mutate new Attack.
-
-## Replacement Matrix
-Attack↔Move / Attack↔Attack / Attack→Mine(Held only) / QueueDeferred unchanged — see GP-S24 doc matrix. Reentrancy-safe: reset executor → sync movement → start new Attack if applicable.
-
-## Reentrancy/Lifecycle
-Capture → mutate → log → RequestMove/StopMove. Tick only while Attack active. EndPlay silent (align Movement EndPlay). No Attack multicast delegate in S24.
-
-## Expected Implementation Files
-- `GPUnitCommandComponent.h/.cpp` (+ optional `GPAttackTypes.h`)
-- GP-S24 doc / AI log / Cursor report
-
-NO: MovementComponent (preferred), MobileUnit, tags, Build.cs, GAS wiring, assets.
-
-## Operator Validation Plan
-A in-range Ready; B approach→Ready; C moving target reissue; D Ready→Approaching; E Move replace; F retarget; G invalid/same-team/self; H/I target destroyed; J QueueDeferred; K remote; L multi-unit; M EndPlay.
+## Build Results
+- GPEditor Development + UHT: **PASSED** (finalization)
+- GP Development: **PASSED**
+- GP Shipping: **PASSED**
 
 ## Scope Verification
-- C++ changed: **NO**
+- MovementComponent changed: **NO**
+- UnitBase changed: **NO**
 - Build.cs changed: **NO**
 - assets/maps/config changed: **NO**
 - damage/health added: **NO**
-- Attack implemented: **NO**
-- Nav/pathfinding added: **NO**
-- queue added: **NO**
+- GAS added: **NO**
+- Nav added: **NO**
+- queue execution added: **NO**
+- replication changed: **NO**
+
+## Files Changed In Finalization
+- `Docs/Development/Claude_Tasks/GP-S24_Attack_Execution_Foundation.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
 ## Git State
-- Branch: `feature/gp-s24-attack-execution-analysis`
-- Docs-only commit; working tree clean after push
+- Branch: `feature/gp-s24-attack-execution-implementation`
+- Ahead of main by implementation + cleanup + finalization commits
+- Working tree clean after commit/push
 - HEAD = origin
 - no merge to main
 
-## Implementation Pending
-Explicit implementation task required. Target stage close: `DONE_WITH_DAMAGE_DEFERRED`.
+## Final Status
+DONE_WITH_DAMAGE_EXECUTION_DEFERRED
+
+## Deferred
+Damage application; health/death; attack cadence; cooldown; animation/montage; projectile; GAS ability/effect; target death integration; Nav/pathfinding; queue execution; replication/prediction/UI; Remote Team 2 client Attack (not separately run)

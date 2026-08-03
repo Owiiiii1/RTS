@@ -2,10 +2,13 @@
 (Serial-aware Held Move clear on Reach — analysis)
 
 ## Status
-**Status: ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**Status: CODE_READY_OPERATOR_VALIDATION_PENDING**
 
-Docs-only. **No** C++ / assets / Nav / AI / Attack/Mine / queue / builds in this pass.
+Implemented on `feature/gp-s22-movement-completion-implementation`
+(base = `main` `664c30d4c7e8d1df52cf1a6caa2e87c366d84c1a`).
 Depends on: GP-S21 `DONE_WITH_COMPLETION_DEFERRED`.
+
+Operator validation **pending**. Failure propagation remains deferred.
 
 ---
 
@@ -342,9 +345,43 @@ Means: natural Reach clears matching Held Move; stale ignored; cancel/manual/End
 
 ---
 
+## 19. Implementation record
+
+### Actual APIs
+```cpp
+enum class EGP_MovementCompletionResult : uint8 { Reached };
+DECLARE_MULTICAST_DELEGATE_TwoParams(FGP_OnMovementCompleted, uint32, EGP_MovementCompletionResult);
+FGP_OnMovementCompleted& OnMovementCompleted();
+#if !UE_BUILD_SHIPPING
+void DebugBroadcastCompletion(uint32 Serial);
+#endif
+```
+
+### Broadcast ordering
+Capture CompletedSerial → ClearActiveMovementState → MoveReached log → Broadcast(Reached) → return.
+
+### Binding
+Authority BeginPlay: MobileUnit → AddUObject; `FDelegateHandle` + `TWeakObjectPtr`.
+EndPlay: Remove before HeldCleared.
+Client: no bind.
+
+### Handler
+Clear Held only on authority + Reached + Held Move + serial match.
+Ignored: NoAuthority / UnsupportedResult / NoHeldCommand / HeldTagNotMove / SerialMismatch.
+
+### Debug
+`gp.Movement.TestCompletion <Serial>` → synthetic Broadcast; no movement mutation; Shipping excluded.
+
+### Builds
+GPEditor Development + UHT — **PASSED**. GP Dev/Shipping deferred to finalization.
+
+### Operator validation
+**Pending.**
+
+---
+
 ## Stop condition
-**ANALYSIS_READY_IMPLEMENTATION_PENDING.**
-Await GP-S22 implementation assignment.
-Do **not** implement delegate/bind/clear/debug from this pass.
+**CODE_READY_OPERATOR_VALIDATION_PENDING.**
+Await operator natural Reach + stale TestCompletion validation.
 Do **not** merge to main.
-Do **not** start Nav / failure results / Attack/Mine / queue.
+Do **not** start failure propagation / Nav / Attack/Mine / queue from this pass.

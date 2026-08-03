@@ -3257,3 +3257,29 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s22-movement-completion-analysis` only. Do **not** merge to main. Do **not** implement completion/bind/clear from this pass.
+
+## 2026-08-03 — GP-S22 / Movement Completion — implementation
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h` / `Private/...cpp` — enum, delegate, Reach broadcast, TestCompletion
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h` / `Private/...cpp` — BeginPlay bind, handler clear, EndPlay unbind
+- `Docs/Development/Claude_Tasks/GP-S22_Movement_Completion.md` — `CODE_READY_OPERATOR_VALIDATION_PENDING`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — implementation report
+
+### What was done
+- Implemented GP-S22 on `feature/gp-s22-movement-completion-implementation` (base = `main` `664c30d`).
+- Reach: clear movement state → MoveReached → Broadcast(Reached); Stop/Manual/EndPlay do not complete.
+- Authority bind; serial-aware Held clear for exact Move match; stale/non-Move/empty ignored.
+- Non-shipping `gp.Movement.TestCompletion` synthetic Broadcast for SerialMismatch tests.
+- Failure propagation deferred. Operator validation pending.
+
+### Builds / validation
+- Candidate: GPEditor Development + UHT — **PASSED**.
+- Finalization GP Dev/Shipping — deferred until operator validation.
+- Operator — **pending**.
+
+### Stop condition
+**CODE_READY_OPERATOR_VALIDATION_PENDING.** Commit/push implementation branch only. Do **not** merge to main. Do **not** start failure propagation / Nav / Attack/Mine.

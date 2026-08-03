@@ -67,8 +67,48 @@ UGP_UnitCommandComponent::UGP_UnitCommandComponent()
 	SetIsReplicatedByDefault(false);
 }
 
+void UGP_UnitCommandComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority())
+	{
+		return;
+	}
+
+	AGP_MobileUnit* MobileUnit = Cast<AGP_MobileUnit>(Owner);
+	if (MobileUnit == nullptr)
+	{
+		return;
+	}
+
+	UGP_MovementComponent* Movement = MobileUnit->GetUnitMovementComponent();
+	if (Movement == nullptr)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MovementUnavailable: Unit=%s Serial=0 Destination=none Reason=MissingComponent Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			GPUnitCommandStatePrivate::RoleToString(Owner->GetLocalRole()),
+			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+		return;
+	}
+
+	BoundMovementComponent = Movement;
+	MovementCompletionHandle = Movement->OnMovementCompleted().AddUObject(
+		this,
+		&UGP_UnitCommandComponent::HandleMovementCompleted);
+}
+
 void UGP_UnitCommandComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (BoundMovementComponent.IsValid() && MovementCompletionHandle.IsValid())
+	{
+		BoundMovementComponent->OnMovementCompleted().Remove(MovementCompletionHandle);
+	}
+	MovementCompletionHandle.Reset();
+	BoundMovementComponent.Reset();
+
 	if (HeldCommand.IsSet())
 	{
 		const AActor* Owner = GetOwner();
@@ -88,6 +128,104 @@ void UGP_UnitCommandComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 
 	Super::EndPlay(EndPlayReason);
+}
+
+void UGP_UnitCommandComponent::HandleMovementCompleted(
+	uint32 CompletedSerial,
+	EGP_MovementCompletionResult Result)
+{
+	AActor* Owner = GetOwner();
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+
+	auto ResultToString = [](EGP_MovementCompletionResult InResult) -> const TCHAR*
+	{
+		switch (InResult)
+		{
+		case EGP_MovementCompletionResult::Reached:
+			return TEXT("Reached");
+		default:
+			return TEXT("Unknown");
+		}
+	};
+
+	auto LogIgnored = [&](const TCHAR* Reason, uint32 HeldSerial, const FString& HeldTag, bool bWarning)
+	{
+		if (bWarning)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution MovementCompletionIgnored: Unit=%s CompletedSerial=%u HeldSerial=%u HeldTag=%s Result=%s Reason=%s Role=%s NetMode=%s"),
+				*GetNameSafe(Owner),
+				CompletedSerial,
+				HeldSerial,
+				*HeldTag,
+				ResultToString(Result),
+				Reason,
+				GPUnitCommandStatePrivate::RoleToString(Role),
+				GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		}
+		else
+		{
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP UnitCommandExecution MovementCompletionIgnored: Unit=%s CompletedSerial=%u HeldSerial=%u HeldTag=%s Result=%s Reason=%s Role=%s NetMode=%s"),
+				*GetNameSafe(Owner),
+				CompletedSerial,
+				HeldSerial,
+				*HeldTag,
+				ResultToString(Result),
+				Reason,
+				GPUnitCommandStatePrivate::RoleToString(Role),
+				GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		}
+	};
+
+	if (Owner == nullptr || !Owner->HasAuthority())
+	{
+		LogIgnored(TEXT("NoAuthority"), 0, FString(TEXT("none")), true);
+		return;
+	}
+
+	if (Result != EGP_MovementCompletionResult::Reached)
+	{
+		const uint32 HeldSerial = HeldCommand.IsSet() ? HeldCommand.GetValue().CommandSerial : 0;
+		const FString HeldTag = HeldCommand.IsSet()
+			? HeldCommand.GetValue().CommandTag.ToString()
+			: FString(TEXT("none"));
+		LogIgnored(TEXT("UnsupportedResult"), HeldSerial, HeldTag, true);
+		return;
+	}
+
+	if (!HeldCommand.IsSet())
+	{
+		LogIgnored(TEXT("NoHeldCommand"), 0, FString(TEXT("none")), false);
+		return;
+	}
+
+	const FGP_StoredUnitCommand& CurrentHeld = HeldCommand.GetValue();
+	const FGameplayTag MoveTag = FGPGameplayTags::Get().Command_Move;
+	if (!(CurrentHeld.CommandTag == MoveTag))
+	{
+		LogIgnored(TEXT("HeldTagNotMove"), CurrentHeld.CommandSerial, CurrentHeld.CommandTag.ToString(), false);
+		return;
+	}
+
+	if (CurrentHeld.CommandSerial != CompletedSerial)
+	{
+		LogIgnored(TEXT("SerialMismatch"), CurrentHeld.CommandSerial, CurrentHeld.CommandTag.ToString(), false);
+		return;
+	}
+
+	const uint32 ClearedSerial = CurrentHeld.CommandSerial;
+	const FGameplayTag ClearedTag = CurrentHeld.CommandTag;
+	HeldCommand.Reset();
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution HeldMoveCompleted: Unit=%s Serial=%u Tag=%s Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		ClearedSerial,
+		*ClearedTag.ToString(),
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
 }
 
 void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)

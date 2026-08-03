@@ -8,13 +8,15 @@
 #include "Misc/Optional.h"
 #include "GPUnitCommandComponent.generated.h"
 
+class UGP_MovementComponent;
+enum class EGP_MovementCompletionResult : uint8;
 struct FGP_UnitCommand;
 
 /**
- * Server-authoritative held-command ownership on AGP_UnitBase (GP-S18/S21).
- * Accepts delivery payloads, stores one Held Command, apply replace / QueueDeferred.
+ * Server-authoritative held-command ownership on AGP_UnitBase (GP-S18–S22).
  * GP-S21: synchronizes Held Move / non-Move replace with UGP_MovementComponent.
- * No tick, replication, RPC, completion callbacks, or queue execution.
+ * GP-S22: serial-aware Held clear on Reached completion.
+ * No tick, replication, RPC, queue execution, or failure propagation.
  */
 UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))
 class GPRUNTIME_API UGP_UnitCommandComponent : public UActorComponent
@@ -24,6 +26,7 @@ class GPRUNTIME_API UGP_UnitCommandComponent : public UActorComponent
 public:
 	UGP_UnitCommandComponent();
 
+	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/** Authority-only accept / replace / QueueDeferred. Syncs movement for non-queued changes. */
@@ -41,7 +44,11 @@ private:
 	void ClearHeldCommand();
 	uint32 AllocateCommandSerial();
 	void SynchronizeMovementWithHeldCommand(const TOptional<FGP_StoredUnitCommand>& PreviousCommand);
+	void HandleMovementCompleted(uint32 CompletedSerial, EGP_MovementCompletionResult Result);
 
 	TOptional<FGP_StoredUnitCommand> HeldCommand;
 	uint32 NextCommandSerial = 1;
+
+	FDelegateHandle MovementCompletionHandle;
+	TWeakObjectPtr<UGP_MovementComponent> BoundMovementComponent;
 };

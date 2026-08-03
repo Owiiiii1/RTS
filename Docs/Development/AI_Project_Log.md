@@ -3257,3 +3257,76 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s22-movement-completion-analysis` only. Do **not** merge to main. Do **not** implement completion/bind/clear from this pass.
+
+## 2026-08-03 — GP-S22 / Movement Completion — implementation
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h` / `Private/...cpp` — enum, delegate, Reach broadcast, TestCompletion
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h` / `Private/...cpp` — BeginPlay bind, handler clear, EndPlay unbind
+- `Docs/Development/Claude_Tasks/GP-S22_Movement_Completion.md` — `CODE_READY_OPERATOR_VALIDATION_PENDING`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — implementation report
+
+### What was done
+- Implemented GP-S22 on `feature/gp-s22-movement-completion-implementation` (base = `main` `664c30d`).
+- Reach: clear movement state → MoveReached → Broadcast(Reached); Stop/Manual/EndPlay do not complete.
+- Authority bind; serial-aware Held clear for exact Move match; stale/non-Move/empty ignored.
+- Non-shipping `gp.Movement.TestCompletion` synthetic Broadcast for SerialMismatch tests.
+- Failure propagation deferred. Operator validation pending.
+
+### Builds / validation
+- Candidate: GPEditor Development + UHT — **PASSED**.
+- Finalization GP Dev/Shipping — deferred until operator validation.
+- Operator — **pending**.
+
+### Stop condition
+Superseded by debug-target fix checkpoint.
+
+## 2026-08-03 — GP-S22 / Movement Completion — debug target fix
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp` — TestCompletion prefers moving authority unit
+- `Docs/Development/Claude_Tasks/GP-S22_Movement_Completion.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Operator confirmed natural completion / Held clear / replacement / Move→Attack / Z=88.
+- Stale SerialMismatch failed because TestCompletion targeted first authority unit (NoHeldCommand).
+- Fixed: prefer first authority moving unit; fallback first authority + log; richer console fields.
+- Production completion path unchanged. SerialMismatch / remote / multi-unit / manual stop still pending.
+
+### Builds / validation
+- GPEditor Development + UHT — **PASSED** (fix rebuild).
+- Operator — partial PASS; SerialMismatch **PENDING**.
+
+### Stop condition
+Superseded by GP-S22 completion checkpoint.
+
+## 2026-08-03 — GP-S22 / Movement Completion — completion checkpoint
+
+Status: **CODE_DONE_OPERATOR_ACCEPTED** / GP-S22 **DONE_WITH_FAILURE_PROPAGATION_DEFERRED**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S22_Movement_Completion.md` — `CODE_DONE_OPERATOR_ACCEPTED`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — finalization report
+- (C++ unchanged from `76b20b2` debug-target fix)
+
+### What was done
+- Operator accepted GP-S22 validation: MovementComponent emits Reached with serial; UnitCommandComponent authority-binds; matching Held Move cleared; stale serial cannot clear newer Held; Move replacement completes only latest serial; cancellation not treated as success; synthetic stale (1 vs Held 2, Selection=MovingUnit) passed; later natural Reach 2 cleared Held.
+- Brief console hitch: no state transition (ActiveMoveSerial unchanged, no MoveStopped); no production fix.
+- NOT_RUN_ACCEPTED_BY_USER: remote Team 2 completion, multi-unit completion, Manual stop.
+- Final status: **DONE_WITH_FAILURE_PROPAGATION_DEFERRED**. Not `CODE_DONE_NETWORK_VALIDATED` (remote S22 completion not separately executed).
+
+### Builds / validation
+- Candidate GPEditor Dev + UHT — **PASSED** (prior).
+- Finalization GP Dev + GP Shipping — **PASSED**.
+- Operator — **CODE_DONE_OPERATOR_ACCEPTED**.
+
+### Stop condition
+Commit/push `feature/gp-s22-movement-completion-implementation` only. Do **not** merge to main. Do **not** start failure propagation / Nav / Attack/Mine / queue from this close-out.

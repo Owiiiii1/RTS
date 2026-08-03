@@ -287,22 +287,24 @@ void UGP_MovementComponent::TickComponent(
 
 	auto FinishReached = [&](const FVector& FinalLocation)
 	{
-		const uint32 ReachedSerial = ActiveMoveSerial;
+		const uint32 CompletedSerial = ActiveMoveSerial;
+		const FVector DestinationForLog = MoveDestination;
 		const ENetMode NetMode = GPUnitMovementPrivate::GetOwnerNetMode(Owner);
 		const ENetRole Role = Owner->GetLocalRole();
 
-		bIsMoving = false;
-		ActiveMoveSerial = 0;
-		SetComponentTickEnabled(false);
+		ClearActiveMovementState();
 
 		UE_LOG(LogGPUnitMovement, Log,
 			TEXT("GP UnitMovement MoveReached: Unit=%s Serial=%u Destination=%s FinalLocation=%s Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
-			ReachedSerial,
-			*MoveDestination.ToCompactString(),
+			CompletedSerial,
+			*DestinationForLog.ToCompactString(),
 			*FinalLocation.ToCompactString(),
 			GPUnitMovementPrivate::RoleToString(Role),
 			GPUnitMovementPrivate::NetModeToString(NetMode));
+
+		MovementCompletedDelegate.Broadcast(CompletedSerial, EGP_MovementCompletionResult::Reached);
+		// No further movement-state mutation after Broadcast (reentrancy-safe).
 	};
 
 	if (Distance2D <= AcceptanceRadius)
@@ -334,8 +336,21 @@ void UGP_MovementComponent::TickComponent(
 		const FVector ExactXY(MoveDestination.X, MoveDestination.Y, CurrentLocation.Z);
 		Owner->SetActorLocation(ExactXY, false);
 		FinishReached(ExactXY);
+		return;
 	}
 }
+
+FGP_OnMovementCompleted& UGP_MovementComponent::OnMovementCompleted()
+{
+	return MovementCompletedDelegate;
+}
+
+#if !UE_BUILD_SHIPPING
+void UGP_MovementComponent::DebugBroadcastCompletion(uint32 Serial)
+{
+	MovementCompletedDelegate.Broadcast(Serial, EGP_MovementCompletionResult::Reached);
+}
+#endif
 
 void UGP_MovementComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
@@ -451,6 +466,95 @@ namespace GPMovementConsolePrivate
 			*MobileUnit->GetName());
 	}
 
+	static AGP_MobileUnit* FindFirstAuthorityMovingMobileUnit(UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			return nullptr;
+		}
+
+		for (TActorIterator<AGP_MobileUnit> It(World); It; ++It)
+		{
+			AGP_MobileUnit* MobileUnit = *It;
+			if (MobileUnit == nullptr || !MobileUnit->HasAuthority())
+			{
+				continue;
+			}
+
+			UGP_MovementComponent* Movement = MobileUnit->GetUnitMovementComponent();
+			if (Movement != nullptr && Movement->IsMoving())
+			{
+				return MobileUnit;
+			}
+		}
+
+		return nullptr;
+	}
+
+	static void MovementTestCompletion(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPUnitMovement, Warning,
+				TEXT("GP UnitMovement Console: gp.Movement.TestCompletion missing world"));
+			return;
+		}
+
+		if (Args.Num() < 1)
+		{
+			UE_LOG(LogGPUnitMovement, Warning,
+				TEXT("GP UnitMovement Console: usage gp.Movement.TestCompletion <Serial>"));
+			return;
+		}
+
+		const int64 Parsed = FCString::Atoi64(*Args[0]);
+		if (Parsed <= 0)
+		{
+			UE_LOG(LogGPUnitMovement, Warning,
+				TEXT("GP UnitMovement Console: gp.Movement.TestCompletion requires nonzero Serial"));
+			return;
+		}
+
+		const uint32 Serial = static_cast<uint32>(Parsed);
+		const TCHAR* Selection = TEXT("MovingUnit");
+		AGP_MobileUnit* MobileUnit = FindFirstAuthorityMovingMobileUnit(World);
+		if (MobileUnit == nullptr)
+		{
+			Selection = TEXT("FallbackFirstAuthority");
+			MobileUnit = FindFirstAuthorityMobileUnit(World);
+			if (MobileUnit != nullptr)
+			{
+				UE_LOG(LogGPUnitMovement, Log,
+					TEXT("GP UnitMovement Console: gp.Movement.TestCompletion no moving authority unit; using fallback first authority"));
+			}
+		}
+
+		if (MobileUnit == nullptr)
+		{
+			UE_LOG(LogGPUnitMovement, Warning,
+				TEXT("GP UnitMovement Console: no authority AGP_MobileUnit found"));
+			return;
+		}
+
+		UGP_MovementComponent* Movement = MobileUnit->GetUnitMovementComponent();
+		if (Movement == nullptr)
+		{
+			UE_LOG(LogGPUnitMovement, Warning,
+				TEXT("GP UnitMovement Console: Unit=%s missing MovementComponent"),
+				*MobileUnit->GetName());
+			return;
+		}
+
+		Movement->DebugBroadcastCompletion(Serial);
+		UE_LOG(LogGPUnitMovement, Log,
+			TEXT("GP UnitMovement Console: gp.Movement.TestCompletion Unit=%s InjectedSerial=%u ActiveMoveSerial=%u IsMoving=%s Selection=%s Result=Reached"),
+			*MobileUnit->GetName(),
+			Serial,
+			Movement->GetActiveMoveSerial(),
+			Movement->IsMoving() ? TEXT("true") : TEXT("false"),
+			Selection);
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs GMovementTestCommand(
 		TEXT("gp.Movement.Test"),
 		TEXT("GP-S20: RequestMove first authority AGP_MobileUnit to X Y [Serial]. Z from unit."),
@@ -460,5 +564,10 @@ namespace GPMovementConsolePrivate
 		TEXT("gp.Movement.Stop"),
 		TEXT("GP-S20: StopMove on first authority AGP_MobileUnit."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&MovementStop));
+
+	static FAutoConsoleCommandWithWorldAndArgs GMovementTestCompletionCommand(
+		TEXT("gp.Movement.TestCompletion"),
+		TEXT("GP-S22: synthetic Reached broadcast for Serial (no movement mutation)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&MovementTestCompletion));
 }
 #endif

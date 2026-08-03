@@ -14,10 +14,21 @@ enum class EGP_MovementStopReason : uint8
 	EndPlay
 };
 
+/** Plain C++ completion result (GP-S22). Broadcast only Reached today. Not UENUM / not Blueprint. */
+enum class EGP_MovementCompletionResult : uint8
+{
+	Reached
+};
+
+DECLARE_MULTICAST_DELEGATE_TwoParams(
+	FGP_OnMovementCompleted,
+	uint32 /*CompletedSerial*/,
+	EGP_MovementCompletionResult /*Result*/);
+
 /**
- * Server-authoritative straight-line movement backend (GP-S20/S21).
+ * Server-authoritative straight-line movement backend (GP-S20–S22).
  * Authority mutates owner transform; component state is not replicated.
- * No Held Command integration internals, NavMesh, AIController, or RPC.
+ * GP-S22: broadcasts Reached completion after local active state is cleared.
  */
 UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))
 class GPRUNTIME_API UGP_MovementComponent : public UActorComponent
@@ -38,7 +49,7 @@ public:
 	bool RequestMove(const FVector& Destination, uint32 CommandSerial);
 
 	/**
-	 * Stops active movement without callbacks.
+	 * Stops active movement without callbacks / completion broadcast.
 	 * Authority-required except Reason=EndPlay (teardown-safe).
 	 */
 	void StopMove(EGP_MovementStopReason Reason = EGP_MovementStopReason::Manual);
@@ -46,6 +57,13 @@ public:
 	bool IsMoving() const;
 	uint32 GetActiveMoveSerial() const;
 	const FVector& GetMoveDestination() const;
+
+	FGP_OnMovementCompleted& OnMovementCompleted();
+
+#if !UE_BUILD_SHIPPING
+	/** Synthetic Reached broadcast for stale-serial validation. Does not mutate movement state. */
+	void DebugBroadcastCompletion(uint32 Serial);
+#endif
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Movement")
 	float MoveSpeed = 600.0f;
@@ -62,6 +80,8 @@ public:
 private:
 	void ClearActiveMovementState();
 	static const TCHAR* StopReasonToString(EGP_MovementStopReason Reason);
+
+	FGP_OnMovementCompleted MovementCompletedDelegate;
 
 	FVector MoveDestination = FVector::ZeroVector;
 	uint32 ActiveMoveSerial = 0;

@@ -1,117 +1,106 @@
 # Cursor Work Report
 
 ## Task
-GP-S22 movement completion analysis
+GP-S22 movement completion finalization
 
 ## Status
-ANALYSIS_READY_IMPLEMENTATION_PENDING
+CODE_DONE_OPERATOR_ACCEPTED
 
 ## Branch
-feature/gp-s22-movement-completion-analysis
+feature/gp-s22-movement-completion-implementation
 
 ## Base
-main @ f6640efe6ad4c64606d28dcb70ecef66a8254591
+main @ 664c30d4c7e8d1df52cf1a6caa2e87c366d84c1a
 
-## Current Problem
-After MoveReached, MovementComponent clears only local active state. Held Move remains stored. No completion callback exists. Older serial must never clear a newer Held command. StopMove(CommandReplaced)/Manual/EndPlay must not be treated as successful Held completion.
+## Final Stage Status
+DONE_WITH_FAILURE_PROPAGATION_DEFERRED
 
-## Selected Architecture
-Native non-dynamic multicast delegate on `UGP_MovementComponent`.
-`UGP_UnitCommandComponent` binds authority-only in BeginPlay, unbinds in EndPlay.
-Rejected: owner interface, polling, Movement→Command lookup, raw function objects.
+## Implementation Summary
+`UGP_MovementComponent` broadcasts native `OnMovementCompleted(Serial, Reached)` after clearing local active state and logging MoveReached. `UGP_UnitCommandComponent` authority-binds in BeginPlay and clears Held only when tag is exact Move and serial matches. Stop/Manual/EndPlay never broadcast. Non-shipping `gp.Movement.TestCompletion` prefers a moving authority unit for stale tests.
 
-## Completion Result Model
-Option B: `EGP_MovementCompletionResult { Reached }` + serial.
-Broadcast **only** on physical Reach.
-StopMove / EndPlay / Manual never broadcast completion.
+## Architecture
+- MovementComponent owns native completion delegate
+- authority-only UnitCommandComponent binding
+- Reached-only completion
+- matching Move serial clears Held
+- stale completion ignored
+- no post-broadcast mutation
+- Stop/Manual/EndPlay do not broadcast
 
-## Delegate Contract
-```cpp
-DECLARE_MULTICAST_DELEGATE_TwoParams(
-    FGP_OnMovementCompleted, uint32, EGP_MovementCompletionResult);
+## Operator Validation
+| Case | Result |
+| --- | --- |
+| Natural completion | **PASS** |
+| Held clear | **PASS** |
+| next Move HeldAccepted | **PASS** |
+| Move replacement | **PASS** |
+| Move→Attack cancellation | **PASS** |
+| Attack→Move | **PASS** |
+| NoHeld synthetic | **PASS** |
+| stale SerialMismatch | **PASS** |
+| Z preservation | **PASS** |
+| Remote Team 2 completion | **NOT_RUN_ACCEPTED_BY_USER** |
+| Multi-unit completion | **NOT_RUN_ACCEPTED_BY_USER** |
+| Manual stop | **NOT_RUN_ACCEPTED_BY_USER** |
 
-FGP_OnMovementCompleted& OnMovementCompleted(); // private member accessor
-```
-No UPROPERTY / BlueprintAssignable / replication.
+## Stale Validation Evidence
+- Active Held Move serial = 2
+- Injected completion serial = 1
+- Selection=MovingUnit; ActiveMoveSerial=2; IsMoving=true
+- MovementCompletionIgnored Reason=SerialMismatch CompletedSerial=1 HeldSerial=2
+- Movement continued; no MoveStopped
+- Later MoveReached Serial=2 + HeldMoveCompleted Serial=2
 
-## Binding Lifecycle
-- BeginPlay: Super → authority → MobileUnit → Movement → AddUObject; store `FDelegateHandle`
-- EndPlay: Remove handle → existing HeldCleared → Super
-- Client: no bind
-- Non-mobile: silent; MobileUnit missing component: Warning once
+## Console Hitch Observation
+- Brief visual pause observed on TestCompletion
+- No movement state change in logs
+- No MoveStopped
+- ActiveMoveSerial unchanged
+- Likely console/game-thread frame hitch
+- No production fix required; no frame-time profiling performed
 
-## Broadcast Ordering
-1. Capture CompletedSerial  
-2. Clear movement-local state + disable tick  
-3. Log MoveReached  
-4. Broadcast(Reached)  
-5. Return immediately from Tick finish path  
+## Build Results
+- GPEditor Development: **PASSED** at candidate stage
+- UHT: **PASSED** at candidate stage
+- GP Development: **PASSED** at finalization
+- GP Shipping: **PASSED** at finalization
 
-## Reentrancy Guarantee
-No post-broadcast mutation of movement state in the completing Tick.
-Serial guard prevents clearing Held N+1 when completion N arrives.
-Tick off before Broadcast so N+1 RequestMove can re-enable Tick safely.
+## Scope Verification
+- Build.cs changed: **NO**
+- PlayerController changed: **NO**
+- payloads/tags changed: **NO**
+- assets/maps/config changed: **NO**
+- failure propagation added: **NO**
+- Nav/AI/GAS added: **NO**
+- queue implementation added: **NO**
+- production logic changed during finalization: **NO**
 
-## Serial-Aware Clear Rules
-Clear Held only if authority + Result==Reached + Held exists + tag==Move + serial match.
-On match: `HeldCommand.Reset()`; allocator unchanged.
-On mismatch: ignore + log.
+## Files Changed
+### C++ (prior commits on branch)
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
 
-## Stale Completion Matrix
-| Completion | Held | Action |
-| --- | --- | --- |
-| 1 Reached | Move 1 | clear |
-| 1 Reached | Move 2 | SerialMismatch |
-| 1 Reached | Attack/Mine 2 | HeldTagNotMove |
-| 1 Reached | None | NoHeldCommand |
-| unsupported | Move 1 | UnsupportedResult |
-
-## Stop / Manual / EndPlay Semantics
-- CommandReplaced: no Reached; Attack Held remains  
-- Manual console stop: no Reached; Held Move remains (debug limitation)  
-- EndPlay: no Reached; UnitCommand clears Held separately; unbind first  
-
-## Logging Contract
-`LogGPUnitCommandExecution`:
-- HeldMoveCompleted (Log)
-- MovementCompletionIgnored with Reason=SerialMismatch|HeldTagNotMove|NoHeldCommand|UnsupportedResult|NoAuthority
-
-## Validation Plan
-Natural Reach → HeldMoveCompleted → next Move is HeldAccepted.
-Move replace → only N+1 completes.
-Move→Attack → no HeldMoveCompleted.
-Stale via `gp.Movement.TestCompletion N` while Held N+1.
-Remote/multi-unit independent authority clear.
-
-## Debug Validation Decision
-Non-shipping `gp.Movement.TestCompletion <Serial>` → `DebugBroadcastCompletion` Broadcasts Reached without mutating physical move.
-Same delegate path. Not for matching serial while physically moving.
-Shipping excluded.
-
-## Exact Proposed API
-See GP-S22 doc §15: enum, delegate, accessor, BeginPlay/handler/handle, optional DebugBroadcastCompletion.
-
-## Exact Files
-- `GPMovementComponent.h/.cpp`
-- `GPUnitCommandComponent.h/.cpp`
-- Docs: GP-S22 task, AI log, Cursor report  
-Build.cs: NO
-
-## Build Workflow
-- Analysis: no builds  
-- Candidate: GPEditor Development + UHT  
-- Finalization: GP Development + GP Shipping  
+### Docs (finalization)
+- `Docs/Development/Claude_Tasks/GP-S22_Movement_Completion.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
 ## Deferred
-Failure/blocked propagation; Nav/pathfinding; Attack/Mine; queue; prediction; replicated Held; UI.
-
-## Final Target Status
-DONE_WITH_FAILURE_PROPAGATION_DEFERRED
+- Failure/blocked result propagation
+- Request rejection propagation
+- Command-layer cancellation
+- Nav/pathfinding
+- Queue storage/execution
+- Attack/Mine execution
+- Prediction
+- Replicated Held
+- Formation/avoidance
 
 ## Git State
 - git diff --check: clean
 - working tree clean after commit/push
-- branch pushed: `feature/gp-s22-movement-completion-analysis`
+- branch pushed: `feature/gp-s22-movement-completion-implementation`
 - HEAD = origin
 - no merge to main
-- docs-only; no C++/assets/maps/config/builds

@@ -3506,4 +3506,26 @@ Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Operator — retest DestroyTarget Approaching cleanup; QueueDeferred pending.
 
 ### Stop condition
-Commit/push same branch only. Do **not** merge to main.
+Superseded by GP-S24 completion checkpoint.
+
+## 2026-08-03 — GP-S24 / Attack Execution Foundation — completion checkpoint
+
+Status: **CODE_DONE_OPERATOR_ACCEPTED** / GP-S24 **DONE_WITH_DAMAGE_EXECUTION_DEFERRED**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S24_Attack_Execution_Foundation.md` — final status
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — finalization report
+- (C++ unchanged from `2c52fe6` terminal cleanup fix)
+
+### What was done
+- Operator accepted GP-S24 Attack executor: Idle→Approaching→Ready; range-entry Manual; Ready retains Held; Ready→Approaching; moving-target reissue + SelfSupersede; Attack→Move / Attack→Attack retarget; invalid Self/Friendly/Null without phantom Held; DestroyTarget Ready/Approaching with TerminalCleanupStop; Distance=-1 DistanceAvailable=false; QueueDeferred unchanged; multi-unit isolation; EndPlay safe; authority-only on Listen Server host.
+- NOT_RUN_ACCEPTED_BY_USER: Remote Team 2 client-issued Attack.
+- Final status: **DONE_WITH_DAMAGE_EXECUTION_DEFERRED** (damage/health/cadence/GAS/Nav/queue/replication deferred).
+
+### Builds / validation
+- Finalization GPEditor Dev + UHT, GP Dev, GP Shipping — **PASSED**.
+- Operator — **CODE_DONE_OPERATOR_ACCEPTED**.
+
+### Stop condition
+Commit/push `feature/gp-s24-attack-execution-implementation` only. **READY_FOR_MAIN_MERGE** (no merge in this close-out). Do **not** start damage/GAS/Nav/Mine/queue.

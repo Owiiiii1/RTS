@@ -1,7 +1,7 @@
 # GP-S24 Attack Execution Foundation
 
 ## Status
-**CODE_READY_OPERATOR_VALIDATION_PENDING**
+**DONE_WITH_DAMAGE_EXECUTION_DEFERRED**
 
 ## Baseline
 `main` @ `462f9bba0bc64c5a7da4fdd5eae9207f36524a7f` (Merge GP-S24 attack execution analysis)
@@ -10,7 +10,9 @@ Depends on: GP-S23 `DONE_WITH_FAILED_RESULT_DEFERRED`; GP-S24 analysis merged.
 
 Branch: `feature/gp-s24-attack-execution-implementation`
 
-Target stage close after operator validation: **`DONE_WITH_DAMAGE_DEFERRED`**
+Implementation status: **CODE_DONE_OPERATOR_ACCEPTED**
+
+Deferred: damage application; health/death; attack cadence; cooldown; animation/montage; projectile; GAS ability/effect; target death integration; Nav/pathfinding; queue execution; replication/prediction/UI.
 
 ---
 
@@ -529,16 +531,16 @@ No force-damage hooks. No public production Attack API beyond Held + executor.
 
 ## Final recommended status name
 
-**`DONE_WITH_DAMAGE_DEFERRED`**
+**`DONE_WITH_DAMAGE_EXECUTION_DEFERRED`**
 
-Means: Attack composite lifecycle (validate / approach / Ready / terminal / replace) implemented and operator-accepted; no damage/health/combat effects; Nav/`Failed` movement still deferred at movement layer.
+Means: Attack composite lifecycle (validate / approach / Ready / terminal / replace) implemented and operator-accepted; no damage application / health / death / cadence / combat effects; Nav/`Failed` movement and queue execution remain deferred.
 
 | Phase label | When |
 | --- | --- |
-| `ANALYSIS_READY_IMPLEMENTATION_PENDING` | This document |
-| `CODE_READY_OPERATOR_VALIDATION_PENDING` | After candidate implementation |
-| `CODE_DONE_OPERATOR_ACCEPTED` | After operator accept |
-| `DONE_WITH_DAMAGE_DEFERRED` | Stage close |
+| `ANALYSIS_READY_IMPLEMENTATION_PENDING` | Analysis |
+| `CODE_READY_OPERATOR_VALIDATION_PENDING` | Candidate implementation |
+| `CODE_DONE_OPERATOR_ACCEPTED` | Operator accept |
+| `DONE_WITH_DAMAGE_EXECUTION_DEFERRED` | Stage close (this finalization) |
 
 ---
 
@@ -558,7 +560,7 @@ Means: Attack composite lifecycle (validate / approach / Ready / terminal / repl
 `AttackRange=250`, `AttackReissueDistance=100`, `AttackReissueInterval=0.25` (EditDefaultsOnly on UnitCommandComponent; GAS attribute unused)
 
 ### Runtime fields
-`AttackState`, `ActiveAttackSerial`, `AttackTarget` (weak UnitBase), `LastApproachDestination`, `LastApproachIssueTime`, `bExpectRangeEntryStop`, `bFinishingAttack`
+`AttackState`, `ActiveAttackSerial`, `AttackTarget` (weak UnitBase), `LastApproachDestination`, `LastApproachIssueTime`, `bExpectRangeEntryStop`, `bFinishingAttack`, `bExpectAttackCleanupStopResult`, `PendingAttackCleanupMovementSerial`
 
 ### Tick policy
 `bCanEverTick=true`, start disabled; enable only while Attack active + authority; disable on Idle / EndPlay.
@@ -576,36 +578,43 @@ Ready retains Held Attack; no damage. Terminal / accept reject clears exact Atta
 `gp.Attack.Inspect`, `gp.Attack.DestroyTarget`, `gp.Attack.MoveTarget X Y`, `gp.Attack.TestInvalid <Self|Friendly|Null>`
 
 ### Builds
-GPEditor Win64 Development + UHT — **PASSED** (candidate + terminal cleanup fix). GP Dev/Shipping deferred to finalization.
+- Candidate / cleanup fix: GPEditor Win64 Development + UHT — **PASSED**
+- Finalization: GPEditor Win64 Development + UHT — **PASSED**
+- Finalization: GP Win64 Development — **PASSED**
+- Finalization: GP Win64 Shipping — **PASSED**
 
 ### Operator validation
-**CODE_READY_OPERATOR_VALIDATION_PENDING**
+**CODE_DONE_OPERATOR_ACCEPTED** / stage **DONE_WITH_DAMAGE_EXECUTION_DEFERRED**
 
 | Case | Result |
 | --- | --- |
-| Approaching→Ready | **PASS** |
-| Ready→Approaching | **PASS** |
-| Attack retarget | **PASS** |
-| Attack→Move | **PASS** |
-| Invalid Self/Friendly/Null | **PASS** |
-| DestroyTarget Ready | **PASS** |
-| DestroyTarget Approaching (functional terminal) | **PASS** (cleanup false-ignore + FLT_MAX distance fixed) |
-| Moving-target SelfSupersede | **PASS** |
-| EndPlay | **PASS** |
-| QueueDeferred | **PENDING** |
-| Remote Team 2 | **PENDING** |
-| Multi-unit | **PENDING** |
+| Attack out of range: Idle → Approaching → Ready | **PASS** |
+| Range-entry StopMove Manual consumed as Attack result | **PASS** |
+| Ready retains Held Attack | **PASS** |
+| Ready → Approaching when target leaves range | **PASS** |
+| Moving-target reissue | **PASS** |
+| Same-serial Cancelled/Superseded = SelfSupersede | **PASS** |
+| Attack → Move replacement | **PASS** |
+| Attack → Attack retarget; new serial/target survive stale callbacks | **PASS** |
+| Invalid Self / Friendly / Null; no phantom Held | **PASS** |
+| DestroyTarget during Ready | **PASS** |
+| DestroyTarget during Approaching; TerminalCleanupStop; no false HeldTagNotMove; Distance=-1 DistanceAvailable=false | **PASS** |
+| QueueDeferred leaves active Attack unchanged | **PASS** |
+| Multi-unit isolation | **PASS** |
+| EndPlay safe | **PASS** |
+| Authority-only on Listen Server host | **PASS** |
+| No damage/GAS/Nav/queue execution added | **PASS** |
+| Remote Team 2 client-issued Attack | **NOT_RUN_ACCEPTED_BY_USER** |
 
-Fixes after operator feedback:
-- `FinishAttack` StopMove(Manual) consumed via `bExpectAttackCleanupStopResult` + `PendingAttackCleanupMovementSerial` (no `MovementResultIgnored HeldTagNotMove`).
-- Terminal distance uses `-1.0` + `DistanceAvailable=false` when target invalid (no FLT_MAX).
+Fixes during validation:
+- Terminal cleanup StopMove consumed via `bExpectAttackCleanupStopResult` + pending serial.
+- Terminal distance `-1.0` / `DistanceAvailable=false` (no FLT_MAX).
 
 ---
 
-## Stop condition (candidate)
+## Stop condition (finalization)
 
-**CODE_READY_OPERATOR_VALIDATION_PENDING.**
-Retest DestroyTarget Approaching cleanup + QueueDeferred still pending.
+**DONE_WITH_DAMAGE_EXECUTION_DEFERRED.**
 Commit/push `feature/gp-s24-attack-execution-implementation` only.
-Do **not** merge to main.
-Do **not** start damage/GAS/Nav/Mine/queue from this candidate.
+**READY_FOR_MAIN_MERGE** (merge not performed here).
+Do **not** start damage/health/GAS/Nav/Mine/queue from this close-out.

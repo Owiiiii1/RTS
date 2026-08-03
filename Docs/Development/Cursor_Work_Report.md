@@ -1,10 +1,10 @@
 # Cursor Work Report
 
 ## Task
-GP-S24 attack terminal cleanup fix
+GP-S24 Attack Execution Foundation finalization
 
 ## Status
-CODE_READY_OPERATOR_VALIDATION_PENDING
+DONE_WITH_DAMAGE_EXECUTION_DEFERRED
 
 ## Branch
 feature/gp-s24-attack-execution-implementation
@@ -12,71 +12,84 @@ feature/gp-s24-attack-execution-implementation
 ## Base
 main @ 462f9bba0bc64c5a7da4fdd5eae9207f36524a7f
 
-## Defects
-1. DestroyTarget while Approaching: FinishAttack → StopMove(Manual) → sync Cancelled/Manual fell through to Held Move routing → false `MovementResultIgnored HeldTagNotMove` (because `bFinishingAttack` short-circuited Attack consume).
-2. AttackFinished after target destroy logged Distance=FLT_MAX from sentinel `TNumericLimits<float>::Max()`.
+## Implementation Summary
+Authority-only Attack executor inside `UGP_UnitCommandComponent`: validate → optional approach via GP-S23 movement results (Attack Held serial == movement serial) → Ready without damage. Exact serial guards, self-supersede, range-entry Manual, replacement-safe reset, accept-time reject without phantom Held.
 
-## Root Cause
-- Cleanup StopMove callback ran while `bFinishingAttack==true` and ActiveAttackSerial already cleared, so TryConsume returned false.
-- Distance helper returned FLT_MAX for null/invalid target and logged it as a real value.
+## Terminal Cleanup Fix
+DestroyTarget during Approaching previously leaked FinishAttack `StopMove(Manual)` into Held Move `MovementResultIgnored HeldTagNotMove`, and logged FLT_MAX distance. Fixed with `bExpectAttackCleanupStopResult` + `PendingAttackCleanupMovementSerial` consume path and `TryComputeAttackDistance2D` (`Distance=-1`, `DistanceAvailable=false`).
 
-## Fix Ordering
-```text
-capture serial/state/target + TryCompute distance
-→ bFinishingAttack=true
-→ set bExpectAttackCleanupStopResult + PendingAttackCleanupMovementSerial
-→ clear Attack runtime (Idle / serial 0)
-→ StopMove(Manual)
-→ TryConsume: TerminalCleanupStop (Cancelled/Manual, exact pending serial) → return true
-→ clear cleanup expectation
-→ clear exact Held Attack
-→ AttackFinished (Distance=-1 DistanceAvailable=false if unavailable)
-```
+## Final Architecture
+- States: Idle / Approaching / Ready (Ready non-terminal)
+- Tick: authority-only while Attack active; disabled on Idle
+- Result routing: Attack consume-first, then Held Move
+- Distinct Manual paths: range-entry vs terminal cleanup
+- FinishAttack clears only exact Held Attack serial/tag
+- QueueDeferred: no serial, no Attack mutation
+- EndPlay: silent Attack reset + existing HeldCleared; movement unbind first
+- No AttackComponent / GAS / MovementComponent API changes
 
-Range-entry still uses `bExpectRangeEntryStop` only. External Manual cancel still Failed/MovementCancelled.
-
-## Build Results
-- GPEditor Development: **PASSED**
-- UHT: **PASSED**
-
-## Operator Validation Matrix
+## Operator Validation
 | Case | Result |
 | --- | --- |
-| Approaching→Ready | **PASS** |
-| Ready→Approaching | **PASS** |
-| Attack retarget | **PASS** |
-| Attack→Move | **PASS** |
-| Invalid Self/Friendly/Null | **PASS** |
+| Out of range Idle→Approaching→Ready | **PASS** |
+| Range-entry Manual consumed as Attack | **PASS** |
+| Ready retains Held Attack | **PASS** |
+| Ready→Approaching on target leave | **PASS** |
+| Moving-target reissue | **PASS** |
+| Same-serial Cancelled/Superseded SelfSupersede | **PASS** |
+| Attack→Move replacement | **PASS** |
+| Attack→Attack retarget; stale-safe | **PASS** |
+| Invalid Self / Friendly / Null; no phantom Held | **PASS** |
 | DestroyTarget Ready | **PASS** |
-| DestroyTarget Approaching | **PASS** functional; cleanup false-ignore + FLT_MAX **fixed** (retest cleanup log) |
-| Moving-target SelfSupersede | **PASS** |
-| EndPlay | **PASS** |
-| QueueDeferred | **PENDING** |
-| Remote Team 2 | **PENDING** |
-| Multi-unit | **PENDING** |
+| DestroyTarget Approaching + TerminalCleanupStop; no HeldTagNotMove; Distance=-1 | **PASS** |
+| QueueDeferred unchanged | **PASS** |
+| Multi-unit isolation | **PASS** |
+| EndPlay safe | **PASS** |
+| Authority-only Listen Server host | **PASS** |
+| No damage/GAS/Nav/queue execution | **PASS** |
+| Remote Team 2 client-issued Attack | **NOT_RUN_ACCEPTED_BY_USER** |
 
-## Files Changed
-- `GPUnitCommandComponent.h/.cpp`
-- GP-S24 doc / AI log / Cursor report
+## Static Verification
+- Executor only in UnitCommandComponent; Idle/Approaching/Ready
+- Authority Tick; disabled on Idle
+- Attack serial == movement serial; Attack result before Held Move path
+- Range-entry Manual ≠ terminal cleanup Manual; exact-serial cleanup guard
+- Self-supersede same serial; stale cannot mutate newer Held
+- Ready non-terminal; FinishAttack exact Held clear
+- QueueDeferred no serial/Attack mutation; EndPlay silent for movement
+- No FLT_MAX distance; no damage side effects; MovementComponent unchanged
+- No generated files/assets/config in finalization
+
+## Build Results
+- GPEditor Development + UHT: **PASSED** (finalization)
+- GP Development: **PASSED**
+- GP Shipping: **PASSED**
 
 ## Scope Verification
 - MovementComponent changed: **NO**
-- UnitBase / tags / Build.cs / assets: **NO**
-- damage/GAS/Nav/queue: **NO**
-- finalization builds: **NO**
+- UnitBase changed: **NO**
+- Build.cs changed: **NO**
+- assets/maps/config changed: **NO**
+- damage/health added: **NO**
+- GAS added: **NO**
+- Nav added: **NO**
+- queue execution added: **NO**
+- replication changed: **NO**
+
+## Files Changed In Finalization
+- `Docs/Development/Claude_Tasks/GP-S24_Attack_Execution_Foundation.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
 ## Git State
-- Same branch pushed
+- Branch: `feature/gp-s24-attack-execution-implementation`
+- Ahead of main by implementation + cleanup + finalization commits
 - Working tree clean after commit/push
 - HEAD = origin
 - no merge to main
 
-## Operator Validation Needed
-1. DestroyTarget during Approaching → AttackTargetInvalidated → AttackApproachResultIgnored IgnoreReason=TerminalCleanupStop → AttackFinished Distance=-1 DistanceAvailable=false; **no** HeldTagNotMove
-2. DestroyTarget Ready unchanged
-3. `gp.Movement.Stop` during Approaching still MovementCancelled
-4. Range-entry Manual still Ready
-5. QueueDeferred still pending
+## Final Status
+DONE_WITH_DAMAGE_EXECUTION_DEFERRED
 
 ## Deferred
-Damage/health/GAS/Nav/Mine/queue/replication/UI; finalization after full operator accept
+Damage application; health/death; attack cadence; cooldown; animation/montage; projectile; GAS ability/effect; target death integration; Nav/pathfinding; queue execution; replication/prediction/UI; Remote Team 2 client Attack (not separately run)

@@ -3282,4 +3282,27 @@ Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Operator — **pending**.
 
 ### Stop condition
-**CODE_READY_OPERATOR_VALIDATION_PENDING.** Commit/push implementation branch only. Do **not** merge to main. Do **not** start failure propagation / Nav / Attack/Mine.
+Superseded by debug-target fix checkpoint.
+
+## 2026-08-03 — GP-S22 / Movement Completion — debug target fix
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp` — TestCompletion prefers moving authority unit
+- `Docs/Development/Claude_Tasks/GP-S22_Movement_Completion.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Operator confirmed natural completion / Held clear / replacement / Move→Attack / Z=88.
+- Stale SerialMismatch failed because TestCompletion targeted first authority unit (NoHeldCommand).
+- Fixed: prefer first authority moving unit; fallback first authority + log; richer console fields.
+- Production completion path unchanged. SerialMismatch / remote / multi-unit / manual stop still pending.
+
+### Builds / validation
+- GPEditor Development + UHT — **PASSED** (fix rebuild).
+- Operator — partial PASS; SerialMismatch **PENDING**.
+
+### Stop condition
+**CODE_READY_OPERATOR_VALIDATION_PENDING.** Commit/push same branch. Do **not** merge to main.

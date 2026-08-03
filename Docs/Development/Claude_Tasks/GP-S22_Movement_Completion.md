@@ -372,16 +372,34 @@ Ignored: NoAuthority / UnsupportedResult / NoHeldCommand / HeldTagNotMove / Seri
 ### Debug
 `gp.Movement.TestCompletion <Serial>` → synthetic Broadcast; no movement mutation; Shipping excluded.
 
-### Builds
-GPEditor Development + UHT — **PASSED**. GP Dev/Shipping deferred to finalization.
+Target resolution (fixed after operator feedback):
 
-### Operator validation
-**Pending.**
+1. First authority `AGP_MobileUnit` with `IsMoving()==true`
+2. Else fallback first authority mobile unit (+ fallback log)
+
+Console dispatch fields: Unit, InjectedSerial, ActiveMoveSerial, IsMoving, Selection=`MovingUnit|FallbackFirstAuthority`, Result=Reached.
+
+### Builds
+GPEditor Development + UHT — **PASSED** (candidate + debug-target fix). GP Dev/Shipping deferred to finalization.
+
+### Operator validation (partial)
+
+| Case | Result |
+| --- | --- |
+| Natural MoveReached → HeldMoveCompleted | **PASS** |
+| Held clear; next Move → HeldAccepted | **PASS** |
+| Move→Move replacement; completion only for latest serial | **PASS** |
+| Move→Attack → CommandReplaced; no HeldMoveCompleted for stopped Move | **PASS** |
+| Attack→Move then Reach clears | **PASS** |
+| Z preservation (88) | **PASS** |
+| Synthetic on idle unit → NoHeldCommand | **PASS** (wrong target; pre-fix) |
+| Stale SerialMismatch on active Held Move | **PENDING** (retest after MovingUnit preference) |
+| Remote Team 2 / multi-unit / Manual stop | **PENDING** |
 
 ---
 
 ## Stop condition
 **CODE_READY_OPERATOR_VALIDATION_PENDING.**
-Await operator natural Reach + stale TestCompletion validation.
+Await operator stale SerialMismatch (MovingUnit target) + remaining matrix.
 Do **not** merge to main.
 Do **not** start failure propagation / Nav / Attack/Mine / queue from this pass.

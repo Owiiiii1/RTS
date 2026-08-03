@@ -466,6 +466,31 @@ namespace GPMovementConsolePrivate
 			*MobileUnit->GetName());
 	}
 
+	static AGP_MobileUnit* FindFirstAuthorityMovingMobileUnit(UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			return nullptr;
+		}
+
+		for (TActorIterator<AGP_MobileUnit> It(World); It; ++It)
+		{
+			AGP_MobileUnit* MobileUnit = *It;
+			if (MobileUnit == nullptr || !MobileUnit->HasAuthority())
+			{
+				continue;
+			}
+
+			UGP_MovementComponent* Movement = MobileUnit->GetUnitMovementComponent();
+			if (Movement != nullptr && Movement->IsMoving())
+			{
+				return MobileUnit;
+			}
+		}
+
+		return nullptr;
+	}
+
 	static void MovementTestCompletion(const TArray<FString>& Args, UWorld* World)
 	{
 		if (World == nullptr)
@@ -491,7 +516,19 @@ namespace GPMovementConsolePrivate
 		}
 
 		const uint32 Serial = static_cast<uint32>(Parsed);
-		AGP_MobileUnit* MobileUnit = FindFirstAuthorityMobileUnit(World);
+		const TCHAR* Selection = TEXT("MovingUnit");
+		AGP_MobileUnit* MobileUnit = FindFirstAuthorityMovingMobileUnit(World);
+		if (MobileUnit == nullptr)
+		{
+			Selection = TEXT("FallbackFirstAuthority");
+			MobileUnit = FindFirstAuthorityMobileUnit(World);
+			if (MobileUnit != nullptr)
+			{
+				UE_LOG(LogGPUnitMovement, Log,
+					TEXT("GP UnitMovement Console: gp.Movement.TestCompletion no moving authority unit; using fallback first authority"));
+			}
+		}
+
 		if (MobileUnit == nullptr)
 		{
 			UE_LOG(LogGPUnitMovement, Warning,
@@ -510,9 +547,12 @@ namespace GPMovementConsolePrivate
 
 		Movement->DebugBroadcastCompletion(Serial);
 		UE_LOG(LogGPUnitMovement, Log,
-			TEXT("GP UnitMovement Console: gp.Movement.TestCompletion Unit=%s Serial=%u (synthetic Reached)"),
+			TEXT("GP UnitMovement Console: gp.Movement.TestCompletion Unit=%s InjectedSerial=%u ActiveMoveSerial=%u IsMoving=%s Selection=%s Result=Reached"),
 			*MobileUnit->GetName(),
-			Serial);
+			Serial,
+			Movement->GetActiveMoveSerial(),
+			Movement->IsMoving() ? TEXT("true") : TEXT("false"),
+			Selection);
 	}
 
 	static FAutoConsoleCommandWithWorldAndArgs GMovementTestCommand(

@@ -87,6 +87,8 @@ const TCHAR* UGP_MovementComponent::StopReasonToString(EGP_MovementStopReason Re
 		return TEXT("CommandReplaced");
 	case EGP_MovementStopReason::EndPlay:
 		return TEXT("EndPlay");
+	case EGP_MovementStopReason::OwnerDied:
+		return TEXT("OwnerDied");
 	default:
 		return TEXT("Unknown");
 	}
@@ -297,8 +299,9 @@ void UGP_MovementComponent::StopMove(EGP_MovementStopReason Reason)
 	const ENetMode NetMode = GPUnitMovementPrivate::GetOwnerNetMode(Owner);
 	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
 
-	// EndPlay teardown must not reject for missing authority.
-	if (Reason != EGP_MovementStopReason::EndPlay)
+	// EndPlay / OwnerDied teardown must not reject for missing authority.
+	if (Reason != EGP_MovementStopReason::EndPlay
+		&& Reason != EGP_MovementStopReason::OwnerDied)
 	{
 		if (Owner == nullptr || !Owner->HasAuthority())
 		{
@@ -335,7 +338,9 @@ void UGP_MovementComponent::StopMove(EGP_MovementStopReason Reason)
 		GPUnitMovementPrivate::RoleToString(Role),
 		GPUnitMovementPrivate::NetModeToString(NetMode));
 
-	if (Reason == EGP_MovementStopReason::EndPlay)
+	// Silent clear — command/death owners clear Held themselves.
+	if (Reason == EGP_MovementStopReason::EndPlay
+		|| Reason == EGP_MovementStopReason::OwnerDied)
 	{
 		return;
 	}

@@ -11,7 +11,8 @@ enum class EGP_MovementStopReason : uint8
 {
 	Manual,
 	CommandReplaced,
-	EndPlay
+	EndPlay,
+	OwnerDied
 };
 
 /** Terminal result for a movement serial that was accepted/active (GP-S23). Not UENUM / not Blueprint. */

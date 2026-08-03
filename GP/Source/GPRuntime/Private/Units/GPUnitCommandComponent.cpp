@@ -1412,6 +1412,54 @@ void UGP_UnitCommandComponent::ClearHeldCommand()
 	HeldCommand.Reset();
 }
 
+void UGP_UnitCommandComponent::NotifyOwnerDied()
+{
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority())
+	{
+		return;
+	}
+
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner->GetLocalRole();
+	const uint32 ClearedSerial = HeldCommand.IsSet() ? HeldCommand.GetValue().CommandSerial : 0;
+	const FString ClearedTag = HeldCommand.IsSet()
+		? HeldCommand.GetValue().CommandTag.ToString()
+		: FString(TEXT("none"));
+	const EGP_AttackExecutionState PreviousAttackState = AttackState;
+	const uint32 PreviousAttackSerial = ActiveAttackSerial;
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitDeathCommandShutdown: Unit=%s HeldSerial=%u HeldTag=%s AttackSerial=%u AttackState=%s Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		ClearedSerial,
+		*ClearedTag,
+		PreviousAttackSerial,
+		AttackStateToString(PreviousAttackState),
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+	SetAttackTickEnabled(false);
+	ResetAttackExecutor();
+
+	if (UGP_MovementComponent* Movement = ResolveMovementComponent())
+	{
+		Movement->StopMove(EGP_MovementStopReason::OwnerDied);
+	}
+
+	if (HeldCommand.IsSet())
+	{
+		UE_LOG(LogGPUnitCommandState, Log,
+			TEXT("GP UnitCommandState HeldCleared: Unit=%s Serial=%u Tag=%s Reason=OwnerDied Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			HeldCommand.GetValue().CommandSerial,
+			*HeldCommand.GetValue().CommandTag.ToString(),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		ClearHeldCommand();
+	}
+}
+
 uint32 UGP_UnitCommandComponent::AllocateCommandSerial()
 {
 	const uint32 Allocated = NextCommandSerial;

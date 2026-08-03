@@ -3429,3 +3429,29 @@ Status: **CODE_DONE_OPERATOR_ACCEPTED** / GP-S23 **DONE_WITH_FAILED_RESULT_DEFER
 
 ### Stop condition
 Commit/push `feature/gp-s23-movement-result-implementation` only. **READY_FOR_MAIN_MERGE** (no merge in this close-out). Do **not** start Attack/Mine/Nav/`Failed`/queue.
+
+## 2026-08-03 — GP-S24 / Attack Execution Foundation — analysis checkpoint
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S24_Attack_Execution_Foundation.md` (new)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Baseline: `main` @ `60169c1cfb6fd7bd1e701e634a14c7a49395327a` (GP-S23 merged).
+- Selected architecture: Attack executor state machine **inside** `UGP_UnitCommandComponent` (no new component / no generic framework).
+- Serial model: Attack Held serial == approach `RequestMove` serial; self-supersede Cancelled/Superseded ignored when still moving on same serial.
+- Target validation: `AGP_UnitBase` + team rules aligned with existing command validation; no health/damage interface.
+- Range/tracking: EditDefaultsOnly `AttackRange` on command component; Distance2D; authority Tick only while Attack active; reissue throttle for moving targets.
+- Movement routing: consume Attack approach results first inside `HandleMovementResult`; Held Move clear path unchanged; eliminates approach `HeldTagNotMove` false ignores.
+- Held policy: retain through Ready; clear on terminal / accept reject / EndPlay silent; replace resets executor before new work.
+- Deferred: damage/health/death, GAS combat, Nav, Mine executor, queue, replication, UI.
+- Implementation **pending** — analysis-only.
+
+### Builds / validation
+- None (analysis-only).
+
+### Stop condition
+Commit/push `feature/gp-s24-attack-execution-analysis` only. Do **not** merge to main. Do **not** mark GP-S24 implemented.

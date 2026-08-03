@@ -1,97 +1,71 @@
 # Cursor Work Report
 
 ## Task
-GP-S23 movement result propagation finalization
+GP-S24 Attack Execution Foundation analysis
 
 ## Status
-DONE_WITH_FAILED_RESULT_DEFERRED
+ANALYSIS_READY_IMPLEMENTATION_PENDING
 
 ## Branch
-feature/gp-s23-movement-result-implementation
+feature/gp-s24-attack-execution-analysis
 
 ## Base
-main @ 966d0e7a884af02593608ea398eb1627d9f5a58f
+main @ 60169c1cfb6fd7bd1e701e634a14c7a49395327a
 
-## Final Architecture
-- Unified native terminal delegate `FGP_OnMovementResult(Serial, Result, Reason)`
-- Results: `Reached`, `Cancelled` (+ Reason None / Superseded / CommandReplaced / Manual)
-- Structured synchronous `FGP_MovementRequestOutcome` rejection (never broadcast)
-- Exact-serial Held clearing on Reached / Cancelled / sync Reject
-- Move→Move: commit new active then Cancelled/Superseded for old serial
-- Move→non-Move: StopMove(CommandReplaced) → Cancelled/CommandReplaced
-- Manual cancellation clears matching Held Move
-- EndPlay silent (no terminal broadcast)
-- Phantom Held on reject fixed
-- Reentrancy-safe ordering (mutate → log → broadcast → return)
-- Failed deferred until Nav/pathfinding stage
+## Current Code Findings
+- Attack already delivered into Held via GP-S17/S18; GP-S23 stops prior movement then idles.
+- `HandleMovementResult` clears only exact Held Move; Attack Held yields `HeldTagNotMove` today.
+- Team rules live on `AGP_UnitBase::GetTeamId`; server rejects same-team Attack.
+- ASC / `UGP_UnitAttributeSet::AttackRange` exist but are not wired to units.
+- No damage/death/Attack executor exists.
 
-## Operator Validation
-| Case | Result |
-| --- | --- |
-| Natural Reached | **PASS** |
-| Move→Move Superseded | **PASS** |
-| Move→Attack CommandReplaced | **PASS** |
-| Manual Stop | **PASS** |
-| Rejected Move | **PASS** |
-| Stale result | **PASS** |
-| Compatibility alias TestCompletion | **PASS** |
-| EndPlay | **PASS** |
-| Remote Team 2 | **NOT_RUN_ACCEPTED_BY_USER** |
-| Multi-unit isolation | **NOT_RUN_ACCEPTED_BY_USER** |
+## Selected Architecture
+Attack executor state machine private to `UGP_UnitCommandComponent` (Option A). Rejected separate AttackComponent and generic executor framework for GP-S24 scope.
 
-Implementation status: **CODE_DONE_OPERATOR_ACCEPTED**
+## Attack State Model
+`Idle → Approaching → Ready` (Ready non-terminal). Terminal `Cancelled|Failed` + reason. Accept-time invalid clears Held (no phantom).
 
-## Manual Stop Fix
-- Initial fail: `gp.Movement.Stop` selected idle first authority unit
-- Production `StopMove` contract not at fault
-- Fix: first moving authority unit only; no idle fallback
-- Confirmed: MoveStopped Serial=1 Manual; MovementResultBroadcast Cancelled/Manual; HeldMoveFinished Cancelled/Manual; Selection=MovingUnit; next HeldAccepted Serial=2
+## Serial Model
+Attack Held serial == approach movement serial. Self-supersede Cancelled/Superseded ignored while still moving on same serial. Allocator never rewound.
 
-## Final Build Results
-- GP Development: **PASSED** (finalization)
-- GP Shipping: **PASSED** (finalization)
-- GPEditor Development + UHT: **PASSED** at candidate / Stop-fix stages (no C++ change in finalization)
+## Target Validation
+Authority + valid `AGP_UnitBase` target ≠ self + finite location + same world + owner TeamId≥1 + not same team; neutrals allowed (matches current server validate). No health interface.
 
-## Static Verification
-- No old production `OnMovementCompleted` / completion enum/delegate
-- `TestCompletion` exists only as non-shipping compatibility alias
-- Request reject never broadcasts
-- `Failed` not in movement result enum
-- EndPlay does not broadcast
-- Move→Move commits new state before old Cancelled broadcast
-- No post-broadcast old-state mutation
-- Manual Stop clears matching Held
-- Rejected Move leaves no Held; allocator not rewound
-- One terminal result channel per accepted serial path
+## Movement Integration
+Out of range → `RequestMove(target XY, owner Z, AttackSerial)`. In-range entry may `StopMove(Manual)` with `bExpectRangeEntryStop`. Result routing: Attack Approaching consume-first inside `HandleMovementResult`, then Held Move path.
+
+## Held Policy
+Retain Attack through Ready. Clear on terminal / accept reject / EndPlay. Replace overwrites Held then resets executor; old callbacks must not mutate new Attack.
+
+## Replacement Matrix
+Attack↔Move / Attack↔Attack / Attack→Mine(Held only) / QueueDeferred unchanged — see GP-S24 doc matrix. Reentrancy-safe: reset executor → sync movement → start new Attack if applicable.
+
+## Reentrancy/Lifecycle
+Capture → mutate → log → RequestMove/StopMove. Tick only while Attack active. EndPlay silent (align Movement EndPlay). No Attack multicast delegate in S24.
+
+## Expected Implementation Files
+- `GPUnitCommandComponent.h/.cpp` (+ optional `GPAttackTypes.h`)
+- GP-S24 doc / AI log / Cursor report
+
+NO: MovementComponent (preferred), MobileUnit, tags, Build.cs, GAS wiring, assets.
+
+## Operator Validation Plan
+A in-range Ready; B approach→Ready; C moving target reissue; D Ready→Approaching; E Move replace; F retarget; G invalid/same-team/self; H/I target destroyed; J QueueDeferred; K remote; L multi-unit; M EndPlay.
 
 ## Scope Verification
+- C++ changed: **NO**
 - Build.cs changed: **NO**
-- gameplay tags changed: **NO**
-- PlayerController changed: **NO**
 - assets/maps/config changed: **NO**
-- Attack added: **NO**
-- Mine added: **NO**
+- damage/health added: **NO**
+- Attack implemented: **NO**
 - Nav/pathfinding added: **NO**
-- Failed producer added: **NO**
-- queue implementation added: **NO**
-- replication model changed: **NO**
-- production C++ changed during finalization: **NO**
+- queue added: **NO**
 
 ## Git State
-- git diff --check: clean
-- working tree clean after commit/push
-- branch pushed: `feature/gp-s23-movement-result-implementation`
+- Branch: `feature/gp-s24-attack-execution-analysis`
+- Docs-only commit; working tree clean after push
 - HEAD = origin
-- ahead of main; no merge to main
+- no merge to main
 
-## Deferred
-- Failed result
-- Nav/pathfinding
-- Attack/Mine
-- queue
-- prediction
-- replicated Held
-- formation/avoidance
-
-## Merge Readiness
-READY_FOR_MAIN_MERGE
+## Implementation Pending
+Explicit implementation task required. Target stage close: `DONE_WITH_DAMAGE_DEFERRED`.

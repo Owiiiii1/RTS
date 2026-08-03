@@ -2,10 +2,15 @@
 (Wire Held Command transitions to UGP_MovementComponent — analysis)
 
 ## Status
-**Status: ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**Status: CODE_DONE_NETWORK_VALIDATED**
 
-Docs-only. **No** C++ / assets / callbacks / GP-S22 completion / Nav / AI in this pass.
+**GP-S21 Status: `DONE_WITH_COMPLETION_DEFERRED`**
+
+Implemented and operator-validated on `feature/gp-s21-held-move-integration-implementation`
+(base = `main` `04d6414b4000f7536a7776181a46382a30b5ad0c`).
 Depends on: GP-S18 `DONE_WITH_EXECUTORS_DEFERRED`, GP-S20 `DONE_WITH_COMMAND_INTEGRATION_DEFERRED`.
+
+Completion callbacks / Held clear on reach remain **deferred** (GP-S22).
 
 ---
 
@@ -317,9 +322,62 @@ Does **not** mean: Reach clears Held; callbacks; stale protection; Nav; Attack/M
 
 ---
 
+## 18. Implementation record
+
+### Integration owner
+`UGP_UnitCommandComponent` — private `SynchronizeMovementWithHeldCommand` after non-queued Held store.
+
+### Ordering
+Capture PreviousCommand → store Held → SynchronizeMovement → HeldAccepted/HeldReplaced log.
+
+Movement logs (`MoveStarted` / `MoveReplaced` / `MoveStopped`) emit inside sync before Held* logs.
+Then `MoveExecutionRequested` / reject / cancel / unavailable from `LogGPUnitCommandExecution`.
+
+### Stop API
+```cpp
+enum class EGP_MovementStopReason : uint8 { Manual, CommandReplaced, EndPlay };
+void StopMove(EGP_MovementStopReason Reason = EGP_MovementStopReason::Manual);
+```
+- Console Stop → Manual
+- EndPlay → `StopMove(EndPlay)` (no authority reject on teardown)
+- Command cancel → CommandReplaced
+
+### Includes (UnitCommandComponent.cpp)
+`GPMobileUnit.h`, `GPMovementComponent.h`, `Tags/GPGameplayTags.h`
+
+### Builds
+- Candidate: GPEditor Development + UHT — **PASSED**
+- Finalization: GP Development + GP Shipping — **PASSED**
+
+### Operator validation (Listen Server / 2P)
+
+Observed Move order:
+
+```text
+MoveStarted → MoveExecutionRequested → HeldAccepted
+```
+
+| Case | Result |
+| --- | --- |
+| Host Held Move (serial equality, Z=88, reach) | **PASS** |
+| Move→Move replacement (no StopMove; serials match e.g. 3→4) | **PASS** |
+| Multi-unit independent serials / both reach / overlap OK | **PASS** |
+| Move→Attack cancellation (`MoveStopped Reason=CommandReplaced` + MovementCancelledByCommand; no attack) | **PASS** |
+| Attack→Move start | **PASS** |
+| QueueDeferred (HeldSerial unchanged; no MoveReplaced/Stop/ExecutionRequested; original reach) | **PASS** |
+| Remote Team 2 client→server authority path; no duplicate client MoveStarted; Team 1 unmodified | **PASS** |
+| Remote authoritative movement path validated; visual replication confirmed by operator | **PASS** |
+| MoveReached clears movement active state; next Move is MoveStarted not MoveReplaced | **PASS** |
+| Held remains after reach; no HeldCleared; no completion callback | **PASS** (expected S21) |
+
+### Deferred (unchanged)
+
+GP-S22 completion callback; Held clear after matching completion; stale protection; failure propagation; Nav/pathfinding; Attack/Mine execution; queue storage/execution; formation/avoidance.
+
+---
+
 ## Stop condition
-**ANALYSIS_READY_IMPLEMENTATION_PENDING.**
-Await GP-S21 implementation assignment.
-Do **not** implement sync/StopMove reason/callbacks/Nav from this pass.
+**CODE_DONE_NETWORK_VALIDATED.** **GP-S21: DONE_WITH_COMPLETION_DEFERRED.**
+Commit/push `feature/gp-s21-held-move-integration-implementation` only.
 Do **not** merge to main.
-Do **not** start GP-S22.
+Do **not** start GP-S22 completion / Held clear / Nav / AI from this close-out.

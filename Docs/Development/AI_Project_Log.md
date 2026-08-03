@@ -3183,3 +3183,54 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s21-held-move-integration-analysis` only. Do **not** merge to main. Do **not** implement sync/StopMove reason/GP-S22 from this pass.
+
+## 2026-08-03 — GP-S21 / Held Move Integration — implementation
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h` / `Private/...cpp` — sync after Held store
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h` / `Private/...cpp` — `EGP_MovementStopReason` + `StopMove(Reason)`
+- `Docs/Development/Claude_Tasks/GP-S21_Held_Move_Integration.md` — `CODE_READY_OPERATOR_VALIDATION_PENDING`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — implementation report
+
+### What was done
+- Implemented GP-S21 on `feature/gp-s21-held-move-integration-implementation` (base = `main` `04d6414`).
+- Held Move → `RequestMove(TargetLocation, CommandSerial)`; Move→Move uses internal MoveReplaced; Move→Attack/Mine → `StopMove(CommandReplaced)` if moving; QueueDeferred unchanged.
+- Command serial = movement serial; RequestMove reject keeps Held; no completion callback / Held clear on reach.
+- Operator validation pending. Completion target: `DONE_WITH_COMPLETION_DEFERRED`.
+
+### Builds / validation
+- GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+- Operator — **pending**.
+
+### Stop condition
+Superseded by GP-S21 completion checkpoint.
+
+## 2026-08-03 — GP-S21 / Held Move Integration — completion checkpoint
+
+Status: **CODE_DONE_NETWORK_VALIDATED** / GP-S21 **DONE_WITH_COMPLETION_DEFERRED**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S21_Held_Move_Integration.md` — `CODE_DONE_NETWORK_VALIDATED`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — finalization report
+- (implementation C++ unchanged from `608c891`)
+
+### What was done
+- Operator-validated Held Move → MovementComponent on Listen Server (host + remote Team 2).
+- Confirmed: serial equality; Move→Move replacement; Move→Attack CommandReplaced cancel; Attack→Move; QueueDeferred preserves execution; multi-unit independence; remote client→server authority path; no duplicate client MoveStarted; Z preservation; MoveReached leaves Held intact (no clear/callback).
+- Final status: **DONE_WITH_COMPLETION_DEFERRED**. Next: **GP-S22**.
+
+### Build workflow (accepted)
+- **Candidate:** GPEditor Win64 Development + UHT
+- **Finalization:** GP Win64 Development + GP Win64 Shipping
+
+### Builds / validation
+- Candidate GPEditor Dev + UHT — **PASSED** (prior)
+- Finalization GP Dev + GP Shipping — see REPORT / this close-out
+- Operator — **CODE_DONE_NETWORK_VALIDATED**
+
+### Stop condition
+Commit/push `feature/gp-s21-held-move-integration-implementation` only. Do **not** merge to main. Do **not** start GP-S22 completion / Held clear / Nav / AI / Attack/Mine execution from this close-out.

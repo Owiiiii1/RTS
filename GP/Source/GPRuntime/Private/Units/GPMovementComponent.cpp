@@ -77,6 +77,21 @@ void UGP_MovementComponent::ClearActiveMovementState()
 	SetComponentTickEnabled(false);
 }
 
+const TCHAR* UGP_MovementComponent::StopReasonToString(EGP_MovementStopReason Reason)
+{
+	switch (Reason)
+	{
+	case EGP_MovementStopReason::Manual:
+		return TEXT("Manual");
+	case EGP_MovementStopReason::CommandReplaced:
+		return TEXT("CommandReplaced");
+	case EGP_MovementStopReason::EndPlay:
+		return TEXT("EndPlay");
+	default:
+		return TEXT("Unknown");
+	}
+}
+
 bool UGP_MovementComponent::RequestMove(const FVector& Destination, uint32 CommandSerial)
 {
 	AActor* Owner = GetOwner();
@@ -176,23 +191,27 @@ bool UGP_MovementComponent::RequestMove(const FVector& Destination, uint32 Comma
 	return true;
 }
 
-void UGP_MovementComponent::StopMove()
+void UGP_MovementComponent::StopMove(EGP_MovementStopReason Reason)
 {
 	AActor* Owner = GetOwner();
 	const ENetMode NetMode = GPUnitMovementPrivate::GetOwnerNetMode(Owner);
 	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
 
-	if (Owner == nullptr || !Owner->HasAuthority())
+	// EndPlay teardown must not reject for missing authority.
+	if (Reason != EGP_MovementStopReason::EndPlay)
 	{
-		UE_LOG(LogGPUnitMovement, Log,
-			TEXT("GP UnitMovement MoveRejected: Unit=%s Serial=%u Destination=%s Reason=%s Role=%s NetMode=%s"),
-			*GetNameSafe(Owner),
-			ActiveMoveSerial,
-			*MoveDestination.ToCompactString(),
-			Owner == nullptr ? TEXT("MissingOwner") : TEXT("NoAuthority"),
-			GPUnitMovementPrivate::RoleToString(Role),
-			GPUnitMovementPrivate::NetModeToString(NetMode));
-		return;
+		if (Owner == nullptr || !Owner->HasAuthority())
+		{
+			UE_LOG(LogGPUnitMovement, Log,
+				TEXT("GP UnitMovement MoveRejected: Unit=%s Serial=%u Destination=%s Reason=%s Role=%s NetMode=%s"),
+				*GetNameSafe(Owner),
+				ActiveMoveSerial,
+				*MoveDestination.ToCompactString(),
+				Owner == nullptr ? TEXT("MissingOwner") : TEXT("NoAuthority"),
+				GPUnitMovementPrivate::RoleToString(Role),
+				GPUnitMovementPrivate::NetModeToString(NetMode));
+			return;
+		}
 	}
 
 	if (!bIsMoving)
@@ -202,16 +221,15 @@ void UGP_MovementComponent::StopMove()
 	}
 
 	const uint32 PreviousSerial = ActiveMoveSerial;
-	const FVector Location = Owner->GetActorLocation();
+	const FVector Location = Owner != nullptr ? Owner->GetActorLocation() : FVector::ZeroVector;
 
-	bIsMoving = false;
-	ActiveMoveSerial = 0;
-	SetComponentTickEnabled(false);
+	ClearActiveMovementState();
 
 	UE_LOG(LogGPUnitMovement, Log,
-		TEXT("GP UnitMovement MoveStopped: Unit=%s Serial=%u Reason=Manual Location=%s Role=%s NetMode=%s"),
+		TEXT("GP UnitMovement MoveStopped: Unit=%s Serial=%u Reason=%s Location=%s Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
 		PreviousSerial,
+		StopReasonToString(Reason),
 		*Location.ToCompactString(),
 		GPUnitMovementPrivate::RoleToString(Role),
 		GPUnitMovementPrivate::NetModeToString(NetMode));
@@ -321,31 +339,7 @@ void UGP_MovementComponent::TickComponent(
 
 void UGP_MovementComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (bIsMoving)
-	{
-		AActor* Owner = GetOwner();
-		const uint32 PreviousSerial = ActiveMoveSerial;
-		const FVector Location = Owner != nullptr ? Owner->GetActorLocation() : FVector::ZeroVector;
-		const ENetMode NetMode = GPUnitMovementPrivate::GetOwnerNetMode(Owner);
-		const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
-
-		bIsMoving = false;
-		ActiveMoveSerial = 0;
-		SetComponentTickEnabled(false);
-
-		UE_LOG(LogGPUnitMovement, Log,
-			TEXT("GP UnitMovement MoveStopped: Unit=%s Serial=%u Reason=EndPlay Location=%s Role=%s NetMode=%s"),
-			*GetNameSafe(Owner),
-			PreviousSerial,
-			*Location.ToCompactString(),
-			GPUnitMovementPrivate::RoleToString(Role),
-			GPUnitMovementPrivate::NetModeToString(NetMode));
-	}
-	else
-	{
-		SetComponentTickEnabled(false);
-	}
-
+	StopMove(EGP_MovementStopReason::EndPlay);
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -451,7 +445,7 @@ namespace GPMovementConsolePrivate
 			return;
 		}
 
-		Movement->StopMove();
+		Movement->StopMove(EGP_MovementStopReason::Manual);
 		UE_LOG(LogGPUnitMovement, Log,
 			TEXT("GP UnitMovement Console: gp.Movement.Stop Unit=%s"),
 			*MobileUnit->GetName());

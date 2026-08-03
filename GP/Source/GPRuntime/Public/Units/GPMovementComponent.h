@@ -6,10 +6,18 @@
 #include "Components/ActorComponent.h"
 #include "GPMovementComponent.generated.h"
 
+/** Plain C++ stop reason for UGP_MovementComponent (GP-S21). Not UENUM / not Blueprint. */
+enum class EGP_MovementStopReason : uint8
+{
+	Manual,
+	CommandReplaced,
+	EndPlay
+};
+
 /**
- * Server-authoritative straight-line movement backend (GP-S20).
+ * Server-authoritative straight-line movement backend (GP-S20/S21).
  * Authority mutates owner transform; component state is not replicated.
- * No Held Command integration, NavMesh, AIController, or RPC.
+ * No Held Command integration internals, NavMesh, AIController, or RPC.
  */
 UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))
 class GPRUNTIME_API UGP_MovementComponent : public UActorComponent
@@ -29,8 +37,11 @@ public:
 	/** Authority-only. Returns true only when the move request is accepted. */
 	bool RequestMove(const FVector& Destination, uint32 CommandSerial);
 
-	/** Authority-only. Stops active movement without callbacks. */
-	void StopMove();
+	/**
+	 * Stops active movement without callbacks.
+	 * Authority-required except Reason=EndPlay (teardown-safe).
+	 */
+	void StopMove(EGP_MovementStopReason Reason = EGP_MovementStopReason::Manual);
 
 	bool IsMoving() const;
 	uint32 GetActiveMoveSerial() const;
@@ -50,6 +61,7 @@ public:
 
 private:
 	void ClearActiveMovementState();
+	static const TCHAR* StopReasonToString(EGP_MovementStopReason Reason);
 
 	FVector MoveDestination = FVector::ZeroVector;
 	uint32 ActiveMoveSerial = 0;

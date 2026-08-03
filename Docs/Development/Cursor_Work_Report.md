@@ -1,121 +1,91 @@
 # Cursor Work Report
 
 ## Task
-GP-S21 Held Move integration analysis
+GP-S21 Held Move integration finalization
 
 ## Status
-ANALYSIS_READY_IMPLEMENTATION_PENDING
+CODE_DONE_NETWORK_VALIDATED
 
 ## Branch
-feature/gp-s21-held-move-integration-analysis
+feature/gp-s21-held-move-integration-implementation
 
 ## Base
-main @ b676a4a41ae29349d3e1ca0c0d4051e23a97d76e
+main @ 04d6414b4000f7536a7776181a46382a30b5ad0c
 
-## Current Pipeline
-```text
-Input → BuildSmartCommand → Server validation → Dispatch
-→ AGP_UnitBase::ReceiveCommand
-→ UGP_UnitCommandComponent::HandleCommand
-→ HeldAccepted / HeldReplaced / QueueDeferred
-```
+## Final Stage Status
+DONE_WITH_COMPLETION_DEFERRED
 
-Separate (unlinked) movement:
-```text
-AGP_MobileUnit → UGP_MovementComponent → RequestMove / StopMove
-```
+## Implementation Summary
+`UGP_UnitCommandComponent` synchronizes non-queued Held transitions with `UGP_MovementComponent`: Move → `RequestMove(Loc, HeldSerial)`; non-Move while moving → `StopMove(CommandReplaced)`; QueueDeferred skips sync. Plain `EGP_MovementStopReason` on StopMove. No completion callback; Held remains after MoveReached until next command.
 
-RMB currently Holds only; physical move only via `gp.Movement.Test`.
+## Architecture
+- UnitCommandComponent owns synchronization
+- authority-only
+- Held serial = movement serial
+- QueueDeferred does not synchronize
+- completion remains deferred
 
-## Selected Architecture
-- Owner: `UGP_UnitCommandComponent` after non-queued Held store
-- Private sync: `SynchronizeMovementWithHeldCommand(const TOptional<FGP_StoredUnitCommand>& PreviousCommand)`
-- Resolve movement: `Cast<AGP_MobileUnit>(Owner)->GetUnitMovementComponent()`
-- Move tag: exact `CommandTag == FGPGameplayTags::Get().Command_Move`
-- Move held → `RequestMove(TargetLocation, CommandSerial)`
-- Non-Move while `IsMoving` → `StopMove(CommandReplaced)`
-- QueueDeferred → no sync call
-- RequestMove false → keep Held; log reject (no rollback)
-- Non-mobile / missing component → Held kept; `MovementUnavailable`
+## Operator Validation
+| Case | Result |
+| --- | --- |
+| Host Move (`MoveStarted` → `MoveExecutionRequested` → `HeldAccepted`) | **PASS** |
+| Serial equality (Held == Movement) | **PASS** |
+| Move→Move replacement (no StopMove; serials e.g. 3→4) | **PASS** |
+| Move→Attack (`MoveStopped Reason=CommandReplaced` + MovementCancelledByCommand; no attack) | **PASS** |
+| Attack→Move | **PASS** |
+| QueueDeferred (HeldSerial unchanged; no replace/stop/execution; original reach) | **PASS** |
+| Multi-unit independent serials / both reach / overlap OK | **PASS** |
+| Remote Team 2 client→server authority path; Team 1 unmodified | **PASS** |
+| No duplicate client MoveStarted | **PASS** |
+| Remote authoritative movement path validated; visual replication confirmed by operator | **PASS** |
+| Z preservation (88) | **PASS** |
+| MoveReached clears movement active state; next Move is MoveStarted | **PASS** |
+| Held remains after reach; no HeldCleared; no completion callback | **PASS** |
 
-Rejected: UnitBase reaction, MobileUnit ReceiveCommand override, extra router, delegates.
+## Build Results
+- GPEditor Development: **PASSED** previously at candidate stage
+- UHT: **PASSED** previously at candidate stage
+- GP Development: **PASSED** at finalization
+- GP Shipping: **PASSED** at finalization
 
-## Transition Matrix
-| Previous | Incoming | Queue | Held | Movement |
-| --- | --- | ---: | --- | --- |
-| None | Move | false | Accepted | RequestMove |
-| Move | Move | false | Replaced | RequestMove (MoveReplaced) |
-| Move | Attack/Mine | false | Replaced | StopMove(CommandReplaced) if moving |
-| Attack/Mine | Move | false | Replaced | RequestMove |
-| Attack/Mine | Attack/Mine | false | Replaced | none |
-| Any | Any | true | QueueDeferred | unchanged |
-| None | Attack/Mine | false | Accepted | none |
+## Build Workflow
+- candidate: GPEditor Development + UHT
+- finalization: GP Development + GP Shipping
 
-Tags verified present: Move, Attack, Mine.
+## Scope Verification
+- Build.cs changed: **NO**
+- PlayerController changed: **NO**
+- payloads/tags changed: **NO**
+- assets/maps/config changed: **NO**
+- completion callback added: **NO**
+- Held clear added: **NO**
+- Nav/AI/GAS added: **NO**
 
-## Stop Reason Decision
-**Option B selected:** plain C++ `EGP_MovementStopReason { Manual, CommandReplaced, EndPlay }` and `StopMove(Reason = Manual)`.
-
-- Not UENUM / Blueprint
-- Avoids incorrect `Reason=Manual` for Attack cancel
-- Console Stop → Manual; EndPlay → EndPlay; command cancel → CommandReplaced
-- Option A rejected (wrong Manual semantics); Option C rejected (duplicate API)
-
-## Exact Proposed API
-```cpp
-// UnitCommandComponent private
-void SynchronizeMovementWithHeldCommand(
-    const TOptional<FGP_StoredUnitCommand>& PreviousCommand);
-
-// MovementComponent
-enum class EGP_MovementStopReason : uint8 { Manual, CommandReplaced, EndPlay };
-void StopMove(EGP_MovementStopReason Reason = EGP_MovementStopReason::Manual);
-```
-
-Logs (`LogGPUnitCommandExecution`): MoveExecutionRequested, MoveExecutionRejected, MovementCancelledByCommand, MovementUnavailable.
-
-Ordering: capture previous → store Held → sync movement → HeldAccepted/Replaced logs.
-
-## Exact Files
-### Modified (future implementation)
+## Files Changed
+### C++ (implementation commit `608c891`)
 - `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
 - `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
 - `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h`
 - `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp`
 
-### Unchanged
-UnitBase, Unit, MobileUnit API, PC, CommandComponent, payloads, tags, Build.cs, assets/maps/config
-
-### Build.cs impact
-NO
-
-## Validation Plan
-- Host RMB Move → HeldAccepted + MoveStarted; serial match
-- Second RMB before reach → HeldReplaced + MoveReplaced
-- Moving + RMB enemy → Held Attack + MoveStopped CommandReplaced; no attack
-- Held Attack + RMB ground → MoveStarted
-- Shift+RMB while moving → QueueDeferred; movement continues
-- Remote Team 2 → server Held+Move; both see transform; no client execution
-- Multi-unit independent serials
-- Regression: console still works; no Held clear on reach; no AI/Nav/GAS
-
-## Deferred
-- GP-S22 completion callback / Held clear / stale protection
-- NavMesh / AIController / Attack/Mine execution / queue
-- Stale Held Move after Reach (document-only until S22)
-
-## Completion Status (after future impl + validation)
-DONE_WITH_COMPLETION_DEFERRED
-
-## Docs Changed (this analysis)
-- `Docs/Development/Claude_Tasks/GP-S21_Held_Move_Integration.md` (new)
+### Docs (finalization)
+- `Docs/Development/Claude_Tasks/GP-S21_Held_Move_Integration.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
+
+## Deferred
+- GP-S22 completion callback
+- Held clearing
+- stale completion protection
+- failure propagation
+- Nav/pathfinding
+- Attack/Mine execution
+- queue implementation
+- formation/avoidance
 
 ## Git State
 - git diff --check: clean
 - working tree clean after commit/push
-- branch pushed: `feature/gp-s21-held-move-integration-analysis`
+- branch pushed: `feature/gp-s21-held-move-integration-implementation`
 - HEAD = origin
 - no merge to main
-- confirmation: docs-only; no C++/assets/maps/config

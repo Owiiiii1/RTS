@@ -1,16 +1,16 @@
 # GP-S24 Attack Execution Foundation
 
 ## Status
-**ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ## Baseline
-`main` @ `60169c1cfb6fd7bd1e701e634a14c7a49395327a` (Merge GP-S23 movement result propagation)
+`main` @ `462f9bba0bc64c5a7da4fdd5eae9207f36524a7f` (Merge GP-S24 attack execution analysis)
 
-Depends on: GP-S23 `DONE_WITH_FAILED_RESULT_DEFERRED`.
+Depends on: GP-S23 `DONE_WITH_FAILED_RESULT_DEFERRED`; GP-S24 analysis merged.
 
-Branch: `feature/gp-s24-attack-execution-analysis`
+Branch: `feature/gp-s24-attack-execution-implementation`
 
-Target stage close after implementation + validation: **`DONE_WITH_DAMAGE_DEFERRED`**
+Target stage close after operator validation: **`DONE_WITH_DAMAGE_DEFERRED`**
 
 ---
 
@@ -542,6 +542,50 @@ Means: Attack composite lifecycle (validate / approach / Ready / terminal / repl
 
 ---
 
-## Stop condition (analysis)
+## Implementation record (candidate)
 
-Docs-only analysis branch. No C++. Commit/push `feature/gp-s24-attack-execution-analysis`. Do **not** merge to main. Do **not** start Attack implementation from this commit without an explicit implementation task.
+### Files
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- (no MovementComponent / UnitBase / tags / Build.cs changes)
+
+### Enums
+`EGP_AttackExecutionState { Idle, Approaching, Ready }`
+`EGP_AttackTerminalResult { Cancelled, Failed }`
+`EGP_AttackTerminalReason { CommandReplaced, InvalidTarget, TargetDestroyed, MovementRejected, MovementCancelled, EndPlay }`
+
+### Config defaults
+`AttackRange=250`, `AttackReissueDistance=100`, `AttackReissueInterval=0.25` (EditDefaultsOnly on UnitCommandComponent; GAS attribute unused)
+
+### Runtime fields
+`AttackState`, `ActiveAttackSerial`, `AttackTarget` (weak UnitBase), `LastApproachDestination`, `LastApproachIssueTime`, `bExpectRangeEntryStop`, `bFinishingAttack`
+
+### Tick policy
+`bCanEverTick=true`, start disabled; enable only while Attack active + authority; disable on Idle / EndPlay.
+
+### Target validation
+Owner authority UnitBase; valid UnitBase target ≠ self; same world; finite location; owner TeamId≥1; target TeamId ≠ owner (0/-1 allowed). Destroyed → TargetDestroyed; else InvalidTarget.
+
+### Serial / routing
+Attack Held serial == approach `RequestMove` serial. `HandleMovementResult` → `TryConsumeAttackMovementResult` first, then Held Move path. Self-supersede Cancelled/Superseded ignored while still moving on same serial. Range-entry uses Manual stop + `bExpectRangeEntryStop`.
+
+### Ready / Held
+Ready retains Held Attack; no damage. Terminal / accept reject clears exact Attack Held. Replacement: `ResetAttackExecutorForReplacement` (no Held clear) → sync → `StartAttackExecutor`.
+
+### Debug commands (non-shipping)
+`gp.Attack.Inspect`, `gp.Attack.DestroyTarget`, `gp.Attack.MoveTarget X Y`, `gp.Attack.TestInvalid <Self|Friendly|Null>`
+
+### Builds
+GPEditor Win64 Development + UHT — **PASSED**. GP Dev/Shipping deferred to finalization.
+
+### Operator validation
+**Pending.** Plan A–M in this document (in-range Ready, approach, reissue, Ready→Approaching, Move replace, retarget, invalid, destroy, QueueDeferred, remote, multi-unit, EndPlay).
+
+---
+
+## Stop condition (candidate)
+
+**CODE_READY_OPERATOR_VALIDATION_PENDING.**
+Commit/push `feature/gp-s24-attack-execution-implementation` only.
+Do **not** merge to main.
+Do **not** start damage/GAS/Nav/Mine/queue from this candidate.

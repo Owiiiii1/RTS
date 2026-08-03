@@ -1,71 +1,119 @@
 # Cursor Work Report
 
 ## Task
-GP-S24 Attack Execution Foundation analysis
+GP-S24 Attack Execution Foundation implementation
 
 ## Status
-ANALYSIS_READY_IMPLEMENTATION_PENDING
+CODE_READY_OPERATOR_VALIDATION_PENDING
 
 ## Branch
-feature/gp-s24-attack-execution-analysis
+feature/gp-s24-attack-execution-implementation
 
 ## Base
-main @ 60169c1cfb6fd7bd1e701e634a14c7a49395327a
+main @ 462f9bba0bc64c5a7da4fdd5eae9207f36524a7f
 
-## Current Code Findings
-- Attack already delivered into Held via GP-S17/S18; GP-S23 stops prior movement then idles.
-- `HandleMovementResult` clears only exact Held Move; Attack Held yields `HeldTagNotMove` today.
-- Team rules live on `AGP_UnitBase::GetTeamId`; server rejects same-team Attack.
-- ASC / `UGP_UnitAttributeSet::AttackRange` exist but are not wired to units.
-- No damage/death/Attack executor exists.
+## Summary
+Implemented authority-only Attack executor inside `UGP_UnitCommandComponent`: validate → optional approach via GP-S23 movement results → Ready (no damage). Exact serial guards, self-supersede, range-entry Manual stop, replacement-safe reset, phantom Held reject path.
 
-## Selected Architecture
-Attack executor state machine private to `UGP_UnitCommandComponent` (Option A). Rejected separate AttackComponent and generic executor framework for GP-S24 scope.
+## Architecture
+- Ownership: private state machine on UnitCommandComponent (no AttackComponent / framework)
+- Tick: enabled only while Attack active + authority
+- Single movement subscriber; Attack consumes approach results first
 
-## Attack State Model
-`Idle → Approaching → Ready` (Ready non-terminal). Terminal `Cancelled|Failed` + reason. Accept-time invalid clears Held (no phantom).
+## Attack Types
+`EGP_AttackExecutionState`, `EGP_AttackTerminalResult`, `EGP_AttackTerminalReason` — plain C++ enums
 
-## Serial Model
-Attack Held serial == approach movement serial. Self-supersede Cancelled/Superseded ignored while still moving on same serial. Allocator never rewound.
+## Runtime State
+`AttackState`, `ActiveAttackSerial`, weak `AttackTarget`, approach destination/time, `bExpectRangeEntryStop`, `bFinishingAttack`
+
+## Configuration
+`AttackRange=250`, `AttackReissueDistance=100`, `AttackReissueInterval=0.25` (EditDefaultsOnly; not GAS)
 
 ## Target Validation
-Authority + valid `AGP_UnitBase` target ≠ self + finite location + same world + owner TeamId≥1 + not same team; neutrals allowed (matches current server validate). No health interface.
+UnitBase ≠ self; same world; finite loc; owner TeamId≥1; target TeamId ≠ owner (0/-1 allowed); destroyed → TargetDestroyed
 
 ## Movement Integration
-Out of range → `RequestMove(target XY, owner Z, AttackSerial)`. In-range entry may `StopMove(Manual)` with `bExpectRangeEntryStop`. Result routing: Attack Approaching consume-first inside `HandleMovementResult`, then Held Move path.
+`RequestMove(destXY+ownerZ, AttackSerial)`; Distance2D ≤ AttackRange → Ready; reissue on threshold/interval
+
+## Result Routing
+`TryConsumeAttackMovementResult` before Held Move clear. Self-supersede ignore; range-entry Manual → Ready; external Manual → Failed/MovementCancelled
 
 ## Held Policy
-Retain Attack through Ready. Clear on terminal / accept reject / EndPlay. Replace overwrites Held then resets executor; old callbacks must not mutate new Attack.
+Retain through Ready; clear on FinishAttack / accept reject; replacement reset does not clear new Held
 
-## Replacement Matrix
-Attack↔Move / Attack↔Attack / Attack→Mine(Held only) / QueueDeferred unchanged — see GP-S24 doc matrix. Reentrancy-safe: reset executor → sync movement → start new Attack if applicable.
+## Replacement/Retarget Ordering
+ResetAttackExecutorForReplacement → SynchronizeMovement → StartAttackExecutor → HeldAccepted/HeldReplaced only if Held survives
 
-## Reentrancy/Lifecycle
-Capture → mutate → log → RequestMove/StopMove. Tick only while Attack active. EndPlay silent (align Movement EndPlay). No Attack multicast delegate in S24.
+## Tick/Reissue Policy
+Authority Tick while Approaching/Ready; no per-tick spam; reissue only when out of range + distance/interval thresholds
 
-## Expected Implementation Files
-- `GPUnitCommandComponent.h/.cpp` (+ optional `GPAttackTypes.h`)
-- GP-S24 doc / AI log / Cursor report
+## Debug Commands
+- `gp.Attack.Inspect`
+- `gp.Attack.DestroyTarget`
+- `gp.Attack.MoveTarget X Y`
+- `gp.Attack.TestInvalid <Self|Friendly|Null>`
 
-NO: MovementComponent (preferred), MobileUnit, tags, Build.cs, GAS wiring, assets.
+## Logging
+AttackAccepted, AttackRejected, AttackStateChanged, AttackApproachRequested/Rejected/Result/ResultIgnored, AttackReady, AttackTargetInvalidated, AttackCancelled, AttackFinished
 
-## Operator Validation Plan
-A in-range Ready; B approach→Ready; C moving target reissue; D Ready→Approaching; E Move replace; F retarget; G invalid/same-team/self; H/I target destroyed; J QueueDeferred; K remote; L multi-unit; M EndPlay.
+## Files Changed
+### Modified C++
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+
+### Modified Docs
+- `Docs/Development/Claude_Tasks/GP-S24_Attack_Execution_Foundation.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
+
+## Build Results
+- GPEditor Development: **PASSED**
+- UHT: **PASSED**
+
+## Static Verification
+- Authority-only Attack Tick; disabled on Idle
+- No phantom Held on Attack reject
+- Ready retains Held; no damage
+- Exact serial guards; stale cannot mutate new Attack
+- Self-supersede + range-entry Manual handled
+- External Manual fails Attack
+- Move/Attack replace survive old callbacks
+- QueueDeferred untouched; EndPlay safe
+- No double consumption; Held Move path unchanged
+- Allocator never rewound
 
 ## Scope Verification
-- C++ changed: **NO**
+- MovementComponent changed: **NO**
+- UnitBase changed: **NO**
 - Build.cs changed: **NO**
 - assets/maps/config changed: **NO**
 - damage/health added: **NO**
-- Attack implemented: **NO**
-- Nav/pathfinding added: **NO**
+- GAS added: **NO**
+- Nav added: **NO**
 - queue added: **NO**
+- replication changed: **NO**
 
 ## Git State
-- Branch: `feature/gp-s24-attack-execution-analysis`
-- Docs-only commit; working tree clean after push
+- Branch pushed: `feature/gp-s24-attack-execution-implementation`
+- Working tree clean after commit/push
 - HEAD = origin
 - no merge to main
 
-## Implementation Pending
-Explicit implementation task required. Target stage close: `DONE_WITH_DAMAGE_DEFERRED`.
+## Operator Validation Needed
+2P Listen Server:
+
+A. In-range Attack → Ready, no MoveStarted, Held retained; `gp.Attack.Inspect` State=Ready  
+B. Out-of-range → Approaching + MoveStarted; range entry Manual → Ready; no HeldMoveFinished  
+C. Moving target reissue → SelfSupersede ignore; Attack continues  
+D. `gp.Attack.MoveTarget` out of range → Ready→Approaching  
+E. Attack→Move → AttackCancelled CommandReplaced; Move survives  
+F. Retarget A→B → serial N+1; old ignored  
+G. `gp.Attack.TestInvalid` Self/Friendly/Null → no phantom Held  
+H/I. `gp.Attack.DestroyTarget` Approaching/Ready → Failed TargetDestroyed  
+J. QueueDeferred unchanged  
+K. Remote Team 2 authority-only  
+L. Multi-unit independent  
+M. EndPlay no crash  
+
+## Deferred
+Damage/health/death, cadence/cooldown/anim/projectile, GAS, Nav, Mine, queue, UI, replicated Attack, prediction, AttackMove

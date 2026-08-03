@@ -9,6 +9,7 @@
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPMobileUnit.h"
 #include "Units/GPMovementComponent.h"
+#include "Units/GPUnitBase.h"
 
 #if !UE_BUILD_SHIPPING
 #include "EngineUtils.h"
@@ -120,9 +121,60 @@ namespace GPUnitCommandStatePrivate
 	}
 }
 
+const TCHAR* UGP_UnitCommandComponent::AttackStateToString(EGP_AttackExecutionState State)
+{
+	switch (State)
+	{
+	case EGP_AttackExecutionState::Idle:
+		return TEXT("Idle");
+	case EGP_AttackExecutionState::Approaching:
+		return TEXT("Approaching");
+	case EGP_AttackExecutionState::Ready:
+		return TEXT("Ready");
+	default:
+		return TEXT("Unknown");
+	}
+}
+
+const TCHAR* UGP_UnitCommandComponent::AttackTerminalResultToString(EGP_AttackTerminalResult Result)
+{
+	switch (Result)
+	{
+	case EGP_AttackTerminalResult::Cancelled:
+		return TEXT("Cancelled");
+	case EGP_AttackTerminalResult::Failed:
+		return TEXT("Failed");
+	default:
+		return TEXT("Unknown");
+	}
+}
+
+const TCHAR* UGP_UnitCommandComponent::AttackTerminalReasonToString(EGP_AttackTerminalReason Reason)
+{
+	switch (Reason)
+	{
+	case EGP_AttackTerminalReason::CommandReplaced:
+		return TEXT("CommandReplaced");
+	case EGP_AttackTerminalReason::InvalidTarget:
+		return TEXT("InvalidTarget");
+	case EGP_AttackTerminalReason::TargetDestroyed:
+		return TEXT("TargetDestroyed");
+	case EGP_AttackTerminalReason::MovementRejected:
+		return TEXT("MovementRejected");
+	case EGP_AttackTerminalReason::MovementCancelled:
+		return TEXT("MovementCancelled");
+	case EGP_AttackTerminalReason::EndPlay:
+		return TEXT("EndPlay");
+	default:
+		return TEXT("Unknown");
+	}
+}
+
 UGP_UnitCommandComponent::UGP_UnitCommandComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
+	SetComponentTickEnabled(false);
 	SetIsReplicatedByDefault(false);
 }
 
@@ -161,6 +213,21 @@ void UGP_UnitCommandComponent::BeginPlay()
 
 void UGP_UnitCommandComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (AttackState != EGP_AttackExecutionState::Idle || ActiveAttackSerial != 0)
+	{
+		const AActor* Owner = GetOwner();
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution AttackCancelled: Unit=%s AttackSerial=%u Target=%s Reason=EndPlay PreviousState=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			ActiveAttackSerial,
+			*GetNameSafe(AttackTarget.Get()),
+			AttackStateToString(AttackState),
+			GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+	}
+
+	ResetAttackExecutor();
+
 	if (BoundMovementComponent.IsValid() && MovementResultHandle.IsValid())
 	{
 		BoundMovementComponent->OnMovementResult().Remove(MovementResultHandle);
@@ -189,11 +256,734 @@ void UGP_UnitCommandComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+void UGP_UnitCommandComponent::TickComponent(
+	float DeltaTime,
+	ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority())
+	{
+		SetAttackTickEnabled(false);
+		return;
+	}
+
+	if (AttackState == EGP_AttackExecutionState::Idle)
+	{
+		SetAttackTickEnabled(false);
+		return;
+	}
+
+	EvaluateAttack();
+}
+
+void UGP_UnitCommandComponent::SetAttackTickEnabled(bool bEnabled)
+{
+	SetComponentTickEnabled(bEnabled);
+}
+
+bool UGP_UnitCommandComponent::IsAttackConfigValid() const
+{
+	return FMath::IsFinite(AttackRange) && AttackRange >= 0.0f
+		&& FMath::IsFinite(AttackReissueDistance) && AttackReissueDistance >= 0.0f
+		&& FMath::IsFinite(AttackReissueInterval) && AttackReissueInterval >= 0.0f;
+}
+
+float UGP_UnitCommandComponent::ComputeAttackDistance2D(const AActor* Owner, const AActor* Target) const
+{
+	if (Owner == nullptr || Target == nullptr)
+	{
+		return TNumericLimits<float>::Max();
+	}
+	return FVector::Dist2D(Owner->GetActorLocation(), Target->GetActorLocation());
+}
+
+FVector UGP_UnitCommandComponent::MakeApproachDestination(const AActor* Owner, const AActor* Target) const
+{
+	const FVector OwnerLocation = Owner != nullptr ? Owner->GetActorLocation() : FVector::ZeroVector;
+	const FVector TargetLocation = Target != nullptr ? Target->GetActorLocation() : FVector::ZeroVector;
+	return FVector(TargetLocation.X, TargetLocation.Y, OwnerLocation.Z);
+}
+
+UGP_MovementComponent* UGP_UnitCommandComponent::ResolveMovementComponent() const
+{
+	if (BoundMovementComponent.IsValid())
+	{
+		return BoundMovementComponent.Get();
+	}
+
+	const AGP_MobileUnit* MobileUnit = Cast<AGP_MobileUnit>(GetOwner());
+	return MobileUnit != nullptr ? MobileUnit->GetUnitMovementComponent() : nullptr;
+}
+
+bool UGP_UnitCommandComponent::HasExactActiveHeldAttack() const
+{
+	if (!HeldCommand.IsSet() || ActiveAttackSerial == 0)
+	{
+		return false;
+	}
+
+	const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
+	return Held.CommandTag == FGPGameplayTags::Get().Command_Attack
+		&& Held.CommandSerial == ActiveAttackSerial;
+}
+
+bool UGP_UnitCommandComponent::ValidateAttackTarget(
+	AActor* Candidate,
+	AGP_UnitBase*& OutTarget,
+	EGP_AttackTerminalReason& OutReason) const
+{
+	OutTarget = nullptr;
+	OutReason = EGP_AttackTerminalReason::InvalidTarget;
+
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority())
+	{
+		return false;
+	}
+
+	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
+	if (OwnerUnit == nullptr)
+	{
+		return false;
+	}
+
+	if (!IsValid(Candidate))
+	{
+		OutReason = EGP_AttackTerminalReason::TargetDestroyed;
+		return false;
+	}
+
+	if (Candidate == Owner)
+	{
+		OutReason = EGP_AttackTerminalReason::InvalidTarget;
+		return false;
+	}
+
+	AGP_UnitBase* TargetUnit = Cast<AGP_UnitBase>(Candidate);
+	if (TargetUnit == nullptr)
+	{
+		OutReason = EGP_AttackTerminalReason::InvalidTarget;
+		return false;
+	}
+
+	if (!IsValid(TargetUnit) || TargetUnit->IsActorBeingDestroyed())
+	{
+		OutReason = EGP_AttackTerminalReason::TargetDestroyed;
+		return false;
+	}
+
+	if (TargetUnit->GetWorld() != Owner->GetWorld())
+	{
+		OutReason = EGP_AttackTerminalReason::InvalidTarget;
+		return false;
+	}
+
+	const FVector TargetLocation = TargetUnit->GetActorLocation();
+	if (TargetLocation.ContainsNaN()
+		|| !FMath::IsFinite(TargetLocation.X)
+		|| !FMath::IsFinite(TargetLocation.Y)
+		|| !FMath::IsFinite(TargetLocation.Z))
+	{
+		OutReason = EGP_AttackTerminalReason::InvalidTarget;
+		return false;
+	}
+
+	const int32 OwnerTeamId = OwnerUnit->GetTeamId();
+	if (OwnerTeamId < 1)
+	{
+		OutReason = EGP_AttackTerminalReason::InvalidTarget;
+		return false;
+	}
+
+	const int32 TargetTeamId = TargetUnit->GetTeamId();
+	// TeamId 0 (neutral) and -1 (unassigned) are allowed — matches server ValidateAndNormalizeCommand.
+	if (TargetTeamId == OwnerTeamId)
+	{
+		OutReason = EGP_AttackTerminalReason::InvalidTarget;
+		return false;
+	}
+
+	OutTarget = TargetUnit;
+	OutReason = EGP_AttackTerminalReason::InvalidTarget;
+	return true;
+}
+
+void UGP_UnitCommandComponent::ResetAttackExecutor()
+{
+	AttackState = EGP_AttackExecutionState::Idle;
+	ActiveAttackSerial = 0;
+	AttackTarget.Reset();
+	LastApproachDestination = FVector::ZeroVector;
+	LastApproachIssueTime = -1.0;
+	bExpectRangeEntryStop = false;
+	SetAttackTickEnabled(false);
+}
+
+void UGP_UnitCommandComponent::ResetAttackExecutorForReplacement(
+	const TOptional<FGP_StoredUnitCommand>& PreviousCommand)
+{
+	if (AttackState == EGP_AttackExecutionState::Idle && ActiveAttackSerial == 0)
+	{
+		return;
+	}
+
+	const AActor* Owner = GetOwner();
+	const uint32 OldSerial = ActiveAttackSerial;
+	const EGP_AttackExecutionState OldState = AttackState;
+	AGP_UnitBase* OldTarget = AttackTarget.Get();
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AttackCancelled: Unit=%s AttackSerial=%u Target=%s Reason=CommandReplaced PreviousState=%s Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		OldSerial,
+		*GetNameSafe(OldTarget),
+		AttackStateToString(OldState),
+		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+
+	(void)PreviousCommand;
+	ResetAttackExecutor();
+}
+
+bool UGP_UnitCommandComponent::StartAttackExecutor()
+{
+	AActor* Owner = GetOwner();
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+
+	if (Owner == nullptr || !Owner->HasAuthority() || !HeldCommand.IsSet())
+	{
+		return HeldCommand.IsSet();
+	}
+
+	const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
+	const FGameplayTag AttackTag = FGPGameplayTags::Get().Command_Attack;
+	if (!(Held.CommandTag == AttackTag))
+	{
+		return true;
+	}
+
+	if (!IsAttackConfigValid())
+	{
+		const uint32 RejectedSerial = Held.CommandSerial;
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution AttackRejected: Unit=%s AttackSerial=%u Target=%s Reason=InvalidTarget Detail=InvalidAttackConfig Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			RejectedSerial,
+			*GetNameSafe(Held.TargetActor.Get()),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+		if (HeldCommand.IsSet()
+			&& HeldCommand.GetValue().CommandTag == AttackTag
+			&& HeldCommand.GetValue().CommandSerial == RejectedSerial)
+		{
+			ClearHeldCommand();
+		}
+		ResetAttackExecutor();
+		return false;
+	}
+
+	const uint32 AttackSerial = Held.CommandSerial;
+	ActiveAttackSerial = AttackSerial;
+
+	AGP_UnitBase* ValidTarget = nullptr;
+	EGP_AttackTerminalReason FailReason = EGP_AttackTerminalReason::InvalidTarget;
+	if (!ValidateAttackTarget(Held.TargetActor.Get(), ValidTarget, FailReason))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution AttackRejected: Unit=%s AttackSerial=%u Target=%s Reason=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			AttackSerial,
+			*GetNameSafe(Held.TargetActor.Get()),
+			AttackTerminalReasonToString(FailReason),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+		if (HeldCommand.IsSet()
+			&& HeldCommand.GetValue().CommandTag == AttackTag
+			&& HeldCommand.GetValue().CommandSerial == AttackSerial)
+		{
+			ClearHeldCommand();
+		}
+		ResetAttackExecutor();
+		return false;
+	}
+
+	AttackTarget = ValidTarget;
+	SetAttackTickEnabled(true);
+
+	const float Distance = ComputeAttackDistance2D(Owner, ValidTarget);
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AttackAccepted: Unit=%s AttackSerial=%u Target=%s Distance=%.1f AttackRange=%.1f Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		AttackSerial,
+		*GetNameSafe(ValidTarget),
+		Distance,
+		AttackRange,
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+	if (Distance <= AttackRange)
+	{
+		EnterAttackReady();
+	}
+	else
+	{
+		EnterAttackApproaching();
+	}
+
+	return HasExactActiveHeldAttack();
+}
+
+void UGP_UnitCommandComponent::EnterAttackApproaching()
+{
+	AActor* Owner = GetOwner();
+	const EGP_AttackExecutionState PreviousState = AttackState;
+	AttackState = EGP_AttackExecutionState::Approaching;
+	SetAttackTickEnabled(true);
+
+	const float Distance = ComputeAttackDistance2D(Owner, AttackTarget.Get());
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AttackStateChanged: Unit=%s AttackSerial=%u Target=%s PreviousState=%s NewState=Approaching Distance=%.1f AttackRange=%.1f Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		ActiveAttackSerial,
+		*GetNameSafe(AttackTarget.Get()),
+		AttackStateToString(PreviousState),
+		Distance,
+		AttackRange,
+		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+
+	RequestOrRefreshAttackApproach(true);
+}
+
+void UGP_UnitCommandComponent::EnterAttackReady()
+{
+	if (!HasExactActiveHeldAttack())
+	{
+		return;
+	}
+
+	AActor* Owner = GetOwner();
+	const EGP_AttackExecutionState PreviousState = AttackState;
+	AttackState = EGP_AttackExecutionState::Ready;
+	bExpectRangeEntryStop = false;
+	SetAttackTickEnabled(true);
+
+	const float Distance = ComputeAttackDistance2D(Owner, AttackTarget.Get());
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AttackStateChanged: Unit=%s AttackSerial=%u Target=%s PreviousState=%s NewState=Ready Distance=%.1f AttackRange=%.1f Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		ActiveAttackSerial,
+		*GetNameSafe(AttackTarget.Get()),
+		AttackStateToString(PreviousState),
+		Distance,
+		AttackRange,
+		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AttackReady: Unit=%s AttackSerial=%u Target=%s Distance=%.1f AttackRange=%.1f Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		ActiveAttackSerial,
+		*GetNameSafe(AttackTarget.Get()),
+		Distance,
+		AttackRange,
+		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+}
+
+void UGP_UnitCommandComponent::RequestOrRefreshAttackApproach(bool bForceIssue)
+{
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority() || !HasExactActiveHeldAttack())
+	{
+		return;
+	}
+
+	AGP_UnitBase* Target = nullptr;
+	EGP_AttackTerminalReason FailReason = EGP_AttackTerminalReason::InvalidTarget;
+	if (!ValidateAttackTarget(AttackTarget.Get(), Target, FailReason))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution AttackTargetInvalidated: Unit=%s AttackSerial=%u Target=%s Reason=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			ActiveAttackSerial,
+			*GetNameSafe(AttackTarget.Get()),
+			AttackTerminalReasonToString(FailReason),
+			GPUnitCommandStatePrivate::RoleToString(Owner->GetLocalRole()),
+			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+		FinishAttack(EGP_AttackTerminalResult::Failed, FailReason);
+		return;
+	}
+
+	AttackTarget = Target;
+
+	const float Distance = ComputeAttackDistance2D(Owner, Target);
+	if (Distance <= AttackRange)
+	{
+		UGP_MovementComponent* Movement = ResolveMovementComponent();
+		if (Movement != nullptr && Movement->IsMoving()
+			&& Movement->GetActiveMoveSerial() == ActiveAttackSerial)
+		{
+			bExpectRangeEntryStop = true;
+			Movement->StopMove(EGP_MovementStopReason::Manual);
+			return;
+		}
+
+		EnterAttackReady();
+		return;
+	}
+
+	const UWorld* World = Owner->GetWorld();
+	const double Now = World != nullptr ? World->GetTimeSeconds() : 0.0;
+	const FVector Destination = MakeApproachDestination(Owner, Target);
+
+	if (!bForceIssue)
+	{
+		const float DestDelta = FVector::Dist2D(Destination, LastApproachDestination);
+		const bool bIntervalOk = LastApproachIssueTime < 0.0
+			|| (Now - LastApproachIssueTime) >= static_cast<double>(AttackReissueInterval);
+		const bool bDistanceOk = DestDelta >= AttackReissueDistance;
+		if (!bIntervalOk || !bDistanceOk)
+		{
+			return;
+		}
+	}
+
+	UGP_MovementComponent* Movement = ResolveMovementComponent();
+	if (Movement == nullptr)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution AttackApproachRejected: Unit=%s AttackSerial=%u RejectReason=MissingComponent Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			ActiveAttackSerial,
+			GPUnitCommandStatePrivate::RoleToString(Owner->GetLocalRole()),
+			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+		FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::MovementRejected);
+		return;
+	}
+
+	const FGP_MovementRequestOutcome Outcome = Movement->RequestMove(Destination, ActiveAttackSerial);
+	if (!Outcome.IsAccepted())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution AttackApproachRejected: Unit=%s AttackSerial=%u Destination=%s RejectReason=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			ActiveAttackSerial,
+			*Destination.ToCompactString(),
+			GPUnitCommandStatePrivate::RejectReasonToString(Outcome.RejectReason),
+			GPUnitCommandStatePrivate::RoleToString(Owner->GetLocalRole()),
+			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+		FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::MovementRejected);
+		return;
+	}
+
+	LastApproachDestination = Destination;
+	LastApproachIssueTime = Now;
+	AttackState = EGP_AttackExecutionState::Approaching;
+	SetAttackTickEnabled(true);
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AttackApproachRequested: Unit=%s AttackSerial=%u MovementSerial=%u Destination=%s Target=%s Distance=%.1f AttackRange=%.1f Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		ActiveAttackSerial,
+		ActiveAttackSerial,
+		*Destination.ToCompactString(),
+		*GetNameSafe(Target),
+		Distance,
+		AttackRange,
+		GPUnitCommandStatePrivate::RoleToString(Owner->GetLocalRole()),
+		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+}
+
+void UGP_UnitCommandComponent::EvaluateAttack()
+{
+	if (bFinishingAttack || AttackState == EGP_AttackExecutionState::Idle)
+	{
+		return;
+	}
+
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority() || !HasExactActiveHeldAttack())
+	{
+		if (AttackState != EGP_AttackExecutionState::Idle)
+		{
+			ResetAttackExecutor();
+		}
+		return;
+	}
+
+	AGP_UnitBase* Target = nullptr;
+	EGP_AttackTerminalReason FailReason = EGP_AttackTerminalReason::InvalidTarget;
+	if (!ValidateAttackTarget(AttackTarget.Get(), Target, FailReason))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution AttackTargetInvalidated: Unit=%s AttackSerial=%u Target=%s Reason=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			ActiveAttackSerial,
+			*GetNameSafe(AttackTarget.Get()),
+			AttackTerminalReasonToString(FailReason),
+			GPUnitCommandStatePrivate::RoleToString(Owner->GetLocalRole()),
+			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+		FinishAttack(EGP_AttackTerminalResult::Failed, FailReason);
+		return;
+	}
+
+	AttackTarget = Target;
+	const float Distance = ComputeAttackDistance2D(Owner, Target);
+
+	if (AttackState == EGP_AttackExecutionState::Ready)
+	{
+		if (Distance > AttackRange)
+		{
+			EnterAttackApproaching();
+		}
+		return;
+	}
+
+	if (AttackState == EGP_AttackExecutionState::Approaching)
+	{
+		if (Distance <= AttackRange)
+		{
+			UGP_MovementComponent* Movement = ResolveMovementComponent();
+			if (Movement != nullptr && Movement->IsMoving()
+				&& Movement->GetActiveMoveSerial() == ActiveAttackSerial)
+			{
+				bExpectRangeEntryStop = true;
+				Movement->StopMove(EGP_MovementStopReason::Manual);
+				return;
+			}
+
+			EnterAttackReady();
+			return;
+		}
+
+		RequestOrRefreshAttackApproach(false);
+	}
+}
+
+void UGP_UnitCommandComponent::FinishAttack(
+	EGP_AttackTerminalResult Result,
+	EGP_AttackTerminalReason Reason)
+{
+	if (bFinishingAttack)
+	{
+		return;
+	}
+
+	bFinishingAttack = true;
+
+	AActor* Owner = GetOwner();
+	const uint32 FinishedSerial = ActiveAttackSerial;
+	const EGP_AttackExecutionState PreviousState = AttackState;
+	AGP_UnitBase* FinishedTarget = AttackTarget.Get();
+	const float Distance = ComputeAttackDistance2D(Owner, FinishedTarget);
+	const FGameplayTag AttackTag = FGPGameplayTags::Get().Command_Attack;
+
+	UGP_MovementComponent* Movement = ResolveMovementComponent();
+	if (Movement != nullptr && Movement->IsMoving()
+		&& FinishedSerial != 0
+		&& Movement->GetActiveMoveSerial() == FinishedSerial)
+	{
+		// External finish — do not treat Cancelled/Manual as range-entry.
+		bExpectRangeEntryStop = false;
+		Movement->StopMove(EGP_MovementStopReason::Manual);
+	}
+
+	AttackState = EGP_AttackExecutionState::Idle;
+	ActiveAttackSerial = 0;
+	AttackTarget.Reset();
+	LastApproachDestination = FVector::ZeroVector;
+	LastApproachIssueTime = -1.0;
+	bExpectRangeEntryStop = false;
+	SetAttackTickEnabled(false);
+
+	if (HeldCommand.IsSet())
+	{
+		const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
+		if (Held.CommandTag == AttackTag && Held.CommandSerial == FinishedSerial)
+		{
+			ClearHeldCommand();
+		}
+	}
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AttackFinished: Unit=%s AttackSerial=%u Target=%s Result=%s Reason=%s PreviousState=%s Distance=%.1f AttackRange=%.1f Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		FinishedSerial,
+		*GetNameSafe(FinishedTarget),
+		AttackTerminalResultToString(Result),
+		AttackTerminalReasonToString(Reason),
+		AttackStateToString(PreviousState),
+		Distance,
+		AttackRange,
+		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+
+	bFinishingAttack = false;
+}
+
+bool UGP_UnitCommandComponent::TryConsumeAttackMovementResult(
+	uint32 Serial,
+	EGP_MovementResult Result,
+	EGP_MovementResultReason Reason)
+{
+	if (bFinishingAttack
+		|| AttackState == EGP_AttackExecutionState::Idle
+		|| ActiveAttackSerial == 0
+		|| Serial != ActiveAttackSerial
+		|| !HasExactActiveHeldAttack())
+	{
+		return false;
+	}
+
+	// Approach movement results are only meaningful while Approaching (or during range-entry stop).
+	if (AttackState != EGP_AttackExecutionState::Approaching && !bExpectRangeEntryStop)
+	{
+		return false;
+	}
+
+	AActor* Owner = GetOwner();
+	UGP_MovementComponent* Movement = ResolveMovementComponent();
+	const float Distance = ComputeAttackDistance2D(Owner, AttackTarget.Get());
+
+	auto LogApproachResult = [&](const TCHAR* Note)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution AttackApproachResult: Unit=%s AttackSerial=%u MovementSerial=%u MovementResult=%s MovementReason=%s Distance=%.1f Note=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			ActiveAttackSerial,
+			Serial,
+			GPUnitCommandStatePrivate::MovementResultToString(Result),
+			GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
+			Distance,
+			Note,
+			GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+	};
+
+	if (Result == EGP_MovementResult::Reached && Reason == EGP_MovementResultReason::None)
+	{
+		LogApproachResult(TEXT("Reached"));
+
+		AGP_UnitBase* Target = nullptr;
+		EGP_AttackTerminalReason FailReason = EGP_AttackTerminalReason::InvalidTarget;
+		if (!ValidateAttackTarget(AttackTarget.Get(), Target, FailReason))
+		{
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP UnitCommandExecution AttackTargetInvalidated: Unit=%s AttackSerial=%u Target=%s Reason=%s Role=%s NetMode=%s"),
+				*GetNameSafe(Owner),
+				ActiveAttackSerial,
+				*GetNameSafe(AttackTarget.Get()),
+				AttackTerminalReasonToString(FailReason),
+				GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+				GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+			FinishAttack(EGP_AttackTerminalResult::Failed, FailReason);
+			return true;
+		}
+
+		AttackTarget = Target;
+		const float Dist = ComputeAttackDistance2D(Owner, Target);
+		if (Dist <= AttackRange)
+		{
+			EnterAttackReady();
+		}
+		else
+		{
+			RequestOrRefreshAttackApproach(true);
+		}
+		return true;
+	}
+
+	if (Result == EGP_MovementResult::Cancelled && Reason == EGP_MovementResultReason::Superseded)
+	{
+		if (Movement != nullptr
+			&& Movement->IsMoving()
+			&& Movement->GetActiveMoveSerial() == ActiveAttackSerial)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP UnitCommandExecution AttackApproachResultIgnored: Unit=%s AttackSerial=%u ResultSerial=%u IgnoreReason=SelfSupersede MovementResult=%s MovementReason=%s Role=%s NetMode=%s"),
+				*GetNameSafe(Owner),
+				ActiveAttackSerial,
+				Serial,
+				GPUnitCommandStatePrivate::MovementResultToString(Result),
+				GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
+				GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+				GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+			return true;
+		}
+
+		LogApproachResult(TEXT("SupersededExternal"));
+		FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::MovementCancelled);
+		return true;
+	}
+
+	if (Result == EGP_MovementResult::Cancelled && Reason == EGP_MovementResultReason::Manual)
+	{
+		if (bExpectRangeEntryStop)
+		{
+			bExpectRangeEntryStop = false;
+			LogApproachResult(TEXT("RangeEntryStop"));
+
+			AGP_UnitBase* Target = nullptr;
+			EGP_AttackTerminalReason FailReason = EGP_AttackTerminalReason::InvalidTarget;
+			if (!ValidateAttackTarget(AttackTarget.Get(), Target, FailReason))
+			{
+				FinishAttack(EGP_AttackTerminalResult::Failed, FailReason);
+				return true;
+			}
+
+			AttackTarget = Target;
+			if (ComputeAttackDistance2D(Owner, Target) <= AttackRange)
+			{
+				EnterAttackReady();
+			}
+			else
+			{
+				RequestOrRefreshAttackApproach(true);
+			}
+			return true;
+		}
+
+		LogApproachResult(TEXT("ManualCancel"));
+		FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::MovementCancelled);
+		return true;
+	}
+
+	if (Result == EGP_MovementResult::Cancelled && Reason == EGP_MovementResultReason::CommandReplaced)
+	{
+		LogApproachResult(TEXT("CommandReplaced"));
+		FinishAttack(EGP_AttackTerminalResult::Cancelled, EGP_AttackTerminalReason::CommandReplaced);
+		return true;
+	}
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AttackApproachResultIgnored: Unit=%s AttackSerial=%u ResultSerial=%u IgnoreReason=UnsupportedCombination MovementResult=%s MovementReason=%s Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		ActiveAttackSerial,
+		Serial,
+		GPUnitCommandStatePrivate::MovementResultToString(Result),
+		GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
+		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+	return true;
+}
+
 void UGP_UnitCommandComponent::HandleMovementResult(
 	uint32 Serial,
 	EGP_MovementResult Result,
 	EGP_MovementResultReason Reason)
 {
+	if (TryConsumeAttackMovementResult(Serial, Result, Reason))
+	{
+		return;
+	}
+
 	AActor* Owner = GetOwner();
 	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
 	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
@@ -330,11 +1120,21 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 
 	HeldCommand = Stored;
 
+	ResetAttackExecutorForReplacement(PreviousCommand);
+
 	const bool bHeldRemainsAfterSync = SynchronizeMovementWithHeldCommand(PreviousCommand);
 	if (!bHeldRemainsAfterSync || !HeldCommand.IsSet())
 	{
-		// Move RequestMove rejected and cleared Held — do not emit HeldAccepted/HeldReplaced.
 		return;
+	}
+
+	const FGameplayTag AttackTag = FGPGameplayTags::Get().Command_Attack;
+	if (HeldCommand.GetValue().CommandTag == AttackTag)
+	{
+		if (!StartAttackExecutor() || !HeldCommand.IsSet())
+		{
+			return;
+		}
 	}
 
 	if (bHadHeldCommand)
@@ -503,6 +1303,31 @@ const FGP_StoredUnitCommand* UGP_UnitCommandComponent::GetHeldCommand() const
 	return HeldCommand.IsSet() ? &HeldCommand.GetValue() : nullptr;
 }
 
+EGP_AttackExecutionState UGP_UnitCommandComponent::GetAttackExecutionState() const
+{
+	return AttackState;
+}
+
+uint32 UGP_UnitCommandComponent::GetActiveAttackSerial() const
+{
+	return ActiveAttackSerial;
+}
+
+AGP_UnitBase* UGP_UnitCommandComponent::GetAttackTarget() const
+{
+	return AttackTarget.Get();
+}
+
+float UGP_UnitCommandComponent::GetAttackRange() const
+{
+	return AttackRange;
+}
+
+bool UGP_UnitCommandComponent::IsAttackActive() const
+{
+	return AttackState != EGP_AttackExecutionState::Idle && ActiveAttackSerial != 0;
+}
+
 void UGP_UnitCommandComponent::ClearHeldCommand()
 {
 	HeldCommand.Reset();
@@ -522,6 +1347,21 @@ uint32 UGP_UnitCommandComponent::AllocateCommandSerial()
 #if !UE_BUILD_SHIPPING
 namespace GPUnitCommandConsolePrivate
 {
+	static const TCHAR* AttackStateLabel(EGP_AttackExecutionState State)
+	{
+		switch (State)
+		{
+		case EGP_AttackExecutionState::Idle:
+			return TEXT("Idle");
+		case EGP_AttackExecutionState::Approaching:
+			return TEXT("Approaching");
+		case EGP_AttackExecutionState::Ready:
+			return TEXT("Ready");
+		default:
+			return TEXT("Unknown");
+		}
+	}
+
 	static AGP_MobileUnit* FindFirstAuthorityMobileUnit(UWorld* World)
 	{
 		if (World == nullptr)
@@ -533,6 +1373,31 @@ namespace GPUnitCommandConsolePrivate
 		{
 			AGP_MobileUnit* MobileUnit = *It;
 			if (MobileUnit != nullptr && MobileUnit->HasAuthority())
+			{
+				return MobileUnit;
+			}
+		}
+
+		return nullptr;
+	}
+
+	static AGP_MobileUnit* FindFirstAuthorityAttackingMobileUnit(UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			return nullptr;
+		}
+
+		for (TActorIterator<AGP_MobileUnit> It(World); It; ++It)
+		{
+			AGP_MobileUnit* MobileUnit = *It;
+			if (MobileUnit == nullptr || !MobileUnit->HasAuthority())
+			{
+				continue;
+			}
+
+			UGP_UnitCommandComponent* Command = MobileUnit->GetUnitCommandComponent();
+			if (Command != nullptr && Command->IsAttackActive())
 			{
 				return MobileUnit;
 			}
@@ -586,9 +1451,260 @@ namespace GPUnitCommandConsolePrivate
 			bHasHeldAfter ? TEXT("true") : TEXT("false"));
 	}
 
+	static void AttackInspect(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.Attack.Inspect missing world"));
+			return;
+		}
+
+		const TCHAR* Selection = TEXT("ActiveAttack");
+		AGP_MobileUnit* MobileUnit = FindFirstAuthorityAttackingMobileUnit(World);
+		if (MobileUnit == nullptr)
+		{
+			Selection = TEXT("FallbackFirstAuthority");
+			MobileUnit = FindFirstAuthorityMobileUnit(World);
+		}
+
+		if (MobileUnit == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.Attack.Inspect no authority AGP_MobileUnit found"));
+			return;
+		}
+
+		UGP_UnitCommandComponent* Command = MobileUnit->GetUnitCommandComponent();
+		UGP_MovementComponent* Movement = MobileUnit->GetUnitMovementComponent();
+		if (Command == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.Attack.Inspect Unit=%s missing UnitCommandComponent"),
+				*MobileUnit->GetName());
+			return;
+		}
+
+		const FGP_StoredUnitCommand* Held = Command->GetHeldCommand();
+		const uint32 HeldSerial = Held != nullptr ? Held->CommandSerial : 0;
+		const FString HeldTag = Held != nullptr ? Held->CommandTag.ToString() : FString(TEXT("none"));
+		AGP_UnitBase* Target = Command->GetAttackTarget();
+		const float Distance = (Target != nullptr)
+			? FVector::Dist2D(MobileUnit->GetActorLocation(), Target->GetActorLocation())
+			: -1.0f;
+
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution Console: gp.Attack.Inspect Unit=%s Selection=%s HeldSerial=%u HeldTag=%s AttackState=%s ActiveAttackSerial=%u Target=%s Distance=%.1f AttackRange=%.1f IsMoving=%s MovementSerial=%u Role=%s NetMode=%s"),
+			*MobileUnit->GetName(),
+			Selection,
+			HeldSerial,
+			*HeldTag,
+			AttackStateLabel(Command->GetAttackExecutionState()),
+			Command->GetActiveAttackSerial(),
+			*GetNameSafe(Target),
+			Distance,
+			Command->GetAttackRange(),
+			(Movement != nullptr && Movement->IsMoving()) ? TEXT("true") : TEXT("false"),
+			Movement != nullptr ? Movement->GetActiveMoveSerial() : 0u,
+			GPUnitCommandStatePrivate::RoleToString(MobileUnit->GetLocalRole()),
+			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(MobileUnit)));
+	}
+
+	static void AttackDestroyTarget(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.Attack.DestroyTarget missing world"));
+			return;
+		}
+
+		AGP_MobileUnit* MobileUnit = FindFirstAuthorityAttackingMobileUnit(World);
+		if (MobileUnit == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.Attack.DestroyTarget no active Attack authority unit"));
+			return;
+		}
+
+		UGP_UnitCommandComponent* Command = MobileUnit->GetUnitCommandComponent();
+		AGP_UnitBase* Target = Command != nullptr ? Command->GetAttackTarget() : nullptr;
+		if (Target == nullptr || !IsValid(Target))
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.Attack.DestroyTarget Unit=%s has no valid AttackTarget"),
+				*MobileUnit->GetName());
+			return;
+		}
+
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution Console: gp.Attack.DestroyTarget Attacker=%s Target=%s AttackSerial=%u"),
+			*MobileUnit->GetName(),
+			*Target->GetName(),
+			Command->GetActiveAttackSerial());
+
+		Target->Destroy();
+	}
+
+	static void AttackMoveTarget(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.Attack.MoveTarget missing world"));
+			return;
+		}
+
+		if (Args.Num() < 2)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: usage gp.Attack.MoveTarget X Y"));
+			return;
+		}
+
+		AGP_MobileUnit* MobileUnit = FindFirstAuthorityAttackingMobileUnit(World);
+		if (MobileUnit == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.Attack.MoveTarget no active Attack authority unit"));
+			return;
+		}
+
+		UGP_UnitCommandComponent* Command = MobileUnit->GetUnitCommandComponent();
+		AGP_UnitBase* Target = Command != nullptr ? Command->GetAttackTarget() : nullptr;
+		if (Target == nullptr || !IsValid(Target))
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.Attack.MoveTarget no valid AttackTarget"));
+			return;
+		}
+
+		const float X = FCString::Atof(*Args[0]);
+		const float Y = FCString::Atof(*Args[1]);
+		const FVector Current = Target->GetActorLocation();
+		const FVector NewLocation(X, Y, Current.Z);
+		Target->SetActorLocation(NewLocation, false);
+
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution Console: gp.Attack.MoveTarget Attacker=%s Target=%s NewLocation=%s (non-shipping Ready/Approaching validation)"),
+			*MobileUnit->GetName(),
+			*Target->GetName(),
+			*NewLocation.ToCompactString());
+	}
+
+	static void AttackTestInvalid(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.Attack.TestInvalid missing world"));
+			return;
+		}
+
+		if (Args.Num() < 1)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: usage gp.Attack.TestInvalid <Self|Friendly|Null>"));
+			return;
+		}
+
+		AGP_MobileUnit* MobileUnit = FindFirstAuthorityMobileUnit(World);
+		if (MobileUnit == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.Attack.TestInvalid no authority AGP_MobileUnit"));
+			return;
+		}
+
+		UGP_UnitCommandComponent* Command = MobileUnit->GetUnitCommandComponent();
+		if (Command == nullptr)
+		{
+			return;
+		}
+
+		FGP_UnitCommand UnitCommand;
+		UnitCommand.CommandTag = FGPGameplayTags::Get().Command_Attack;
+		UnitCommand.bQueue = false;
+		UnitCommand.TargetLocation = MobileUnit->GetActorLocation();
+
+		const FString Mode = Args[0];
+		if (Mode.Equals(TEXT("Self"), ESearchCase::IgnoreCase))
+		{
+			UnitCommand.TargetActor = MobileUnit;
+		}
+		else if (Mode.Equals(TEXT("Null"), ESearchCase::IgnoreCase))
+		{
+			UnitCommand.TargetActor = nullptr;
+		}
+		else if (Mode.Equals(TEXT("Friendly"), ESearchCase::IgnoreCase))
+		{
+			AGP_UnitBase* Friendly = nullptr;
+			for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
+			{
+				AGP_UnitBase* Candidate = *It;
+				if (Candidate != nullptr
+					&& Candidate->HasAuthority()
+					&& Candidate != MobileUnit
+					&& Candidate->GetTeamId() == MobileUnit->GetTeamId()
+					&& Candidate->GetTeamId() >= 1)
+				{
+					Friendly = Candidate;
+					break;
+				}
+			}
+
+			if (Friendly == nullptr)
+			{
+				UE_LOG(LogGPUnitCommandExecution, Warning,
+					TEXT("GP UnitCommandExecution Console: gp.Attack.TestInvalid Friendly — no same-team unit found"));
+				return;
+			}
+			UnitCommand.TargetActor = Friendly;
+		}
+		else
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: usage gp.Attack.TestInvalid <Self|Friendly|Null>"));
+			return;
+		}
+
+		const bool bHadHeldBefore = Command->HasHeldCommand();
+		Command->HandleCommand(UnitCommand);
+		const bool bHasHeldAfter = Command->HasHeldCommand();
+		const bool bAttackActive = Command->IsAttackActive();
+
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution Console: gp.Attack.TestInvalid Mode=%s Unit=%s HadHeldBefore=%s HasHeldAfter=%s AttackActive=%s"),
+			*Mode,
+			*MobileUnit->GetName(),
+			bHadHeldBefore ? TEXT("true") : TEXT("false"),
+			bHasHeldAfter ? TEXT("true") : TEXT("false"),
+			bAttackActive ? TEXT("true") : TEXT("false"));
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs GUnitCommandTestRejectedMoveCommand(
 		TEXT("gp.UnitCommand.TestRejectedMove"),
 		TEXT("GP-S23 non-shipping: HandleCommand Move with non-finite destination to validate phantom-Held clear."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&UnitCommandTestRejectedMove));
+
+	static FAutoConsoleCommandWithWorldAndArgs GAttackInspectCommand(
+		TEXT("gp.Attack.Inspect"),
+		TEXT("GP-S24 non-shipping: dump Attack executor state (active Attack preferred)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&AttackInspect));
+
+	static FAutoConsoleCommandWithWorldAndArgs GAttackDestroyTargetCommand(
+		TEXT("gp.Attack.DestroyTarget"),
+		TEXT("GP-S24 non-shipping: Destroy() current Attack target; Tick must detect TargetDestroyed."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&AttackDestroyTarget));
+
+	static FAutoConsoleCommandWithWorldAndArgs GAttackMoveTargetCommand(
+		TEXT("gp.Attack.MoveTarget"),
+		TEXT("GP-S24 non-shipping: teleport Attack target to X Y (Z preserved) for Ready↔Approaching tests."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&AttackMoveTarget));
+
+	static FAutoConsoleCommandWithWorldAndArgs GAttackTestInvalidCommand(
+		TEXT("gp.Attack.TestInvalid"),
+		TEXT("GP-S24 non-shipping: HandleCommand Attack with Self|Friendly|Null to validate accept-time reject."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&AttackTestInvalid));
 }
 #endif

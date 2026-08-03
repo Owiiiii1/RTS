@@ -3454,4 +3454,31 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 - None (analysis-only).
 
 ### Stop condition
-Commit/push `feature/gp-s24-attack-execution-analysis` only. Do **not** merge to main. Do **not** mark GP-S24 implemented.
+Superseded by GP-S24 implementation candidate checkpoint.
+
+## 2026-08-03 — GP-S24 / Attack Execution Foundation — implementation candidate
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `Docs/Development/Claude_Tasks/GP-S24_Attack_Execution_Foundation.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Attack executor inside `UGP_UnitCommandComponent`: Idle/Approaching/Ready; Attack serial == approach movement serial.
+- Accept-time validation clears phantom Held; Ready retains Held; no damage.
+- Movement result consume-first routing; self-supersede ignore; range-entry Manual stop flag; FinishAttack reentrancy guard.
+- Tick authority-only while Attack active; reissue throttle for moving targets.
+- Debug: `gp.Attack.Inspect`, `DestroyTarget`, `MoveTarget`, `TestInvalid`.
+- Deferred: damage/health/GAS/Nav/Mine/queue/replication.
+
+### Builds / validation
+- GPEditor Development + UHT — **PASSED**.
+- GP Dev/Shipping — deferred until operator validation.
+- Operator — **pending**.
+
+### Stop condition
+Commit/push `feature/gp-s24-attack-execution-implementation` only. Do **not** merge to main.

@@ -2,36 +2,30 @@
 (Unit-side Held Command ownership after GP-S17 delivery — analysis)
 
 ## Status
-**Status: ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**Status: CODE_DONE_NETWORK_VALIDATED**
 
-Docs-only. **No** C++ / assets / Blueprint / movement / AI / GAS / routing / executor / queue / state-enum / callback code in this pass.
-Depends on: GP-S17 `DONE_WITH_EXECUTION_DEFERRED` (delivery to `ReceiveCommand` complete).
+**GP-S18 Status: `DONE_WITH_EXECUTORS_DEFERRED`**
 
----
+Held-command layer implemented and operator-validated on `feature/gp-s18-unit-layer-implementation` (base = `main` `8b64405`).
 
-## Terminology (locked)
-
-Use **Held Command** everywhere for GP-S18.
-
-Do **not** use for GP-S18:
-
-- Active Command
-- Executing Command
-- Running Command
-- Completed Command
-
-**Reason:** no executor exists; the command is accepted and held only; gameplay execution has not started.
-
-Canonical pipeline after GP-S18:
+Validated pipeline:
 
 ```text
 AGP_UnitBase::ReceiveCommand
 → UGP_UnitCommandComponent::HandleCommand
-→ Held Command state
-→ future executor integration
+→ HeldAccepted / HeldReplaced / QueueDeferred
 ```
 
-**Held does not imply executable.** A structurally accepted command may be held even though no executor exists yet.
+**Held Command does not mean executing.** Explicitly remaining deferred / absent:
+
+- no movement exists
+- no routing exists
+- no executor exists
+- no queue exists
+- no completion/cancel callbacks exist
+- no AI / NavMesh / GAS execution
+
+Depends on: GP-S17 `DONE_WITH_EXECUTION_DEFERRED`.
 
 ---
 
@@ -554,35 +548,57 @@ GP UnitCommandState HeldCleared: Unit=... Serial=... Reason=EndPlay Role=... Net
 
 ---
 
-## 22. Validation matrix (future implementation)
+## 22. Operator validation (Listen Server / 2P)
 
-### Standalone
+### Host Team 1
 
-| Case | Expected |
+| Case | Evidence | Result |
+| --- | --- | --- |
+| First Move | `HeldAccepted Serial=1 Tag=GP.Command.Move Queue=false Role=Authority NetMode=ListenServer` | **PASS** — first held; serial starts at 1; authority-only; no movement |
+| Second Move | `HeldReplaced PreviousSerial=1 NewSerial=2 PreviousTag=Move NewTag=Move` | **PASS** — replace; serial increment; old held replaced |
+| Multi-selection | Unit A continued `2→3`; Unit B independent `Serial=1` | **PASS** — per-unit independent state; no shared serial |
+| Attack replacement | Unit A `3→4` Move→Attack; Unit B `1→2` Move→Attack | **PASS** — command-agnostic storage; Attack replaces Move; no Attack execution |
+
+### Remote client Team 2
+
+| Case | Evidence | Result |
+| --- | --- | --- |
+| Client input | `LocalTeam=2 NetMode=Client Role=AutonomousProxy` | **PASS** |
+| Server acceptance | `PC=GP_PlayerController_1 Team=2 NetMode=ListenServer` | **PASS** |
+| Authority receiver | `Team=2 Role=Authority NetMode=ListenServer` | **PASS** |
+| Held state | `HeldAccepted Serial=1` then `HeldReplaced 1→2` | **PASS** — remote submission; server-only held processing; no client duplicate; Team 2 isolated |
+| QueueDeferred | `Queue=true HeldSerial=2 Role=Authority NetMode=ListenServer` | **PASS** — held unchanged; no serial consumed; no silent replace; no queue execution |
+| Remote Attack after queue | `HeldReplaced PreviousSerial=2 NewSerial=3 Move→Attack` | **PASS** — queued did not consume serial; next non-queued got 3; Attack held; no execution |
+
+### Validation summary
+
+| Item | Result |
 | --- | --- |
-| Single Move | Phase E Received exactly once; HandleCommand exactly once; HeldAccepted; serial 1; held Move fields match delivery; **no** movement |
-| Second Move | HeldReplaced; previous serial 1; new serial 2; held location updated; **no** execution |
-| Queued Move | QueueDeferred; held serial/content unchanged; no new serial |
-| Attack | Weak TargetActor resolves while actor exists; target is not command owner; **no** attack |
-| Destroyed target | Weak pointer invalid safely; no crash; no tick processing |
+| Host HeldAccepted | **PASS** |
+| Host HeldReplaced | **PASS** |
+| Independent per-unit serials | **PASS** |
+| Multi-unit held state | **PASS** |
+| Remote-client held state | **PASS** |
+| Server-authoritative processing | **PASS** |
+| QueueDeferred | **PASS** |
+| Queue does not replace state | **PASS** |
+| Queue does not consume serial | **PASS** |
+| Attack held state | **PASS** |
+| Target is not command-state owner | **PASS** |
+| Team isolation | **PASS** |
+| Duplicate state handling | **NONE** |
+| Unexpected movement | **NONE** |
+| AI / NavMesh / GAS execution | **NONE** |
+| Runtime warnings/errors | **NONE** in supplied excerpts |
+| Weak target destruction | **NOT CAPTURED** |
+| EndPlay HeldCleared log | **NOT CAPTURED** |
+| Mine held state | **DEFERRED** |
 
-### 2P Listen Server
-
-| Case | Expected |
-| --- | --- |
-| Remote client | Input on client; validation/dispatch on server; Phase E receiver on authority; UnitCommandState log only server-side; held state only on authoritative component; no duplicate client processing |
-| Host multi-unit | Each selected unit owns independent serial/state; multi-unit command creates serial 1 independently on each unit |
-| Isolation | No cross-team held command; no state on target actor; no unit RPC added |
-
-### Regression
-
-GP-S17 log sequence remains; selection/input unaffected; controller tick remains enabled; no movement / AI / GAS; no asset requirement; no Build.cs change.
+Do **not** invent PASS for uncaptured cases.
 
 ---
 
-## 23. GP-S18 completion status (locked)
-
-After successful implementation and network validation:
+## 23. GP-S18 completion status
 
 **GP-S18 Status: `DONE_WITH_EXECUTORS_DEFERRED`**
 
@@ -592,12 +608,12 @@ Completion means:
 - Server-authoritative held state exists
 - Lifetime-safe target storage exists
 - Replace semantics exist
-- Queue intent is explicitly deferred
-- Serial identity exists
+- Queue intent is explicitly deferred (`QueueDeferred`)
+- Serial identity exists (per-unit, independent)
 - UnitBase forwards correctly
-- Standalone/2P validated
+- Host + remote-client validated
 
-It does **not** mean: commands execute; movement exists; Attack/Mine work; queue exists.
+It does **not** mean: commands execute; movement exists; Attack/Mine gameplay works; queue exists; routing/executor/callbacks exist.
 
 ---
 
@@ -623,9 +639,69 @@ It does **not** mean: commands execute; movement exists; Attack/Mine work; queue
 
 ---
 
+## 25. Implementation record
+
+### Actual files
+
+| File | Role |
+| --- | --- |
+| `GP/Source/GPRuntime/Public/Command/GPStoredUnitCommand.h` | Plain `FGP_StoredUnitCommand` |
+| `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h` | Component API / state |
+| `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp` | HandleCommand / EndPlay / logs |
+| `GP/Source/GPRuntime/Public/Units/GPUnitBase.h` | Subobject + getter |
+| `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp` | CreateDefaultSubobject + forward |
+
+### Exact APIs
+
+```cpp
+// UGP_UnitCommandComponent
+void HandleCommand(const FGP_UnitCommand& Command);
+bool HasHeldCommand() const;
+const FGP_StoredUnitCommand* GetHeldCommand() const;
+
+// AGP_UnitBase
+UGP_UnitCommandComponent* GetUnitCommandComponent() const;
+virtual void ReceiveCommand(const FGP_UnitCommand& Command); // Received log + forward
+```
+
+### Component metadata / settings
+
+- `UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))` — matches Selection/Command components
+- `PrimaryComponentTick.bCanEverTick = false`
+- `SetIsReplicatedByDefault(false)`
+- No UFUNCTION / RPC / replicated properties
+
+### Serial wrap policy (implemented)
+
+`AllocateCommandSerial()` returns current `NextCommandSerial` (starts at 1), then increments.
+If post-increment equals `0`, reset to `1` (zero reserved).
+
+### Policies implemented
+
+| Policy | Behavior |
+| --- | --- |
+| Non-authority | `RejectedAuthority`; no state/serial |
+| `bQueue=true` | `QueueDeferred`; held unchanged; no serial |
+| `bQueue=false` empty | `HeldAccepted`; serial allocated |
+| `bQueue=false` held | `HeldReplaced`; serial allocated |
+| EndPlay with held | `HeldCleared Reason=EndPlay` then clear |
+| Routing / execution | **NO** |
+| Movement / AI / GAS | **NO** |
+
+### Target storage
+
+Delivery `AActor*` → held `TWeakObjectPtr<AActor>` in `HandleCommand`. No raw persistence. No validity polling.
+
+### Validation
+
+Host + remote-client Listen Server validation — **CODE_DONE_NETWORK_VALIDATED** (§22).
+Weak target destruction / EndPlay HeldCleared / Mine — **NOT CAPTURED** or **DEFERRED**.
+
+---
+
 ## Stop condition
-**ANALYSIS_READY_IMPLEMENTATION_PENDING.**
-Await GP-S18 implementation assignment.
-Do **not** create component / stored struct / executor / movement / routing / queue / state-enum / callback code from this analysis.
-Do **not** rewrite TDD from this pass.
-Do **not** merge to main from this docs pass.
+**CODE_DONE_NETWORK_VALIDATED.** **GP-S18: DONE_WITH_EXECUTORS_DEFERRED.**
+Commit/push `feature/gp-s18-unit-layer-implementation` only.
+Do **not** merge to main from this close-out.
+Do **not** start GP-S20 / Move / AI / NavMesh / GAS / routing / executor / queue / callbacks from this pass.
+Do **not** rewrite TDD.

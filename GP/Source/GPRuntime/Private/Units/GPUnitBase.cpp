@@ -7,6 +7,7 @@
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 #include "Tags/GPGameplayTags.h"
+#include "Units/GPUnitCommandComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPUnitCommand, Log, All);
 
@@ -52,6 +53,13 @@ AGP_UnitBase::AGP_UnitBase()
 	PrimaryActorTick.bCanEverTick = false;
 	bReplicates = true;
 	SetReplicateMovement(true);
+
+	UnitCommandComponent = CreateDefaultSubobject<UGP_UnitCommandComponent>(TEXT("UnitCommandComponent"));
+}
+
+UGP_UnitCommandComponent* AGP_UnitBase::GetUnitCommandComponent() const
+{
+	return UnitCommandComponent;
 }
 
 void AGP_UnitBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -146,6 +154,18 @@ void AGP_UnitBase::ReceiveCommand(const FGP_UnitCommand& Command)
 		Command.bQueue ? TEXT("true") : TEXT("false"),
 		GPUnitCommandPrivate::RoleToString(GetLocalRole()),
 		GPUnitCommandPrivate::NetModeToString(NetMode));
+
+	if (UnitCommandComponent)
+	{
+		UnitCommandComponent->HandleCommand(Command);
+	}
+	else
+	{
+		UE_LOG(LogGPUnitCommand, Warning,
+			TEXT("GP UnitCommand ForwardFailed: Unit=%s Reason=MissingUnitCommandComponent Tag=%s"),
+			*GetName(),
+			*Command.CommandTag.ToString());
+	}
 }
 
 void AGP_UnitBase::OnRep_TeamId()

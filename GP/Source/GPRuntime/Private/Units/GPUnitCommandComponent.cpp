@@ -291,13 +291,19 @@ bool UGP_UnitCommandComponent::IsAttackConfigValid() const
 		&& FMath::IsFinite(AttackReissueInterval) && AttackReissueInterval >= 0.0f;
 }
 
-float UGP_UnitCommandComponent::ComputeAttackDistance2D(const AActor* Owner, const AActor* Target) const
+bool UGP_UnitCommandComponent::TryComputeAttackDistance2D(
+	const AActor* Owner,
+	const AActor* Target,
+	float& OutDistance) const
 {
-	if (Owner == nullptr || Target == nullptr)
+	OutDistance = -1.0f;
+	if (Owner == nullptr || !IsValid(Target))
 	{
-		return TNumericLimits<float>::Max();
+		return false;
 	}
-	return FVector::Dist2D(Owner->GetActorLocation(), Target->GetActorLocation());
+
+	OutDistance = FVector::Dist2D(Owner->GetActorLocation(), Target->GetActorLocation());
+	return true;
 }
 
 FVector UGP_UnitCommandComponent::MakeApproachDestination(const AActor* Owner, const AActor* Target) const
@@ -419,6 +425,8 @@ void UGP_UnitCommandComponent::ResetAttackExecutor()
 	LastApproachDestination = FVector::ZeroVector;
 	LastApproachIssueTime = -1.0;
 	bExpectRangeEntryStop = false;
+	bExpectAttackCleanupStopResult = false;
+	PendingAttackCleanupMovementSerial = 0;
 	SetAttackTickEnabled(false);
 }
 
@@ -516,18 +524,20 @@ bool UGP_UnitCommandComponent::StartAttackExecutor()
 	AttackTarget = ValidTarget;
 	SetAttackTickEnabled(true);
 
-	const float Distance = ComputeAttackDistance2D(Owner, ValidTarget);
+	float Distance = -1.0f;
+	const bool bDistanceAvailable = TryComputeAttackDistance2D(Owner, ValidTarget, Distance);
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution AttackAccepted: Unit=%s AttackSerial=%u Target=%s Distance=%.1f AttackRange=%.1f Role=%s NetMode=%s"),
+		TEXT("GP UnitCommandExecution AttackAccepted: Unit=%s AttackSerial=%u Target=%s Distance=%.1f DistanceAvailable=%s AttackRange=%.1f Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
 		AttackSerial,
 		*GetNameSafe(ValidTarget),
 		Distance,
+		bDistanceAvailable ? TEXT("true") : TEXT("false"),
 		AttackRange,
 		GPUnitCommandStatePrivate::RoleToString(Role),
 		GPUnitCommandStatePrivate::NetModeToString(NetMode));
 
-	if (Distance <= AttackRange)
+	if (bDistanceAvailable && Distance <= AttackRange)
 	{
 		EnterAttackReady();
 	}
@@ -546,14 +556,16 @@ void UGP_UnitCommandComponent::EnterAttackApproaching()
 	AttackState = EGP_AttackExecutionState::Approaching;
 	SetAttackTickEnabled(true);
 
-	const float Distance = ComputeAttackDistance2D(Owner, AttackTarget.Get());
+	float Distance = -1.0f;
+	const bool bDistanceAvailable = TryComputeAttackDistance2D(Owner, AttackTarget.Get(), Distance);
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution AttackStateChanged: Unit=%s AttackSerial=%u Target=%s PreviousState=%s NewState=Approaching Distance=%.1f AttackRange=%.1f Role=%s NetMode=%s"),
+		TEXT("GP UnitCommandExecution AttackStateChanged: Unit=%s AttackSerial=%u Target=%s PreviousState=%s NewState=Approaching Distance=%.1f DistanceAvailable=%s AttackRange=%.1f Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
 		ActiveAttackSerial,
 		*GetNameSafe(AttackTarget.Get()),
 		AttackStateToString(PreviousState),
 		Distance,
+		bDistanceAvailable ? TEXT("true") : TEXT("false"),
 		AttackRange,
 		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
 		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
@@ -574,24 +586,27 @@ void UGP_UnitCommandComponent::EnterAttackReady()
 	bExpectRangeEntryStop = false;
 	SetAttackTickEnabled(true);
 
-	const float Distance = ComputeAttackDistance2D(Owner, AttackTarget.Get());
+	float Distance = -1.0f;
+	const bool bDistanceAvailable = TryComputeAttackDistance2D(Owner, AttackTarget.Get(), Distance);
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution AttackStateChanged: Unit=%s AttackSerial=%u Target=%s PreviousState=%s NewState=Ready Distance=%.1f AttackRange=%.1f Role=%s NetMode=%s"),
+		TEXT("GP UnitCommandExecution AttackStateChanged: Unit=%s AttackSerial=%u Target=%s PreviousState=%s NewState=Ready Distance=%.1f DistanceAvailable=%s AttackRange=%.1f Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
 		ActiveAttackSerial,
 		*GetNameSafe(AttackTarget.Get()),
 		AttackStateToString(PreviousState),
 		Distance,
+		bDistanceAvailable ? TEXT("true") : TEXT("false"),
 		AttackRange,
 		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
 		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution AttackReady: Unit=%s AttackSerial=%u Target=%s Distance=%.1f AttackRange=%.1f Role=%s NetMode=%s"),
+		TEXT("GP UnitCommandExecution AttackReady: Unit=%s AttackSerial=%u Target=%s Distance=%.1f DistanceAvailable=%s AttackRange=%.1f Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
 		ActiveAttackSerial,
 		*GetNameSafe(AttackTarget.Get()),
 		Distance,
+		bDistanceAvailable ? TEXT("true") : TEXT("false"),
 		AttackRange,
 		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
 		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
@@ -610,7 +625,7 @@ void UGP_UnitCommandComponent::RequestOrRefreshAttackApproach(bool bForceIssue)
 	if (!ValidateAttackTarget(AttackTarget.Get(), Target, FailReason))
 	{
 		UE_LOG(LogGPUnitCommandExecution, Log,
-			TEXT("GP UnitCommandExecution AttackTargetInvalidated: Unit=%s AttackSerial=%u Target=%s Reason=%s Role=%s NetMode=%s"),
+			TEXT("GP UnitCommandExecution AttackTargetInvalidated: Unit=%s AttackSerial=%u Target=%s Reason=%s Distance=-1.0 DistanceAvailable=false Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			ActiveAttackSerial,
 			*GetNameSafe(AttackTarget.Get()),
@@ -623,7 +638,13 @@ void UGP_UnitCommandComponent::RequestOrRefreshAttackApproach(bool bForceIssue)
 
 	AttackTarget = Target;
 
-	const float Distance = ComputeAttackDistance2D(Owner, Target);
+	float Distance = -1.0f;
+	if (!TryComputeAttackDistance2D(Owner, Target, Distance))
+	{
+		FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::InvalidTarget);
+		return;
+	}
+
 	if (Distance <= AttackRange)
 	{
 		UGP_MovementComponent* Movement = ResolveMovementComponent();
@@ -723,7 +744,7 @@ void UGP_UnitCommandComponent::EvaluateAttack()
 	if (!ValidateAttackTarget(AttackTarget.Get(), Target, FailReason))
 	{
 		UE_LOG(LogGPUnitCommandExecution, Log,
-			TEXT("GP UnitCommandExecution AttackTargetInvalidated: Unit=%s AttackSerial=%u Target=%s Reason=%s Role=%s NetMode=%s"),
+			TEXT("GP UnitCommandExecution AttackTargetInvalidated: Unit=%s AttackSerial=%u Target=%s Reason=%s Distance=-1.0 DistanceAvailable=false Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			ActiveAttackSerial,
 			*GetNameSafe(AttackTarget.Get()),
@@ -735,7 +756,12 @@ void UGP_UnitCommandComponent::EvaluateAttack()
 	}
 
 	AttackTarget = Target;
-	const float Distance = ComputeAttackDistance2D(Owner, Target);
+	float Distance = -1.0f;
+	if (!TryComputeAttackDistance2D(Owner, Target, Distance))
+	{
+		FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::InvalidTarget);
+		return;
+	}
 
 	if (AttackState == EGP_AttackExecutionState::Ready)
 	{
@@ -782,17 +808,23 @@ void UGP_UnitCommandComponent::FinishAttack(
 	const uint32 FinishedSerial = ActiveAttackSerial;
 	const EGP_AttackExecutionState PreviousState = AttackState;
 	AGP_UnitBase* FinishedTarget = AttackTarget.Get();
-	const float Distance = ComputeAttackDistance2D(Owner, FinishedTarget);
+	float Distance = -1.0f;
+	const bool bDistanceAvailable = TryComputeAttackDistance2D(Owner, FinishedTarget, Distance);
 	const FGameplayTag AttackTag = FGPGameplayTags::Get().Command_Attack;
 
 	UGP_MovementComponent* Movement = ResolveMovementComponent();
-	if (Movement != nullptr && Movement->IsMoving()
+	const bool bNeedCleanupStop = Movement != nullptr
+		&& Movement->IsMoving()
 		&& FinishedSerial != 0
-		&& Movement->GetActiveMoveSerial() == FinishedSerial)
+		&& Movement->GetActiveMoveSerial() == FinishedSerial;
+
+	// Range-entry must not consume terminal cleanup StopMove.
+	bExpectRangeEntryStop = false;
+
+	if (bNeedCleanupStop)
 	{
-		// External finish — do not treat Cancelled/Manual as range-entry.
-		bExpectRangeEntryStop = false;
-		Movement->StopMove(EGP_MovementStopReason::Manual);
+		bExpectAttackCleanupStopResult = true;
+		PendingAttackCleanupMovementSerial = FinishedSerial;
 	}
 
 	AttackState = EGP_AttackExecutionState::Idle;
@@ -800,8 +832,16 @@ void UGP_UnitCommandComponent::FinishAttack(
 	AttackTarget.Reset();
 	LastApproachDestination = FVector::ZeroVector;
 	LastApproachIssueTime = -1.0;
-	bExpectRangeEntryStop = false;
 	SetAttackTickEnabled(false);
+
+	if (bNeedCleanupStop)
+	{
+		Movement->StopMove(EGP_MovementStopReason::Manual);
+	}
+
+	// Defensive clear if StopMove did not broadcast (e.g. already idle).
+	bExpectAttackCleanupStopResult = false;
+	PendingAttackCleanupMovementSerial = 0;
 
 	if (HeldCommand.IsSet())
 	{
@@ -813,7 +853,7 @@ void UGP_UnitCommandComponent::FinishAttack(
 	}
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution AttackFinished: Unit=%s AttackSerial=%u Target=%s Result=%s Reason=%s PreviousState=%s Distance=%.1f AttackRange=%.1f Role=%s NetMode=%s"),
+		TEXT("GP UnitCommandExecution AttackFinished: Unit=%s AttackSerial=%u Target=%s Result=%s Reason=%s PreviousState=%s Distance=%.1f DistanceAvailable=%s AttackRange=%.1f Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
 		FinishedSerial,
 		*GetNameSafe(FinishedTarget),
@@ -821,6 +861,7 @@ void UGP_UnitCommandComponent::FinishAttack(
 		AttackTerminalReasonToString(Reason),
 		AttackStateToString(PreviousState),
 		Distance,
+		bDistanceAvailable ? TEXT("true") : TEXT("false"),
 		AttackRange,
 		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
 		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
@@ -833,6 +874,30 @@ bool UGP_UnitCommandComponent::TryConsumeAttackMovementResult(
 	EGP_MovementResult Result,
 	EGP_MovementResultReason Reason)
 {
+	AActor* Owner = GetOwner();
+
+	// Terminal cleanup StopMove(Manual) from FinishAttack — consume before any Held Move fallback.
+	if (bExpectAttackCleanupStopResult
+		&& Serial == PendingAttackCleanupMovementSerial
+		&& PendingAttackCleanupMovementSerial != 0
+		&& Result == EGP_MovementResult::Cancelled
+		&& Reason == EGP_MovementResultReason::Manual)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution AttackApproachResultIgnored: Unit=%s AttackSerial=%u ResultSerial=%u IgnoreReason=TerminalCleanupStop MovementResult=%s MovementReason=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			PendingAttackCleanupMovementSerial,
+			Serial,
+			GPUnitCommandStatePrivate::MovementResultToString(Result),
+			GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
+			GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+
+		bExpectAttackCleanupStopResult = false;
+		PendingAttackCleanupMovementSerial = 0;
+		return true;
+	}
+
 	if (bFinishingAttack
 		|| AttackState == EGP_AttackExecutionState::Idle
 		|| ActiveAttackSerial == 0
@@ -848,20 +913,21 @@ bool UGP_UnitCommandComponent::TryConsumeAttackMovementResult(
 		return false;
 	}
 
-	AActor* Owner = GetOwner();
 	UGP_MovementComponent* Movement = ResolveMovementComponent();
-	const float Distance = ComputeAttackDistance2D(Owner, AttackTarget.Get());
+	float Distance = -1.0f;
+	const bool bDistanceAvailable = TryComputeAttackDistance2D(Owner, AttackTarget.Get(), Distance);
 
 	auto LogApproachResult = [&](const TCHAR* Note)
 	{
 		UE_LOG(LogGPUnitCommandExecution, Log,
-			TEXT("GP UnitCommandExecution AttackApproachResult: Unit=%s AttackSerial=%u MovementSerial=%u MovementResult=%s MovementReason=%s Distance=%.1f Note=%s Role=%s NetMode=%s"),
+			TEXT("GP UnitCommandExecution AttackApproachResult: Unit=%s AttackSerial=%u MovementSerial=%u MovementResult=%s MovementReason=%s Distance=%.1f DistanceAvailable=%s Note=%s Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			ActiveAttackSerial,
 			Serial,
 			GPUnitCommandStatePrivate::MovementResultToString(Result),
 			GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
 			Distance,
+			bDistanceAvailable ? TEXT("true") : TEXT("false"),
 			Note,
 			GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
 			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
@@ -876,7 +942,7 @@ bool UGP_UnitCommandComponent::TryConsumeAttackMovementResult(
 		if (!ValidateAttackTarget(AttackTarget.Get(), Target, FailReason))
 		{
 			UE_LOG(LogGPUnitCommandExecution, Log,
-				TEXT("GP UnitCommandExecution AttackTargetInvalidated: Unit=%s AttackSerial=%u Target=%s Reason=%s Role=%s NetMode=%s"),
+				TEXT("GP UnitCommandExecution AttackTargetInvalidated: Unit=%s AttackSerial=%u Target=%s Reason=%s Distance=-1.0 DistanceAvailable=false Role=%s NetMode=%s"),
 				*GetNameSafe(Owner),
 				ActiveAttackSerial,
 				*GetNameSafe(AttackTarget.Get()),
@@ -888,7 +954,13 @@ bool UGP_UnitCommandComponent::TryConsumeAttackMovementResult(
 		}
 
 		AttackTarget = Target;
-		const float Dist = ComputeAttackDistance2D(Owner, Target);
+		float Dist = -1.0f;
+		if (!TryComputeAttackDistance2D(Owner, Target, Dist))
+		{
+			FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::InvalidTarget);
+			return true;
+		}
+
 		if (Dist <= AttackRange)
 		{
 			EnterAttackReady();
@@ -939,7 +1011,14 @@ bool UGP_UnitCommandComponent::TryConsumeAttackMovementResult(
 			}
 
 			AttackTarget = Target;
-			if (ComputeAttackDistance2D(Owner, Target) <= AttackRange)
+			float Dist = -1.0f;
+			if (!TryComputeAttackDistance2D(Owner, Target, Dist))
+			{
+				FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::InvalidTarget);
+				return true;
+			}
+
+			if (Dist <= AttackRange)
 			{
 				EnterAttackReady();
 			}

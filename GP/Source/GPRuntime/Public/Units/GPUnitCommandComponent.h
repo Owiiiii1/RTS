@@ -123,7 +123,13 @@ private:
 	void SetAttackTickEnabled(bool bEnabled);
 	bool HasExactActiveHeldAttack() const;
 	bool IsAttackConfigValid() const;
-	float ComputeAttackDistance2D(const AActor* Owner, const AActor* Target) const;
+
+	/** Returns false when distance is unavailable (null/invalid target). OutDistance stays -1.f. */
+	bool TryComputeAttackDistance2D(
+		const AActor* Owner,
+		const AActor* Target,
+		float& OutDistance) const;
+
 	FVector MakeApproachDestination(const AActor* Owner, const AActor* Target) const;
 	UGP_MovementComponent* ResolveMovementComponent() const;
 
@@ -144,4 +150,8 @@ private:
 	double LastApproachIssueTime = -1.0;
 	bool bExpectRangeEntryStop = false;
 	bool bFinishingAttack = false;
+
+	/** Internal FinishAttack StopMove(Manual) cleanup — not range-entry. */
+	bool bExpectAttackCleanupStopResult = false;
+	uint32 PendingAttackCleanupMovementSerial = 0;
 };

@@ -576,16 +576,36 @@ Ready retains Held Attack; no damage. Terminal / accept reject clears exact Atta
 `gp.Attack.Inspect`, `gp.Attack.DestroyTarget`, `gp.Attack.MoveTarget X Y`, `gp.Attack.TestInvalid <Self|Friendly|Null>`
 
 ### Builds
-GPEditor Win64 Development + UHT — **PASSED**. GP Dev/Shipping deferred to finalization.
+GPEditor Win64 Development + UHT — **PASSED** (candidate + terminal cleanup fix). GP Dev/Shipping deferred to finalization.
 
 ### Operator validation
-**Pending.** Plan A–M in this document (in-range Ready, approach, reissue, Ready→Approaching, Move replace, retarget, invalid, destroy, QueueDeferred, remote, multi-unit, EndPlay).
+**CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+| Case | Result |
+| --- | --- |
+| Approaching→Ready | **PASS** |
+| Ready→Approaching | **PASS** |
+| Attack retarget | **PASS** |
+| Attack→Move | **PASS** |
+| Invalid Self/Friendly/Null | **PASS** |
+| DestroyTarget Ready | **PASS** |
+| DestroyTarget Approaching (functional terminal) | **PASS** (cleanup false-ignore + FLT_MAX distance fixed) |
+| Moving-target SelfSupersede | **PASS** |
+| EndPlay | **PASS** |
+| QueueDeferred | **PENDING** |
+| Remote Team 2 | **PENDING** |
+| Multi-unit | **PENDING** |
+
+Fixes after operator feedback:
+- `FinishAttack` StopMove(Manual) consumed via `bExpectAttackCleanupStopResult` + `PendingAttackCleanupMovementSerial` (no `MovementResultIgnored HeldTagNotMove`).
+- Terminal distance uses `-1.0` + `DistanceAvailable=false` when target invalid (no FLT_MAX).
 
 ---
 
 ## Stop condition (candidate)
 
 **CODE_READY_OPERATOR_VALIDATION_PENDING.**
+Retest DestroyTarget Approaching cleanup + QueueDeferred still pending.
 Commit/push `feature/gp-s24-attack-execution-implementation` only.
 Do **not** merge to main.
 Do **not** start damage/GAS/Nav/Mine/queue from this candidate.

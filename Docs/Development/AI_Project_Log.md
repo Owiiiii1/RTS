@@ -3481,4 +3481,29 @@ Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Operator — **pending**.
 
 ### Stop condition
-Commit/push `feature/gp-s24-attack-execution-implementation` only. Do **not** merge to main.
+Superseded by terminal cleanup fix checkpoint.
+
+## 2026-08-03 — GP-S24 / Attack Execution Foundation — terminal cleanup fix
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h` — cleanup expectation fields; TryComputeAttackDistance2D
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `Docs/Development/Claude_Tasks/GP-S24_Attack_Execution_Foundation.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Operator found: DestroyTarget during Approaching → FinishAttack StopMove → false `MovementResultIgnored HeldTagNotMove`; AttackFinished logged FLT_MAX distance.
+- Fix: `bExpectAttackCleanupStopResult` + `PendingAttackCleanupMovementSerial` consume Cancelled/Manual cleanup before Held Move fallback; no recursive FinishAttack.
+- Fix: `TryComputeAttackDistance2D` → Distance=-1 / DistanceAvailable=false when target unavailable.
+- PASS so far: Approaching↔Ready, retarget, Attack→Move, invalid tests, DestroyTarget Ready/Approaching path, SelfSupersede, EndPlay.
+- PENDING: QueueDeferred; Remote/multi-unit still open.
+
+### Builds / validation
+- GPEditor Development + UHT — **PASSED** (fix rebuild).
+- Operator — retest DestroyTarget Approaching cleanup; QueueDeferred pending.
+
+### Stop condition
+Commit/push same branch only. Do **not** merge to main.

@@ -3039,3 +3039,52 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s18-unit-layer-analysis` only. Do **not** merge to main. Do **not** implement component/stored struct/movement/AI/GAS/routing/executor/queue from this pass.
+
+## 2026-08-03 — GP-S18 / Unit Layer — implementation
+
+Status: **CODE_READY_NETWORK_VALIDATION_PENDING** (superseded by completion checkpoint below)
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Command/GPStoredUnitCommand.h` — new plain held payload (`TWeakObjectPtr` + serial)
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h` — new
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp` — new
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h` — default subobject + getter
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp` — CreateDefaultSubobject + ReceiveCommand forward
+- `Docs/Development/Claude_Tasks/GP-S18_Unit_Layer.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Implemented server-authoritative Held Command layer on `feature/gp-s18-unit-layer-implementation` (base = `main` `8b64405`).
+- `UGP_UnitCommandComponent` on `AGP_UnitBase`: non-replicated, tick off; `HandleCommand` / `HasHeldCommand` / `GetHeldCommand`.
+- Policies: RejectedAuthority; QueueDeferred (no mutation/serial); HeldAccepted / HeldReplaced; EndPlay HeldCleared.
+- Stored weak target; local `CommandSerial` with zero-skip wrap; Phase E Received log preserved then forward once.
+- No routing, execution, movement, AI, GAS, queue, RPC, Build.cs, tags, PlayerController/CommandComponent/delivery payload changes.
+
+### Builds / validation
+- GPEditor Win64 Development / GP Win64 Development / GP Win64 Shipping / UHT — **PASSED** (implementation pass).
+
+### Stop condition
+Superseded by GP-S18 completion checkpoint.
+
+## 2026-08-03 — GP-S18 / Unit Layer — completion checkpoint
+
+Status: **CODE_DONE_NETWORK_VALIDATED** / GP-S18 **DONE_WITH_EXECUTORS_DEFERRED**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S18_Unit_Layer.md` — `CODE_DONE_NETWORK_VALIDATED` + operator matrix
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- (implementation C++ unchanged from prior checkpoint)
+
+### What was done
+- Operator-validated held-command layer on Listen Server host Team 1 + remote client Team 2.
+- Pipeline confirmed: `ReceiveCommand` → `HandleCommand` → HeldAccepted / HeldReplaced / QueueDeferred.
+- Confirmed: UnitCommandComponent complete; lifetime-safe held payload; local per-unit serial; replace policy; QueueDeferred (no replace, no serial); Attack held replacement; authority/server-only; team isolation; no movement/AI/GAS/execution; no duplicate client processing.
+- NOT CAPTURED: weak target destruction; EndPlay HeldCleared. DEFERRED: Mine held state.
+- Final GP-S18 status: **DONE_WITH_EXECUTORS_DEFERRED**. Next: GP-S20 movement foundation (when assigned).
+
+### Builds / validation
+- Retained: GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+- Operator held-command validation — **CODE_DONE_NETWORK_VALIDATED**.
+
+### Stop condition
+Commit/push `feature/gp-s18-unit-layer-implementation` only. Do **not** merge to main. Do **not** start GP-S20 / Move / AI / NavMesh / GAS / routing / executor / queue / callbacks from this close-out.

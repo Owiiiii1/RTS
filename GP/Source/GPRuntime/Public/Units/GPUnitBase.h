@@ -7,12 +7,14 @@
 #include "GameplayTagContainer.h"
 #include "GPUnitBase.generated.h"
 
+class UGP_UnitCommandComponent;
 struct FGP_UnitCommand;
 
 /**
  * Abstract replicated unit ancestor.
  * Provides TeamId + interim CapabilityTags for selection eligibility facts.
- * Full gameplay UnitBase (ASC, Definition, highlight, death) remains GP-S18.
+ * Owns UGP_UnitCommandComponent for server-authoritative Held Command state (GP-S18).
+ * Fuller UnitBase (ASC, Definition, highlight, death) remains deferred.
  */
 UCLASS(Abstract, Blueprintable)
 class GPRUNTIME_API AGP_UnitBase : public APawn
@@ -26,9 +28,12 @@ public:
 
 	/**
 	 * Server delivery boundary for a validated unit command (GP-S17 Phase E).
-	 * Base implementation: authority guard + diagnostic log only. No gameplay execution.
+	 * Authority guard + diagnostic Received log, then forward to UnitCommandComponent.
+	 * No gameplay execution.
 	 */
 	virtual void ReceiveCommand(const FGP_UnitCommand& Command);
+
+	UGP_UnitCommandComponent* GetUnitCommandComponent() const;
 
 	UFUNCTION(BlueprintPure, Category = "GP|Team")
 	int32 GetTeamId() const;
@@ -78,4 +83,8 @@ protected:
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Selection")
 	FGameplayTagContainer CapabilityTags;
+
+private:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Command", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UGP_UnitCommandComponent> UnitCommandComponent;
 };

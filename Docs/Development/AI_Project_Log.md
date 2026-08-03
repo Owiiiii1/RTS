@@ -3403,4 +3403,29 @@ Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Operator — Manual **RETEST**; other listed cases **PASS**.
 
 ### Stop condition
-Commit/push same branch only. Do **not** merge to main.
+Superseded by GP-S23 completion checkpoint.
+
+## 2026-08-03 — GP-S23 / Movement Result Propagation — completion checkpoint
+
+Status: **CODE_DONE_OPERATOR_ACCEPTED** / GP-S23 **DONE_WITH_FAILED_RESULT_DEFERRED**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S23_Movement_Result_Propagation.md` — final status
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — finalization report
+- (C++ unchanged from `b702d0c` Stop target fix)
+
+### What was done
+- Operator accepted GP-S23: unified `FGP_OnMovementResult`; Reached/Cancelled; structured sync RequestMove rejection; exact-serial Held clear; Move→Move Superseded; Move→non-Move CommandReplaced; Manual Cancelled clears matching Held; EndPlay silent; phantom Held fixed; reentrancy-safe ordering.
+- Manual Stop confirmed after debug target fix (`Selection=MovingUnit`, ActiveSerialBefore=1, HeldMoveFinished Cancelled/Manual, next HeldAccepted Serial=2).
+- PASS: Natural Reached, Move→Move, Move→Attack, Manual Stop, Rejected Move, stale result, TestCompletion alias, EndPlay.
+- NOT_RUN_ACCEPTED_BY_USER: Remote Team 2, multi-unit isolation.
+- Final status: **DONE_WITH_FAILED_RESULT_DEFERRED**. Failed deferred until Nav/pathfinding.
+
+### Builds / validation
+- Candidate GPEditor Dev + UHT — **PASSED** (prior).
+- Finalization GP Dev + GP Shipping — **PASSED**.
+- Operator — **CODE_DONE_OPERATOR_ACCEPTED**.
+
+### Stop condition
+Commit/push `feature/gp-s23-movement-result-implementation` only. **READY_FOR_MAIN_MERGE** (no merge in this close-out). Do **not** start Attack/Mine/Nav/`Failed`/queue.

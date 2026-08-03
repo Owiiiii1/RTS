@@ -1,10 +1,10 @@
 # Cursor Work Report
 
 ## Task
-GP-S23 movement result propagation — Manual Stop debug target fix
+GP-S23 movement result propagation finalization
 
 ## Status
-CODE_READY_OPERATOR_VALIDATION_PENDING
+DONE_WITH_FAILED_RESULT_DEFERRED
 
 ## Branch
 feature/gp-s23-movement-result-implementation
@@ -12,64 +12,86 @@ feature/gp-s23-movement-result-implementation
 ## Base
 main @ 966d0e7a884af02593608ea398eb1627d9f5a58f
 
-## Summary
-Operator validation showed `gp.Movement.Stop` targeting the first authority unit instead of the moving unit, so StopMove did not run on the active mover. Production StopMove / Cancelled/Manual contract unchanged. Debug command now selects the first moving authority unit only (no idle fallback).
-
-## Architecture
-- terminal delegate / sync rejection / serial policy unchanged
-- production StopMove Manual → Cancelled/Manual unchanged
-- debug Stop target resolution only changed
-
-## Files Changed
-### Modified C++
-- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp` (non-shipping `gp.Movement.Stop` only)
-
-### Modified Docs
-- `Docs/Development/Claude_Tasks/GP-S23_Movement_Result_Propagation.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
-
-## Debug Fix
-- Before: `FindFirstAuthorityMobileUnit` (could pick idle unit)
-- After: `FindFirstAuthorityMovingMobileUnit`; if none → log `gp.Movement.Stop no moving authority unit` and return
-- Success log: `Unit`, `ActiveSerialBefore`, `WasMovingBefore=true`, `Selection=MovingUnit`
-- Unchanged: Test / TestResult / TestCompletion / TestRejectedMove selection
+## Final Architecture
+- Unified native terminal delegate `FGP_OnMovementResult(Serial, Result, Reason)`
+- Results: `Reached`, `Cancelled` (+ Reason None / Superseded / CommandReplaced / Manual)
+- Structured synchronous `FGP_MovementRequestOutcome` rejection (never broadcast)
+- Exact-serial Held clearing on Reached / Cancelled / sync Reject
+- Move→Move: commit new active then Cancelled/Superseded for old serial
+- Move→non-Move: StopMove(CommandReplaced) → Cancelled/CommandReplaced
+- Manual cancellation clears matching Held Move
+- EndPlay silent (no terminal broadcast)
+- Phantom Held on reject fixed
+- Reentrancy-safe ordering (mutate → log → broadcast → return)
+- Failed deferred until Nav/pathfinding stage
 
 ## Operator Validation
 | Case | Result |
 | --- | --- |
 | Natural Reached | **PASS** |
-| Move→Move | **PASS** |
-| Move→Attack | **PASS** |
+| Move→Move Superseded | **PASS** |
+| Move→Attack CommandReplaced | **PASS** |
+| Manual Stop | **PASS** |
 | Rejected Move | **PASS** |
 | Stale result | **PASS** |
-| Compatibility alias | **PASS** |
+| Compatibility alias TestCompletion | **PASS** |
 | EndPlay | **PASS** |
-| Manual Stop | **RETEST** required |
+| Remote Team 2 | **NOT_RUN_ACCEPTED_BY_USER** |
+| Multi-unit isolation | **NOT_RUN_ACCEPTED_BY_USER** |
 
-## Build Results
-- GPEditor Development: **PASSED** (fix rebuild)
-- UHT: **PASSED**
+Implementation status: **CODE_DONE_OPERATOR_ACCEPTED**
+
+## Manual Stop Fix
+- Initial fail: `gp.Movement.Stop` selected idle first authority unit
+- Production `StopMove` contract not at fault
+- Fix: first moving authority unit only; no idle fallback
+- Confirmed: MoveStopped Serial=1 Manual; MovementResultBroadcast Cancelled/Manual; HeldMoveFinished Cancelled/Manual; Selection=MovingUnit; next HeldAccepted Serial=2
+
+## Final Build Results
+- GP Development: **PASSED** (finalization)
+- GP Shipping: **PASSED** (finalization)
+- GPEditor Development + UHT: **PASSED** at candidate / Stop-fix stages (no C++ change in finalization)
+
+## Static Verification
+- No old production `OnMovementCompleted` / completion enum/delegate
+- `TestCompletion` exists only as non-shipping compatibility alias
+- Request reject never broadcasts
+- `Failed` not in movement result enum
+- EndPlay does not broadcast
+- Move→Move commits new state before old Cancelled broadcast
+- No post-broadcast old-state mutation
+- Manual Stop clears matching Held
+- Rejected Move leaves no Held; allocator not rewound
+- One terminal result channel per accepted serial path
 
 ## Scope Verification
-- Production movement/result logic changed: **NO**
-- Headers changed: **NO**
-- GP Development / Shipping run: **NO**
-- Build.cs / assets / maps / config: **NO**
+- Build.cs changed: **NO**
+- gameplay tags changed: **NO**
+- PlayerController changed: **NO**
+- assets/maps/config changed: **NO**
+- Attack added: **NO**
+- Mine added: **NO**
+- Nav/pathfinding added: **NO**
+- Failed producer added: **NO**
+- queue implementation added: **NO**
+- replication model changed: **NO**
+- production C++ changed during finalization: **NO**
 
 ## Git State
-- Same branch pushed
-- Working tree clean after commit/push
+- git diff --check: clean
+- working tree clean after commit/push
+- branch pushed: `feature/gp-s23-movement-result-implementation`
 - HEAD = origin
-- no merge to main
-
-## Operator Validation Needed
-Retest Manual cancellation:
-
-1. Start Held Move on a unit that is not the first authority actor
-2. Run `gp.Movement.Stop`
-3. Expect Selection=MovingUnit on the moving unit; MoveStopped; MovementResultBroadcast Cancelled/Manual; HeldMoveFinished Cancelled/Manual
-4. Next Move → HeldAccepted
+- ahead of main; no merge to main
 
 ## Deferred
-Failed / Nav / Attack / Mine / queue / prediction / replicated Held / formation / avoidance
+- Failed result
+- Nav/pathfinding
+- Attack/Mine
+- queue
+- prediction
+- replicated Held
+- formation/avoidance
+
+## Merge Readiness
+READY_FOR_MAIN_MERGE

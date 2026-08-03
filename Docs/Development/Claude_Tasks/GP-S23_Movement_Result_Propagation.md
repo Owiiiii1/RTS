@@ -1,7 +1,9 @@
 # GP-S23 Movement Result Propagation
 
 ## Status
-**CODE_READY_OPERATOR_VALIDATION_PENDING**
+**CODE_DONE_OPERATOR_ACCEPTED**
+
+**GP-S23 Status: `DONE_WITH_FAILED_RESULT_DEFERRED`**
 
 ## Baseline
 `main` @ `966d0e7a884af02593608ea398eb1627d9f5a58f` (Merge GP-S23 movement result analysis)
@@ -10,7 +12,7 @@ Depends on: GP-S22 `DONE_WITH_FAILURE_PROPAGATION_DEFERRED`; GP-S23 analysis mer
 
 Branch: `feature/gp-s23-movement-result-implementation`
 
-Target stage close: **`DONE_WITH_FAILED_RESULT_DEFERRED`** (after operator validation).
+Final architecture locked and operator-accepted: unified native terminal delegate; Reached/Cancelled; structured sync RequestMove rejection; exact-serial Held clear; Move→Move Superseded; Move→non-Move CommandReplaced; Manual cancellation; EndPlay silent; phantom Held fixed; reentrancy-safe ordering; Failed deferred until Nav/pathfinding.
 
 ---
 
@@ -659,32 +661,35 @@ Exact authority + Move tag + serial match clears on Reached or Cancelled. Else i
 | `gp.UnitCommand.TestRejectedMove` | Command-layer phantom-Held reject path |
 
 ### Builds
-- GPEditor Win64 Development — **PASSED** (candidate + Stop target fix)
-- UHT — **PASSED** (processed with builds)
-- GP Dev / Shipping — deferred to finalization
+- Candidate: GPEditor Win64 Development + UHT — **PASSED** (implementation + Stop target fix)
+- Finalization: GP Win64 Development — **PASSED**
+- Finalization: GP Win64 Shipping — **PASSED**
 
 ### Operator validation
-**CODE_READY_OPERATOR_VALIDATION_PENDING** (Manual retest required after debug Stop target fix).
+**CODE_DONE_OPERATOR_ACCEPTED**
 
 | Case | Result |
 | --- | --- |
-| Natural Reached | **PASS** |
-| Move→Move Superseded | **PASS** |
-| Move→Attack CommandReplaced | **PASS** |
-| Rejected Move (phantom Held clear) | **PASS** |
-| Stale result | **PASS** |
-| Compatibility alias TestCompletion | **PASS** |
-| EndPlay | **PASS** |
-| Manual Stop (`gp.Movement.Stop`) | **RETEST** — wrong debug target selected idle first authority; production `StopMove` contract not at fault |
+| Natural Reached (MoveReached + MovementResultBroadcast Reached/None + HeldMoveFinished; next Move HeldAccepted) | **PASS** |
+| Move→Move (Cancelled/Superseded old; SerialMismatch; latest Reach clears) | **PASS** |
+| Move→Attack (CommandReplaced; HeldTagNotMove; Attack Held retained; no HeldMoveFinished for old Move) | **PASS** |
+| Manual Stop after debug target fix (MoveStopped Manual; Cancelled/Manual; HeldMoveFinished; Selection=MovingUnit; next HeldAccepted) | **PASS** |
+| Rejected Move (InvalidDestination; MoveExecutionRejected; HeldMoveRejectedCleared; HasHeldAfter=false; no HeldAccepted/HeldReplaced) | **PASS** |
+| Stale result (old Cancelled/Manual ignored SerialMismatch; newer Move continues) | **PASS** |
+| Compatibility alias (`gp.Movement.TestCompletion` → Reached/None; stale ignored) | **PASS** |
+| EndPlay (no crash; no EndPlay result broadcast; teardown safe) | **PASS** |
+| Remote Team 2 | **NOT_RUN_ACCEPTED_BY_USER** |
+| Multi-unit isolation | **NOT_RUN_ACCEPTED_BY_USER** |
 
-Debug fix: `gp.Movement.Stop` now uses `FindFirstAuthorityMovingMobileUnit`; no fallback; logs `ActiveSerialBefore` / `WasMovingBefore` / `Selection=MovingUnit`.
+Manual Stop note: initial failure was wrong debug target (idle first authority); production StopMove contract validated after `FindFirstAuthorityMovingMobileUnit` fix.
+
+NOT_RUN_ACCEPTED_BY_USER: user accepted current validation scope; no separate runtime evidence for remote/multi-unit GP-S23 result paths in this pass.
 
 ---
 
-## Stop condition (candidate)
+## Stop condition (finalization)
 
-**CODE_READY_OPERATOR_VALIDATION_PENDING.**
-Manual cancellation requires re-validation after Stop target fix.
+**CODE_DONE_OPERATOR_ACCEPTED.** **GP-S23: DONE_WITH_FAILED_RESULT_DEFERRED.**
 Commit/push `feature/gp-s23-movement-result-implementation` only.
-Do **not** merge to main.
-Do **not** start Attack/Mine/Nav/`Failed`/queue from this candidate.
+**READY_FOR_MAIN_MERGE** (merge not performed here).
+Do **not** start Attack/Mine/Nav/`Failed`/queue from this close-out.

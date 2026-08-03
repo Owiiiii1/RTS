@@ -1,7 +1,7 @@
 # GP-S25 Attack Damage Execution
 
 ## Status
-**GP-S25A_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S25A_DONE_GP-S25B_PENDING**
 
 ## Baseline
 `main` @ `eb590a5baa1780cdb4b8b01b17a09ce4ece252fe` (Merge GP-S25 attack damage analysis)
@@ -10,7 +10,7 @@ Depends on: GP-S24 `DONE_WITH_DAMAGE_EXECUTION_DEFERRED`; GP-S03 Attribute Sets 
 
 Branch: `feature/gp-s25a-health-damage-foundation`
 
-Recommended close status after full S25A+S25B implementation + validation: **`DONE_WITH_VISUAL_COMBAT_DEFERRED`**
+Recommended close status after full S25A+S25B implementation + validation: **`DONE_WITH_VISUAL_COMBAT_DEFERRED`** (not yet — S25B pending)
 
 ---
 
@@ -518,10 +518,11 @@ Docs only. Commit/push `feature/gp-s25-attack-damage-analysis`. Do **not** merge
 
 ## GP-S25A Implementation Record
 
-Status: **GP-S25A_CODE_READY_OPERATOR_VALIDATION_PENDING**
+Status: **GP-S25A_DONE_GP-S25B_PENDING**
 
 Branch: `feature/gp-s25a-health-damage-foundation`
 Base: `main` @ `eb590a5baa1780cdb4b8b01b17a09ce4ece252fe`
+Head at finalization: `51c9112` (+ docs finalize commit)
 
 ### Unit ASC ownership
 - `AGP_UnitBase` implements `IAbilitySystemInterface` + `IGP_DeathSink`
@@ -582,22 +583,38 @@ Base: `main` @ `eb590a5baa1780cdb4b8b01b17a09ce4ece252fe`
 - `gp.Combat.SetStats [Source|Target] ...` — same pair; Target rejects if no enemy
 - `gp.Combat.ApplyDamage Amount` / `gp.Combat.KillTarget` — same pair; real GE path
 
-### Operator validation note
-- Lethal GAS/death path **PASS** (Health→0, UnitDied once, lifespan, no crash)
-- Debug target resolution **FAIL** found then fixed: selected Source + nearest enemy + `gp.Combat.Resolve`
-- Overkill gameplay **PASS**; diagnostic `UnitHealthChanged` HealthBefore **FAIL** (reconstructed from clamped HealthAfter − raw Magnitude → reported 100 instead of 40)
-- Fix: PreGE capture of actual Health; log EvaluatedMagnitude vs AppliedDelta
-- Rerun: `SetStats Target 40 100 ...` + `ApplyDamage 100` → HealthBefore=40 AppliedDelta=-40 EvaluatedMagnitude=-100; normal `ApplyDamage 25` → AppliedDelta=-25
+### Operator validation matrix (accepted)
+
+| Area | Result |
+| --- | --- |
+| ASC / ActorInfo / defaults (100/100/25/0/0/1/250) Listen Server | **PASS** |
+| Formula: base 25; Armor10→15; Res0.5→10; Armor5+Res0.5→10; Armor25→0; Res1.0→0; no death on block | **PASS** |
+| Overkill logging after fix (Before=40 After=0 Mag=-100 AppliedDelta=-40) | **PASS** |
+| Normal logging (Before=100 After=75 Mag=-25 AppliedDelta=-25) | **PASS** |
+| Debug resolver Selected + NearestEnemy; Resolve/KillTarget same pair | **PASS** |
+| Death once + LifeSpan=2; no sync Destroy | **PASS** |
+| Death while Move / Attack Ready → OwnerDied shutdown | **PASS** |
+| Repeat damage → Target=None; no second UnitDied | **PASS** |
+| Dead command reject `UnitDead` (Accepted delivery ≠ execution) | **PASS** |
+| Replication observable scope + delayed client destroy | **PASS** |
+| PIE EndPlay clean (unrelated pre-existing warnings ignored) | **PASS** |
+
+### Defects found and fixed during validation
+1. Arbitrary debug target (`TActorIterator`) — fixed: selected Source + nearest enemy + `gp.Combat.Resolve`
+2. Overkill `UnitHealthChanged` HealthBefore wrong — fixed: PreGE capture; EvaluatedMagnitude vs AppliedDelta
 
 ### Logs
 `UnitASCInitialized`, `UnitCombatAttributesInitialized`, `DamageApplyAttempt/Rejected/Applied`, `UnitHealthChanged`, `UnitDeathStarted`, `UnitDeathCommandShutdown`, `UnitDied`, `UnitCommandRejected Reason=UnitDead`, `GP Combat Select` (SourcePolicy/TargetPolicy/Distance)
 
 ### Build
-- GPEditor Win64 Development + UHT — **PASSED** (implementation + debug resolver fix)
-- GP Dev / Shipping deferred until operator validation
+- GPEditor Win64 Development + UHT — **PASSED** (implementation + validation fixes; not re-run at finalization — C++ frozen)
+- GP Win64 Development — **PASSED** (finalization)
+- GP Win64 Shipping — **PASSED** (finalization)
 
-### GP-S25B deferred
-- Attack Ready hit cadence / NextHitTime
-- TargetDied Attack terminal reason + OnUnitDied bind in Attack executor
-- AttackSpeed / range migration beyond attribute init
-- Animation / projectile / VFX / UI / GameMode death
+### GP-S25B deferred (explicit)
+- Immediate first hit on entering Ready
+- Periodic hit cadence / NextHitTime / AttackCooldown scheduling / cooldown min safety
+- GAS AttackRange preferred + component fallback in Attack executor
+- Target `OnUnitDied` binding + `TargetDied` terminal reason
+- Reentrancy guards during synchronous death callback; no further hit after target death
+- AttackSpeed; animation / projectile / VFX / UI / GameMode death

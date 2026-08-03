@@ -3630,3 +3630,28 @@ Status: **GP-S25A_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ### Stop condition
 Commit/push same branch. No merge to main. No GP-S25B.
+
+## 2026-08-03 — GP-S25A / Health and Damage Foundation — finalization
+
+Status: **GP-S25A_DONE_GP-S25B_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S25_Attack_Damage_Execution.md` — final status + operator matrix
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — finalization report
+- C++ unchanged at finalization
+
+### What was done
+- Operator accepted full GP-S25A matrix (ASC/defaults, formula, overkill logs, debug resolver, death, move/Attack shutdown, once-only death, dead reject, replication scope, PIE EndPlay).
+- Validation defects already fixed on branch: debug target resolution (`550538f`); overkill HealthBefore logging (`51c9112`).
+- Final builds: GP Win64 Development + Shipping **PASSED**.
+- Overall GP-S25 remains open until GP-S25B. Do **not** use `DONE_WITH_VISUAL_COMBAT_DEFERRED` yet.
+
+### Builds / validation
+- GPEditor Dev + UHT — previously **PASSED** (last fix); C++ frozen
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- Operator — **CODE_DONE_OPERATOR_ACCEPTED** for S25A
+
+### Stop condition
+Commit/push `feature/gp-s25a-health-damage-foundation` only. **READY_FOR_MAIN_MERGE** of S25A slice when operator requests. Do **not** merge in this close-out. Do **not** start GP-S25B without explicit task.

@@ -3012,3 +3012,30 @@ Status: **CODE_DONE_NETWORK_VALIDATED** / GP-S17 **DONE_WITH_EXECUTION_DEFERRED*
 
 ### Stop condition
 Commit/push `feature/gp-s17-phase-e-command-dispatch-implementation` only. Do **not** merge to main. Do **not** start Move / AI / GAS / Attack/Mine execution / queue / Client RPC from this close-out.
+
+## 2026-08-03 — GP-S18 / Unit Layer — analysis (final contract)
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S18_Unit_Layer.md` — finalized Held Command contract
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Finalized GP-S18 docs-only contract on `feature/gp-s18-unit-layer-analysis` (base = `main` `8efdd2e`).
+- Terminology: **Held Command** only (not Active/Executing/Running/Completed).
+- Owner: `UGP_UnitCommandComponent` default subobject on `AGP_UnitBase`; non-replicated; tick disabled; no client/unit RPC; no Blueprint API.
+- Stored payload: plain `FGP_StoredUnitCommand` in `Public/Command/GPStoredUnitCommand.h` — Tag/Loc/`TWeakObjectPtr<AActor>`/bQueue/`CommandSerial`. Delivery `FGP_UnitCommand` unchanged (`AActor*` sync-only).
+- Public API: `HandleCommand`, `HasHeldCommand`, `GetHeldCommand` (read-only pointer). Private `ClearHeldCommand` for replace/EndPlay.
+- Serial: local authority-only; starts at 1; QueueDeferred/RejectedAuthority do not consume; `0` reserved.
+- Policies: non-authority → RejectedAuthority; `bQueue=true` → QueueDeferred (no mutation); `bQueue=false` → HeldAccepted/HeldReplaced; no execution; no tag routing; no executor interface.
+- UnitBase: PC-style `TObjectPtr` + `GetUnitCommandComponent`; ReceiveCommand keeps Phase E Received log then forwards once.
+- Checkpoint: held-state shell only. Completion target: `DONE_WITH_EXECUTORS_DEFERRED`.
+- Roadmap mismatch noted (TDD/13 S18 highlight; S22 delivery routing already done by GP-S17); TDD not rewritten.
+- Expected files: `GPStoredUnitCommand.h`, `Units/GPUnitCommandComponent.h/.cpp`, `GPUnitBase.h/.cpp`. Build.cs: NO.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+### Stop condition
+Commit/push `feature/gp-s18-unit-layer-analysis` only. Do **not** merge to main. Do **not** implement component/stored struct/movement/AI/GAS/routing/executor/queue from this pass.

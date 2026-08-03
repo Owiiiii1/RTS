@@ -3234,3 +3234,26 @@ Status: **CODE_DONE_NETWORK_VALIDATED** / GP-S21 **DONE_WITH_COMPLETION_DEFERRED
 
 ### Stop condition
 Commit/push `feature/gp-s21-held-move-integration-implementation` only. Do **not** merge to main. Do **not** start GP-S22 completion / Held clear / Nav / AI / Attack/Mine execution from this close-out.
+
+## 2026-08-03 — GP-S22 / Movement Completion — analysis
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S22_Movement_Completion.md` — created
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — analysis report
+
+### What was done
+- Docs-only GP-S22 analysis on `feature/gp-s22-movement-completion-analysis` (base = `main` `f6640ef`).
+- Problem: Held Move remains after MoveReached; need serial-aware clear.
+- Selected: native multicast `OnMovementCompleted` on MovementComponent; UnitCommandComponent authority bind/unbind; emit only `Reached` after clear-local-state + MoveReached log; Stop/Manual/EndPlay never emit success.
+- Clear Held only on exact Move serial match; stale/non-Move/empty ignored.
+- Stale validation: non-shipping `gp.Movement.TestCompletion` synthetic Broadcast.
+- Target status: `DONE_WITH_FAILURE_PROPAGATION_DEFERRED`. Build workflow recorded (analysis=no builds; candidate=GPEditor+UHT; finalization=GP Dev+Shipping). No C++/builds.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+### Stop condition
+Commit/push `feature/gp-s22-movement-completion-analysis` only. Do **not** merge to main. Do **not** implement completion/bind/clear from this pass.

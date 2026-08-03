@@ -3110,3 +3110,30 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s20-movement-foundation-analysis` only. Do **not** merge to main. Do **not** implement MobileUnit/MovementComponent/debug command/Held wiring/Nav/AI from this pass.
+
+## 2026-08-03 — GP-S20 / Movement Foundation — implementation
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPMobileUnit.h` / `Private/Units/GPMobileUnit.cpp` — new
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h` / `Private/Units/GPMovementComponent.cpp` — new
+- `GP/Source/GPRuntime/Public/Units/GPUnit.h` — reparent to `AGP_MobileUnit`
+- `Docs/Development/Claude_Tasks/GP-S20_Movement_Foundation.md` — `CODE_READY_OPERATOR_VALIDATION_PENDING`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — latest task report
+
+### What was done
+- Implemented GP-S20 on `feature/gp-s20-movement-foundation-implementation` (base = `main` `416ba39`).
+- Hierarchy: `UnitBase` → `MobileUnit` (+ `UGP_MovementComponent`) → `Unit`.
+- Straight-line server XY backend; Z preserved; no sweep; smooth yaw; non-replicated component; actor transform replication.
+- Non-shipping console: `gp.Movement.Test` / `gp.Movement.Stop`. Getter named `GetUnitMovementComponent` (APawn conflict).
+- No Held Command integration, Nav/AI/GAS, Build.cs, command pipeline changes.
+- Operator validation pending.
+
+### Builds / validation
+- GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+- Operator — **pending**.
+
+### Stop condition
+**CODE_READY_OPERATOR_VALIDATION_PENDING.** Commit/push implementation branch only. Do **not** merge to main. Do **not** start GP-S21 Held wiring / Nav / AI.

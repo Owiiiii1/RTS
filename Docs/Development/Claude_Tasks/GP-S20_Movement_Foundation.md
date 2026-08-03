@@ -2,14 +2,14 @@
 (Server-authoritative unit movement foundation after GP-S18 Held Command — analysis)
 
 ## Status
-**Status: ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**Status: CODE_READY_OPERATOR_VALIDATION_PENDING**
 
-Docs-only. **No** C++ / assets / Blueprint / NavMesh / AIController / command-integration / debug-command code in this pass.
+Implemented on `feature/gp-s20-movement-foundation-implementation`.
 Depends on: GP-S18 `DONE_WITH_EXECUTORS_DEFERRED`.
 
 **Canonical stage: GP-S20 — Movement Foundation.**  
-Branch: `feature/gp-s20-movement-foundation-analysis`.  
-Future implementation branch: `feature/gp-s20-…`.
+Operator Standalone/2P validation **pending**.  
+**No** Held Command integration. **No** navigation / AIController.
 
 TDD/13 is **not** rewritten. Stage mapping below is **project continuation mapping**, not a change to historical TDD numbering.
 
@@ -463,9 +463,67 @@ Does **not** mean: Move command drives motion; pathfinding exists; command compl
 
 ---
 
+## 27. Implementation record
+
+### Actual hierarchy
+
+```text
+AGP_UnitBase ← AGP_MobileUnit ← AGP_Unit
+```
+
+`UGP_MovementComponent` default subobject on `AGP_MobileUnit` only.
+
+### Compile deviation
+
+`GetMovementComponent()` renamed to **`GetUnitMovementComponent()`** — `APawn::GetMovementComponent()` returns `UPawnMovementComponent*` and blocks covariant override.
+
+### Actual metadata
+
+- `AGP_MobileUnit`: `UCLASS(Abstract, Blueprintable)`
+- `UGP_MovementComponent`: `UCLASS(ClassGroup=(GP), meta=(BlueprintSpawnableComponent))` : `UActorComponent`
+- Tick: `bCanEverTick=true`, start disabled; enabled only while moving on authority
+- Replication: component non-replicated; pawn `SetReplicateMovement(true)`
+
+### Exact APIs
+
+```cpp
+bool RequestMove(const FVector& Destination, uint32 CommandSerial);
+void StopMove();
+bool IsMoving() const;
+uint32 GetActiveMoveSerial() const;
+const FVector& GetMoveDestination() const;
+UGP_MovementComponent* GetUnitMovementComponent() const;
+```
+
+### Defaults
+
+`MoveSpeed=600`, `AcceptanceRadius=50`, `RotationSpeed=360`, `bRotateToMovement=true` (`EditDefaultsOnly, BlueprintReadOnly`).
+
+### Console validation (non-shipping only)
+
+```text
+gp.Movement.Test X Y [Serial]
+gp.Movement.Stop
+```
+
+- Finds first authority `AGP_MobileUnit` in world
+- Destination Z = unit current Z
+- Default serial = 1
+- Absent from Shipping builds (`#if !UE_BUILD_SHIPPING`)
+
+### Builds
+
+GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+
+### Operator validation
+
+**Pending.** RMB still only Holds command; does not start movement.
+
+---
+
 ## Stop condition
-**ANALYSIS_READY_IMPLEMENTATION_PENDING.**  
-Commit/push `feature/gp-s20-movement-foundation-analysis` only.  
+**CODE_READY_OPERATOR_VALIDATION_PENDING.**  
+Await operator console-driven Standalone/2P validation.  
 Do **not** merge to main.  
-Do **not** implement MobileUnit / MovementComponent / debug command / Held wiring / Nav / AI from this pass.  
+Do **not** start Held Command wiring / Nav / AI / GP-S21 from this pass.  
 Do **not** rewrite TDD/13.

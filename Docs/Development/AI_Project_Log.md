@@ -3305,4 +3305,28 @@ Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Operator — partial PASS; SerialMismatch **PENDING**.
 
 ### Stop condition
-**CODE_READY_OPERATOR_VALIDATION_PENDING.** Commit/push same branch. Do **not** merge to main.
+Superseded by GP-S22 completion checkpoint.
+
+## 2026-08-03 — GP-S22 / Movement Completion — completion checkpoint
+
+Status: **CODE_DONE_OPERATOR_ACCEPTED** / GP-S22 **DONE_WITH_FAILURE_PROPAGATION_DEFERRED**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S22_Movement_Completion.md` — `CODE_DONE_OPERATOR_ACCEPTED`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — finalization report
+- (C++ unchanged from `76b20b2` debug-target fix)
+
+### What was done
+- Operator accepted GP-S22 validation: MovementComponent emits Reached with serial; UnitCommandComponent authority-binds; matching Held Move cleared; stale serial cannot clear newer Held; Move replacement completes only latest serial; cancellation not treated as success; synthetic stale (1 vs Held 2, Selection=MovingUnit) passed; later natural Reach 2 cleared Held.
+- Brief console hitch: no state transition (ActiveMoveSerial unchanged, no MoveStopped); no production fix.
+- NOT_RUN_ACCEPTED_BY_USER: remote Team 2 completion, multi-unit completion, Manual stop.
+- Final status: **DONE_WITH_FAILURE_PROPAGATION_DEFERRED**. Not `CODE_DONE_NETWORK_VALIDATED` (remote S22 completion not separately executed).
+
+### Builds / validation
+- Candidate GPEditor Dev + UHT — **PASSED** (prior).
+- Finalization GP Dev + GP Shipping — **PASSED**.
+- Operator — **CODE_DONE_OPERATOR_ACCEPTED**.
+
+### Stop condition
+Commit/push `feature/gp-s22-movement-completion-implementation` only. Do **not** merge to main. Do **not** start failure propagation / Nav / Attack/Mine / queue from this close-out.

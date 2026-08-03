@@ -1,10 +1,10 @@
 # Cursor Work Report
 
 ## Task
-GP-S22 completion test target fix
+GP-S22 movement completion finalization
 
 ## Status
-CODE_READY_OPERATOR_VALIDATION_PENDING
+CODE_DONE_OPERATOR_ACCEPTED
 
 ## Branch
 feature/gp-s22-movement-completion-implementation
@@ -12,52 +12,95 @@ feature/gp-s22-movement-completion-implementation
 ## Base
 main @ 664c30d4c7e8d1df52cf1a6caa2e87c366d84c1a
 
-## Summary
-Natural GP-S22 completion validated. Fixed non-shipping `gp.Movement.TestCompletion` to prefer the first authority mobile unit that is currently moving, so synthetic stale SerialMismatch can target the active Held Move unit. Production completion code unchanged.
+## Final Stage Status
+DONE_WITH_FAILURE_PROPAGATION_DEFERRED
 
-## Operator Validation (partial)
+## Implementation Summary
+`UGP_MovementComponent` broadcasts native `OnMovementCompleted(Serial, Reached)` after clearing local active state and logging MoveReached. `UGP_UnitCommandComponent` authority-binds in BeginPlay and clears Held only when tag is exact Move and serial matches. Stop/Manual/EndPlay never broadcast. Non-shipping `gp.Movement.TestCompletion` prefers a moving authority unit for stale tests.
+
+## Architecture
+- MovementComponent owns native completion delegate
+- authority-only UnitCommandComponent binding
+- Reached-only completion
+- matching Move serial clears Held
+- stale completion ignored
+- no post-broadcast mutation
+- Stop/Manual/EndPlay do not broadcast
+
+## Operator Validation
 | Case | Result |
 | --- | --- |
-| Natural MoveReached → HeldMoveCompleted | **PASS** |
-| Held clear; next Move HeldAccepted | **PASS** |
-| Move replacement; completion only for latest serial | **PASS** |
-| Move→Attack no HeldMoveCompleted | **PASS** |
-| Attack→Move then Reach clears | **PASS** |
-| Z=88 | **PASS** |
-| Synthetic NoHeldCommand (wrong first unit) | **PASS** (pre-fix artifact) |
-| Stale SerialMismatch | **PENDING** |
-| Remote Team 2 / multi-unit / Manual stop | **PENDING** |
+| Natural completion | **PASS** |
+| Held clear | **PASS** |
+| next Move HeldAccepted | **PASS** |
+| Move replacement | **PASS** |
+| Move→Attack cancellation | **PASS** |
+| Attack→Move | **PASS** |
+| NoHeld synthetic | **PASS** |
+| stale SerialMismatch | **PASS** |
+| Z preservation | **PASS** |
+| Remote Team 2 completion | **NOT_RUN_ACCEPTED_BY_USER** |
+| Multi-unit completion | **NOT_RUN_ACCEPTED_BY_USER** |
+| Manual stop | **NOT_RUN_ACCEPTED_BY_USER** |
 
-## Debug Fix
-`gp.Movement.TestCompletion`:
-1. First authority `AGP_MobileUnit` with `IsMoving()`
-2. Else fallback first authority (+ log)
-Log: Unit, InjectedSerial, ActiveMoveSerial, IsMoving, Selection=MovingUnit|FallbackFirstAuthority, Result=Reached
+## Stale Validation Evidence
+- Active Held Move serial = 2
+- Injected completion serial = 1
+- Selection=MovingUnit; ActiveMoveSerial=2; IsMoving=true
+- MovementCompletionIgnored Reason=SerialMismatch CompletedSerial=1 HeldSerial=2
+- Movement continued; no MoveStopped
+- Later MoveReached Serial=2 + HeldMoveCompleted Serial=2
 
-`DebugBroadcastCompletion` unchanged (Broadcast only).
+## Console Hitch Observation
+- Brief visual pause observed on TestCompletion
+- No movement state change in logs
+- No MoveStopped
+- ActiveMoveSerial unchanged
+- Likely console/game-thread frame hitch
+- No production fix required; no frame-time profiling performed
+
+## Build Results
+- GPEditor Development: **PASSED** at candidate stage
+- UHT: **PASSED** at candidate stage
+- GP Development: **PASSED** at finalization
+- GP Shipping: **PASSED** at finalization
+
+## Scope Verification
+- Build.cs changed: **NO**
+- PlayerController changed: **NO**
+- payloads/tags changed: **NO**
+- assets/maps/config changed: **NO**
+- failure propagation added: **NO**
+- Nav/AI/GAS added: **NO**
+- queue implementation added: **NO**
+- production logic changed during finalization: **NO**
 
 ## Files Changed
+### C++ (prior commits on branch)
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h`
 - `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+
+### Docs (finalization)
 - `Docs/Development/Claude_Tasks/GP-S22_Movement_Completion.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Build Results
-- GPEditor Development: **PASSED**
-- UHT: **PASSED**
-- GP Development / Shipping: not run (candidate workflow)
-
-## Scope Verification
-- Production completion / bind / handler: unchanged
-- `#if !UE_BUILD_SHIPPING` only for target selection
-- Build.cs / PC / tags / assets: NO
-
-## Operator Retest Needed
-1. Start Move on one unit (note Held serial e.g. N+1).
-2. Optionally replace so Held is N+1 while moving.
-3. `gp.Movement.TestCompletion N` — expect Selection=MovingUnit, SerialMismatch, motion continues.
-4. Remaining: remote Team 2, multi-unit, Manual stop.
+## Deferred
+- Failure/blocked result propagation
+- Request rejection propagation
+- Command-layer cancellation
+- Nav/pathfinding
+- Queue storage/execution
+- Attack/Mine execution
+- Prediction
+- Replicated Held
+- Formation/avoidance
 
 ## Git State
-- branch pushed after fix commit
+- git diff --check: clean
+- working tree clean after commit/push
+- branch pushed: `feature/gp-s22-movement-completion-implementation`
+- HEAD = origin
 - no merge to main

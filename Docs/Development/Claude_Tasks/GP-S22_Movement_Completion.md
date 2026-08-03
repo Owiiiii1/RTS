@@ -2,13 +2,16 @@
 (Serial-aware Held Move clear on Reach — analysis)
 
 ## Status
-**Status: CODE_READY_OPERATOR_VALIDATION_PENDING**
+**Status: CODE_DONE_OPERATOR_ACCEPTED**
 
-Implemented on `feature/gp-s22-movement-completion-implementation`
+**GP-S22 Status: `DONE_WITH_FAILURE_PROPAGATION_DEFERRED`**
+
+Implemented and operator-accepted on `feature/gp-s22-movement-completion-implementation`
 (base = `main` `664c30d4c7e8d1df52cf1a6caa2e87c366d84c1a`).
 Depends on: GP-S21 `DONE_WITH_COMPLETION_DEFERRED`.
 
-Operator validation **pending**. Failure propagation remains deferred.
+Not marked `CODE_DONE_NETWORK_VALIDATED` — remote GP-S22 completion was not separately executed.
+Failure/blocked propagation remains deferred.
 
 ---
 
@@ -341,7 +344,7 @@ After implementation + validation:
 
 **GP-S22 Status: `DONE_WITH_FAILURE_PROPAGATION_DEFERRED`**
 
-Means: natural Reach clears matching Held Move; stale ignored; cancel/manual/EndPlay do not succeed-clear; network validated. Failure/blocked results deferred.
+Means: natural Reach clears matching Held Move; stale ignored; cancel/manual/EndPlay do not succeed-clear. Remote/multi-unit/Manual stop were NOT_RUN_ACCEPTED_BY_USER (not separately executed). Failure/blocked results deferred. Not `CODE_DONE_NETWORK_VALIDATED`.
 
 ---
 
@@ -380,26 +383,42 @@ Target resolution (fixed after operator feedback):
 Console dispatch fields: Unit, InjectedSerial, ActiveMoveSerial, IsMoving, Selection=`MovingUnit|FallbackFirstAuthority`, Result=Reached.
 
 ### Builds
-GPEditor Development + UHT — **PASSED** (candidate + debug-target fix). GP Dev/Shipping deferred to finalization.
+- Candidate: GPEditor Development + UHT — **PASSED**
+- Finalization: GP Development + GP Shipping — **PASSED**
 
-### Operator validation (partial)
+### Operator validation
 
 | Case | Result |
 | --- | --- |
-| Natural MoveReached → HeldMoveCompleted | **PASS** |
-| Held clear; next Move → HeldAccepted | **PASS** |
-| Move→Move replacement; completion only for latest serial | **PASS** |
-| Move→Attack → CommandReplaced; no HeldMoveCompleted for stopped Move | **PASS** |
-| Attack→Move then Reach clears | **PASS** |
+| Natural completion (MoveReached N + HeldMoveCompleted N) | **PASS** |
+| Held clear; next Move → HeldAccepted (not HeldReplaced); allocator monotonic | **PASS** |
+| Move replacement (no completion for N; Reach/clear N+1 only) | **PASS** |
+| Move→Attack cancellation (CommandReplaced; no HeldMoveCompleted) | **PASS** |
+| Attack→Move then natural clear | **PASS** |
+| NoHeld synthetic (Reason=NoHeldCommand; no mutation) | **PASS** |
+| Stale SerialMismatch (Injected=1, Held/Active=2, Selection=MovingUnit; later Reach 2 clears) | **PASS** |
 | Z preservation (88) | **PASS** |
-| Synthetic on idle unit → NoHeldCommand | **PASS** (wrong target; pre-fix) |
-| Stale SerialMismatch on active Held Move | **PENDING** (retest after MovingUnit preference) |
-| Remote Team 2 / multi-unit / Manual stop | **PENDING** |
+| Remote Team 2 completion | **NOT_RUN_ACCEPTED_BY_USER** |
+| Multi-unit completion isolation | **NOT_RUN_ACCEPTED_BY_USER** |
+| Manual stop | **NOT_RUN_ACCEPTED_BY_USER** |
+
+NOT_RUN_ACCEPTED_BY_USER reason: user accepted current validation scope; authority/network behavior structurally inherited from validated GP-S21 pipeline; no separate GP-S22 runtime evidence for these rows.
+
+### Console hitch observation
+Brief visual pause when running `gp.Movement.TestCompletion`:
+- no movement state transition in logs
+- ActiveMoveSerial remained 2; IsMoving remained true
+- no MoveStopped / restart
+- interpreted as likely console/game-thread frame hitch
+- no production code change; no frame-time profiling performed
+
+### Deferred
+Failure/blocked result propagation; request rejection propagation; command-layer cancellation; Nav/pathfinding; queue storage/execution; Attack/Mine execution; prediction; replicated Held; formation/avoidance.
 
 ---
 
 ## Stop condition
-**CODE_READY_OPERATOR_VALIDATION_PENDING.**
-Await operator stale SerialMismatch (MovingUnit target) + remaining matrix.
+**CODE_DONE_OPERATOR_ACCEPTED.** **GP-S22: DONE_WITH_FAILURE_PROPAGATION_DEFERRED.**
+Commit/push `feature/gp-s22-movement-completion-implementation` only.
 Do **not** merge to main.
-Do **not** start failure propagation / Nav / Attack/Mine / queue from this pass.
+Do **not** start failure propagation / Nav / Attack/Mine / queue from this close-out.

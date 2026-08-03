@@ -3583,3 +3583,26 @@ Status: **GP-S25A_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s25a-health-damage-foundation` only. Do **not** merge to main. Do **not** start GP-S25B without explicit task.
+
+## 2026-08-03 — GP-S25A / combat debug target resolution fix
+
+Status: **GP-S25A_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp` — non-shipping combat resolver only
+- `Docs/Development/Claude_Tasks/GP-S25_Attack_Damage_Execution.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Operator: `gp.Combat.KillTarget` killed unexpected unit — iterator order, selection ignored.
+- GAS/death path itself PASS (Health→0, single UnitDied, lifespan, no crash).
+- Fix: shared `ResolveCombatDebugPair` — selected Source + nearest enemy Target; name tie-break; `gp.Combat.Resolve` read-only.
+- Production damage/death/ASC/Attack cadence unchanged.
+
+### Builds / validation
+- GPEditor Win64 Development + UHT — **PASSED**
+- Operator must restart from Resolve → KillTarget/ApplyDamage
+
+### Stop condition
+Commit/push same branch `feature/gp-s25a-health-damage-foundation`. No merge to main. No GP-S25B.

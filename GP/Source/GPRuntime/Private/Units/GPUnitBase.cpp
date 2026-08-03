@@ -16,7 +16,10 @@
 
 #if !UE_BUILD_SHIPPING
 #include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "Player/GPPlayerController.h"
+#include "Player/GPSelectionComponent.h"
 #endif
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPUnitCommand, Log, All);
@@ -593,6 +596,16 @@ void AGP_UnitBase::OnRep_TeamId()
 #if !UE_BUILD_SHIPPING
 namespace GPCombatConsolePrivate
 {
+	struct FGPCombatDebugPair
+	{
+		AGP_UnitBase* Source = nullptr;
+		AGP_UnitBase* Target = nullptr;
+		bool bSourceFromSelection = false;
+		float TargetDistance = -1.0f;
+		const TCHAR* SourcePolicy = TEXT("None");
+		const TCHAR* TargetPolicy = TEXT("None");
+	};
+
 	static const TCHAR* NetModeToString(ENetMode NetMode)
 	{
 		return GPUnitCommandPrivate::NetModeToString(NetMode);
@@ -641,6 +654,84 @@ namespace GPCombatConsolePrivate
 		ASC->SetNumericAttributeBase(UGP_UnitAttributeSet::GetAttackRangeAttribute(), SanitizedRange);
 	}
 
+	static AGP_PlayerController* FindLocalGPPlayerController(UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			return nullptr;
+		}
+
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			APlayerController* PC = It->Get();
+			AGP_PlayerController* GPPC = Cast<AGP_PlayerController>(PC);
+			if (GPPC != nullptr && GPPC->IsLocalController())
+			{
+				return GPPC;
+			}
+		}
+
+		return nullptr;
+	}
+
+	static AGP_UnitBase* FindFirstSelectedAuthorityUnit(UWorld* World, bool bAliveOnly)
+	{
+		AGP_PlayerController* LocalPC = FindLocalGPPlayerController(World);
+		if (LocalPC == nullptr)
+		{
+			return nullptr;
+		}
+
+		const UGP_SelectionComponent* Selection = LocalPC->GetSelectionComponent();
+		if (Selection == nullptr)
+		{
+			return nullptr;
+		}
+
+		for (const TWeakObjectPtr<AGP_UnitBase>& WeakUnit : Selection->GetSelectedUnits())
+		{
+			AGP_UnitBase* Unit = WeakUnit.Get();
+			if (!IsValid(Unit) || !Unit->HasAuthority() || Unit->GetWorld() != World)
+			{
+				continue;
+			}
+
+			if (bAliveOnly && Unit->IsDead())
+			{
+				continue;
+			}
+
+			return Unit;
+		}
+
+		return nullptr;
+	}
+
+	static AGP_UnitBase* FindFallbackAliveTeamSource(UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			return nullptr;
+		}
+
+		AGP_UnitBase* Best = nullptr;
+		for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
+		{
+			AGP_UnitBase* Unit = *It;
+			if (!IsValid(Unit) || !Unit->HasAuthority() || Unit->IsDead() || Unit->GetTeamId() < 1)
+			{
+				continue;
+			}
+
+			if (Best == nullptr || Unit->GetName() < Best->GetName())
+			{
+				Best = Unit;
+			}
+		}
+
+		return Best;
+	}
+
 	static AGP_UnitBase* FindFirstAuthorityAliveUnit(UWorld* World)
 	{
 		if (World == nullptr)
@@ -648,16 +739,22 @@ namespace GPCombatConsolePrivate
 			return nullptr;
 		}
 
+		AGP_UnitBase* Best = nullptr;
 		for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
 		{
 			AGP_UnitBase* Unit = *It;
-			if (Unit != nullptr && Unit->HasAuthority() && !Unit->IsDead())
+			if (!IsValid(Unit) || !Unit->HasAuthority() || Unit->IsDead())
 			{
-				return Unit;
+				continue;
+			}
+
+			if (Best == nullptr || Unit->GetName() < Best->GetName())
+			{
+				Best = Unit;
 			}
 		}
 
-		return nullptr;
+		return Best;
 	}
 
 	static AGP_UnitBase* FindFirstAuthorityUnit(UWorld* World)
@@ -667,73 +764,160 @@ namespace GPCombatConsolePrivate
 			return nullptr;
 		}
 
+		AGP_UnitBase* Best = nullptr;
 		for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
 		{
 			AGP_UnitBase* Unit = *It;
-			if (Unit != nullptr && Unit->HasAuthority())
-			{
-				return Unit;
-			}
-		}
-
-		return nullptr;
-	}
-
-	static AGP_UnitBase* FindCombatSource(UWorld* World)
-	{
-		if (World == nullptr)
-		{
-			return nullptr;
-		}
-
-		for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
-		{
-			AGP_UnitBase* Unit = *It;
-			if (Unit != nullptr && Unit->HasAuthority() && !Unit->IsDead() && Unit->GetTeamId() >= 1)
-			{
-				return Unit;
-			}
-		}
-
-		return nullptr;
-	}
-
-	static AGP_UnitBase* FindCombatTarget(UWorld* World, AGP_UnitBase* Source)
-	{
-		if (World == nullptr || Source == nullptr)
-		{
-			return nullptr;
-		}
-
-		AGP_UnitBase* NeutralFallback = nullptr;
-		for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
-		{
-			AGP_UnitBase* Unit = *It;
-			if (Unit == nullptr || Unit == Source || !Unit->HasAuthority() || Unit->IsDead())
+			if (!IsValid(Unit) || !Unit->HasAuthority())
 			{
 				continue;
 			}
 
-			if (Unit->GetWorld() != Source->GetWorld())
+			if (Best == nullptr || Unit->GetName() < Best->GetName())
+			{
+				Best = Unit;
+			}
+		}
+
+		return Best;
+	}
+
+	static void FindNearestEnemyTarget(
+		UWorld* World,
+		AGP_UnitBase* Source,
+		AGP_UnitBase*& OutTarget,
+		float& OutDistance,
+		const TCHAR*& OutPolicy)
+	{
+		OutTarget = nullptr;
+		OutDistance = -1.0f;
+		OutPolicy = TEXT("None");
+
+		if (World == nullptr || !IsValid(Source))
+		{
+			return;
+		}
+
+		AGP_UnitBase* BestEnemy = nullptr;
+		float BestEnemyDistance = TNumericLimits<float>::Max();
+		AGP_UnitBase* BestNeutral = nullptr;
+		float BestNeutralDistance = TNumericLimits<float>::Max();
+
+		const FVector SourceLocation = Source->GetActorLocation();
+		const int32 SourceTeam = Source->GetTeamId();
+
+		for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
+		{
+			AGP_UnitBase* Candidate = *It;
+			if (!IsValid(Candidate)
+				|| Candidate == Source
+				|| !Candidate->HasAuthority()
+				|| Candidate->IsDead()
+				|| Candidate->GetWorld() != World)
 			{
 				continue;
 			}
 
-			if (Unit->GetTeamId() != Source->GetTeamId())
+			const int32 CandidateTeam = Candidate->GetTeamId();
+			if (CandidateTeam == SourceTeam)
 			{
-				if (Unit->GetTeamId() >= 1)
+				continue;
+			}
+
+			const float Distance = FVector::Dist2D(SourceLocation, Candidate->GetActorLocation());
+			if (!FMath::IsFinite(Distance))
+			{
+				continue;
+			}
+
+			auto IsBetter = [](float NewDistance, AGP_UnitBase* NewUnit, float BestDistance, AGP_UnitBase* BestUnit) -> bool
+			{
+				if (BestUnit == nullptr)
 				{
-					return Unit;
+					return true;
 				}
 
-				if (NeutralFallback == nullptr && Unit->GetTeamId() == 0)
+				if (!FMath::IsNearlyEqual(NewDistance, BestDistance))
 				{
-					NeutralFallback = Unit;
+					return NewDistance < BestDistance;
+				}
+
+				return NewUnit->GetName() < BestUnit->GetName();
+			};
+
+			if (CandidateTeam >= 1)
+			{
+				if (IsBetter(Distance, Candidate, BestEnemyDistance, BestEnemy))
+				{
+					BestEnemy = Candidate;
+					BestEnemyDistance = Distance;
+				}
+			}
+			else if (CandidateTeam == 0)
+			{
+				if (IsBetter(Distance, Candidate, BestNeutralDistance, BestNeutral))
+				{
+					BestNeutral = Candidate;
+					BestNeutralDistance = Distance;
 				}
 			}
 		}
 
-		return NeutralFallback;
+		if (BestEnemy != nullptr)
+		{
+			OutTarget = BestEnemy;
+			OutDistance = BestEnemyDistance;
+			OutPolicy = TEXT("NearestEnemy");
+			return;
+		}
+
+		if (BestNeutral != nullptr)
+		{
+			OutTarget = BestNeutral;
+			OutDistance = BestNeutralDistance;
+			OutPolicy = TEXT("NeutralFallback");
+		}
+	}
+
+	static FGPCombatDebugPair ResolveCombatDebugPair(UWorld* World)
+	{
+		FGPCombatDebugPair Pair;
+
+		Pair.Source = FindFirstSelectedAuthorityUnit(World, /*bAliveOnly=*/true);
+		if (Pair.Source != nullptr)
+		{
+			Pair.bSourceFromSelection = true;
+			Pair.SourcePolicy = TEXT("Selected");
+		}
+		else
+		{
+			Pair.Source = FindFallbackAliveTeamSource(World);
+			Pair.bSourceFromSelection = false;
+			Pair.SourcePolicy = Pair.Source != nullptr ? TEXT("FallbackFirstAlive") : TEXT("None");
+		}
+
+		if (Pair.Source != nullptr)
+		{
+			FindNearestEnemyTarget(
+				World,
+				Pair.Source,
+				Pair.Target,
+				Pair.TargetDistance,
+				Pair.TargetPolicy);
+		}
+
+		UE_LOG(LogGPCombat, Log,
+			TEXT("GP Combat Select: Source=%s SourceTeam=%d SourcePolicy=%s SelectionSource=%s Target=%s TargetTeam=%d TargetPolicy=%s Distance=%.1f"),
+			*GetNameSafe(Pair.Source),
+			Pair.Source != nullptr ? Pair.Source->GetTeamId() : -1,
+			Pair.SourcePolicy,
+			Pair.bSourceFromSelection ? TEXT("true") : TEXT("false"),
+			*GetNameSafe(Pair.Target),
+			Pair.Target != nullptr ? Pair.Target->GetTeamId() : -1,
+			Pair.TargetPolicy,
+			Pair.TargetDistance);
+
+		return Pair;
 	}
 
 	static void LogInspect(AGP_UnitBase* Unit)
@@ -773,10 +957,31 @@ namespace GPCombatConsolePrivate
 			NetModeToString(World != nullptr ? World->GetNetMode() : NM_MAX));
 	}
 
+	static void CombatResolve(const TArray<FString>& Args, UWorld* World)
+	{
+		(void)Args;
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPCombat, Warning, TEXT("GP Combat.Resolve: missing world"));
+			return;
+		}
+
+		const FGPCombatDebugPair Pair = ResolveCombatDebugPair(World);
+		UE_LOG(LogGPCombat, Log,
+			TEXT("GP Combat.Resolve: Source=%s Target=%s Distance=%.1f (read-only)"),
+			*GetNameSafe(Pair.Source),
+			*GetNameSafe(Pair.Target),
+			Pair.TargetDistance);
+	}
+
 	static void CombatInspect(const TArray<FString>& Args, UWorld* World)
 	{
 		(void)Args;
-		AGP_UnitBase* Unit = FindFirstAuthorityAliveUnit(World);
+		AGP_UnitBase* Unit = FindFirstSelectedAuthorityUnit(World, /*bAliveOnly=*/false);
+		if (Unit == nullptr)
+		{
+			Unit = FindFirstAuthorityAliveUnit(World);
+		}
 		if (Unit == nullptr)
 		{
 			Unit = FindFirstAuthorityUnit(World);
@@ -818,30 +1023,37 @@ namespace GPCombatConsolePrivate
 		const float Cooldown = FCString::Atof(*Args[ValueOffset + 5]);
 		const float Range = FCString::Atof(*Args[ValueOffset + 6]);
 
-		AGP_UnitBase* Source = FindCombatSource(World);
-		AGP_UnitBase* Target = FindCombatTarget(World, Source);
+		const FGPCombatDebugPair Pair = ResolveCombatDebugPair(World);
 		AGP_UnitBase* Unit = nullptr;
 
 		if (Selector.Equals(TEXT("Target"), ESearchCase::IgnoreCase))
 		{
-			Unit = Target;
+			Unit = Pair.Target;
 			if (Unit == nullptr)
 			{
-				Unit = FindFirstAuthorityAliveUnit(World);
+				UE_LOG(LogGPCombat, Warning,
+					TEXT("GP Combat.SetStats: Target reject Reason=NoNearestEnemy Source=%s"),
+					*GetNameSafe(Pair.Source));
+				return;
 			}
 		}
 		else
 		{
-			Unit = Source;
+			Unit = Pair.Source;
 			if (Unit == nullptr)
 			{
-				Unit = FindFirstAuthorityAliveUnit(World);
+				UE_LOG(LogGPCombat, Warning,
+					TEXT("GP Combat.SetStats: Source reject Reason=NoSelectedOrFallbackAliveTeamUnit"));
+				return;
 			}
 		}
 
-		if (Unit == nullptr || Unit->IsDead())
+		if (Unit->IsDead())
 		{
-			UE_LOG(LogGPCombat, Warning, TEXT("GP Combat.SetStats: no authority alive unit for selector=%s"), *Selector);
+			UE_LOG(LogGPCombat, Warning,
+				TEXT("GP Combat.SetStats: reject selector=%s Unit=%s Reason=UnitDead"),
+				*Selector,
+				*Unit->GetName());
 			return;
 		}
 
@@ -874,25 +1086,20 @@ namespace GPCombatConsolePrivate
 			Attrs != nullptr ? Attrs->GetAttackRange() : -1.0f);
 	}
 
-	static bool ResolveSourceTarget(UWorld* World, AGP_UnitBase*& OutSource, AGP_UnitBase*& OutTarget)
+	static bool RequireResolvedPair(UWorld* World, FGPCombatDebugPair& OutPair)
 	{
-		OutSource = FindCombatSource(World);
-		OutTarget = FindCombatTarget(World, OutSource);
-		if (OutSource == nullptr || OutTarget == nullptr)
+		OutPair = ResolveCombatDebugPair(World);
+		if (OutPair.Source == nullptr || OutPair.Target == nullptr)
 		{
 			UE_LOG(LogGPCombat, Warning,
-				TEXT("GP Combat: unable to resolve source/target (Source=%s Target=%s)"),
-				*GetNameSafe(OutSource),
-				*GetNameSafe(OutTarget));
+				TEXT("GP Combat: unable to resolve source/target (Source=%s Target=%s SourcePolicy=%s TargetPolicy=%s)"),
+				*GetNameSafe(OutPair.Source),
+				*GetNameSafe(OutPair.Target),
+				OutPair.SourcePolicy,
+				OutPair.TargetPolicy);
 			return false;
 		}
 
-		UE_LOG(LogGPCombat, Log,
-			TEXT("GP Combat Select: Source=%s Team=%d Target=%s Team=%d"),
-			*OutSource->GetName(),
-			OutSource->GetTeamId(),
-			*OutTarget->GetName(),
-			OutTarget->GetTeamId());
 		return true;
 	}
 
@@ -904,12 +1111,14 @@ namespace GPCombatConsolePrivate
 			return;
 		}
 
-		AGP_UnitBase* Source = nullptr;
-		AGP_UnitBase* Target = nullptr;
-		if (!ResolveSourceTarget(World, Source, Target))
+		FGPCombatDebugPair Pair;
+		if (!RequireResolvedPair(World, Pair))
 		{
 			return;
 		}
+
+		AGP_UnitBase* Source = Pair.Source;
+		AGP_UnitBase* Target = Pair.Target;
 
 		UGP_AbilitySystemComponent* SourceASC = Source->GetGPAbilitySystemComponent();
 		const UGP_UnitAttributeSet* SourceAttrs = Source->GetUnitAttributeSet();
@@ -931,7 +1140,9 @@ namespace GPCombatConsolePrivate
 		SourceASC->SetNumericAttributeBase(UGP_UnitAttributeSet::GetDamageAttribute(), PreviousDamage);
 
 		UE_LOG(LogGPCombat, Log,
-			TEXT("GP Combat.ApplyDamage Done: Applied=%s HealthBefore=%.2f HealthAfter=%.2f AppliedDamage=%.2f Reject=%s RestoredSourceDamage=%.2f"),
+			TEXT("GP Combat.ApplyDamage Done: Source=%s Target=%s Applied=%s HealthBefore=%.2f HealthAfter=%.2f AppliedDamage=%.2f Reject=%s RestoredSourceDamage=%.2f"),
+			*Source->GetName(),
+			*Target->GetName(),
 			bApplied ? TEXT("true") : TEXT("false"),
 			Result.HealthBefore,
 			Result.HealthAfter,
@@ -949,12 +1160,14 @@ namespace GPCombatConsolePrivate
 			return;
 		}
 
-		AGP_UnitBase* Source = nullptr;
-		AGP_UnitBase* Target = nullptr;
-		if (!ResolveSourceTarget(World, Source, Target))
+		FGPCombatDebugPair Pair;
+		if (!RequireResolvedPair(World, Pair))
 		{
 			return;
 		}
+
+		AGP_UnitBase* Source = Pair.Source;
+		AGP_UnitBase* Target = Pair.Target;
 
 		UGP_AbilitySystemComponent* SourceASC = Source->GetGPAbilitySystemComponent();
 		const UGP_UnitAttributeSet* SourceAttrs = Source->GetUnitAttributeSet();
@@ -981,7 +1194,9 @@ namespace GPCombatConsolePrivate
 		SourceASC->SetNumericAttributeBase(UGP_UnitAttributeSet::GetDamageAttribute(), PreviousDamage);
 
 		UE_LOG(LogGPCombat, Log,
-			TEXT("GP Combat.KillTarget Done: Applied=%s TempDamage=%.2f HealthBefore=%.2f HealthAfter=%.2f TargetDead=%s Reject=%s"),
+			TEXT("GP Combat.KillTarget Done: Source=%s Target=%s Applied=%s TempDamage=%.2f HealthBefore=%.2f HealthAfter=%.2f TargetDead=%s Reject=%s"),
+			*Source->GetName(),
+			*Target->GetName(),
 			bApplied ? TEXT("true") : TEXT("false"),
 			TemporaryDamage,
 			Result.HealthBefore,
@@ -990,9 +1205,14 @@ namespace GPCombatConsolePrivate
 			*Result.RejectReason);
 	}
 
+	static FAutoConsoleCommandWithWorldAndArgs GCombatResolveCommand(
+		TEXT("gp.Combat.Resolve"),
+		TEXT("Read-only: log resolved combat Source/Target (selected Source + nearest enemy)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&CombatResolve));
+
 	static FAutoConsoleCommandWithWorldAndArgs GCombatInspectCommand(
 		TEXT("gp.Combat.Inspect"),
-		TEXT("Inspect first authority alive unit combat/ASC state (fallback: first authority unit)."),
+		TEXT("Inspect selected authority unit combat/ASC state (fallback: first authority alive/unit)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&CombatInspect));
 
 	static FAutoConsoleCommandWithWorldAndArgs GCombatSetStatsCommand(
@@ -1002,12 +1222,12 @@ namespace GPCombatConsolePrivate
 
 	static FAutoConsoleCommandWithWorldAndArgs GCombatApplyDamageCommand(
 		TEXT("gp.Combat.ApplyDamage"),
-		TEXT("gp.Combat.ApplyDamage Amount — apply real GE damage from Team1 source to valid target."),
+		TEXT("gp.Combat.ApplyDamage Amount — apply real GE damage from selected/fallback Source to nearest enemy."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&CombatApplyDamage));
 
 	static FAutoConsoleCommandWithWorldAndArgs GCombatKillTargetCommand(
 		TEXT("gp.Combat.KillTarget"),
-		TEXT("Kill selected combat target through real GE/MMC path."),
+		TEXT("Kill nearest enemy to selected/fallback Source through real GE/MMC path."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&CombatKillTarget));
 }
 #endif

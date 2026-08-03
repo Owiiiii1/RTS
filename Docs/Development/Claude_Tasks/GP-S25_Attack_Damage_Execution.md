@@ -573,16 +573,25 @@ Base: `main` @ `eb590a5baa1780cdb4b8b01b17a09ce4ece252fe`
 - Dead units not gameplay-selectable
 
 ### Debug commands (non-shipping)
-- `gp.Combat.Inspect`
-- `gp.Combat.SetStats [Source|Target] Health MaxHealth Damage Armor Resistance Cooldown AttackRange`
-- `gp.Combat.ApplyDamage Amount` (temp source Damage → real GE → restore)
-- `gp.Combat.KillTarget` (computed lethal Damage via GE)
+- Shared resolver `FGPCombatDebugPair` / `ResolveCombatDebugPair` (non-shipping, `GPUnitBase.cpp`)
+- Source: first selected alive authority unit; fallback TeamId≥1 alive (name-stable)
+- Target: nearest enemy 2D to Source (TeamId≥1 preferred; neutral fallback); distance tie-break by actor name
+- `gp.Combat.Resolve` — read-only Source/Target dump
+- `gp.Combat.Inspect` — selected authority unit, else alive/unit fallback
+- `gp.Combat.SetStats [Source|Target] ...` — same pair; Target rejects if no enemy
+- `gp.Combat.ApplyDamage Amount` / `gp.Combat.KillTarget` — same pair; real GE path
+
+### Operator validation note
+- Lethal GAS/death path **PASS** (Health→0, UnitDied once, lifespan, no crash)
+- Debug target resolution **FAIL** found: arbitrary `TActorIterator` order ignored selection
+- Fix landed: selected Source + nearest enemy Target + `gp.Combat.Resolve`
+- Restart operator validation from `gp.Combat.Resolve` then KillTarget/ApplyDamage
 
 ### Logs
-`UnitASCInitialized`, `UnitCombatAttributesInitialized`, `DamageApplyAttempt/Rejected/Applied`, `UnitHealthChanged`, `UnitDeathStarted`, `UnitDeathCommandShutdown`, `UnitDied`, `UnitCommandRejected Reason=UnitDead`
+`UnitASCInitialized`, `UnitCombatAttributesInitialized`, `DamageApplyAttempt/Rejected/Applied`, `UnitHealthChanged`, `UnitDeathStarted`, `UnitDeathCommandShutdown`, `UnitDied`, `UnitCommandRejected Reason=UnitDead`, `GP Combat Select` (SourcePolicy/TargetPolicy/Distance)
 
 ### Build
-- GPEditor Win64 Development + UHT — **PASSED**
+- GPEditor Win64 Development + UHT — **PASSED** (implementation + debug resolver fix)
 - GP Dev / Shipping deferred until operator validation
 
 ### GP-S25B deferred

@@ -3330,3 +3330,25 @@ Status: **CODE_DONE_OPERATOR_ACCEPTED** / GP-S22 **DONE_WITH_FAILURE_PROPAGATION
 
 ### Stop condition
 Commit/push `feature/gp-s22-movement-completion-implementation` only. Do **not** merge to main. Do **not** start failure propagation / Nav / Attack/Mine / queue from this close-out.
+
+## 2026-08-03 — GP-S23 / Movement Result Propagation — analysis checkpoint
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S23_Movement_Result_Propagation.md` (new)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Selected GP-S23 after GP-S22 close-out on baseline `main` @ `5a41a2352f50d598ab8ee3e557791659403d6552`.
+- Purpose: serial-aware movement result contract for command layer and future Attack executor (Reached / Cancelled / sync Rejected); fix phantom Held on RequestMove reject; emit Cancelled on real stop/supersede paths; keep EndPlay silent.
+- Chosen architecture: single `FGP_OnMovementResult(Serial, Result, Reason)` for terminal results of accepted/active moves (`Reached`, `Cancelled`); `RequestMove` returns `FGP_MovementRequestOutcome` with no sync reject broadcast; `Failed` omitted until a real producer exists; exact-serial Held clear on Reached/Cancelled/sync-Reject; Move→Move emits Cancelled/Superseded; Manual Cancelled clears matching Held; EndPlay silent.
+- Deferred: Nav/blocked/`Failed`, Attack/Mine executors, queue execution, prediction, replicated Held, formation/avoidance, dedicated Cancel API.
+- Implementation **pending** — analysis-only; no C++ on this branch.
+
+### Builds / validation
+- None (analysis-only).
+
+### Stop condition
+Commit/push `feature/gp-s23-movement-result-analysis` only. Do **not** merge to main. Do **not** mark GP-S23 implemented.

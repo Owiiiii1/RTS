@@ -1,106 +1,79 @@
 # Cursor Work Report
 
 ## Task
-GP-S22 movement completion finalization
+GP-S23 movement result propagation analysis
 
 ## Status
-CODE_DONE_OPERATOR_ACCEPTED
+ANALYSIS_READY_IMPLEMENTATION_PENDING
 
 ## Branch
-feature/gp-s22-movement-completion-implementation
+feature/gp-s23-movement-result-analysis
 
 ## Base
-main @ 664c30d4c7e8d1df52cf1a6caa2e87c366d84c1a
+main @ 5a41a2352f50d598ab8ee3e557791659403d6552
 
-## Final Stage Status
-DONE_WITH_FAILURE_PROPAGATION_DEFERRED
+## Current Code Findings
+- GP-S22 broadcasts only `Reached` via `FGP_OnMovementCompleted`; `StopMove` never broadcasts.
+- `RequestMove` returns `bool`; reject logs `MoveRejected` / `MoveExecutionRejected` but Held Move remains (phantom Held).
+- Move→Move silently replaces active serial (`MoveReplaced`); no terminal for previous serial.
+- Move→non-Move calls `StopMove(CommandReplaced)` without result callback; Held already replaced.
+- Manual `gp.Movement.Stop` leaves Held Move.
+- EndPlay: silent `StopMove(EndPlay)` + command-layer `HeldCleared`.
+- No runtime `Failed` producer (straight-line XY only).
+- Call sites confined to `GPMovementComponent` / `GPUnitCommandComponent` (+ non-shipping console).
 
-## Implementation Summary
-`UGP_MovementComponent` broadcasts native `OnMovementCompleted(Serial, Reached)` after clearing local active state and logging MoveReached. `UGP_UnitCommandComponent` authority-binds in BeginPlay and clears Held only when tag is exact Move and serial matches. Stop/Manual/EndPlay never broadcast. Non-shipping `gp.Movement.TestCompletion` prefers a moving authority unit for stale tests.
+## Selected Architecture
+Single native terminal delegate for accepted/active moves; synchronous structured `RequestMove` outcome for rejects (no sync reject multicast). Rename GP-S22 completion types to result types with Reason. Omit `Failed` until Nav stage.
 
-## Architecture
-- MovementComponent owns native completion delegate
-- authority-only UnitCommandComponent binding
-- Reached-only completion
-- matching Move serial clears Held
-- stale completion ignored
-- no post-broadcast mutation
-- Stop/Manual/EndPlay do not broadcast
+## Result Contract
+```cpp
+enum class EGP_MovementResult : uint8 { Reached, Cancelled };
+enum class EGP_MovementResultReason : uint8 { None, Superseded, CommandReplaced, Manual };
+FGP_OnMovementResult(Serial, Result, Reason);
+```
+Sync-only: `FGP_MovementRequestOutcome { Status, RejectReason }`.
 
-## Operator Validation
-| Case | Result |
-| --- | --- |
-| Natural completion | **PASS** |
-| Held clear | **PASS** |
-| next Move HeldAccepted | **PASS** |
-| Move replacement | **PASS** |
-| Move→Attack cancellation | **PASS** |
-| Attack→Move | **PASS** |
-| NoHeld synthetic | **PASS** |
-| stale SerialMismatch | **PASS** |
-| Z preservation | **PASS** |
-| Remote Team 2 completion | **NOT_RUN_ACCEPTED_BY_USER** |
-| Multi-unit completion | **NOT_RUN_ACCEPTED_BY_USER** |
-| Manual stop | **NOT_RUN_ACCEPTED_BY_USER** |
+## RequestMove Decision
+Return `FGP_MovementRequestOutcome`. No RequestRejected broadcast (reentrancy with Held mutation). On Rejected after Held-set Move: clear exact matching Held in `SynchronizeMovementWithHeldCommand`. Allocator never rewinds.
 
-## Stale Validation Evidence
-- Active Held Move serial = 2
-- Injected completion serial = 1
-- Selection=MovingUnit; ActiveMoveSerial=2; IsMoving=true
-- MovementCompletionIgnored Reason=SerialMismatch CompletedSerial=1 HeldSerial=2
-- Movement continued; no MoveStopped
-- Later MoveReached Serial=2 + HeldMoveCompleted Serial=2
+## Cancellation Decision
+- Move→Move: emit Cancelled/Superseded after committing new active state.
+- Move→non-Move: StopMove(CommandReplaced) emits Cancelled/CommandReplaced.
+- Manual: emit Cancelled/Manual; clear matching Held Move.
+- EndPlay: silent; no Cancelled broadcast.
 
-## Console Hitch Observation
-- Brief visual pause observed on TestCompletion
-- No movement state change in logs
-- No MoveStopped
-- ActiveMoveSerial unchanged
-- Likely console/game-thread frame hitch
-- No production fix required; no frame-time profiling performed
+## Held Policy
+Clear only authority + exact Move tag + exact serial on Reached or Cancelled (and sync Reject clear in sync path). Newer / non-Move / no Held → ignore + log. Stale serial protection retained.
 
-## Build Results
-- GPEditor Development: **PASSED** at candidate stage
-- UHT: **PASSED** at candidate stage
-- GP Development: **PASSED** at finalization
-- GP Shipping: **PASSED** at finalization
+## Reentrancy Rules
+Capture → mutate movement-local → log → broadcast → return. No post-broadcast mutation of old serial. No broadcast on Reject or EndPlay. Callback may start a new Move safely.
+
+## Expected Implementation Files
+- `GPMovementComponent.h/.cpp`
+- `GPUnitCommandComponent.h/.cpp`
+- `GP-S23_Movement_Result_Propagation.md`
+- `AI_Project_Log.md`
+- `Cursor_Work_Report.md`
+
+NO: GPMobileUnit, GPStoredUnitCommand, gameplay tags, Build.cs, assets/maps/config.
+
+## Validation Plan
+2P Listen Server: Reached clear; real Rejected (no phantom Held); Move→Attack Cancelled ignores new Held; Move→Move Superseded; Manual clears Held; stale inject; reentrancy new Move; authority-only remote/multi-unit; EndPlay no crash/unsafe callback.
 
 ## Scope Verification
+- C++ changed: **NO**
 - Build.cs changed: **NO**
-- PlayerController changed: **NO**
-- payloads/tags changed: **NO**
 - assets/maps/config changed: **NO**
-- failure propagation added: **NO**
-- Nav/AI/GAS added: **NO**
+- Attack/Mine added: **NO**
+- Nav/pathfinding added: **NO**
 - queue implementation added: **NO**
-- production logic changed during finalization: **NO**
-
-## Files Changed
-### C++ (prior commits on branch)
-- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h`
-- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
-
-### Docs (finalization)
-- `Docs/Development/Claude_Tasks/GP-S22_Movement_Completion.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
-
-## Deferred
-- Failure/blocked result propagation
-- Request rejection propagation
-- Command-layer cancellation
-- Nav/pathfinding
-- Queue storage/execution
-- Attack/Mine execution
-- Prediction
-- Replicated Held
-- Formation/avoidance
 
 ## Git State
-- git diff --check: clean
-- working tree clean after commit/push
-- branch pushed: `feature/gp-s22-movement-completion-implementation`
+- Branch: `feature/gp-s23-movement-result-analysis`
+- Base: `main` @ `5a41a2352f50d598ab8ee3e557791659403d6552`
+- Docs-only commit; working tree clean after commit/push
 - HEAD = origin
 - no merge to main
+
+## Implementation Pending
+Explicit implementation task required. Target stage close status: `DONE_WITH_FAILED_RESULT_DEFERRED`.

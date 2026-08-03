@@ -1,14 +1,18 @@
 # GP-S23 Movement Result Propagation
 
 ## Status
-**ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**CODE_DONE_OPERATOR_ACCEPTED**
+
+**GP-S23 Status: `DONE_WITH_FAILED_RESULT_DEFERRED`**
 
 ## Baseline
-`main` @ `5a41a2352f50d598ab8ee3e557791659403d6552` (Merge GP-S22 movement completion)
+`main` @ `966d0e7a884af02593608ea398eb1627d9f5a58f` (Merge GP-S23 movement result analysis)
 
-Depends on: GP-S22 `DONE_WITH_FAILURE_PROPAGATION_DEFERRED`.
+Depends on: GP-S22 `DONE_WITH_FAILURE_PROPAGATION_DEFERRED`; GP-S23 analysis merged.
 
-Branch: `feature/gp-s23-movement-result-analysis`
+Branch: `feature/gp-s23-movement-result-implementation`
+
+Final architecture locked and operator-accepted: unified native terminal delegate; Reached/Cancelled; structured sync RequestMove rejection; exact-serial Held clear; Move→Move Superseded; Move→non-Move CommandReplaced; Manual cancellation; EndPlay silent; phantom Held fixed; reentrancy-safe ordering; Failed deferred until Nav/pathfinding.
 
 ---
 
@@ -600,6 +604,92 @@ Do **not** mark `CODE_DONE_NETWORK_VALIDATED` unless remote GP-S23 result paths 
 
 ---
 
-## Stop condition (analysis)
+## Implementation record (candidate)
 
-Analysis branch documents only. No C++ on this branch. Commit/push `feature/gp-s23-movement-result-analysis`. Do **not** merge to main. Do **not** start implementation from this analysis commit without an explicit implementation task.
+### Actual APIs
+```cpp
+enum class EGP_MovementResult : uint8 { Reached, Cancelled };
+enum class EGP_MovementResultReason : uint8 { None, Superseded, CommandReplaced, Manual };
+enum class EGP_MovementRequestStatus : uint8 { Accepted, Rejected };
+enum class EGP_MovementRejectReason : uint8 {
+  None, MissingOwner, NoAuthority, InvalidSerial,
+  InvalidDestination, InvalidMoveSpeed, InvalidAcceptanceRadius
+};
+struct FGP_MovementRequestOutcome { Status; RejectReason; IsAccepted(); };
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FGP_OnMovementResult, uint32, EGP_MovementResult, EGP_MovementResultReason);
+FGP_MovementRequestOutcome RequestMove(const FVector&, uint32);
+FGP_OnMovementResult& OnMovementResult();
+#if !UE_BUILD_SHIPPING
+void DebugBroadcastResult(uint32, EGP_MovementResult, EGP_MovementResultReason);
+#endif
+```
+
+### Migration names
+| Old (GP-S22) | New (GP-S23) |
+| --- | --- |
+| `EGP_MovementCompletionResult` | `EGP_MovementResult` |
+| `FGP_OnMovementCompleted` | `FGP_OnMovementResult` (+ Reason) |
+| `OnMovementCompleted()` | `OnMovementResult()` |
+| `HandleMovementCompleted` | `HandleMovementResult` |
+| `DebugBroadcastCompletion` | `DebugBroadcastResult` |
+| `HeldMoveCompleted` | `HeldMoveFinished` |
+| `MovementCompletionIgnored` | `MovementResultIgnored` |
+
+### Rejection behavior
+- `RequestMove` returns structured outcome; **never** broadcasts Rejected.
+- Reject does not mutate active movement state.
+- Command layer: Held set → `RequestMove` → on Reject clear exact Move serial → `MoveExecutionRejected` + `HeldMoveRejectedCleared` → **no** `HeldAccepted`/`HeldReplaced`.
+- Allocator continues monotonically.
+- Non-shipping `gp.UnitCommand.TestRejectedMove` exercises Held-before-RequestMove via non-finite destination.
+
+### Cancellation ordering
+- Move→Move: commit new active → `MoveReplaced` → Broadcast Cancelled/Superseded (old) → return Accepted.
+- Move→non-Move: Held already new → `StopMove(CommandReplaced)` → Cancelled/CommandReplaced → ignore HeldTagNotMove.
+- Manual: Cancelled/Manual → clear matching Held Move.
+- EndPlay: silent clear; no broadcast.
+
+### Held policy
+Exact authority + Move tag + serial match clears on Reached or Cancelled. Else ignore with `MovementResultIgnored`.
+
+### Debug commands
+| Command | Role |
+| --- | --- |
+| `gp.Movement.TestResult <Serial> <Reached\|Cancelled> [Reason]` | Primary synthetic (no mutation) |
+| `gp.Movement.TestCompletion <Serial>` | Deprecated alias → Reached/None |
+| `gp.Movement.Stop` | Real Manual cancel producer — selects first **moving** authority unit only (no idle fallback) |
+| `gp.Movement.Test` | Structured RequestMove outcome |
+| `gp.UnitCommand.TestRejectedMove` | Command-layer phantom-Held reject path |
+
+### Builds
+- Candidate: GPEditor Win64 Development + UHT — **PASSED** (implementation + Stop target fix)
+- Finalization: GP Win64 Development — **PASSED**
+- Finalization: GP Win64 Shipping — **PASSED**
+
+### Operator validation
+**CODE_DONE_OPERATOR_ACCEPTED**
+
+| Case | Result |
+| --- | --- |
+| Natural Reached (MoveReached + MovementResultBroadcast Reached/None + HeldMoveFinished; next Move HeldAccepted) | **PASS** |
+| Move→Move (Cancelled/Superseded old; SerialMismatch; latest Reach clears) | **PASS** |
+| Move→Attack (CommandReplaced; HeldTagNotMove; Attack Held retained; no HeldMoveFinished for old Move) | **PASS** |
+| Manual Stop after debug target fix (MoveStopped Manual; Cancelled/Manual; HeldMoveFinished; Selection=MovingUnit; next HeldAccepted) | **PASS** |
+| Rejected Move (InvalidDestination; MoveExecutionRejected; HeldMoveRejectedCleared; HasHeldAfter=false; no HeldAccepted/HeldReplaced) | **PASS** |
+| Stale result (old Cancelled/Manual ignored SerialMismatch; newer Move continues) | **PASS** |
+| Compatibility alias (`gp.Movement.TestCompletion` → Reached/None; stale ignored) | **PASS** |
+| EndPlay (no crash; no EndPlay result broadcast; teardown safe) | **PASS** |
+| Remote Team 2 | **NOT_RUN_ACCEPTED_BY_USER** |
+| Multi-unit isolation | **NOT_RUN_ACCEPTED_BY_USER** |
+
+Manual Stop note: initial failure was wrong debug target (idle first authority); production StopMove contract validated after `FindFirstAuthorityMovingMobileUnit` fix.
+
+NOT_RUN_ACCEPTED_BY_USER: user accepted current validation scope; no separate runtime evidence for remote/multi-unit GP-S23 result paths in this pass.
+
+---
+
+## Stop condition (finalization)
+
+**CODE_DONE_OPERATOR_ACCEPTED.** **GP-S23: DONE_WITH_FAILED_RESULT_DEFERRED.**
+Commit/push `feature/gp-s23-movement-result-implementation` only.
+**READY_FOR_MAIN_MERGE** (merge not performed here).
+Do **not** start Attack/Mine/Nav/`Failed`/queue from this close-out.

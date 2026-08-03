@@ -3352,3 +3352,80 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s23-movement-result-analysis` only. Do **not** merge to main. Do **not** mark GP-S23 implemented.
+
+## 2026-08-03 — GP-S23 / Movement Result Propagation — implementation candidate
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `Docs/Development/Claude_Tasks/GP-S23_Movement_Result_Propagation.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Unified terminal `FGP_OnMovementResult(Serial, Result, Reason)` for accepted/active moves (`Reached`, `Cancelled`).
+- Structured `RequestMove` → `FGP_MovementRequestOutcome`; reject never broadcasts; phantom Held cleared via exact serial + `HeldMoveRejectedCleared`.
+- Move→Move emits Cancelled/Superseded after committing new active state.
+- Move→non-Move `StopMove(CommandReplaced)` emits Cancelled/CommandReplaced; Attack Held ignored (HeldTagNotMove).
+- Manual Cancelled clears matching Held Move; EndPlay silent; `Failed` deferred.
+- Debug: `gp.Movement.TestResult`, deprecated `TestCompletion` alias, `gp.UnitCommand.TestRejectedMove`.
+
+### Builds / validation
+- GPEditor Development + UHT — **PASSED**.
+- GP Dev/Shipping — deferred until operator validation.
+- Operator — **pending**.
+
+### Stop condition
+Superseded by Stop debug-target fix checkpoint.
+
+## 2026-08-03 — GP-S23 / Movement Result Propagation — Stop debug target fix
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp` — `gp.Movement.Stop` selects moving authority unit only
+- `Docs/Development/Claude_Tasks/GP-S23_Movement_Result_Propagation.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Operator validation found wrong debug target: `gp.Movement.Stop` used first authority unit while a different unit was moving; production `StopMove` contract not the cause.
+- Fixed: select first authority moving unit; no idle fallback; console log includes ActiveSerialBefore / WasMovingBefore / Selection=MovingUnit.
+- PASS so far: Natural Reached, Move→Move, Move→Attack, Rejected Move, stale result, TestCompletion alias, EndPlay.
+- Manual cancellation requires retest.
+
+### Builds / validation
+- GPEditor Development + UHT — **PASSED** (Stop target fix rebuild).
+- Operator — Manual **RETEST**; other listed cases **PASS**.
+
+### Stop condition
+Superseded by GP-S23 completion checkpoint.
+
+## 2026-08-03 — GP-S23 / Movement Result Propagation — completion checkpoint
+
+Status: **CODE_DONE_OPERATOR_ACCEPTED** / GP-S23 **DONE_WITH_FAILED_RESULT_DEFERRED**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S23_Movement_Result_Propagation.md` — final status
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — finalization report
+- (C++ unchanged from `b702d0c` Stop target fix)
+
+### What was done
+- Operator accepted GP-S23: unified `FGP_OnMovementResult`; Reached/Cancelled; structured sync RequestMove rejection; exact-serial Held clear; Move→Move Superseded; Move→non-Move CommandReplaced; Manual Cancelled clears matching Held; EndPlay silent; phantom Held fixed; reentrancy-safe ordering.
+- Manual Stop confirmed after debug target fix (`Selection=MovingUnit`, ActiveSerialBefore=1, HeldMoveFinished Cancelled/Manual, next HeldAccepted Serial=2).
+- PASS: Natural Reached, Move→Move, Move→Attack, Manual Stop, Rejected Move, stale result, TestCompletion alias, EndPlay.
+- NOT_RUN_ACCEPTED_BY_USER: Remote Team 2, multi-unit isolation.
+- Final status: **DONE_WITH_FAILED_RESULT_DEFERRED**. Failed deferred until Nav/pathfinding.
+
+### Builds / validation
+- Candidate GPEditor Dev + UHT — **PASSED** (prior).
+- Finalization GP Dev + GP Shipping — **PASSED**.
+- Operator — **CODE_DONE_OPERATOR_ACCEPTED**.
+
+### Stop condition
+Commit/push `feature/gp-s23-movement-result-implementation` only. **READY_FOR_MAIN_MERGE** (no merge in this close-out). Do **not** start Attack/Mine/Nav/`Failed`/queue.

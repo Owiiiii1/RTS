@@ -10,6 +10,12 @@
 #include "Units/GPMobileUnit.h"
 #include "Units/GPMovementComponent.h"
 
+#if !UE_BUILD_SHIPPING
+#include "EngineUtils.h"
+#include "HAL/IConsoleManager.h"
+#include <limits>
+#endif
+
 DEFINE_LOG_CATEGORY_STATIC(LogGPUnitCommandState, Log, All);
 DEFINE_LOG_CATEGORY_STATIC(LogGPUnitCommandExecution, Log, All);
 
@@ -59,6 +65,59 @@ namespace GPUnitCommandStatePrivate
 		const UWorld* World = Owner->GetWorld();
 		return World != nullptr ? World->GetNetMode() : NM_MAX;
 	}
+
+	static const TCHAR* MovementResultToString(EGP_MovementResult Result)
+	{
+		switch (Result)
+		{
+		case EGP_MovementResult::Reached:
+			return TEXT("Reached");
+		case EGP_MovementResult::Cancelled:
+			return TEXT("Cancelled");
+		default:
+			return TEXT("Unknown");
+		}
+	}
+
+	static const TCHAR* MovementResultReasonToString(EGP_MovementResultReason Reason)
+	{
+		switch (Reason)
+		{
+		case EGP_MovementResultReason::None:
+			return TEXT("None");
+		case EGP_MovementResultReason::Superseded:
+			return TEXT("Superseded");
+		case EGP_MovementResultReason::CommandReplaced:
+			return TEXT("CommandReplaced");
+		case EGP_MovementResultReason::Manual:
+			return TEXT("Manual");
+		default:
+			return TEXT("Unknown");
+		}
+	}
+
+	static const TCHAR* RejectReasonToString(EGP_MovementRejectReason Reason)
+	{
+		switch (Reason)
+		{
+		case EGP_MovementRejectReason::None:
+			return TEXT("None");
+		case EGP_MovementRejectReason::MissingOwner:
+			return TEXT("MissingOwner");
+		case EGP_MovementRejectReason::NoAuthority:
+			return TEXT("NoAuthority");
+		case EGP_MovementRejectReason::InvalidSerial:
+			return TEXT("InvalidSerial");
+		case EGP_MovementRejectReason::InvalidDestination:
+			return TEXT("InvalidDestination");
+		case EGP_MovementRejectReason::InvalidMoveSpeed:
+			return TEXT("InvalidMoveSpeed");
+		case EGP_MovementRejectReason::InvalidAcceptanceRadius:
+			return TEXT("InvalidAcceptanceRadius");
+		default:
+			return TEXT("Unknown");
+		}
+	}
 }
 
 UGP_UnitCommandComponent::UGP_UnitCommandComponent()
@@ -95,18 +154,18 @@ void UGP_UnitCommandComponent::BeginPlay()
 	}
 
 	BoundMovementComponent = Movement;
-	MovementCompletionHandle = Movement->OnMovementCompleted().AddUObject(
+	MovementResultHandle = Movement->OnMovementResult().AddUObject(
 		this,
-		&UGP_UnitCommandComponent::HandleMovementCompleted);
+		&UGP_UnitCommandComponent::HandleMovementResult);
 }
 
 void UGP_UnitCommandComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (BoundMovementComponent.IsValid() && MovementCompletionHandle.IsValid())
+	if (BoundMovementComponent.IsValid() && MovementResultHandle.IsValid())
 	{
-		BoundMovementComponent->OnMovementCompleted().Remove(MovementCompletionHandle);
+		BoundMovementComponent->OnMovementResult().Remove(MovementResultHandle);
 	}
-	MovementCompletionHandle.Reset();
+	MovementResultHandle.Reset();
 	BoundMovementComponent.Reset();
 
 	if (HeldCommand.IsSet())
@@ -130,50 +189,42 @@ void UGP_UnitCommandComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-void UGP_UnitCommandComponent::HandleMovementCompleted(
-	uint32 CompletedSerial,
-	EGP_MovementCompletionResult Result)
+void UGP_UnitCommandComponent::HandleMovementResult(
+	uint32 Serial,
+	EGP_MovementResult Result,
+	EGP_MovementResultReason Reason)
 {
 	AActor* Owner = GetOwner();
 	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
 	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
 
-	auto ResultToString = [](EGP_MovementCompletionResult InResult) -> const TCHAR*
-	{
-		switch (InResult)
-		{
-		case EGP_MovementCompletionResult::Reached:
-			return TEXT("Reached");
-		default:
-			return TEXT("Unknown");
-		}
-	};
-
-	auto LogIgnored = [&](const TCHAR* Reason, uint32 HeldSerial, const FString& HeldTag, bool bWarning)
+	auto LogIgnored = [&](const TCHAR* IgnoreReason, uint32 HeldSerial, const FString& HeldTag, bool bWarning)
 	{
 		if (bWarning)
 		{
 			UE_LOG(LogGPUnitCommandExecution, Warning,
-				TEXT("GP UnitCommandExecution MovementCompletionIgnored: Unit=%s CompletedSerial=%u HeldSerial=%u HeldTag=%s Result=%s Reason=%s Role=%s NetMode=%s"),
+				TEXT("GP UnitCommandExecution MovementResultIgnored: Unit=%s ResultSerial=%u HeldSerial=%u HeldTag=%s Result=%s ResultReason=%s IgnoreReason=%s Role=%s NetMode=%s"),
 				*GetNameSafe(Owner),
-				CompletedSerial,
+				Serial,
 				HeldSerial,
 				*HeldTag,
-				ResultToString(Result),
-				Reason,
+				GPUnitCommandStatePrivate::MovementResultToString(Result),
+				GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
+				IgnoreReason,
 				GPUnitCommandStatePrivate::RoleToString(Role),
 				GPUnitCommandStatePrivate::NetModeToString(NetMode));
 		}
 		else
 		{
 			UE_LOG(LogGPUnitCommandExecution, Log,
-				TEXT("GP UnitCommandExecution MovementCompletionIgnored: Unit=%s CompletedSerial=%u HeldSerial=%u HeldTag=%s Result=%s Reason=%s Role=%s NetMode=%s"),
+				TEXT("GP UnitCommandExecution MovementResultIgnored: Unit=%s ResultSerial=%u HeldSerial=%u HeldTag=%s Result=%s ResultReason=%s IgnoreReason=%s Role=%s NetMode=%s"),
 				*GetNameSafe(Owner),
-				CompletedSerial,
+				Serial,
 				HeldSerial,
 				*HeldTag,
-				ResultToString(Result),
-				Reason,
+				GPUnitCommandStatePrivate::MovementResultToString(Result),
+				GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
+				IgnoreReason,
 				GPUnitCommandStatePrivate::RoleToString(Role),
 				GPUnitCommandStatePrivate::NetModeToString(NetMode));
 		}
@@ -185,7 +236,7 @@ void UGP_UnitCommandComponent::HandleMovementCompleted(
 		return;
 	}
 
-	if (Result != EGP_MovementCompletionResult::Reached)
+	if (Result != EGP_MovementResult::Reached && Result != EGP_MovementResult::Cancelled)
 	{
 		const uint32 HeldSerial = HeldCommand.IsSet() ? HeldCommand.GetValue().CommandSerial : 0;
 		const FString HeldTag = HeldCommand.IsSet()
@@ -209,7 +260,7 @@ void UGP_UnitCommandComponent::HandleMovementCompleted(
 		return;
 	}
 
-	if (CurrentHeld.CommandSerial != CompletedSerial)
+	if (CurrentHeld.CommandSerial != Serial)
 	{
 		LogIgnored(TEXT("SerialMismatch"), CurrentHeld.CommandSerial, CurrentHeld.CommandTag.ToString(), false);
 		return;
@@ -220,10 +271,12 @@ void UGP_UnitCommandComponent::HandleMovementCompleted(
 	HeldCommand.Reset();
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution HeldMoveCompleted: Unit=%s Serial=%u Tag=%s Role=%s NetMode=%s"),
+		TEXT("GP UnitCommandExecution HeldMoveFinished: Unit=%s Serial=%u Tag=%s Result=%s Reason=%s Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
 		ClearedSerial,
 		*ClearedTag.ToString(),
+		GPUnitCommandStatePrivate::MovementResultToString(Result),
+		GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
 		GPUnitCommandStatePrivate::RoleToString(Role),
 		GPUnitCommandStatePrivate::NetModeToString(NetMode));
 }
@@ -277,7 +330,12 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 
 	HeldCommand = Stored;
 
-	SynchronizeMovementWithHeldCommand(PreviousCommand);
+	const bool bHeldRemainsAfterSync = SynchronizeMovementWithHeldCommand(PreviousCommand);
+	if (!bHeldRemainsAfterSync || !HeldCommand.IsSet())
+	{
+		// Move RequestMove rejected and cleared Held — do not emit HeldAccepted/HeldReplaced.
+		return;
+	}
 
 	if (bHadHeldCommand)
 	{
@@ -285,9 +343,9 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 			TEXT("GP UnitCommandState HeldReplaced: Unit=%s PreviousSerial=%u NewSerial=%u PreviousTag=%s NewTag=%s Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			PreviousCommand.GetValue().CommandSerial,
-			Stored.CommandSerial,
+			HeldCommand.GetValue().CommandSerial,
 			*PreviousCommand.GetValue().CommandTag.ToString(),
-			*Stored.CommandTag.ToString(),
+			*HeldCommand.GetValue().CommandTag.ToString(),
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
 	}
@@ -296,16 +354,16 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 		UE_LOG(LogGPUnitCommandState, Log,
 			TEXT("GP UnitCommandState HeldAccepted: Unit=%s Serial=%u Tag=%s TargetActor=%s Loc=%s Queue=false Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
-			Stored.CommandSerial,
-			*Stored.CommandTag.ToString(),
-			*GetNameSafe(Stored.TargetActor.Get()),
-			*Stored.TargetLocation.ToCompactString(),
+			HeldCommand.GetValue().CommandSerial,
+			*HeldCommand.GetValue().CommandTag.ToString(),
+			*GetNameSafe(HeldCommand.GetValue().TargetActor.Get()),
+			*HeldCommand.GetValue().TargetLocation.ToCompactString(),
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
 	}
 }
 
-void UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
+bool UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 	const TOptional<FGP_StoredUnitCommand>& PreviousCommand)
 {
 	AActor* Owner = GetOwner();
@@ -314,12 +372,12 @@ void UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 
 	if (Owner == nullptr || !Owner->HasAuthority())
 	{
-		return;
+		return HeldCommand.IsSet();
 	}
 
 	if (!HeldCommand.IsSet())
 	{
-		return;
+		return false;
 	}
 
 	const FGP_StoredUnitCommand& CurrentHeld = HeldCommand.GetValue();
@@ -344,7 +402,7 @@ void UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 				GPUnitCommandStatePrivate::RoleToString(Role),
 				GPUnitCommandStatePrivate::NetModeToString(NetMode));
 		}
-		return;
+		return HeldCommand.IsSet();
 	}
 
 	UGP_MovementComponent* Movement = MobileUnit->GetUnitMovementComponent();
@@ -360,35 +418,61 @@ void UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 				GPUnitCommandStatePrivate::RoleToString(Role),
 				GPUnitCommandStatePrivate::NetModeToString(NetMode));
 		}
-		return;
+		return HeldCommand.IsSet();
 	}
 
 	if (bCurrentIsMove)
 	{
-		const bool bAccepted = Movement->RequestMove(CurrentHeld.TargetLocation, CurrentHeld.CommandSerial);
-		if (bAccepted)
+		const uint32 RequestedSerial = CurrentHeld.CommandSerial;
+		const FGameplayTag RequestedTag = CurrentHeld.CommandTag;
+		const FVector RequestedDestination = CurrentHeld.TargetLocation;
+
+		const FGP_MovementRequestOutcome Outcome =
+			Movement->RequestMove(RequestedDestination, RequestedSerial);
+
+		if (Outcome.IsAccepted())
 		{
 			UE_LOG(LogGPUnitCommandExecution, Log,
 				TEXT("GP UnitCommandExecution MoveExecutionRequested: Unit=%s Serial=%u Destination=%s PreviousSerial=%u PreviousTag=%s Role=%s NetMode=%s"),
 				*GetNameSafe(Owner),
-				CurrentHeld.CommandSerial,
-				*CurrentHeld.TargetLocation.ToCompactString(),
+				RequestedSerial,
+				*RequestedDestination.ToCompactString(),
 				PreviousSerial,
 				*PreviousTagString,
 				GPUnitCommandStatePrivate::RoleToString(Role),
 				GPUnitCommandStatePrivate::NetModeToString(NetMode));
+			return true;
 		}
-		else
+
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MoveExecutionRejected: Unit=%s Serial=%u Destination=%s RejectReason=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			RequestedSerial,
+			*RequestedDestination.ToCompactString(),
+			GPUnitCommandStatePrivate::RejectReasonToString(Outcome.RejectReason),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+		if (HeldCommand.IsSet())
 		{
-			UE_LOG(LogGPUnitCommandExecution, Warning,
-				TEXT("GP UnitCommandExecution MoveExecutionRejected: Unit=%s Serial=%u Destination=%s Role=%s NetMode=%s"),
-				*GetNameSafe(Owner),
-				CurrentHeld.CommandSerial,
-				*CurrentHeld.TargetLocation.ToCompactString(),
-				GPUnitCommandStatePrivate::RoleToString(Role),
-				GPUnitCommandStatePrivate::NetModeToString(NetMode));
+			const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
+			if (Held.CommandTag == MoveTag && Held.CommandSerial == RequestedSerial)
+			{
+				HeldCommand.Reset();
+
+				UE_LOG(LogGPUnitCommandState, Log,
+					TEXT("GP UnitCommandState HeldMoveRejectedCleared: Unit=%s Serial=%u Tag=%s RejectReason=%s Destination=%s Role=%s NetMode=%s"),
+					*GetNameSafe(Owner),
+					RequestedSerial,
+					*RequestedTag.ToString(),
+					GPUnitCommandStatePrivate::RejectReasonToString(Outcome.RejectReason),
+					*RequestedDestination.ToCompactString(),
+					GPUnitCommandStatePrivate::RoleToString(Role),
+					GPUnitCommandStatePrivate::NetModeToString(NetMode));
+			}
 		}
-		return;
+
+		return false;
 	}
 
 	if (Movement->IsMoving())
@@ -405,6 +489,8 @@ void UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
 	}
+
+	return HeldCommand.IsSet();
 }
 
 bool UGP_UnitCommandComponent::HasHeldCommand() const
@@ -432,3 +518,77 @@ uint32 UGP_UnitCommandComponent::AllocateCommandSerial()
 	}
 	return Allocated;
 }
+
+#if !UE_BUILD_SHIPPING
+namespace GPUnitCommandConsolePrivate
+{
+	static AGP_MobileUnit* FindFirstAuthorityMobileUnit(UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			return nullptr;
+		}
+
+		for (TActorIterator<AGP_MobileUnit> It(World); It; ++It)
+		{
+			AGP_MobileUnit* MobileUnit = *It;
+			if (MobileUnit != nullptr && MobileUnit->HasAuthority())
+			{
+				return MobileUnit;
+			}
+		}
+
+		return nullptr;
+	}
+
+	static void UnitCommandTestRejectedMove(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: gp.UnitCommand.TestRejectedMove missing world"));
+			return;
+		}
+
+		AGP_MobileUnit* MobileUnit = FindFirstAuthorityMobileUnit(World);
+		if (MobileUnit == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: no authority AGP_MobileUnit found"));
+			return;
+		}
+
+		UGP_UnitCommandComponent* CommandComponent = MobileUnit->GetUnitCommandComponent();
+		if (CommandComponent == nullptr)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution Console: Unit=%s missing UnitCommandComponent"),
+				*MobileUnit->GetName());
+			return;
+		}
+
+		const float InvalidCoord = std::numeric_limits<float>::quiet_NaN();
+
+		FGP_UnitCommand Command;
+		Command.CommandTag = FGPGameplayTags::Get().Command_Move;
+		Command.TargetLocation = FVector(InvalidCoord, InvalidCoord, InvalidCoord);
+		Command.TargetActor = nullptr;
+		Command.bQueue = false;
+
+		const bool bHadHeldBefore = CommandComponent->HasHeldCommand();
+		CommandComponent->HandleCommand(Command);
+		const bool bHasHeldAfter = CommandComponent->HasHeldCommand();
+
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution Console: gp.UnitCommand.TestRejectedMove Unit=%s HadHeldBefore=%s HasHeldAfter=%s (exercises Held-before-RequestMove InvalidDestination reject)"),
+			*MobileUnit->GetName(),
+			bHadHeldBefore ? TEXT("true") : TEXT("false"),
+			bHasHeldAfter ? TEXT("true") : TEXT("false"));
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs GUnitCommandTestRejectedMoveCommand(
+		TEXT("gp.UnitCommand.TestRejectedMove"),
+		TEXT("GP-S23 non-shipping: HandleCommand Move with non-finite destination to validate phantom-Held clear."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&UnitCommandTestRejectedMove));
+}
+#endif

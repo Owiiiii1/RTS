@@ -3088,3 +3088,25 @@ Status: **CODE_DONE_NETWORK_VALIDATED** / GP-S18 **DONE_WITH_EXECUTORS_DEFERRED*
 
 ### Stop condition
 Commit/push `feature/gp-s18-unit-layer-implementation` only. Do **not** merge to main. Do **not** start GP-S20 / Move / AI / NavMesh / GAS / routing / executor / queue / callbacks from this close-out.
+
+## 2026-08-03 — GP-S20 / Movement Foundation — analysis
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S20_Movement_Foundation.md` — finalized contract
+- `Docs/Development/AI_Project_Log.md` (this entry)
+
+### What was done
+- Docs-only GP-S20 analysis on `feature/gp-s20-movement-foundation-analysis` (renamed from provisional `gp-s19-…`; base = `main` `c75ebe0`).
+- Roadmap: **GP-S19** = request/mapping, absorbed by GP-S17; **GP-S20** = Movement Foundation (canonical next); **GP-S21** = Held Move integration/cancel; **GP-S22** = serial completion + Held clear. Continuation mapping — TDD/13 not rewritten.
+- Hierarchy: `UnitBase` → `MobileUnit` (+ `UGP_MovementComponent`) → `Unit`. No movement on UnitBase.
+- Backend: straight-line server movement (`UActorComponent`); XY move, Z preserve; `SetActorLocation` no sweep; smooth yaw 360°/s; EditDefaultsOnly config (600/50/360/true).
+- Scope: physical lifecycle + non-shipping console validation entry; **no** Held wiring, Nav, AI, callbacks, queue, formation.
+- Completion target: `DONE_WITH_COMMAND_INTEGRATION_DEFERRED`. No C++/assets.
+
+### Builds / validation
+- Documentation-only; no builds required.
+
+### Stop condition
+Commit/push `feature/gp-s20-movement-foundation-analysis` only. Do **not** merge to main. Do **not** implement MobileUnit/MovementComponent/debug command/Held wiring/Nav/AI from this pass.

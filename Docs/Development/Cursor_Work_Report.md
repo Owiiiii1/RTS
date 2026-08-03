@@ -1,99 +1,114 @@
 # Cursor Work Report
 
 ## Task
-GP-S25 Attack Damage Execution analysis
+GP-S25A Health and Damage Foundation implementation
 
 ## Status
-ANALYSIS_READY_IMPLEMENTATION_PENDING
+GP-S25A_CODE_READY_OPERATOR_VALIDATION_PENDING
 
 ## Branch
-feature/gp-s25-attack-damage-analysis
+feature/gp-s25a-health-damage-foundation
 
 ## Base
-main @ f0bfb3b0bfa3b96015011cc6c4bd0375d0b6ef69
+main @ eb590a5baa1780cdb4b8b01b17a09ce4ece252fe
 
-## Current-State Inventory
-- Units: no ASC, no `IAbilitySystemInterface`, no death API (UnitBase comment: ASC/death deferred)
-- ASC host today: `AGP_PlayerState` only (Mixed + PlayerAttributeSet)
-- `UGP_UnitAttributeSet`: combat attrs default 0; PreAttributeChange clamps; **no** PostGameplayEffectExecute
-- `UGP_DamageCalculation` MMC: Source Damage − Armor × (1−Resistance) → −Health magnitude — **already coded**
-- No GE_GP_Damage_Basic asset; no unit combat BP/DA
-- GP-S24 Attack: Ready without hits; component AttackRange=250; no TargetDied reason
-- Tags: `GP.Unit.State.Dead` exists; no Data.Damage / Event.UnitDied
-- Module: GPRuntime already depends on GPGASRuntime
+## Summary
+Units now own ASC + UnitAttributeSet, initialize combat attributes on authority, apply Instant C++ damage GE through existing MMC, and transition once to death with command/movement shutdown. Attack Ready hit cadence remains deferred to GP-S25B. Damage is exercised via non-shipping `gp.Combat.*` console commands on the real GAS path.
 
-## Selected Architecture
-UnitBase hosts ASC + UnitAttributeSet; CommandComponent owns hit cadence; GPGAS owns MMC + C++ Instant GE + AttributeSet death notify via thin GPGAS interface (no AttributeSet→UnitBase include cycle).
+## Unit ASC Ownership
+`AGP_UnitBase` implements `IAbilitySystemInterface` + `IGP_DeathSink`. Creates `UGP_AbilitySystemComponent` (replicated, Mixed) and `UGP_UnitAttributeSet` as default subobjects. No player ASC reuse.
 
-## Damage Mechanism
-Instant C++ `UGP_GE_Damage_Basic` + existing `UGP_DamageCalculation` MMC. Reject SetByCaller dual-Damage and direct Health mutation.
-
-## Attribute Semantics
-- Damage = source base damage
-- Armor = flat reduction
-- DamageResistance = 0..1 fraction (MMC clamp)
-- AttackCooldown = seconds between hits
-- AttackSpeed = deferred
-- No new IncomingDamage meta attribute
-
-## Damage Formula
-`Final = max(0, Damage - Armor) * (1 - clamp(Res,0,1))`; min damage 0; friendly/self rejected at command layer.
-
-## Attack Cadence
-Immediate-first-hit on Ready; then `NextHitTime = Now + AttackCooldown` (min 0.05s clamp); preserve NextHitTime across temporary OOR; AttackSpeed unused.
-
-## Range Source
-GAS AttackRange if finite and >0; else component AttackRange (250). Keep component property in S25.
+## Actor Info Initialization
+`BeginPlay` → `InitializeAbilitySystemActorInfo()` → `InitAbilityActorInfo(this, this)` with Owner/Avatar already-set guard. Runs on authority and clients.
 
 ## Attribute Initialization
-EditDefaultsOnly combat defaults on UnitBase + authority `SetNumericAttributeBase` after ASC init. Debug `gp.Combat.SetStats`. No AttributeSet.cpp hardcode; DA deferred.
+EditDefaultsOnly defaults on UnitBase; authority `SetNumericAttributeBase` once (`bCombatAttributesInitialized`). Defaults: MaxHealth/Health 100, Damage 25, Armor 0, Resistance 0, Cooldown 1, AttackRange 250. Clamp/sanitize applied. Not hardcoded in AttributeSet.cpp.
+
+## Damage GameplayEffect
+`UGP_GE_Damage_Basic` Instant Health Additive with `UGP_DamageCalculation` MMC (`FGameplayEffectModifierMagnitude`). No BP asset.
+
+## Damage Calculation
+Existing MMC unchanged: `max(0, Damage - Armor) * (1 - clamp(Res,0,1))` → negative Health magnitude. Min 0; Resistance 1.0 full block.
+
+## Damage Application API
+`GPDamageApplication::ApplyDamageEffect` (GPGASRuntime) + `AGP_UnitBase::ApplyDamageFromUnit` (authority validation: dead/self/friendly/ASC). Applied damage = HealthBefore − HealthAfter.
+
+## Health Processing
+`PreAttributeChange` clamps Health/MaxHealth; `PostAttributeChange` clamps Health when MaxHealth drops; `PostGameplayEffectExecute` reclamps, logs `UnitHealthChanged`, notifies death sink at Health≤0.
 
 ## Death Contract
-PostGEExecute Health≤0 → UnitBase HandleDeath once → replicate bIsDead → Dead tag → stop move/clear commands → disable collision → OnUnitDied → delayed Destroy. GameMode notify deferred.
+Authority once-only `HandleDeathInternal`: `bIsDead`, Dead tag (`TagOnly` replication), `NotifyOwnerDied`, disable collision, broadcast `OnUnitDied`, optional `SetLifeSpan` (default 2s). No sync Destroy in GE stack.
 
-## Target Death Integration
-Bind `OnUnitDied` at Attack start; FinishAttack Failed/TargetDied; unbind on replace/end. Reentrancy-safe with FinishAttack guards; no sync Destroy in GE stack.
+## Death Replication
+`bIsDead` DOREPLIFETIME + `OnRep_IsDead` client collision disable. Delegate authority-only.
 
-## Attacker Death Integration
-Owner HandleDeath → command `NotifyOwnerDied` (reset Attack, clear Held, stop move, disable tick).
+## Command/Movement Shutdown
+`ReceiveCommand` rejects dead units (`UnitDead`). `NotifyOwnerDied` disables Attack tick, resets Attack executor, `StopMove(OwnerDied)` silent, clears Held. New `EGP_MovementStopReason::OwnerDied`.
 
-## Replication
-Authority-only Apply; unit ASC Mixed; replicate bIsDead; no damage RPC/prediction.
+## Debug Commands
+Non-shipping: `gp.Combat.Inspect`, `gp.Combat.SetStats [Source|Target] ...`, `gp.Combat.ApplyDamage`, `gp.Combat.KillTarget`. Selection: Team≥1 source + enemy/neutral target. Temp Damage restored after Apply.
 
-## Tags
-Use existing `GP.Unit.State.Dead`. No new tags required for MMC path.
-
-## Proposed Files
-- S25A: UnitBase ASC/death; UnitAttributeSet PostGE; IGP death sink; UGP_GE_Damage_Basic; gp.Combat.*
-- S25B: UnitCommandComponent cadence, Apply GE, TargetDied, EffectiveRange
-- Build.cs: NO change expected
-
-## Reentrancy Analysis
-Death-during-hit FinishAttack idempotent; multi-attacker single death; LifeSpan not sync Destroy; exact serial on retarget.
-
-## Debug/Logging Plan
-`gp.Combat.Inspect|SetStats|ApplyDamage|KillTarget` (GE path). Logs: AttackHitAttempt/Applied/Rejected, UnitDied, AttackFinished TargetDied.
-
-## Acceptance Plan
-S25A: ApplyDamage/mitigation/single death/dead rejects commands. S25B: Ready cadence, OOR pause, TargetDied, two attackers, replace/retarget, attacker death, QueueDeferred, builds.
-
-## Recommended Slice Split
-**GP-S25A** Health & Damage Foundation → **GP-S25B** Attack Cadence Integration. Do not start B before A accepted.
-
-## Risks
-ASC init order; AttributeSet include cycle; zero defaults without init; FinishAttack reentrancy; Resistance=1 full block.
+## Logging
+`UnitASCInitialized`, `UnitCombatAttributesInitialized`, `DamageApplyAttempt/Rejected/Applied`, `UnitHealthChanged`, `UnitDeathStarted`, `UnitDeathCommandShutdown`, `UnitDied`, `UnitCommandRejected Reason=UnitDead`.
 
 ## Files Changed
-Documentation only:
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp`
+- `GP/Source/GPGASRuntime/Public/AttributeSets/GPUnitAttributeSet.h`
+- `GP/Source/GPGASRuntime/Private/AttributeSets/GPUnitAttributeSet.cpp`
+- `GP/Source/GPGASRuntime/Public/Combat/GPDeathSink.h` (new)
+- `GP/Source/GPGASRuntime/Public/Combat/GPDamageApplication.h` (new)
+- `GP/Source/GPGASRuntime/Private/Combat/GPDamageApplication.cpp` (new)
+- `GP/Source/GPGASRuntime/Public/Effects/GPGE_DamageBasic.h` (new)
+- `GP/Source/GPGASRuntime/Private/Effects/GPGE_DamageBasic.cpp` (new)
 - `Docs/Development/Claude_Tasks/GP-S25_Attack_Damage_Execution.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
 ## Build Results
-Not run — analysis-only.
+- GPEditor Development — **PASSED**
+- UHT — **PASSED** (implicit via GPEditor build)
+
+## Static Verification
+- UnitBase ISI + ASC/AttributeSet subobjects: yes
+- Actor info once-safe: yes
+- Authority attribute init / clients no overwrite: yes
+- Damage via GE/MMC, no direct Health mutation in damage path: yes
+- Death once + replicate bIsDead + Dead tag: yes
+- Dead reject commands + owner death shutdown: yes
+- Delayed LifeSpan only: yes
+- No Attack cadence / TargetDied / assets / Build.cs / module cycle: yes
+
+## Scope Verification
+- Attack cadence added: **no**
+- Attack executor target-death binding added: **no**
+- animation/projectile/VFX added: **no**
+- Build.cs changed: **no**
+- assets/config changed: **no**
+- direct Health mutation used: **no** (damage path)
+- immediate Destroy used: **no**
+- prediction/UI added: **no**
 
 ## Git State
-- Branch: `feature/gp-s25-attack-damage-analysis`
-- Docs-only; working tree clean after push
-- HEAD = origin
-- no merge to main
+- Branch: `feature/gp-s25a-health-damage-foundation`
+- No merge to main
+
+## Operator Validation Needed
+2P Listen Server:
+1. `gp.Combat.Inspect` — ASC/attrs defaults / not dead
+2. `gp.Combat.ApplyDamage 25` — Health 100→75
+3. `gp.Combat.SetStats Target 100 100 25 10 0 1 250` then ApplyDamage 25 → Applied 15
+4. Resistance 0.5 / Armor+Res cases
+5. Full block (Armor≥Damage or Res=1) → Applied 0, no death
+6. `gp.Combat.KillTarget` — single death, Dead tag, collision off, LifeSpan
+7. Repeat damage → TargetDead reject; no second UnitDied
+8. Dead unit Move/Attack → UnitCommandRejected UnitDead
+9. Kill while moving / while Attack active (attacker) — shutdown, no crash
+10. Client observes Health + bIsDead; EndPlay PIE safe
+
+## Deferred To GP-S25B
+Ready periodic hits, NextHitTime, AttackCooldown cadence, TargetDied reason + OnUnitDied bind, EffectiveRange fallback usage in Attack executor, AttackSpeed.

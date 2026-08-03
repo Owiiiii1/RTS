@@ -72,6 +72,13 @@ public:
 	 */
 	const FGP_StoredUnitCommand* GetHeldCommand() const;
 
+	/**
+	 * Authority-only owner death shutdown (GP-S25A).
+	 * Disables Attack tick, resets Attack executor, stops movement (OwnerDied),
+	 * clears Held. No TargetDied terminal Attack result.
+	 */
+	void NotifyOwnerDied();
+
 	EGP_AttackExecutionState GetAttackExecutionState() const;
 	uint32 GetActiveAttackSerial() const;
 	AGP_UnitBase* GetAttackTarget() const;

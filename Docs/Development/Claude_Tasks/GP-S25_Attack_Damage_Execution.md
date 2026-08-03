@@ -1,16 +1,16 @@
 # GP-S25 Attack Damage Execution
 
 ## Status
-**ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**GP-S25A_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ## Baseline
-`main` @ `f0bfb3b0bfa3b96015011cc6c4bd0375d0b6ef69` (Merge GP-S24 attack execution foundation)
+`main` @ `eb590a5baa1780cdb4b8b01b17a09ce4ece252fe` (Merge GP-S25 attack damage analysis)
 
-Depends on: GP-S24 `DONE_WITH_DAMAGE_EXECUTION_DEFERRED`; GP-S03 Attribute Sets `DONE`; GPGASRuntime ASC + `UGP_DamageCalculation` stubs present.
+Depends on: GP-S24 `DONE_WITH_DAMAGE_EXECUTION_DEFERRED`; GP-S03 Attribute Sets `DONE`; GP-S25 analysis locked.
 
-Branch: `feature/gp-s25-attack-damage-analysis`
+Branch: `feature/gp-s25a-health-damage-foundation`
 
-Recommended close status after full implementation + validation: **`DONE_WITH_VISUAL_COMBAT_DEFERRED`**
+Recommended close status after full S25A+S25B implementation + validation: **`DONE_WITH_VISUAL_COMBAT_DEFERRED`**
 
 ---
 
@@ -513,3 +513,80 @@ Do **not** implement S25B until S25A operator-accepted.
 ## Stop condition (analysis)
 
 Docs only. Commit/push `feature/gp-s25-attack-damage-analysis`. Do **not** merge to main. Do **not** start S25A implementation without explicit task. Do **not** add damage C++ on this branch.
+
+---
+
+## GP-S25A Implementation Record
+
+Status: **GP-S25A_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+Branch: `feature/gp-s25a-health-damage-foundation`
+Base: `main` @ `eb590a5baa1780cdb4b8b01b17a09ce4ece252fe`
+
+### Unit ASC ownership
+- `AGP_UnitBase` implements `IAbilitySystemInterface` + `IGP_DeathSink`
+- Subobjects: `UGP_AbilitySystemComponent` (replicated, Mixed), `UGP_UnitAttributeSet`
+- Accessors: `GetAbilitySystemComponent`, `GetGPAbilitySystemComponent`, `GetUnitAttributeSet`
+
+### Actor info lifecycle
+- `BeginPlay` → `InitializeAbilitySystemActorInfo()` → `InitAbilityActorInfo(this, this)`
+- Idempotent when Owner/Avatar already `this`
+- Safe for authority + client proxies
+
+### Attribute initialization
+- EditDefaultsOnly combat defaults on UnitBase (Health/MaxHealth=100, Damage=25, Armor=0, Resistance=0, Cooldown=1, AttackRange=250)
+- Authority-only `SetNumericAttributeBase` once (`bCombatAttributesInitialized`)
+- Order: MaxHealth → Health → Damage → Armor → DamageResistance → AttackCooldown → AttackRange
+- No hardcoded values in `UGP_UnitAttributeSet.cpp`
+
+### Damage GameplayEffect
+- Native `UGP_GE_Damage_Basic` Instant Health Additive via `UGP_DamageCalculation`
+- No Blueprint GE asset
+- Apply helper: `GPDamageApplication::ApplyDamageEffect`
+- Unit API: `AGP_UnitBase::ApplyDamageFromUnit` (authority, team/dead/self guards)
+
+### MMC behavior
+- Existing formula unchanged: `max(0, Damage-Armor)*(1-clamp(Res,0,1))` → negative Health magnitude
+- Min damage 0; Resistance 1.0 full block
+
+### Death sink
+- `IGP_DeathSink` / `UGP_DeathSink` in GPGASRuntime
+- `UGP_UnitAttributeSet::PostGameplayEffectExecute` clamps Health, logs `UnitHealthChanged`, notifies sink when Health≤0
+- No GPGASRuntime→GPRuntime include
+
+### Death lifecycle
+- Authority `HandleDeathInternal` once (`bIsDead` + `bDeathHandled`)
+- Add `GP.Unit.State.Dead` loose tag with `EGameplayTagReplicationState::TagOnly`
+- `NotifyOwnerDied` → stop movement `OwnerDied` (silent) → clear Held → disable collision
+- Broadcast `OnUnitDied` (server-only)
+- `SetLifeSpan(DeadActorLifeSpan)` default 2s; 0 = keep actor
+- No sync `Destroy` in GE stack
+
+### Replication
+- `bIsDead` replicated + `OnRep_IsDead` client collision disable
+- Attributes via GAS Mixed
+- `OnUnitDied` authority-only (not fired from OnRep)
+- No damage RPC / prediction
+
+### Command rejection
+- `ReceiveCommand` rejects when `IsDead` → `UnitCommandRejected Reason=UnitDead`
+- Dead units not gameplay-selectable
+
+### Debug commands (non-shipping)
+- `gp.Combat.Inspect`
+- `gp.Combat.SetStats [Source|Target] Health MaxHealth Damage Armor Resistance Cooldown AttackRange`
+- `gp.Combat.ApplyDamage Amount` (temp source Damage → real GE → restore)
+- `gp.Combat.KillTarget` (computed lethal Damage via GE)
+
+### Logs
+`UnitASCInitialized`, `UnitCombatAttributesInitialized`, `DamageApplyAttempt/Rejected/Applied`, `UnitHealthChanged`, `UnitDeathStarted`, `UnitDeathCommandShutdown`, `UnitDied`, `UnitCommandRejected Reason=UnitDead`
+
+### Build
+- GPEditor Win64 Development + UHT — **PASSED**
+- GP Dev / Shipping deferred until operator validation
+
+### GP-S25B deferred
+- Attack Ready hit cadence / NextHitTime
+- TargetDied Attack terminal reason + OnUnitDied bind in Attack executor
+- AttackSpeed / range migration beyond attribute init
+- Animation / projectile / VFX / UI / GameMode death

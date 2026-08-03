@@ -1,7 +1,12 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "AttributeSets/GPUnitAttributeSet.h"
+
+#include "Combat/GPDeathSink.h"
+#include "GameplayEffectExtension.h"
 #include "Net/UnrealNetwork.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogGPUnitAttributes, Log, All);
 
 UGP_UnitAttributeSet::UGP_UnitAttributeSet()
 {
@@ -40,6 +45,76 @@ void UGP_UnitAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribut
 	{
 		// Upper clamp deferred until WorkerCarryCapacity / cargo slice (no MaxCargo attribute in MVP AttributeSet).
 		NewValue = FMath::Max(NewValue, 0.0f);
+	}
+}
+
+void UGP_UnitAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
+{
+	Super::PostAttributeChange(Attribute, OldValue, NewValue);
+
+	if (Attribute == GetMaxHealthAttribute())
+	{
+		const float ClampedMax = FMath::Max(NewValue, 0.0f);
+		if (GetHealth() > ClampedMax)
+		{
+			if (UAbilitySystemComponent* ASC = GetOwningAbilitySystemComponent())
+			{
+				ASC->SetNumericAttributeBase(GetHealthAttribute(), ClampedMax);
+			}
+			else
+			{
+				SetHealth(ClampedMax);
+			}
+		}
+	}
+}
+
+void UGP_UnitAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
+{
+	Super::PostGameplayEffectExecute(Data);
+
+	if (Data.EvaluatedData.Attribute != GetHealthAttribute())
+	{
+		return;
+	}
+
+	const float HealthBeforeClamp = GetHealth();
+	const float ClampedHealth = FMath::Clamp(HealthBeforeClamp, 0.0f, GetMaxHealth());
+	if (ClampedHealth != HealthBeforeClamp)
+	{
+		SetHealth(ClampedHealth);
+	}
+
+	const float HealthAfter = GetHealth();
+	const float AppliedDelta = Data.EvaluatedData.Magnitude;
+	const float HealthBefore = HealthAfter - AppliedDelta;
+
+	if (!FMath::IsNearlyEqual(HealthBefore, HealthAfter))
+	{
+		AActor* OwnerActor = GetOwningActor();
+		UE_LOG(LogGPUnitAttributes, Log,
+			TEXT("GP UnitHealthChanged: Unit=%s HealthBefore=%.2f HealthAfter=%.2f Magnitude=%.2f MaxHealth=%.2f"),
+			*GetNameSafe(OwnerActor),
+			HealthBefore,
+			HealthAfter,
+			AppliedDelta,
+			GetMaxHealth());
+	}
+
+	if (HealthAfter > 0.0f)
+	{
+		return;
+	}
+
+	AActor* AvatarActor = GetOwningActor();
+	if (AvatarActor == nullptr)
+	{
+		return;
+	}
+
+	if (IGP_DeathSink* DeathSink = Cast<IGP_DeathSink>(AvatarActor))
+	{
+		DeathSink->HandleGASDeath(Data);
 	}
 }
 

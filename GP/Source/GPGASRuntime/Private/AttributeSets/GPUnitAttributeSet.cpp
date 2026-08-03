@@ -69,6 +69,19 @@ void UGP_UnitAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribu
 	}
 }
 
+bool UGP_UnitAttributeSet::PreGameplayEffectExecute(FGameplayEffectModCallbackData& Data)
+{
+	// Engine applies the modifier between Pre and Post (GameplayEffect.cpp InternalExecuteMod).
+	// FGameplayEffectModCallbackData has no OldValue — capture actual Health here.
+	if (Data.EvaluatedData.Attribute == GetHealthAttribute())
+	{
+		HealthBeforeGameplayEffect = GetHealth();
+		bHasHealthBeforeGameplayEffect = true;
+	}
+
+	return Super::PreGameplayEffectExecute(Data);
+}
+
 void UGP_UnitAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
 {
 	Super::PostGameplayEffectExecute(Data);
@@ -78,6 +91,9 @@ void UGP_UnitAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 		return;
 	}
 
+	const float HealthBefore = bHasHealthBeforeGameplayEffect ? HealthBeforeGameplayEffect : GetHealth();
+	bHasHealthBeforeGameplayEffect = false;
+
 	const float HealthBeforeClamp = GetHealth();
 	const float ClampedHealth = FMath::Clamp(HealthBeforeClamp, 0.0f, GetMaxHealth());
 	if (ClampedHealth != HealthBeforeClamp)
@@ -86,17 +102,19 @@ void UGP_UnitAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 	}
 
 	const float HealthAfter = GetHealth();
-	const float AppliedDelta = Data.EvaluatedData.Magnitude;
-	const float HealthBefore = HealthAfter - AppliedDelta;
+	const float EvaluatedMagnitude = Data.EvaluatedData.Magnitude;
+	const float AppliedDelta = HealthAfter - HealthBefore;
 
-	if (!FMath::IsNearlyEqual(HealthBefore, HealthAfter))
+	if (!FMath::IsNearlyEqual(HealthBefore, HealthAfter)
+		|| !FMath::IsNearlyEqual(EvaluatedMagnitude, 0.0f))
 	{
 		AActor* OwnerActor = GetOwningActor();
 		UE_LOG(LogGPUnitAttributes, Log,
-			TEXT("GP UnitHealthChanged: Unit=%s HealthBefore=%.2f HealthAfter=%.2f Magnitude=%.2f MaxHealth=%.2f"),
+			TEXT("GP UnitHealthChanged: Unit=%s HealthBefore=%.2f HealthAfter=%.2f EvaluatedMagnitude=%.2f AppliedDelta=%.2f MaxHealth=%.2f"),
 			*GetNameSafe(OwnerActor),
 			HealthBefore,
 			HealthAfter,
+			EvaluatedMagnitude,
 			AppliedDelta,
 			GetMaxHealth());
 	}

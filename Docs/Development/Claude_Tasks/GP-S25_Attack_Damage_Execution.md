@@ -551,7 +551,8 @@ Base: `main` @ `eb590a5baa1780cdb4b8b01b17a09ce4ece252fe`
 
 ### Death sink
 - `IGP_DeathSink` / `UGP_DeathSink` in GPGASRuntime
-- `UGP_UnitAttributeSet::PostGameplayEffectExecute` clamps Health, logs `UnitHealthChanged`, notifies sink when Health≤0
+- `UGP_UnitAttributeSet::PreGameplayEffectExecute` captures actual Health before mod apply (`FGameplayEffectModCallbackData` has no OldValue in UE 5.8.1)
+- `PostGameplayEffectExecute` clamps Health, logs `UnitHealthChanged` with HealthBefore / HealthAfter / EvaluatedMagnitude / AppliedDelta (= HealthAfter−HealthBefore), notifies sink when Health≤0
 - No GPGASRuntime→GPRuntime include
 
 ### Death lifecycle
@@ -583,9 +584,10 @@ Base: `main` @ `eb590a5baa1780cdb4b8b01b17a09ce4ece252fe`
 
 ### Operator validation note
 - Lethal GAS/death path **PASS** (Health→0, UnitDied once, lifespan, no crash)
-- Debug target resolution **FAIL** found: arbitrary `TActorIterator` order ignored selection
-- Fix landed: selected Source + nearest enemy Target + `gp.Combat.Resolve`
-- Restart operator validation from `gp.Combat.Resolve` then KillTarget/ApplyDamage
+- Debug target resolution **FAIL** found then fixed: selected Source + nearest enemy + `gp.Combat.Resolve`
+- Overkill gameplay **PASS**; diagnostic `UnitHealthChanged` HealthBefore **FAIL** (reconstructed from clamped HealthAfter − raw Magnitude → reported 100 instead of 40)
+- Fix: PreGE capture of actual Health; log EvaluatedMagnitude vs AppliedDelta
+- Rerun: `SetStats Target 40 100 ...` + `ApplyDamage 100` → HealthBefore=40 AppliedDelta=-40 EvaluatedMagnitude=-100; normal `ApplyDamage 25` → AppliedDelta=-25
 
 ### Logs
 `UnitASCInitialized`, `UnitCombatAttributesInitialized`, `DamageApplyAttempt/Rejected/Applied`, `UnitHealthChanged`, `UnitDeathStarted`, `UnitDeathCommandShutdown`, `UnitDied`, `UnitCommandRejected Reason=UnitDead`, `GP Combat Select` (SourcePolicy/TargetPolicy/Distance)

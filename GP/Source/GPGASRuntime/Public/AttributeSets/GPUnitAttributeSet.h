@@ -23,6 +23,7 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue) override;
 	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
+	virtual bool PreGameplayEffectExecute(FGameplayEffectModCallbackData& Data) override;
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
 
 	UPROPERTY(BlueprintReadOnly, Category = "GP|Attributes|Unit", ReplicatedUsing = OnRep_Health)
@@ -96,4 +97,9 @@ protected:
 
 	UFUNCTION()
 	void OnRep_CarriedFerronite(const FGameplayAttributeData& OldCarriedFerronite);
+
+private:
+	/** Captured in PreGameplayEffectExecute; Health is already modified by PostGameplayEffectExecute. */
+	float HealthBeforeGameplayEffect = 0.0f;
+	bool bHasHealthBeforeGameplayEffect = false;
 };

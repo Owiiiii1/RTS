@@ -3606,3 +3606,27 @@ Status: **GP-S25A_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ### Stop condition
 Commit/push same branch `feature/gp-s25a-health-damage-foundation`. No merge to main. No GP-S25B.
+
+## 2026-08-03 — GP-S25A / overkill health logging fix
+
+Status: **GP-S25A_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPGASRuntime/Public/AttributeSets/GPUnitAttributeSet.h`
+- `GP/Source/GPGASRuntime/Private/AttributeSets/GPUnitAttributeSet.cpp`
+- `Docs/Development/Claude_Tasks/GP-S25_Attack_Damage_Execution.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Operator: overkill gameplay PASS (Health 40→0, AppliedDamage=40) but `UnitHealthChanged` logged HealthBefore=100 from HealthAfter−Magnitude.
+- Root cause: PostGE reconstructed pre-clamp theoretical Health; `FGameplayEffectModCallbackData` has no OldValue.
+- Fix: `PreGameplayEffectExecute` captures actual Health; Post logs EvaluatedMagnitude + AppliedDelta (= HealthAfter−HealthBefore).
+- Death/GE/MMC/replication unchanged.
+
+### Builds / validation
+- GPEditor Win64 Development + UHT — **PASSED**
+- Operator rerun normal damage + overkill log checks
+
+### Stop condition
+Commit/push same branch. No merge to main. No GP-S25B.

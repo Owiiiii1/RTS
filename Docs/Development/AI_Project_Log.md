@@ -3183,3 +3183,27 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s21-held-move-integration-analysis` only. Do **not** merge to main. Do **not** implement sync/StopMove reason/GP-S22 from this pass.
+
+## 2026-08-03 — GP-S21 / Held Move Integration — implementation
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h` / `Private/...cpp` — sync after Held store
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h` / `Private/...cpp` — `EGP_MovementStopReason` + `StopMove(Reason)`
+- `Docs/Development/Claude_Tasks/GP-S21_Held_Move_Integration.md` — `CODE_READY_OPERATOR_VALIDATION_PENDING`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — implementation report
+
+### What was done
+- Implemented GP-S21 on `feature/gp-s21-held-move-integration-implementation` (base = `main` `04d6414`).
+- Held Move → `RequestMove(TargetLocation, CommandSerial)`; Move→Move uses internal MoveReplaced; Move→Attack/Mine → `StopMove(CommandReplaced)` if moving; QueueDeferred unchanged.
+- Command serial = movement serial; RequestMove reject keeps Held; no completion callback / Held clear on reach.
+- Operator validation pending. Completion target: `DONE_WITH_COMPLETION_DEFERRED`.
+
+### Builds / validation
+- GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+- Operator — **pending**.
+
+### Stop condition
+**CODE_READY_OPERATOR_VALIDATION_PENDING.** Commit/push implementation branch only. Do **not** merge to main. Do **not** start GP-S22.

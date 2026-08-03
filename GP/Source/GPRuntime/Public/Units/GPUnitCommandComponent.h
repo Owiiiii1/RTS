@@ -11,9 +11,10 @@
 struct FGP_UnitCommand;
 
 /**
- * Server-authoritative held-command ownership on AGP_UnitBase (GP-S18).
+ * Server-authoritative held-command ownership on AGP_UnitBase (GP-S18/S21).
  * Accepts delivery payloads, stores one Held Command, apply replace / QueueDeferred.
- * No tick, replication, RPC, routing, or gameplay execution.
+ * GP-S21: synchronizes Held Move / non-Move replace with UGP_MovementComponent.
+ * No tick, replication, RPC, completion callbacks, or queue execution.
  */
 UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))
 class GPRUNTIME_API UGP_UnitCommandComponent : public UActorComponent
@@ -25,7 +26,7 @@ public:
 
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	/** Authority-only accept / replace / QueueDeferred. No execution. */
+	/** Authority-only accept / replace / QueueDeferred. Syncs movement for non-queued changes. */
 	void HandleCommand(const FGP_UnitCommand& Command);
 
 	bool HasHeldCommand() const;
@@ -39,6 +40,7 @@ public:
 private:
 	void ClearHeldCommand();
 	uint32 AllocateCommandSerial();
+	void SynchronizeMovementWithHeldCommand(const TOptional<FGP_StoredUnitCommand>& PreviousCommand);
 
 	TOptional<FGP_StoredUnitCommand> HeldCommand;
 	uint32 NextCommandSerial = 1;

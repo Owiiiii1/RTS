@@ -2,10 +2,14 @@
 (Wire Held Command transitions to UGP_MovementComponent — analysis)
 
 ## Status
-**Status: ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**Status: CODE_READY_OPERATOR_VALIDATION_PENDING**
 
-Docs-only. **No** C++ / assets / callbacks / GP-S22 completion / Nav / AI in this pass.
+Implemented on `feature/gp-s21-held-move-integration-implementation`
+(base = `main` `04d6414b4000f7536a7776181a46382a30b5ad0c`).
 Depends on: GP-S18 `DONE_WITH_EXECUTORS_DEFERRED`, GP-S20 `DONE_WITH_COMMAND_INTEGRATION_DEFERRED`.
+
+Operator Standalone/2P validation **pending**.
+Completion callbacks / Held clear on reach remain **deferred** (GP-S22).
 
 ---
 
@@ -317,9 +321,39 @@ Does **not** mean: Reach clears Held; callbacks; stale protection; Nav; Attack/M
 
 ---
 
+## 18. Implementation record
+
+### Integration owner
+`UGP_UnitCommandComponent` — private `SynchronizeMovementWithHeldCommand` after non-queued Held store.
+
+### Ordering
+Capture PreviousCommand → store Held → SynchronizeMovement → HeldAccepted/HeldReplaced log.
+
+Movement logs (`MoveStarted` / `MoveReplaced` / `MoveStopped`) emit inside sync before Held* logs.
+Then `MoveExecutionRequested` / reject / cancel / unavailable from `LogGPUnitCommandExecution`.
+
+### Stop API
+```cpp
+enum class EGP_MovementStopReason : uint8 { Manual, CommandReplaced, EndPlay };
+void StopMove(EGP_MovementStopReason Reason = EGP_MovementStopReason::Manual);
+```
+- Console Stop → Manual
+- EndPlay → `StopMove(EndPlay)` (no authority reject on teardown)
+- Command cancel → CommandReplaced
+
+### Includes (UnitCommandComponent.cpp)
+`GPMobileUnit.h`, `GPMovementComponent.h`, `Tags/GPGameplayTags.h`
+
+### Builds
+GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+
+### Operator validation
+**Pending.**
+
+---
+
 ## Stop condition
-**ANALYSIS_READY_IMPLEMENTATION_PENDING.**
-Await GP-S21 implementation assignment.
-Do **not** implement sync/StopMove reason/callbacks/Nav from this pass.
+**CODE_READY_OPERATOR_VALIDATION_PENDING.**
+Await operator RMB-driven Listen Server validation.
 Do **not** merge to main.
-Do **not** start GP-S22.
+Do **not** start GP-S22 completion / Held clear / Nav / AI from this pass.

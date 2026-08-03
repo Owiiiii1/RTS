@@ -2,13 +2,14 @@
 (Wire Held Command transitions to UGP_MovementComponent — analysis)
 
 ## Status
-**Status: CODE_READY_OPERATOR_VALIDATION_PENDING**
+**Status: CODE_DONE_NETWORK_VALIDATED**
 
-Implemented on `feature/gp-s21-held-move-integration-implementation`
+**GP-S21 Status: `DONE_WITH_COMPLETION_DEFERRED`**
+
+Implemented and operator-validated on `feature/gp-s21-held-move-integration-implementation`
 (base = `main` `04d6414b4000f7536a7776181a46382a30b5ad0c`).
 Depends on: GP-S18 `DONE_WITH_EXECUTORS_DEFERRED`, GP-S20 `DONE_WITH_COMMAND_INTEGRATION_DEFERRED`.
 
-Operator Standalone/2P validation **pending**.
 Completion callbacks / Held clear on reach remain **deferred** (GP-S22).
 
 ---
@@ -345,15 +346,38 @@ void StopMove(EGP_MovementStopReason Reason = EGP_MovementStopReason::Manual);
 `GPMobileUnit.h`, `GPMovementComponent.h`, `Tags/GPGameplayTags.h`
 
 ### Builds
-GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
+- Candidate: GPEditor Development + UHT — **PASSED**
+- Finalization: GP Development + GP Shipping — **PASSED**
 
-### Operator validation
-**Pending.**
+### Operator validation (Listen Server / 2P)
+
+Observed Move order:
+
+```text
+MoveStarted → MoveExecutionRequested → HeldAccepted
+```
+
+| Case | Result |
+| --- | --- |
+| Host Held Move (serial equality, Z=88, reach) | **PASS** |
+| Move→Move replacement (no StopMove; serials match e.g. 3→4) | **PASS** |
+| Multi-unit independent serials / both reach / overlap OK | **PASS** |
+| Move→Attack cancellation (`MoveStopped Reason=CommandReplaced` + MovementCancelledByCommand; no attack) | **PASS** |
+| Attack→Move start | **PASS** |
+| QueueDeferred (HeldSerial unchanged; no MoveReplaced/Stop/ExecutionRequested; original reach) | **PASS** |
+| Remote Team 2 client→server authority path; no duplicate client MoveStarted; Team 1 unmodified | **PASS** |
+| Remote authoritative movement path validated; visual replication confirmed by operator | **PASS** |
+| MoveReached clears movement active state; next Move is MoveStarted not MoveReplaced | **PASS** |
+| Held remains after reach; no HeldCleared; no completion callback | **PASS** (expected S21) |
+
+### Deferred (unchanged)
+
+GP-S22 completion callback; Held clear after matching completion; stale protection; failure propagation; Nav/pathfinding; Attack/Mine execution; queue storage/execution; formation/avoidance.
 
 ---
 
 ## Stop condition
-**CODE_READY_OPERATOR_VALIDATION_PENDING.**
-Await operator RMB-driven Listen Server validation.
+**CODE_DONE_NETWORK_VALIDATED.** **GP-S21: DONE_WITH_COMPLETION_DEFERRED.**
+Commit/push `feature/gp-s21-held-move-integration-implementation` only.
 Do **not** merge to main.
-Do **not** start GP-S22 completion / Held clear / Nav / AI from this pass.
+Do **not** start GP-S22 completion / Held clear / Nav / AI from this close-out.

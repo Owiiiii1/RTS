@@ -3206,4 +3206,31 @@ Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Operator — **pending**.
 
 ### Stop condition
-**CODE_READY_OPERATOR_VALIDATION_PENDING.** Commit/push implementation branch only. Do **not** merge to main. Do **not** start GP-S22.
+Superseded by GP-S21 completion checkpoint.
+
+## 2026-08-03 — GP-S21 / Held Move Integration — completion checkpoint
+
+Status: **CODE_DONE_NETWORK_VALIDATED** / GP-S21 **DONE_WITH_COMPLETION_DEFERRED**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S21_Held_Move_Integration.md` — `CODE_DONE_NETWORK_VALIDATED`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — finalization report
+- (implementation C++ unchanged from `608c891`)
+
+### What was done
+- Operator-validated Held Move → MovementComponent on Listen Server (host + remote Team 2).
+- Confirmed: serial equality; Move→Move replacement; Move→Attack CommandReplaced cancel; Attack→Move; QueueDeferred preserves execution; multi-unit independence; remote client→server authority path; no duplicate client MoveStarted; Z preservation; MoveReached leaves Held intact (no clear/callback).
+- Final status: **DONE_WITH_COMPLETION_DEFERRED**. Next: **GP-S22**.
+
+### Build workflow (accepted)
+- **Candidate:** GPEditor Win64 Development + UHT
+- **Finalization:** GP Win64 Development + GP Win64 Shipping
+
+### Builds / validation
+- Candidate GPEditor Dev + UHT — **PASSED** (prior)
+- Finalization GP Dev + GP Shipping — see REPORT / this close-out
+- Operator — **CODE_DONE_NETWORK_VALIDATED**
+
+### Stop condition
+Commit/push `feature/gp-s21-held-move-integration-implementation` only. Do **not** merge to main. Do **not** start GP-S22 completion / Held clear / Nav / AI / Attack/Mine execution from this close-out.

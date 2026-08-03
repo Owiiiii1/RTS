@@ -3529,3 +3529,26 @@ Status: **CODE_DONE_OPERATOR_ACCEPTED** / GP-S24 **DONE_WITH_DAMAGE_EXECUTION_DE
 
 ### Stop condition
 Commit/push `feature/gp-s24-attack-execution-implementation` only. **READY_FOR_MAIN_MERGE** (no merge in this close-out). Do **not** start damage/GAS/Nav/Mine/queue.
+
+## 2026-08-03 — GP-S25 / Attack Damage Execution — analysis checkpoint
+
+Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S25_Attack_Damage_Execution.md` (new)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Baseline: `main` @ `f0bfb3b0bfa3b96015011cc6c4bd0375d0b6ef69` (GP-S24 merged).
+- Inventory: units have **no** ASC/`IAbilitySystemInterface`; `UGP_UnitAttributeSet` defaults 0, no `PostGameplayEffectExecute`; `UGP_DamageCalculation` MMC already implements armor/resistance formula; ASC lives on `AGP_PlayerState` only; GP-S24 uses component `AttackRange=250`.
+- Selected architecture: host ASC+UnitAttributeSet on `AGP_UnitBase`; Instant C++ `UGP_GE_Damage_Basic` + existing MMC; UnitBase death + `OnUnitDied`; Attack cadence in UnitCommandComponent; GPRuntime→GPGASRuntime already allows dependency (death notify via GPGAS interface to avoid cycle).
+- Recommended split: **GP-S25A** Health/Damage/Death foundation; **GP-S25B** Ready hit cadence + TargetDied binding.
+- No blockers for analysis close; implementation pending explicit S25A task.
+- Implementation **not** started — analysis-only.
+
+### Builds / validation
+- None (analysis-only).
+
+### Stop condition
+Commit/push `feature/gp-s25-attack-damage-analysis` only. Do **not** merge to main. Do **not** start damage C++ without explicit implementation task.

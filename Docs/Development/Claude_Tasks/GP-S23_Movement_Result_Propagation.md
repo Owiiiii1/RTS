@@ -1,14 +1,16 @@
 # GP-S23 Movement Result Propagation
 
 ## Status
-**ANALYSIS_READY_IMPLEMENTATION_PENDING**
+**CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ## Baseline
-`main` @ `5a41a2352f50d598ab8ee3e557791659403d6552` (Merge GP-S22 movement completion)
+`main` @ `966d0e7a884af02593608ea398eb1627d9f5a58f` (Merge GP-S23 movement result analysis)
 
-Depends on: GP-S22 `DONE_WITH_FAILURE_PROPAGATION_DEFERRED`.
+Depends on: GP-S22 `DONE_WITH_FAILURE_PROPAGATION_DEFERRED`; GP-S23 analysis merged.
 
-Branch: `feature/gp-s23-movement-result-analysis`
+Branch: `feature/gp-s23-movement-result-implementation`
+
+Target stage close: **`DONE_WITH_FAILED_RESULT_DEFERRED`** (after operator validation).
 
 ---
 
@@ -600,6 +602,75 @@ Do **not** mark `CODE_DONE_NETWORK_VALIDATED` unless remote GP-S23 result paths 
 
 ---
 
-## Stop condition (analysis)
+## Implementation record (candidate)
 
-Analysis branch documents only. No C++ on this branch. Commit/push `feature/gp-s23-movement-result-analysis`. Do **not** merge to main. Do **not** start implementation from this analysis commit without an explicit implementation task.
+### Actual APIs
+```cpp
+enum class EGP_MovementResult : uint8 { Reached, Cancelled };
+enum class EGP_MovementResultReason : uint8 { None, Superseded, CommandReplaced, Manual };
+enum class EGP_MovementRequestStatus : uint8 { Accepted, Rejected };
+enum class EGP_MovementRejectReason : uint8 {
+  None, MissingOwner, NoAuthority, InvalidSerial,
+  InvalidDestination, InvalidMoveSpeed, InvalidAcceptanceRadius
+};
+struct FGP_MovementRequestOutcome { Status; RejectReason; IsAccepted(); };
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FGP_OnMovementResult, uint32, EGP_MovementResult, EGP_MovementResultReason);
+FGP_MovementRequestOutcome RequestMove(const FVector&, uint32);
+FGP_OnMovementResult& OnMovementResult();
+#if !UE_BUILD_SHIPPING
+void DebugBroadcastResult(uint32, EGP_MovementResult, EGP_MovementResultReason);
+#endif
+```
+
+### Migration names
+| Old (GP-S22) | New (GP-S23) |
+| --- | --- |
+| `EGP_MovementCompletionResult` | `EGP_MovementResult` |
+| `FGP_OnMovementCompleted` | `FGP_OnMovementResult` (+ Reason) |
+| `OnMovementCompleted()` | `OnMovementResult()` |
+| `HandleMovementCompleted` | `HandleMovementResult` |
+| `DebugBroadcastCompletion` | `DebugBroadcastResult` |
+| `HeldMoveCompleted` | `HeldMoveFinished` |
+| `MovementCompletionIgnored` | `MovementResultIgnored` |
+
+### Rejection behavior
+- `RequestMove` returns structured outcome; **never** broadcasts Rejected.
+- Reject does not mutate active movement state.
+- Command layer: Held set → `RequestMove` → on Reject clear exact Move serial → `MoveExecutionRejected` + `HeldMoveRejectedCleared` → **no** `HeldAccepted`/`HeldReplaced`.
+- Allocator continues monotonically.
+- Non-shipping `gp.UnitCommand.TestRejectedMove` exercises Held-before-RequestMove via non-finite destination.
+
+### Cancellation ordering
+- Move→Move: commit new active → `MoveReplaced` → Broadcast Cancelled/Superseded (old) → return Accepted.
+- Move→non-Move: Held already new → `StopMove(CommandReplaced)` → Cancelled/CommandReplaced → ignore HeldTagNotMove.
+- Manual: Cancelled/Manual → clear matching Held Move.
+- EndPlay: silent clear; no broadcast.
+
+### Held policy
+Exact authority + Move tag + serial match clears on Reached or Cancelled. Else ignore with `MovementResultIgnored`.
+
+### Debug commands
+| Command | Role |
+| --- | --- |
+| `gp.Movement.TestResult <Serial> <Reached\|Cancelled> [Reason]` | Primary synthetic (no mutation) |
+| `gp.Movement.TestCompletion <Serial>` | Deprecated alias → Reached/None |
+| `gp.Movement.Stop` | Real Manual cancel producer |
+| `gp.Movement.Test` | Structured RequestMove outcome |
+| `gp.UnitCommand.TestRejectedMove` | Command-layer phantom-Held reject path |
+
+### Builds
+- GPEditor Win64 Development — **PASSED**
+- UHT — **PASSED** (processed with candidate build)
+- GP Dev / Shipping — deferred to finalization
+
+### Operator validation
+**Pending.** See Operator Validation Plan (Reached, Superseded, CommandReplaced, Manual, Rejected via `gp.UnitCommand.TestRejectedMove`, stale TestResult/TestCompletion, remote, multi-unit, EndPlay).
+
+---
+
+## Stop condition (candidate)
+
+**CODE_READY_OPERATOR_VALIDATION_PENDING.**
+Commit/push `feature/gp-s23-movement-result-implementation` only.
+Do **not** merge to main.
+Do **not** start Attack/Mine/Nav/`Failed`/queue from this candidate.

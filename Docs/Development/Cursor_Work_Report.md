@@ -1,79 +1,128 @@
 # Cursor Work Report
 
 ## Task
-GP-S23 movement result propagation analysis
+GP-S23 movement result propagation implementation
 
 ## Status
-ANALYSIS_READY_IMPLEMENTATION_PENDING
+CODE_READY_OPERATOR_VALIDATION_PENDING
 
 ## Branch
-feature/gp-s23-movement-result-analysis
+feature/gp-s23-movement-result-implementation
 
 ## Base
-main @ 5a41a2352f50d598ab8ee3e557791659403d6552
+main @ 966d0e7a884af02593608ea398eb1627d9f5a58f
 
-## Current Code Findings
-- GP-S22 broadcasts only `Reached` via `FGP_OnMovementCompleted`; `StopMove` never broadcasts.
-- `RequestMove` returns `bool`; reject logs `MoveRejected` / `MoveExecutionRejected` but Held Move remains (phantom Held).
-- Move→Move silently replaces active serial (`MoveReplaced`); no terminal for previous serial.
-- Move→non-Move calls `StopMove(CommandReplaced)` without result callback; Held already replaced.
-- Manual `gp.Movement.Stop` leaves Held Move.
-- EndPlay: silent `StopMove(EndPlay)` + command-layer `HeldCleared`.
-- No runtime `Failed` producer (straight-line XY only).
-- Call sites confined to `GPMovementComponent` / `GPUnitCommandComponent` (+ non-shipping console).
+## Summary
+Migrated GP-S22 Reached-only completion to a unified serial-aware movement result contract: terminal delegate for Reached/Cancelled, structured sync reject from RequestMove, exact-serial Held policy, phantom Held clear on reject, Cancelled emission on Move→Move / CommandReplaced / Manual, silent EndPlay. Failed/Nav/Attack deferred.
 
-## Selected Architecture
-Single native terminal delegate for accepted/active moves; synchronous structured `RequestMove` outcome for rejects (no sync reject multicast). Rename GP-S22 completion types to result types with Reason. Omit `Failed` until Nav stage.
+## Architecture
+- terminal delegate: `FGP_OnMovementResult(Serial, Result, Reason)` — single production channel
+- sync rejection outcome: `FGP_MovementRequestOutcome` — no reject broadcast
+- serial policy: exact Match Move tag + serial to clear; allocator never rewind
+- reentrancy: mutate/commit → log → broadcast → return; no post-broadcast old-serial mutation
+- EndPlay policy: silent `StopMove(EndPlay)`; unbind before HeldCleared
 
-## Result Contract
-```cpp
-enum class EGP_MovementResult : uint8 { Reached, Cancelled };
-enum class EGP_MovementResultReason : uint8 { None, Superseded, CommandReplaced, Manual };
-FGP_OnMovementResult(Serial, Result, Reason);
-```
-Sync-only: `FGP_MovementRequestOutcome { Status, RejectReason }`.
+## Files Changed
+### Modified C++
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
 
-## RequestMove Decision
-Return `FGP_MovementRequestOutcome`. No RequestRejected broadcast (reentrancy with Held mutation). On Rejected after Held-set Move: clear exact matching Held in `SynchronizeMovementWithHeldCommand`. Allocator never rewinds.
+### Modified Docs
+- `Docs/Development/Claude_Tasks/GP-S23_Movement_Result_Propagation.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
-## Cancellation Decision
-- Move→Move: emit Cancelled/Superseded after committing new active state.
-- Move→non-Move: StopMove(CommandReplaced) emits Cancelled/CommandReplaced.
-- Manual: emit Cancelled/Manual; clear matching Held Move.
-- EndPlay: silent; no Cancelled broadcast.
+## API Changes
+| Old | New |
+| --- | --- |
+| `EGP_MovementCompletionResult` | `EGP_MovementResult` { Reached, Cancelled } |
+| `FGP_OnMovementCompleted` | `FGP_OnMovementResult` (+ Reason) |
+| `OnMovementCompleted()` | `OnMovementResult()` |
+| `bool RequestMove(...)` | `FGP_MovementRequestOutcome RequestMove(...)` |
+| `HandleMovementCompleted` | `HandleMovementResult` |
+| `DebugBroadcastCompletion` | `DebugBroadcastResult` |
+| `HeldMoveCompleted` | `HeldMoveFinished` |
+| `MovementCompletionIgnored` | `MovementResultIgnored` |
+
+## Result Semantics
+- Reached: natural Tick; clears matching Held Move
+- Cancelled/Superseded: Move→Move after new active commit; ignore vs newer Held
+- Cancelled/CommandReplaced: StopMove from non-Move Held; ignore HeldTagNotMove
+- Cancelled/Manual: StopMove(Manual) / `gp.Movement.Stop`; clears matching Held
+- Rejected: sync only; clear phantom Held; no delegate
+- Failed: deferred (not in enum)
 
 ## Held Policy
-Clear only authority + exact Move tag + exact serial on Reached or Cancelled (and sync Reject clear in sync path). Newer / non-Move / no Held → ignore + log. Stale serial protection retained.
+| Result | Matching Move | Newer Move | Non-Move | No Held |
+| --- | --- | --- | --- | --- |
+| Reached | clear | ignore SerialMismatch | ignore HeldTagNotMove | ignore NoHeldCommand |
+| Cancelled | clear | ignore SerialMismatch | ignore HeldTagNotMove | ignore NoHeldCommand |
+| Sync Rejected | clear in sync path | N/A | N/A | N/A |
 
-## Reentrancy Rules
-Capture → mutate movement-local → log → broadcast → return. No post-broadcast mutation of old serial. No broadcast on Reject or EndPlay. Callback may start a new Move safely.
+## Rejection Behavior
+- Reasons: MissingOwner, NoAuthority, InvalidSerial, InvalidDestination, InvalidMoveSpeed, InvalidAcceptanceRadius
+- Phantom Held: cleared only if exact Move tag + rejected serial
+- Allocator: advanced before RequestMove; not rewound
+- Logs: `MoveRejected`, `MoveExecutionRejected`, `HeldMoveRejectedCleared`; no HeldAccepted/HeldReplaced after clear
+- Control: `SynchronizeMovementWithHeldCommand` returns bool; HandleCommand skips success logs if Held gone
 
-## Expected Implementation Files
-- `GPMovementComponent.h/.cpp`
-- `GPUnitCommandComponent.h/.cpp`
-- `GP-S23_Movement_Result_Propagation.md`
-- `AI_Project_Log.md`
-- `Cursor_Work_Report.md`
+## Cancellation Behavior
+- Move→Move: commit N+1 → Broadcast Cancelled/Superseded N → Accepted
+- Move→Attack: StopMove(CommandReplaced) → Cancelled/CommandReplaced N → Attack Held retained
+- Manual: Cancelled/Manual → HeldMoveFinished clear
+- EndPlay: no broadcast
 
-NO: GPMobileUnit, GPStoredUnitCommand, gameplay tags, Build.cs, assets/maps/config.
+## Debug Commands
+- `gp.Movement.TestResult <Serial> <Reached\|Cancelled> [Reason]` — primary synthetic
+- `gp.Movement.TestCompletion <Serial>` — deprecated alias → Reached/None
+- `gp.Movement.Stop` — real Manual cancel
+- `gp.Movement.Test` — structured outcome
+- `gp.UnitCommand.TestRejectedMove` — Held-before-RequestMove InvalidDestination
 
-## Validation Plan
-2P Listen Server: Reached clear; real Rejected (no phantom Held); Move→Attack Cancelled ignores new Held; Move→Move Superseded; Manual clears Held; stale inject; reentrancy new Move; authority-only remote/multi-unit; EndPlay no crash/unsafe callback.
+## Logging
+### Movement
+MoveStarted, MoveReplaced, MoveReached, MoveStopped, MoveRejected, MovementResultBroadcast (Unit, Serial, Result, Reason, Destination, Role, NetMode)
+
+### Command
+MoveExecutionRequested, MoveExecutionRejected (+ RejectReason), HeldMoveRejectedCleared, HeldMoveFinished, MovementResultIgnored, MovementCancelledByCommand
+
+## Build Results
+- GPEditor Development: **PASSED**
+- UHT: **PASSED**
 
 ## Scope Verification
-- C++ changed: **NO**
+- GP Development run: **NO** (finalization only)
+- GP Shipping run: **NO** (finalization only)
 - Build.cs changed: **NO**
+- PlayerController changed: **NO**
+- payloads/tags changed: **NO**
 - assets/maps/config changed: **NO**
 - Attack/Mine added: **NO**
 - Nav/pathfinding added: **NO**
+- Failed producer added: **NO**
 - queue implementation added: **NO**
 
 ## Git State
-- Branch: `feature/gp-s23-movement-result-analysis`
-- Base: `main` @ `5a41a2352f50d598ab8ee3e557791659403d6552`
-- Docs-only commit; working tree clean after commit/push
+- Branch pushed: `feature/gp-s23-movement-result-implementation`
+- Working tree clean after commit/push
 - HEAD = origin
 - no merge to main
 
-## Implementation Pending
-Explicit implementation task required. Target stage close status: `DONE_WITH_FAILED_RESULT_DEFERRED`.
+## Operator Validation Needed
+2P Listen Server:
+
+A. Natural Reached → HeldMoveFinished Reached/None; next Move HeldAccepted  
+B. Move→Move → Cancelled/Superseded N ignored; Reach clears N+1  
+C. Move→Attack → Cancelled/CommandReplaced; Attack Held retained; no HeldMoveFinished for N  
+D. `gp.Movement.Stop` → Cancelled/Manual clears Held; next Move HeldAccepted  
+E. `gp.UnitCommand.TestRejectedMove` → MoveExecutionRejected + HeldMoveRejectedCleared; no HeldAccepted  
+F. `gp.Movement.TestResult N Cancelled Manual` while Held N+1 → SerialMismatch; N+1 continues  
+G. `gp.Movement.TestCompletion N` stale Reached alias  
+H. Remote Team 2 — server-only handling  
+I. Multi-unit — no cross clear  
+J. EndPlay during Move — no crash; no EndPlay result broadcast  
+
+## Deferred
+Failed result / Nav / blocked / timeout; Attack/Mine executors; queue execution; prediction; replicated Held; formation/avoidance; dedicated Cancel API; UI.

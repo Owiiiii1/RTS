@@ -3352,3 +3352,32 @@ Status: **ANALYSIS_READY_IMPLEMENTATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s23-movement-result-analysis` only. Do **not** merge to main. Do **not** mark GP-S23 implemented.
+
+## 2026-08-03 — GP-S23 / Movement Result Propagation — implementation candidate
+
+Status: **CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `Docs/Development/Claude_Tasks/GP-S23_Movement_Result_Propagation.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Unified terminal `FGP_OnMovementResult(Serial, Result, Reason)` for accepted/active moves (`Reached`, `Cancelled`).
+- Structured `RequestMove` → `FGP_MovementRequestOutcome`; reject never broadcasts; phantom Held cleared via exact serial + `HeldMoveRejectedCleared`.
+- Move→Move emits Cancelled/Superseded after committing new active state.
+- Move→non-Move `StopMove(CommandReplaced)` emits Cancelled/CommandReplaced; Attack Held ignored (HeldTagNotMove).
+- Manual Cancelled clears matching Held Move; EndPlay silent; `Failed` deferred.
+- Debug: `gp.Movement.TestResult`, deprecated `TestCompletion` alias, `gp.UnitCommand.TestRejectedMove`.
+
+### Builds / validation
+- GPEditor Development + UHT — **PASSED**.
+- GP Dev/Shipping — deferred until operator validation.
+- Operator — **pending**.
+
+### Stop condition
+Commit/push `feature/gp-s23-movement-result-implementation` only. Do **not** merge to main.

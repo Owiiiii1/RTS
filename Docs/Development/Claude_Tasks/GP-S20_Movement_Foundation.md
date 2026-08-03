@@ -2,13 +2,15 @@
 (Server-authoritative unit movement foundation after GP-S18 Held Command — analysis)
 
 ## Status
-**Status: CODE_READY_OPERATOR_VALIDATION_PENDING**
+**Status: CODE_DONE_NETWORK_VALIDATED**
 
-Implemented on `feature/gp-s20-movement-foundation-implementation`.
+**GP-S20 Status: `DONE_WITH_COMMAND_INTEGRATION_DEFERRED`**
+
+Implemented and operator-validated on `feature/gp-s20-movement-foundation-implementation`
+(base = `main` `416ba39bba38c4a85e692ffef700443f5c8abd15`).
 Depends on: GP-S18 `DONE_WITH_EXECUTORS_DEFERRED`.
 
-**Canonical stage: GP-S20 — Movement Foundation.**  
-Operator Standalone/2P validation **pending**.  
+**Canonical stage: GP-S20 — Movement Foundation.**
 **No** Held Command integration. **No** navigation / AIController.
 
 TDD/13 is **not** rewritten. Stage mapping below is **project continuation mapping**, not a change to historical TDD numbering.
@@ -515,15 +517,46 @@ gp.Movement.Stop
 
 GPEditor Dev / GP Dev / GP Shipping / UHT — **PASSED**.
 
-### Operator validation
+### Operator validation (Listen Server / 2P)
 
-**Pending.** RMB still only Holds command; does not start movement.
+Validated pipeline:
+
+```text
+gp.Movement.Test / Stop
+→ UGP_MovementComponent::RequestMove / StopMove
+→ authority Tick XY straight-line
+→ MoveStarted / MoveReplaced / MoveReached / MoveStopped
+→ remote clients observe replicated Pawn transform
+```
+
+| Case | Result |
+| --- | --- |
+| MoveStarted (`gp.Movement.Test -4000 8000`, Serial=1, Speed=600, AcceptanceRadius=50, Role=Authority, NetMode=ListenServer) | **PASS** |
+| Straight-line movement visible | **PASS** |
+| Z preserved at 88 (start and reach) | **PASS** |
+| MoveReached FinalLocation inside AcceptanceRadius (not exact destination snap) | **PASS** |
+| Tick stops after reach (observed stop) | **PASS** |
+| Second independent move after completion | **PASS** |
+| Debug serial reuse after completion accepted | **PASS** (by design; component does not allocate/order serials) |
+| MoveReplaced PreviousSerial=2 → NewSerial=1 | **PASS** |
+| Manual `gp.Movement.Stop` MoveStopped Reason=Manual | **PASS** |
+| Remote client sees transform; no duplicate client execution; no RPC warnings | **PASS** |
+| Selection / camera / input regression | **PASS** |
+| RMB still Held Command only; no auto-move from Held Move | **PASS** |
+| No AI / Nav / GAS | **PASS** |
+
+### Retained limitations
+
+- no sweep / collision blocking / pathfinding / NavMesh / AIController
+- no terrain following / formation / avoidance
+- no completion callback / Held Command clearing
+- no automatic RMB movement
 
 ---
 
 ## Stop condition
-**CODE_READY_OPERATOR_VALIDATION_PENDING.**  
-Await operator console-driven Standalone/2P validation.  
-Do **not** merge to main.  
-Do **not** start Held Command wiring / Nav / AI / GP-S21 from this pass.  
+**CODE_DONE_NETWORK_VALIDATED.** **GP-S20: DONE_WITH_COMMAND_INTEGRATION_DEFERRED.**
+Commit/push `feature/gp-s20-movement-foundation-implementation` only.
+Do **not** merge to main.
+Do **not** start GP-S21 Held wiring / GP-S22 callbacks / Nav / AI from this close-out.
 Do **not** rewrite TDD/13.

@@ -10,6 +10,7 @@
 #include "GPUnitBase.generated.h"
 
 class UGP_AbilitySystemComponent;
+class UGP_CombatPresentationComponent;
 class UGP_UnitAttributeSet;
 class UGP_UnitCommandComponent;
 struct FGP_DamageApplicationResult;
@@ -23,6 +24,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FGP_OnUnitDied, AGP_UnitBase*);
  * Provides TeamId + interim CapabilityTags for selection eligibility facts.
  * Owns UGP_UnitCommandComponent for server-authoritative Held Command state (GP-S18).
  * Owns unit ASC + UnitAttributeSet + death contract (GP-S25A).
+ * Owns UGP_CombatPresentationComponent for cosmetic combat events (GP-S26A).
  */
 UCLASS(Abstract, Blueprintable)
 class GPRUNTIME_API AGP_UnitBase : public APawn, public IAbilitySystemInterface, public IGP_DeathSink
@@ -61,6 +63,8 @@ public:
 	FGP_OnUnitDied& OnUnitDied();
 
 	UGP_UnitCommandComponent* GetUnitCommandComponent() const;
+
+	UGP_CombatPresentationComponent* GetCombatPresentationComponent() const;
 
 	UFUNCTION(BlueprintPure, Category = "GP|Team")
 	int32 GetTeamId() const;
@@ -151,6 +155,9 @@ protected:
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Command", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_UnitCommandComponent> UnitCommandComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Combat|Presentation", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UGP_CombatPresentationComponent> CombatPresentationComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|GAS", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_AbilitySystemComponent> AbilitySystemComponent;

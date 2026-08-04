@@ -3,6 +3,7 @@
 #include "Units/GPUnitCommandComponent.h"
 
 #include "AttributeSets/GPUnitAttributeSet.h"
+#include "Combat/GPCombatPresentationComponent.h"
 #include "Combat/GPDamageApplication.h"
 #include "Command/GPUnitCommand.h"
 #include "Engine/EngineBaseTypes.h"
@@ -1266,6 +1267,31 @@ void UGP_UnitCommandComponent::AttemptAttackHit()
 	const bool bApplied = Target->ApplyDamageFromUnit(OwnerUnit, DamageResult);
 
 	bAttackHitInProgress = false;
+
+	// Snapshot before reading mutable Attack state — sync TargetDied may FinishAttack during Apply.
+	const uint32 PresentationAttackSerial = HitSerial;
+	AGP_UnitBase* const PresentationTarget = Target;
+	const float PresentationAppliedDamage = DamageResult.FinalDamage;
+	const bool bPresentationBlocked = bApplied && PresentationAppliedDamage <= 0.0f;
+	const bool bPresentationTargetDied =
+		!IsValid(PresentationTarget) || PresentationTarget->IsDead();
+	const float PresentationWorldTime =
+		World != nullptr ? static_cast<float>(World->GetTimeSeconds()) : static_cast<float>(Now);
+
+	if (bApplied)
+	{
+		if (UGP_CombatPresentationComponent* Presentation = OwnerUnit->GetCombatPresentationComponent())
+		{
+			Presentation->AuthorityEmitAttackHitPresentation(
+				PresentationAttackSerial,
+				PresentationTarget,
+				EGP_CombatPresentationEventType::MeleeImpact,
+				PresentationWorldTime,
+				PresentationAppliedDamage,
+				bPresentationBlocked,
+				bPresentationTargetDied);
+		}
+	}
 
 	if (bFinishingAttack
 		|| ActiveAttackSerial != HitSerial

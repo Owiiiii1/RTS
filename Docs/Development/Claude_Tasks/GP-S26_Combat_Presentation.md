@@ -1,20 +1,19 @@
 # GP-S26 Combat Presentation
 
 ## Status
-**GP-S26_ANALYSIS_READY_FOR_REVIEW**
+**GP-S26A_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
-Analysis / design only. No production C++. No Blueprint assets. No combat-semantics changes.
-
-Review correction applied on top of analysis commit `d5e8b13fec5f4f21e7ed8ed7e8a51b1d73a83a5d`: transport locked to **Unreliable NetMulticast**; LastEvent / late-join replay removed from S26A; RPC ownership and payload tightened.
+GP-S26 analysis accepted; GP-S26A vertical slice implemented (cosmetic Unreliable NetMulticast events). No Blueprint / animation / Niagara assets. S25 gameplay semantics unchanged.
 
 ## Main baseline
-`main` @ `b511cf5008546cc421971cd4612cbd92c1a8b945` — Merge GP-S25B attack cadence integration
+`main` @ `3cb1e8055778c1ba4c67fa0546bb7ef96398a3d7` (includes merged GP-S26 analysis)
 
 Depends on:
 - GP-S24 Attack executor (`DONE_WITH_DAMAGE_EXECUTION_DEFERRED`)
 - GP-S25A/B Health/Damage/Cadence (`DONE_WITH_VISUAL_COMBAT_DEFERRED`)
+- GP-S26 analysis (transport / payload / RPC ownership locked)
 
-Branch: `feature/gp-s26-combat-presentation-analysis`
+Branch: `feature/gp-s26a-combat-presentation-events`
 
 ---
 
@@ -497,10 +496,35 @@ Gameplay regression checks (must remain PASS): immediate hit, cadence, hysteresi
 
 ---
 
-## Stop condition
+## GP-S26A Implementation Record
 
-- Document `GP-S26_Combat_Presentation.md` updated with review corrections.
-- AI Project Log + Cursor Work Report updated.
-- Branch `feature/gp-s26-combat-presentation-analysis` pushed.
-- **No** C++ diff. **No** Blueprint assets. **No** merge to main. **No** PR.
-- **Do not** start GP-S26A implementation without an explicit task.
+Status: **GP-S26A_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+Branch: `feature/gp-s26a-combat-presentation-events`  
+Base: `main` @ `3cb1e8055778c1ba4c67fa0546bb7ef96398a3d7`
+
+### Added
+- `UGP_CombatPresentationComponent` — replicated default subobject on `AGP_UnitBase`
+- `FGP_CombatPresentationEvent` + `EGP_CombatPresentationEventType::MeleeImpact`
+- `UFUNCTION(NetMulticast, Unreliable) Multicast_CombatPresentationEvent`
+- Authority emit after successful `ApplyDamageFromUnit` in `AttemptAttackHit` (incl. blocked; snapshot for sync TargetDied)
+- Receive-only Play path: Sequence serial-arithmetic dedupe; dedicated suppresses visual/debug draw
+- Non-shipping `gp.CombatPresentation.Inspect`
+- Debug log category `LogGPCombatPresentation` + short Source→Target debug line (non-shipping)
+
+### Explicitly not shipped
+- LastPresentationEvent / late-join replay / reliable multicast
+- Animation / Niagara / sound / projectile assets
+- Gameplay cadence / damage / TargetDied / hysteresis changes
+
+### Build
+- GPEditor Win64 Development + UHT — **PASSED**
+- GP Dev / Shipping deferred to finalization after operator validation
+
+---
+
+## Stop condition (S26A candidate)
+
+- Commit/push `feature/gp-s26a-combat-presentation-events`
+- **No** merge to main. **No** PR. **No** Blueprint/visual assets.
+- Operator validation pending (listen + remote client matrix).

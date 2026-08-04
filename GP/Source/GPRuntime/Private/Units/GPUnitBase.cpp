@@ -4,6 +4,7 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPUnitAttributeSet.h"
+#include "Combat/GPCombatPresentationComponent.h"
 #include "Combat/GPDamageApplication.h"
 #include "Command/GPUnitCommand.h"
 #include "Effects/GPGE_DamageBasic.h"
@@ -134,6 +135,8 @@ AGP_UnitBase::AGP_UnitBase()
 
 	UnitCommandComponent = CreateDefaultSubobject<UGP_UnitCommandComponent>(TEXT("UnitCommandComponent"));
 
+	CombatPresentationComponent = CreateDefaultSubobject<UGP_CombatPresentationComponent>(TEXT("CombatPresentationComponent"));
+
 	AbilitySystemComponent = CreateDefaultSubobject<UGP_AbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 	AbilitySystemComponent->SetIsReplicated(true);
 	AbilitySystemComponent->SetProjectReplicationMode(EGameplayEffectReplicationMode::Mixed);
@@ -144,6 +147,11 @@ AGP_UnitBase::AGP_UnitBase()
 UGP_UnitCommandComponent* AGP_UnitBase::GetUnitCommandComponent() const
 {
 	return UnitCommandComponent;
+}
+
+UGP_CombatPresentationComponent* AGP_UnitBase::GetCombatPresentationComponent() const
+{
+	return CombatPresentationComponent;
 }
 
 UAbilitySystemComponent* AGP_UnitBase::GetAbilitySystemComponent() const

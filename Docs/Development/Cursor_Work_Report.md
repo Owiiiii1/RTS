@@ -1,67 +1,77 @@
 # Cursor Work Report
 
 ## Task
-GP-S25A Health and Damage Foundation finalization
+GP-S25B Attack Cadence Integration finalization
 
 ## Status
-GP-S25A_DONE_GP-S25B_PENDING
+GP-S25B_FINALIZED_READY_FOR_MERGE
 
 ## Branch
-feature/gp-s25a-health-damage-foundation
+feature/gp-s25b-attack-cadence-integration
 
 ## Base
-main @ eb590a5baa1780cdb4b8b01b17a09ce4ece252fe
+main @ 7864b2bc45060f48021f46a1711d71fd62b0f3da
 
 ## Head
-Implementation/fix tip before finalize docs: `51c9112` Fix GP-S25A overkill health logging  
+Last confirmed implementation commit: `e5333fa7ef853bab2018648d273ffb6ecee7b695` Fix GP-S25B ready range exit hysteresis  
 Commits on branch ahead of main:
-1. `e9a7bf7` Implement GP-S25A health and damage foundation
-2. `550538f` Fix GP-S25A combat debug target resolution
-3. `51c9112` Fix GP-S25A overkill health logging
-4. (this) Finalize GP-S25A health and damage foundation
+1. `8203cc6` Implement GP-S25B attack cadence integration
+2. `9c31e79` Fix GP-S25B invalid stats and unreachable approach loop
+3. `e5333fa` Fix GP-S25B ready range exit hysteresis
+4. `865408a` Record GP-S25B hysteresis fix commit SHA in work report
+5. `cef3593` Finalize GP-S25B attack cadence integration
+6. (this) Correct finalization commit SHA in docs
 
 ## Final Status
-**GP-S25A_DONE_GP-S25B_PENDING** — S25A accepted; overall GP-S25 open until S25B. Not `DONE_WITH_VISUAL_COMBAT_DEFERRED`.
+**GP-S25B_FINALIZED_READY_FOR_MERGE** — operator-validated; ready to merge into main when requested.  
+Overall GP-S25 (S25A+S25B): **DONE_WITH_VISUAL_COMBAT_DEFERRED**. No known blockers.
+
+## Scope (GP-S25B)
+- Immediate first hit on first Ready of each Attack serial
+- World-time AttackCooldown cadence (`NextAttackHitTime`); cooldown re-read after every processed hit
+- Blocked damage (AppliedDamage=0) still schedules cooldown
+- Cooldown sanitize minimum 0.05s
+- Preserve `NextHitTime` / `FirstHitAttempted` across temporary OOR Approaching
+- `TargetDied` terminal reason + `OnUnitDied` bind/unbind
+- Synchronous death reentrancy guards after ApplyDamageFromUnit
+- Attacker death stops active Attack
+- Attack → Move replacement; retarget new serial + immediate hit
+- Effective range: GAS AttackRange if finite >0 else component
+- Damage only via GP-S25A `ApplyDamageFromUnit`
+- Moving-target SelfSupersede / destination refresh (unchanged core)
+
+## Validation Fixes
+1. **Strict `gp.Combat.SetStats`** — exactly `Source|Target` + 7 floats; unknown selector rejected (`9c31e79`)
+2. **RangeUnreachable** — Reached while Dist > range → no-progress → FinishAttack(Failed, RangeUnreachable) (`9c31e79`)
+3. **Ready/Approaching hysteresis** — entry `Distance <= EffectiveRange`; exit `Distance > EffectiveRange + 20`; damage only `<= EffectiveRange` (`e5333fa`)
 
 ## Operator Validation Matrix
 
 | Area | Result |
 | --- | --- |
-| ASC valid / ActorInfo valid / defaults 100/100/25/0/0/1/250 / Listen Server authority | PASS |
-| Damage 25→25; Armor10→15; Res0.5 on 20→10; Armor5+Res0.5 on 25→10 | PASS |
-| Full block Armor25 / Res1.0 → AppliedDamage 0; no death | PASS |
-| Normal log HealthBefore=100 After=75 Mag=-25 AppliedDelta=-25 AppliedDamage=25 | PASS |
-| Overkill log HealthBefore=40 After=0 Mag=-100 AppliedDelta=-40 AppliedDamage=40 | PASS |
-| Debug resolver Selected + NearestEnemy; Resolve/KillTarget same pair | PASS |
-| Death once: UnitDeathStarted / Shutdown / UnitDied; bIsDead; LifeSpan=2; no sync Destroy | PASS |
-| Death while Move → MoveStopped OwnerDied; HeldCleared OwnerDied | PASS |
-| Death while Attack Ready → UnitDeathCommandShutdown; Held Attack cleared; no crash | PASS |
-| Repeat after kill → Target=None; no second death | PASS |
-| Dead Move → UnitCommandRejected UnitDead (Accepted delivery ≠ execution) | PASS |
-| Replication observable scope + delayed client destroy; no crash | PASS |
-| PIE EndPlay clean | PASS |
-
-Non-blockers (ignored): r.MotionVectorSimulation; MVVM ClassViewer; GameplayCueNotifyPaths; post-death Resolve no target; client-world authority-only Inspect.
-
-## Defects Fixed During Validation
-1. **Arbitrary debug target** — `TActorIterator` order ignored selection → selected Source + nearest enemy + `gp.Combat.Resolve` (`550538f`)
-2. **Overkill HealthBefore logging** — reconstructed from clamped HealthAfter − Magnitude → PreGE capture; EvaluatedMagnitude vs AppliedDelta (`51c9112`)
+| Immediate first hit | PASS |
+| Cadence by world time | PASS |
+| Cooldown re-read after each hit | PASS |
+| Blocked damage still assigns cooldown | PASS |
+| TargetDied (normal + external death) | PASS |
+| Synchronous death reentrancy | PASS |
+| Attacker death stops old Attack | PASS |
+| Attack → Move replacement | PASS |
+| Retarget Attack → new serial + immediate hit | PASS |
+| GAS AttackRange | PASS |
+| Component fallback when GAS AttackRange <= 0 | PASS |
+| Cooldown minimum 0.05 | PASS |
+| Strict gp.Combat.SetStats parser | PASS |
+| RangeUnreachable (no infinite approach) | PASS |
+| Moving-target SelfSupersede | PASS |
+| NextHitTime / FirstHitAttempted preserved OOR | PASS |
+| Hysteresis entry/exit/damage; boundary thrashing gone | PASS |
 
 ## Final Build Results
-- GPEditor Win64 Development + UHT — **PASSED** (prior; C++ frozen at finalization)
-- GP Win64 Development — **PASSED**
-- GP Win64 Shipping — **PASSED**
+- GPEditor Win64 Development + UHT — **PASSED** on implementation tip `e5333fa7ef853bab2018648d273ffb6ecee7b695` (not re-run; C++ frozen at finalization)
+- GP Win64 Development — **PASSED** (exit 0; linked `GP.exe`)
+- GP Win64 Shipping — **PASSED** (exit 0; linked `GP-Win64-Shipping.exe`)
 - No C++ changes during finalization
-
-## Unchanged Scope
-ASC ownership, AttributeSet architecture, GE/MMC formula, damage API, death contract, replication, lifespan, command shutdown, movement, selection, debug resolver, Attack executor, Build.cs, assets/config — frozen for finalization.
-
-## Deferred To GP-S25B
-- Immediate first hit on Ready
-- Periodic hit cadence / NextHitTime / AttackCooldown scheduling / cooldown min safety
-- GAS AttackRange preferred + component fallback in Attack executor
-- Target OnUnitDied binding + TargetDied terminal reason
-- Reentrancy guards during sync death callback; no further hit after target death
 
 ## Files Changed (finalization)
 Documentation only:
@@ -69,8 +79,12 @@ Documentation only:
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
+## Final Commit SHA
+cef35935e0017fe91fe7993347bdd6f76c6260cc
+
 ## Git State
-- Branch: `feature/gp-s25a-health-damage-foundation`
-- Ahead of main; not behind
+- Branch: `feature/gp-s25b-attack-cadence-integration`
+- Ahead of main by 5 commits after finalization; behind: 0
 - Working tree clean after push; HEAD = origin
-- No merge to main
+- No merge to main; no PR
+- No Blueprint assets / binaries / Saved / Intermediate / DDC in commit

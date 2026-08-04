@@ -14,7 +14,7 @@ enum class EGP_MovementResult : uint8;
 enum class EGP_MovementResultReason : uint8;
 struct FGP_UnitCommand;
 
-/** Attack executor runtime state (GP-S24). Plain C++ — not UENUM / not Blueprint. */
+/** Attack executor runtime state (GP-S24/S25B). Plain C++ — not UENUM / not Blueprint. */
 enum class EGP_AttackExecutionState : uint8
 {
 	Idle,
@@ -35,16 +35,27 @@ enum class EGP_AttackTerminalReason : uint8
 	CommandReplaced,
 	InvalidTarget,
 	TargetDestroyed,
+	TargetDied,
 	MovementRejected,
 	MovementCancelled,
+	RangeUnreachable,
 	EndPlay
 };
 
+/** Effective Attack range resolution source (GP-S25B). */
+enum class EGP_AttackRangeSource : uint8
+{
+	GAS,
+	FallbackComponent,
+	Invalid
+};
+
 /**
- * Server-authoritative held-command ownership on AGP_UnitBase (GP-S18–S24).
+ * Server-authoritative held-command ownership on AGP_UnitBase (GP-S18–S25B).
  * GP-S21–S23: Held Move sync + serial-aware movement results.
- * GP-S24: authority Attack executor (validate / approach / Ready) without damage.
- * No replication, RPC, queue execution, GAS combat, or Blueprint Attack API.
+ * GP-S24: authority Attack approach / Ready.
+ * GP-S25B: Ready hit cadence + TargetDied binding via GP-S25A ApplyDamageFromUnit.
+ * No replication, RPC, queue execution, or Blueprint Attack API.
  */
 UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))
 class GPRUNTIME_API UGP_UnitCommandComponent : public UActorComponent
@@ -73,17 +84,24 @@ public:
 	const FGP_StoredUnitCommand* GetHeldCommand() const;
 
 	/**
-	 * Authority-only owner death shutdown (GP-S25A).
-	 * Disables Attack tick, resets Attack executor, stops movement (OwnerDied),
-	 * clears Held. No TargetDied terminal Attack result.
+	 * Authority-only owner death shutdown (GP-S25A/S25B).
+	 * Unbinds target death, resets cadence/Attack, stops movement (OwnerDied), clears Held.
 	 */
 	void NotifyOwnerDied();
 
 	EGP_AttackExecutionState GetAttackExecutionState() const;
 	uint32 GetActiveAttackSerial() const;
 	AGP_UnitBase* GetAttackTarget() const;
+
+	/** Effective runtime Attack range (GAS if >0, else component fallback). */
 	float GetAttackRange() const;
+
 	bool IsAttackActive() const;
+	double GetNextAttackHitTime() const;
+	bool HasAttemptedFirstAttackHit() const;
+	bool IsAttackTargetDeathBound() const;
+	EGP_AttackRangeSource GetAttackRangeSource() const;
+	const TCHAR* GetAttackRangeSourceLabel() const;
 
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Attack")
 	float AttackRange = 250.0f;
@@ -95,6 +113,12 @@ public:
 	float AttackReissueInterval = 0.25f;
 
 private:
+	/**
+	 * Ready→Approaching only when Distance > EffectiveRange + this tolerance.
+	 * Entry into Ready remains Distance <= EffectiveRange (no early hits).
+	 */
+	static constexpr float AttackReadyExitTolerance = 20.0f;
+
 	void ClearHeldCommand();
 	uint32 AllocateCommandSerial();
 
@@ -131,6 +155,30 @@ private:
 	bool HasExactActiveHeldAttack() const;
 	bool IsAttackConfigValid() const;
 
+	bool TryResolveEffectiveAttackRange(
+		float& OutRange,
+		EGP_AttackRangeSource& OutSource) const;
+	float ResolveSanitizedAttackCooldown(bool bLogSanitize) const;
+	void ProcessReadyCadence();
+	void AttemptAttackHit();
+
+	void BindAttackTargetDeath(AGP_UnitBase* Target);
+	void UnbindAttackTargetDeath();
+	void HandleAttackTargetDied(AGP_UnitBase* DeadUnit);
+	void ClearAttackCadenceState();
+	void ClearApproachProgressState();
+
+	/**
+	 * Movement Reached while still outside effective range.
+	 * Returns true when Attack was terminated (unreachable / no progress).
+	 */
+	bool HandleReachedStillOutOfRange(
+		AActor* Owner,
+		AGP_UnitBase* Target,
+		float Distance,
+		float EffectiveRange,
+		EGP_AttackRangeSource RangeSource);
+
 	/** Returns false when distance is unavailable (null/invalid target). OutDistance stays -1.f. */
 	bool TryComputeAttackDistance2D(
 		const AActor* Owner,
@@ -143,6 +191,7 @@ private:
 	static const TCHAR* AttackStateToString(EGP_AttackExecutionState State);
 	static const TCHAR* AttackTerminalResultToString(EGP_AttackTerminalResult Result);
 	static const TCHAR* AttackTerminalReasonToString(EGP_AttackTerminalReason Reason);
+	static const TCHAR* AttackRangeSourceToString(EGP_AttackRangeSource Source);
 
 	TOptional<FGP_StoredUnitCommand> HeldCommand;
 	uint32 NextCommandSerial = 1;
@@ -161,4 +210,17 @@ private:
 	/** Internal FinishAttack StopMove(Manual) cleanup — not range-entry. */
 	bool bExpectAttackCleanupStopResult = false;
 	uint32 PendingAttackCleanupMovementSerial = 0;
+
+	/** GP-S25B cadence / target-death binding. */
+	FDelegateHandle TargetDiedHandle;
+	TWeakObjectPtr<AGP_UnitBase> BoundDeathTarget;
+	double NextAttackHitTime = -1.0;
+	bool bHasAttemptedFirstHit = false;
+	bool bAttackHitInProgress = false;
+
+	/** GP-S25B unreachable-range / no-progress approach tracking. */
+	bool bHasReachedOutOfRangeSample = false;
+	float LastReachedOutOfRangeDistance = -1.0f;
+	FVector LastReachedOutOfRangeLocation = FVector::ZeroVector;
+	int32 ConsecutiveNoProgressApproachCount = 0;
 };

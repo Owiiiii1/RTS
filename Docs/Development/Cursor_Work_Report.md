@@ -80,7 +80,7 @@ Wait-for-art; skeletal-in-MVP; GameplayCue-primary; projectile damage; hard game
 - Build: **not required**
 
 ## Commit SHA
-COMMIT_SHA_PLACEHOLDER
+11ae3cb69a877b612f989d0883409f7a30422683
 
 ## Git State
 - Push to `feature/gp-s26b-combat-assets-analysis`

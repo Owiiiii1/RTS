@@ -989,6 +989,16 @@ namespace GPCombatConsolePrivate
 		LogInspect(Unit);
 	}
 
+	static bool TryParseCombatFloat(const FString& Text, float& OutValue)
+	{
+		if (Text.IsEmpty())
+		{
+			return false;
+		}
+
+		return LexTryParseString(OutValue, *Text);
+	}
+
 	static void CombatSetStats(const TArray<FString>& Args, UWorld* World)
 	{
 		if (World == nullptr)
@@ -997,36 +1007,50 @@ namespace GPCombatConsolePrivate
 			return;
 		}
 
-		// gp.Combat.SetStats [Source|Target] Health MaxHealth Damage Armor Resistance Cooldown AttackRange
-		int32 ValueOffset = 0;
-		FString Selector = TEXT("Source");
-		if (Args.Num() >= 8
-			&& (Args[0].Equals(TEXT("Source"), ESearchCase::IgnoreCase)
-				|| Args[0].Equals(TEXT("Target"), ESearchCase::IgnoreCase)))
-		{
-			Selector = Args[0];
-			ValueOffset = 1;
-		}
-
-		if (Args.Num() - ValueOffset < 7)
+		// Strict: gp.Combat.SetStats <Source|Target> Health MaxHealth Damage Armor Resistance Cooldown AttackRange
+		if (Args.Num() != 8)
 		{
 			UE_LOG(LogGPCombat, Warning,
-				TEXT("GP Combat.SetStats usage: gp.Combat.SetStats [Source|Target] Health MaxHealth Damage Armor Resistance Cooldown AttackRange"));
+				TEXT("GP Combat.SetStats Rejected: InvalidArgCount=%d Expected=8 Usage=gp.Combat.SetStats Source|Target Health MaxHealth Damage Armor Resistance Cooldown AttackRange"),
+				Args.Num());
 			return;
 		}
 
-		const float Health = FCString::Atof(*Args[ValueOffset + 0]);
-		const float MaxHealth = FCString::Atof(*Args[ValueOffset + 1]);
-		const float Damage = FCString::Atof(*Args[ValueOffset + 2]);
-		const float Armor = FCString::Atof(*Args[ValueOffset + 3]);
-		const float Resistance = FCString::Atof(*Args[ValueOffset + 4]);
-		const float Cooldown = FCString::Atof(*Args[ValueOffset + 5]);
-		const float Range = FCString::Atof(*Args[ValueOffset + 6]);
+		const FString& Selector = Args[0];
+		const bool bIsSource = Selector.Equals(TEXT("Source"), ESearchCase::IgnoreCase);
+		const bool bIsTarget = Selector.Equals(TEXT("Target"), ESearchCase::IgnoreCase);
+		if (!bIsSource && !bIsTarget)
+		{
+			UE_LOG(LogGPCombat, Warning,
+				TEXT("GP Combat.SetStats Rejected: InvalidSelector=%s Expected=Source|Target"),
+				*Selector);
+			return;
+		}
+
+		float Health = 0.0f;
+		float MaxHealth = 0.0f;
+		float Damage = 0.0f;
+		float Armor = 0.0f;
+		float Resistance = 0.0f;
+		float Cooldown = 0.0f;
+		float Range = 0.0f;
+		if (!TryParseCombatFloat(Args[1], Health)
+			|| !TryParseCombatFloat(Args[2], MaxHealth)
+			|| !TryParseCombatFloat(Args[3], Damage)
+			|| !TryParseCombatFloat(Args[4], Armor)
+			|| !TryParseCombatFloat(Args[5], Resistance)
+			|| !TryParseCombatFloat(Args[6], Cooldown)
+			|| !TryParseCombatFloat(Args[7], Range))
+		{
+			UE_LOG(LogGPCombat, Warning,
+				TEXT("GP Combat.SetStats Rejected: InvalidNumericArgument Usage=gp.Combat.SetStats Source|Target Health MaxHealth Damage Armor Resistance Cooldown AttackRange"));
+			return;
+		}
 
 		const FGPCombatDebugPair Pair = ResolveCombatDebugPair(World);
 		AGP_UnitBase* Unit = nullptr;
 
-		if (Selector.Equals(TEXT("Target"), ESearchCase::IgnoreCase))
+		if (bIsTarget)
 		{
 			Unit = Pair.Target;
 			if (Unit == nullptr)

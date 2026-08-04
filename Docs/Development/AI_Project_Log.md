@@ -3680,3 +3680,26 @@ Status: **GP-S25B_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s25b-attack-cadence-integration` only. No merge to main. No visual combat / S25B finalization yet.
+
+## 2026-08-04 — GP-S25B / invalid SetStats + unreachable approach fix
+
+Status: **GP-S25B_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp` — strict SetStats selector/args
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h` — RangeUnreachable + no-progress state
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- Docs (task / AI log / Cursor report)
+
+### What was done
+- Typo `sourse` previously shifted args → AttackRange=1 → Reached/reissue spam.
+- SetStats: only Source|Target; exact 8 args; LexTryParseString; no attribute mutation on reject.
+- Reached while Dist>range: no-progress tracking → `FinishAttack(Failed, RangeUnreachable)` after 2 stuck results; log `AttackApproachUnreachable`.
+- Cadence / TargetDied / GAS range hierarchy unchanged.
+
+### Builds / validation
+- GPEditor Win64 Development + UHT — **PASSED**
+- Operator must rerun validation with correct `Source` selector; unreachable tiny range should terminate cleanly
+
+### Stop condition
+Commit/push same branch. No merge to main.

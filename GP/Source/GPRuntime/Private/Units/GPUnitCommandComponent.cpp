@@ -167,6 +167,8 @@ const TCHAR* UGP_UnitCommandComponent::AttackTerminalReasonToString(EGP_AttackTe
 		return TEXT("MovementRejected");
 	case EGP_AttackTerminalReason::MovementCancelled:
 		return TEXT("MovementCancelled");
+	case EGP_AttackTerminalReason::RangeUnreachable:
+		return TEXT("RangeUnreachable");
 	case EGP_AttackTerminalReason::EndPlay:
 		return TEXT("EndPlay");
 	default:
@@ -516,6 +518,87 @@ void UGP_UnitCommandComponent::ClearAttackCadenceState()
 	bAttackHitInProgress = false;
 }
 
+void UGP_UnitCommandComponent::ClearApproachProgressState()
+{
+	bHasReachedOutOfRangeSample = false;
+	LastReachedOutOfRangeDistance = -1.0f;
+	LastReachedOutOfRangeLocation = FVector::ZeroVector;
+	ConsecutiveNoProgressApproachCount = 0;
+}
+
+bool UGP_UnitCommandComponent::HandleReachedStillOutOfRange(
+	AActor* Owner,
+	AGP_UnitBase* Target,
+	float Distance,
+	float EffectiveRange,
+	EGP_AttackRangeSource RangeSource)
+{
+	if (Owner == nullptr || Target == nullptr)
+	{
+		FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::InvalidTarget);
+		return true;
+	}
+
+	const FVector OwnerLocation = Owner->GetActorLocation();
+	const FVector Destination = MakeApproachDestination(Owner, Target);
+
+	constexpr float LocationEpsilon = 5.0f;
+	constexpr float DistanceImproveEpsilon = 5.0f;
+	constexpr float DestinationEpsilon = 5.0f;
+	constexpr int32 MaxNoProgressResults = 2;
+
+	bool bNoProgress = false;
+	if (bHasReachedOutOfRangeSample)
+	{
+		const float LocationDelta = FVector::Dist2D(OwnerLocation, LastReachedOutOfRangeLocation);
+		const float DistanceImproved = LastReachedOutOfRangeDistance - Distance;
+		const float DestinationDelta = FVector::Dist2D(Destination, LastApproachDestination);
+
+		if (LocationDelta < LocationEpsilon
+			&& DistanceImproved < DistanceImproveEpsilon
+			&& DestinationDelta < DestinationEpsilon)
+		{
+			bNoProgress = true;
+		}
+	}
+
+	if (bNoProgress)
+	{
+		++ConsecutiveNoProgressApproachCount;
+	}
+	else
+	{
+		ConsecutiveNoProgressApproachCount = 0;
+	}
+
+	LastReachedOutOfRangeDistance = Distance;
+	LastReachedOutOfRangeLocation = OwnerLocation;
+	bHasReachedOutOfRangeSample = true;
+
+	if (ConsecutiveNoProgressApproachCount >= MaxNoProgressResults)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP AttackApproachUnreachable: Unit=%s Target=%s Serial=%u Distance=%.1f AttackRange=%.1f RangeSource=%s OwnerLocation=%s Destination=%s NoProgressCount=%d"),
+			*GetNameSafe(Owner),
+			*GetNameSafe(Target),
+			ActiveAttackSerial,
+			Distance,
+			EffectiveRange,
+			AttackRangeSourceToString(RangeSource),
+			*OwnerLocation.ToCompactString(),
+			*Destination.ToCompactString(),
+			ConsecutiveNoProgressApproachCount);
+
+		FinishAttack(
+			EGP_AttackTerminalResult::Failed,
+			EGP_AttackTerminalReason::RangeUnreachable);
+		return true;
+	}
+
+	RequestOrRefreshAttackApproach(true);
+	return false;
+}
+
 void UGP_UnitCommandComponent::UnbindAttackTargetDeath()
 {
 	if (TargetDiedHandle.IsValid())
@@ -600,6 +683,7 @@ void UGP_UnitCommandComponent::ResetAttackExecutor()
 {
 	UnbindAttackTargetDeath();
 	ClearAttackCadenceState();
+	ClearApproachProgressState();
 
 	AttackState = EGP_AttackExecutionState::Idle;
 	ActiveAttackSerial = 0;
@@ -704,6 +788,7 @@ bool UGP_UnitCommandComponent::StartAttackExecutor()
 	}
 
 	ClearAttackCadenceState();
+	ClearApproachProgressState();
 	AttackTarget = ValidTarget;
 	BindAttackTargetDeath(ValidTarget);
 	SetAttackTickEnabled(true);
@@ -797,6 +882,7 @@ void UGP_UnitCommandComponent::EnterAttackReady()
 	const EGP_AttackExecutionState PreviousState = AttackState;
 	AttackState = EGP_AttackExecutionState::Ready;
 	bExpectRangeEntryStop = false;
+	ClearApproachProgressState();
 	SetAttackTickEnabled(true);
 
 	float EffectiveRange = AttackRange;
@@ -933,6 +1019,13 @@ void UGP_UnitCommandComponent::RequestOrRefreshAttackApproach(bool bForceIssue)
 			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
 		FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::MovementRejected);
 		return;
+	}
+
+	const float PreviousDestDelta = FVector::Dist2D(Destination, LastApproachDestination);
+	if (PreviousDestDelta >= AttackReissueDistance)
+	{
+		// Meaningful new destination (moving target) — allow fresh approach progress.
+		ClearApproachProgressState();
 	}
 
 	LastApproachDestination = Destination;
@@ -1256,6 +1349,7 @@ void UGP_UnitCommandComponent::FinishAttack(
 
 	UnbindAttackTargetDeath();
 	ClearAttackCadenceState();
+	ClearApproachProgressState();
 
 	AttackState = EGP_AttackExecutionState::Idle;
 	ActiveAttackSerial = 0;
@@ -1393,9 +1487,15 @@ bool UGP_UnitCommandComponent::TryConsumeAttackMovementResult(
 
 		float EffectiveRange = 0.0f;
 		EGP_AttackRangeSource RangeSource = EGP_AttackRangeSource::Invalid;
-		if (!TryResolveEffectiveAttackRange(EffectiveRange, RangeSource) || Dist > EffectiveRange)
+		if (!TryResolveEffectiveAttackRange(EffectiveRange, RangeSource))
 		{
-			RequestOrRefreshAttackApproach(true);
+			FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::InvalidTarget);
+			return true;
+		}
+
+		if (Dist > EffectiveRange)
+		{
+			HandleReachedStillOutOfRange(Owner, Target, Dist, EffectiveRange, RangeSource);
 		}
 		else
 		{
@@ -1452,9 +1552,15 @@ bool UGP_UnitCommandComponent::TryConsumeAttackMovementResult(
 
 			float EffectiveRange = 0.0f;
 			EGP_AttackRangeSource RangeSource = EGP_AttackRangeSource::Invalid;
-			if (!TryResolveEffectiveAttackRange(EffectiveRange, RangeSource) || Dist > EffectiveRange)
+			if (!TryResolveEffectiveAttackRange(EffectiveRange, RangeSource))
 			{
-				RequestOrRefreshAttackApproach(true);
+				FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::InvalidTarget);
+				return true;
+			}
+
+			if (Dist > EffectiveRange)
+			{
+				HandleReachedStillOutOfRange(Owner, Target, Dist, EffectiveRange, RangeSource);
 			}
 			else
 			{

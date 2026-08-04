@@ -38,6 +38,7 @@ enum class EGP_AttackTerminalReason : uint8
 	TargetDied,
 	MovementRejected,
 	MovementCancelled,
+	RangeUnreachable,
 	EndPlay
 };
 
@@ -159,6 +160,18 @@ private:
 	void UnbindAttackTargetDeath();
 	void HandleAttackTargetDied(AGP_UnitBase* DeadUnit);
 	void ClearAttackCadenceState();
+	void ClearApproachProgressState();
+
+	/**
+	 * Movement Reached while still outside effective range.
+	 * Returns true when Attack was terminated (unreachable / no progress).
+	 */
+	bool HandleReachedStillOutOfRange(
+		AActor* Owner,
+		AGP_UnitBase* Target,
+		float Distance,
+		float EffectiveRange,
+		EGP_AttackRangeSource RangeSource);
 
 	/** Returns false when distance is unavailable (null/invalid target). OutDistance stays -1.f. */
 	bool TryComputeAttackDistance2D(
@@ -198,4 +211,10 @@ private:
 	double NextAttackHitTime = -1.0;
 	bool bHasAttemptedFirstHit = false;
 	bool bAttackHitInProgress = false;
+
+	/** GP-S25B unreachable-range / no-progress approach tracking. */
+	bool bHasReachedOutOfRangeSample = false;
+	float LastReachedOutOfRangeDistance = -1.0f;
+	FVector LastReachedOutOfRangeLocation = FVector::ZeroVector;
+	int32 ConsecutiveNoProgressApproachCount = 0;
 };

@@ -652,10 +652,20 @@ Base: `main` @ `7864b2bc45060f48021f46a1711d71fd62b0f3da`
 
 ### Debug
 - Enhanced existing `gp.Attack.Inspect` with cadence/range/death-bind fields
-- No new mutation commands
+- `gp.Combat.SetStats` strict: exactly `Source|Target` + 7 numeric args; unknown selector rejected (no shift)
+
+### Approach unreachable
+- Movement Reached with Dist > EffectiveRange no longer infinite-reissues
+- No-progress tracking → `FinishAttack(Failed, RangeUnreachable)` after 2 stuck results
+- Log: `GP AttackApproachUnreachable` then AttackFinished Reason=RangeUnreachable
+- Tiny GAS AttackRange (e.g. 1) terminates cleanly; hierarchy unchanged
+
+### Operator validation notes (in progress)
+- Typo `sourse` + AttackRange=1 caused MoveStarted/Reached spam — fixed
+- Rerun with correct `Source` selector and normal ranges
 
 ### Build
-- GPEditor Win64 Development + UHT — **PASSED**
+- GPEditor Win64 Development + UHT — **PASSED** (implementation + validation fixes)
 - GP Dev / Shipping deferred to finalization after operator validation
 
 ### Still deferred (visual / non-S25B)

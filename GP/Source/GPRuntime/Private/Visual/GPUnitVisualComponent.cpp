@@ -2,12 +2,11 @@
 
 #include "Visual/GPUnitVisualComponent.h"
 
-#include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Units/GPUnitBase.h"
+
 #if !UE_BUILD_SHIPPING
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
@@ -41,7 +40,7 @@ EGP_VisualArchetype UGP_UnitVisualComponent::GetVisualArchetype() const
 
 int32 UGP_UnitVisualComponent::GetPartCount() const
 {
-	return PartComponents.Num();
+	return BuiltVisual.PartComponents.Num();
 }
 
 bool UGP_UnitVisualComponent::IsDedicatedVisualSuppressed() const
@@ -56,23 +55,23 @@ bool UGP_UnitVisualComponent::HasBuiltVisual() const
 
 FName UGP_UnitVisualComponent::GetPresentationRootPartName() const
 {
-	return PresentationRootPartName;
+	return BuiltVisual.PresentationRootPartName;
 }
 
 void UGP_UnitVisualComponent::GetPartNames(TArray<FName>& OutNames) const
 {
 	OutNames.Reset();
-	PartLookup.GetKeys(OutNames);
+	BuiltVisual.PartLookup.GetKeys(OutNames);
 }
 
 bool UGP_UnitVisualComponent::AreVisualPartCollisionsDisabled() const
 {
-	if (PartComponents.Num() == 0)
+	if (BuiltVisual.PartComponents.Num() == 0)
 	{
 		return true;
 	}
 
-	for (const TObjectPtr<UStaticMeshComponent>& Part : PartComponents)
+	for (const TObjectPtr<UStaticMeshComponent>& Part : BuiltVisual.PartComponents)
 	{
 		if (Part == nullptr)
 		{
@@ -109,176 +108,29 @@ void UGP_UnitVisualComponent::RebuildVisual()
 	}
 
 	bDedicatedVisualSuppressed = false;
+	AActor* Owner = GetOwner();
+	USceneComponent* OwnerRoot = Owner != nullptr ? Owner->GetRootComponent() : nullptr;
 	const FGP_PrimitiveVisualDefinition Definition =
 		GPPrimitiveVisualDefaults::MakeDefinitionForArchetype(VisualArchetype);
-	BuildVisualFromDefinition(Definition);
+	bVisualBuilt = GPPrimitiveVisualBuilder::BuildFromDefinition(
+		Owner,
+		OwnerRoot,
+		Definition,
+		BuiltVisual,
+		*GetNameSafe(Owner));
 	ApplyTeamColorFallback();
 }
 
 void UGP_UnitVisualComponent::ClearVisual()
 {
-	for (TObjectPtr<UStaticMeshComponent>& Part : PartComponents)
-	{
-		if (Part != nullptr)
-		{
-			Part->DestroyComponent();
-			Part = nullptr;
-		}
-	}
-
-	PartComponents.Reset();
-	PartLookup.Reset();
-	PresentationRootComponent = nullptr;
-	PresentationRootPartName = NAME_None;
+	GPPrimitiveVisualBuilder::DestroyBuiltParts(BuiltVisual);
 	bVisualBuilt = false;
-}
-
-FString UGP_UnitVisualComponent::GetEngineShapePath(EGP_PrimitiveShape Shape)
-{
-	switch (Shape)
-	{
-	case EGP_PrimitiveShape::Cube:
-		return TEXT("/Engine/BasicShapes/Cube.Cube");
-	case EGP_PrimitiveShape::Sphere:
-		return TEXT("/Engine/BasicShapes/Sphere.Sphere");
-	case EGP_PrimitiveShape::Cone:
-		return TEXT("/Engine/BasicShapes/Cone.Cone");
-	case EGP_PrimitiveShape::Capsule:
-		// No Engine Capsule basic mesh — use Cylinder.
-		return TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
-	case EGP_PrimitiveShape::Cylinder:
-	default:
-		return TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
-	}
-}
-
-UStaticMesh* UGP_UnitVisualComponent::ResolveShapeMesh(EGP_PrimitiveShape Shape) const
-{
-	const FString Path = GetEngineShapePath(Shape);
-	return LoadObject<UStaticMesh>(nullptr, *Path);
-}
-
-USceneComponent* UGP_UnitVisualComponent::ResolveAttachParent(
-	const FGP_PrimitiveVisualPart& Part,
-	USceneComponent* FallbackRoot) const
-{
-	if (!Part.ParentPartName.IsNone())
-	{
-		if (const TObjectPtr<UStaticMeshComponent>* Found = PartLookup.Find(Part.ParentPartName))
-		{
-			if (Found->Get() != nullptr)
-			{
-				return Found->Get();
-			}
-		}
-	}
-
-	if (PresentationRootComponent != nullptr && !Part.bPresentationRoot)
-	{
-		return PresentationRootComponent;
-	}
-
-	return FallbackRoot;
-}
-
-void UGP_UnitVisualComponent::BuildVisualFromDefinition(const FGP_PrimitiveVisualDefinition& Definition)
-{
-	AActor* Owner = GetOwner();
-	if (Owner == nullptr)
-	{
-		return;
-	}
-
-	USceneComponent* OwnerRoot = Owner->GetRootComponent();
-	if (OwnerRoot == nullptr)
-	{
-		UE_LOG(LogGPUnitVisual, Warning,
-			TEXT("GP UnitVisual: Owner=%s missing root; skip build"),
-			*Owner->GetName());
-		return;
-	}
-
-	// Two-pass friendly: definition order should list parents before children.
-	for (const FGP_PrimitiveVisualPart& PartDef : Definition.Parts)
-	{
-		if (PartDef.PartName.IsNone())
-		{
-			UE_LOG(LogGPUnitVisual, Warning, TEXT("GP UnitVisual: skip part with empty name"));
-			continue;
-		}
-
-		if (PartLookup.Contains(PartDef.PartName))
-		{
-			UE_LOG(LogGPUnitVisual, Warning,
-				TEXT("GP UnitVisual: duplicate PartName=%s ignored"),
-				*PartDef.PartName.ToString());
-			continue;
-		}
-
-		UStaticMesh* Mesh = ResolveShapeMesh(PartDef.Shape);
-		if (Mesh == nullptr)
-		{
-			UE_LOG(LogGPUnitVisual, Warning,
-				TEXT("GP UnitVisual: failed to load shape=%s for Part=%s"),
-				GPPrimitiveVisualDefaults::ShapeToString(PartDef.Shape),
-				*PartDef.PartName.ToString());
-			continue;
-		}
-
-		USceneComponent* AttachParent = ResolveAttachParent(PartDef, OwnerRoot);
-		if (AttachParent == nullptr)
-		{
-			continue;
-		}
-
-		UStaticMeshComponent* PartComp = NewObject<UStaticMeshComponent>(
-			Owner,
-			UStaticMeshComponent::StaticClass(),
-			PartDef.PartName,
-			RF_Transient);
-		if (PartComp == nullptr)
-		{
-			continue;
-		}
-
-		PartComp->SetMobility(EComponentMobility::Movable);
-		PartComp->SetupAttachment(AttachParent);
-		PartComp->SetRelativeLocation(PartDef.RelativeLocation);
-		PartComp->SetRelativeRotation(PartDef.RelativeRotation);
-		PartComp->SetRelativeScale3D(PartDef.RelativeScale);
-		PartComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		PartComp->SetGenerateOverlapEvents(false);
-		PartComp->SetCanEverAffectNavigation(false);
-		PartComp->SetCastShadow(false);
-		PartComp->SetStaticMesh(Mesh);
-		PartComp->RegisterComponent();
-
-		PartComponents.Add(PartComp);
-		PartLookup.Add(PartDef.PartName, PartComp);
-
-		if (PartDef.bPresentationRoot || PresentationRootComponent == nullptr)
-		{
-			PresentationRootComponent = PartComp;
-			PresentationRootPartName = PartDef.PartName;
-		}
-	}
-
-	bVisualBuilt = PartComponents.Num() > 0;
-
-	UE_LOG(LogGPUnitVisual, Log,
-		TEXT("GP UnitVisualBuilt: Owner=%s Archetype=%s Parts=%d PresentationRoot=%s"),
-		*Owner->GetName(),
-		GPPrimitiveVisualDefaults::ArchetypeToString(Definition.Archetype),
-		PartComponents.Num(),
-		*PresentationRootPartName.ToString());
 }
 
 void UGP_UnitVisualComponent::ApplyTeamColorFallback()
 {
-	// Engine BasicShapes materials typically lack stable color parameters.
-	// Attempt DMI BaseColor/Color; if ineffective, silhouette/facing remain the differentiator.
 	const AGP_UnitBase* Unit = Cast<AGP_UnitBase>(GetOwner());
-	if (Unit == nullptr || PartComponents.Num() == 0)
+	if (Unit == nullptr || BuiltVisual.PartComponents.Num() == 0)
 	{
 		return;
 	}
@@ -299,7 +151,7 @@ void UGP_UnitVisualComponent::ApplyTeamColorFallback()
 	}
 
 	bool bAnyParameterApplied = false;
-	for (TObjectPtr<UStaticMeshComponent>& Part : PartComponents)
+	for (TObjectPtr<UStaticMeshComponent>& Part : BuiltVisual.PartComponents)
 	{
 		if (Part == nullptr)
 		{

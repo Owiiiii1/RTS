@@ -4,12 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Visual/GPPrimitiveVisualBuilder.h"
 #include "Visual/GPPrimitiveVisualTypes.h"
 #include "GPUnitVisualComponent.generated.h"
-
-class USceneComponent;
-class UStaticMesh;
-class UStaticMeshComponent;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogGPUnitVisual, Log, All);
 
@@ -55,21 +52,9 @@ protected:
 
 private:
 	bool ShouldSuppressVisualConstruction() const;
-	void BuildVisualFromDefinition(const FGP_PrimitiveVisualDefinition& Definition);
-	UStaticMesh* ResolveShapeMesh(EGP_PrimitiveShape Shape) const;
-	USceneComponent* ResolveAttachParent(const FGP_PrimitiveVisualPart& Part, USceneComponent* FallbackRoot) const;
 	void ApplyTeamColorFallback();
-	static FString GetEngineShapePath(EGP_PrimitiveShape Shape);
 
-	UPROPERTY(Transient)
-	TObjectPtr<USceneComponent> PresentationRootComponent;
-
-	UPROPERTY(Transient)
-	TArray<TObjectPtr<UStaticMeshComponent>> PartComponents;
-
-	TMap<FName, TObjectPtr<UStaticMeshComponent>> PartLookup;
-
-	FName PresentationRootPartName;
+	GPPrimitiveVisualBuilder::FBuildResult BuiltVisual;
 	bool bVisualBuilt = false;
 	bool bDedicatedVisualSuppressed = false;
 };

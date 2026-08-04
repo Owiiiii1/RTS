@@ -44,6 +44,59 @@ namespace GPPrimitiveVisualDefaults
 		return Definition;
 	}
 
+	FGP_PrimitiveVisualDefinition MakeOreNodeDefinition()
+	{
+		FGP_PrimitiveVisualDefinition Definition;
+		Definition.Archetype = EGP_VisualArchetype::InfantryMelee; // unused for resource nodes
+
+		FGP_PrimitiveVisualPart Base;
+		Base.PartName = TEXT("Base");
+		Base.Shape = EGP_PrimitiveShape::Cylinder;
+		Base.RelativeLocation = FVector(0.0f, 0.0f, -20.0f);
+		Base.RelativeScale = FVector(1.25f, 1.25f, 0.28f);
+		Base.bPresentationRoot = true;
+		Base.bBody = true;
+		Definition.Parts.Add(Base);
+
+		FGP_PrimitiveVisualPart Core;
+		Core.PartName = TEXT("Core");
+		Core.Shape = EGP_PrimitiveShape::Cone;
+		Core.ParentPartName = TEXT("Base");
+		Core.RelativeLocation = FVector(0.0f, 0.0f, 55.0f);
+		Core.RelativeRotation = FRotator(0.0f, 0.0f, 0.0f);
+		Core.RelativeScale = FVector(0.55f, 0.55f, 0.95f);
+		Definition.Parts.Add(Core);
+
+		FGP_PrimitiveVisualPart AccentA;
+		AccentA.PartName = TEXT("AccentA");
+		AccentA.Shape = EGP_PrimitiveShape::Cone;
+		AccentA.ParentPartName = TEXT("Base");
+		AccentA.RelativeLocation = FVector(38.0f, 12.0f, 38.0f);
+		AccentA.RelativeRotation = FRotator(18.0f, 25.0f, -12.0f);
+		AccentA.RelativeScale = FVector(0.34f, 0.34f, 0.58f);
+		Definition.Parts.Add(AccentA);
+
+		FGP_PrimitiveVisualPart AccentB;
+		AccentB.PartName = TEXT("AccentB");
+		AccentB.Shape = EGP_PrimitiveShape::Cone;
+		AccentB.ParentPartName = TEXT("Base");
+		AccentB.RelativeLocation = FVector(-34.0f, 22.0f, 36.0f);
+		AccentB.RelativeRotation = FRotator(-16.0f, -40.0f, 10.0f);
+		AccentB.RelativeScale = FVector(0.30f, 0.30f, 0.52f);
+		Definition.Parts.Add(AccentB);
+
+		FGP_PrimitiveVisualPart AccentC;
+		AccentC.PartName = TEXT("AccentC");
+		AccentC.Shape = EGP_PrimitiveShape::Cone;
+		AccentC.ParentPartName = TEXT("Base");
+		AccentC.RelativeLocation = FVector(8.0f, -40.0f, 40.0f);
+		AccentC.RelativeRotation = FRotator(12.0f, 70.0f, -8.0f);
+		AccentC.RelativeScale = FVector(0.32f, 0.32f, 0.54f);
+		Definition.Parts.Add(AccentC);
+
+		return Definition;
+	}
+
 	FGP_PrimitiveVisualDefinition MakeDefinitionForArchetype(EGP_VisualArchetype Archetype)
 	{
 		switch (Archetype)

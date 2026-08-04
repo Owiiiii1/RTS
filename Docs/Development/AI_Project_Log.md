@@ -1,5 +1,32 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-04 — GP-S27A1 Resource Node Foundation
+
+Status: GP-S27A1_CODE_READY_OPERATOR_VALIDATION_PENDING
+
+### Branch / baseline
+- Branch: `feature/gp-s27a1-resource-node-foundation`
+- Base: `main` @ `74c058914a6349b3a9d0f83161023ff54b742be7`
+- Source: `Docs/Development/Claude_Tasks/GP-S27A_Prototype_Arena_Analysis.md`
+
+### What was done
+- Added `EGP_ResourceType` (`None`, `Ore`) and server-authoritative `AGP_ResourceNode` (AActor, box root, replicated amounts, `ConsumeResource`)
+- Added `UGP_ResourceNodeVisualComponent` with native Ore primitive composition (5 parts)
+- Extracted shared `GPPrimitiveVisualMesh` + `GPPrimitiveVisualBuilder`; refactored `UGP_UnitVisualComponent` to use them
+- Non-shipping `gp.ResourceNode.Inspect` / `gp.ResourceNode.Consume`
+- Docs: task note, AI log, Cursor work report rewrite
+- Candidate build: GPEditor Win64 Development + UHT — PASSED
+
+### Intentionally not done
+- No map / umap, editor module, generator, Blueprint, DataAsset, gather/harvest, command changes, S27A2
+- No GP Development/Shipping builds (finalization later)
+- No PR / merge to main
+
+### Operator next
+- Place `AGP_ResourceNode` on a temporary editor map; validate listen+client, Inspect, Consume, collision/nav properties
+
+---
+
 ## 2026-08-01 — SETUP-001 / Clean baseline project check
 
 Status: DONE

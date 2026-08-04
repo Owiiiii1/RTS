@@ -108,6 +108,9 @@ namespace GPPrimitiveVisualDefaults
 	/** Native InfantryMelee prototype (≤4 parts). Cosmetic only. */
 	GPRUNTIME_API FGP_PrimitiveVisualDefinition MakeInfantryMeleeDefinition();
 
+	/** Native Ore resource-node pile (≤6 parts). Cosmetic only. */
+	GPRUNTIME_API FGP_PrimitiveVisualDefinition MakeOreNodeDefinition();
+
 	GPRUNTIME_API FGP_PrimitiveVisualDefinition MakeDefinitionForArchetype(EGP_VisualArchetype Archetype);
 
 	GPRUNTIME_API const TCHAR* ArchetypeToString(EGP_VisualArchetype Archetype);

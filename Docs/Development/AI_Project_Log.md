@@ -3730,3 +3730,28 @@ Status: **GP-S25B_FINALIZED_READY_FOR_MERGE**
 
 ### Stop condition
 Commit/push `feature/gp-s25b-attack-cadence-integration` only. **READY_FOR_MAIN_MERGE** when operator requests. Do **not** merge in this close-out. Do **not** create PR.
+
+## 2026-08-04 — GP-S26 / Combat Presentation — analysis
+
+Status: **GP-S26_ANALYSIS_READY_FOR_REVIEW**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S26_Combat_Presentation.md` (new)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+- C++ unchanged (analysis only)
+
+### What was done
+- Branched from `main` @ `b511cf5` (Merge GP-S25B) → `feature/gp-s26-combat-presentation-analysis`.
+- Inventoried presentation gaps: Attack executor fully server-only/non-replicated; no Anim/Niagara/GameplayCue/multicast cosmetic channel; clients see transform + GAS attrs + `bIsDead` only; `ApplyClientDeadPresentation` is collision-only; `AGP_Unit` static mesh placeholder.
+- Compared Option A (replicated cosmetic event) vs Option B (replicated Attack state observation).
+- Recommended hybrid: **A primary for S26A** (post-AttackHitApplied emit + Sequence dedupe + NetMode gate); light B deferred for chrome.
+- Temporal lock: cosmetic moment = after AttackHitApplied; no AnimNotify-gated damage; immediate-first-hit unchanged; blocked damage still emits.
+- Proposed S26A minimal slice: presentation event payload, multicast (+ optional LastEvent), one presentation component, debug viz/logs, no assets.
+
+### Builds / validation
+- Build not required (docs only)
+- No C++ diff
+
+### Stop condition
+Commit/push `feature/gp-s26-combat-presentation-analysis` only. No merge to main. No PR. Do **not** start GP-S26A implementation without explicit task.

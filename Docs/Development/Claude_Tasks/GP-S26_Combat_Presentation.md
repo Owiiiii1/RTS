@@ -1,9 +1,10 @@
 # GP-S26 Combat Presentation
 
 ## Status
-**GP-S26A_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S26A_DONE_PRESENTATION_ASSETS_DEFERRED**
 
-GP-S26 analysis accepted; GP-S26A vertical slice implemented (cosmetic Unreliable NetMulticast events). No Blueprint / animation / Niagara assets. S25 gameplay semantics unchanged.
+GP-S26A: **FINALIZED_READY_FOR_MERGE** — operator-validated on `feature/gp-s26a-combat-presentation-events`.  
+Overall GP-S26: S26A cosmetic event channel done; animation/Niagara/sound/projectile presentation assets remain deferred.
 
 ## Main baseline
 `main` @ `3cb1e8055778c1ba4c67fa0546bb7ef96398a3d7` (includes merged GP-S26 analysis)
@@ -498,33 +499,61 @@ Gameplay regression checks (must remain PASS): immediate hit, cadence, hysteresi
 
 ## GP-S26A Implementation Record
 
-Status: **GP-S26A_CODE_READY_OPERATOR_VALIDATION_PENDING**
+Status: **GP-S26A_FINALIZED_READY_FOR_MERGE** (operator-validated)
 
 Branch: `feature/gp-s26a-combat-presentation-events`  
-Base: `main` @ `3cb1e8055778c1ba4c67fa0546bb7ef96398a3d7`
+Base: `main` @ `3cb1e8055778c1ba4c67fa0546bb7ef96398a3d7`  
+Implementation commit: `85f833415b92a5eeb89f5601c01d9498fb1c4dbe`  
+Finalization commit: `FINALIZATION_SHA_PLACEHOLDER`
 
-### Added
-- `UGP_CombatPresentationComponent` — replicated default subobject on `AGP_UnitBase`
-- `FGP_CombatPresentationEvent` + `EGP_CombatPresentationEventType::MeleeImpact`
-- `UFUNCTION(NetMulticast, Unreliable) Multicast_CombatPresentationEvent`
-- Authority emit after successful `ApplyDamageFromUnit` in `AttemptAttackHit` (incl. blocked; snapshot for sync TargetDied)
-- Receive-only Play path: Sequence serial-arithmetic dedupe; dedicated suppresses visual/debug draw
-- Non-shipping `gp.CombatPresentation.Inspect`
-- Debug log category `LogGPCombatPresentation` + short Source→Target debug line (non-shipping)
+### Shipped
+- Replicated `UGP_CombatPresentationComponent` default subobject on `AGP_UnitBase`
+- `FGP_CombatPresentationEvent` payload: PresentationSequence, AttackSerial, Target, EventType (`MeleeImpact`), AuthoritativeWorldTime (`float`), AppliedDamage, bBlocked, bTargetDiedFromHit (Source = owner)
+- `UFUNCTION(NetMulticast, Unreliable) Multicast_CombatPresentationEvent` — no LastPresentationEvent, no persistent replicated event state, no late-join replay
+- Authority-only emit after successful `ApplyDamageFromUnit` in `AttemptAttackHit` (incl. blocked)
+- Snapshot/reentrancy: Serial/Target/damage/death captured before reading mutable Attack state cleared by sync TargetDied
+- Serial-arithmetic Sequence dedupe (skip 0; first=1; payload-only)
+- Listen-server single receive path (multicast Implementation only; no inline Play on emit)
+- Remote client delivery confirmed
+- Dedicated visual suppression: `NM_DedicatedServer` early return before debug draw (code review; not operator-executed)
+- Debug: `LogGPCombatPresentation`, non-shipping Source→Target debug line, `gp.CombatPresentation.Inspect`
+- **No** Blueprint / animation / Niagara / sound / projectile asset dependency
+- **No** changes to S25 gameplay cadence / damage / TargetDied / hysteresis semantics
 
-### Explicitly not shipped
-- LastPresentationEvent / late-join replay / reliable multicast
-- Animation / Niagara / sound / projectile assets
-- Gameplay cadence / damage / TargetDied / hysteresis changes
+### Explicitly deferred (presentation assets / later stages)
+- Real animation montages / AnimInstance / AnimNotify
+- Niagara / materials / sounds
+- Cosmetic projectile variants
+- Reliable multicast / LastEvent / late-join catch-up
+- Polished UI damage numbers
+
+### Operator validation matrix (accepted)
+
+| Area | Result |
+| --- | --- |
+| Listen host: one Emit + one Accepted per hit; no double-play | **PASS** |
+| Remote client: one Accepted per hit; Sequence 1,2,3…; AttackSerial preserved | **PASS** |
+| Cadence unchanged vs S25 | **PASS** |
+| Blocked hit: AppliedDamage=0, Blocked=true, TargetDied=false; Health unchanged; cooldown continues; host+client event | **PASS** |
+| Killing hit / sync TargetDied: limited AppliedDamage; TargetDied=true; AttackFinished TargetDied; AttackEndedDuringApply; correct metadata; host+client one event; no further events after death | **PASS** |
+| Approaching / OOR: no presentation until Apply; FirstHitAttempted + NextHitTime preserved on re-entry; Attack→Move stops further events | **PASS** |
+| Inspect client: Component present; LastProcessed; Role=SimulatedProxy; NetMode=Client; AuthorityNext=1 expected (counter not replicated) | **PASS** |
+| Inspect listen host: LastProcessed; AuthorityNext; Role=Authority; NetMode=ListenServer; DedicatedVisualSuppressed=false | **PASS** |
+| Dedicated server runtime | **NOT RUN** — not operator-executed; suppression confirmed by code review (`NM_DedicatedServer` early return before debug draw); not a blocker |
+| Late join / relevancy replay | **NOT RUN** — not operator-executed; absent by architecture (no LastPresentationEvent / persistent event state); expected S26A semantics; not a blocker |
+
+No known blockers.
 
 ### Build
-- GPEditor Win64 Development + UHT — **PASSED**
-- GP Dev / Shipping deferred to finalization after operator validation
+- GPEditor Win64 Development + UHT — **PASSED** at implementation `85f833415b92a5eeb89f5601c01d9498fb1c4dbe` (not re-run; C++ frozen at finalization)
+- GP Win64 Development — **PASSED** (finalization)
+- GP Win64 Shipping — **PASSED** (finalization)
 
 ---
 
-## Stop condition (S26A candidate)
+## Stop condition (S26A finalization)
 
 - Commit/push `feature/gp-s26a-combat-presentation-events`
-- **No** merge to main. **No** PR. **No** Blueprint/visual assets.
-- Operator validation pending (listen + remote client matrix).
+- Status: **GP-S26A_FINALIZED_READY_FOR_MERGE**
+- Overall GP-S26: **GP-S26A_DONE_PRESENTATION_ASSETS_DEFERRED**
+- **No** merge to main in this close-out. **No** PR unless requested.

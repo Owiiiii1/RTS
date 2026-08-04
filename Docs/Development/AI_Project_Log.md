@@ -3809,3 +3809,30 @@ Status: **GP-S26A_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s26a-combat-presentation-events` only. No merge to main. No PR. No finalization until operator accepts.
+
+## 2026-08-04 — GP-S26A / Combat Presentation Events — finalization
+
+Status: **GP-S26A_FINALIZED_READY_FOR_MERGE**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S26_Combat_Presentation.md` — S26A finalized; overall `GP-S26A_DONE_PRESENTATION_ASSETS_DEFERRED`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — finalization report
+- C++ unchanged at finalization
+
+### What was done
+- Operator accepted listen-server + remote-client matrix: single Emit/Accepted (no host double-play), Sequence/AttackSerial, blocked hits, sync TargetDied metadata, OOR/approach/re-entry cadence preserve, Attack→Move stops events, Inspect Role/NetMode/Sequence fields.
+- Dedicated runtime and late-join replay: **NOT RUN** this session; dedicated suppression code-reviewed; late-join absent by architecture; not blockers.
+- Final builds: GP Win64 Development + Shipping **PASSED**.
+- Last implementation editor build/UHT: **PASSED** at `85f8334` (not re-run; docs-only finalization).
+- No known blockers. Ready for main merge when requested. Do **not** merge in this close-out.
+
+### Builds / validation
+- GPEditor Dev + UHT — previously **PASSED** at `85f8334`; C++ frozen
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- Operator — **CODE_DONE_OPERATOR_ACCEPTED** for S26A (available matrix)
+- Overall GP-S26 — **GP-S26A_DONE_PRESENTATION_ASSETS_DEFERRED**
+
+### Stop condition
+Commit/push `feature/gp-s26a-combat-presentation-events` only. **READY_FOR_MAIN_MERGE** when operator requests. Do **not** merge in this close-out. Do **not** create PR.

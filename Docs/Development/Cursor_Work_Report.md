@@ -1,10 +1,12 @@
 # Cursor Work Report
 
 ## Task
-GP-S26A Combat Presentation Events — minimal vertical slice
+GP-S26A Combat Presentation Events finalization
 
 ## Status
-GP-S26A_CODE_READY_OPERATOR_VALIDATION_PENDING
+GP-S26A_FINALIZED_READY_FOR_MERGE
+
+Overall GP-S26: **GP-S26A_DONE_PRESENTATION_ASSETS_DEFERRED**
 
 ## Branch
 feature/gp-s26a-combat-presentation-events
@@ -12,59 +14,58 @@ feature/gp-s26a-combat-presentation-events
 ## Base
 main @ 3cb1e8055778c1ba4c67fa0546bb7ef96398a3d7
 
+## Implementation Commit
+85f833415b92a5eeb89f5601c01d9498fb1c4dbe
+
 ## Architecture
-- `UGP_CombatPresentationComponent` on `AGP_UnitBase` (replicated default subobject)
-- Authority emit after successful `ApplyDamageFromUnit` in `AttemptAttackHit`
-- Transport: `UFUNCTION(NetMulticast, Unreliable) Multicast_CombatPresentationEvent`
-- Sole local presentation path = multicast Implementation (listen server once; no inline Play on emit)
-- Dedicated server: accept/dedupe bookkeeping only; no debug draw
-- Source = component owner; Target in payload; no LastEvent / late-join replay
+- Replicated `UGP_CombatPresentationComponent` default subobject on `AGP_UnitBase`
+- Authority-only emit after successful `ApplyDamageFromUnit` (incl. blocked)
+- Transport: Unreliable NetMulticast `Multicast_CombatPresentationEvent`
+- Payload: PresentationSequence, AttackSerial, Target, EventType (`MeleeImpact`), AuthoritativeWorldTime (`float`), AppliedDamage, bBlocked, bTargetDiedFromHit; Source = owner
+- Snapshot/reentrancy for sync TargetDied; serial-arithmetic Sequence dedupe (skip 0; first=1; payload-only)
+- Single receive Play path (listen host once; remote client once); dedicated early-out before debug draw
+- No LastPresentationEvent / late-join replay / asset dependency
+- No S25 cadence/damage/TargetDied semantic changes
 
-## Payload
-`FGP_CombatPresentationEvent`: PresentationSequence, AttackSerial, Target, EventType (`MeleeImpact`), AuthoritativeWorldTime (`float`), AppliedDamage, bBlocked, bTargetDiedFromHit
+## Operator Validation Matrix
 
-## Emit Point
-`UGP_UnitCommandComponent::AttemptAttackHit` after Apply returns `true` (includes blocked). Uses local snapshot of Serial/Target/damage/death so sync `TargetDied` FinishAttack cannot corrupt metadata. Does not change NextHitTime / FirstHitAttempted / TargetDied lifecycle.
+| Area | Result |
+| --- | --- |
+| Listen + remote: one Emit / one Accepted each; no host double-play; Sequence 1,2,3…; AttackSerial; cadence unchanged | **PASS** |
+| Blocked hit: AppliedDamage=0, Blocked=true, TargetDied=false; Health unchanged; cooldown continues; host+client event | **PASS** |
+| Killing / sync TargetDied: limited AppliedDamage; TargetDied=true; AttackFinished TargetDied; AttackEndedDuringApply; correct metadata; one event each; no further events | **PASS** |
+| Approaching/OOR: no event until Apply; FirstHitAttempted + NextHitTime preserved on re-entry; Attack→Move stops events | **PASS** |
+| Inspect client/host Role/NetMode/Sequence fields as expected | **PASS** |
 
-## Reentrancy
-Snapshot taken immediately after Apply; emit uses snapshot even if AttackEndedDuringApply. Mutable Attack state not required for emit.
+## Not-Run Cases
+| Case | Notes |
+| --- | --- |
+| Dedicated server runtime | **NOT RUN** this session; suppression confirmed by code review (`NM_DedicatedServer` early return before debug draw); not a blocker |
+| Late join / relevancy | **NOT RUN** this session; no replay by architecture (no LastEvent / persistent event state); expected S26A semantics; not a blocker |
 
-## Dedupe Model
-Authority monotonic Sequence (skip 0; first=1). Receivers reject invalid/duplicate/stale via equality + int32 serial-distance (`Incoming - LastProcessed`); Sequence only in multicast payload.
+No known blockers.
 
-## Debug Commands
-- `gp.CombatPresentation.Inspect` (non-shipping) — component presence, LastProcessed, AuthorityNext, Role/NetMode, dedicated visual suppression
+## Final Build Results
+- GPEditor Win64 Development + UHT — **PASSED** on implementation `85f833415b92a5eeb89f5601c01d9498fb1c4dbe` (not re-run; C++ frozen at finalization)
+- GP Win64 Development — **PASSED** (exit 0; linked `GP.exe`)
+- GP Win64 Shipping — **PASSED** (exit 0; linked `GP-Win64-Shipping.exe`)
+- No C++ changes during finalization
 
-## Files Changed
-- `GP/Source/GPRuntime/Public/Combat/GPCombatPresentationTypes.h` (new)
-- `GP/Source/GPRuntime/Public/Combat/GPCombatPresentationComponent.h` (new)
-- `GP/Source/GPRuntime/Private/Combat/GPCombatPresentationComponent.cpp` (new)
-- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
-- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+## Files Changed During Finalization
+Documentation only:
 - `Docs/Development/Claude_Tasks/GP-S26_Combat_Presentation.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Build Results
-- GPEditor Win64 Development — **PASSED** (UHT generated 9 files; compiled presentation + UnitBase + UnitCommandComponent; linked GPRuntime)
-- Automated Attack/presentation tests — none in repo
-- GP Dev/Shipping — deferred to finalization
-
-## Operator Validation Steps
-1. Listen server Attack in range → one `CombatPresentationAccepted` + debug line per hit
-2. Remote client → receives multicast; one viz; Sequence increases
-3. Blocked damage → event with Blocked=true; cooldown still schedules
-4. Killing hit → TargetDied metadata; AttackFinished TargetDied unchanged
-5. OOR / hysteresis → no presentation event
-6. Attack→Move / retarget → gameplay unchanged
-7. Dedicated (if available) → no debug draw
-8. Late join → no replay of past cosmetics
-9. `gp.CombatPresentation.Inspect` on Source
-
-## Commit SHA
-85f833415b92a5eeb89f5601c01d9498fb1c4dbe
+## Final Commit SHA
+FINALIZATION_SHA_PLACEHOLDER
 
 ## Git State
+- Branch ahead of main; behind: 0
 - Push to `feature/gp-s26a-combat-presentation-events`
-- No merge to main; no PR; no assets
+- Working tree clean after push; HEAD = origin
+- No binaries / Saved / Intermediate / DDC / Blueprint or presentation assets in commit
+- Scope limited to GP-S26A docs finalization
+
+## Ready-for-Merge Conclusion
+**GP-S26A_FINALIZED_READY_FOR_MERGE** — ready to merge into main when requested. Do not merge in this close-out. Presentation assets remain deferred under **GP-S26A_DONE_PRESENTATION_ASSETS_DEFERRED**.

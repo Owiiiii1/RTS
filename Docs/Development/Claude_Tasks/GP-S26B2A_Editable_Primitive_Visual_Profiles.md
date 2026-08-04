@@ -6,7 +6,8 @@
 ## Baseline
 `main` @ `215b4b603e7fd333ef9b379103329bfac03edbf4`
 
-Branch: `feature/gp-s26b2a-editable-visual-profiles`
+Branch: `feature/gp-s26b2a-editable-visual-profiles`  
+Implementation: `54bfe62d5c6b54edfa7cdff02ff48e221f9a98ff`
 
 ## Goal
 Editable DataAsset visual profiles for InfantryMelee and Ore, with native fallback. Editor rebuild without C++ rebuild. No gameplay / collision / nav / replication coupling.

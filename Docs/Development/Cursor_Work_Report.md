@@ -104,7 +104,7 @@ See task doc A–E (Unit edit/rebuild, Ore edit/rebuild, per-instance, fallback 
 - No full unit visual catalog
 
 ## Commit SHA
-(filled after commit)
+54bfe62d5c6b54edfa7cdff02ff48e221f9a98ff
 
 ## Git state
 Branch `feature/gp-s26b2a-editable-visual-profiles` pushed; main untouched; no PR.

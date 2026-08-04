@@ -7,23 +7,21 @@ Status: GP-S27A2_CODE_AND_BASE_MAP_READY_OPERATOR_VALIDATION_PENDING
 ### Branch / baseline
 - Branch: `feature/gp-s27a2-editor-generator-foundation`
 - Base: `main` @ `326c881ae0578973b79b92de2043976bfbcd6121`
+- Implementation: `7508fc8eca2acc7f277fe3d9ed7965db15df5711`
 
 ### What was done
 - Added Editor module `GPEditor` (uproject + GPEditor.Target only; not in Game target)
 - `FGPPrototypeArenaGenerator` one-shot create of `/Game/GrimProtocol/Maps/L_PrototypeArena`
 - Console/menu + commandlet; Inspect; abort-if-exists
-- Infrastructure-only umap (floor/walls/lights/PlayerStart/NavBounds); layout manifest
-- GPEditor Win64 Development + UHT — PASSED
-- Generation SUCCESS; second run ExistingMapAbort; Inspect ReadyForPopulation=true
-- LFS tracks `.umap`
-- Implementation commit: `7508fc8eca2acc7f277fe3d9ed7965db15df5711`
+- Infrastructure-only umap; layout manifest; LFS `.umap`
+- **Nav bounds correction:** switch to `UActorFactory::CreateBrushForVolumeActor`; pre-save bounds validation; unlock AsyncLoadLock; MapCheck 0/0; Recast=1 after reload; defective umap regenerated
 
 ### Intentionally not done
 - No units/ore/combat population; no S27A3; no GameDefaultMap change; no GP Dev/Shipping yet
-- No PR / merge to main
+- No PR / merge to main; no user-facing rebuild command
 
 ### Operator next
-- Open L_PrototypeArena; validate visual/PIE/nav (Build Paths if needed); confirm Generate abort + Inspect
+- Open L_PrototypeArena; press P for green nav; confirm MapCheck clean; re-run Generate abort + Inspect
 
 ---
 

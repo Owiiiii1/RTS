@@ -11,49 +11,47 @@ Architecture sources:
 - `Docs/Development/Claude_Tasks/GP-S27A1_Resource_Node_Foundation.md`
 
 Branch: `feature/gp-s27a2-editor-generator-foundation`  
-Implementation: `7508fc8eca2acc7f277fe3d9ed7965db15df5711`
+Implementation: `7508fc8eca2acc7f277fe3d9ed7965db15df5711`  
+Nav bounds correction: (see Cursor report)
 
 ## Goal
 Editor-only module + one-shot tool that creates and saves infrastructure-only persistent map `/Game/GrimProtocol/Maps/L_PrototypeArena`. No gameplay population. No S27A3.
+
+## Operator blocker (fixed)
+Initial generator used `CubeBuilder::Build` without `UActorFactory::CreateBrushForVolumeActor`, leaving empty brush geometry (SphereRadius=0, MapCheck collision 0 radius, no Recast).
+
+### Correction
+- Use `UActorFactory::CreateBrushForVolumeActor` + `UCubeBuilder` 4500×4500×500
+- Pre-save validation: BrushComponent, non-zero SphereRadius, positive BoxExtent
+- Unlock `AsyncLoadLock` + `InitialLock`; commandlet uses `NavSys->Build()` (full Editor uses `FEditorBuildUtils::EditorBuild`)
+- Map Check after save/load: **0 Error(s), 0 Warning(s)**
+- Inspect: `NavBoundsValid=true`, Extent≈(2250,2250,250), `RecastNavMeshCount=1`, `ReadyForPopulation=true`
 
 ## Shipped
 
 ### Editor module `GPEditor`
 - Type: Editor (`.uproject` + `GPEditor.Target.cs`)
 - Absent from `GP` Game target / packaged Shipping graph
-- No editor deps added to `GPRuntime`
 
 ### Commands / menu
-- Console: `gp.Editor.GeneratePrototypeArena`
-- Console: `gp.Editor.InspectPrototypeArena`
-- Menu: Tools → Grim Protocol → Generate Prototype Arena
-- Shared service: `FGPPrototypeArenaGenerator`
-- Automation helper: `UGPPrototypeArenaGenerateCommandlet` (`-run=GPPrototypeArenaGenerate`, optional `-InspectOnly`)
+- `gp.Editor.GeneratePrototypeArena` / `gp.Editor.InspectPrototypeArena`
+- Tools → Grim Protocol → Generate Prototype Arena
+- Service: `FGPPrototypeArenaGenerator`
+- Commandlet: `-run=GPPrototypeArenaGenerate` (`-InspectOnly`)
 
-### Map
-- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
-- Compact non–World-Partition
-- GameMode override: `AGP_GameMode` on WorldSettings only
-- Global `GameDefaultMap` / `DefaultGameMode` unchanged
-
-### Infrastructure (tagged `GP.GeneratedPrototypeArena`)
-Floor, 4 walls, DirectionalLight, SkyLight, SkyAtmosphere, PlayerStart, NavMeshBoundsVolume — see layout manifest.
-
-### Idempotency
-Abort if package exists (`ExistingMapAbort=true`). No force/rebuild in A2.
-
-### Navigation
-Bounds spawned; editor `Build()` may remain locked in commandlet — operator may need Build Paths. Documented warning.
+### Map / nav
+- Non–World-Partition `L_PrototypeArena.umap` (LFS)
+- Valid `GP_Arena_NavMeshBounds` brush; Recast present after generation/reload
+- Abort-if-exists unchanged
 
 ## Intentionally not done
-Units, ResourceNodes, combat pairs, obstacles, buildings, runtime generator, rebuild/force, Blueprint/DataAsset/materials, default map switch, S27A3.
+Units, ResourceNodes, combat pairs, runtime generator, rebuild user command, Blueprint/DataAsset/materials, default map switch, S27A3.
 
-## Build / generation (candidate)
-- GPEditor Win64 Development + UHT — **PASSED**
-- Generation via commandlet — **SUCCESS** (10 actors)
-- Second generate — **ABORT** ExistingMapAbort
-- Inspect — ReadyForPopulation=true
+## Build / generation (candidate + correction)
+- GPEditor Win64 Development — **PASSED**
+- Defective umap deleted and regenerated in branch
+- Second generate — ExistingMapAbort
 - GP Dev/Shipping — deferred to finalization
 
 ## Operator validation
-See `Docs/Development/Cursor_Work_Report.md` steps A–F.
+See `Docs/Development/Cursor_Work_Report.md` (recheck P / green nav).

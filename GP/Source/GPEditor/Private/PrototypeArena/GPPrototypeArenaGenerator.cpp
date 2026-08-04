@@ -2,11 +2,17 @@
 
 #include "PrototypeArena/GPPrototypeArenaGenerator.h"
 
+#include "ActorFactories/ActorFactory.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Builders/CubeBuilder.h"
+#include "Components/BrushComponent.h"
 #include "Components/DirectionalLightComponent.h"
+#include "Components/SkyAtmosphereComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Editor.h"
+#include "EditorBuildUtils.h"
+#include "Engine/Brush.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/SkyLight.h"
 #include "Engine/StaticMesh.h"
@@ -24,9 +30,8 @@
 #include "Misc/Paths.h"
 #include "NavigationSystem.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
-#include "Editor.h"
-#include "Engine/Brush.h"
-#include "Components/SkyAtmosphereComponent.h"
+#include "NavMesh/RecastNavMesh.h"
+#include "NavigationData.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPPrototypeArenaGenerator, Log, All);
 
@@ -382,15 +387,31 @@ bool FGPPrototypeArenaGenerator::SpawnInfrastructure(
 			return false;
 		}
 
+		// Root cause of empty bounds: CubeBuilder::Build alone requires an initialized UModel/Polys
+		// on the volume (Brush). Engine placement uses UActorFactory::CreateBrushForVolumeActor,
+		// which creates UModel + Polys, duplicates the builder onto the actor, Build(), then
+		// FBSPOps::csgPrepMovingBrush + PostEditChange.
 		UCubeBuilder* CubeBuilder = NewObject<UCubeBuilder>();
 		CubeBuilder->X = 4500.0f;
 		CubeBuilder->Y = 4500.0f;
 		CubeBuilder->Z = 500.0f;
-		NavBounds->BrushBuilder = CubeBuilder;
-		CubeBuilder->Build(World, NavBounds);
-		NavBounds->SetActorLabel(TEXT("GP_Arena_NavMeshBounds"), true);
-		NavBounds->Tags.AddUnique(GPPrototypeArenaPrivate::TagName);
-		NavBounds->SetFolderPath(FName(TEXT("GP/PrototypeArena")));
+		UActorFactory::CreateBrushForVolumeActor(NavBounds, CubeBuilder);
+
+		ApplyGeneratedMetadata(NavBounds, FName(TEXT("GP_Arena_NavMeshBounds")));
+
+		const FNavBoundsValidation Validation = ValidateNavMeshBounds(NavBounds);
+		if (!Validation.bValid)
+		{
+			OutError = FString::Printf(
+				TEXT("NavMeshBoundsVolume brush invalid after CreateBrushForVolumeActor: %s"),
+				*Validation.Detail);
+			return false;
+		}
+
+		if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+		{
+			NavSys->OnNavigationBoundsUpdated(NavBounds);
+		}
 
 		FSpawnedActorRecord Record;
 		Record.Label = TEXT("GP_Arena_NavMeshBounds");
@@ -398,10 +419,127 @@ bool FGPPrototypeArenaGenerator::SpawnInfrastructure(
 		Record.Location = FVector(0.0f, 0.0f, 100.0f);
 		Record.Rotation = FRotator::ZeroRotator;
 		Record.Scale = FVector::OneVector;
+		Record.Extra = FString::Printf(
+			TEXT("BrushExtent=(%.1f,%.1f,%.1f) SphereRadius=%.1f"),
+			Validation.BoxExtent.X, Validation.BoxExtent.Y, Validation.BoxExtent.Z,
+			Validation.SphereRadius);
 		OutRecords.Add(Record);
+
+		UE_LOG(LogGPPrototypeArenaGenerator, Log,
+			TEXT("GP PrototypeArena NavBounds OK: Origin=(%.1f,%.1f,%.1f) Extent=(%.1f,%.1f,%.1f) SphereRadius=%.1f"),
+			Validation.Origin.X, Validation.Origin.Y, Validation.Origin.Z,
+			Validation.BoxExtent.X, Validation.BoxExtent.Y, Validation.BoxExtent.Z,
+			Validation.SphereRadius);
 	}
 
 	return true;
+}
+
+FGPPrototypeArenaGenerator::FNavBoundsValidation FGPPrototypeArenaGenerator::ValidateNavMeshBounds(
+	const ANavMeshBoundsVolume* NavBounds)
+{
+	FNavBoundsValidation Result;
+	if (NavBounds == nullptr)
+	{
+		Result.Detail = TEXT("NavBounds=null");
+		return Result;
+	}
+
+	const UBrushComponent* BrushComp = NavBounds->GetBrushComponent();
+	if (BrushComp == nullptr)
+	{
+		Result.Detail = TEXT("BrushComponent=null");
+		return Result;
+	}
+
+	if (NavBounds->Brush == nullptr || BrushComp->Brush == nullptr)
+	{
+		Result.Detail = TEXT("Brush UModel=null (empty geometry)");
+		return Result;
+	}
+
+	const FBoxSphereBounds Bounds = BrushComp->CalcBounds(BrushComp->GetComponentTransform());
+	Result.Origin = Bounds.Origin;
+	Result.BoxExtent = Bounds.BoxExtent;
+	Result.SphereRadius = Bounds.SphereRadius;
+
+	constexpr float MinRadius = 1.0f;
+	constexpr float MinExtentAxis = 100.0f;
+	const bool bExtentOk =
+		Result.BoxExtent.X > MinExtentAxis
+		&& Result.BoxExtent.Y > MinExtentAxis
+		&& Result.BoxExtent.Z > MinExtentAxis;
+
+	Result.bValid = Bounds.SphereRadius > MinRadius && bExtentOk;
+	Result.Detail = FString::Printf(
+		TEXT("Origin=(%.2f,%.2f,%.2f) Extent=(%.2f,%.2f,%.2f) SphereRadius=%.2f Valid=%s"),
+		Result.Origin.X, Result.Origin.Y, Result.Origin.Z,
+		Result.BoxExtent.X, Result.BoxExtent.Y, Result.BoxExtent.Z,
+		Result.SphereRadius,
+		Result.bValid ? TEXT("true") : TEXT("false"));
+	return Result;
+}
+
+bool FGPPrototypeArenaGenerator::ValidatePrimaryNavBoundsInWorld(
+	UWorld* World,
+	FNavBoundsValidation& OutValidation,
+	FString& OutError)
+{
+	OutValidation = FNavBoundsValidation();
+	if (World == nullptr)
+	{
+		OutError = TEXT("World null during nav bounds validation");
+		return false;
+	}
+
+	ANavMeshBoundsVolume* Found = nullptr;
+	for (TActorIterator<ANavMeshBoundsVolume> It(World); It; ++It)
+	{
+		ANavMeshBoundsVolume* Candidate = *It;
+		if (IsValid(Candidate) && Candidate->ActorHasTag(GPPrototypeArenaPrivate::TagName))
+		{
+			Found = Candidate;
+			break;
+		}
+	}
+
+	if (Found == nullptr)
+	{
+		OutError = TEXT("Tagged NavMeshBoundsVolume not found");
+		return false;
+	}
+
+	OutValidation = ValidateNavMeshBounds(Found);
+	if (!OutValidation.bValid)
+	{
+		OutError = FString::Printf(TEXT("NavMeshBounds validation failed: %s"), *OutValidation.Detail);
+		return false;
+	}
+
+	return true;
+}
+
+void FGPPrototypeArenaGenerator::CountNavigationActors(UWorld* World, int32& OutRecastCount, int32& OutNavDataCount)
+{
+	OutRecastCount = 0;
+	OutNavDataCount = 0;
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	for (TActorIterator<ANavigationData> It(World); It; ++It)
+	{
+		if (!IsValid(*It))
+		{
+			continue;
+		}
+		++OutNavDataCount;
+		if (Cast<ARecastNavMesh>(*It) != nullptr)
+		{
+			++OutRecastCount;
+		}
+	}
 }
 
 bool FGPPrototypeArenaGenerator::TryBuildNavigation(UWorld* World, FGPPrototypeArenaGenerateResult& InOutResult)
@@ -416,16 +554,83 @@ bool FGPPrototypeArenaGenerator::TryBuildNavigation(UWorld* World, FGPPrototypeA
 		return false;
 	}
 
+	// Prior failure used ReleaseInitialBuildingLock only; commandlet hit AsyncLoadLock (0x20).
+	NavSys->RemoveNavigationBuildLock(ENavigationBuildLock::AsyncLoadLock);
+	NavSys->RemoveNavigationBuildLock(ENavigationBuildLock::InitialLock);
 	NavSys->ReleaseInitialBuildingLock();
-	InOutResult.bNavigationBuildAttempted = true;
-	NavSys->Build();
 
-	// Async/editor nav build completion is not always synchronously observable.
-	InOutResult.bNavigationBuildSucceeded = false;
-	InOutResult.bOperatorMustBuildPaths = true;
-	InOutResult.Message += TEXT(" Nav bounds created; verify nav with P / Build Paths if green mesh missing.");
-	UE_LOG(LogGPPrototypeArenaGenerator, Warning,
-		TEXT("GP PrototypeArena[Navigation]: bounds created; operator must confirm Build Paths if nav data not yet green"));
+	for (TActorIterator<ANavMeshBoundsVolume> It(World); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			NavSys->OnNavigationBoundsUpdated(*It);
+		}
+	}
+
+	InOutResult.bNavigationBuildAttempted = true;
+
+	bool bBuildApiSucceeded = false;
+	if (IsRunningCommandlet())
+	{
+		// FEditorBuildUtils::EditorBuild crashes in commandlet (no LevelEditor UI).
+		// Unlock + NavigationSystem::Build is the supported headless path.
+		NavSys->Build();
+		bBuildApiSucceeded = true;
+	}
+	else
+	{
+		bBuildApiSucceeded = FEditorBuildUtils::EditorBuild(
+			World,
+			FBuildOptions::BuildAIPaths,
+			/*bAllowLightingDialog*/ false);
+	}
+
+	// Allow async nav tasks a short window to create RecastNavMesh actors.
+	const double Deadline = FPlatformTime::Seconds() + 15.0;
+	while (FPlatformTime::Seconds() < Deadline)
+	{
+		CountNavigationActors(World, InOutResult.RecastNavMeshCount, InOutResult.NavDataCount);
+		if (InOutResult.RecastNavMeshCount >= 1)
+		{
+			break;
+		}
+
+		if (NavSys->GetNumRemainingBuildTasks() <= 0 && !NavSys->IsNavigationBuildInProgress())
+		{
+			break;
+		}
+
+		NavSys->Tick(0.05f);
+		FPlatformProcess::Sleep(0.01f);
+	}
+
+	CountNavigationActors(World, InOutResult.RecastNavMeshCount, InOutResult.NavDataCount);
+
+	const bool bHasRecast = InOutResult.RecastNavMeshCount >= 1 && InOutResult.NavDataCount >= 1;
+	InOutResult.bNavigationBuildSucceeded = bBuildApiSucceeded && bHasRecast;
+	InOutResult.bOperatorMustBuildPaths = !InOutResult.bNavigationBuildSucceeded;
+
+	if (InOutResult.bNavigationBuildSucceeded)
+	{
+		InOutResult.Message += FString::Printf(
+			TEXT(" Navigation build OK Recast=%d NavData=%d."),
+			InOutResult.RecastNavMeshCount,
+			InOutResult.NavDataCount);
+		UE_LOG(LogGPPrototypeArenaGenerator, Log,
+			TEXT("GP PrototypeArena[Navigation]: build succeeded Recast=%d NavData=%d Commandlet=%s"),
+			InOutResult.RecastNavMeshCount,
+			InOutResult.NavDataCount,
+			IsRunningCommandlet() ? TEXT("true") : TEXT("false"));
+		return true;
+	}
+
+	InOutResult.Message += FString::Printf(
+		TEXT(" Navigation build incomplete ApiOk=%s Recast=%d NavData=%d — operator may need Build Paths in full Editor."),
+		bBuildApiSucceeded ? TEXT("true") : TEXT("false"),
+		InOutResult.RecastNavMeshCount,
+		InOutResult.NavDataCount);
+	UE_LOG(LogGPPrototypeArenaGenerator, Warning, TEXT("GP PrototypeArena[Navigation]: %s"), *InOutResult.Message);
+	// Bounds are already validated; allow Save so operator can Build Paths in Editor.
 	return false;
 }
 
@@ -451,24 +656,28 @@ bool FGPPrototypeArenaGenerator::WriteManifest(
 	Body += FString::Printf(TEXT("- MapPath: `%s`\n"), MapPackagePath);
 	Body += TEXT("- MapType: non-World-Partition compact umap\n");
 	Body += TEXT("- FloorDimensions: 4000 x 4000 uu (Engine Cube scale 40x40x1)\n");
-	Body += TEXT("- NavPolicy: NavMeshBoundsVolume spawned; editor Build Paths may be required\n");
+	Body += TEXT("- NavPolicy: UActorFactory::CreateBrushForVolumeActor + CubeBuilder 4500x4500x500; EditorBuild AIPaths; pre-save bounds validation\n");
 	Body += TEXT("- GameplayPopulation: none (GP-S27A2 infrastructure only)\n");
 	Body += FString::Printf(TEXT("- ExistingMapAbort: %s\n"), Result.bExistingMapAbort ? TEXT("true") : TEXT("false"));
+	Body += FString::Printf(TEXT("- RecastNavMeshCount: %d\n"), Result.RecastNavMeshCount);
+	Body += FString::Printf(TEXT("- NavDataCount: %d\n"), Result.NavDataCount);
+	Body += FString::Printf(TEXT("- NavigationBuildSucceeded: %s\n"), Result.bNavigationBuildSucceeded ? TEXT("true") : TEXT("false"));
 	Body += FString::Printf(TEXT("- GenerationTimestampUTC: %s\n"), *FDateTime::UtcNow().ToIso8601());
 	Body += TEXT("- SourceCommit: (filled by documentation commit)\n\n");
-	Body += TEXT("| Label | Class | Location | Rotation | Scale | Tag |\n");
-	Body += TEXT("| --- | --- | --- | --- | --- | --- |\n");
+	Body += TEXT("| Label | Class | Location | Rotation | Scale | Tag | Extra |\n");
+	Body += TEXT("| --- | --- | --- | --- | --- | --- | --- |\n");
 
 	for (const FSpawnedActorRecord& Record : Records)
 	{
 		Body += FString::Printf(
-			TEXT("| %s | %s | (%.1f, %.1f, %.1f) | (P%.1f Y%.1f R%.1f) | (%.2f, %.2f, %.2f) | `%s` |\n"),
+			TEXT("| %s | %s | (%.1f, %.1f, %.1f) | (P%.1f Y%.1f R%.1f) | (%.2f, %.2f, %.2f) | `%s` | %s |\n"),
 			*Record.Label,
 			*Record.ClassName,
 			Record.Location.X, Record.Location.Y, Record.Location.Z,
 			Record.Rotation.Pitch, Record.Rotation.Yaw, Record.Rotation.Roll,
 			Record.Scale.X, Record.Scale.Y, Record.Scale.Z,
-			GeneratedActorTag);
+			GeneratedActorTag,
+			Record.Extra.IsEmpty() ? TEXT("-") : *Record.Extra);
 	}
 
 	Body += TEXT("\n## Notes\n");
@@ -543,8 +752,30 @@ FGPPrototypeArenaGenerateResult FGPPrototypeArenaGenerator::Generate()
 	}
 	Result.SpawnedActorCount = Records.Num();
 
-	LogStage(TEXT("Navigation"), TEXT("Update/build attempt"));
+	FNavBoundsValidation NavValidation;
+	LogStage(TEXT("Navigation"), TEXT("Pre-save nav bounds validation"));
+	if (!ValidatePrimaryNavBoundsInWorld(World, NavValidation, Error))
+	{
+		Result.FailureStage = TEXT("Navigation");
+		Result.Message = Error;
+		UE_LOG(LogGPPrototypeArenaGenerator, Error,
+			TEXT("GP PrototypeArena incomplete (not saved): %s"), *Error);
+		return Result;
+	}
+
+	LogStage(TEXT("Navigation"), TEXT("EditorBuild AIPaths"));
 	TryBuildNavigation(World, Result);
+	CountNavigationActors(World, Result.RecastNavMeshCount, Result.NavDataCount);
+
+	// Re-validate after build; never save defective empty brush volumes.
+	if (!ValidatePrimaryNavBoundsInWorld(World, NavValidation, Error))
+	{
+		Result.FailureStage = TEXT("Navigation");
+		Result.Message = Error;
+		UE_LOG(LogGPPrototypeArenaGenerator, Error,
+			TEXT("GP PrototypeArena incomplete (not saved): %s"), *Error);
+		return Result;
+	}
 
 	LogStage(TEXT("Save"), MapPackagePath);
 	const bool bSaved = UEditorLoadingAndSavingUtils::SaveMap(World, MapPackagePath);
@@ -571,7 +802,25 @@ FGPPrototypeArenaGenerateResult FGPPrototypeArenaGenerator::Generate()
 	FAssetRegistryModule::AssetCreated(World);
 
 	LogStage(TEXT("Open"), TEXT("LoadMap after save"));
-	UEditorLoadingAndSavingUtils::LoadMap(MapPackagePath);
+	UWorld* ReloadedWorld = UEditorLoadingAndSavingUtils::LoadMap(MapPackagePath);
+	if (ReloadedWorld != nullptr)
+	{
+		World = ReloadedWorld;
+	}
+
+	// Recast/NavData often finalize across save/load; recount for manifest + result.
+	CountNavigationActors(World, Result.RecastNavMeshCount, Result.NavDataCount);
+	if (Result.RecastNavMeshCount >= 1)
+	{
+		Result.bNavigationBuildSucceeded = true;
+		Result.bOperatorMustBuildPaths = false;
+	}
+
+	if (GEditor != nullptr && World != nullptr)
+	{
+		// Quiet map check; warn on map-check issues without failing generation if bounds already validated.
+		GEditor->Exec(World, TEXT("MAP CHECK DONOTSKIPEDITORONLY"));
+	}
 
 	if (!WriteManifest(Records, Result, Error))
 	{
@@ -583,9 +832,11 @@ FGPPrototypeArenaGenerateResult FGPPrototypeArenaGenerator::Generate()
 
 	Result.bSuccess = true;
 	Result.Message = FString::Printf(
-		TEXT("Generated %s actors=%d ExistingMapAbort=false file=%s"),
+		TEXT("Generated %s actors=%d ExistingMapAbort=false Recast=%d NavData=%d file=%s"),
 		MapPackagePath,
 		Result.SpawnedActorCount,
+		Result.RecastNavMeshCount,
+		Result.NavDataCount,
 		*Result.MapFilename);
 	LogStage(TEXT("Complete"), Result.Message);
 	return Result;
@@ -635,6 +886,7 @@ FGPPrototypeArenaInspectResult FGPPrototypeArenaGenerator::Inspect(UWorld* Optio
 	}
 
 	TMap<FString, int32> LabelCounts;
+	ANavMeshBoundsVolume* PrimaryNavBounds = nullptr;
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
 		AActor* Actor = *It;
@@ -679,6 +931,7 @@ FGPPrototypeArenaInspectResult FGPPrototypeArenaGenerator::Inspect(UWorld* Optio
 		else if (Label == TEXT("GP_Arena_NavMeshBounds"))
 		{
 			++Result.NavMeshBoundsCount;
+			PrimaryNavBounds = Cast<ANavMeshBoundsVolume>(Actor);
 		}
 	}
 
@@ -690,11 +943,35 @@ FGPPrototypeArenaInspectResult FGPPrototypeArenaGenerator::Inspect(UWorld* Optio
 		}
 	}
 
+	if (PrimaryNavBounds != nullptr)
+	{
+		const FNavBoundsValidation Validation = ValidateNavMeshBounds(PrimaryNavBounds);
+		Result.bNavBoundsValid = Validation.bValid;
+		Result.NavBoundsOrigin = Validation.Origin;
+		Result.NavBoundsExtent = Validation.BoxExtent;
+		Result.NavBoundsSphereRadius = Validation.SphereRadius;
+	}
+
+	CountNavigationActors(World, Result.RecastNavMeshCount, Result.NavDataCount);
+
 	if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
 	{
-		Result.NavigationBuildStatus = NavSys->IsNavigationBuilt(World->GetWorldSettings())
-			? TEXT("NavigationBuiltOrDefaultPresent")
-			: TEXT("NavSysPresent_BuildUnconfirmed_OperatorMayNeedBuildPaths");
+		if (Result.RecastNavMeshCount >= 1 && NavSys->IsNavigationBuilt(World->GetWorldSettings()))
+		{
+			Result.NavigationBuildStatus = TEXT("RecastPresent_NavigationBuilt");
+		}
+		else if (Result.RecastNavMeshCount >= 1)
+		{
+			Result.NavigationBuildStatus = TEXT("RecastPresent_BuildStateUnconfirmed");
+		}
+		else if (Result.bNavBoundsValid)
+		{
+			Result.NavigationBuildStatus = TEXT("BoundsValid_NoRecastYet_OperatorMayBuildPaths");
+		}
+		else
+		{
+			Result.NavigationBuildStatus = TEXT("BoundsInvalid_NoRecast");
+		}
 	}
 	else
 	{
@@ -711,6 +988,8 @@ FGPPrototypeArenaInspectResult FGPPrototypeArenaGenerator::Inspect(UWorld* Optio
 		&& Result.SkyLightCount == 1
 		&& Result.PlayerStartCount == 1
 		&& Result.NavMeshBoundsCount == 1
+		&& Result.bNavBoundsValid
+		&& Result.NavBoundsSphereRadius > 0.0f
 		&& Result.DuplicateLabelsCount == 0
 		&& Result.UnexpectedGeneratedActorsCount == 0
 		&& Result.GameModeOverride.Contains(TEXT("GP_GameMode"));
@@ -721,7 +1000,7 @@ FGPPrototypeArenaInspectResult FGPPrototypeArenaGenerator::Inspect(UWorld* Optio
 void FGPPrototypeArenaGenerator::LogInspectResult(const FGPPrototypeArenaInspectResult& Result)
 {
 	UE_LOG(LogGPPrototypeArenaGenerator, Log,
-		TEXT("GP Editor.InspectPrototypeArena: MapPath=%s Exists=%s Loaded=%s WorldPartition=%s GameModeOverride=%s GeneratorTagActors=%d Floor=%d Walls=%d DirectionalLight=%d SkyLight=%d SkyAtmosphere=%d PlayerStart=%d NavMeshBounds=%d DuplicateLabels=%d UnexpectedGeneratedActors=%d NavigationBuildStatus=%s ReadyForPopulation=%s"),
+		TEXT("GP Editor.InspectPrototypeArena: MapPath=%s Exists=%s Loaded=%s WorldPartition=%s GameModeOverride=%s GeneratorTagActors=%d Floor=%d Walls=%d DirectionalLight=%d SkyLight=%d SkyAtmosphere=%d PlayerStart=%d NavMeshBounds=%d NavBoundsValid=%s NavBoundsOrigin=(%.1f,%.1f,%.1f) NavBoundsExtent=(%.1f,%.1f,%.1f) NavBoundsSphereRadius=%.1f RecastNavMeshCount=%d NavDataCount=%d DuplicateLabels=%d UnexpectedGeneratedActors=%d NavigationBuildStatus=%s ReadyForPopulation=%s"),
 		*Result.MapPath,
 		Result.bExists ? TEXT("true") : TEXT("false"),
 		Result.bLoaded ? TEXT("true") : TEXT("false"),
@@ -735,6 +1014,12 @@ void FGPPrototypeArenaGenerator::LogInspectResult(const FGPPrototypeArenaInspect
 		Result.SkyAtmosphereCount,
 		Result.PlayerStartCount,
 		Result.NavMeshBoundsCount,
+		Result.bNavBoundsValid ? TEXT("true") : TEXT("false"),
+		Result.NavBoundsOrigin.X, Result.NavBoundsOrigin.Y, Result.NavBoundsOrigin.Z,
+		Result.NavBoundsExtent.X, Result.NavBoundsExtent.Y, Result.NavBoundsExtent.Z,
+		Result.NavBoundsSphereRadius,
+		Result.RecastNavMeshCount,
+		Result.NavDataCount,
 		Result.DuplicateLabelsCount,
 		Result.UnexpectedGeneratedActorsCount,
 		*Result.NavigationBuildStatus,

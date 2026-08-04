@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 
+class ANavMeshBoundsVolume;
+
 struct FGPPrototypeArenaGenerateResult
 {
 	bool bSuccess = false;
@@ -16,6 +18,8 @@ struct FGPPrototypeArenaGenerateResult
 	FString MapPackagePath;
 	FString MapFilename;
 	int32 SpawnedActorCount = 0;
+	int32 RecastNavMeshCount = 0;
+	int32 NavDataCount = 0;
 };
 
 struct FGPPrototypeArenaInspectResult
@@ -35,6 +39,12 @@ struct FGPPrototypeArenaInspectResult
 	int32 NavMeshBoundsCount = 0;
 	int32 DuplicateLabelsCount = 0;
 	int32 UnexpectedGeneratedActorsCount = 0;
+	bool bNavBoundsValid = false;
+	FVector NavBoundsOrigin = FVector::ZeroVector;
+	FVector NavBoundsExtent = FVector::ZeroVector;
+	float NavBoundsSphereRadius = 0.0f;
+	int32 RecastNavMeshCount = 0;
+	int32 NavDataCount = 0;
 	FString NavigationBuildStatus;
 	bool bReadyForPopulation = false;
 };
@@ -62,6 +72,16 @@ private:
 		FVector Location = FVector::ZeroVector;
 		FRotator Rotation = FRotator::ZeroRotator;
 		FVector Scale = FVector::OneVector;
+		FString Extra;
+	};
+
+	struct FNavBoundsValidation
+	{
+		bool bValid = false;
+		FVector Origin = FVector::ZeroVector;
+		FVector BoxExtent = FVector::ZeroVector;
+		float SphereRadius = 0.0f;
+		FString Detail;
 	};
 
 	static void LogStage(const TCHAR* Stage, const FString& Detail);
@@ -75,7 +95,10 @@ private:
 	static void ApplyGeneratedMetadata(AActor* Actor, const FName& Label);
 	static bool ConfigureWorldSettings(UWorld* World, FString& OutError);
 	static bool SpawnInfrastructure(UWorld* World, TArray<FSpawnedActorRecord>& OutRecords, FString& OutError);
+	static FNavBoundsValidation ValidateNavMeshBounds(const ANavMeshBoundsVolume* NavBounds);
+	static bool ValidatePrimaryNavBoundsInWorld(UWorld* World, FNavBoundsValidation& OutValidation, FString& OutError);
 	static bool TryBuildNavigation(UWorld* World, FGPPrototypeArenaGenerateResult& InOutResult);
+	static void CountNavigationActors(UWorld* World, int32& OutRecastCount, int32& OutNavDataCount);
 	static bool WriteManifest(const TArray<FSpawnedActorRecord>& Records, const FGPPrototypeArenaGenerateResult& Result, FString& OutError);
 	static FString ResolveManifestAbsolutePath();
 };

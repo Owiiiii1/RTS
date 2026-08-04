@@ -63,7 +63,7 @@ Authority monotonic Sequence (skip 0; first=1). Receivers reject invalid/duplica
 9. `gp.CombatPresentation.Inspect` on Source
 
 ## Commit SHA
-COMMIT_SHA_PLACEHOLDER
+85f833415b92a5eeb89f5601c01d9498fb1c4dbe
 
 ## Git State
 - Push to `feature/gp-s26a-combat-presentation-events`

@@ -53,7 +53,7 @@ Approaching transition log includes `AttackExitRange` and `ExitTolerance` (not p
 - Automated Attack tests — N/A (none in repo)
 
 ## Commit SHA
-(filled after push)
+e5333fa7ef853bab2018648d273ffb6ecee7b695
 
 ## Git State
 - Push to `feature/gp-s25b-attack-cadence-integration`

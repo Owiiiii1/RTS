@@ -17,14 +17,17 @@ Status: GP-S27A1_CODE_READY_OPERATOR_VALIDATION_PENDING
 - Docs: task note, AI log, Cursor work report rewrite
 - Candidate build: GPEditor Win64 Development + UHT — PASSED
 - Implementation commit: `e2bf9ea86c7e49e1a4b841577d9b737fbf05a778`
+- Operator functional / replication / depletion matrix — **PASS**
+- Ore visual readability correction: retuned `MakeOreNodeDefinition` transforms only (uniform sunk Base + tall Cones); GPEditor Dev — PASSED; operator visual recheck pending
 
 ### Intentionally not done
 - No map / umap, editor module, generator, Blueprint, DataAsset, gather/harvest, command changes, S27A2
 - No GP Development/Shipping builds (finalization later)
 - No PR / merge to main
+- No finalization
 
 ### Operator next
-- Place `AGP_ResourceNode` on a temporary editor map; validate listen+client, Inspect, Consume, collision/nav properties
+- Recheck Ore silhouette from RTS camera (crystal pile readability) after transform correction
 
 ---
 

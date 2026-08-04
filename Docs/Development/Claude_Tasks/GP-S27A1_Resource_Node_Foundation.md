@@ -55,6 +55,19 @@ Thin `UGP_ResourceNodeVisualComponent` + shared helpers extracted from unit path
 ### Ore composition (5 parts)
 Base (Cylinder) + Core (Cone) + AccentA/B/C (Cone). Dedicated: no render parts.
 
+### Ore visual readability correction
+Operator functional matrix **PASS**; prior Ore read as flat disk + blobs. Native transforms retuned only (`MakeOreNodeDefinition`):
+
+| Part | New Loc / Rot / Scale |
+| --- | --- |
+| Base | (0,0,-40) / I / (0.56,0.56,0.56) — sunk uniform pedestal |
+| Core | (0,0,98) / I / (0.52,0.52,3.85) — tall central crystal |
+| AccentA | (52,8,82) / Pitch 28 / (0.36,0.36,2.75) — lean +X |
+| AccentB | (-10,-54,76) / Roll -30 / (0.32,0.32,2.45) — lean -Y |
+| AccentC | (-46,40,68) / (-18,12,24) / (0.28,0.28,1.95) — lean +Y/-X |
+
+Root cause of flat look: old Base scale Z=0.28 squashed child Cones. Visual recheck pending.
+
 ### Console (non-shipping)
 - `gp.ResourceNode.Inspect`
 - `gp.ResourceNode.Consume <Amount>` (authority world only)
@@ -68,10 +81,12 @@ Map, editor module, generator, Blueprint, DataAsset, meshes/materials import, ga
 - Current `UGP_MovementComponent` uses non-sweeping `SetActorLocation`; physical blocking for unit Move is nav/future concern — root is still nav-blocking configured for Recast once a map exists
 - Dedicated operator run not required for this candidate
 - No depletion visual states
+- Ore visual readability awaiting operator recheck after transform correction
 
 ## Build
-- GPEditor Win64 Development + UHT — **PASSED**
+- GPEditor Win64 Development + UHT — **PASSED** (implementation)
+- GPEditor Win64 Development — **PASSED** (Ore visual correction)
 - GP Development / Shipping — not run (deferred to finalization)
 
 ## Operator validation
-See `Docs/Development/Cursor_Work_Report.md` steps A–E.
+Functional matrix PASS (see Cursor report). Visual readability recheck pending after correction.

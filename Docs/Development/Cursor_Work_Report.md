@@ -1,10 +1,12 @@
 # Cursor Work Report
 
 ## Task
-GP-S27A1 — Resource Node Foundation (Ore visual readability correction)
+GP-S27A1 — Resource Node Foundation (finalization)
 
 ## Status
-GP-S27A1_CODE_READY_OPERATOR_VALIDATION_PENDING
+GP-S27A1_FINALIZED_READY_FOR_MERGE
+
+Overall: **GP-S27A1_DONE_RESOURCE_NODE_FOUNDATION**
 
 ## Branch
 feature/gp-s27a1-resource-node-foundation
@@ -15,62 +17,95 @@ main @ 74c058914a6349b3a9d0f83161023ff54b742be7
 ## Implementation commit
 e2bf9ea86c7e49e1a4b841577d9b737fbf05a778
 
-## Correction commit SHA
+## Visual correction commit
 51a310acfd2200d2bedd0b2a03221274d09f73d0
 
-## Operator functional matrix
-**PASS** (implementation candidate):
+## ResourceNode architecture
+- `EGP_ResourceType`: `None`, `Ore`
+- `AGP_ResourceNode : AActor` — replicated, always relevant, no permanent tick, no movement, no GAS, no combat
+- Not derived from `AGP_Unit` / `AGP_UnitBase` / Pawn / Character
+- No team ownership
+- Cosmetic: `UGP_ResourceNodeVisualComponent` (local build; parts not replicated)
+- No gather / economy / map / editor generator in this slice
 
-| Check | Result |
-| --- | --- |
-| Host/client visibility | PASS |
-| Replicated CurrentAmount | PASS |
-| 5000 → 4900 | PASS |
-| Client sees 4900 | PASS |
-| Zero consume no-op | PASS |
-| Negative consume no-op | PASS |
-| Consume beyond remainder clamps | PASS |
-| Final CurrentAmount=0 | PASS |
-| Depleted=true | PASS |
-| Actor remains after depletion | PASS |
-| Visual remains after depletion | PASS |
-| Selection does not treat node as unit | PASS |
-| Collision/nav/visual inspect fields | PASS |
-| No tick | PASS |
-| Visual parts NoCollision | PASS |
+## Replication policy
+- `ResourceType`, `MaxAmount`: map-authored replicated configuration
+- `CurrentAmount`: mutable replicated state (`OnRep_CurrentAmount`)
+- `bReplicates = true`, `bAlwaysRelevant = true`
+- Initial + late join via actor replication
+- No NetMulticast
 
-Replication / depletion: **PASS**.
+## ConsumeResource contract
+- Authority only
+- `RequestedAmount <= 0` → no-op (0)
+- Returns actual consumed; clamps to remainder / `[0, MaxAmount]`
+- Depletion (`CurrentAmount=0`, `Depleted=true`) does **not** destroy actor or change visuals
+- No gather loop / workers / cooldown events beyond state + RepNotify
 
-Visual readability: prior Ore silhouette read as flat disk + small blobs — **correction applied; operator recheck pending**.
+## Collision / navigation policy
+- Root `UBoxComponent` (~120×120×80 pile), profile **`BlockAll`**
+- `QueryAndPhysics`, `GenerateOverlapEvents=false`, `CanEverAffectNavigation=true`
+- Visual parts: `NoCollision`, no nav relevance
+- Not treated as unit/pawn object type
 
-## Ore visual transforms (old → new)
+## Primitive visual architecture
+- Option B: thin `UGP_ResourceNodeVisualComponent`
+- Shared `GPPrimitiveVisualMesh` + `GPPrimitiveVisualBuilder`
+- Reuses `EGP_PrimitiveShape` / `FGP_PrimitiveVisualPart` / `FGP_PrimitiveVisualDefinition`
+- Dedicated: no render parts (`DedicatedVisualSuppressed`)
+- Listen: single local composition; no team tint
 
-| Part | Old Loc / Rot / Scale | New Loc / Rot / Scale |
-| --- | --- | --- |
-| Base | (0,0,-20) / I / (1.25,1.25,0.28) | (0,0,-40) / I / (0.56,0.56,0.56) |
-| Core | (0,0,55) / I / (0.55,0.55,0.95) | (0,0,98) / I / (0.52,0.52,3.85) |
-| AccentA | (38,12,38) / (18,25,-12) / (0.34,0.34,0.58) | (52,8,82) / (28,0,0) lean +X / (0.36,0.36,2.75) |
-| AccentB | (-34,22,36) / (-16,-40,10) / (0.30,0.30,0.52) | (-10,-54,76) / (0,0,-30) lean -Y / (0.32,0.32,2.45) |
-| AccentC | (8,-40,40) / (12,70,-8) / (0.32,0.32,0.54) | (-46,40,68) / (-18,12,24) lean +Y/-X / (0.28,0.28,1.95) |
+## Ore composition
+5 parts: **Base** (Cylinder, PresentationRoot) + **Core** (Cone) + **AccentA/B/C** (Cone).  
+Post-correction: sunk uniform Base; tall dominant Core; elongated accents leaning +X / -Y / +Y−X; Cone +Z tip up.
 
-Notes:
-- Same 5 part names; Cone +Z tip up; Base remains Cylinder PresentationRoot.
-- Old Base non-uniform Z=0.28 squashed child cones into discs; new Base uses uniform scale and is sunk so pedestal does not dominate.
+## Operator validation matrix
 
-## Unchanged in this correction
-Collision root, replication, ConsumeResource, depletion, navigation, inspector contract, materials/assets/Blueprint/map.
+### Functional — PASS
+Host/client visibility; initial 5000; Consume 100→4900; client 4900; zero/negative no-op; over-consume clamp; final 0 + Depleted; actor+visual remain; not selected as unit; collision/nav/visual inspect; visual NoCollision; no idle tick.
 
-## Build results
+### Network — PASS
+Listen Authority / remote SimulatedProxy; ResourceType/Max/Current match; Replicates; AlwaysRelevant; no duplicate visuals.
+
+### Visual readability — PASS
+After correction, object reads more like ore (crystal pile) from RTS camera.
+
+## Visual correction result
+- Cause: non-uniform Base scale Z squashed child Cones into discs/blobs
+- Fix: uniform sunk Base + taller Core/accents with outward leans
+- Operator recheck: **PASS**
+
+## Final build results
+
 | Target | Result |
 | --- | --- |
-| GPEditor Win64 Development | **PASSED** (visual correction) |
-| GP Development / Shipping | not run |
+| GPEditor Win64 Development | **PASSED** at `51a310acfd2200d2bedd0b2a03221274d09f73d0` (not re-run; C++ unchanged) |
+| GP Win64 Development | **PASSED** (finalization) |
+| GP Win64 Shipping | **PASSED** (finalization) |
 
-## Files changed (correction)
-- `GP/Source/GPRuntime/Private/Visual/GPPrimitiveVisualTypes.cpp`
+Exit codes 0; no compile/link errors.
+
+## Known limitations
+- Harvest still expects `AGP_UnitBase` + `GP.Resource.Node` — not wired
+- No selection UI / Move / Attack for nodes
+- No map, navmesh content, gather, economy, depletion cosmetics
+- Dedicated runtime not operator-executed (code policy confirmed)
+- Engine BasicShapes may look uniform gray
+
+## Files changed during finalization
 - `Docs/Development/Claude_Tasks/GP-S27A1_Resource_Node_Foundation.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Git State
-- Same feature branch; no main; no PR; no finalization; S27A2 not started
+C++: **unchanged** at finalization.
+
+## Final commit SHA
+(pending)
+
+## Git state
+- Feature branch only; no main change; no PR; no merge
+- No binaries / Saved / Intermediate / DerivedDataCache tracked
+- No `.umap`; no new Blueprint/assets; no editor module; S27A2 not started; no gather/economy changes
+
+## Ready-for-merge conclusion
+GP-S27A1 is **FINALIZED_READY_FOR_MERGE**. Operator functional, network, and visual readability validation accepted. Game Dev + Shipping builds passed. Ready for main merge when requested.

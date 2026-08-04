@@ -3860,3 +3860,29 @@ Status: **GP-S26B_ANALYSIS_READY_FOR_REVIEW**
 
 ### Stop condition
 Commit/push `feature/gp-s26b-combat-assets-analysis` only. No merge to main. No PR. Do **not** start GP-S26B implementation or asset import without explicit task.
+
+## 2026-08-04 — GP-S26B / Primitive Visual MVP — analysis revision
+
+Status: **GP-S26B_ANALYSIS_READY_FOR_REVIEW**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S26B_Primitive_Visual_MVP_Architecture.md` (new; replaces combat-assets analysis)
+- `Docs/Development/Claude_Tasks/GP-S26B_Combat_Assets_Analysis.md` (removed)
+- `Docs/Development/Claude_Tasks/GP-S26_Combat_Presentation.md` (post-S26A deferred pointer updated)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+- C++ unchanged; assets unchanged
+
+### What was done
+- Product redirect: MVP visuals via Engine primitives / composite meshes — do not wait for authored art.
+- Architecture: `UGP_UnitVisualComponent` + `UGP_PrimitiveVisualProfile`; part schema; archetype catalog; transform cosmetics; team-color strategy; profile assignment via VisualArchetype.
+- Timing: B1/B2 melee + reactive Impact; ranged travel projectile + Fire event deferred to **GP-S26C**.
+- Roadmap: B1 foundation → B2 combat cosmetics → B3 catalog → S26C two-phase ranged.
+- Scalability/validation matrices documented. No implementation / no Content creation.
+
+### Builds / validation
+- Build not required (docs only)
+- C++ diff: none; assets diff: none
+
+### Stop condition
+Commit/push same branch `feature/gp-s26b-combat-assets-analysis`. No merge to main. No PR. Do **not** start GP-S26B1 implementation without explicit task.

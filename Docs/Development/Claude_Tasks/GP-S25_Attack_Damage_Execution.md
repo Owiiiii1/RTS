@@ -625,7 +625,7 @@ Status: **GP-S25B_FINALIZED_READY_FOR_MERGE** (operator-validated)
 Branch: `feature/gp-s25b-attack-cadence-integration`
 Base: `main` @ `7864b2bc45060f48021f46a1711d71fd62b0f3da`
 Last implementation commit: `e5333fa7ef853bab2018648d273ffb6ecee7b695`
-Finalization commit: `ad5aebf2ae4b1abede0962f83f8c221becf0aced`
+Finalization commit: `cef35935e0017fe91fe7993347bdd6f76c6260cc`
 
 ### Cadence
 - Immediate first hit on first Ready of each Attack serial (`bHasAttemptedFirstHit`)

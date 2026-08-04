@@ -19,7 +19,8 @@ Commits on branch ahead of main:
 2. `9c31e79` Fix GP-S25B invalid stats and unreachable approach loop
 3. `e5333fa` Fix GP-S25B ready range exit hysteresis
 4. `865408a` Record GP-S25B hysteresis fix commit SHA in work report
-5. (this) Finalize GP-S25B attack cadence integration
+5. `cef3593` Finalize GP-S25B attack cadence integration
+6. (this) Correct finalization commit SHA in docs
 
 ## Final Status
 **GP-S25B_FINALIZED_READY_FOR_MERGE** — operator-validated; ready to merge into main when requested.  
@@ -79,7 +80,7 @@ Documentation only:
 - `Docs/Development/Cursor_Work_Report.md`
 
 ## Final Commit SHA
-ad5aebf2ae4b1abede0962f83f8c221becf0aced
+cef35935e0017fe91fe7993347bdd6f76c6260cc
 
 ## Git State
 - Branch: `feature/gp-s25b-attack-cadence-integration`

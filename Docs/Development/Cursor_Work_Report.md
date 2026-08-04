@@ -60,7 +60,7 @@ Documentation only:
 - C++ diff: none
 
 ## Commit SHA
-COMMIT_SHA_PLACEHOLDER
+d5e8b13fec5f4f21e7ed8ed7e8a51b1d73a83a5d
 
 ## Git State
 - Push to `feature/gp-s26-combat-presentation-analysis`

@@ -504,7 +504,7 @@ Status: **GP-S26A_FINALIZED_READY_FOR_MERGE** (operator-validated)
 Branch: `feature/gp-s26a-combat-presentation-events`  
 Base: `main` @ `3cb1e8055778c1ba4c67fa0546bb7ef96398a3d7`  
 Implementation commit: `85f833415b92a5eeb89f5601c01d9498fb1c4dbe`  
-Finalization commit: `FINALIZATION_SHA_PLACEHOLDER`
+Finalization commit: `fc48dc16516dfcb68b14c7ecd1c3bda6479f9b39`
 
 ### Shipped
 - Replicated `UGP_CombatPresentationComponent` default subobject on `AGP_UnitBase`

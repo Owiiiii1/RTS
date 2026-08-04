@@ -1,10 +1,13 @@
 # Cursor Work Report
 
 ## Task
-GP-S27A2 — Editor Generator Foundation (NavMeshBounds brush correction)
+GP-S27A2 — Editor Generator Foundation (finalization)
 
 ## Status
-GP-S27A2_CODE_AND_BASE_MAP_READY_OPERATOR_VALIDATION_PENDING
+GP-S27A2_FINALIZED_READY_FOR_MERGE
+
+## Overall
+GP-S27A2_DONE_EDITOR_GENERATOR_FOUNDATION
 
 ## Branch
 feature/gp-s27a2-editor-generator-foundation
@@ -15,91 +18,99 @@ main @ 326c881ae0578973b79b92de2043976bfbcd6121
 ## Implementation commit
 7508fc8eca2acc7f277fe3d9ed7965db15df5711
 
-## Correction commit SHA
+## Correction commit
 bf98e85a69971767cf44b990ac54701d3da46d1e
 
-## Operator blocker
-- NAVMESH NEEDS TO BE REBUILT / Unable to find RecastNavMesh
-- `UNavigationSystemV1::Build` locked
-- MapCheck: NavMeshBoundsVolume collision component with 0 radius
-- Navigation dirty area empty bounds
-- Build Paths produced no green navmesh
+## Editor module architecture
+- Separate Editor module `GPEditor` (`GP/Source/GPEditor/`)
+- Registered in `GP.uproject` (`Type: Editor`) and `GPEditor.Target.cs`
+- **Not** in `GP.Target.cs`
+- Generator treated as **service tooling**, not mandatory future workflow
 
-## Root cause
-Defective brush creation:
+## Commands / menu / commandlet
+| Entry | Role |
+| --- | --- |
+| `gp.Editor.GeneratePrototypeArena` | One-shot generate; abort-if-exists |
+| `gp.Editor.InspectPrototypeArena` | Read-only inspect |
+| Tools → Grim Protocol → Generate Prototype Arena | Same Generate service |
+| `-run=GPPrototypeArenaGenerate` | Automation (+ `-InspectOnly`) |
 
-```
-NewObject<UCubeBuilder>()
-NavBounds->BrushBuilder = CubeBuilder
-CubeBuilder->Build(World, NavBounds)
-```
+## Map architecture
+- Path: `/Game/GrimProtocol/Maps/L_PrototypeArena`
+- Compact **non–World-Partition** `.umap` (LFS)
+- Infrastructure: Floor, 4 Walls, DirectionalLight, SkyLight, SkyAtmosphere, PlayerStart, NavMeshBounds
+- World GameMode override: `GP_GameMode`
+- No units / ResourceNodes / combat pairs
+- Global GameDefaultMap unchanged
 
-`UEditorBrushBuilder::EndBrush` returns early when `ABrush::Brush` (UModel) is null, so geometry never materializes. Engine placement initializes UModel/Polys via `UActorFactory::CreateBrushForVolumeActor` before Build + `FBSPOps::csgPrepMovingBrush`.
+## NavMesh root cause and correction
+- **Cause:** `CubeBuilder::Build` without initialized `UModel` → empty brush (SphereRadius=0)
+- **Fix:** `UActorFactory::CreateBrushForVolumeActor` + pre-save bounds validation + lock unlock / nav build path
+- Defective umap deleted and regenerated on the feature branch
 
-## Correct API / path
-1. Spawn `ANavMeshBoundsVolume`
-2. `UCubeBuilder` X/Y/Z = 4500/4500/500
-3. `UActorFactory::CreateBrushForVolumeActor(NavBounds, CubeBuilder)`
-4. Validate BrushComponent bounds (SphereRadius>0, extents > 100)
-5. `OnNavigationBoundsUpdated`
-6. Remove `AsyncLoadLock` + `InitialLock`
-7. Commandlet: `NavSys->Build()` (avoid `FEditorBuildUtils::EditorBuild` crash without LevelEditor UI)
-8. Interactive Editor: `FEditorBuildUtils::EditorBuild(..., BuildAIPaths)`
-9. Pre-save validation; refuse Save on empty bounds
-10. After Save/Load: recount Recast/NavData; `MAP CHECK`
+## Final nav bounds values
+- Location `(0,0,100)`
+- Brush extent ≈ **(2250, 2250, 250)**
+- SphereRadius ≈ **3191.8** (> 0)
+- RecastNavMesh present; green nav with **P** (operator PASS)
 
-## Exact nav bounds (validated)
-- Location: (0, 0, 100)
-- Label: `GP_Arena_NavMeshBounds`
-- Tag: `GP.GeneratedPrototypeArena`
-- Origin: (0, 0, 100)
-- Extent: **(2250, 2250, 250)**
-- SphereRadius: **≈3191.8**
+## Operator validation matrix
 
-## Pre-save validation
-Required: BrushComponent, Brush UModel, SphereRadius > 1, BoxExtent XYZ > 100. FailureStage=`Navigation`; map not saved.
+| Item | Result |
+| --- | --- |
+| Map opens | PASS |
+| Floor / walls / lighting / PlayerStart | PASS |
+| GameMode override / World Partition off | PASS |
+| Valid NavMeshBounds | PASS |
+| Green nav with P / Recast present | PASS |
+| PIE without nav rebuild warning | PASS |
+| No runtime duplicates | PASS |
+| Generate abort-if-exists | PASS |
+| Inspect expected counts | PASS |
+| No gameplay population | PASS |
+| Listen+client after correction | Not re-run (nav-brush-only fix; not required) |
 
-## Map Check result
-**0 Error(s), 0 Warning(s)** on regenerated `L_PrototypeArena` (no zero-radius NavMeshBounds warning).
+## Final build results
 
-## Recast / NavData result
-After save/reload: **RecastNavMeshCount=1**, **NavDataCount=2**, `NavigationBuildSucceeded=true` in manifest.
+| Target | Result |
+| --- | --- |
+| GPEditor Win64 Development + UHT | **PASSED** at `bf98e85…` (not re-run; C++ unchanged) |
+| GP Win64 Development | **PASSED** |
+| GP Win64 Shipping | **PASSED** |
 
-## P / green-nav result
-Not visually verified in this automation session. Recast actor present + MapCheck clean; operator should press **P** to confirm green area.
+Exit codes 0; no compile/link errors.
 
-## Generation result
-SUCCESS after deleting defective umap and regenerating (10 actors; bounds valid).
+## Dependency boundary
+- `GP.Target.cs` modules: GP, GPGASRuntime, GPRuntime, GPUIRuntime only — **no GPEditor**
+- GP Development / Shipping do not link GPEditor
+- Editor-only types stay out of packaged graph
+- `GPRuntime.Build.cs` has **no** UnrealEd / LevelEditor / ToolMenus
 
-## Inspect result
-```
-Exists=true Loaded=true WorldPartition=false
-NavMeshBounds=1 NavBoundsValid=true
-NavBoundsExtent=(2250.0,2250.0,250.0) NavBoundsSphereRadius=3191.8
-RecastNavMeshCount=1 NavDataCount=2
-DuplicateLabels=0 UnexpectedGeneratedActors=0
-ReadyForPopulation=true
-```
-
-## Second-run abort result
-PASS — `ExistingMapAbort=true`, no overwrite.
-
-## Build result
-GPEditor Win64 Development — **PASSED** (headers changed; UHT OK)
-
-## Files changed (correction)
-- `GP/Source/GPEditor/Public/PrototypeArena/GPPrototypeArenaGenerator.h`
-- `GP/Source/GPEditor/Private/PrototypeArena/GPPrototypeArenaGenerator.cpp`
-- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap` (regenerated, LFS)
-- `Docs/Development/Generated/GP_PrototypeArena_Layout.md`
-- `Docs/Development/Claude_Tasks/GP-S27A2_Editor_Generator_Foundation.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
+## LFS / map state
+- `L_PrototypeArena.umap` tracked via Git LFS (`filter=lfs`)
+- No ExternalActors / World Partition content / unintended BuiltData
+- No duplicate/temp maps
+- Binaries / Saved / Intermediate / DerivedDataCache gitignored (not tracked)
 
 ## Known limitations
-- Commandlet cannot use `FEditorBuildUtils::EditorBuild` (crash); uses `NavSys->Build` + post-load Recast presence
-- Visual P/green-nav confirmation remains operator step
-- No gameplay population; abort-if-exists only (no rebuild command)
+- Map empty — gameplay actors placed manually later
+- Visual profiles remain native C++; editable DataAsset profiles = separate stage
+- Generator not for automatic population; no rebuild command
+
+## Files changed during finalization
+- `Docs/Development/Claude_Tasks/GP-S27A2_Editor_Generator_Foundation.md`
+- `Docs/Development/Generated/GP_PrototypeArena_Layout.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
+- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap` (operator-validated save included if dirty)
+
+C++: **unchanged** at finalization.
+
+## Final commit SHA
+(pending)
 
 ## Git state
-Feature branch only; no main/PR/merge; S27A3 not started.
+Feature branch only; no main change; no PR; no merge; no S27A3; no editable visual profiles started.
+
+## Ready-for-merge conclusion
+GP-S27A2 is **FINALIZED_READY_FOR_MERGE**. Editor module + infrastructure map + valid nav accepted. Game Dev + Shipping builds passed. Ready for main merge when requested.

@@ -1,16 +1,20 @@
 # GP Prototype Arena Layout Manifest
 
+Status: **GP-S27A2_FINALIZED_READY_FOR_MERGE** (infrastructure SoT; generator is service tooling)
+
 - GeneratorVersion: 1
 - MapPath: `/Game/GrimProtocol/Maps/L_PrototypeArena`
 - MapType: non-World-Partition compact umap
 - FloorDimensions: 4000 x 4000 uu (Engine Cube scale 40x40x1)
-- NavPolicy: UActorFactory::CreateBrushForVolumeActor + CubeBuilder 4500x4500x500; EditorBuild AIPaths; pre-save bounds validation
-- GameplayPopulation: none (GP-S27A2 infrastructure only)
-- ExistingMapAbort: false
+- NavPolicy: UActorFactory::CreateBrushForVolumeActor + CubeBuilder 4500x4500x500; pre-save bounds validation; Recast present; operator P/green-nav PASS
+- GameplayPopulation: none (GP-S27A2 infrastructure only; manual placement later)
+- ExistingMapAbort: false (initial create); subsequent Generate abort-if-exists PASS
 - RecastNavMeshCount: 1
 - NavDataCount: 2
 - NavigationBuildSucceeded: true
 - GenerationTimestampUTC: 2026-08-04T15:40:19.859Z
+- ImplementationCommit: `7508fc8eca2acc7f277fe3d9ed7965db15df5711`
+- CorrectionCommit: `bf98e85a69971767cf44b990ac54701d3da46d1e`
 - SourceCommit: `bf98e85a69971767cf44b990ac54701d3da46d1e`
 
 | Label | Class | Location | Rotation | Scale | Tag | Extra |

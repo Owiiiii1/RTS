@@ -1,7 +1,9 @@
 # GP-S27A2 Editor Generator Foundation
 
 ## Status
-**GP-S27A2_CODE_AND_BASE_MAP_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S27A2_FINALIZED_READY_FOR_MERGE**
+
+Overall: **GP-S27A2_DONE_EDITOR_GENERATOR_FOUNDATION**
 
 ## Baseline
 `main` @ `326c881ae0578973b79b92de2043976bfbcd6121`
@@ -15,43 +17,65 @@ Implementation: `7508fc8eca2acc7f277fe3d9ed7965db15df5711`
 Nav bounds correction: `bf98e85a69971767cf44b990ac54701d3da46d1e`
 
 ## Goal
-Editor-only module + one-shot tool that creates and saves infrastructure-only persistent map `/Game/GrimProtocol/Maps/L_PrototypeArena`. No gameplay population. No S27A3.
-
-## Operator blocker (fixed)
-Initial generator used `CubeBuilder::Build` without `UActorFactory::CreateBrushForVolumeActor`, leaving empty brush geometry (SphereRadius=0, MapCheck collision 0 radius, no Recast).
-
-### Correction
-- Use `UActorFactory::CreateBrushForVolumeActor` + `UCubeBuilder` 4500×4500×500
-- Pre-save validation: BrushComponent, non-zero SphereRadius, positive BoxExtent
-- Unlock `AsyncLoadLock` + `InitialLock`; commandlet uses `NavSys->Build()` (full Editor uses `FEditorBuildUtils::EditorBuild`)
-- Map Check after save/load: **0 Error(s), 0 Warning(s)**
-- Inspect: `NavBoundsValid=true`, Extent≈(2250,2250,250), `RecastNavMeshCount=1`, `ReadyForPopulation=true`
+Editor-only module + one-shot tool that creates and saves infrastructure-only persistent map `/Game/GrimProtocol/Maps/L_PrototypeArena`. No gameplay population.
 
 ## Shipped
 
 ### Editor module `GPEditor`
 - Type: Editor (`.uproject` + `GPEditor.Target.cs`)
-- Absent from `GP` Game target / packaged Shipping graph
+- **Absent** from `GP.Target.cs` / Game Development / Shipping link graph
+- No UnrealEd / LevelEditor / ToolMenus deps in `GPRuntime`
+- Generator is **service tooling**, not a mandatory future population workflow
 
-### Commands / menu
-- `gp.Editor.GeneratePrototypeArena` / `gp.Editor.InspectPrototypeArena`
-- Tools → Grim Protocol → Generate Prototype Arena
+### Commands / menu / automation
+- Console: `gp.Editor.GeneratePrototypeArena`
+- Console: `gp.Editor.InspectPrototypeArena`
+- Menu: Tools → Grim Protocol → Generate Prototype Arena
 - Service: `FGPPrototypeArenaGenerator`
 - Commandlet: `-run=GPPrototypeArenaGenerate` (`-InspectOnly`)
+- Policy: **one-shot abort-if-exists** (no rebuild / force overwrite)
 
-### Map / nav
-- Non–World-Partition `L_PrototypeArena.umap` (LFS)
-- Valid `GP_Arena_NavMeshBounds` brush; Recast present after generation/reload
-- Abort-if-exists unchanged
+### Map
+- `/Game/GrimProtocol/Maps/L_PrototypeArena` — compact non–World-Partition
+- WorldSettings GameMode override: `AGP_GameMode` / `GP_GameMode`
+- Global `GameDefaultMap` / `DefaultGameMode` unchanged
+- Infrastructure only (floor, 4 walls, lights, SkyAtmosphere, PlayerStart, NavMeshBounds)
+- Tag: `GP.GeneratedPrototypeArena`
 
-## Intentionally not done
-Units, ResourceNodes, combat pairs, runtime generator, rebuild user command, Blueprint/DataAsset/materials, default map switch, S27A3.
+### Navigation
+- Valid brush via `UActorFactory::CreateBrushForVolumeActor` + CubeBuilder 4500×4500×500
+- Pre-save bounds validation (non-zero SphereRadius / extents)
+- Recast/NavData present; operator **P** green nav **PASS**
+- PIE without `NAVMESH NEEDS TO BE REBUILT` **PASS**
 
-## Build / generation (candidate + correction)
-- GPEditor Win64 Development — **PASSED**
-- Defective umap deleted and regenerated in branch
-- Second generate — ExistingMapAbort
-- GP Dev/Shipping — deferred to finalization
+## Operator validation (accepted)
 
-## Operator validation
-See `Docs/Development/Cursor_Work_Report.md` (recheck P / green nav).
+| Check | Result |
+| --- | --- |
+| Map opens / non-WP | PASS |
+| Floor / walls / lighting / PlayerStart | PASS |
+| GameMode override | PASS |
+| Valid NavMeshBounds + extents | PASS |
+| MapCheck no zero-radius warning | PASS |
+| Recast + green nav (P) | PASS |
+| PIE no nav rebuild warning | PASS |
+| No runtime duplicates / no units / no ore | PASS |
+| Generate abort-if-exists | PASS |
+| Inspect expected counts | PASS |
+
+Listen+client after correction: not re-run; correction was nav brush only; dedicated MP recheck not required for this finalization.
+
+## Known limitations
+- Map empty of gameplay actors — manual placement next
+- Visual profiles still native C++; editable DataAsset profiles = separate stage
+- Generator not used for automatic population; no rebuild command
+
+## Build
+
+| Target | Result | Notes |
+| --- | --- | --- |
+| GPEditor Win64 Development + UHT | **PASSED** | At correction `bf98e85…` (not re-run; C++ frozen) |
+| GP Win64 Development | **PASSED** | Finalization |
+| GP Win64 Shipping | **PASSED** | Finalization |
+
+No known blockers. Ready for main merge when requested.

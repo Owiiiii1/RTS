@@ -79,7 +79,7 @@ Attempted runtime DMI + common vector params (`BaseColor`/`Color`/…). Engine B
 - No DataAsset / Blueprint / level
 
 ## Commit SHA
-COMMIT_SHA_PLACEHOLDER
+7212604d4cdae4a8310fa8e8db8d7811b36f9452
 
 ## Git State
 - Push to `feature/gp-s26b1-primitive-visual-foundation`

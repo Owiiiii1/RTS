@@ -64,7 +64,7 @@ Documentation only:
 - Assets diff: **none**
 
 ## Commit SHA
-COMMIT_SHA_PLACEHOLDER
+09b97157aa64531755801db03b05ffddeb5334fc
 
 ## Git State
 - Push to `feature/gp-s26b-combat-assets-analysis`

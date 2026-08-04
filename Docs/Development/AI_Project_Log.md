@@ -1,5 +1,36 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-04 — GP-S27A1 Resource Node Foundation
+
+Status: GP-S27A1_FINALIZED_READY_FOR_MERGE  
+Overall: GP-S27A1_DONE_RESOURCE_NODE_FOUNDATION
+
+### Branch / baseline
+- Branch: `feature/gp-s27a1-resource-node-foundation`
+- Base: `main` @ `74c058914a6349b3a9d0f83161023ff54b742be7`
+- Source: `Docs/Development/Claude_Tasks/GP-S27A_Prototype_Arena_Analysis.md`
+- Implementation: `e2bf9ea86c7e49e1a4b841577d9b737fbf05a778`
+- Visual correction: `51a310acfd2200d2bedd0b2a03221274d09f73d0`
+
+### What was done
+- `EGP_ResourceType` (`None`, `Ore`); `AGP_ResourceNode` (AActor; replicated ResourceType/Max/Current; authority `ConsumeResource`)
+- `UBoxComponent` BlockAll root + nav relevance; `UGP_ResourceNodeVisualComponent`; shared primitive mesh/builder
+- 5-part Ore composition; dedicated visual suppression; no permanent tick; no team ownership; no unit inheritance
+- Non-shipping Inspect/Consume; no map/editor generator; no gather/economy
+- Operator functional + network + visual readability — **PASS**
+- Finalization builds: GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
+- GPEditor Win64 Development **PASSED** at correction `51a310a` (not re-run; C++ frozen)
+- Finalization commit: `8c64c7868dc7e20cc2ddba431eb38ec45e83b3a1`
+
+### Intentionally not done
+- No map / umap, editor module, generator, Blueprint, DataAsset, gather/harvest, command changes, S27A2
+- No PR / merge to main (ready when requested)
+
+### Operator next
+- None for S27A1; merge when requested; S27A2 separate
+
+---
+
 ## 2026-08-01 — SETUP-001 / Clean baseline project check
 
 Status: DONE

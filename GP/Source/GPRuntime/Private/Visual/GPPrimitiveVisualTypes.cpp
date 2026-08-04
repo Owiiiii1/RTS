@@ -44,6 +44,64 @@ namespace GPPrimitiveVisualDefaults
 		return Definition;
 	}
 
+	FGP_PrimitiveVisualDefinition MakeOreNodeDefinition()
+	{
+		FGP_PrimitiveVisualDefinition Definition;
+		Definition.Archetype = EGP_VisualArchetype::InfantryMelee; // unused for resource nodes
+
+		// Accents/Core parent to Base: keep Base scale uniform so Cone +Z tips are not
+		// squashed into discs and tilted accents are not sheared. Sink Base so only a
+		// low pedestal reads above ground; crystals dominate the RTS silhouette.
+		// Engine Cone axis = +Z (tip up). Pitch leans tip toward +X; Roll toward +Y.
+
+		FGP_PrimitiveVisualPart Base;
+		Base.PartName = TEXT("Base");
+		Base.Shape = EGP_PrimitiveShape::Cylinder;
+		Base.RelativeLocation = FVector(0.0f, 0.0f, -40.0f);
+		Base.RelativeScale = FVector(0.56f, 0.56f, 0.56f);
+		Base.bPresentationRoot = true;
+		Base.bBody = true;
+		Definition.Parts.Add(Base);
+
+		FGP_PrimitiveVisualPart Core;
+		Core.PartName = TEXT("Core");
+		Core.Shape = EGP_PrimitiveShape::Cone;
+		Core.ParentPartName = TEXT("Base");
+		Core.RelativeLocation = FVector(0.0f, 0.0f, 98.0f);
+		Core.RelativeRotation = FRotator(0.0f, 0.0f, 0.0f);
+		Core.RelativeScale = FVector(0.52f, 0.52f, 3.85f);
+		Definition.Parts.Add(Core);
+
+		FGP_PrimitiveVisualPart AccentA;
+		AccentA.PartName = TEXT("AccentA");
+		AccentA.Shape = EGP_PrimitiveShape::Cone;
+		AccentA.ParentPartName = TEXT("Base");
+		AccentA.RelativeLocation = FVector(52.0f, 8.0f, 82.0f);
+		AccentA.RelativeRotation = FRotator(28.0f, 0.0f, 0.0f); // lean +X
+		AccentA.RelativeScale = FVector(0.36f, 0.36f, 2.75f);
+		Definition.Parts.Add(AccentA);
+
+		FGP_PrimitiveVisualPart AccentB;
+		AccentB.PartName = TEXT("AccentB");
+		AccentB.Shape = EGP_PrimitiveShape::Cone;
+		AccentB.ParentPartName = TEXT("Base");
+		AccentB.RelativeLocation = FVector(-10.0f, -54.0f, 76.0f);
+		AccentB.RelativeRotation = FRotator(0.0f, 0.0f, -30.0f); // lean -Y
+		AccentB.RelativeScale = FVector(0.32f, 0.32f, 2.45f);
+		Definition.Parts.Add(AccentB);
+
+		FGP_PrimitiveVisualPart AccentC;
+		AccentC.PartName = TEXT("AccentC");
+		AccentC.Shape = EGP_PrimitiveShape::Cone;
+		AccentC.ParentPartName = TEXT("Base");
+		AccentC.RelativeLocation = FVector(-46.0f, 40.0f, 68.0f);
+		AccentC.RelativeRotation = FRotator(-18.0f, 12.0f, 24.0f); // lean +Y / -X
+		AccentC.RelativeScale = FVector(0.28f, 0.28f, 1.95f);
+		Definition.Parts.Add(AccentC);
+
+		return Definition;
+	}
+
 	FGP_PrimitiveVisualDefinition MakeDefinitionForArchetype(EGP_VisualArchetype Archetype)
 	{
 		switch (Archetype)

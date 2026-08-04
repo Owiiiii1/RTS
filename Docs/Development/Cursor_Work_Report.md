@@ -1,87 +1,111 @@
 # Cursor Work Report
 
 ## Task
-GP-S27A Persistent Prototype Arena + One-Shot Editor Generator + Ore Node — analysis
+GP-S27A1 — Resource Node Foundation (finalization)
 
 ## Status
-GP-S27A_ANALYSIS_READY_FOR_REVIEW
+GP-S27A1_FINALIZED_READY_FOR_MERGE
+
+Overall: **GP-S27A1_DONE_RESOURCE_NODE_FOUNDATION**
 
 ## Branch
-feature/gp-s27a-prototype-arena-analysis
+feature/gp-s27a1-resource-node-foundation
 
 ## Base
-main @ 805756d12477b23bf7794f674e534fafba8ce360
+main @ 74c058914a6349b3a9d0f83161023ff54b742be7
 
-## Current Map / Editor State
-- No project `.umap`; Content = Enhanced Input only
-- `GameDefaultMap` = Engine OpenWorld template
-- GameMode `AGP_GameMode` / CameraPawn / PC configured
-- **No Editor module** (only `GPEditor` Target loading Runtime modules)
-- No NavMesh/Recast usage in project C++; no ResourceNode actor
-- Units: placeable `AGP_Unit`; no tracked level population
-- Git LFS already tracks `*.umap` / `*.uasset`
-- Python editor plugin: not enabled
+## Implementation commit
+e2bf9ea86c7e49e1a4b841577d9b737fbf05a778
 
-## Chosen Map Strategy
-**A — new compact non–World-Partition** `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`  
-Rejected: WP arena, Engine OpenWorld ownership, Data Layer complexity for MVP.
+## Visual correction commit
+51a310acfd2200d2bedd0b2a03221274d09f73d0
 
-## Chosen Editor Generator Strategy
-**Primary:** Editor-module console command + menu (`gp.Editor.GeneratePrototypeArena`) via subsystem.  
-**Fallback:** `CallInEditor` actor calling same code.  
-Never PIE; abort if map exists; explicit rebuild command separate.
+## ResourceNode architecture
+- `EGP_ResourceType`: `None`, `Ore`
+- `AGP_ResourceNode : AActor` — replicated, always relevant, no permanent tick, no movement, no GAS, no combat
+- Not derived from `AGP_Unit` / `AGP_UnitBase` / Pawn / Character
+- No team ownership
+- Cosmetic: `UGP_ResourceNodeVisualComponent` (local build; parts not replicated)
+- No gather / economy / map / editor generator in this slice
 
-## Editor Module Decision
-Add **`GPEditor`** Editor-type module (Build.cs, IMPLEMENT_MODULE, generator, menus); register in `.uproject` + `GPEditor.Target.cs`. Not in Game target → absent from packaged game.
+## Replication policy
+- `ResourceType`, `MaxAmount`: map-authored replicated configuration
+- `CurrentAmount`: mutable replicated state (`OnRep_CurrentAmount`)
+- `bReplicates = true`, `bAlwaysRelevant = true`
+- Initial + late join via actor replication
+- No NetMulticast
 
-## Resource Node Architecture
-`AGP_ResourceNode : AActor` (replicated): Ore type, Max/Current amount; root gameplay collision; primitive visuals via shared/thin visual component — **not** a unit subclass. Gather/deplete out of scope. Selection optional/deferred if still unit-only.
+## ConsumeResource contract
+- Authority only
+- `RequestedAmount <= 0` → no-op (0)
+- Returns actual consumed; clamps to remainder / `[0, MaxAmount]`
+- Depletion (`CurrentAmount=0`, `Depleted=true`) does **not** destroy actor or change visuals
+- No gather loop / workers / cooldown events beyond state + RepNotify
 
-## Ore Visual Proposal
-Base Cylinder + Core Cone + 3–4 accent Cones (≤6 parts); visual NoCollision; no material/anim; RTS-readable crystal pile.
+## Collision / navigation policy
+- Root `UBoxComponent` (~120×120×80 pile), profile **`BlockAll`**
+- `QueryAndPhysics`, `GenerateOverlapEvents=false`, `CanEverAffectNavigation=true`
+- Visual parts: `NoCollision`, no nav relevance
+- Not treated as unit/pawn object type
 
-## Exact Arena Layout Proposal
-4000×4000 floor; Team1 (−1400) / Team2 (+1400); melee/blocked/kill/OOR test pairs (OOR ~450 given range 250); 5 ore; 6–8 obstacles; lights; PlayerStart; NavMeshBounds; ~40–50 actors; tag `GP.GeneratedPrototypeArena`; deterministic labels.
+## Primitive visual architecture
+- Option B: thin `UGP_ResourceNodeVisualComponent`
+- Shared `GPPrimitiveVisualMesh` + `GPPrimitiveVisualBuilder`
+- Reuses `EGP_PrimitiveShape` / `FGP_PrimitiveVisualPart` / `FGP_PrimitiveVisualDefinition`
+- Dedicated: no render parts (`DedicatedVisualSuppressed`)
+- Listen: single local composition; no team tint
 
-## Navigation Strategy
-Introduce Recast + bounds; editor build after generate; save with map; ore/obstacles block nav; no runtime regen for MVP.
+## Ore composition
+5 parts: **Base** (Cylinder, PresentationRoot) + **Core** (Cone) + **AccentA/B/C** (Cone).  
+Post-correction: sunk uniform Base; tall dominant Core; elongated accents leaning +X / -Y / +Y−X; Cone +Z tip up.
 
-## Multiplayer Implications
-Persistent map only; server-authoritative units/ore; no runtime duplicate generation; editor code not in game build.
+## Operator validation matrix
 
-## Idempotency / Rebuild Policy
-Default **abort if exists**; explicit rebuild command; generated-actor tag; companion layout manifest.
+### Functional — PASS
+Host/client visibility; initial 5000; Consume 100→4900; client 4900; zero/negative no-op; over-consume clamp; final 0 + Depleted; actor+visual remain; not selected as unit; collision/nav/visual inspect; visual NoCollision; no idle tick.
 
-## Binary Map / Git Policy
-LFS `.umap` (already configured); non-reviewable binary diff; companion `.layout.md`/`.json` with version/seed/actor table; deterministic generator.
+### Network — PASS
+Listen Authority / remote SimulatedProxy; ResourceType/Max/Current match; Replicates; AlwaysRelevant; no duplicate visuals.
 
-## Implementation Slices
-- **S27A1** ResourceNode foundation (no map)
-- **S27A2** Editor module + empty arena save
-- **S27A3** Populate units/ore/tests + nav + validation
+### Visual readability — PASS
+After correction, object reads more like ore (crystal pile) from RTS camera.
 
-## Validation Matrix
-See analysis §14 (node / generator / arena).
+## Visual correction result
+- Cause: non-uniform Base scale Z squashed child Cones into discs/blobs
+- Fix: uniform sunk Base + taller Core/accents with outward leans
+- Operator recheck: **PASS**
 
-## Rejected Options
-Runtime/PIE generation; WP-first; OpenWorld as owned map; Ore-as-Unit; Python-first; silent overwrite.
+## Final build results
 
-## API Gaps Noted
-Per-instance combat stats need EditInstanceOnly overrides or editor helpers (Defaults are EditDefaultsOnly today). Harvest command currently expects `AGP_UnitBase` + resource tag — align when gather lands.
+| Target | Result |
+| --- | --- |
+| GPEditor Win64 Development | **PASSED** at `51a310acfd2200d2bedd0b2a03221274d09f73d0` (not re-run; C++ unchanged) |
+| GP Win64 Development | **PASSED** (finalization) |
+| GP Win64 Shipping | **PASSED** (finalization) |
 
-## Files Changed
-- `Docs/Development/Claude_Tasks/GP-S27A_Prototype_Arena_Analysis.md` (new)
+Exit codes 0; no compile/link errors.
+
+## Known limitations
+- Harvest still expects `AGP_UnitBase` + `GP.Resource.Node` — not wired
+- No selection UI / Move / Attack for nodes
+- No map, navmesh content, gather, economy, depletion cosmetics
+- Dedicated runtime not operator-executed (code policy confirmed)
+- Engine BasicShapes may look uniform gray
+
+## Files changed during finalization
+- `Docs/Development/Claude_Tasks/GP-S27A1_Resource_Node_Foundation.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Diff Status
-- C++ diff: **none**
-- Assets / umap diff: **none**
-- Build: **not required**
+C++: **unchanged** at finalization.
 
-## Commit SHA
-2aba0137e6c198375861dd5ef8c08d1226701947
+## Final commit SHA
+8c64c7868dc7e20cc2ddba431eb38ec45e83b3a1
 
-## Git State
-- Push to `feature/gp-s27a-prototype-arena-analysis`
-- No merge to main; no PR; no implementation; no `.umap` created
+## Git state
+- Feature branch only; no main change; no PR; no merge
+- No binaries / Saved / Intermediate / DerivedDataCache tracked
+- No `.umap`; no new Blueprint/assets; no editor module; S27A2 not started; no gather/economy changes
+
+## Ready-for-merge conclusion
+GP-S27A1 is **FINALIZED_READY_FOR_MERGE**. Operator functional, network, and visual readability validation accepted. Game Dev + Shipping builds passed. Ready for main merge when requested.

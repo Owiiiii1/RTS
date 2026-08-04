@@ -16,7 +16,7 @@ main @ 326c881ae0578973b79b92de2043976bfbcd6121
 7508fc8eca2acc7f277fe3d9ed7965db15df5711
 
 ## Correction commit SHA
-(pending)
+bf98e85a69971767cf44b990ac54701d3da46d1e
 
 ## Operator blocker
 - NAVMESH NEEDS TO BE REBUILT / Unable to find RecastNavMesh

@@ -12,7 +12,7 @@ Architecture sources:
 
 Branch: `feature/gp-s27a2-editor-generator-foundation`  
 Implementation: `7508fc8eca2acc7f277fe3d9ed7965db15df5711`  
-Nav bounds correction: (see Cursor report)
+Nav bounds correction: `bf98e85a69971767cf44b990ac54701d3da46d1e`
 
 ## Goal
 Editor-only module + one-shot tool that creates and saves infrastructure-only persistent map `/Game/GrimProtocol/Maps/L_PrototypeArena`. No gameplay population. No S27A3.

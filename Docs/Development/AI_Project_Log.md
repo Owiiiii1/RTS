@@ -15,6 +15,7 @@ Status: GP-S27A2_CODE_AND_BASE_MAP_READY_OPERATOR_VALIDATION_PENDING
 - Console/menu + commandlet; Inspect; abort-if-exists
 - Infrastructure-only umap; layout manifest; LFS `.umap`
 - **Nav bounds correction:** switch to `UActorFactory::CreateBrushForVolumeActor`; pre-save bounds validation; unlock AsyncLoadLock; MapCheck 0/0; Recast=1 after reload; defective umap regenerated
+- Correction commit: `bf98e85a69971767cf44b990ac54701d3da46d1e`
 
 ### Intentionally not done
 - No units/ore/combat population; no S27A3; no GameDefaultMap change; no GP Dev/Shipping yet

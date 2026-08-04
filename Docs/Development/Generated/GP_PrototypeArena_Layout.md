@@ -11,7 +11,7 @@
 - NavDataCount: 2
 - NavigationBuildSucceeded: true
 - GenerationTimestampUTC: 2026-08-04T15:40:19.859Z
-- SourceCommit: (filled by documentation commit)
+- SourceCommit: `bf98e85a69971767cf44b990ac54701d3da46d1e`
 
 | Label | Class | Location | Rotation | Scale | Tag | Extra |
 | --- | --- | --- | --- | --- | --- | --- |

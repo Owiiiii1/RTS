@@ -1,71 +1,87 @@
 # Cursor Work Report
 
 ## Task
-GP-S26A Combat Presentation Events finalization
+GP-S26B Primitive Visual MVP Architecture — analysis revision
 
 ## Status
-GP-S26A_FINALIZED_READY_FOR_MERGE
-
-Overall GP-S26: **GP-S26A_DONE_PRESENTATION_ASSETS_DEFERRED**
+GP-S26B_ANALYSIS_READY_FOR_REVIEW
 
 ## Branch
-feature/gp-s26a-combat-presentation-events
+feature/gp-s26b-combat-assets-analysis
 
 ## Base
-main @ 3cb1e8055778c1ba4c67fa0546bb7ef96398a3d7
+main @ 80251125bbf03566edb4ec902f8770ee900d9bde
 
-## Implementation Commit
-85f833415b92a5eeb89f5601c01d9498fb1c4dbe
+## Prior Analysis Commit
+09b97157aa64531755801db03b05ffddeb5334fc (combat-assets wait direction — superseded)
 
-## Architecture
-- Replicated `UGP_CombatPresentationComponent` default subobject on `AGP_UnitBase`
-- Authority-only emit after successful `ApplyDamageFromUnit` (incl. blocked)
-- Transport: Unreliable NetMulticast `Multicast_CombatPresentationEvent`
-- Payload: PresentationSequence, AttackSerial, Target, EventType (`MeleeImpact`), AuthoritativeWorldTime (`float`), AppliedDamage, bBlocked, bTargetDiedFromHit; Source = owner
-- Snapshot/reentrancy for sync TargetDied; serial-arithmetic Sequence dedupe (skip 0; first=1; payload-only)
-- Single receive Play path (listen host once; remote client once); dedicated early-out before debug draw
-- No LastPresentationEvent / late-join replay / asset dependency
-- No S25 cadence/damage/TargetDied semantic changes
+## Revised Product Direction
+Do **not** wait for authored art for MVP. Ship a playable, readable RTS using Engine primitives and composite primitive meshes, replaceable later without gameplay changes.
 
-## Operator Validation Matrix
+## Verified Empty Asset State
+- Content: 10 Enhanced Input packages only
+- No skeletal/anim/Niagara/sound/projectile/unit BP combat art
+- `AGP_Unit`: capsule + Engine Cylinder
+- S26A presentation channel live
 
-| Area | Result |
-| --- | --- |
-| Listen + remote: one Emit / one Accepted each; no host double-play; Sequence 1,2,3…; AttackSerial; cadence unchanged | **PASS** |
-| Blocked hit: AppliedDamage=0, Blocked=true, TargetDied=false; Health unchanged; cooldown continues; host+client event | **PASS** |
-| Killing / sync TargetDied: limited AppliedDamage; TargetDied=true; AttackFinished TargetDied; AttackEndedDuringApply; correct metadata; one event each; no further events | **PASS** |
-| Approaching/OOR: no event until Apply; FirstHitAttempted + NextHitTime preserved on re-entry; Attack→Move stops events | **PASS** |
-| Inspect client/host Role/NetMode/Sequence fields as expected | **PASS** |
+## Primitive MVP Goals
+Readable infantry/heavy/worker/tank/artillery/turret/monsters/buildings/resource node; bullet/shell/energy projectiles; normal/blocked/killing impacts; death/destruction; facing/team/selection/health — via architecture + phased slices.
 
-## Not-Run Cases
-| Case | Notes |
-| --- | --- |
-| Dedicated server runtime | **NOT RUN** this session; suppression confirmed by code review (`NM_DedicatedServer` early return before debug draw); not a blocker |
-| Late join / relevancy | **NOT RUN** this session; no replay by architecture (no LastEvent / persistent event state); expected S26A semantics; not a blocker |
+## Proposed Architecture
+`UGP_UnitVisualComponent` + `UGP_PrimitiveVisualProfile` (DataAsset + native defaults). Consumes S26A accepted events. Soft Engine shape paths. No gameplay hard refs. Capsule remains collision/selection authority.
 
-No known blockers.
+## Visual Part Schema
+`FGP_PrimitiveVisualPart`: name, shape enum, transforms, parent, flags (root/facing/weapon/turret/animated), team-color mode, NoCollision visuals.
 
-## Final Build Results
-- GPEditor Win64 Development + UHT — **PASSED** on implementation `85f833415b92a5eeb89f5601c01d9498fb1c4dbe` (not re-run; C++ frozen at finalization)
-- GP Win64 Development — **PASSED** (exit 0; linked `GP.exe`)
-- GP Win64 Shipping — **PASSED** (exit 0; linked `GP-Win64-Shipping.exe`)
-- No C++ changes during finalization
+## Archetype Catalog
+Infantry melee/ranged, heavy, worker, tank, artillery, turret, monsters (melee/ranged/boss), HQ/barracks/factory/defense/resource — parts, hierarchy, move/attack/death styles; only `AGP_Unit` is existing host today; others future actors.
 
-## Files Changed During Finalization
-Documentation only:
-- `Docs/Development/Claude_Tasks/GP-S26_Combat_Presentation.md`
+## Animation Model
+Local transform cosmetics via transient tick/timer + easing; styles for move/attack/hit/death; idle disables tick; death cancels attack; not replicated.
+
+## Projectile / Timing Decision
+B1/B2: melee + reactive Impact only (no travel projectile).  
+**GP-S26C:** AttackFired + Impact two-phase; cosmetic pooled projectile; damage stays authoritative.
+
+## Team Color Strategy
+C++ apply path + DMI/CPD if Engine materials allow; optional operator-created minimal project material; fallback without claiming complex `.uasset` authoring from C++.
+
+## Profile Assignment
+MVP: `EGP_VisualArchetype` (+ CDO defaults / optional soft DA). Combat code ignores visual archetype for damage/range.
+
+## Gameplay Boundaries
+Visual NoCollision; selection on capsule; visual scale ≠ range; cosmetic facing; no permanent tick; no replicated anim state; dedicated suppresses mesh/play.
+
+## Roadmap Slices
+- **B1** foundation (parts, infantry prototype, facing, team fallback)
+- **B2** combat cosmetics on S26A Impact
+- **B3** full archetype catalog
+- **S26C** two-phase ranged + projectiles
+
+## Scalability Analysis
+Part caps; shared team materials; tick-on-active-only; pooled projectiles; unreliable cosmetics; budgets for 100/500/1000 visible units.
+
+## Validation Matrix
+Foundation / combat / catalog / scale matrices documented in analysis §Validation.
+
+## Rejected Approaches
+Wait-for-art; skeletal-in-MVP; GameplayCue-primary; projectile damage; hard gameplay→mesh refs; permanent tick; replicated anim transforms; reliable cosmetic RPC.
+
+## Files Changed
+- `Docs/Development/Claude_Tasks/GP-S26B_Primitive_Visual_MVP_Architecture.md` (new; replaces `GP-S26B_Combat_Assets_Analysis.md`)
+- `Docs/Development/Claude_Tasks/GP-S26B_Combat_Assets_Analysis.md` (deleted)
+- `Docs/Development/Claude_Tasks/GP-S26_Combat_Presentation.md` (deferred refs updated)
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Final Commit SHA
-fc48dc16516dfcb68b14c7ecd1c3bda6479f9b39
+## Diff Status
+- C++ diff: **none**
+- Assets diff: **none**
+- Build: **not required**
+
+## Commit SHA
+11ae3cb69a877b612f989d0883409f7a30422683
 
 ## Git State
-- Branch ahead of main; behind: 0
-- Push to `feature/gp-s26a-combat-presentation-events`
-- Working tree clean after push; HEAD = origin
-- No binaries / Saved / Intermediate / DDC / Blueprint or presentation assets in commit
-- Scope limited to GP-S26A docs finalization
-
-## Ready-for-Merge Conclusion
-**GP-S26A_FINALIZED_READY_FOR_MERGE** — ready to merge into main when requested. Do not merge in this close-out. Presentation assets remain deferred under **GP-S26A_DONE_PRESENTATION_ASSETS_DEFERRED**.
+- Push to `feature/gp-s26b-combat-assets-analysis`
+- No merge to main; no PR; no implementation; no asset creation

@@ -4,7 +4,7 @@
 **GP-S26A_DONE_PRESENTATION_ASSETS_DEFERRED**
 
 GP-S26A: **FINALIZED_READY_FOR_MERGE** — operator-validated on `feature/gp-s26a-combat-presentation-events`.  
-Overall GP-S26: S26A cosmetic event channel done; animation/Niagara/sound/projectile presentation assets remain deferred.
+Overall GP-S26: S26A cosmetic event channel done; next presentation stage is **GP-S26B Primitive Visual MVP** (Engine primitives) — see `GP-S26B_Primitive_Visual_MVP_Architecture.md`. Authored art remains later.
 
 ## Main baseline
 `main` @ `3cb1e8055778c1ba4c67fa0546bb7ef96398a3d7` (includes merged GP-S26 analysis)
@@ -428,9 +428,9 @@ Minimal vertical slice (review-corrected):
 
 | Stage | Candidate |
 | --- | --- |
-| S26B | Soft-ref montage / hit react hooks; optional Approaching/Ready chrome (light B) |
-| S26C | Cosmetic projectile path; instant ranged variant EventTypes |
-| Later | Niagara/SFX DataAssets; UI damage numbers; death flair beyond collision |
+| S26B | Primitive Visual MVP (composite Engine shapes + transform cosmetics) — `GP-S26B_Primitive_Visual_MVP_Architecture.md` |
+| S26C | Two-phase ranged Fire + cosmetic projectile (no damage-from-projectile) |
+| Later | Authored skeletal/Niagara/SFX swap-in without gameplay changes; UI damage numbers |
 
 ---
 
@@ -520,10 +520,10 @@ Finalization commit: `fc48dc16516dfcb68b14c7ecd1c3bda6479f9b39`
 - **No** Blueprint / animation / Niagara / sound / projectile asset dependency
 - **No** changes to S25 gameplay cadence / damage / TargetDied / hysteresis semantics
 
-### Explicitly deferred (presentation assets / later stages)
-- Real animation montages / AnimInstance / AnimNotify
-- Niagara / materials / sounds
-- Cosmetic projectile variants
+### Explicitly deferred (presentation / later stages)
+- Primitive Visual MVP (GP-S26B) and two-phase ranged (GP-S26C)
+- Authored animation montages / AnimInstance / AnimNotify
+- Niagara / materials / sounds (beyond optional minimal team-color material)
 - Reliable multicast / LastEvent / late-join catch-up
 - Polished UI damage numbers
 

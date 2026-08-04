@@ -10,7 +10,8 @@ Architecture sources:
 - `Docs/Development/Claude_Tasks/GP-S27A_Prototype_Arena_Analysis.md`
 - `Docs/Development/Claude_Tasks/GP-S27A1_Resource_Node_Foundation.md`
 
-Branch: `feature/gp-s27a2-editor-generator-foundation`
+Branch: `feature/gp-s27a2-editor-generator-foundation`  
+Implementation: `7508fc8eca2acc7f277fe3d9ed7965db15df5711`
 
 ## Goal
 Editor-only module + one-shot tool that creates and saves infrastructure-only persistent map `/Game/GrimProtocol/Maps/L_PrototypeArena`. No gameplay population. No S27A3.

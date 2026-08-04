@@ -16,6 +16,7 @@ Status: GP-S27A2_CODE_AND_BASE_MAP_READY_OPERATOR_VALIDATION_PENDING
 - GPEditor Win64 Development + UHT — PASSED
 - Generation SUCCESS; second run ExistingMapAbort; Inspect ReadyForPopulation=true
 - LFS tracks `.umap`
+- Implementation commit: `7508fc8eca2acc7f277fe3d9ed7965db15df5711`
 
 ### Intentionally not done
 - No units/ore/combat population; no S27A3; no GameDefaultMap change; no GP Dev/Shipping yet

@@ -140,7 +140,7 @@ Press P; if no green nav, Build Paths and save.
 - SkyAtmosphere included for readability (allowed)
 
 ## Commit SHA
-(pending)
+7508fc8eca2acc7f277fe3d9ed7965db15df5711
 
 ## Git state
 Feature branch only; no main/PR/merge; no S27A3; no gameplay population beyond infrastructure umap.

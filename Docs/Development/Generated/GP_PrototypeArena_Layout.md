@@ -8,7 +8,7 @@
 - GameplayPopulation: none (GP-S27A2 infrastructure only)
 - ExistingMapAbort: false
 - GenerationTimestampUTC: 2026-08-04T15:19:31.562Z
-- SourceCommit: (see feature branch commit including this umap)
+- SourceCommit: `7508fc8eca2acc7f277fe3d9ed7965db15df5711`
 
 | Label | Class | Location | Rotation | Scale | Tag |
 | --- | --- | --- | --- | --- | --- |

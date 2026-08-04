@@ -3915,3 +3915,24 @@ Status: **GP-S26B1_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s26b1-primitive-visual-foundation` only. No merge to main. No PR. Do **not** start B2 without explicit task.
+
+## 2026-08-04 — GP-S26B1 / InfantryMelee visual readability correction
+
+Status: **GP-S26B1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Private/Visual/GPPrimitiveVisualTypes.cpp` — Forward/Weapon transforms
+- Docs (task / AI log / Cursor report)
+
+### What was done
+- Functional operator matrix already **PASS**.
+- Forward: Cone→elongated Cube nose (RTS cam); larger / further forward.
+- Weapon: ~1.8× length, thicker, offset further from Body (still Cube).
+- Body unchanged; 3 parts; no gameplay/tick/collision/asset changes.
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED**
+- Visual readability — pending operator recheck
+
+### Stop condition
+Commit/push same branch. No finalization. No merge to main. No B2.

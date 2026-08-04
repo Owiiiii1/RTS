@@ -1,7 +1,7 @@
 # Cursor Work Report
 
 ## Task
-GP-S26B1 Primitive Visual Foundation
+GP-S26B1 InfantryMelee visual readability correction
 
 ## Status
 GP-S26B1_CODE_READY_OPERATOR_VALIDATION_PENDING
@@ -12,75 +12,40 @@ feature/gp-s26b1-primitive-visual-foundation
 ## Base
 main @ bfc762675bba6266011be948c228913c8fc5a324
 
-## Architecture Implemented
-`UGP_UnitVisualComponent` builds non-replicated Engine basic-shape `UStaticMeshComponent` parts from a native `FGP_PrimitiveVisualDefinition`. Capsule remains gameplay/selection root. S26A presentation contract untouched. No combat animation / projectile.
+## Implementation Commit
+7212604d4cdae4a8310fa8e8db8d7811b36f9452
 
-## Exact Native Types
-- `EGP_PrimitiveShape` — Cube, Sphere, Cylinder, Cone, Capsule (→ Cylinder mesh)
-- `EGP_VisualArchetype` — InfantryMelee (extensible)
-- `EGP_PrimitiveVisualCollisionPolicy` / `VisibilityPolicy`
-- `FGP_PrimitiveVisualPart` — name, shape, transforms, parent, role bools
-- `FGP_PrimitiveVisualDefinition` — archetype + parts array
-- `GPPrimitiveVisualDefaults::MakeInfantryMeleeDefinition()`
+## Functional Operator Matrix
+**PASS** — listen/client composition; Move; Attack; selection; death cleanup; visual NoCollision; idle tick off; legacy mesh absent; cadence/presentation unchanged.
 
-## Component Ownership
-- Default subobject on **`AGP_Unit`** (minimal scope; not UnitBase)
-- Non-replicated; tick disabled
-- Build in `BeginPlay`; clear in `EndPlay`
+## Visual Readability Correction
+Pending operator recheck after this commit.
 
-## AGP_Unit Migration
-- Removed `VisualMesh` `UStaticMeshComponent` + ConstructorHelpers Cylinder
-- Added `UnitVisualComponent` + `GetUnitVisualComponent()` / `HasLegacyVisualMesh()` (always false)
-- No external C++ references to old `VisualMesh` found
+| Part | Field | Old | New |
+| --- | --- | --- | --- |
+| Forward | Shape | Cone | Cube |
+| Forward | Location | (42, 0, 18) | (52, 0, 16) |
+| Forward | Rotation | (90, 0, 0) | (0, 0, 0) |
+| Forward | Scale | (0.22, 0.22, 0.38) | (0.58, 0.20, 0.16) |
+| Weapon | Location | (28, 20, 10) | (42, 30, 14) |
+| Weapon | Rotation | (0, 12, 0) | (0, 10, 0) |
+| Weapon | Scale | (0.50, 0.10, 0.10) | (0.90, 0.16, 0.16) |
 
-## Primitive Composition (InfantryMelee)
-1. **Body** — Cylinder, PresentationRoot + Body
-2. **Forward** — Cone parented to Body, FacingIndicator (+X)
-3. **Weapon** — Cube parented to Body, Weapon (static)
-
-## Team Color Decision
-Attempted runtime DMI + common vector params (`BaseColor`/`Color`/…). Engine BasicShapes materials likely ignore these — **not claimed as reliable team color**. Full team color requires a separate minimal project material (editor/operator step). Facing silhouette remains primary direction cue.
-
-## Dedicated Behavior
-`NM_DedicatedServer` → no part components created; `DedicatedVisualSuppressed=true`; no cosmetic tick.
-
-## Inspector Command
-`gp.UnitVisual.Inspect` (non-shipping) — actor, component, archetype, parts, root, Role/NetMode, dedicated flag, tick, visual collision, legacy mesh absent/present, built flag.
+Body unchanged. Still Body + Forward + Weapon. Cone replaced because tip-forward reads as a disc from RTS camera.
 
 ## Files Changed
-- `GP/Source/GPRuntime/Public/Visual/GPPrimitiveVisualTypes.h` (new)
-- `GP/Source/GPRuntime/Private/Visual/GPPrimitiveVisualTypes.cpp` (new)
-- `GP/Source/GPRuntime/Public/Visual/GPUnitVisualComponent.h` (new)
-- `GP/Source/GPRuntime/Private/Visual/GPUnitVisualComponent.cpp` (new)
-- `GP/Source/GPRuntime/Public/Units/GPUnit.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnit.cpp`
-- `Docs/Development/Claude_Tasks/GP-S26B1_Primitive_Visual_Foundation.md` (new)
+- `GP/Source/GPRuntime/Private/Visual/GPPrimitiveVisualTypes.cpp`
+- `Docs/Development/Claude_Tasks/GP-S26B1_Primitive_Visual_Foundation.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
 ## Build Results
-- GPEditor Win64 Development — **PASSED** (UHT/makefile refresh; compiled visual types + component + GPUnit; linked GPRuntime)
-- GP Dev/Shipping — deferred to finalization
+- GPEditor Win64 Development — **PASSED** (compiled GPPrimitiveVisualTypes.cpp; linked GPRuntime)
+- Header/UHT — not required (`.cpp` definition only)
 
-## Operator Validation Steps
-1. Listen: Body/Forward/Weapon visible; no duplicate old Cylinder
-2. Remote client: same composition
-3. Facing cone tracks actor forward on rotate/move
-4. Selection / capsule collision / Attack cadence unchanged
-5. Death cleans parts with actor
-6. `gp.UnitVisual.Inspect` fields as documented
-7. Idle: TickEnabled=false; visual collision disabled
-
-## Known Limitations
-- Only InfantryMelee archetype
-- Team color DMI may be a no-op on Engine materials
-- No combat cosmetics (B2)
-- Capsule shape enum maps to Cylinder mesh
-- No DataAsset / Blueprint / level
-
-## Commit SHA
-7212604d4cdae4a8310fa8e8db8d7811b36f9452
+## Correction Commit SHA
+COMMIT_SHA_PLACEHOLDER
 
 ## Git State
 - Push to `feature/gp-s26b1-primitive-visual-foundation`
-- No merge to main; no PR; no Blueprint/assets/level; no B2
+- No finalization; no merge to main; no PR; no B2

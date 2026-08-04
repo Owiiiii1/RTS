@@ -22,12 +22,12 @@ namespace GPPrimitiveVisualDefaults
 
 		FGP_PrimitiveVisualPart Forward;
 		Forward.PartName = TEXT("Forward");
-		Forward.Shape = EGP_PrimitiveShape::Cone;
+		// Elongated Cube reads as a direction nose from RTS camera; Cone tip-forward reads as a disc.
+		Forward.Shape = EGP_PrimitiveShape::Cube;
 		Forward.ParentPartName = TEXT("Body");
-		// Cone default axis is +Z; roll so tip faces actor +X.
-		Forward.RelativeLocation = FVector(42.0f, 0.0f, 18.0f);
-		Forward.RelativeRotation = FRotator(90.0f, 0.0f, 0.0f);
-		Forward.RelativeScale = FVector(0.22f, 0.22f, 0.38f);
+		Forward.RelativeLocation = FVector(52.0f, 0.0f, 16.0f);
+		Forward.RelativeRotation = FRotator(0.0f, 0.0f, 0.0f);
+		Forward.RelativeScale = FVector(0.58f, 0.20f, 0.16f);
 		Forward.bFacingIndicator = true;
 		Definition.Parts.Add(Forward);
 
@@ -35,9 +35,9 @@ namespace GPPrimitiveVisualDefaults
 		Weapon.PartName = TEXT("Weapon");
 		Weapon.Shape = EGP_PrimitiveShape::Cube;
 		Weapon.ParentPartName = TEXT("Body");
-		Weapon.RelativeLocation = FVector(28.0f, 20.0f, 10.0f);
-		Weapon.RelativeRotation = FRotator(0.0f, 12.0f, 0.0f);
-		Weapon.RelativeScale = FVector(0.50f, 0.10f, 0.10f);
+		Weapon.RelativeLocation = FVector(42.0f, 30.0f, 14.0f);
+		Weapon.RelativeRotation = FRotator(0.0f, 10.0f, 0.0f);
+		Weapon.RelativeScale = FVector(0.90f, 0.16f, 0.16f);
 		Weapon.bWeapon = true;
 		Definition.Parts.Add(Weapon);
 

@@ -80,7 +80,7 @@ Per-instance combat stats need EditInstanceOnly overrides or editor helpers (Def
 - Build: **not required**
 
 ## Commit SHA
-COMMIT_SHA_PLACEHOLDER
+2aba0137e6c198375861dd5ef8c08d1226701947
 
 ## Git State
 - Push to `feature/gp-s27a-prototype-arena-analysis`

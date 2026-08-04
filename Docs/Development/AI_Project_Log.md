@@ -3936,3 +3936,29 @@ Status: **GP-S26B1_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ### Stop condition
 Commit/push same branch. No finalization. No merge to main. No B2.
+
+## 2026-08-04 — GP-S26B1 / Primitive Visual Foundation — finalization
+
+Status: **GP-S26B1_FINALIZED_READY_FOR_MERGE**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S26B1_Primitive_Visual_Foundation.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+- C++ unchanged at finalization
+
+### What was done
+- Operator accepted functional matrix + Inspect + visual readability after Forward/Weapon correction (`70f4cc2`).
+- Final builds: GP Win64 Development + Shipping **PASSED**.
+- Last GPEditor build: **PASSED** at correction `70f4cc2` (not re-run; docs-only finalization).
+- Overall: **GP-S26B1_DONE_PRIMITIVE_VISUAL_FOUNDATION**. Known limits: team color needs material; InfantryMelee only.
+- No known blockers. Ready for main merge when requested. Do **not** merge / start B2 / S27A in this close-out.
+
+### Builds / validation
+- GPEditor Dev — previously **PASSED** at `70f4cc2`; C++ frozen
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- Operator — **CODE_DONE_OPERATOR_ACCEPTED** for S26B1
+
+### Stop condition
+Commit/push `feature/gp-s26b1-primitive-visual-foundation` only. **READY_FOR_MAIN_MERGE** when operator requests. No PR/merge in this close-out.

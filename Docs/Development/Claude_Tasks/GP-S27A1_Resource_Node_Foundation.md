@@ -11,7 +11,8 @@ Overall: **GP-S27A1_DONE_RESOURCE_NODE_FOUNDATION**
 Architecture source: `Docs/Development/Claude_Tasks/GP-S27A_Prototype_Arena_Analysis.md`  
 Branch: `feature/gp-s27a1-resource-node-foundation`  
 Implementation: `e2bf9ea86c7e49e1a4b841577d9b737fbf05a778`  
-Ore visual correction: `51a310acfd2200d2bedd0b2a03221274d09f73d0`
+Ore visual correction: `51a310acfd2200d2bedd0b2a03221274d09f73d0`  
+Finalization: `8c64c7868dc7e20cc2ddba431eb38ec45e83b3a1`
 
 ## Goal
 Server-authoritative Ore `AGP_ResourceNode` suitable for later persistent placement on `L_PrototypeArena`. No map, editor module, gather loop, Blueprint, or DataAsset in this slice.

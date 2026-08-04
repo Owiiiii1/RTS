@@ -20,6 +20,7 @@ Overall: GP-S27A1_DONE_RESOURCE_NODE_FOUNDATION
 - Operator functional + network + visual readability — **PASS**
 - Finalization builds: GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
 - GPEditor Win64 Development **PASSED** at correction `51a310a` (not re-run; C++ frozen)
+- Finalization commit: `8c64c7868dc7e20cc2ddba431eb38ec45e83b3a1`
 
 ### Intentionally not done
 - No map / umap, editor module, generator, Blueprint, DataAsset, gather/harvest, command changes, S27A2

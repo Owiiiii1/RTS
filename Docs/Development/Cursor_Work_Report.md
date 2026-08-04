@@ -100,7 +100,7 @@ Exit codes 0; no compile/link errors.
 C++: **unchanged** at finalization.
 
 ## Final commit SHA
-(pending)
+8c64c7868dc7e20cc2ddba431eb38ec45e83b3a1
 
 ## Git state
 - Feature branch only; no main change; no PR; no merge

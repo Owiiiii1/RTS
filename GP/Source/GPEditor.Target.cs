@@ -15,7 +15,8 @@ public class GPEditorTarget : TargetRules
 			"GP",
 			"GPGASRuntime",
 			"GPRuntime",
-			"GPUIRuntime"
+			"GPUIRuntime",
+			"GPEditor"
 		});
 	}
 }

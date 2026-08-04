@@ -3836,3 +3836,27 @@ Status: **GP-S26A_FINALIZED_READY_FOR_MERGE**
 
 ### Stop condition
 Commit/push `feature/gp-s26a-combat-presentation-events` only. **READY_FOR_MAIN_MERGE** when operator requests. Do **not** merge in this close-out. Do **not** create PR.
+
+## 2026-08-04 — GP-S26B / Combat Assets — analysis
+
+Status: **GP-S26B_ANALYSIS_READY_FOR_REVIEW**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S26B_Combat_Assets_Analysis.md` (new)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+- C++ unchanged; assets unchanged
+
+### What was done
+- Branched from `main` @ `8025112` → `feature/gp-s26b-combat-assets-analysis`.
+- Inventoried S26A channel + unit visual architecture (StaticMesh Cylinder placeholder; no AnimInstance).
+- Verified Content: only 10 Enhanced Input packages; **zero** combat skeletal/anim/Niagara/audio/projectile/unit BP assets.
+- Compared A/B/C/D; recommended **D + B shell** (`UGP_UnitVisualComponent` + soft-ref profile) reusing S26A multicast; reject GameplayCue for S26B.
+- Proposed architecture-first S26B slice (hooks + missing-asset fallback + keep debug); real art requires separate import; two-phase windup deferred to S26C.
+
+### Builds / validation
+- Build not required (docs only)
+- C++ diff: none; assets diff: none
+
+### Stop condition
+Commit/push `feature/gp-s26b-combat-assets-analysis` only. No merge to main. No PR. Do **not** start GP-S26B implementation or asset import without explicit task.

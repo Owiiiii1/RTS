@@ -130,7 +130,7 @@ Root `CanEverAffectNavigation=true` for Recast when a map exists. Visual parts n
 - Engine BasicShapes may look uniform gray (acceptable for S27A1)
 
 ## Commit SHA
-(pending commit)
+e2bf9ea86c7e49e1a4b841577d9b737fbf05a778
 
 ## Git State
 - Feature branch only; no main change; no PR; no merge; no `.umap`; no editor module; S27A2 not started

@@ -7,7 +7,8 @@
 `main` @ `74c058914a6349b3a9d0f83161023ff54b742be7`
 
 Architecture source: `Docs/Development/Claude_Tasks/GP-S27A_Prototype_Arena_Analysis.md`  
-Branch: `feature/gp-s27a1-resource-node-foundation`
+Branch: `feature/gp-s27a1-resource-node-foundation`  
+Implementation: `e2bf9ea86c7e49e1a4b841577d9b737fbf05a778`
 
 ## Goal
 Server-authoritative Ore `AGP_ResourceNode` suitable for later persistent placement on `L_PrototypeArena`. No map, editor module, gather loop, Blueprint, or DataAsset in this slice.

@@ -16,6 +16,7 @@ Status: GP-S27A1_CODE_READY_OPERATOR_VALIDATION_PENDING
 - Non-shipping `gp.ResourceNode.Inspect` / `gp.ResourceNode.Consume`
 - Docs: task note, AI log, Cursor work report rewrite
 - Candidate build: GPEditor Win64 Development + UHT — PASSED
+- Implementation commit: `e2bf9ea86c7e49e1a4b841577d9b737fbf05a778`
 
 ### Intentionally not done
 - No map / umap, editor module, generator, Blueprint, DataAsset, gather/harvest, command changes, S27A2

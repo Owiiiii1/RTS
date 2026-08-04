@@ -3655,3 +3655,28 @@ Status: **GP-S25A_DONE_GP-S25B_PENDING**
 
 ### Stop condition
 Commit/push `feature/gp-s25a-health-damage-foundation` only. **READY_FOR_MAIN_MERGE** of S25A slice when operator requests. Do **not** merge in this close-out. Do **not** start GP-S25B without explicit task.
+
+## 2026-08-04 — GP-S25B / Attack Cadence Integration — candidate checkpoint
+
+Status: **GP-S25B_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `Docs/Development/Claude_Tasks/GP-S25_Attack_Damage_Execution.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Baseline: `main` @ `7864b2b` (GP-S25A merged). New branch `feature/gp-s25b-attack-cadence-integration`.
+- Ready immediate-first-hit + AttackCooldown world-time cadence; preserve NextHitTime across OOR.
+- Target `OnUnitDied` → `FinishAttack(Failed, TargetDied)`; reentrancy-safe after ApplyDamageFromUnit.
+- Effective range GAS>0 else component; cooldown sanitize 0.05; damage only via GP-S25A path.
+- Enhanced `gp.Attack.Inspect` for cadence fields.
+
+### Builds / validation
+- GPEditor Win64 Development + UHT — **PASSED**
+- Operator validation pending (immediate hit, cadence, TargetDied, OOR preserve, retarget, owner death, range/cooldown)
+
+### Stop condition
+Commit/push `feature/gp-s25b-attack-cadence-integration` only. No merge to main. No visual combat / S25B finalization yet.

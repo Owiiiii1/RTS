@@ -1,16 +1,16 @@
 # GP-S25 Attack Damage Execution
 
 ## Status
-**GP-S25A_DONE_GP-S25B_PENDING**
+**GP-S25B_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ## Baseline
-`main` @ `eb590a5baa1780cdb4b8b01b17a09ce4ece252fe` (Merge GP-S25 attack damage analysis)
+`main` @ `7864b2bc45060f48021f46a1711d71fd62b0f3da` (Merge GP-S25A health and damage foundation)
 
-Depends on: GP-S24 `DONE_WITH_DAMAGE_EXECUTION_DEFERRED`; GP-S03 Attribute Sets `DONE`; GP-S25 analysis locked.
+Depends on: GP-S25A `GP-S25A_DONE_GP-S25B_PENDING` merged; GP-S24 Attack executor; GP-S03 Attribute Sets.
 
-Branch: `feature/gp-s25a-health-damage-foundation`
+Branch: `feature/gp-s25b-attack-cadence-integration`
 
-Recommended close status after full S25A+S25B implementation + validation: **`DONE_WITH_VISUAL_COMBAT_DEFERRED`** (not yet — S25B pending)
+Recommended close status after full S25A+S25B operator validation + final builds: **`DONE_WITH_VISUAL_COMBAT_DEFERRED`** (not yet)
 
 ---
 
@@ -611,10 +611,52 @@ Head at finalization: `51c9112` (+ docs finalize commit)
 - GP Win64 Development — **PASSED** (finalization)
 - GP Win64 Shipping — **PASSED** (finalization)
 
-### GP-S25B deferred (explicit)
-- Immediate first hit on entering Ready
-- Periodic hit cadence / NextHitTime / AttackCooldown scheduling / cooldown min safety
-- GAS AttackRange preferred + component fallback in Attack executor
-- Target `OnUnitDied` binding + `TargetDied` terminal reason
-- Reentrancy guards during synchronous death callback; no further hit after target death
-- AttackSpeed; animation / projectile / VFX / UI / GameMode death
+### GP-S25B deferred (explicit) — superseded by implementation record below
+
+---
+
+## GP-S25B Implementation Record
+
+Status: **GP-S25B_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+Branch: `feature/gp-s25b-attack-cadence-integration`
+Base: `main` @ `7864b2bc45060f48021f46a1711d71fd62b0f3da`
+
+### Cadence
+- Immediate first hit on first Ready of each Attack serial (`bHasAttemptedFirstHit`)
+- Subsequent hits when `Now >= NextAttackHitTime`
+- After each processed hit: `NextHitTime = Now + SanitizedAttackCooldown` (re-read attribute each hit)
+- Blocked damage (AppliedDamage=0) still schedules cooldown
+- Cooldown invalid/≤0 → 0.05s + `GP AttackCooldownSanitized` Warning on schedule
+- AttackSpeed unused
+- Leave range → Approaching; **NextHitTime preserved**; re-enter Ready waits or hits if expired
+- No TimerManager; component Attack tick owns cadence
+
+### Damage path
+- Only `Target->ApplyDamageFromUnit(OwnerUnit, Result)` (GP-S25A)
+- No direct Health mutation; no second MMC path
+- Serial + target weak guards after Apply for synchronous TargetDied reentrancy
+
+### Target death
+- `EGP_AttackTerminalReason::TargetDied`
+- Bind `OnUnitDied` at StartAttackExecutor; unbind on Finish/Reset/OwnerDied/EndPlay/replace
+- Callback → `FinishAttack(Failed, TargetDied)`
+- Dead target validation returns TargetDied; destroyed actor still TargetDestroyed
+- No duplicate TargetDestroyed after normal death (binding cleared before delayed Destroy)
+
+### Effective range
+- GAS AttackRange if finite and >0; else component AttackRange if finite and >0
+- Both invalid → Attack config reject
+- Single resolver used for Ready/Approaching/approach/hit/logs
+- `GetAttackRange()` returns effective runtime range
+
+### Debug
+- Enhanced existing `gp.Attack.Inspect` with cadence/range/death-bind fields
+- No new mutation commands
+
+### Build
+- GPEditor Win64 Development + UHT — **PASSED**
+- GP Dev / Shipping deferred to finalization after operator validation
+
+### Still deferred (visual / non-S25B)
+- Animation / projectile / VFX / UI / AttackSpeed / AttackMove / LOS / Nav / prediction

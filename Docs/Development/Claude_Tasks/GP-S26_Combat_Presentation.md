@@ -5,6 +5,8 @@
 
 Analysis / design only. No production C++. No Blueprint assets. No combat-semantics changes.
 
+Review correction applied on top of analysis commit `d5e8b13fec5f4f21e7ed8ed7e8a51b1d73a83a5d`: transport locked to **Unreliable NetMulticast**; LastEvent / late-join replay removed from S26A; RPC ownership and payload tightened.
+
 ## Main baseline
 `main` @ `b511cf5008546cc421971cd4612cbd92c1a8b945` — Merge GP-S25B attack cadence integration
 
@@ -72,7 +74,7 @@ GPUIRuntime → GPRuntime → GPGASRuntime
 ### Listen-server / dedicated implications (current)
 
 - All hit/cadence/damage paths gate on `HasAuthority()` → no duplicate **gameplay** execution.
-- Listen host is authority **and** local viewport: any future visual bound both to the gameplay hit path **and** a replicated/multicast presentation path will **double-play** unless presentation has a single receive policy.
+- Listen host is authority **and** local viewport: any future visual bound both to the gameplay hit path **and** a multicast presentation path will **double-play** unless presentation has a single receive policy.
 - Dedicated server has no viewport; visual load/play must early-out (`NM_DedicatedServer`).
 
 ### Can presentation subscribe to AttackHitAttempt / AttackHitApplied?
@@ -106,10 +108,11 @@ Safe approach: **side-effect emit after successful hit processing**, never gatin
 | --- | --- |
 | Authority | Gameplay remains server-authoritative |
 | Cadence independence | Damage timing must **not** depend on AnimNotify / montage length |
-| Presentation optional | Missing/late visuals must not change damage, cooldown, or FinishAttack |
-| Dedicated server | Must not load/execute visual logic (meshes/Niagara/audio play) |
+| Presentation optional | Missing/late/dropped visuals must not change damage, cooldown, or FinishAttack |
+| Dedicated server | Must not load/execute visual logic (meshes/Niagara/audio play / debug draw) |
 | Listen server | Must not play the same presentation event twice |
-| Clients | Must receive enough data to visualize a hit beat |
+| Clients | Must receive enough data to visualize a hit beat when the packet arrives |
+| Transport | Transient cosmetics must not occupy the reliable channel |
 | Extensibility | Melee, instant ranged, projectile ranged, future variants |
 | Assets | No core runtime hard-dependency on specific Blueprint / montage / Niagara assets |
 | Stack | No Lyra / CommonGame |
@@ -120,48 +123,31 @@ Safe approach: **side-effect emit after successful hit processing**, never gatin
 
 ## Options considered
 
-### Option A — Replicated combat presentation event
+### Option A — Explicit authoritative cosmetic event (accepted)
 
-Server records an authoritative **cosmetic** attack-release/hit event after gameplay Apply. Clients receive a multicast and/or replicated last-event payload and run local presentation.
+Server emits a cosmetic hit/release event after gameplay Apply. Viewports receive it via multicast and run local presentation.
 
 | Criterion | Assessment |
 | --- | --- |
-| Reliability | High if reliable multicast or replicated+OnRep; event is explicit |
-| Late join | Multicast-only misses history; last-event OnRep recovers “most recent” only |
-| Packet loss | Reliable channel recovers; unreliable may drop cosmetic beats (acceptable) |
-| Duplicate suppression | Strong via monotonic `PresentationSequence` per source |
-| Listen server | Safe **if** visuals play only on presentation receive path, never also inline in `AttemptAttackHit` |
-| Bandwidth | Low — compact struct per hit |
-| Coupling | Low — emit is fire-and-forget side effect; gameplay does not wait |
-| Debugging | Excellent — sequence + serial + metadata in logs |
+| Reliability of gameplay | Unaffected — cosmetics are best-effort |
+| Late join | Misses past beats by design (S26A) |
+| Packet loss | Dropped beat is acceptable for cosmetics |
+| Duplicate suppression | `PresentationSequence` per source |
+| Listen server | Safe if visuals play **only** on multicast receive path |
+| Bandwidth / scaling | Unreliable multicast scales for many concurrent RTS attackers |
+| Coupling | Low — fire-and-forget side effect |
+| Debugging | Sequence + serial + metadata |
 | Extensibility | EventType / variant tag grows cleanly |
 
-### Option B — Replicated Attack state + client observation
+### Option B — Replicated Attack state + client observation (deferred)
 
 Replicate AttackState / serial / target / timestamps; clients derive visuals from transitions and Health changes.
 
-| Criterion | Assessment |
-| --- | --- |
-| Reliability | Medium — state converges, but “hit beat” is inferred |
-| Late join | Better for continuous state (Approaching/Ready) |
-| Packet loss | State eventually consistent; transient hits may be missed without event |
-| Duplicate suppression | Harder for discrete VFX (must synthesize edge triggers) |
-| Listen server | OnRep + local authority mutation can double-fire without careful gating |
-| Bandwidth | Higher if ticking state; moderate if OnRep-only fields |
-| Coupling | Higher — presentation tied to executor state shape |
-| Debugging | Ambiguous hit vs blocked vs external damage |
-| Extensibility | Weak for projectile / multi-hit variants without extra events |
+Useful later for Approaching/Ready chrome; weak for discrete hit beats; higher coupling. **Not S26A.**
 
-### Recommendation — **Hybrid (A primary, B deferred)**
+### Recommendation
 
-**S26A implements Option A** (authoritative cosmetic presentation event).
-
-Optionally later (S26B+): light replicated Attack intent flags (e.g. Approaching/Ready) for UI/selection feedback — **not** required for hit VFX and **not** allowed to drive damage.
-
-Rationale:
-- Hit identity and blocked/death metadata need an explicit event (A).
-- Continuous Attack state replication (B) is useful for chrome, not for reliable hit beats.
-- Keeps S25 cadence untouched: emit after Apply, never wait on presentation.
+**Option A for S26A** with transport locked below. Light Option B chrome remains post-S26A only.
 
 ---
 
@@ -173,15 +159,18 @@ Rationale:
     → ApplyDamageFromUnit (gameplay; unchanged)
     → schedule NextHitTime (unchanged)
     → AttackHitApplied log
-    → EmitCombatPresentationEvent(payload)   // NEW side effect only
+    → PresentationSequence++ (authority, first value 1)
+    → Unreliable NetMulticast(payload)   // NEW side effect only
+    // NO inline PlayPresentation here
 
-[Net] Multicast and/or Replicated LastEvent + PresentationSequence
+[Net] Unreliable NetMulticast on presentation component
+      (payload includes PresentationSequence; no separate replicated sequence state)
 
-[Local worlds with viewport]
-    UGP_CombatPresentationComponent / subsystem
-      → dedupe by PresentationSequence
-      → if NM_DedicatedServer: return
-      → debug draw / log (S26A)
+[Local worlds]
+    UGP_CombatPresentationComponent receive
+      → bookkeeping / dedupe by PresentationSequence
+      → if NM_DedicatedServer: no visual/debug draw
+      → else: debug draw / log (S26A)
       → future: montage / VFX / cosmetic projectile (assets optional)
 ```
 
@@ -189,78 +178,147 @@ Rationale:
 
 | Layer | Module | Responsibility |
 | --- | --- | --- |
-| Emit after Apply | `GPRuntime` (`UGP_UnitCommandComponent`) | Build payload; call presentation sink; **never** await it |
-| Presentation sink / component | `GPRuntime` (generic) | Replication receive, dedupe, NetMode gate, debug viz |
-| Future rich UI / widgets | `GPUIRuntime` | Optional consumers of the same event API |
-| GAS / damage formula | `GPGASRuntime` | Unchanged; no presentation includes |
+| Emit after Apply | `GPRuntime` (`UGP_UnitCommandComponent`) | Resolve presentation component; ask it to multicast; **never** await / never Play inline |
+| Presentation component | `GPRuntime` | Own Unreliable NetMulticast, Sequence counter (authority), dedupe, NetMode gate, debug viz |
+| Future rich UI / widgets | `GPUIRuntime` | Optional consumers |
+| GAS / damage formula | `GPGASRuntime` | Unchanged |
 
 ### Policies
 
-1. **Single play path:** Visuals execute only inside presentation receive handlers.
-2. **Dedicated server:** Early-out before any mesh/Niagara/audio/debug-draw that implies a viewport (logs may remain Verbose/category-gated).
-3. **Listen server:** Receives the same multicast/OnRep once; must not also call Play from `AttemptAttackHit`.
-4. **No AnimNotify → damage:** Forbidden forever for GP combat cadence.
-5. **Soft asset refs:** SoftObjectPath / TSoftObjectPtr / DataAsset optional; missing asset = silent no-op visual.
+1. **Single play path:** Visuals execute only inside the multicast receive handler (after dedupe / NetMode gate).
+2. **Dedicated server:** Receive stub may update last-seen Sequence for diagnostics; **no** visual/debug draw / asset work.
+3. **Listen server:** One play via multicast receive; **no** second inline Play after emit.
+4. **No AnimNotify → damage:** Forbidden for GP combat cadence.
+5. **Soft asset refs (later):** optional; missing asset = silent no-op.
+6. **Dropped packets:** acceptable; Sequence is **not** a retransmission mechanism.
+
+---
+
+## RPC ownership placement
+
+### Requirements if NetMulticast is on `UGP_CombatPresentationComponent`
+
+| Requirement | Detail |
+| --- | --- |
+| Owning actor replicated | `AGP_UnitBase` already `bReplicates = true` |
+| Default subobject | Component created in UnitBase constructor as default subobject |
+| Component replicated | `SetIsReplicatedByDefault(true)` (or equivalent) so component RPCs are valid on server and clients |
+| Authority-only call | Multicast invoked only with authority after AttackHitApplied |
+| Exists server + clients | Same subobject path as other unit components |
+| Dedicated receive | Stub / sequence bookkeeping only; no visual/debug draw |
+| No double Play | Emit path must not call PlayPresentation locally before/after multicast |
+
+### Alternative: multicast on `AGP_UnitBase`
+
+- UnitBase declares Unreliable NetMulticast and forwards payload into the local presentation component.
+- Pros: actor-level RPC always tied to replicated pawn.
+- Cons: pollutes UnitBase with presentation RPC surface; UnitBase already owns command/ASC/death concerns; weaker separation than CommandComponent-style ownership.
+
+### Choice (locked for S26A)
+
+**NetMulticast on `UGP_CombatPresentationComponent`.**
+
+Rationale:
+- Minimizes UnitBase API pollution (UnitBase only gains a default subobject pointer, matching `UnitCommandComponent` / ASC pattern).
+- Presentation owns its channel, sequence counter, dedupe, and NetMode policy.
+- Matches current architecture: gameplay emit from CommandComponent → sibling presentation component.
+
+UnitBase remains responsible only for creating/replicating the subobject, not for presentation RPC signatures.
 
 ---
 
 ## Data model
 
 ```text
-FGP_CombatPresentationEvent
-  PresentationSequence : uint32   // monotonic per source unit; 0 = invalid
-  AttackSerial         : uint32   // matches executor ActiveAttackSerial
-  Source               : AGP_UnitBase* (owner implied if component-owned)
-  Target               : AGP_UnitBase* (may be pending-kill / dead)
-  EventType            : EGP_CombatPresentationEventType
-  AuthoritativeWorldTime : double // server GetTimeSeconds at emit
-  AppliedDamage        : float
-  bBlocked             : bool     // Applied path ran but FinalDamage == 0
-  bTargetDiedFromHit   : bool     // death observed for this hit apply
-  // Future (not S26A required):
-  // VariantTag, ImpactLocation, ProjectileId, WindUpSeconds
+FGP_CombatPresentationEvent  (or mirrored multicast args)
+  PresentationSequence     : uint32  // 0 invalid; first emit = 1; monotonic per source unit
+  AttackSerial             : uint32  // matches executor ActiveAttackSerial
+  Target                   : AGP_UnitBase*  // explicit; may be pending-kill / dead
+  EventType                : EGP_CombatPresentationEventType
+  AuthoritativeWorldTime   : float   // server GetTimeSeconds at emit (debug/ordering aid only)
+  AppliedDamage            : float
+  bBlocked                 : bool    // Apply ran; FinalDamage == 0
+  bTargetDiedFromHit       : bool
+  // Source NOT in payload — derived from component owner (source unit)
+  // Future: VariantTag, ImpactLocation, ProjectileId, WindUpSeconds
 ```
 
 ```text
 EGP_CombatPresentationEventType (S26A minimal)
-  MeleeImpact      // default for current Attack executor hits
-  // Deferred:
-  // RangedInstant, ProjectileLaunch, ProjectileImpact, HitReaction, AttackCancel
+  MeleeImpact
+  // Deferred: RangedInstant, ProjectileLaunch, ProjectileImpact, HitReaction, AttackCancel
 ```
 
-Duplicate key: `(SourceUnitNetId or Object*, PresentationSequence)`.
+### Source field
+
+Omit from wire payload when RPC lives on the source unit’s presentation component. Receivers use `GetOwner()` / `Cast<AGP_UnitBase>(GetOwner())`. Reduces payload without losing meaning.
+
+### AuthoritativeWorldTime
+
+- **float is sufficient** for S26A debug / transient cosmetics.
+- Not a clock-sync protocol; no client-server time synchronization feature in S26A.
+- Do not introduce double solely for “precision”; float matches cosmetic needs and shrinks payload.
+
+### PresentationSequence semantics
+
+| Rule | Detail |
+| --- | --- |
+| Scope | Monotonic per source unit (component authority counter) |
+| Increment | Authority increments **before** multicast emit |
+| First valid value | `1` (`0` = invalid / unset) |
+| Wire presence | Carried **inside** multicast payload only |
+| Not replicated as standing state | No separate replicated Sequence / LastEvent property in S26A |
+| Used for | Duplicate suppression, gap diagnostics, listen-server safety |
+| Not used for | Retransmit / late-join replay / relevancy catch-up |
+
+**Wraparound:** For S26A, `uint32` wrap is **practically irrelevant**. If implementation uses “ignore when `Sequence <= LastProcessed`”, that comparison **must** carry an explicit comment that wraparound is ignored for S26A. Prefer also treating exact `Sequence == LastProcessed` as the primary duplicate case. Sequence must **not** be treated as a delivery guarantee.
+
+Duplicate key: `(SourceOwner, PresentationSequence)`.
 
 ---
 
 ## Replication model
 
-### S26A recommended transport
+### S26A transport (locked)
 
-**NetMulticast reliable** on `UGP_CombatPresentationComponent` (or UnitBase):
+**Unreliable NetMulticast** on `UGP_CombatPresentationComponent`.
 
-- Payload = `FGP_CombatPresentationEvent` (or mirrored args).
-- Client/listen handler: dedupe → NetMode gate → debug presentation.
-- Dedicated server: multicast stub returns immediately (no visual work).
+Reasons:
+- Event is transient and cosmetic.
+- Losing an individual presentation beat is acceptable.
+- Reliable per-hit multicast scales poorly with many concurrent RTS attackers.
+- Reliable backlog can deliver visually stale hits.
+- Presentation must not occupy the reliable channel or harm gameplay/network responsiveness.
 
-**Why not only OnRep last-event for S26A:**
-- OnRep is fine for late-join “last hit” and bandwidth, but multicast matches RTS hit-beat immediacy with less inference.
+### Explicitly out of S26A transport
 
-**Optional hybrid add-on (same slice if cheap):**
-- Also store `LastPresentationEvent` + `PresentationSequence` as replicated properties for late join / relevancy catch-up of the **latest** beat only.
-- Not required to close S26A if operator accepts “late join misses past cosmetics.”
+| Item | Status |
+| --- | --- |
+| Reliable NetMulticast | **Rejected** for S26A baseline |
+| Replicated `LastPresentationEvent` | **Out of scope** |
+| Late-join replay of last hit | **Out of scope** |
+| Relevancy catch-up of transient hit | **Out of scope** |
+
+### Late join / relevancy semantics (expected)
+
+- Late join does **not** receive past cosmetic events.
+- Actor becoming relevant does **not** replay an old hit.
+- This is **correct and intentional** S26A semantics.
 
 ### Suppression rules
 
 | Case | Behavior |
 | --- | --- |
-| Sequence ≤ last processed | Ignore |
-| Dedicated server | No visual execution |
-| Listen host | Exactly one play via multicast/OnRep path |
-| Replay / re-possess | Sequence still monotonic — no replay of old sequences |
+| Same Sequence already processed | Ignore (duplicate suppression) |
+| Older Sequence after gaps (optional `<=` with wrap comment) | Ignore stale beat |
+| Packet loss | Missed beat; no retransmission |
+| Dedicated server | No visual/debug draw |
+| Listen host | Exactly one play via multicast receive path |
+| Emit path | Never calls PlayPresentation inline |
 
 ### Bandwidth
 
-One compact event per authoritative hit (~tens of bytes + actor refs). Compatible with current RTS scale for S26A.
+Unreliable compact payload per hit (no Source actor ref). Suitable for many simultaneous attackers; drops under pressure rather than queueing stale reliable cosmetics.
 
 ---
 
@@ -268,95 +326,100 @@ One compact event per authoritative hit (~tens of bytes + actor refs). Compatibl
 
 ### Authoritative cosmetic moment (locked for S26A)
 
-**Post-`AttackHitApplied` emit** — after GE Apply returns and AttackHitApplied metadata is known; **before or after** NextHitTime schedule is irrelevant as long as emit does not alter schedule.
+**Post-`AttackHitApplied` emit** — after GE Apply returns and AttackHitApplied metadata is known; emit must not alter NextHitTime / cadence.
 
 | Moment | Role |
 | --- | --- |
 | `AttackHitAttempt` | Gameplay-only log; **do not** drive presentation emit |
 | ApplyDamageFromUnit | Authoritative damage / death |
-| `AttackHitApplied` + emit | Authoritative **cosmetic release / impact** marker |
-| Separate pre-damage `AttackRelease` | Deferred (wind-up era); would require cosmetic-only timeline |
+| `AttackHitApplied` + unreliable multicast | Authoritative **cosmetic release / impact** marker |
+| Separate pre-damage `AttackRelease` | Deferred (wind-up era) |
 
 ### Wind-up / animation start
 
 | Topic | S26A | Later |
 | --- | --- | --- |
 | Gameplay wind-up delaying damage | **Forbidden** | Still forbidden |
-| Visual wind-up before cosmetic impact | Not required | Optional client-only lead-in that **does not** move NextHitTime |
-| When animation starts | N/A (no montage) | On presentation event; may play a short anticipatory montage that finishes **after** damage already applied |
+| Visual wind-up before cosmetic impact | Not required | Optional client-only; must not move NextHitTime |
+| When animation starts | N/A (no montage) | On presentation receive; may finish after damage already applied |
 
 ### Immediate-first-hit
 
 - Gameplay remains immediate on first Ready (S25).
-- Presentation event fires in the same authoritative hit processing step.
-- Clients may see visual slightly late due to net; **acceptable**; no server wait.
+- Presentation multicast fires in the same authoritative hit processing step.
+- Clients may miss or see late visuals due to unreliable net; **acceptable**; no server wait.
 
 ### Blocked damage
 
-- Still emit event with `bBlocked=true`, `AppliedDamage=0`.
-- Cadence already schedules cooldown (unchanged).
-- Presentation may use a “blocked / clank” debug color later; S26A can log + debug draw differently.
+- Still emit with `bBlocked=true`, `AppliedDamage=0`.
+- Cadence unchanged.
+- S26A: distinct debug log/draw optional.
 
 ### TargetDied during presentation
 
 - Emit may set `bTargetDiedFromHit=true`.
-- Ongoing cosmetic may complete or shorten; gameplay already finished via TargetDied bind.
-- Clients also see `bIsDead` OnRep for death presentation (collision today).
+- Gameplay FinishAttack(TargetDied) unchanged.
+- Clients still see `bIsDead` OnRep for death presentation (collision today).
 
 ### Command replacement / attacker death / OOR
 
 | Case | Presentation |
 | --- | --- |
-| Attack → Move / retarget | New AttackSerial; old cosmetics may finish; new events use new serial |
-| Attacker death | No further emits; in-flight cosmetic optional cancel by observing `bIsDead` on source |
-| Target left range (no hit) | **No** presentation event |
+| Attack → Move / retarget | New AttackSerial; old cosmetics may finish if already received |
+| Attacker death | No further emits |
+| Target left range (no hit) | **No** event |
 | Hysteresis band (Ready, no damage) | **No** event |
 
 ### Projectile visual vs authoritative damage
 
-- Authoritative damage remains instant (S25 path) for current units.
-- Future cosmetic projectile: spawn on event (`ProjectileLaunch`) and interpolate to target **after** damage already applied; impact VFX is cosmetic only.
+- Authoritative damage remains instant (S25) for current units.
+- Future cosmetic projectile is post-damage visual only.
 - **No** projectile collision gameplay in S26.
-- Optional later: true travel-time damage is a **different gameplay stage**, not presentation.
+- True travel-time damage would be a separate gameplay stage.
 
 ### Cosmetic delay
 
-- S26A: **no** artificial server delay; optional client-only lerp for debug projectile stub only.
+- S26A: **no** artificial server delay.
 - Must not insert server `Delay` before Apply.
 
 ### Cadence preservation
 
-Emit is a pure side effect. No TimerManager for presentation on the authority cadence path. No AnimNotify callbacks into CommandComponent.
+Emit is a pure side effect. No presentation TimerManager on the authority cadence path. No AnimNotify callbacks into CommandComponent.
 
 ---
 
 ## GP-S26A scope
 
-Minimal vertical slice (recommended after code analysis):
+Minimal vertical slice (review-corrected):
 
 | Include | Detail |
 | --- | --- |
-| Cosmetic presentation event emit | After AttackHitApplied (incl. blocked) |
-| Payload | PresentationSequence, AttackSerial, Source, Target, EventType, AuthoritativeWorldTime, AppliedDamage, bBlocked, bTargetDiedFromHit |
-| Transport | NetMulticast reliable (+ optional LastEvent replicate) |
-| Consumer | One `UGP_CombatPresentationComponent` on `AGP_UnitBase` (or equivalent single sink) |
-| Dedupe | Client/listen Sequence suppression |
-| Dedicated | No visual execution |
-| Assets | **None required** — debug draw + logs only |
-| Debug | `gp.CombatPresentation.*` inspect/log verbosity (non-shipping) |
+| Cosmetic emit | After AttackHitApplied (incl. blocked) |
+| Payload | PresentationSequence, AttackSerial, Target, EventType, AuthoritativeWorldTime (`float`), AppliedDamage, bBlocked, bTargetDiedFromHit |
+| Source | Derived from component owner (not wired) |
+| Transport | **Unreliable NetMulticast** on `UGP_CombatPresentationComponent` |
+| Component | Default subobject on `AGP_UnitBase`; replicated; authority emit; single receive Play path |
+| Sequence | Authority increment before emit; first value `1`; payload-only (not standing replicated state) |
+| Dedupe | Client/listen Sequence suppression; not a redelivery mechanism |
+| Late join | No past cosmetics; no relevancy hit replay |
+| Dedicated | Receive stub / bookkeeping only; no visual/debug draw |
+| Assets | **None** — debug draw + logs only |
+| Debug | `gp.CombatPresentation.*` (non-shipping) |
 | Validation | Listen server + remote client |
 
 ### Explicitly deferred (not GP-S26A)
 
+- Reliable multicast / LastPresentationEvent / late-join or relevancy catch-up
 - Real animation montages / AnimInstance / AnimNotify
 - Niagara systems, materials, sounds
 - Projectile actors with collision gameplay
 - Attack prediction / lag compensation
 - LOS, nav combat, aggro presentation
 - Ability-specific visuals / GameplayCue asset pipeline
-- Polished UI (health bars, damage numbers) — may be S26B/UI track
+- Polished UI (health bars, damage numbers)
 - Full replicated AttackState machine (Option B)
 - Wind-up that offsets gameplay hit time
+- Server-time synchronization protocols
 - Changing S25 cadence, hysteresis, range, TargetDied, damage formula
 
 ---
@@ -375,15 +438,16 @@ Minimal vertical slice (recommended after code analysis):
 
 | Risk | Mitigation |
 | --- | --- |
-| Listen-server double play | Single receive path; never Play from AttemptAttackHit body |
-| Presentation starts gating damage | Code review + tests: emit after Apply only; no waits |
-| Clients infer hits from Health | Prefer event channel; Health remains secondary |
-| Multicast spam / bandwidth | Compact payload; one event per hit |
-| Late join misses cosmetics | Accept in S26A; optional LastEvent OnRep |
-| Dedicated loads assets | Soft refs + NetMode gate; no hard constructor loads |
-| Coupling to BP assets | Debug-only default; soft optional paths |
-| Event before FinishAttack reentrancy | Emit after Apply with same serial guards as AttackHitApplied |
-| Confusion with unused Attacking tags | Do not require tags for S26A; optional later |
+| Listen-server double play | Single multicast receive Play path; never inline Play on emit |
+| Presentation gates damage | Emit after Apply only; no waits |
+| Reliable channel congestion | Unreliable multicast only for S26A cosmetics |
+| Stale reliable backlog | Eliminated by rejecting reliable transport |
+| Dropped beats | Accepted cosmetic loss; Sequence for diagnostics, not retry |
+| Late join empty cosmetics | Expected S26A semantics |
+| Dedicated visual work | NetMode gate; no debug draw on DS |
+| UnitBase pollution | Multicast on presentation component, not UnitBase |
+| Sequence wrap `<=` bugs | Comment wrap as practically irrelevant for S26A |
+| Coupling to BP assets | Debug-only default |
 
 ---
 
@@ -391,15 +455,15 @@ Minimal vertical slice (recommended after code analysis):
 
 Docs-only until explicit S26A implementation task.
 
-Suggested implementation order (future):
+Suggested order (future):
 
-1. Define `FGP_CombatPresentationEvent` + EventType enum (GPRuntime).
-2. Add `UGP_CombatPresentationComponent` (replicate/multicast + dedupe + NetMode gate + debug draw).
-3. Attach to `AGP_UnitBase`; no mesh/anim dependency.
-4. Emit from CommandComponent **after** AttackHitApplied metadata is finalized (incl. blocked).
+1. Define payload struct/args + EventType (GPRuntime); Source omitted; time as float.
+2. Add replicated `UGP_CombatPresentationComponent` default subobject on UnitBase.
+3. Authority Sequence++ + Unreliable NetMulticast; receive = dedupe + NetMode gate + debug viz.
+4. Emit from CommandComponent after AttackHitApplied; no inline Play.
 5. Non-shipping debug commands / log category.
-6. Operator matrix (listen + client).
-7. Finalization builds; still no required Content assets.
+6. Operator matrix (listen + client + dedicated no-visual).
+7. Finalization builds; no required Content assets.
 
 ---
 
@@ -407,17 +471,18 @@ Suggested implementation order (future):
 
 | ID | Case | Expect |
 | --- | --- | --- |
-| P1 | Listen server host attacks | One presentation log/debug viz per hit |
-| P2 | Remote client observes attack | Same Sequence/Serial/metadata; one viz |
+| P1 | Listen server host attacks | One presentation log/debug viz per received hit |
+| P2 | Remote client observes attack | Sequence/Serial/metadata; one viz when packet arrives |
 | P3 | Melee-like immediate Attack in range | Event on first hit without gameplay delay |
-| P4 | Blocked damage (Armor/Res) | Event with bBlocked; cooldown still schedules |
-| P5 | Repeated cadence | Sequences increase; no dupes |
-| P6 | TargetDied on hit | Event may flag death; AttackFinished TargetDied unchanged |
+| P4 | Blocked damage | Event with bBlocked; cooldown still schedules |
+| P5 | Repeated cadence | Sequences increase; duplicates ignored |
+| P6 | TargetDied on hit | Optional death flag; AttackFinished TargetDied unchanged |
 | P7 | Attacker dies mid-Attack | No crash; no further events |
-| P8 | Attack → Move replacement | Old Attack stops; no gameplay change; cosmetics may finish |
-| P9 | Duplicate suppression | Inject/replay same Sequence → ignored |
-| P10 | Dedicated server | No visual execution / no asset load errors |
-| P11 | Late join / relevancy (if LastEvent shipped) | Sees last event or acceptable miss if multicast-only |
+| P8 | Attack → Move replacement | Gameplay unchanged; cosmetics may finish if already received |
+| P9 | Duplicate suppression | Same Sequence ignored |
+| P10 | Dedicated server | No visual/debug draw / no asset load errors |
+| P11 | Late join / become relevant | **No** replay of past cosmetic hits (expected) |
+| P12 | Artificial packet drop (if testable) | Missed beat does not affect damage/cadence |
 
 Gameplay regression checks (must remain PASS): immediate hit, cadence, hysteresis, RangeUnreachable, SelfSupersede, TargetDied.
 
@@ -430,13 +495,11 @@ Gameplay regression checks (must remain PASS): immediate hit, cadence, hysteresi
 | This analysis branch | **None** (docs only) |
 | S26A implementation | GPEditor Dev + UHT; operator PIE listen+client; finalization GP Dev + Shipping |
 
-Automated tests: none required for analysis; S26A may add a lightweight authority emit unit test if harness exists (currently no Attack automation).
-
 ---
 
 ## Stop condition
 
-- Document `GP-S26_Combat_Presentation.md` committed.
+- Document `GP-S26_Combat_Presentation.md` updated with review corrections.
 - AI Project Log + Cursor Work Report updated.
 - Branch `feature/gp-s26-combat-presentation-analysis` pushed.
 - **No** C++ diff. **No** Blueprint assets. **No** merge to main. **No** PR.

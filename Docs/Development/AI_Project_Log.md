@@ -3755,3 +3755,28 @@ Status: **GP-S26_ANALYSIS_READY_FOR_REVIEW**
 
 ### Stop condition
 Commit/push `feature/gp-s26-combat-presentation-analysis` only. No merge to main. No PR. Do **not** start GP-S26A implementation without explicit task.
+
+## 2026-08-04 — GP-S26 / Combat Presentation — analysis review correction
+
+Status: **GP-S26_ANALYSIS_READY_FOR_REVIEW**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S26_Combat_Presentation.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+- C++ unchanged
+
+### What was done
+- Review correction on analysis `d5e8b13`: keep Option A cosmetic event after AttackHitApplied.
+- Locked S26A transport to **Unreliable NetMulticast** (scale + no reliable backlog of stale hits).
+- Removed LastPresentationEvent / late-join replay / relevancy catch-up from S26A; missed cosmetics are expected.
+- PresentationSequence retained for dedupe/diagnostics only (not redelivery); first value 1; payload-only.
+- Chose multicast on replicated `UGP_CombatPresentationComponent` over UnitBase RPC to minimize UnitBase pollution.
+- Payload: omit Source (owner-derived); Target explicit; AuthoritativeWorldTime as float; no time-sync feature.
+
+### Builds / validation
+- Build not required (docs only)
+- No C++ diff
+
+### Stop condition
+Commit/push same branch `feature/gp-s26-combat-presentation-analysis`. No merge to main. No PR. Do **not** start GP-S26A implementation without explicit task.

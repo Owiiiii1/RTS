@@ -26,9 +26,16 @@ namespace GPPrimitiveVisualBuilder
 					return Found->Get();
 				}
 			}
+
+			// Unresolved explicit parent → actor root (not presentation root) to avoid surprise scale inherit.
+			UE_LOG(LogGPPrimitiveVisualBuilder, Warning,
+				TEXT("GP PrimitiveVisualBuild: unresolved ParentPartName=%s for Part=%s; attach actor root"),
+				*Part.ParentPartName.ToString(),
+				*Part.PartName.ToString());
+			return FallbackRoot;
 		}
 
-		if (PresentationRoot != nullptr && !Part.bPresentationRoot)
+		if (!Part.bPresentationRoot && PresentationRoot != nullptr)
 		{
 			return PresentationRoot;
 		}
@@ -53,22 +60,30 @@ namespace GPPrimitiveVisualBuilder
 			return false;
 		}
 
-		for (const FGP_PrimitiveVisualPart& PartDef : Definition.Parts)
-		{
-			if (PartDef.PartName.IsNone())
-			{
-				UE_LOG(LogGPPrimitiveVisualBuilder, Warning,
-					TEXT("GP PrimitiveVisualBuild: skip empty PartName Owner=%s"),
-					LogOwnerLabel != nullptr ? LogOwnerLabel : TEXT("null"));
-				continue;
-			}
+		const FGP_PrimitiveVisualValidationResult Validation =
+			GPPrimitiveVisualDefaults::ValidateAndSanitizeDefinition(Definition);
+		const FGP_PrimitiveVisualDefinition& Def =
+			Validation.bValid ? Validation.SanitizedDefinition : Definition;
 
-			if (OutResult.PartLookup.Contains(PartDef.PartName))
+		if (!Validation.bValid)
+		{
+			UE_LOG(LogGPPrimitiveVisualBuilder, Warning,
+				TEXT("GP PrimitiveVisualBuild: Owner=%s definition failed validation; building best-effort"),
+				LogOwnerLabel != nullptr ? LogOwnerLabel : TEXT("null"));
+		}
+
+		struct FPendingPart
+		{
+			FGP_PrimitiveVisualPart Def;
+			TObjectPtr<UStaticMeshComponent> Component;
+		};
+		TArray<FPendingPart> Pending;
+
+		// Pass 1: create all parts attached to actor root so order-independent parents can resolve.
+		for (const FGP_PrimitiveVisualPart& PartDef : Def.Parts)
+		{
+			if (PartDef.PartName.IsNone() || OutResult.PartLookup.Contains(PartDef.PartName))
 			{
-				UE_LOG(LogGPPrimitiveVisualBuilder, Warning,
-					TEXT("GP PrimitiveVisualBuild: duplicate PartName=%s Owner=%s"),
-					*PartDef.PartName.ToString(),
-					LogOwnerLabel != nullptr ? LogOwnerLabel : TEXT("null"));
 				continue;
 			}
 
@@ -83,16 +98,6 @@ namespace GPPrimitiveVisualBuilder
 				continue;
 			}
 
-			USceneComponent* AttachParent = ResolveAttachParent(
-				PartDef,
-				AttachRoot,
-				OutResult.PresentationRootComponent.Get(),
-				OutResult.PartLookup);
-			if (AttachParent == nullptr)
-			{
-				continue;
-			}
-
 			UStaticMeshComponent* PartComp = NewObject<UStaticMeshComponent>(
 				Owner,
 				UStaticMeshComponent::StaticClass(),
@@ -104,14 +109,16 @@ namespace GPPrimitiveVisualBuilder
 			}
 
 			PartComp->SetMobility(EComponentMobility::Movable);
-			PartComp->SetupAttachment(AttachParent);
+			PartComp->SetupAttachment(AttachRoot);
 			PartComp->SetRelativeLocation(PartDef.RelativeLocation);
 			PartComp->SetRelativeRotation(PartDef.RelativeRotation);
 			PartComp->SetRelativeScale3D(PartDef.RelativeScale);
 			PartComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			PartComp->SetGenerateOverlapEvents(false);
 			PartComp->SetCanEverAffectNavigation(false);
-			PartComp->SetCastShadow(false);
+			PartComp->SetCastShadow(PartDef.bCastShadow);
+			PartComp->SetVisibility(PartDef.bVisible, true);
+			PartComp->SetHiddenInGame(!PartDef.bVisible);
 			PartComp->SetStaticMesh(Mesh);
 			PartComp->RegisterComponent();
 
@@ -123,6 +130,40 @@ namespace GPPrimitiveVisualBuilder
 				OutResult.PresentationRootComponent = PartComp;
 				OutResult.PresentationRootPartName = PartDef.PartName;
 			}
+
+			FPendingPart PendingPart;
+			PendingPart.Def = PartDef;
+			PendingPart.Component = PartComp;
+			Pending.Add(PendingPart);
+		}
+
+		// Pass 2: reparent according to hierarchy / presentation-root sibling policy.
+		for (FPendingPart& PendingPart : Pending)
+		{
+			UStaticMeshComponent* PartComp = PendingPart.Component.Get();
+			if (PartComp == nullptr)
+			{
+				continue;
+			}
+
+			USceneComponent* DesiredParent = ResolveAttachParent(
+				PendingPart.Def,
+				AttachRoot,
+				OutResult.PresentationRootComponent.Get(),
+				OutResult.PartLookup);
+			if (DesiredParent == nullptr || DesiredParent == PartComp)
+			{
+				continue;
+			}
+
+			if (PartComp->GetAttachParent() != DesiredParent)
+			{
+				PartComp->AttachToComponent(DesiredParent, FAttachmentTransformRules::KeepRelativeTransform);
+			}
+			// Relative transforms are authored vs intended parent — re-apply after hierarchy resolve.
+			PartComp->SetRelativeLocation(PendingPart.Def.RelativeLocation);
+			PartComp->SetRelativeRotation(PendingPart.Def.RelativeRotation);
+			PartComp->SetRelativeScale3D(PendingPart.Def.RelativeScale);
 		}
 
 		const bool bBuilt = OutResult.PartComponents.Num() > 0;

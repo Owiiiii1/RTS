@@ -6,11 +6,18 @@
 #include "Engine/World.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Units/GPUnitBase.h"
+#include "UObject/SoftObjectPath.h"
+
+#if WITH_EDITOR
+#include "Misc/App.h"
+#endif
 
 #if !UE_BUILD_SHIPPING
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
+#include "Resources/GPResourceNode.h"
 #include "Units/GPUnit.h"
+#include "Visual/GPResourceNodeVisualComponent.h"
 #endif
 
 DEFINE_LOG_CATEGORY(LogGPUnitVisual);
@@ -19,6 +26,20 @@ UGP_UnitVisualComponent::UGP_UnitVisualComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(false);
+	VisualProfile = TSoftObjectPtr<UGP_PrimitiveVisualProfile>(
+		FSoftObjectPath(GPPrimitiveVisualDefaults::DefaultInfantryMeleeProfilePath()));
+}
+
+void UGP_UnitVisualComponent::OnRegister()
+{
+	Super::OnRegister();
+
+#if WITH_EDITOR
+	if (!IsTemplate() && GetWorld() != nullptr && !GetWorld()->IsGameWorld())
+	{
+		RebuildVisual();
+	}
+#endif
 }
 
 void UGP_UnitVisualComponent::BeginPlay()
@@ -32,6 +53,19 @@ void UGP_UnitVisualComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	ClearVisual();
 	Super::EndPlay(EndPlayReason);
 }
+
+#if WITH_EDITOR
+void UGP_UnitVisualComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	const FName PropName = PropertyChangedEvent.GetPropertyName();
+	if (PropName == GET_MEMBER_NAME_CHECKED(UGP_UnitVisualComponent, VisualProfile)
+		|| PropName == GET_MEMBER_NAME_CHECKED(UGP_UnitVisualComponent, VisualArchetype))
+	{
+		RebuildVisual();
+	}
+}
+#endif
 
 EGP_VisualArchetype UGP_UnitVisualComponent::GetVisualArchetype() const
 {
@@ -51,6 +85,48 @@ bool UGP_UnitVisualComponent::IsDedicatedVisualSuppressed() const
 bool UGP_UnitVisualComponent::HasBuiltVisual() const
 {
 	return bVisualBuilt;
+}
+
+bool UGP_UnitVisualComponent::IsUsingFallback() const
+{
+	return bUsingFallback;
+}
+
+EGP_VisualDefinitionSource UGP_UnitVisualComponent::GetActiveVisualSource() const
+{
+	return ActiveVisualSource;
+}
+
+FString UGP_UnitVisualComponent::GetVisualProfilePath() const
+{
+	return VisualProfile.ToSoftObjectPath().IsValid()
+		? VisualProfile.ToSoftObjectPath().ToString()
+		: FString(TEXT("None"));
+}
+
+bool UGP_UnitVisualComponent::IsProfileValid() const
+{
+	return bProfileValid;
+}
+
+int32 UGP_UnitVisualComponent::GetProfileValidationErrorCount() const
+{
+	return ProfileValidationErrorCount;
+}
+
+int32 UGP_UnitVisualComponent::GetProfilePartCount() const
+{
+	return ProfilePartCount;
+}
+
+bool UGP_UnitVisualComponent::IsHierarchyValid() const
+{
+	return bHierarchyValid;
+}
+
+int32 UGP_UnitVisualComponent::GetDuplicatePartNameCount() const
+{
+	return DuplicatePartNameCount;
 }
 
 FName UGP_UnitVisualComponent::GetPresentationRootPartName() const
@@ -73,12 +149,7 @@ bool UGP_UnitVisualComponent::AreVisualPartCollisionsDisabled() const
 
 	for (const TObjectPtr<UStaticMeshComponent>& Part : BuiltVisual.PartComponents)
 	{
-		if (Part == nullptr)
-		{
-			continue;
-		}
-
-		if (Part->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+		if (Part != nullptr && Part->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
 		{
 			return false;
 		}
@@ -87,10 +158,73 @@ bool UGP_UnitVisualComponent::AreVisualPartCollisionsDisabled() const
 	return true;
 }
 
+void UGP_UnitVisualComponent::SetVisualProfile(TSoftObjectPtr<UGP_PrimitiveVisualProfile> NewProfile)
+{
+	VisualProfile = NewProfile;
+	RebuildVisual();
+}
+
 bool UGP_UnitVisualComponent::ShouldSuppressVisualConstruction() const
 {
 	const UWorld* World = GetWorld();
 	return World != nullptr && World->GetNetMode() == NM_DedicatedServer;
+}
+
+FGP_PrimitiveVisualDefinition UGP_UnitVisualComponent::ResolveDefinition()
+{
+	bUsingFallback = true;
+	bProfileValid = false;
+	bHierarchyValid = true;
+	ProfileValidationErrorCount = 0;
+	ProfilePartCount = 0;
+	DuplicatePartNameCount = 0;
+	ActiveVisualSource = EGP_VisualDefinitionSource::NativeFallback;
+
+	UGP_PrimitiveVisualProfile* Profile = VisualProfile.IsNull() ? nullptr : VisualProfile.LoadSynchronous();
+	if (Profile != nullptr)
+	{
+		ProfilePartCount = Profile->Parts.Num();
+		TArray<FString> Errors;
+		FGP_PrimitiveVisualDefinition FromAsset;
+		if (Profile->GetValidatedDefinition(FromAsset, Errors))
+		{
+			FGP_PrimitiveVisualDefinition Check = FromAsset;
+			Check.Archetype = VisualArchetype;
+			const FGP_PrimitiveVisualValidationResult Validation =
+				GPPrimitiveVisualDefaults::ValidateAndSanitizeDefinition(Check);
+			bProfileValid = Validation.bValid;
+			bHierarchyValid = Validation.bHierarchyValid;
+			DuplicatePartNameCount = Validation.DuplicatePartNameCount;
+			ProfileValidationErrorCount = Validation.Errors.Num();
+			if (Validation.bValid)
+			{
+				bUsingFallback = false;
+				ActiveVisualSource = EGP_VisualDefinitionSource::DataAsset;
+				FromAsset.Archetype = VisualArchetype;
+				return Validation.SanitizedDefinition.Parts.Num() > 0
+					? Validation.SanitizedDefinition
+					: FromAsset;
+			}
+		}
+		else
+		{
+			ProfileValidationErrorCount = Errors.Num();
+			bHierarchyValid = false;
+		}
+
+		UE_LOG(LogGPUnitVisual, Warning,
+			TEXT("GP UnitVisual: Owner=%s invalid profile=%s — native InfantryMelee fallback"),
+			*GetNameSafe(GetOwner()),
+			*GetVisualProfilePath());
+	}
+
+	FGP_PrimitiveVisualDefinition Native =
+		GPPrimitiveVisualDefaults::MakeDefinitionForArchetype(VisualArchetype);
+	const FGP_PrimitiveVisualValidationResult NativeValidation =
+		GPPrimitiveVisualDefaults::ValidateAndSanitizeDefinition(Native);
+	bHierarchyValid = NativeValidation.bHierarchyValid;
+	DuplicatePartNameCount = NativeValidation.DuplicatePartNameCount;
+	return NativeValidation.bValid ? NativeValidation.SanitizedDefinition : Native;
 }
 
 void UGP_UnitVisualComponent::RebuildVisual()
@@ -101,21 +235,19 @@ void UGP_UnitVisualComponent::RebuildVisual()
 	{
 		bDedicatedVisualSuppressed = true;
 		UE_LOG(LogGPUnitVisual, Verbose,
-			TEXT("GP UnitVisual: Owner=%s Archetype=%s DedicatedVisualSuppressed=true (no parts)"),
-			*GetNameSafe(GetOwner()),
-			GPPrimitiveVisualDefaults::ArchetypeToString(VisualArchetype));
+			TEXT("GP UnitVisual: Owner=%s DedicatedVisualSuppressed=true"),
+			*GetNameSafe(GetOwner()));
 		return;
 	}
 
 	bDedicatedVisualSuppressed = false;
 	AActor* Owner = GetOwner();
 	USceneComponent* OwnerRoot = Owner != nullptr ? Owner->GetRootComponent() : nullptr;
-	const FGP_PrimitiveVisualDefinition Definition =
-		GPPrimitiveVisualDefaults::MakeDefinitionForArchetype(VisualArchetype);
+	CachedDefinition = ResolveDefinition();
 	bVisualBuilt = GPPrimitiveVisualBuilder::BuildFromDefinition(
 		Owner,
 		OwnerRoot,
-		Definition,
+		CachedDefinition,
 		BuiltVisual,
 		*GetNameSafe(Owner));
 	ApplyTeamColorFallback();
@@ -150,10 +282,19 @@ void UGP_UnitVisualComponent::ApplyTeamColorFallback()
 		Tint = FLinearColor(0.25f, 0.75f, 0.35f, 1.0f);
 	}
 
+	TSet<FName> TintEligible;
+	for (const FGP_PrimitiveVisualPart& Part : CachedDefinition.Parts)
+	{
+		if (Part.bTeamTintEligible)
+		{
+			TintEligible.Add(Part.PartName);
+		}
+	}
+
 	bool bAnyParameterApplied = false;
 	for (TObjectPtr<UStaticMeshComponent>& Part : BuiltVisual.PartComponents)
 	{
-		if (Part == nullptr)
+		if (Part == nullptr || !TintEligible.Contains(Part->GetFName()))
 		{
 			continue;
 		}
@@ -285,7 +426,7 @@ namespace GPUnitVisualDebug
 		}
 
 		UE_LOG(LogGPUnitVisual, Log,
-			TEXT("GP UnitVisual.Inspect: Source=%s VisualComponent=%s Archetype=%s Parts=%d PartNames=[%s] PresentationRoot=%s Role=%s NetMode=%s DedicatedVisualSuppressed=%s TickEnabled=%s VisualPartCollisionDisabled=%s LegacyVisualMesh=%s HasBuiltVisual=%s"),
+			TEXT("GP UnitVisual.Inspect: Source=%s VisualComponent=%s Archetype=%s Parts=%d PartNames=[%s] PresentationRoot=%s Role=%s NetMode=%s DedicatedVisualSuppressed=%s TickEnabled=%s VisualCollisionDisabled=%s LegacyVisualMesh=%s HasBuiltVisual=%s VisualProfile=%s VisualSource=%s ProfileValid=%s ProfileValidationErrors=%d ProfilePartCount=%d BuiltPartCount=%d IsUsingFallback=%s DuplicatePartNames=%d HierarchyValid=%s"),
 			*Unit->GetName(),
 			Visual != nullptr ? TEXT("present") : TEXT("missing"),
 			Visual != nullptr
@@ -300,12 +441,93 @@ namespace GPUnitVisualDebug
 			(Visual != nullptr && Visual->IsComponentTickEnabled()) ? TEXT("true") : TEXT("false"),
 			(Visual == nullptr || Visual->AreVisualPartCollisionsDisabled()) ? TEXT("true") : TEXT("false"),
 			Unit->HasLegacyVisualMesh() ? TEXT("present") : TEXT("absent"),
-			(Visual != nullptr && Visual->HasBuiltVisual()) ? TEXT("true") : TEXT("false"));
+			(Visual != nullptr && Visual->HasBuiltVisual()) ? TEXT("true") : TEXT("false"),
+			Visual != nullptr ? *Visual->GetVisualProfilePath() : TEXT("n/a"),
+			Visual != nullptr
+				? GPPrimitiveVisualDefaults::VisualSourceToString(Visual->GetActiveVisualSource())
+				: TEXT("n/a"),
+			(Visual != nullptr && Visual->IsProfileValid()) ? TEXT("true") : TEXT("false"),
+			Visual != nullptr ? Visual->GetProfileValidationErrorCount() : 0,
+			Visual != nullptr ? Visual->GetProfilePartCount() : 0,
+			Visual != nullptr ? Visual->GetPartCount() : 0,
+			(Visual != nullptr && Visual->IsUsingFallback()) ? TEXT("true") : TEXT("false"),
+			Visual != nullptr ? Visual->GetDuplicatePartNameCount() : 0,
+			(Visual == nullptr || Visual->IsHierarchyValid()) ? TEXT("true") : TEXT("false"));
+	}
+
+	static void VisualRebuild(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPUnitVisual, Warning, TEXT("GP Visual.Rebuild: missing world"));
+			return;
+		}
+
+		FString Target = Args.Num() > 0 ? Args[0] : TEXT("All");
+		const bool bUnit = Target.Equals(TEXT("Unit"), ESearchCase::IgnoreCase) || Target.Equals(TEXT("All"), ESearchCase::IgnoreCase);
+		const bool bResource = Target.Equals(TEXT("Resource"), ESearchCase::IgnoreCase) || Target.Equals(TEXT("All"), ESearchCase::IgnoreCase);
+		if (!bUnit && !bResource)
+		{
+			UE_LOG(LogGPUnitVisual, Warning, TEXT("GP Visual.Rebuild: usage gp.Visual.Rebuild [Unit|Resource|All]"));
+			return;
+		}
+
+		if (bUnit)
+		{
+			if (AGP_Unit* Unit = FindInspectUnit(World))
+			{
+				if (UGP_UnitVisualComponent* Visual = Unit->GetUnitVisualComponent())
+				{
+					Visual->RebuildVisual();
+					UE_LOG(LogGPUnitVisual, Log, TEXT("GP Visual.Rebuild: Unit=%s Source=%s Fallback=%s"),
+						*Unit->GetName(),
+						GPPrimitiveVisualDefaults::VisualSourceToString(Visual->GetActiveVisualSource()),
+						Visual->IsUsingFallback() ? TEXT("true") : TEXT("false"));
+				}
+			}
+			else
+			{
+				UE_LOG(LogGPUnitVisual, Warning, TEXT("GP Visual.Rebuild: no AGP_Unit found"));
+			}
+		}
+
+		if (bResource)
+		{
+			AGP_ResourceNode* Best = nullptr;
+			for (TActorIterator<AGP_ResourceNode> It(World); It; ++It)
+			{
+				if (IsValid(*It) && (Best == nullptr || (*It)->GetName() < Best->GetName()))
+				{
+					Best = *It;
+				}
+			}
+
+			if (Best != nullptr)
+			{
+				if (UGP_ResourceNodeVisualComponent* Visual = Best->GetResourceNodeVisualComponent())
+				{
+					Visual->RebuildVisual();
+					UE_LOG(LogGPUnitVisual, Log, TEXT("GP Visual.Rebuild: Resource=%s Source=%s Fallback=%s"),
+						*Best->GetName(),
+						GPPrimitiveVisualDefaults::VisualSourceToString(Visual->GetActiveVisualSource()),
+						Visual->IsUsingFallback() ? TEXT("true") : TEXT("false"));
+				}
+			}
+			else
+			{
+				UE_LOG(LogGPUnitVisual, Warning, TEXT("GP Visual.Rebuild: no AGP_ResourceNode found"));
+			}
+		}
 	}
 
 	static FAutoConsoleCommandWithWorldAndArgs GUnitVisualInspectCommand(
 		TEXT("gp.UnitVisual.Inspect"),
 		TEXT("Inspect primitive unit visual composition for the first AGP_Unit in the world."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&UnitVisualInspect));
+
+	static FAutoConsoleCommandWithWorldAndArgs GVisualRebuildCommand(
+		TEXT("gp.Visual.Rebuild"),
+		TEXT("Local cosmetic rebuild of first Unit and/or ResourceNode visual. Usage: gp.Visual.Rebuild [Unit|Resource|All]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&VisualRebuild));
 }
 #endif

@@ -6,6 +6,7 @@
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "Visual/GPPrimitiveVisualTypes.h"
 #include "Visual/GPResourceNodeVisualComponent.h"
 
 #if !UE_BUILD_SHIPPING
@@ -247,7 +248,7 @@ namespace GPResourceNodeDebug
 		}
 
 		UE_LOG(LogGPResourceNode, Log,
-			TEXT("GP ResourceNode.Inspect: Actor=%s ResourceType=%s MaxAmount=%d CurrentAmount=%d Depleted=%s Role=%s NetMode=%s Replicates=%s AlwaysRelevant=%s CollisionComponent=%s CollisionEnabled=%s CollisionProfile=%s AffectsNavigation=%s VisualComponent=%s VisualBuilt=%s Parts=%d PartNames=[%s] DedicatedVisualSuppressed=%s TickEnabled=%s VisualCollisionDisabled=%s"),
+			TEXT("GP ResourceNode.Inspect: Actor=%s ResourceType=%s MaxAmount=%d CurrentAmount=%d Depleted=%s Role=%s NetMode=%s Replicates=%s AlwaysRelevant=%s CollisionComponent=%s CollisionEnabled=%s CollisionProfile=%s AffectsNavigation=%s VisualComponent=%s VisualBuilt=%s Parts=%d PartNames=[%s] DedicatedVisualSuppressed=%s TickEnabled=%s VisualCollisionDisabled=%s VisualProfile=%s VisualSource=%s ProfileValid=%s ProfileValidationErrors=%d ProfilePartCount=%d BuiltPartCount=%d IsUsingFallback=%s DuplicatePartNames=%d HierarchyValid=%s"),
 			*Node->GetName(),
 			GPResourceTypePrivate::ToString(Node->GetResourceType()),
 			Node->GetMaxAmount(),
@@ -275,7 +276,18 @@ namespace GPResourceNodeDebug
 			*PartNamesJoined,
 			(Visual != nullptr && Visual->IsDedicatedVisualSuppressed()) ? TEXT("true") : TEXT("false"),
 			Node->IsActorTickEnabled() ? TEXT("true") : TEXT("false"),
-			(Visual == nullptr || Visual->AreVisualPartCollisionsDisabled()) ? TEXT("true") : TEXT("false"));
+			(Visual == nullptr || Visual->AreVisualPartCollisionsDisabled()) ? TEXT("true") : TEXT("false"),
+			Visual != nullptr ? *Visual->GetVisualProfilePath() : TEXT("n/a"),
+			Visual != nullptr
+				? GPPrimitiveVisualDefaults::VisualSourceToString(Visual->GetActiveVisualSource())
+				: TEXT("n/a"),
+			(Visual != nullptr && Visual->IsProfileValid()) ? TEXT("true") : TEXT("false"),
+			Visual != nullptr ? Visual->GetProfileValidationErrorCount() : 0,
+			Visual != nullptr ? Visual->GetProfilePartCount() : 0,
+			Visual != nullptr ? Visual->GetPartCount() : 0,
+			(Visual != nullptr && Visual->IsUsingFallback()) ? TEXT("true") : TEXT("false"),
+			Visual != nullptr ? Visual->GetDuplicatePartNameCount() : 0,
+			(Visual == nullptr || Visual->IsHierarchyValid()) ? TEXT("true") : TEXT("false"));
 	}
 
 	static void ResourceNodeConsume(const TArray<FString>& Args, UWorld* World)

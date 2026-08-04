@@ -1,5 +1,31 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-04 — GP-S26B2A Editable Primitive Visual Profiles
+
+Status: GP-S26B2A_CODE_AND_ASSETS_READY_OPERATOR_VALIDATION_PENDING
+
+### Branch / baseline
+- Branch: `feature/gp-s26b2a-editable-visual-profiles`
+- Base: `main` @ `215b4b603e7fd333ef9b379103329bfac03edbf4`
+- Task: `Docs/Development/Claude_Tasks/GP-S26B2A_Editable_Primitive_Visual_Profiles.md`
+
+### What was done
+- `UGP_PrimitiveVisualProfile` DataAsset + editable `FGP_PrimitiveVisualPart` + validation/sanitize + native fallback
+- Soft default profiles on `UGP_UnitVisualComponent` / `UGP_ResourceNodeVisualComponent`; CallInEditor Rebuild Visual
+- Two-pass hierarchy builder; Inspect fields; `gp.Visual.Rebuild`
+- Assets: `DA_Visual_InfantryMelee`, `DA_Visual_Ore` (LFS); AlwaysCook + AssetManager AlwaysCook
+- Seed commandlet `-run=GPVisualProfileSeed`
+- GPEditor Win64 Development + UHT **PASSED**
+- No map population / generator / GameDefaultMap / new archetypes
+
+### Intentionally not done
+- Operator validation pending; no GP Dev/Shipping; no PR/merge; no other profiles / S27A3
+
+### Operator next
+- Validate A–E in task doc (edit assets → Rebuild Visual; fallback; listen+client)
+
+---
+
 ## 2026-08-04 — GP-S27A2 Editor Generator Foundation
 
 Status: GP-S27A2_FINALIZED_READY_FOR_MERGE  

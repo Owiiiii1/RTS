@@ -1,76 +1,87 @@
 # Cursor Work Report
 
 ## Task
-GP-S26B1 Primitive Visual Foundation finalization
+GP-S27A Persistent Prototype Arena + One-Shot Editor Generator + Ore Node — analysis
 
 ## Status
-GP-S26B1_FINALIZED_READY_FOR_MERGE
-
-Overall: **GP-S26B1_DONE_PRIMITIVE_VISUAL_FOUNDATION**
+GP-S27A_ANALYSIS_READY_FOR_REVIEW
 
 ## Branch
-feature/gp-s26b1-primitive-visual-foundation
+feature/gp-s27a-prototype-arena-analysis
 
 ## Base
-main @ bfc762675bba6266011be948c228913c8fc5a324
+main @ 805756d12477b23bf7794f674e534fafba8ce360
 
-## Implementation Commit
-7212604d4cdae4a8310fa8e8db8d7811b36f9452
+## Current Map / Editor State
+- No project `.umap`; Content = Enhanced Input only
+- `GameDefaultMap` = Engine OpenWorld template
+- GameMode `AGP_GameMode` / CameraPawn / PC configured
+- **No Editor module** (only `GPEditor` Target loading Runtime modules)
+- No NavMesh/Recast usage in project C++; no ResourceNode actor
+- Units: placeable `AGP_Unit`; no tracked level population
+- Git LFS already tracks `*.umap` / `*.uasset`
+- Python editor plugin: not enabled
 
-## Correction Commit
-70f4cc23e4dda3799bc3d49a647d2a935eaa2c0d
+## Chosen Map Strategy
+**A — new compact non–World-Partition** `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`  
+Rejected: WP arena, Engine OpenWorld ownership, Data Layer complexity for MVP.
 
-## Architecture
-- `UGP_UnitVisualComponent` builds Engine basic-shape parts from native `FGP_PrimitiveVisualDefinition`
-- Non-replicated parts; no permanent tick; dedicated suppresses construction
-- Capsule remains gameplay/selection root; S26A presentation untouched
+## Chosen Editor Generator Strategy
+**Primary:** Editor-module console command + menu (`gp.Editor.GeneratePrototypeArena`) via subsystem.  
+**Fallback:** `CallInEditor` actor calling same code.  
+Never PIE; abort if map exists; explicit rebuild command separate.
 
-## AGP_Unit Migration
-- Removed legacy `VisualMesh` Cylinder
-- Added `UnitVisualComponent`; `HasLegacyVisualMesh()` always false
+## Editor Module Decision
+Add **`GPEditor`** Editor-type module (Build.cs, IMPLEMENT_MODULE, generator, menus); register in `.uproject` + `GPEditor.Target.cs`. Not in Game target → absent from packaged game.
 
-## Primitive Composition
-InfantryMelee: **Body** (Cylinder) + **Forward** (elongated Cube nose) + **Weapon** (Cube), after readability correction.
+## Resource Node Architecture
+`AGP_ResourceNode : AActor` (replicated): Ore type, Max/Current amount; root gameplay collision; primitive visuals via shared/thin visual component — **not** a unit subclass. Gather/deplete out of scope. Selection optional/deferred if still unit-only.
 
-## Operator Validation Matrix
+## Ore Visual Proposal
+Base Cylinder + Core Cone + 3–4 accent Cones (≤6 parts); visual NoCollision; no material/anim; RTS-readable crystal pile.
 
-| Area | Result |
-| --- | --- |
-| Listen / client composition | **PASS** |
-| Move / Attack / selection / death cleanup | **PASS** |
-| NoCollision visuals; idle tick off; legacy absent | **PASS** |
-| Cadence + S26A unchanged | **PASS** |
-| Inspect contract | **PASS** |
-| Visual readability (post-correction) | **PASS** |
+## Exact Arena Layout Proposal
+4000×4000 floor; Team1 (−1400) / Team2 (+1400); melee/blocked/kill/OOR test pairs (OOR ~450 given range 250); 5 ore; 6–8 obstacles; lights; PlayerStart; NavMeshBounds; ~40–50 actors; tag `GP.GeneratedPrototypeArena`; deterministic labels.
 
-## Visual Correction Result
-Forward Cone→Cube nose; Weapon enlarged/offset. Operator recheck: looks correct.
+## Navigation Strategy
+Introduce Recast + bounds; editor build after generate; save with map; ore/obstacles block nav; no runtime regen for MVP.
 
-## Final Build Results
-- GPEditor Win64 Development — **PASSED** on `70f4cc23e4dda3799bc3d49a647d2a935eaa2c0d` (not re-run; C++ frozen)
-- GP Win64 Development — **PASSED** (exit 0; `GP.exe`)
-- GP Win64 Shipping — **PASSED** (exit 0; `GP-Win64-Shipping.exe`)
-- No C++ changes during finalization
+## Multiplayer Implications
+Persistent map only; server-authoritative units/ore; no runtime duplicate generation; editor code not in game build.
 
-## Known Limitations
-- Team color needs project material for reliable tint
-- Only InfantryMelee archetype
-- No B2 combat cosmetics / arena / resource node
+## Idempotency / Rebuild Policy
+Default **abort if exists**; explicit rebuild command; generated-actor tag; companion layout manifest.
 
-## Files Changed During Finalization
-Documentation only:
-- `Docs/Development/Claude_Tasks/GP-S26B1_Primitive_Visual_Foundation.md`
+## Binary Map / Git Policy
+LFS `.umap` (already configured); non-reviewable binary diff; companion `.layout.md`/`.json` with version/seed/actor table; deterministic generator.
+
+## Implementation Slices
+- **S27A1** ResourceNode foundation (no map)
+- **S27A2** Editor module + empty arena save
+- **S27A3** Populate units/ore/tests + nav + validation
+
+## Validation Matrix
+See analysis §14 (node / generator / arena).
+
+## Rejected Options
+Runtime/PIE generation; WP-first; OpenWorld as owned map; Ore-as-Unit; Python-first; silent overwrite.
+
+## API Gaps Noted
+Per-instance combat stats need EditInstanceOnly overrides or editor helpers (Defaults are EditDefaultsOnly today). Harvest command currently expects `AGP_UnitBase` + resource tag — align when gather lands.
+
+## Files Changed
+- `Docs/Development/Claude_Tasks/GP-S27A_Prototype_Arena_Analysis.md` (new)
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Final Commit SHA
-8c26810e1ecf91a83aa13da7285b40df05155afc
+## Diff Status
+- C++ diff: **none**
+- Assets / umap diff: **none**
+- Build: **not required**
+
+## Commit SHA
+COMMIT_SHA_PLACEHOLDER
 
 ## Git State
-- Ahead of main; behind 0
-- Push to `feature/gp-s26b1-primitive-visual-foundation`
-- No binaries / Saved / Intermediate / DDC / Blueprint / assets / level in commit
-- No B2 / arena / resource-node changes
-
-## Ready-for-Merge Conclusion
-**GP-S26B1_FINALIZED_READY_FOR_MERGE** — ready to merge when requested. Do not merge in this close-out. Do not start GP-S26B2 or GP-S27A here.
+- Push to `feature/gp-s27a-prototype-arena-analysis`
+- No merge to main; no PR; no implementation; no `.umap` created

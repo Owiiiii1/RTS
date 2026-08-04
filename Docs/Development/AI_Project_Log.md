@@ -3962,3 +3962,25 @@ Status: **GP-S26B1_FINALIZED_READY_FOR_MERGE**
 
 ### Stop condition
 Commit/push `feature/gp-s26b1-primitive-visual-foundation` only. **READY_FOR_MAIN_MERGE** when operator requests. No PR/merge in this close-out.
+
+## 2026-08-04 — GP-S27A / Prototype Arena — analysis
+
+Status: **GP-S27A_ANALYSIS_READY_FOR_REVIEW**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S27A_Prototype_Arena_Analysis.md` (new)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+- C++ unchanged; no `.umap` / assets created
+
+### What was done
+- Branched from `main` @ `805756d` → `feature/gp-s27a-prototype-arena-analysis`.
+- Verified: no project maps; no Editor module; GameDefaultMap=Engine OpenWorld; no NavMesh usage; no ResourceNode; LFS already tracks umap; TeamId instance-editable; combat defaults class-only.
+- Chose non-WP persistent `L_PrototypeArena` + one-shot Editor-module generator (abort-if-exists); `AGP_ResourceNode` non-unit actor; ore primitives; arena layout for AttackRange≈250; Recast editor-built nav; slices A1→A2→A3.
+
+### Builds / validation
+- Build not required (docs only)
+- C++ diff: none; assets diff: none
+
+### Stop condition
+Commit/push `feature/gp-s27a-prototype-arena-analysis` only. No merge to main. No PR. Do **not** start S27A1 implementation without explicit task.

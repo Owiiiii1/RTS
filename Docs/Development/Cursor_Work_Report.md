@@ -16,7 +16,7 @@ main @ 74c058914a6349b3a9d0f83161023ff54b742be7
 e2bf9ea86c7e49e1a4b841577d9b737fbf05a778
 
 ## Correction commit SHA
-(pending)
+51a310acfd2200d2bedd0b2a03221274d09f73d0
 
 ## Operator functional matrix
 **PASS** (implementation candidate):

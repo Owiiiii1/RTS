@@ -1,87 +1,86 @@
 # Cursor Work Report
 
 ## Task
-GP-S26B Primitive Visual MVP Architecture — analysis revision
+GP-S26B1 Primitive Visual Foundation
 
 ## Status
-GP-S26B_ANALYSIS_READY_FOR_REVIEW
+GP-S26B1_CODE_READY_OPERATOR_VALIDATION_PENDING
 
 ## Branch
-feature/gp-s26b-combat-assets-analysis
+feature/gp-s26b1-primitive-visual-foundation
 
 ## Base
-main @ 80251125bbf03566edb4ec902f8770ee900d9bde
+main @ bfc762675bba6266011be948c228913c8fc5a324
 
-## Prior Analysis Commit
-09b97157aa64531755801db03b05ffddeb5334fc (combat-assets wait direction — superseded)
+## Architecture Implemented
+`UGP_UnitVisualComponent` builds non-replicated Engine basic-shape `UStaticMeshComponent` parts from a native `FGP_PrimitiveVisualDefinition`. Capsule remains gameplay/selection root. S26A presentation contract untouched. No combat animation / projectile.
 
-## Revised Product Direction
-Do **not** wait for authored art for MVP. Ship a playable, readable RTS using Engine primitives and composite primitive meshes, replaceable later without gameplay changes.
+## Exact Native Types
+- `EGP_PrimitiveShape` — Cube, Sphere, Cylinder, Cone, Capsule (→ Cylinder mesh)
+- `EGP_VisualArchetype` — InfantryMelee (extensible)
+- `EGP_PrimitiveVisualCollisionPolicy` / `VisibilityPolicy`
+- `FGP_PrimitiveVisualPart` — name, shape, transforms, parent, role bools
+- `FGP_PrimitiveVisualDefinition` — archetype + parts array
+- `GPPrimitiveVisualDefaults::MakeInfantryMeleeDefinition()`
 
-## Verified Empty Asset State
-- Content: 10 Enhanced Input packages only
-- No skeletal/anim/Niagara/sound/projectile/unit BP combat art
-- `AGP_Unit`: capsule + Engine Cylinder
-- S26A presentation channel live
+## Component Ownership
+- Default subobject on **`AGP_Unit`** (minimal scope; not UnitBase)
+- Non-replicated; tick disabled
+- Build in `BeginPlay`; clear in `EndPlay`
 
-## Primitive MVP Goals
-Readable infantry/heavy/worker/tank/artillery/turret/monsters/buildings/resource node; bullet/shell/energy projectiles; normal/blocked/killing impacts; death/destruction; facing/team/selection/health — via architecture + phased slices.
+## AGP_Unit Migration
+- Removed `VisualMesh` `UStaticMeshComponent` + ConstructorHelpers Cylinder
+- Added `UnitVisualComponent` + `GetUnitVisualComponent()` / `HasLegacyVisualMesh()` (always false)
+- No external C++ references to old `VisualMesh` found
 
-## Proposed Architecture
-`UGP_UnitVisualComponent` + `UGP_PrimitiveVisualProfile` (DataAsset + native defaults). Consumes S26A accepted events. Soft Engine shape paths. No gameplay hard refs. Capsule remains collision/selection authority.
+## Primitive Composition (InfantryMelee)
+1. **Body** — Cylinder, PresentationRoot + Body
+2. **Forward** — Cone parented to Body, FacingIndicator (+X)
+3. **Weapon** — Cube parented to Body, Weapon (static)
 
-## Visual Part Schema
-`FGP_PrimitiveVisualPart`: name, shape enum, transforms, parent, flags (root/facing/weapon/turret/animated), team-color mode, NoCollision visuals.
+## Team Color Decision
+Attempted runtime DMI + common vector params (`BaseColor`/`Color`/…). Engine BasicShapes materials likely ignore these — **not claimed as reliable team color**. Full team color requires a separate minimal project material (editor/operator step). Facing silhouette remains primary direction cue.
 
-## Archetype Catalog
-Infantry melee/ranged, heavy, worker, tank, artillery, turret, monsters (melee/ranged/boss), HQ/barracks/factory/defense/resource — parts, hierarchy, move/attack/death styles; only `AGP_Unit` is existing host today; others future actors.
+## Dedicated Behavior
+`NM_DedicatedServer` → no part components created; `DedicatedVisualSuppressed=true`; no cosmetic tick.
 
-## Animation Model
-Local transform cosmetics via transient tick/timer + easing; styles for move/attack/hit/death; idle disables tick; death cancels attack; not replicated.
-
-## Projectile / Timing Decision
-B1/B2: melee + reactive Impact only (no travel projectile).  
-**GP-S26C:** AttackFired + Impact two-phase; cosmetic pooled projectile; damage stays authoritative.
-
-## Team Color Strategy
-C++ apply path + DMI/CPD if Engine materials allow; optional operator-created minimal project material; fallback without claiming complex `.uasset` authoring from C++.
-
-## Profile Assignment
-MVP: `EGP_VisualArchetype` (+ CDO defaults / optional soft DA). Combat code ignores visual archetype for damage/range.
-
-## Gameplay Boundaries
-Visual NoCollision; selection on capsule; visual scale ≠ range; cosmetic facing; no permanent tick; no replicated anim state; dedicated suppresses mesh/play.
-
-## Roadmap Slices
-- **B1** foundation (parts, infantry prototype, facing, team fallback)
-- **B2** combat cosmetics on S26A Impact
-- **B3** full archetype catalog
-- **S26C** two-phase ranged + projectiles
-
-## Scalability Analysis
-Part caps; shared team materials; tick-on-active-only; pooled projectiles; unreliable cosmetics; budgets for 100/500/1000 visible units.
-
-## Validation Matrix
-Foundation / combat / catalog / scale matrices documented in analysis §Validation.
-
-## Rejected Approaches
-Wait-for-art; skeletal-in-MVP; GameplayCue-primary; projectile damage; hard gameplay→mesh refs; permanent tick; replicated anim transforms; reliable cosmetic RPC.
+## Inspector Command
+`gp.UnitVisual.Inspect` (non-shipping) — actor, component, archetype, parts, root, Role/NetMode, dedicated flag, tick, visual collision, legacy mesh absent/present, built flag.
 
 ## Files Changed
-- `Docs/Development/Claude_Tasks/GP-S26B_Primitive_Visual_MVP_Architecture.md` (new; replaces `GP-S26B_Combat_Assets_Analysis.md`)
-- `Docs/Development/Claude_Tasks/GP-S26B_Combat_Assets_Analysis.md` (deleted)
-- `Docs/Development/Claude_Tasks/GP-S26_Combat_Presentation.md` (deferred refs updated)
+- `GP/Source/GPRuntime/Public/Visual/GPPrimitiveVisualTypes.h` (new)
+- `GP/Source/GPRuntime/Private/Visual/GPPrimitiveVisualTypes.cpp` (new)
+- `GP/Source/GPRuntime/Public/Visual/GPUnitVisualComponent.h` (new)
+- `GP/Source/GPRuntime/Private/Visual/GPUnitVisualComponent.cpp` (new)
+- `GP/Source/GPRuntime/Public/Units/GPUnit.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnit.cpp`
+- `Docs/Development/Claude_Tasks/GP-S26B1_Primitive_Visual_Foundation.md` (new)
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Diff Status
-- C++ diff: **none**
-- Assets diff: **none**
-- Build: **not required**
+## Build Results
+- GPEditor Win64 Development — **PASSED** (UHT/makefile refresh; compiled visual types + component + GPUnit; linked GPRuntime)
+- GP Dev/Shipping — deferred to finalization
+
+## Operator Validation Steps
+1. Listen: Body/Forward/Weapon visible; no duplicate old Cylinder
+2. Remote client: same composition
+3. Facing cone tracks actor forward on rotate/move
+4. Selection / capsule collision / Attack cadence unchanged
+5. Death cleans parts with actor
+6. `gp.UnitVisual.Inspect` fields as documented
+7. Idle: TickEnabled=false; visual collision disabled
+
+## Known Limitations
+- Only InfantryMelee archetype
+- Team color DMI may be a no-op on Engine materials
+- No combat cosmetics (B2)
+- Capsule shape enum maps to Cylinder mesh
+- No DataAsset / Blueprint / level
 
 ## Commit SHA
-11ae3cb69a877b612f989d0883409f7a30422683
+COMMIT_SHA_PLACEHOLDER
 
 ## Git State
-- Push to `feature/gp-s26b-combat-assets-analysis`
-- No merge to main; no PR; no implementation; no asset creation
+- Push to `feature/gp-s26b1-primitive-visual-foundation`
+- No merge to main; no PR; no Blueprint/assets/level; no B2

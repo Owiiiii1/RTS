@@ -3,9 +3,8 @@
 #include "Units/GPUnit.h"
 
 #include "Components/CapsuleComponent.h"
-#include "Components/StaticMeshComponent.h"
 #include "Tags/GPGameplayTags.h"
-#include "UObject/ConstructorHelpers.h"
+#include "Visual/GPUnitVisualComponent.h"
 
 AGP_Unit::AGP_Unit()
 {
@@ -20,21 +19,7 @@ AGP_Unit::AGP_Unit()
 	CapsuleComponent->SetCanEverAffectNavigation(false);
 	CapsuleComponent->SetSimulatePhysics(false);
 
-	VisualMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
-	VisualMesh->SetupAttachment(CapsuleComponent);
-	VisualMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	VisualMesh->SetGenerateOverlapEvents(false);
-	VisualMesh->SetCanEverAffectNavigation(false);
-	VisualMesh->SetMobility(EComponentMobility::Movable);
-	// BasicShapes Cylinder is ~100 tall / diameter 100; scale to sit inside capsule (r=42, hh=88).
-	VisualMesh->SetRelativeScale3D(FVector(0.80f, 0.80f, 1.60f));
-
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(
-		TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	if (CylinderMesh.Succeeded())
-	{
-		VisualMesh->SetStaticMesh(CylinderMesh.Object);
-	}
+	UnitVisualComponent = CreateDefaultSubobject<UGP_UnitVisualComponent>(TEXT("UnitVisualComponent"));
 
 	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
 	CapabilityTags.Reset();
@@ -50,4 +35,14 @@ AGP_Unit::AGP_Unit()
 	{
 		CapabilityTags.AddTag(GPTags.Selection_Type_Unit);
 	}
+}
+
+UGP_UnitVisualComponent* AGP_Unit::GetUnitVisualComponent() const
+{
+	return UnitVisualComponent;
+}
+
+bool AGP_Unit::HasLegacyVisualMesh() const
+{
+	return false;
 }

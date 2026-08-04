@@ -1,0 +1,115 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GPPrimitiveVisualTypes.generated.h"
+
+/** Engine basic-shape kind used by primitive MVP visuals (GP-S26B1). */
+UENUM()
+enum class EGP_PrimitiveShape : uint8
+{
+	Cube,
+	Sphere,
+	Cylinder,
+	Cone,
+	/** Resolved as Engine Cylinder with capsule-like scale (no Engine Capsule basic mesh). */
+	Capsule
+};
+
+/** Visual archetype identity (cosmetic only; not used by combat gameplay). */
+UENUM()
+enum class EGP_VisualArchetype : uint8
+{
+	InfantryMelee UMETA(DisplayName = "InfantryMelee")
+	// Future: InfantryRanged, HeavyInfantry, Worker, Tank, Artillery, Turret, Monsters, Buildings, ResourceNode
+};
+
+/** Collision policy for visual parts (MVP: always NoCollision). */
+UENUM()
+enum class EGP_PrimitiveVisualCollisionPolicy : uint8
+{
+	NoCollision
+};
+
+/** Visibility policy for visual parts. */
+UENUM()
+enum class EGP_PrimitiveVisualVisibilityPolicy : uint8
+{
+	AlwaysVisible,
+	HideOnDedicatedServer
+};
+
+/** Single primitive part in a composite visual definition. */
+USTRUCT()
+struct GPRUNTIME_API FGP_PrimitiveVisualPart
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FName PartName;
+
+	UPROPERTY()
+	EGP_PrimitiveShape Shape = EGP_PrimitiveShape::Cube;
+
+	UPROPERTY()
+	FVector RelativeLocation = FVector::ZeroVector;
+
+	UPROPERTY()
+	FRotator RelativeRotation = FRotator::ZeroRotator;
+
+	UPROPERTY()
+	FVector RelativeScale = FVector::OneVector;
+
+	/** Empty = attach under unit root (presentation attach parent). */
+	UPROPERTY()
+	FName ParentPartName;
+
+	UPROPERTY()
+	bool bPresentationRoot = false;
+
+	UPROPERTY()
+	bool bBody = false;
+
+	UPROPERTY()
+	bool bFacingIndicator = false;
+
+	UPROPERTY()
+	bool bWeapon = false;
+
+	UPROPERTY()
+	bool bTurret = false;
+
+	UPROPERTY()
+	bool bAnimated = false;
+
+	UPROPERTY()
+	EGP_PrimitiveVisualCollisionPolicy CollisionPolicy = EGP_PrimitiveVisualCollisionPolicy::NoCollision;
+
+	UPROPERTY()
+	EGP_PrimitiveVisualVisibilityPolicy VisibilityPolicy = EGP_PrimitiveVisualVisibilityPolicy::HideOnDedicatedServer;
+};
+
+/** Native composite visual definition (no DataAsset instance in B1). */
+USTRUCT()
+struct GPRUNTIME_API FGP_PrimitiveVisualDefinition
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	EGP_VisualArchetype Archetype = EGP_VisualArchetype::InfantryMelee;
+
+	UPROPERTY()
+	TArray<FGP_PrimitiveVisualPart> Parts;
+};
+
+namespace GPPrimitiveVisualDefaults
+{
+	/** Native InfantryMelee prototype (≤4 parts). Cosmetic only. */
+	GPRUNTIME_API FGP_PrimitiveVisualDefinition MakeInfantryMeleeDefinition();
+
+	GPRUNTIME_API FGP_PrimitiveVisualDefinition MakeDefinitionForArchetype(EGP_VisualArchetype Archetype);
+
+	GPRUNTIME_API const TCHAR* ArchetypeToString(EGP_VisualArchetype Archetype);
+	GPRUNTIME_API const TCHAR* ShapeToString(EGP_PrimitiveShape Shape);
+}

@@ -3886,3 +3886,32 @@ Status: **GP-S26B_ANALYSIS_READY_FOR_REVIEW**
 
 ### Stop condition
 Commit/push same branch `feature/gp-s26b-combat-assets-analysis`. No merge to main. No PR. Do **not** start GP-S26B1 implementation without explicit task.
+
+## 2026-08-04 — GP-S26B1 / Primitive Visual Foundation — candidate checkpoint
+
+Status: **GP-S26B1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Visual/GPPrimitiveVisualTypes.h` (new)
+- `GP/Source/GPRuntime/Private/Visual/GPPrimitiveVisualTypes.cpp` (new)
+- `GP/Source/GPRuntime/Public/Visual/GPUnitVisualComponent.h` (new)
+- `GP/Source/GPRuntime/Private/Visual/GPUnitVisualComponent.cpp` (new)
+- `GP/Source/GPRuntime/Public/Units/GPUnit.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnit.cpp`
+- `Docs/Development/Claude_Tasks/GP-S26B1_Primitive_Visual_Foundation.md` (new)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Branch from `main` @ `bfc7626` → `feature/gp-s26b1-primitive-visual-foundation`.
+- Replaced `AGP_Unit` legacy Cylinder `VisualMesh` with `UGP_UnitVisualComponent` composite InfantryMelee (Body/Forward/Weapon).
+- Dedicated suppresses part construction; no idle tick; visual parts NoCollision; capsule/selection/gameplay unchanged.
+- Team tint: best-effort DMI params on Engine basic materials (unverified visual efficacy); full team color needs operator material step.
+- `gp.UnitVisual.Inspect` non-shipping. No B2 combat cosmetics / projectiles / assets / levels.
+
+### Builds / validation
+- GPEditor Win64 Development + UHT — **PASSED**
+- Operator validation pending
+
+### Stop condition
+Commit/push `feature/gp-s26b1-primitive-visual-foundation` only. No merge to main. No PR. Do **not** start B2 without explicit task.

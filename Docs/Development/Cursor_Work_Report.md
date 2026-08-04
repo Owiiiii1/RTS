@@ -1,87 +1,76 @@
 # Cursor Work Report
 
 ## Task
-GP-S26B Primitive Visual MVP Architecture — analysis revision
+GP-S26B1 Primitive Visual Foundation finalization
 
 ## Status
-GP-S26B_ANALYSIS_READY_FOR_REVIEW
+GP-S26B1_FINALIZED_READY_FOR_MERGE
+
+Overall: **GP-S26B1_DONE_PRIMITIVE_VISUAL_FOUNDATION**
 
 ## Branch
-feature/gp-s26b-combat-assets-analysis
+feature/gp-s26b1-primitive-visual-foundation
 
 ## Base
-main @ 80251125bbf03566edb4ec902f8770ee900d9bde
+main @ bfc762675bba6266011be948c228913c8fc5a324
 
-## Prior Analysis Commit
-09b97157aa64531755801db03b05ffddeb5334fc (combat-assets wait direction — superseded)
+## Implementation Commit
+7212604d4cdae4a8310fa8e8db8d7811b36f9452
 
-## Revised Product Direction
-Do **not** wait for authored art for MVP. Ship a playable, readable RTS using Engine primitives and composite primitive meshes, replaceable later without gameplay changes.
+## Correction Commit
+70f4cc23e4dda3799bc3d49a647d2a935eaa2c0d
 
-## Verified Empty Asset State
-- Content: 10 Enhanced Input packages only
-- No skeletal/anim/Niagara/sound/projectile/unit BP combat art
-- `AGP_Unit`: capsule + Engine Cylinder
-- S26A presentation channel live
+## Architecture
+- `UGP_UnitVisualComponent` builds Engine basic-shape parts from native `FGP_PrimitiveVisualDefinition`
+- Non-replicated parts; no permanent tick; dedicated suppresses construction
+- Capsule remains gameplay/selection root; S26A presentation untouched
 
-## Primitive MVP Goals
-Readable infantry/heavy/worker/tank/artillery/turret/monsters/buildings/resource node; bullet/shell/energy projectiles; normal/blocked/killing impacts; death/destruction; facing/team/selection/health — via architecture + phased slices.
+## AGP_Unit Migration
+- Removed legacy `VisualMesh` Cylinder
+- Added `UnitVisualComponent`; `HasLegacyVisualMesh()` always false
 
-## Proposed Architecture
-`UGP_UnitVisualComponent` + `UGP_PrimitiveVisualProfile` (DataAsset + native defaults). Consumes S26A accepted events. Soft Engine shape paths. No gameplay hard refs. Capsule remains collision/selection authority.
+## Primitive Composition
+InfantryMelee: **Body** (Cylinder) + **Forward** (elongated Cube nose) + **Weapon** (Cube), after readability correction.
 
-## Visual Part Schema
-`FGP_PrimitiveVisualPart`: name, shape enum, transforms, parent, flags (root/facing/weapon/turret/animated), team-color mode, NoCollision visuals.
+## Operator Validation Matrix
 
-## Archetype Catalog
-Infantry melee/ranged, heavy, worker, tank, artillery, turret, monsters (melee/ranged/boss), HQ/barracks/factory/defense/resource — parts, hierarchy, move/attack/death styles; only `AGP_Unit` is existing host today; others future actors.
+| Area | Result |
+| --- | --- |
+| Listen / client composition | **PASS** |
+| Move / Attack / selection / death cleanup | **PASS** |
+| NoCollision visuals; idle tick off; legacy absent | **PASS** |
+| Cadence + S26A unchanged | **PASS** |
+| Inspect contract | **PASS** |
+| Visual readability (post-correction) | **PASS** |
 
-## Animation Model
-Local transform cosmetics via transient tick/timer + easing; styles for move/attack/hit/death; idle disables tick; death cancels attack; not replicated.
+## Visual Correction Result
+Forward Cone→Cube nose; Weapon enlarged/offset. Operator recheck: looks correct.
 
-## Projectile / Timing Decision
-B1/B2: melee + reactive Impact only (no travel projectile).  
-**GP-S26C:** AttackFired + Impact two-phase; cosmetic pooled projectile; damage stays authoritative.
+## Final Build Results
+- GPEditor Win64 Development — **PASSED** on `70f4cc23e4dda3799bc3d49a647d2a935eaa2c0d` (not re-run; C++ frozen)
+- GP Win64 Development — **PASSED** (exit 0; `GP.exe`)
+- GP Win64 Shipping — **PASSED** (exit 0; `GP-Win64-Shipping.exe`)
+- No C++ changes during finalization
 
-## Team Color Strategy
-C++ apply path + DMI/CPD if Engine materials allow; optional operator-created minimal project material; fallback without claiming complex `.uasset` authoring from C++.
+## Known Limitations
+- Team color needs project material for reliable tint
+- Only InfantryMelee archetype
+- No B2 combat cosmetics / arena / resource node
 
-## Profile Assignment
-MVP: `EGP_VisualArchetype` (+ CDO defaults / optional soft DA). Combat code ignores visual archetype for damage/range.
-
-## Gameplay Boundaries
-Visual NoCollision; selection on capsule; visual scale ≠ range; cosmetic facing; no permanent tick; no replicated anim state; dedicated suppresses mesh/play.
-
-## Roadmap Slices
-- **B1** foundation (parts, infantry prototype, facing, team fallback)
-- **B2** combat cosmetics on S26A Impact
-- **B3** full archetype catalog
-- **S26C** two-phase ranged + projectiles
-
-## Scalability Analysis
-Part caps; shared team materials; tick-on-active-only; pooled projectiles; unreliable cosmetics; budgets for 100/500/1000 visible units.
-
-## Validation Matrix
-Foundation / combat / catalog / scale matrices documented in analysis §Validation.
-
-## Rejected Approaches
-Wait-for-art; skeletal-in-MVP; GameplayCue-primary; projectile damage; hard gameplay→mesh refs; permanent tick; replicated anim transforms; reliable cosmetic RPC.
-
-## Files Changed
-- `Docs/Development/Claude_Tasks/GP-S26B_Primitive_Visual_MVP_Architecture.md` (new; replaces `GP-S26B_Combat_Assets_Analysis.md`)
-- `Docs/Development/Claude_Tasks/GP-S26B_Combat_Assets_Analysis.md` (deleted)
-- `Docs/Development/Claude_Tasks/GP-S26_Combat_Presentation.md` (deferred refs updated)
+## Files Changed During Finalization
+Documentation only:
+- `Docs/Development/Claude_Tasks/GP-S26B1_Primitive_Visual_Foundation.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Diff Status
-- C++ diff: **none**
-- Assets diff: **none**
-- Build: **not required**
-
-## Commit SHA
-11ae3cb69a877b612f989d0883409f7a30422683
+## Final Commit SHA
+8c26810e1ecf91a83aa13da7285b40df05155afc
 
 ## Git State
-- Push to `feature/gp-s26b-combat-assets-analysis`
-- No merge to main; no PR; no implementation; no asset creation
+- Ahead of main; behind 0
+- Push to `feature/gp-s26b1-primitive-visual-foundation`
+- No binaries / Saved / Intermediate / DDC / Blueprint / assets / level in commit
+- No B2 / arena / resource-node changes
+
+## Ready-for-Merge Conclusion
+**GP-S26B1_FINALIZED_READY_FOR_MERGE** — ready to merge when requested. Do not merge in this close-out. Do not start GP-S26B2 or GP-S27A here.

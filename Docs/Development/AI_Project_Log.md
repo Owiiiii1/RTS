@@ -3886,3 +3886,79 @@ Status: **GP-S26B_ANALYSIS_READY_FOR_REVIEW**
 
 ### Stop condition
 Commit/push same branch `feature/gp-s26b-combat-assets-analysis`. No merge to main. No PR. Do **not** start GP-S26B1 implementation without explicit task.
+
+## 2026-08-04 — GP-S26B1 / Primitive Visual Foundation — candidate checkpoint
+
+Status: **GP-S26B1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Public/Visual/GPPrimitiveVisualTypes.h` (new)
+- `GP/Source/GPRuntime/Private/Visual/GPPrimitiveVisualTypes.cpp` (new)
+- `GP/Source/GPRuntime/Public/Visual/GPUnitVisualComponent.h` (new)
+- `GP/Source/GPRuntime/Private/Visual/GPUnitVisualComponent.cpp` (new)
+- `GP/Source/GPRuntime/Public/Units/GPUnit.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnit.cpp`
+- `Docs/Development/Claude_Tasks/GP-S26B1_Primitive_Visual_Foundation.md` (new)
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Branch from `main` @ `bfc7626` → `feature/gp-s26b1-primitive-visual-foundation`.
+- Replaced `AGP_Unit` legacy Cylinder `VisualMesh` with `UGP_UnitVisualComponent` composite InfantryMelee (Body/Forward/Weapon).
+- Dedicated suppresses part construction; no idle tick; visual parts NoCollision; capsule/selection/gameplay unchanged.
+- Team tint: best-effort DMI params on Engine basic materials (unverified visual efficacy); full team color needs operator material step.
+- `gp.UnitVisual.Inspect` non-shipping. No B2 combat cosmetics / projectiles / assets / levels.
+
+### Builds / validation
+- GPEditor Win64 Development + UHT — **PASSED**
+- Operator validation pending
+
+### Stop condition
+Commit/push `feature/gp-s26b1-primitive-visual-foundation` only. No merge to main. No PR. Do **not** start B2 without explicit task.
+
+## 2026-08-04 — GP-S26B1 / InfantryMelee visual readability correction
+
+Status: **GP-S26B1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Files changed
+- `GP/Source/GPRuntime/Private/Visual/GPPrimitiveVisualTypes.cpp` — Forward/Weapon transforms
+- Docs (task / AI log / Cursor report)
+
+### What was done
+- Functional operator matrix already **PASS**.
+- Forward: Cone→elongated Cube nose (RTS cam); larger / further forward.
+- Weapon: ~1.8× length, thicker, offset further from Body (still Cube).
+- Body unchanged; 3 parts; no gameplay/tick/collision/asset changes.
+
+### Builds / validation
+- GPEditor Win64 Development — **PASSED**
+- Visual readability — pending operator recheck
+
+### Stop condition
+Commit/push same branch. No finalization. No merge to main. No B2.
+
+## 2026-08-04 — GP-S26B1 / Primitive Visual Foundation — finalization
+
+Status: **GP-S26B1_FINALIZED_READY_FOR_MERGE**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S26B1_Primitive_Visual_Foundation.md`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md`
+- C++ unchanged at finalization
+
+### What was done
+- Operator accepted functional matrix + Inspect + visual readability after Forward/Weapon correction (`70f4cc2`).
+- Final builds: GP Win64 Development + Shipping **PASSED**.
+- Last GPEditor build: **PASSED** at correction `70f4cc2` (not re-run; docs-only finalization).
+- Overall: **GP-S26B1_DONE_PRIMITIVE_VISUAL_FOUNDATION**. Known limits: team color needs material; InfantryMelee only.
+- No known blockers. Ready for main merge when requested. Do **not** merge / start B2 / S27A in this close-out.
+
+### Builds / validation
+- GPEditor Dev — previously **PASSED** at `70f4cc2`; C++ frozen
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- Operator — **CODE_DONE_OPERATOR_ACCEPTED** for S26B1
+
+### Stop condition
+Commit/push `feature/gp-s26b1-primitive-visual-foundation` only. **READY_FOR_MAIN_MERGE** when operator requests. No PR/merge in this close-out.

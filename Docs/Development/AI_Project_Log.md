@@ -3703,3 +3703,30 @@ Status: **GP-S25B_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ### Stop condition
 Commit/push same branch. No merge to main.
+
+## 2026-08-04 — GP-S25B / Attack Cadence Integration — finalization
+
+Status: **GP-S25B_FINALIZED_READY_FOR_MERGE**
+
+### Files changed
+- `Docs/Development/Claude_Tasks/GP-S25_Attack_Damage_Execution.md` — S25B finalized; overall S25 `DONE_WITH_VISUAL_COMBAT_DEFERRED`
+- `Docs/Development/AI_Project_Log.md` (this entry)
+- `Docs/Development/Cursor_Work_Report.md` — finalization report
+- C++ unchanged at finalization
+
+### What was done
+- Operator accepted full GP-S25B matrix: immediate first hit, world-time cadence, cooldown re-read, blocked-damage cooldown, TargetDied (normal/external/sync), attacker death stop, Attack→Move, retarget serial+immediate hit, GAS/component range, cooldown min 0.05, strict SetStats, RangeUnreachable, SelfSupersede, NextHitTime/FirstHitAttempted preserve, Ready/Approaching hysteresis (entry ≤ range, exit > range+20, damage ≤ range).
+- Validation defects already fixed on branch: strict SetStats + RangeUnreachable (`9c31e79`); exit hysteresis (`e5333fa`).
+- Final builds: GP Win64 Development + Shipping **PASSED**.
+- Last implementation editor build/UHT: **PASSED** at `e5333fa` (not re-run; docs-only finalization).
+- No known blockers. Ready for main merge when requested. Do **not** merge in this close-out.
+
+### Builds / validation
+- GPEditor Dev + UHT — previously **PASSED** at `e5333fa`; C++ frozen
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+- Operator — **CODE_DONE_OPERATOR_ACCEPTED** for S25B
+- Overall GP-S25 — **DONE_WITH_VISUAL_COMBAT_DEFERRED**
+
+### Stop condition
+Commit/push `feature/gp-s25b-attack-cadence-integration` only. **READY_FOR_MAIN_MERGE** when operator requests. Do **not** merge in this close-out. Do **not** create PR.

@@ -1,16 +1,19 @@
 # GP-S25 Attack Damage Execution
 
 ## Status
-**GP-S25B_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**DONE_WITH_VISUAL_COMBAT_DEFERRED**
+
+GP-S25A: merged to main (`7864b2b`).  
+GP-S25B: **FINALIZED_READY_FOR_MERGE** — operator-validated on `feature/gp-s25b-attack-cadence-integration`.
 
 ## Baseline
 `main` @ `7864b2bc45060f48021f46a1711d71fd62b0f3da` (Merge GP-S25A health and damage foundation)
 
-Depends on: GP-S25A `GP-S25A_DONE_GP-S25B_PENDING` merged; GP-S24 Attack executor; GP-S03 Attribute Sets.
+Depends on: GP-S25A merged; GP-S24 Attack executor; GP-S03 Attribute Sets.
 
 Branch: `feature/gp-s25b-attack-cadence-integration`
 
-Recommended close status after full S25A+S25B operator validation + final builds: **`DONE_WITH_VISUAL_COMBAT_DEFERRED`** (not yet)
+Overall S25 close status after S25A+S25B operator validation + final builds: **`DONE_WITH_VISUAL_COMBAT_DEFERRED`**
 
 ---
 
@@ -617,10 +620,12 @@ Head at finalization: `51c9112` (+ docs finalize commit)
 
 ## GP-S25B Implementation Record
 
-Status: **GP-S25B_CODE_READY_OPERATOR_VALIDATION_PENDING**
+Status: **GP-S25B_FINALIZED_READY_FOR_MERGE** (operator-validated)
 
 Branch: `feature/gp-s25b-attack-cadence-integration`
 Base: `main` @ `7864b2bc45060f48021f46a1711d71fd62b0f3da`
+Last implementation commit: `e5333fa7ef853bab2018648d273ffb6ecee7b695`
+Finalization commit: `ad5aebf2ae4b1abede0962f83f8c221becf0aced`
 
 ### Cadence
 - Immediate first hit on first Ready of each Attack serial (`bHasAttemptedFirstHit`)
@@ -629,7 +634,7 @@ Base: `main` @ `7864b2bc45060f48021f46a1711d71fd62b0f3da`
 - Blocked damage (AppliedDamage=0) still schedules cooldown
 - Cooldown invalid/≤0 → 0.05s + `GP AttackCooldownSanitized` Warning on schedule
 - AttackSpeed unused
-- Leave range → Approaching; **NextHitTime preserved**; re-enter Ready waits or hits if expired
+- Leave range → Approaching; **NextHitTime / FirstHitAttempted preserved**; re-enter Ready waits or hits if expired
 - No TimerManager; component Attack tick owns cadence
 
 ### Damage path
@@ -650,6 +655,12 @@ Base: `main` @ `7864b2bc45060f48021f46a1711d71fd62b0f3da`
 - Single resolver used for Ready/Approaching/approach/hit/logs
 - `GetAttackRange()` returns effective runtime range
 
+### Ready/Approaching hysteresis
+- Entry Ready: `Distance <= EffectiveRange` (unchanged; no early hits)
+- Exit Ready → Approaching: `Distance > EffectiveRange + AttackReadyExitTolerance` (20 uu)
+- Hysteresis band: stay Ready, no damage, cadence state preserved
+- Transition log includes `AttackExitRange` / `ExitTolerance` (not per-frame)
+
 ### Debug
 - Enhanced existing `gp.Attack.Inspect` with cadence/range/death-bind fields
 - `gp.Combat.SetStats` strict: exactly `Source|Target` + 7 numeric args; unknown selector rejected (no shift)
@@ -660,13 +671,33 @@ Base: `main` @ `7864b2bc45060f48021f46a1711d71fd62b0f3da`
 - Log: `GP AttackApproachUnreachable` then AttackFinished Reason=RangeUnreachable
 - Tiny GAS AttackRange (e.g. 1) terminates cleanly; hierarchy unchanged
 
-### Operator validation notes (in progress)
-- Typo `sourse` + AttackRange=1 caused MoveStarted/Reached spam — fixed
-- Rerun with correct `Source` selector and normal ranges
+### Defects found and fixed during validation
+1. Typo `sourse` shifted SetStats args → AttackRange=1 spam — fixed: strict selector + argc (`9c31e79`)
+2. Infinite approach when Reached OOR — fixed: RangeUnreachable (`9c31e79`)
+3. Boundary thrashing Ready↔Approaching at Dist ≈ range — fixed: 20 uu exit hysteresis (`e5333fa`)
+
+### Operator validation matrix (accepted)
+
+| Area | Result |
+| --- | --- |
+| Immediate first hit | **PASS** |
+| World-time cadence; cooldown re-read each hit | **PASS** |
+| Blocked damage still schedules cooldown | **PASS** |
+| TargetDied (normal + external); sync death reentrancy | **PASS** |
+| Attacker death stops Attack; Attack→Move replacement | **PASS** |
+| Retarget new serial + immediate hit | **PASS** |
+| GAS AttackRange; component fallback <=0 | **PASS** |
+| Cooldown min 0.05; strict SetStats | **PASS** |
+| RangeUnreachable; moving-target SelfSupersede | **PASS** |
+| NextHitTime / FirstHitAttempted preserved OOR | **PASS** |
+| Hysteresis entry/exit/damage; thrashing eliminated | **PASS** |
+
+No known blockers.
 
 ### Build
-- GPEditor Win64 Development + UHT — **PASSED** (implementation + validation fixes)
-- GP Dev / Shipping deferred to finalization after operator validation
+- GPEditor Win64 Development + UHT — **PASSED** at `e5333fa` (not re-run; C++ frozen at finalization)
+- GP Win64 Development — **PASSED** (finalization)
+- GP Win64 Shipping — **PASSED** (finalization)
 
 ### Still deferred (visual / non-S25B)
 - Animation / projectile / VFX / UI / AttackSpeed / AttackMove / LOS / Nav / prediction

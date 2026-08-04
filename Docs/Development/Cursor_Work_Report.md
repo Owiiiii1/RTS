@@ -107,7 +107,7 @@ Exit codes 0; no compile/link errors.
 C++: **unchanged** at finalization.
 
 ## Final commit SHA
-(pending)
+b8ab0614f8fcd8279d8ea7e6865f951a849a66a4
 
 ## Git state
 Feature branch only; no main change; no PR; no merge; no S27A3; no editable visual profiles started.

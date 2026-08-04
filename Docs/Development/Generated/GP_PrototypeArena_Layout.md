@@ -15,6 +15,7 @@ Status: **GP-S27A2_FINALIZED_READY_FOR_MERGE** (infrastructure SoT; generator is
 - GenerationTimestampUTC: 2026-08-04T15:40:19.859Z
 - ImplementationCommit: `7508fc8eca2acc7f277fe3d9ed7965db15df5711`
 - CorrectionCommit: `bf98e85a69971767cf44b990ac54701d3da46d1e`
+- FinalizationCommit: `b8ab0614f8fcd8279d8ea7e6865f951a849a66a4`
 - SourceCommit: `bf98e85a69971767cf44b990ac54701d3da46d1e`
 
 | Label | Class | Location | Rotation | Scale | Tag | Extra |

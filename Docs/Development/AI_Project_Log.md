@@ -18,6 +18,7 @@ Overall: GP-S27A2_DONE_EDITOR_GENERATOR_FOUNDATION
 - Finalization builds: GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
 - GPEditor Dev+UHT **PASSED** at correction `bf98e85…` (not re-run; C++ frozen)
 - Generator documented as service tooling, not mandatory population workflow
+- Finalization commit: `b8ab0614f8fcd8279d8ea7e6865f951a849a66a4`
 
 ### Intentionally not done
 - No units/ore/combat population; no S27A3; no rebuild command; no default map switch

@@ -1,7 +1,7 @@
 # Cursor Work Report
 
 ## Task
-GP-S25B validation fixes — invalid SetStats selector + unreachable approach loop
+GP-S25B Ready/Approaching boundary hysteresis (anti-thrashing)
 
 ## Status
 GP-S25B_CODE_READY_OPERATOR_VALIDATION_PENDING
@@ -12,42 +12,49 @@ feature/gp-s25b-attack-cadence-integration
 ## Base
 main @ 7864b2bc45060f48021f46a1711d71fd62b0f3da
 
-## Summary
-Operator typed `gp.Combat.SetStats sourse ...`; old parser treated unknown selector as optional and shifted numeric args, setting AttackRange=1. Movement Reached while Dist>range reissued Move forever. Fixes: strict SetStats validation; bounded no-progress approach termination with `RangeUnreachable`.
+## Cause
+With AttackRange=250 and a moving target oscillating Dist ≈ 248–256, Ready used a hard `Distance > EffectiveRange` exit. Each exit started movement; RangeEntryStop re-entered Ready → MoveStarted/MoveStopped/AttackReady spam. Cadence (`NextHitTime` / `FirstHitAttempted`) was already preserved across OOR; the defect was boundary thrashing, not cooldown loss.
 
-## Fix 1 — Strict SetStats
-- Require exactly 8 args: `Source|Target` + 7 floats
-- Unknown selector → Warning `InvalidSelector=... Expected=Source|Target`; no attribute writes
-- Non-numeric args → reject entire command (no partial apply)
-- `LexTryParseString` for numeric validation
+## Fix
+`AttackReadyExitTolerance = 20.0f` (private `static constexpr` on `UGP_UnitCommandComponent`):
 
-## Fix 2 — Unreachable approach
-- New `EGP_AttackTerminalReason::RangeUnreachable`
-- On Reached with Dist > EffectiveRange: track location/distance/destination no-progress
-- After 2 consecutive no-progress results → log `AttackApproachUnreachable` → `FinishAttack(Failed, RangeUnreachable)`
-- Progress state cleared on new Attack / Ready / Finish / Reset / meaningful retarget destination
-- Normal moving-target reissue preserved when destination/distance improves
+| Transition | Condition |
+| --- | --- |
+| → Ready (entry) | `Distance <= EffectiveRange` (unchanged) |
+| Ready → Approaching | `Distance > EffectiveRange + ExitTolerance` (AttackExitRange) |
+| Hit while Ready | Damage only if `Distance <= EffectiveRange`; hysteresis band stays Ready without Approaching and without clearing NextHitTime |
 
-## Unchanged
-Immediate first hit, cadence, TargetDied bind, cooldown schedule, GAS>0 else component range, single damage path, movement core.
+Approaching transition log includes `AttackExitRange` and `ExitTolerance` (not per-frame).
 
 ## Files Changed
-- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
-- `Docs/Development/Claude_Tasks/GP-S25_Attack_Damage_Execution.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h` — `AttackReadyExitTolerance`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp` — EvaluateAttack / AttemptAttackHit / Approaching transition log
+- `Docs/Development/Cursor_Work_Report.md` — this report
+
+## Preserved
+- Immediate first hit; NextHitTime; FirstHitAttempted; cooldown cadence
+- GAS AttackRange → component fallback
+- Moving-target refresh; SelfSupersede; RangeUnreachable
+- Damage path; death lifecycle; command replacement
+- Movement component core
+- Idle/Approaching → Ready entry threshold (no early hits on new Attack)
+
+## Static Scenario Checks
+- Dist 248–256 @ range 250 → remain Ready; no thrash movement
+- Dist > 270 → Ready → Approaching; log AttackExitRange / ExitTolerance
+- Re-entry only at Dist <= 250; hit after cooldown when back inside entry range
+- AttackRange=1 unreachable → still RangeUnreachable
+- Far moving-target approach refresh unchanged
+- Automated Attack tests — none present in repo
 
 ## Build Results
-- GPEditor Development — **PASSED**
-- UHT — **PASSED**
+- GPEditor Win64 Development — Succeeded (18.14s); compiled GPUnitCommandComponent.cpp / GPUnitBase.cpp / Module.GPRuntime.cpp; linked UnrealEditor-GPRuntime
+- UHT — processed GPEditor successfully (header touched; 0 generated files written)
+- Automated Attack tests — N/A (none in repo)
 
-## Operator Validation Needed
-1. `gp.Combat.SetStats sourse ...` → Rejected InvalidSelector; stats unchanged
-2. `gp.Combat.SetStats Source 100 100 25 0 0 1 5000` → applies correctly
-3. Tiny AttackRange=1 unreachable → terminal RangeUnreachable; no infinite MoveStarted/Reached spam
-4. Normal range Attack / cadence / TargetDied still PASS
+## Commit SHA
+(filled after push)
 
 ## Git State
-- Same branch; ahead of main; no merge to main
+- Push to `feature/gp-s25b-attack-cadence-integration`
+- No merge to main; no PR; no finalization

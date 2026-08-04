@@ -854,8 +854,9 @@ void UGP_UnitCommandComponent::EnterAttackApproaching()
 
 	float Distance = -1.0f;
 	const bool bDistanceAvailable = TryComputeAttackDistance2D(Owner, AttackTarget.Get(), Distance);
+	const float AttackExitRange = EffectiveRange + AttackReadyExitTolerance;
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution AttackStateChanged: Unit=%s AttackSerial=%u Target=%s PreviousState=%s NewState=Approaching Distance=%.1f DistanceAvailable=%s AttackRange=%.1f RangeSource=%s NextHitTime=%.3f Role=%s NetMode=%s"),
+		TEXT("GP UnitCommandExecution AttackStateChanged: Unit=%s AttackSerial=%u Target=%s PreviousState=%s NewState=Approaching Distance=%.1f DistanceAvailable=%s AttackRange=%.1f AttackExitRange=%.1f ExitTolerance=%.1f RangeSource=%s NextHitTime=%.3f Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
 		ActiveAttackSerial,
 		*GetNameSafe(AttackTarget.Get()),
@@ -863,6 +864,8 @@ void UGP_UnitCommandComponent::EnterAttackApproaching()
 		Distance,
 		bDistanceAvailable ? TEXT("true") : TEXT("false"),
 		EffectiveRange,
+		AttackExitRange,
+		AttackReadyExitTolerance,
 		AttackRangeSourceToString(RangeSource),
 		NextAttackHitTime,
 		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
@@ -1106,7 +1109,8 @@ void UGP_UnitCommandComponent::EvaluateAttack()
 
 	if (AttackState == EGP_AttackExecutionState::Ready)
 	{
-		if (Distance > EffectiveRange)
+		const float AttackExitRange = EffectiveRange + AttackReadyExitTolerance;
+		if (Distance > AttackExitRange)
 		{
 			EnterAttackApproaching();
 			return;
@@ -1218,16 +1222,25 @@ void UGP_UnitCommandComponent::AttemptAttackHit()
 		return;
 	}
 
-	if (Distance > EffectiveRange)
+	const float AttackExitRange = EffectiveRange + AttackReadyExitTolerance;
+	if (Distance > AttackExitRange)
 	{
 		UE_LOG(LogGPUnitCommandExecution, Log,
-			TEXT("GP AttackHitRejected: Unit=%s Target=%s Serial=%u Reason=OutOfRange Distance=%.1f AttackRange=%.1f"),
+			TEXT("GP AttackHitRejected: Unit=%s Target=%s Serial=%u Reason=OutOfRange Distance=%.1f AttackRange=%.1f AttackExitRange=%.1f ExitTolerance=%.1f"),
 			*GetNameSafe(Owner),
 			*GetNameSafe(Target),
 			HitSerial,
 			Distance,
-			EffectiveRange);
+			EffectiveRange,
+			AttackExitRange,
+			AttackReadyExitTolerance);
 		EnterAttackApproaching();
+		return;
+	}
+
+	if (Distance > EffectiveRange)
+	{
+		// Hysteresis band: stay Ready, preserve NextHitTime / FirstHitAttempted; no damage until re-entry.
 		return;
 	}
 

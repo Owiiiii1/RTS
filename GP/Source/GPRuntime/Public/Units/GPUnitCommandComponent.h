@@ -113,6 +113,12 @@ public:
 	float AttackReissueInterval = 0.25f;
 
 private:
+	/**
+	 * Ready→Approaching only when Distance > EffectiveRange + this tolerance.
+	 * Entry into Ready remains Distance <= EffectiveRange (no early hits).
+	 */
+	static constexpr float AttackReadyExitTolerance = 20.0f;
+
 	void ClearHeldCommand();
 	uint32 AllocateCommandSerial();
 

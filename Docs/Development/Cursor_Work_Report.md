@@ -44,7 +44,7 @@ Body unchanged. Still Body + Forward + Weapon. Cone replaced because tip-forward
 - Header/UHT — not required (`.cpp` definition only)
 
 ## Correction Commit SHA
-COMMIT_SHA_PLACEHOLDER
+70f4cc23e4dda3799bc3d49a647d2a935eaa2c0d
 
 ## Git State
 - Push to `feature/gp-s26b1-primitive-visual-foundation`

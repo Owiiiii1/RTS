@@ -1,62 +1,71 @@
 # Cursor Work Report
 
 ## Task
-GP-S26 Combat Presentation — analysis review correction
+GP-S26A Combat Presentation Events finalization
 
 ## Status
-GP-S26_ANALYSIS_READY_FOR_REVIEW
+GP-S26A_FINALIZED_READY_FOR_MERGE
+
+Overall GP-S26: **GP-S26A_DONE_PRESENTATION_ASSETS_DEFERRED**
 
 ## Branch
-feature/gp-s26-combat-presentation-analysis
+feature/gp-s26a-combat-presentation-events
 
 ## Base
-main @ b511cf5008546cc421971cd4612cbd92c1a8b945
+main @ 3cb1e8055778c1ba4c67fa0546bb7ef96398a3d7
 
-## Prior Analysis Commit
-d5e8b13fec5f4f21e7ed8ed7e8a51b1d73a83a5d
+## Implementation Commit
+85f833415b92a5eeb89f5601c01d9498fb1c4dbe
 
-## Review Correction
-Accepted architecture unchanged: post-AttackHitApplied cosmetic event, cadence independence, generic presentation component, PresentationSequence dedupe, debug-only S26A without assets.
+## Architecture
+- Replicated `UGP_CombatPresentationComponent` default subobject on `AGP_UnitBase`
+- Authority-only emit after successful `ApplyDamageFromUnit` (incl. blocked)
+- Transport: Unreliable NetMulticast `Multicast_CombatPresentationEvent`
+- Payload: PresentationSequence, AttackSerial, Target, EventType (`MeleeImpact`), AuthoritativeWorldTime (`float`), AppliedDamage, bBlocked, bTargetDiedFromHit; Source = owner
+- Snapshot/reentrancy for sync TargetDied; serial-arithmetic Sequence dedupe (skip 0; first=1; payload-only)
+- Single receive Play path (listen host once; remote client once); dedicated early-out before debug draw
+- No LastPresentationEvent / late-join replay / asset dependency
+- No S25 cadence/damage/TargetDied semantic changes
 
-Transport and scope corrected:
+## Operator Validation Matrix
 
-| Topic | Correction |
+| Area | Result |
 | --- | --- |
-| Transport | **Unreliable NetMulticast** (reliable rejected for S26A) |
-| LastEvent | Removed from S26A — no replicated LastPresentationEvent |
-| Late join | No replay / no relevancy catch-up of transient hits (expected) |
-| Sequence | Dedupe + diagnostics only; not retransmission; payload-only; first value 1 |
-| Payload | Source omitted (owner-derived); Target explicit; AuthoritativeWorldTime as `float` |
-| RPC placement | Multicast on `UGP_CombatPresentationComponent` (not UnitBase) |
+| Listen + remote: one Emit / one Accepted each; no host double-play; Sequence 1,2,3…; AttackSerial; cadence unchanged | **PASS** |
+| Blocked hit: AppliedDamage=0, Blocked=true, TargetDied=false; Health unchanged; cooldown continues; host+client event | **PASS** |
+| Killing / sync TargetDied: limited AppliedDamage; TargetDied=true; AttackFinished TargetDied; AttackEndedDuringApply; correct metadata; one event each; no further events | **PASS** |
+| Approaching/OOR: no event until Apply; FirstHitAttempted + NextHitTime preserved on re-entry; Attack→Move stops events | **PASS** |
+| Inspect client/host Role/NetMode/Sequence fields as expected | **PASS** |
 
-## RPC Ownership Choice
-**Component-owned Unreliable NetMulticast** on replicated default-subobject `UGP_CombatPresentationComponent`.
+## Not-Run Cases
+| Case | Notes |
+| --- | --- |
+| Dedicated server runtime | **NOT RUN** this session; suppression confirmed by code review (`NM_DedicatedServer` early return before debug draw); not a blocker |
+| Late join / relevancy | **NOT RUN** this session; no replay by architecture (no LastEvent / persistent event state); expected S26A semantics; not a blocker |
 
-Requires: replicated `AGP_UnitBase`, component default subobject + `SetIsReplicatedByDefault(true)`, authority-only invoke, single receive Play path, dedicated stub without visual/debug draw.
+No known blockers.
 
-Rejected alternative: UnitBase multicast forwarding into component — works, but pollutes UnitBase.
+## Final Build Results
+- GPEditor Win64 Development + UHT — **PASSED** on implementation `85f833415b92a5eeb89f5601c01d9498fb1c4dbe` (not re-run; C++ frozen at finalization)
+- GP Win64 Development — **PASSED** (exit 0; linked `GP.exe`)
+- GP Win64 Shipping — **PASSED** (exit 0; linked `GP-Win64-Shipping.exe`)
+- No C++ changes during finalization
 
-## Final Recommended GP-S26A Scope
-- Emit after AttackHitApplied (incl. blocked)
-- Unreliable NetMulticast presentation event
-- PresentationSequence + AttackSerial + Target + EventType + float world time + Applied/Blocked/death flags
-- One replicated presentation component; duplicate suppression; debug draw/logs
-- No assets; no LastEvent; no late-join cosmetic replay
-- Listen + remote client validation; dedicated no-visual
-
-## Files Changed
+## Files Changed During Finalization
 Documentation only:
 - `Docs/Development/Claude_Tasks/GP-S26_Combat_Presentation.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Build Results
-- Not required (docs-only)
-- C++ diff: none
-
-## Commit SHA
-945d396d110869adc5c6391708400390f8ef60ad
+## Final Commit SHA
+fc48dc16516dfcb68b14c7ecd1c3bda6479f9b39
 
 ## Git State
-- Push to `feature/gp-s26-combat-presentation-analysis`
-- No merge to main; no PR; no S26A implementation
+- Branch ahead of main; behind: 0
+- Push to `feature/gp-s26a-combat-presentation-events`
+- Working tree clean after push; HEAD = origin
+- No binaries / Saved / Intermediate / DDC / Blueprint or presentation assets in commit
+- Scope limited to GP-S26A docs finalization
+
+## Ready-for-Merge Conclusion
+**GP-S26A_FINALIZED_READY_FOR_MERGE** — ready to merge into main when requested. Do not merge in this close-out. Presentation assets remain deferred under **GP-S26A_DONE_PRESENTATION_ASSETS_DEFERRED**.

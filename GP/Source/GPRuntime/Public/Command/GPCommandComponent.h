@@ -21,7 +21,8 @@ enum class EGP_CommandRejectReason : uint8
 	InvalidTarget,
 	FriendlyAttackTarget,
 	InvalidResourceTarget,
-	InvalidTargetLocation
+	InvalidTargetLocation,
+	UnsupportedUnit
 };
 
 DECLARE_LOG_CATEGORY_EXTERN(LogGPCommandServer, Log, All);

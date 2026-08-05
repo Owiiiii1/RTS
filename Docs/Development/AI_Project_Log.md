@@ -1,5 +1,81 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-05 — GP-S27 AGP_Worker — finalization
+
+Status: **GP-S27_FINALIZED_READY_FOR_MERGE**
+
+### Branch / baseline
+- Branch: `feature/gp-s27-worker`
+- Base: `main` @ `860070c4acbcb85fd5c4334628584372bdd082ca`
+- Candidate: `07e20fbfff36e181076d237d0596ef6f25b40951`
+- Approach correction: `4d38a405729fb5766a5498e91436896ef5efda6b`
+- Finalization: `03ced125fed4081f933ce3074ceb50ea344cedb0`
+- Task: `Docs/Development/Claude_Tasks/GP-S27_Worker.md`
+
+### What was done
+- Operator validation **PASSED** (long-distance PredictedWorst=175.8 / ActualDistance=175.6 / Range=200 → MineBegin → CargoFull; full matrix)
+- Finalization re-run: Worker / Mining / Cargo contract tests **Failures=0**
+- GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
+- GPEditor not rerun (no C++ at finalization)
+- Overall: **GP-S27_DONE_WORKER** — ready for main merge when requested
+
+### Intentionally not done
+- No PR/merge/main; no GP-S28; no Worker Blueprint
+
+### Operator next
+- Merge to main when ready; then GP-S28 StorageComponent + FerroniteThreatValue
+
+---
+
+## 2026-08-05 — GP-S27 Worker Mine Approach Range Correction
+
+Status: **GP-S27_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded by finalization)*
+
+### Branch / baseline
+- Branch: `feature/gp-s27-worker`
+- Base: `main` @ `860070c4acbcb85fd5c4334628584372bdd082ca`
+- Candidate: `07e20fbfff36e181076d237d0596ef6f25b40951`
+- Approach correction: `4d38a405729fb5766a5498e91436896ef5efda6b`
+- Task: `Docs/Development/Claude_Tasks/GP-S27_Worker.md`
+
+### What was done
+- Operator edge: arrival Distance=200.4 > Range=200 (`MineArrivalOutOfRange`) with Acc=50 + ΔZ
+- Approach geometry: 3D-safe `D_h` with SafetyMargin=25; one-shot corrective; Inspect diagnostics
+- Contract edge tests + time-based movement timeout; **Failures=0**
+- GPEditor Dev+UHT **PASSED**; GP Dev/Shipping not run; Mining range unchanged
+
+### Operator next
+- Re-validate far/diagonal Mine (CommandMove 3000 3000 then CommandMine); no MineArrivalOutOfRange
+
+---
+
+## 2026-08-05 — GP-S27 AGP_Worker
+
+Status: **GP-S27_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded by approach correction for validation)*
+
+### Branch / baseline
+- Branch: `feature/gp-s27-worker`
+- Base: `main` @ `860070c4acbcb85fd5c4334628584372bdd082ca`
+- **GP-S26 merged into main** @ `860070c4acbcb85fd5c4334628584372bdd082ca`
+- Candidate: `07e20fbfff36e181076d237d0596ef6f25b40951`
+- Task: `Docs/Development/Claude_Tasks/GP-S27_Worker.md`
+
+### What was done
+- `AGP_Worker : AGP_MobileUnit` with Cargo + Mining composition
+- Mine execution in `UGP_UnitCommandComponent` (serial-aware approach + BeginMining)
+- Command validate filters Mine to Workers (`UnsupportedUnit`)
+- Diagnostics `gp.Worker.*` + staged `RunContractTest` → **Failures=0**
+- GPEditor Win64 Development + UHT **PASSED**
+- GP Win64 Development / Shipping **not run**
+
+### Intentionally not done
+- No Storage / return-to-base / Worker Blueprint / map / GP-S28 / PR / merge
+
+### Operator next
+- Validate Spawn/CommandMine/approach/FIFO/`RunContractTest`; then finalize
+
+---
+
 ## 2026-08-05 — GP-S26 UGP_MiningComponent — finalization
 
 Status: **GP-S26_FINALIZED_READY_FOR_MERGE**

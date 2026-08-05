@@ -537,6 +537,7 @@ namespace GPWorkerDebug
 		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
 		int32 WorkerCount = 0;
 		AGP_Worker* PrimaryWorker = nullptr;
+		AGP_Worker* FallbackPlayableWorker = nullptr;
 		for (TActorIterator<AGP_Worker> It(World); It; ++It)
 		{
 			AGP_Worker* Worker = *It;
@@ -545,9 +546,35 @@ namespace GPWorkerDebug
 				continue;
 			}
 			++WorkerCount;
-			if (PrimaryWorker == nullptr || Worker->GetTeamId() >= 1)
+			if (Worker->GetTeamId() < 1)
+			{
+				continue;
+			}
+			if (FallbackPlayableWorker == nullptr)
+			{
+				FallbackPlayableWorker = Worker;
+			}
+			// Prefer operator (non-contract) Team1 for hauling readiness validation.
+			const bool bContractOwned = Worker->Tags.Contains(GPResourceLoopDiagnostics::TagOwnedByContract);
+			if (!bContractOwned && Worker->GetTeamId() == 1)
 			{
 				PrimaryWorker = Worker;
+			}
+			else if (PrimaryWorker == nullptr && !bContractOwned)
+			{
+				PrimaryWorker = Worker;
+			}
+		}
+		if (PrimaryWorker == nullptr)
+		{
+			PrimaryWorker = FallbackPlayableWorker;
+		}
+		for (TActorIterator<AGP_Worker> It(World); It; ++It)
+		{
+			AGP_Worker* Worker = *It;
+			if (!IsValid(Worker))
+			{
+				continue;
 			}
 			UGP_UnitCommandComponent* Commands = Worker->GetUnitCommandComponent();
 			UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
@@ -622,7 +649,7 @@ namespace GPWorkerDebug
 			BaseCount,
 			NetModeToString(World->GetNetMode()));
 		UE_LOG(LogGPWorker, Log,
-			TEXT("GP Worker.List ScenarioValidation: NavSystemPresent=%s PlayableTeamValid=%s WorkerHasMainBase=%s WorkerHasResourceNode=%s MainBaseRegisteredForTeam=%s WorkerAndBaseSameTeam=%s NodeMineable=%s WorkerProjected=%s NodeApproachProjected=%s BaseDropOffProjected=%s NavWorkerToNode=%s NavNodeToBase=%s NavBaseToNode=%s ReadyForHaulingTest=%s Errors=%d Warnings=%d PathFailure=%s SuggestedCommand=%s"),
+			TEXT("GP Worker.List ScenarioValidation: NavSystemPresent=%s PlayableTeamValid=%s WorkerHasMainBase=%s WorkerHasResourceNode=%s MainBaseRegisteredForTeam=%s WorkerAndBaseSameTeam=%s NodeMineable=%s MainBaseCountForWorkerTeam=%d RegistryUniqueForTeam=%s ResolvedMainBaseMatchesListedBase=%s WorkerProjected=%s NodeApproachProjected=%s BaseDropOffProjected=%s NavWorkerToNode=%s NavNodeToBase=%s NavBaseToNode=%s ReadyForHaulingTest=%s Errors=%d Warnings=%d PathFailure=%s SuggestedCommand=%s"),
 			Validation.bNavSystemPresent ? TEXT("true") : TEXT("false"),
 			Validation.bPlayableTeamValid ? TEXT("true") : TEXT("false"),
 			Validation.bWorkerHasMainBase ? TEXT("true") : TEXT("false"),
@@ -630,6 +657,9 @@ namespace GPWorkerDebug
 			Validation.bMainBaseRegisteredForTeam ? TEXT("true") : TEXT("false"),
 			Validation.bWorkerAndBaseSameTeam ? TEXT("true") : TEXT("false"),
 			Validation.bNodeMineable ? TEXT("true") : TEXT("false"),
+			Validation.MainBaseCountForWorkerTeam,
+			Validation.bRegistryUniqueForTeam ? TEXT("true") : TEXT("false"),
+			Validation.bResolvedMainBaseMatchesListedBase ? TEXT("true") : TEXT("false"),
 			Validation.bWorkerProjected ? TEXT("true") : TEXT("false"),
 			Validation.bNodeApproachProjected ? TEXT("true") : TEXT("false"),
 			Validation.bBaseDropOffProjected ? TEXT("true") : TEXT("false"),
@@ -1698,7 +1728,7 @@ AGP_ResourceNode* UGP_WorkerHaulingContractTestRunner::SpawnNode(const FVector& 
 		/*bOwnedByContract*/ true);
 	if (IsValid(Node))
 	{
-		Node->Tags.AddUnique(GPResourceLoopDiagnostics::MakeTeamScenarioTag(1));
+		Node->Tags.AddUnique(GPResourceLoopDiagnostics::MakeTeamScenarioTag(ContractTeamId));
 	}
 	return Node;
 }
@@ -1758,6 +1788,7 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 	case 0:
 	{
 		// Navigable layout (same discovery as operator diagnostic) — not hardcoded off-mesh coords.
+		// Isolates onto a free playable team when Team 1 is occupied by operator scenario.
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
 			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, /*bOwnedByContract*/ true);
 		if (!Expect(Scenario.bOk && Scenario.bReadyForHaulingTest, TEXT("SpawnNavigableHaulingScenario")))
@@ -1771,13 +1802,14 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		TestNodeWeak = Node;
 		MainBaseWeak = Base;
 		PrimaryWorkerWeak = Worker;
+		ContractTeamId = Scenario.TeamId;
 		DropOffRangeCm = Base->GetDropOffRangeCm();
 		Expect(FMath::IsNearlyEqual(DropOffRangeCm, 400.0f), TEXT("DropOffRange400"));
 		if (const UGP_ResourceDefinition* Def = Node->ResolveResourceDefinition(true))
 		{
 			InteractionRangeCm = Def->InteractionRangeCm;
 		}
-		Expect(Worker->GetTeamId() == 1 && Base->GetTeamId() == 1, TEXT("TeamMatch"));
+		Expect(Worker->GetTeamId() == ContractTeamId && Base->GetTeamId() == ContractTeamId, TEXT("TeamMatch"));
 		++StageIndex;
 		ScheduleNext();
 		break;
@@ -1807,7 +1839,7 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		ThreatBefore = 0.0f;
 		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
 		{
-			ThreatBefore = GS->GetFerroniteThreatValueForTeam(1);
+			ThreatBefore = GS->GetFerroniteThreatValueForTeam(ContractTeamId);
 		}
 		MovementWaitTicks = 0;
 		++StageIndex;
@@ -1829,7 +1861,7 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		Expect(Cmd->GetLastHaulAcceptedAmount() >= 49.0f, TEXT("HaulAccepted50"));
 		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
 		{
-			const float ThreatAfter = GS->GetFerroniteThreatValueForTeam(1);
+			const float ThreatAfter = GS->GetFerroniteThreatValueForTeam(ContractTeamId);
 			Expect(ThreatAfter > ThreatBefore + KINDA_SMALL_NUMBER, TEXT("ThreatIncreasedOnAccepted"));
 			Expect(FMath::IsNearlyEqual(Cmd->GetLastHaulThreatDelta(), Cmd->GetLastHaulAcceptedAmount() * Storage->GetThreatPerStoredUnit(), 0.05f),
 				TEXT("ThreatDeltaMatchesAccepted"));
@@ -2031,14 +2063,15 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 			return;
 		}
 		DestroyWeakMainBase(MainBaseWeak);
-		AGP_MainBase* Enemy = SpawnMainBase(FVector(-54000.0f, 0.0f, 100.0f), 2);
+		const int32 EnemyTeamId = (ContractTeamId == 8) ? 7 : 8;
+		AGP_MainBase* Enemy = SpawnMainBase(FVector(-54000.0f, 0.0f, 100.0f), EnemyTeamId);
 		EnemyBaseWeak = Enemy;
 		Expect(IsValid(Enemy), TEXT("EnemyBaseSpawned"));
 		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
 		{
-			Expect(GS->FindMainBaseForTeam(1) == nullptr, TEXT("NoTeam1MainBase"));
+			Expect(GS->FindMainBaseForTeam(ContractTeamId) == nullptr, TEXT("NoContractTeamMainBase"));
 		}
-		Worker->SetTeamId(1);
+		Worker->SetTeamId(ContractTeamId);
 		Worker->GetCargoComponent()->ClearCargo();
 		Worker->SetActorLocation(Node->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f), false, nullptr, ETeleportType::TeleportPhysics);
 		IssueMine(Worker, Node);
@@ -2057,7 +2090,7 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 	{
 		// Restore friendly base for lifecycle stage
 		DestroyWeakMainBase(EnemyBaseWeak);
-		MainBaseWeak = SpawnMainBase(FVector(-52400.0f, 0.0f, 100.0f), 1);
+		MainBaseWeak = SpawnMainBase(FVector(-52400.0f, 0.0f, 100.0f), ContractTeamId);
 		Expect(IsValid(MainBaseWeak.Get()), TEXT("RestoreFriendlyBase"));
 		++StageIndex;
 		ScheduleNext();
@@ -2132,10 +2165,35 @@ void UGP_DiagnosticScenarioContractTestRunner::Start(UWorld* InWorld)
 	WorldWeak = InWorld;
 	StageIndex = 0;
 	Failures = 0;
+	ContractTeamId = 1;
+	bOperatorTeam1PresentAtStart = false;
+	OperatorTeam1MainBaseWeak.Reset();
+	RejectedMainBaseWeak.Reset();
+	ReplacementMainBaseWeak.Reset();
+	MainBaseWeak.Reset();
+	WorkerWeak.Reset();
+	NodeWeak.Reset();
+
+	if (IsValid(InWorld))
+	{
+		if (AGP_GameState* GS = InWorld->GetGameState<AGP_GameState>())
+		{
+			GS->PruneInvalidMainBaseRegistrations();
+			if (AGP_MainBase* OpBase = GS->FindMainBaseForTeam(1))
+			{
+				bOperatorTeam1PresentAtStart = true;
+				OperatorTeam1MainBaseWeak = OpBase;
+			}
+		}
+	}
+
 	UnbindWorldCleanup();
 	WorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(
 		this, &UGP_DiagnosticScenarioContractTestRunner::OnWorldCleanup);
-	UE_LOG(LogGPWorker, Log, TEXT("GP Resource.RunDiagnosticScenarioContractTest Stage=Start"));
+	UE_LOG(LogGPWorker, Log,
+		TEXT("GP Resource.RunDiagnosticScenarioContractTest Stage=Start OperatorTeam1Present=%s OperatorMainBase=%s"),
+		bOperatorTeam1PresentAtStart ? TEXT("true") : TEXT("false"),
+		*GetNameSafe(OperatorTeam1MainBaseWeak.Get()));
 	ScheduleNext();
 }
 
@@ -2180,6 +2238,22 @@ void UGP_DiagnosticScenarioContractTestRunner::Finish()
 	if (UWorld* World = WorldWeak.Get())
 	{
 		World->GetTimerManager().ClearTimer(StageTimerHandle);
+		// Best-effort: destroy only contract-owned leftovers for the contract team.
+		GPResourceLoopDiagnostics::CleanupTaggedScenarioForTeam(World, ContractTeamId, /*bContractOwnedOnly*/ true);
+		if (AGP_MainBase* Rejected = RejectedMainBaseWeak.Get())
+		{
+			if (IsValid(Rejected))
+			{
+				Rejected->Destroy();
+			}
+		}
+		if (AGP_MainBase* Replacement = ReplacementMainBaseWeak.Get())
+		{
+			if (IsValid(Replacement))
+			{
+				Replacement->Destroy();
+			}
+		}
 	}
 	UnbindWorldCleanup();
 	UE_LOG(LogGPWorker, Log, TEXT("GP Resource.RunDiagnosticScenarioContractTest: Complete Failures=%d"), Failures);
@@ -2187,8 +2261,11 @@ void UGP_DiagnosticScenarioContractTestRunner::Finish()
 	GPWorkerDebug::GActiveDiagnosticScenarioContractTest.Reset();
 	WorldWeak.Reset();
 	MainBaseWeak.Reset();
+	RejectedMainBaseWeak.Reset();
+	ReplacementMainBaseWeak.Reset();
 	WorkerWeak.Reset();
 	NodeWeak.Reset();
+	OperatorTeam1MainBaseWeak.Reset();
 }
 
 void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
@@ -2204,16 +2281,25 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 	{
 	case 0:
 	{
-		// Only prior contract-owned leftovers — never wipe operator scenarios.
+		// Prior contract leftovers only — never wipe operator scenarios.
 		GPResourceLoopDiagnostics::CleanupTaggedScenarioForTeam(World, 1, /*bContractOwnedOnly*/ true);
+		GPResourceLoopDiagnostics::CleanupTaggedScenarioForTeam(World, 2, /*bContractOwnedOnly*/ true);
 
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
 			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, /*bOwnedByContract*/ true);
+		if (Scenario.Error == TEXT("BlockedByOccupiedPlayableTeams"))
+		{
+			Expect(false, TEXT("BlockedByOccupiedPlayableTeams"));
+			Finish();
+			return;
+		}
 		if (!Expect(Scenario.bOk, TEXT("DiagnosticScenarioSpawnOk")))
 		{
 			Finish();
 			return;
 		}
+
+		ContractTeamId = Scenario.TeamId;
 		MainBaseWeak = Scenario.MainBase;
 		WorkerWeak = Scenario.Worker;
 		NodeWeak = Scenario.ResourceNode;
@@ -2227,8 +2313,8 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 		Expect(Scenario.bNavNodeToBase, TEXT("NodeToBasePathReachable"));
 		Expect(Scenario.bNavBaseToNode, TEXT("BaseToNodePathReachable"));
 
-		Expect(IsValid(Scenario.MainBase) && Scenario.MainBase->GetTeamId() == 1, TEXT("MainBaseTeam1"));
-		Expect(IsValid(Scenario.Worker) && Scenario.Worker->GetTeamId() == 1, TEXT("WorkerTeam1"));
+		Expect(IsValid(Scenario.MainBase) && Scenario.MainBase->GetTeamId() == ContractTeamId, TEXT("MainBaseContractTeam"));
+		Expect(IsValid(Scenario.Worker) && Scenario.Worker->GetTeamId() == ContractTeamId, TEXT("WorkerContractTeam"));
 		Expect(IsValid(Scenario.ResourceNode) && Scenario.ResourceNode->GetCurrentAmount() > 0, TEXT("NodeMineableAmount"));
 		Expect(Scenario.ResourceNode->HasAnyFlags(RF_Transient), TEXT("NodeTransient"));
 		Expect(Scenario.MainBase->HasAnyFlags(RF_Transient), TEXT("MainBaseTransient"));
@@ -2236,13 +2322,36 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 		Expect(Scenario.MainBase->Tags.Contains(GPResourceLoopDiagnostics::TagOwnedByContract), TEXT("ContractOwnedTag"));
 
 		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
-		Expect(IsValid(GS) && GS->FindMainBaseForTeam(1) == Scenario.MainBase, TEXT("RegistryResolvesMainBase"));
+		if (!Expect(IsValid(GS), TEXT("GameStatePresent")))
+		{
+			Finish();
+			return;
+		}
+
+		Expect(GS->FindMainBaseForTeam(ContractTeamId) == Scenario.MainBase, TEXT("FirstMainBaseRegistered"));
+		Expect(GS->CountRegisteredMainBasesForTeam(ContractTeamId) == 1, TEXT("RegistryCountRemainsOne"));
+		Expect(GS->IsMainBaseRegistryUniqueForTeam(ContractTeamId), TEXT("RegistryUniqueForContractTeam"));
 		Expect(Scenario.Worker->GetTeamId() != -1 && Scenario.MainBase->GetTeamId() != -1, TEXT("NoUnassignedTeam"));
 
+		const AGP_GameState::EGP_MainBaseRegisterResult Idempotent =
+			GS->RegisterMainBase(Scenario.MainBase);
+		Expect(Idempotent == AGP_GameState::EGP_MainBaseRegisterResult::AlreadyRegistered, TEXT("SameActorRegistrationIdempotent"));
+		Expect(GS->CountRegisteredMainBasesForTeam(ContractTeamId) == 1, TEXT("IdempotentCountStillOne"));
+
+		if (bOperatorTeam1PresentAtStart)
+		{
+			Expect(ContractTeamId != 1, TEXT("ContractRemappedOffOccupiedTeam1"));
+			Expect(OperatorTeam1MainBaseWeak.IsValid() && IsValid(OperatorTeam1MainBaseWeak.Get()), TEXT("OperatorTeam1PreservedAfterContractSpawn"));
+			Expect(GS->FindMainBaseForTeam(1) == OperatorTeam1MainBaseWeak.Get(), TEXT("OperatorTeam1RegistryUnchanged"));
+		}
+
 		const GPResourceLoopDiagnostics::FGP_ScenarioValidation Validation =
-			GPResourceLoopDiagnostics::ValidateHaulingScenario(World, 1, Scenario.Worker);
+			GPResourceLoopDiagnostics::ValidateHaulingScenario(World, ContractTeamId, Scenario.Worker);
 		Expect(Validation.bWorkerHasMainBase, TEXT("WorkerHasMainBase"));
 		Expect(Validation.bMainBaseRegisteredForTeam, TEXT("MainBaseRegisteredForTeam"));
+		Expect(Validation.MainBaseCountForWorkerTeam == 1, TEXT("ValidationMainBaseCountOne"));
+		Expect(Validation.bRegistryUniqueForTeam, TEXT("ValidationRegistryUnique"));
+		Expect(Validation.bResolvedMainBaseMatchesListedBase, TEXT("ValidationResolvedMatchesListed"));
 		Expect(Validation.bWorkerAndBaseSameTeam, TEXT("WorkerAndBaseSameTeam"));
 		Expect(Validation.bNodeMineable, TEXT("NodeMineable"));
 		Expect(Validation.bReadyForHaulingTest, TEXT("ValidationReadyForHaulingTest"));
@@ -2250,14 +2359,19 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 		Expect(Validation.bNavReachableNodeToBase, TEXT("ValidationNodeToBase"));
 		Expect(Validation.bNavReachableBaseToNode, TEXT("ValidationBaseToNode"));
 
-		// Team change refresh: reassign then restore must not leave stale registry.
-		// Use a high temp team id so operator Team1 MainBase (if any) is not disturbed.
-		Scenario.MainBase->SetTeamId(99);
-		Expect(GS->FindMainBaseForTeam(99) == Scenario.MainBase, TEXT("RegisteredUnderTempTeam"));
-		Expect(GS->FindMainBaseForTeam(1) != Scenario.MainBase, TEXT("NoStaleOnTeam1"));
-		Scenario.MainBase->SetTeamId(1);
-		Expect(Scenario.MainBase->GetTeamId() == 1, TEXT("RestoredTeam1"));
-		Expect(GS->FindMainBaseForTeam(99) == nullptr, TEXT("TempTeamCleared"));
+		// Team change refresh: reassign then restore must not leave stale registry / disturb Team1 operator.
+		const int32 TempTeam = 99;
+		Scenario.MainBase->SetTeamId(TempTeam);
+		Expect(GS->FindMainBaseForTeam(TempTeam) == Scenario.MainBase, TEXT("RegisteredUnderTempTeam"));
+		Expect(GS->FindMainBaseForTeam(ContractTeamId) != Scenario.MainBase, TEXT("NoStaleOnContractTeam"));
+		if (bOperatorTeam1PresentAtStart)
+		{
+			Expect(GS->FindMainBaseForTeam(1) == OperatorTeam1MainBaseWeak.Get(), TEXT("OperatorTeam1StableDuringTempTeam"));
+		}
+		Scenario.MainBase->SetTeamId(ContractTeamId);
+		Expect(Scenario.MainBase->GetTeamId() == ContractTeamId, TEXT("RestoredContractTeam"));
+		Expect(GS->FindMainBaseForTeam(TempTeam) == nullptr, TEXT("TempTeamCleared"));
+		Expect(GS->FindMainBaseForTeam(ContractTeamId) == Scenario.MainBase, TEXT("RestoredRegistryResolve"));
 
 		++StageIndex;
 		ScheduleNext();
@@ -2265,27 +2379,111 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 	}
 	case 1:
 	{
-		AGP_MainBase* Base = MainBaseWeak.Get();
-		AGP_Worker* Worker = WorkerWeak.Get();
-		AGP_ResourceNode* Node = NodeWeak.Get();
-		GPResourceLoopDiagnostics::DestroyDiagnosticScenarioActors(Base, Worker, Node);
-		MainBaseWeak.Reset();
-		WorkerWeak.Reset();
-		NodeWeak.Reset();
+		// Duplicate MainBase rejection stage (production registry invariant).
+		AGP_MainBase* BaseA = MainBaseWeak.Get();
+		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
+		if (!Expect(IsValid(BaseA) && IsValid(GS), TEXT("DuplicateStageObjects")))
+		{
+			Finish();
+			return;
+		}
+
+		Expect(GS->FindMainBaseForTeam(ContractTeamId) == BaseA, TEXT("ExistingMainBasePreserved"));
+		Expect(GS->CountRegisteredMainBasesForTeam(ContractTeamId) == 1, TEXT("RegistryCountRemainsOneBeforeDuplicate"));
+
+		const FVector DupLoc = BaseA->GetActorLocation() + FVector(300.0f, 0.0f, 0.0f);
+		AGP_MainBase* BaseB = GPResourceLoopDiagnostics::SpawnMainBaseDeferred(
+			World, DupLoc, ContractTeamId, /*bOwnedByContract*/ true);
+		RejectedMainBaseWeak = BaseB;
+		if (!Expect(IsValid(BaseB), TEXT("DuplicateCandidateSpawned")))
+		{
+			Finish();
+			return;
+		}
+
+		const AGP_GameState::EGP_MainBaseRegisterResult DupResult = GS->RegisterMainBase(BaseB);
+		Expect(DupResult == AGP_GameState::EGP_MainBaseRegisterResult::RejectedDuplicate, TEXT("DuplicateMainBaseRejected"));
+		Expect(GS->CountRegisteredMainBasesForTeam(ContractTeamId) == 1, TEXT("RegistryCountRemainsOne"));
+		Expect(GS->FindMainBaseForTeam(ContractTeamId) == BaseA, TEXT("ExistingMainBasePreserved"));
+		Expect(GS->IsMainBaseRegistryUniqueForTeam(ContractTeamId), TEXT("RegistryStillUniqueAfterReject"));
+
+		BaseB->Destroy();
+		RejectedMainBaseWeak.Reset();
+		Expect(GS->FindMainBaseForTeam(ContractTeamId) == BaseA, TEXT("RejectedBaseCleanupDoesNotRemoveExisting"));
+		Expect(GS->CountRegisteredMainBasesForTeam(ContractTeamId) == 1, TEXT("CountOneAfterRejectedCleanup"));
+
 		++StageIndex;
 		ScheduleNext();
 		break;
 	}
 	case 2:
 	{
+		AGP_MainBase* BaseA = MainBaseWeak.Get();
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* Node = NodeWeak.Get();
 		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
-		// Contract cleanup must not require wiping operator MainBases — only our destroyed actor.
+		if (!Expect(IsValid(GS), TEXT("ReplacementStageGameState")))
+		{
+			Finish();
+			return;
+		}
+
+		if (IsValid(BaseA))
+		{
+			BaseA->Destroy();
+		}
+		MainBaseWeak.Reset();
+		Expect(GS->FindMainBaseForTeam(ContractTeamId) == nullptr, TEXT("DestroyedExistingClearsRegistry"));
+		Expect(GS->CountRegisteredMainBasesForTeam(ContractTeamId) == 0, TEXT("RegistryEmptyAfterDestroy"));
+
+		const FVector ReplaceLoc = IsValid(Worker)
+			? Worker->GetActorLocation() + FVector(-400.0f, 0.0f, 0.0f)
+			: FVector::ZeroVector;
+		AGP_MainBase* BaseC = GPResourceLoopDiagnostics::SpawnMainBaseDeferred(
+			World, ReplaceLoc, ContractTeamId, /*bOwnedByContract*/ true);
+		ReplacementMainBaseWeak = BaseC;
+		if (!Expect(IsValid(BaseC), TEXT("ReplacementBaseSpawned")))
+		{
+			Finish();
+			return;
+		}
+		Expect(GS->FindMainBaseForTeam(ContractTeamId) == BaseC, TEXT("ReplacementAfterCleanupSucceeds"));
+		Expect(GS->CountRegisteredMainBasesForTeam(ContractTeamId) == 1, TEXT("ReplacementCountOne"));
+
+		const AGP_GameState::EGP_MainBaseRegisterResult Again = GS->RegisterMainBase(BaseC);
+		Expect(Again == AGP_GameState::EGP_MainBaseRegisterResult::AlreadyRegistered, TEXT("ReplacementIdempotent"));
+
+		GPResourceLoopDiagnostics::DestroyDiagnosticScenarioActors(BaseC, Worker, Node);
+		ReplacementMainBaseWeak.Reset();
+		WorkerWeak.Reset();
+		NodeWeak.Reset();
+		Expect(GS->FindMainBaseForTeam(ContractTeamId) == nullptr
+			|| !GS->FindMainBaseForTeam(ContractTeamId)->Tags.Contains(GPResourceLoopDiagnostics::TagOwnedByContract),
+			TEXT("ContractBaseUnregistered"));
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 3:
+	{
+		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
 		Expect(!MainBaseWeak.IsValid() && !WorkerWeak.IsValid() && !NodeWeak.IsValid(), TEXT("ContractActorsDestroyed"));
-		if (IsValid(GS))
+		if (bOperatorTeam1PresentAtStart)
+		{
+			Expect(OperatorTeam1MainBaseWeak.IsValid() && IsValid(OperatorTeam1MainBaseWeak.Get()), TEXT("OperatorTeam1PreservedAfterContract"));
+			if (IsValid(GS))
+			{
+				Expect(GS->FindMainBaseForTeam(1) == OperatorTeam1MainBaseWeak.Get(), TEXT("OperatorTeam1RegistryIntact"));
+				Expect(GS->CountRegisteredMainBasesForTeam(1) == 1, TEXT("OperatorTeam1CountOne"));
+				Expect(GS->IsMainBaseRegistryUniqueForTeam(1), TEXT("OperatorTeam1RegistryUnique"));
+			}
+		}
+		else if (IsValid(GS))
 		{
 			AGP_MainBase* Remaining = GS->FindMainBaseForTeam(1);
 			Expect(Remaining == nullptr || !Remaining->Tags.Contains(GPResourceLoopDiagnostics::TagOwnedByContract),
-				TEXT("ContractBaseUnregistered"));
+				TEXT("NoContractResidueOnTeam1"));
 		}
 		Finish();
 		break;

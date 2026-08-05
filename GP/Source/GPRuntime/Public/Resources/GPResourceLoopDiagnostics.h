@@ -66,12 +66,18 @@ namespace GPResourceLoopDiagnostics
 		bool bNavReachableWorkerToNode = false;
 		bool bNavReachableNodeToBase = false;
 		bool bNavReachableBaseToNode = false;
+		int32 MainBaseCountForWorkerTeam = 0;
+		bool bRegistryUniqueForTeam = false;
+		bool bResolvedMainBaseMatchesListedBase = false;
 		bool bReadyForHaulingTest = false;
 		int32 Errors = 0;
 		int32 Warnings = 0;
 		FString PathFailureReason;
 		FString SuggestedCommand;
 	};
+
+	/** First playable TeamId in [1..8] with no registered MainBase, or INDEX_NONE. */
+	int32 FindFreePlayableTeamId(UWorld* World);
 
 	bool IsNavPointProjected(UWorld* World, const FVector& Location, FVector* OutProjected = nullptr, float ExtentXY = 800.0f, float ExtentZ = 800.0f);
 	bool IsNavReachable(UWorld* World, const FVector& From, const FVector& To, FString* OutFailReason = nullptr);

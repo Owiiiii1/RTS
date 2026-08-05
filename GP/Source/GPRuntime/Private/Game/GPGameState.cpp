@@ -280,55 +280,84 @@ void AGP_GameState::ClearMatchResult()
 	BroadcastMatchResultChanged(OldWinner, WinnerTeamId, OldReason, WinReasonTag);
 }
 
-void AGP_GameState::RegisterMainBase(AGP_MainBase* MainBase)
+void AGP_GameState::PruneInvalidMainBaseRegistrations()
 {
-	if (!HasAuthority() || !IsValid(MainBase))
+	RegisteredMainBases.RemoveAll([](const TWeakObjectPtr<AGP_MainBase>& Weak)
 	{
-		return;
+		return !Weak.IsValid();
+	});
+}
+
+AGP_GameState::EGP_MainBaseRegisterResult AGP_GameState::RegisterMainBase(AGP_MainBase* MainBase)
+{
+	if (!HasAuthority())
+	{
+		return EGP_MainBaseRegisterResult::RejectedNoAuthority;
 	}
+	if (!IsValid(MainBase))
+	{
+		return EGP_MainBaseRegisterResult::RejectedInvalidActor;
+	}
+
+	PruneInvalidMainBaseRegistrations();
 
 	const int32 TeamId = MainBase->GetTeamId();
 	if (TeamId < 1)
 	{
-		// Production-safe: refuse invalid registration. Caller must assign TeamId first.
-		return;
+		return EGP_MainBaseRegisterResult::RejectedInvalidTeam;
 	}
 
+	AGP_MainBase* ExistingForTeam = nullptr;
 	for (const TWeakObjectPtr<AGP_MainBase>& ExistingWeak : RegisteredMainBases)
 	{
-		if (AGP_MainBase* Existing = ExistingWeak.Get())
+		AGP_MainBase* Existing = ExistingWeak.Get();
+		if (!IsValid(Existing))
 		{
-			if (Existing == MainBase)
-			{
-				return;
-			}
-			if (Existing->GetTeamId() == TeamId)
-			{
-				UE_LOG(LogTemp, Error,
-					TEXT("AGP_GameState::RegisterMainBase: duplicate MainBase for TeamId=%d Existing=%s New=%s"),
-					TeamId,
-					*GetNameSafe(Existing),
-					*GetNameSafe(MainBase));
-			}
+			continue;
 		}
+		if (Existing == MainBase)
+		{
+			UE_LOG(LogTemp, Log,
+				TEXT("AGP_GameState::RegisterMainBase: AlreadyRegistered MainBase=%s TeamId=%d CountForTeam=%d"),
+				*GetNameSafe(MainBase),
+				TeamId,
+				CountRegisteredMainBasesForTeam(TeamId));
+			return EGP_MainBaseRegisterResult::AlreadyRegistered;
+		}
+		if (Existing->GetTeamId() == TeamId)
+		{
+			ExistingForTeam = Existing;
+		}
+	}
+
+	if (ExistingForTeam != nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_GameState::RegisterMainBase: Rejected DuplicateMainBaseForTeam TeamId=%d Existing=%s New=%s Registered=false CountForTeam=%d ResolvedMainBase=%s"),
+			TeamId,
+			*GetNameSafe(ExistingForTeam),
+			*GetNameSafe(MainBase),
+			CountRegisteredMainBasesForTeam(TeamId),
+			*GetNameSafe(ExistingForTeam));
+		return EGP_MainBaseRegisterResult::RejectedDuplicate;
 	}
 
 	RegisteredMainBases.Add(MainBase);
 	UE_LOG(LogTemp, Log,
-		TEXT("AGP_GameState::RegisterMainBase: MainBase=%s TeamId=%d Count=%d"),
+		TEXT("AGP_GameState::RegisterMainBase: Registered=true MainBase=%s TeamId=%d CountForTeam=%d RegistrySize=%d"),
 		*GetNameSafe(MainBase),
 		TeamId,
+		CountRegisteredMainBasesForTeam(TeamId),
 		RegisteredMainBases.Num());
+	return EGP_MainBaseRegisterResult::Registered;
 }
 
 void AGP_GameState::UnregisterMainBase(AGP_MainBase* MainBase)
 {
-	if (!IsValid(MainBase) && MainBase == nullptr)
+	PruneInvalidMainBaseRegistrations();
+
+	if (MainBase == nullptr)
 	{
-		RegisteredMainBases.RemoveAll([](const TWeakObjectPtr<AGP_MainBase>& Weak)
-		{
-			return !Weak.IsValid();
-		});
 		return;
 	}
 
@@ -346,6 +375,7 @@ AGP_MainBase* AGP_GameState::FindMainBaseForTeam(int32 InTeamId) const
 	}
 
 	AGP_MainBase* Found = nullptr;
+	int32 Count = 0;
 	for (const TWeakObjectPtr<AGP_MainBase>& Weak : RegisteredMainBases)
 	{
 		AGP_MainBase* Candidate = Weak.Get();
@@ -353,17 +383,46 @@ AGP_MainBase* AGP_GameState::FindMainBaseForTeam(int32 InTeamId) const
 		{
 			continue;
 		}
-		if (Found != nullptr)
+		++Count;
+		if (Found == nullptr)
 		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("AGP_GameState::FindMainBaseForTeam: multiple MainBases for TeamId=%d; using first=%s"),
-				InTeamId,
-				*GetNameSafe(Found));
-			break;
+			Found = Candidate;
 		}
-		Found = Candidate;
+	}
+
+	if (Count > 1)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_GameState::FindMainBaseForTeam: invariant broken TeamId=%d Count=%d using first=%s"),
+			InTeamId,
+			Count,
+			*GetNameSafe(Found));
 	}
 	return Found;
+}
+
+int32 AGP_GameState::CountRegisteredMainBasesForTeam(int32 InTeamId) const
+{
+	if (InTeamId < 1)
+	{
+		return 0;
+	}
+
+	int32 Count = 0;
+	for (const TWeakObjectPtr<AGP_MainBase>& Weak : RegisteredMainBases)
+	{
+		AGP_MainBase* Candidate = Weak.Get();
+		if (IsValid(Candidate) && Candidate->GetTeamId() == InTeamId)
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+bool AGP_GameState::IsMainBaseRegistryUniqueForTeam(int32 InTeamId) const
+{
+	return CountRegisteredMainBasesForTeam(InTeamId) <= 1;
 }
 
 void AGP_GameState::BroadcastMatchResultChanged(

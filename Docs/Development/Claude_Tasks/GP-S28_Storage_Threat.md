@@ -11,6 +11,17 @@ Candidate: `cd83858390db086c6913669f348a7402ae0a5ad3`
 Diagnostic TeamId correction: `61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`  
 Diagnostic nav correction: `caf5bf0c947176ce5c72affadae41cbbd60be590`
 
+## MainBase registry uniqueness + contract isolation
+Operator failure after nav-ready Team1 scenario: `RunDiagnosticScenarioContractTest` logged duplicate MainBase for TeamId=1 then **still Add** → Count=2 → `MainBaseRegistryResolveFailed`.
+
+Fixes:
+- `AGP_GameState::RegisterMainBase` → `EGP_MainBaseRegisterResult`; prune stale weaks; same-actor idempotent; **reject duplicate without Add** (`RejectedDuplicate`)
+- `AGP_MainBase` sets `bRegisteredWithGameState` only on Registered/AlreadyRegistered; rejected EndPlay cannot unregister existing
+- Contract picks free playable TeamId (Team2 if Team1 occupied); contract-owned tags only; operator Team1 preserved
+- Duplicate-rejection contract stage assertions (First/Idempotent/Rejected/CountOne/Preserved/Cleanup/Replacement)
+- Operator re-spawn cleans prior operator diagnostic only; never authored/production; never second MainBase for same team
+- `gp.Worker.List`: `MainBaseCountForWorkerTeam`, `RegistryUniqueForTeam`, `ResolvedMainBaseMatchesListedBase`; Ready requires count=1 + unique
+
 ## Diagnostic scenario correction (operator-blocking)
 Operator failure: MainBase registered at TeamId=-1; Worker TeamId=-1; Node=None.
 

@@ -146,6 +146,7 @@ private:
 	TWeakObjectPtr<AGP_Worker> PrimaryWorkerWeak;
 	float InteractionRangeCm = 200.0f;
 	float DropOffRangeCm = 400.0f;
+	int32 ContractTeamId = 1;
 	int32 MovementWaitTicks = 0;
 	double MovementWaitStartTime = -1.0;
 	uint32 StaleHaulSerial = 0;
@@ -179,6 +180,11 @@ private:
 	FTimerHandle StageTimerHandle;
 	TWeakObjectPtr<UWorld> WorldWeak;
 	TWeakObjectPtr<AGP_MainBase> MainBaseWeak;
+	TWeakObjectPtr<AGP_MainBase> RejectedMainBaseWeak;
+	TWeakObjectPtr<AGP_MainBase> ReplacementMainBaseWeak;
 	TWeakObjectPtr<AGP_Worker> WorkerWeak;
 	TWeakObjectPtr<AGP_ResourceNode> NodeWeak;
+	int32 ContractTeamId = 1;
+	bool bOperatorTeam1PresentAtStart = false;
+	TWeakObjectPtr<AGP_MainBase> OperatorTeam1MainBaseWeak;
 };

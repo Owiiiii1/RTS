@@ -448,6 +448,7 @@ namespace GPResourceLoopDiagnostics
 
 		Base->SetFlags(RF_Transient);
 		MakeTransientUniqueName(Base, TEXT("GP_DiagMainBase"), TeamId);
+		ApplyScenarioTags(Base, TeamId, bOwnedByContract);
 		Base->SetTeamId(TeamId);
 		Base->FinishSpawning(Xform);
 		if (Base->GetTeamId() != TeamId)
@@ -458,7 +459,6 @@ namespace GPResourceLoopDiagnostics
 		{
 			Base->RefreshMainBaseRegistration();
 		}
-		ApplyScenarioTags(Base, TeamId, bOwnedByContract);
 		if (!Base->GetActorLocation().Equals(Location, 1.0f))
 		{
 			Base->SetActorLocation(Location, false, nullptr, ETeleportType::TeleportPhysics);
@@ -578,6 +578,28 @@ namespace GPResourceLoopDiagnostics
 		return nullptr;
 	}
 
+	int32 FindFreePlayableTeamId(UWorld* World)
+	{
+		if (!IsValid(World))
+		{
+			return INDEX_NONE;
+		}
+		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
+		if (GS == nullptr)
+		{
+			return INDEX_NONE;
+		}
+		GS->PruneInvalidMainBaseRegistrations();
+		for (int32 Candidate = 1; Candidate <= 8; ++Candidate)
+		{
+			if (GS->FindMainBaseForTeam(Candidate) == nullptr)
+			{
+				return Candidate;
+			}
+		}
+		return INDEX_NONE;
+	}
+
 	FGP_DiagnosticScenarioActors SpawnDiagnosticScenario(UWorld* World, int32 TeamId, bool bOwnedByContract)
 	{
 		FGP_DiagnosticScenarioActors Result;
@@ -588,6 +610,50 @@ namespace GPResourceLoopDiagnostics
 		{
 			Result.Error = TEXT("MissingWorldOrClient");
 			return Result;
+		}
+
+		AGP_GameState* GSEarly = World->GetGameState<AGP_GameState>();
+		if (GSEarly != nullptr)
+		{
+			GSEarly->PruneInvalidMainBaseRegistrations();
+		}
+
+		if (bOwnedByContract)
+		{
+			// Never collide with an existing operator/authored MainBase registry entry.
+			if (GSEarly != nullptr && GSEarly->FindMainBaseForTeam(TeamId) != nullptr)
+			{
+				const int32 FreeTeam = FindFreePlayableTeamId(World);
+				if (FreeTeam == INDEX_NONE)
+				{
+					Result.Error = TEXT("BlockedByOccupiedPlayableTeams");
+					UE_LOG(LogGPResourceLoopDiag, Error,
+						TEXT("GP Resource.SpawnDiagnosticScenario: Ok=false Reason=BlockedByOccupiedPlayableTeams RequestedTeam=%d"),
+						TeamId);
+					return Result;
+				}
+				UE_LOG(LogGPResourceLoopDiag, Log,
+					TEXT("GP Resource.SpawnDiagnosticScenario: Contract team remapped Requested=%d -> Free=%d"),
+					TeamId,
+					FreeTeam);
+				TeamId = FreeTeam;
+				Result.TeamId = TeamId;
+			}
+			CleanupTaggedScenarioForTeam(World, TeamId, /*bContractOwnedOnly*/ true);
+		}
+		else
+		{
+			// Operator re-spawn: replace prior operator diagnostic only (never authored/production).
+			CleanupTaggedScenarioForTeam(World, TeamId, /*bContractOwnedOnly*/ false);
+			if (GSEarly != nullptr && GSEarly->FindMainBaseForTeam(TeamId) != nullptr)
+			{
+				Result.Error = TEXT("TeamMainBaseOccupied");
+				UE_LOG(LogGPResourceLoopDiag, Error,
+					TEXT("GP Resource.SpawnDiagnosticScenario: Ok=false Reason=TeamMainBaseOccupied TeamId=%d Existing=%s"),
+					TeamId,
+					*GetNameSafe(GSEarly->FindMainBaseForTeam(TeamId)));
+				return Result;
+			}
 		}
 
 		UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
@@ -642,9 +708,6 @@ namespace GPResourceLoopDiagnostics
 		Result.bNavNodeToBase = Layout.bNavNodeToBase;
 		Result.bNavBaseToNode = Layout.bNavBaseToNode;
 
-		// Replace prior scenario of the same ownership class for this team (tag-scoped).
-		CleanupTaggedScenarioForTeam(World, TeamId, bOwnedByContract);
-
 		Result.MainBase = SpawnMainBaseDeferred(World, Layout.BaseLoc, TeamId, bOwnedByContract);
 		Result.bCreatedMainBase = IsValid(Result.MainBase);
 		Result.ResourceNode = SpawnResourceNodeTransient(World, Layout.NodeLoc, bOwnedByContract);
@@ -690,13 +753,16 @@ namespace GPResourceLoopDiagnostics
 		}
 
 		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
-		AGP_MainBase* Resolved = GS != nullptr ? GS->FindMainBaseForTeam(TeamId) : nullptr;
-		if (Resolved != Result.MainBase)
+		if (GS == nullptr || !Result.MainBase->Tags.Contains(TagScenario))
 		{
-			Result.MainBase->RefreshMainBaseRegistration();
-			Resolved = GS != nullptr ? GS->FindMainBaseForTeam(TeamId) : nullptr;
+			FailAtomic(TEXT("MainBaseRegistryResolveFailed"));
+			return Result;
 		}
-		if (Resolved != Result.MainBase)
+		Result.MainBase->RefreshMainBaseRegistration();
+		AGP_MainBase* Resolved = GS->FindMainBaseForTeam(TeamId);
+		if (Resolved != Result.MainBase
+			|| GS->CountRegisteredMainBasesForTeam(TeamId) != 1
+			|| !GS->IsMainBaseRegistryUniqueForTeam(TeamId))
 		{
 			FailAtomic(TEXT("MainBaseRegistryResolveFailed"));
 			return Result;
@@ -865,8 +931,15 @@ namespace GPResourceLoopDiagnostics
 		}
 
 		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
+		if (GS != nullptr)
+		{
+			GS->PruneInvalidMainBaseRegistrations();
+		}
 		AGP_MainBase* Registered = GS != nullptr ? GS->FindMainBaseForTeam(TeamId) : nullptr;
-		V.bMainBaseRegisteredForTeam = IsValid(Registered) && IsValid(Base) && Registered == Base;
+		V.MainBaseCountForWorkerTeam = GS != nullptr ? GS->CountRegisteredMainBasesForTeam(TeamId) : 0;
+		V.bRegistryUniqueForTeam = GS != nullptr && GS->IsMainBaseRegistryUniqueForTeam(TeamId) && V.MainBaseCountForWorkerTeam == 1;
+		V.bResolvedMainBaseMatchesListedBase = IsValid(Registered) && IsValid(Base) && Registered == Base;
+		V.bMainBaseRegisteredForTeam = V.bResolvedMainBaseMatchesListedBase && V.bRegistryUniqueForTeam;
 		V.bWorkerHasMainBase = IsValid(Worker) && IsValid(Registered) && Registered->GetTeamId() == Worker->GetTeamId();
 		V.bWorkerHasResourceNode = IsValid(Worker) && IsValid(Node);
 		V.bWorkerAndBaseSameTeam = IsValid(Worker) && IsValid(Base) && Worker->GetTeamId() == Base->GetTeamId() && Worker->GetTeamId() == TeamId;
@@ -917,7 +990,9 @@ namespace GPResourceLoopDiagnostics
 		}
 
 		if (!V.bPlayableTeamValid || !V.bWorkerHasMainBase || !V.bWorkerHasResourceNode
-			|| !V.bMainBaseRegisteredForTeam || !V.bWorkerAndBaseSameTeam || !V.bNodeMineable)
+			|| !V.bMainBaseRegisteredForTeam || !V.bWorkerAndBaseSameTeam || !V.bNodeMineable
+			|| V.MainBaseCountForWorkerTeam != 1 || !V.bRegistryUniqueForTeam
+			|| !V.bResolvedMainBaseMatchesListedBase)
 		{
 			++V.Errors;
 		}
@@ -929,6 +1004,9 @@ namespace GPResourceLoopDiagnostics
 			&& V.bMainBaseRegisteredForTeam
 			&& V.bWorkerAndBaseSameTeam
 			&& V.bNodeMineable
+			&& V.MainBaseCountForWorkerTeam == 1
+			&& V.bRegistryUniqueForTeam
+			&& V.bResolvedMainBaseMatchesListedBase
 			&& V.bNavSystemPresent
 			&& V.bWorkerProjected
 			&& V.bNodeApproachProjected

@@ -99,10 +99,24 @@ public:
 	void SetMatchResult(int32 InWinnerTeamId, FGameplayTag InWinReasonTag);
 	void ClearMatchResult();
 
-	/** Authority-only MainBase registry (team-scoped; no GetActorOfClass lookups). */
-	void RegisterMainBase(AGP_MainBase* MainBase);
+	/** Result of authority MainBase registry mutation (GP-S28). */
+	enum class EGP_MainBaseRegisterResult : uint8
+	{
+		Registered,
+		AlreadyRegistered,
+		RejectedNoAuthority,
+		RejectedInvalidActor,
+		RejectedInvalidTeam,
+		RejectedDuplicate
+	};
+
+	/** Authority-only MainBase registry (team-scoped; no GetActorOfClass lookups). Exactly one MainBase per playable TeamId. */
+	EGP_MainBaseRegisterResult RegisterMainBase(AGP_MainBase* MainBase);
 	void UnregisterMainBase(AGP_MainBase* MainBase);
 	AGP_MainBase* FindMainBaseForTeam(int32 InTeamId) const;
+	int32 CountRegisteredMainBasesForTeam(int32 InTeamId) const;
+	bool IsMainBaseRegistryUniqueForTeam(int32 InTeamId) const;
+	void PruneInvalidMainBaseRegistrations();
 
 	/** C++ subscription: old/new MatchStateTag. */
 	FOnGP_MatchStateTagChanged OnMatchStateTagChanged;

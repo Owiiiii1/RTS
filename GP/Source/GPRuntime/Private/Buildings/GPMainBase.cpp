@@ -109,7 +109,7 @@ UCapsuleComponent* AGP_MainBase::GetCapsuleComponent() const
 
 void AGP_MainBase::RegisterWithGameState()
 {
-	if (!HasAuthority() || bRegisteredWithGameState)
+	if (!HasAuthority())
 	{
 		return;
 	}
@@ -119,12 +119,31 @@ void AGP_MainBase::RegisterWithGameState()
 		return;
 	}
 
+	// Idempotent refresh when already marked registered.
+	if (bRegisteredWithGameState)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
+			{
+				const AGP_GameState::EGP_MainBaseRegisterResult Result = GS->RegisterMainBase(this);
+				if (Result == AGP_GameState::EGP_MainBaseRegisterResult::RejectedDuplicate)
+				{
+					bRegisteredWithGameState = false;
+				}
+			}
+		}
+		return;
+	}
+
 	if (UWorld* World = GetWorld())
 	{
 		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
 		{
-			GS->RegisterMainBase(this);
-			bRegisteredWithGameState = true;
+			const AGP_GameState::EGP_MainBaseRegisterResult Result = GS->RegisterMainBase(this);
+			bRegisteredWithGameState =
+				Result == AGP_GameState::EGP_MainBaseRegisterResult::Registered
+				|| Result == AGP_GameState::EGP_MainBaseRegisterResult::AlreadyRegistered;
 		}
 	}
 }

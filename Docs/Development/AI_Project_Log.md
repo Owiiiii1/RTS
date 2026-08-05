@@ -1,5 +1,33 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-05 — GP-S28 MainBase Registry Uniqueness + Contract Isolation
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior: candidate `cd83858` / TeamId `61f69df` / nav `caf5bf0`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Root cause
+`RegisterMainBase` logged DuplicateMainBaseForTeam Error then still `Add` → Count=2. Contract reused Team1 while operator scenario occupied it.
+
+### What was done
+- Registry uniqueness invariant: one MainBase per playable TeamId; typed register result; no Add after reject; stale prune; same-actor idempotent
+- MainBase lifecycle respects reject / EndPlay / TeamId change
+- Contract team isolation + duplicate-rejection stages; operator Team1 preservation
+- Operator re-spawn policy; Worker.List registry uniqueness fields; Ready requires unique count=1
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping not run
+- Runtime regression console suite: operator validation pending (code ready)
+
+### Operator next
+1. Sequence B: `SpawnDiagnosticScenario 1` → `RunDiagnosticScenarioContractTest` → `Worker.List` (Team1 preserved, Ready=true, Count=1)
+2. Full contract suite; confirm Failures=0 with and without prior Team1 scenario
+
+---
+
 ## 2026-08-05 — GP-S28 Diagnostic Nav-Reachability Correction
 
 Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**

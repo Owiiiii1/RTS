@@ -2,27 +2,27 @@
 
 ## 2026-08-05 — GP-S27 Worker Architecture Reconciliation Analysis
 
-Status: GP-S27_WORKER_ANALYSIS_READY_FOR_REVIEW
+Status: GP-S27_WORKER_ANALYSIS_CORRECTED_READY_FOR_REVIEW
 
 ### Branch / baseline
 - Branch: `feature/gp-s27-worker-analysis`
 - Base: `main` @ `d81a9bea45f35069636f13df9229685226282311`
-- Analysis: `b5526d1ebad4d6c76e522005767d0bb162adccd1`
+- Initial analysis: `b5526d1ebad4d6c76e522005767d0bb162adccd1`
 - Task: `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
 - Type: documentation / analysis only (no production C++ / assets / map)
 
-### What was done
-- Reconciled canonical Slice 6 (S23–S28) against post-S26B2A main inventory
-- Selected Worker architecture: `AGP_Worker : AGP_MobileUnit` (sibling of `AGP_Unit`)
-- Prerequisites split proposed: **GP-S26C** (Mine→ResourceNode) → **GP-S26D** (Cargo+Mining) → **GP-S27** (Worker)
-- Documented supersession: `AGP_FerroniteDeposit` → current `AGP_ResourceNode` MVP deposit
-- Operator validation plan drafted for future Worker implementation
+### Correction
+- Restored mandatory Slice-6 order + ADR-0002 Data-Driven First
+- Rejected skip-S23 / hardcoded mining rates / GP-S26C-first recommendations
+- Next stage: **GP-S23R** → **GP-S24R** → S25 Cargo → S26 Mining → S27 Worker → S28 Storage
+- Worker architecture unchanged: `AGP_Worker : AGP_MobileUnit`
+- Cargo SoT: `UGP_CargoComponent`; no dual-write with `CarriedFerronite`
 
 ### Intentionally not done
-- No Worker/Cargo/Mining/Storage C++; no uasset/umap; no PR/merge; no S28
+- No Worker/Cargo/Mining/Storage/ResourceDefinition C++; no uasset/umap; no PR/merge
 
 ### Operator next
-- Review analysis; approve GP-S26C as next implementation stage
+- Review corrected analysis; approve **GP-S23R** as next implementation stage
 
 ---
 

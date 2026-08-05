@@ -1,235 +1,265 @@
 # GP-S27 — Worker Architecture Reconciliation and Implementation Analysis
 
 ## Status
-**GP-S27_WORKER_ANALYSIS_READY_FOR_REVIEW**
+**GP-S27_WORKER_ANALYSIS_CORRECTED_READY_FOR_REVIEW**
 
 ## Baseline
 `main` @ `d81a9bea45f35069636f13df9229685226282311`  
 (includes merged GP-S26B2A Blueprint Authored Visuals)
 
 Branch: `feature/gp-s27-worker-analysis`  
-Analysis commit: `b5526d1ebad4d6c76e522005767d0bb162adccd1`  
+Initial analysis: `b5526d1ebad4d6c76e522005767d0bb162adccd1`  
 Type: **analysis / documentation only** — no production C++, no content assets, no map edits.
 
-## Canonical place in roadmap
+## Correction reason
 
-From `Docs/TDD/13_Architecture_Proposal.md` Slice 6:
+Initial analysis correctly inventoried missing Slice-6 systems, but incorrectly proposed:
 
-| Stage | Canonical deliverable |
-| --- | --- |
-| GP-S23 | `UGP_ResourceDefinition` (Ferronite metadata) |
-| GP-S24 | `AGP_FerroniteDeposit` (capacity, soft-cap + miner queue) |
-| GP-S25 | `UGP_CargoComponent` |
-| GP-S26 | `UGP_MiningComponent` (auto-cycle SM) |
-| **GP-S27** | **`AGP_Worker`** (`bAutoAttacks=false`; mine + carry + repair; no Build) |
-| GP-S28 | `UGP_StorageComponent` drop-off + `FerroniteThreatValue` write |
+- treating `UGP_ResourceDefinition` as non-blocking;
+- temporary hardcoded mining rates in `UGP_MiningComponent`;
+- starting next with **GP-S26C** Mine Target Compatibility before S23/S24;
+- softening S24 into “ResourceNode stand-in without full deposit contract.”
 
-**Naming collision note:** Prototype arena slices `GP-S27A1` / `GP-S27A2` are **not** canonical Slice-6 Worker. They delivered `AGP_ResourceNode` + `L_PrototypeArena` scaffolding only.
+That violates documented **implementation order** (`TDD/13` Slice 6) and **ADR-0002 Data-Driven First**.
 
-Documentation priority used (INDEX + ADR over Archive):
+This correction restores the mandatory dependency chain and DataAsset-first balance policy.
 
-1. `Docs/Architecture_Decisions/` + `Docs/TDD/13_Architecture_Proposal.md` (ADR-0009 wins on Build/Produce)
+---
+
+## Canonical dependency order (mandatory)
+
+```text
+GP-S23  UGP_ResourceDefinition
+GP-S24  Ferronite deposit implementation
+GP-S25  UGP_CargoComponent
+GP-S26  UGP_MiningComponent
+GP-S27  AGP_Worker
+GP-S28  UGP_StorageComponent + FerroniteThreatValue write
+```
+
+**Rules:**
+
+- Do **not** skip GP-S23.
+- Do **not** hardcode mining rates / yield balance in C++.
+- Do **not** defer ResourceDefinition “until later” past mining implementation.
+- Do **not** start Mine-target work before S23/S24 deposit contract.
+- Prototype arena `GP-S27A1` / `GP-S27A2` are **not** canonical Slice-6 Worker.
+
+Documentation priority:
+
+1. ADR + `Docs/TDD/13_Architecture_Proposal.md` (ADR-0009 / ADR-0002)
 2. `Docs/GDD/` (`02`, `04`, `06`)
-3. `Docs/Development/AI_Project_Log.md` for live status
+3. `Docs/Development/AI_Project_Log.md` (live status)
 4. `Docs/TDD/05_Unit_Architecture.md`, `Docs/TDD/07_Resource_Architecture.md`
-5. Archive — **not** source of truth
+5. Archive — not source of truth
 
 ---
 
 ## Current-code inventory
 
-| Entity | C++ status | Location / notes |
+| Entity | C++ status | Notes |
 | --- | --- | --- |
-| `UGP_ResourceDefinition` | **Missing** | Docs/TDD only |
-| `AGP_FerroniteDeposit` | **Missing** | Canonical name unused in code |
-| `AGP_ResourceNode` | **Implemented** | `GPRuntime/Resources`; `AActor`; replicated type/max/current; `ConsumeResource` |
-| `EGP_ResourceType` | **Implemented** | `None`, `Ore` only (not Ferronite enum) |
-| `UGP_CargoComponent` | **Missing** | Docs only |
-| `CarriedFerronite` attr | **Partial** | `UGP_UnitAttributeSet` replicated; no cargo UX / component |
-| `UGP_MiningComponent` | **Missing** | Docs only |
-| `AGP_Worker` | **Missing** | Tags only (`GP.Unit.Type.Worker`) |
-| `UGP_StorageComponent` | **Missing** | Docs only |
-| `FerroniteThreatValue` | **Partial** | `AGP_GameState` replicated getter/setter; **no** drop-off write path |
-| `GP.Command.Mine` | **Partial** | Tag + smart-build + server validate; **no executor**; target must be `AGP_UnitBase` + `GP.Resource.Node` |
-| `GP.Command.Repair` | **Partial** | Tag registered; **not** in validate allow-list; GA is later (S46) |
-| `GP.Resource.Node` / `GP.Resource.Type.Ferronite` | **Tags only** | Not applied on `AGP_ResourceNode` |
-| Unit hierarchy | **Implemented** | `AGP_UnitBase` → `AGP_MobileUnit` → `AGP_Unit` |
-| `bAutoAttacks` | **Missing** | Docs/`UGP_UnitDefinition` only; no definition class in C++ |
-| Move / Attack routing | **Implemented** | Held-command + `UGP_MovementComponent::RequestMove` |
-| Movement-to-mine-target | **Missing** | Mine enters Held but does not approach deposit |
-| VisualSourceMode | **Implemented** | Unit + ResourceNode; NativeFallback / AuthoredComponents (S26B2A) |
-| Blueprint examples | **Implemented** | `BP_Unit_AuthoredExample`, `BP_ResourceNode_AuthoredExample` |
-
-### Critical compatibility gap
-`UGP_CommandComponent` Mine validation requires `AGP_UnitBase` with `GP.Resource.Node`. Shipped `AGP_ResourceNode` is a plain `AActor` without that path → **Mine cannot currently target the only deposit actor in the project.**
+| `UGP_ResourceDefinition` | **Missing** | Required next (S23R) |
+| `AGP_FerroniteDeposit` | **Missing** | Canonical name; not in code |
+| `AGP_ResourceNode` | **Partial deposit** | `AActor`; Ore; Max/Current; `ConsumeResource`; visuals |
+| `EGP_ResourceType` | **Partial** | `None`, `Ore` only |
+| `UGP_CargoComponent` | **Missing** | |
+| `CarriedFerronite` | **Partial / unused economy** | Replicated attr; no cargo component |
+| `UGP_MiningComponent` | **Missing** | |
+| `AGP_Worker` | **Missing** | Tag `GP.Unit.Type.Worker` only |
+| `UGP_StorageComponent` | **Missing** | |
+| `FerroniteThreatValue` | **Partial** | Field on `AGP_GameState`; no drop-off write |
+| `GP.Command.Mine` | **Partial** | Validate path exists; cannot target ResourceNode; no executor |
+| `GP.Command.Repair` | **Partial** | Tag only; full GA later (S46) |
+| Move / Attack | **Implemented** | Reusable routing |
+| `VisualSourceMode` | **Implemented** | S26B2A authored / native fallback |
+| `bAutoAttacks` | **Missing** | Must be explicit Worker policy later |
 
 ---
 
-## Renames / supersessions vs canonical
+## Revised S23–S28 reconciliation matrix
 
-| Canonical / older assumption | Current reality | Reconciliation |
-| --- | --- | --- |
-| `AGP_FerroniteDeposit : AGP_BuildingBase` | `AGP_ResourceNode : AActor` (Ore) | **Superseded for near-term MVP** by ResourceNode. Full building-as-pawn deposit deferred. |
-| Ferronite-only enum/DA | `EGP_ResourceType::{None,Ore}` + Ferronite **tag** unused on node | Treat Ore node as Ferronite deposit stand-in until rename/alias stage; do not block Worker on DA. |
-| `UGP_ResourceDefinition` required before mining | No DataAsset; amounts on node | Definition remains canonical metadata; thin rates may live on MiningComponent until S23-lite. |
-| Worker under abstract mobile hierarchy | Concrete placeable is `AGP_Unit` (combat/infantry visual defaults) | Worker must **not** inherit `AGP_Unit`; sibling under `AGP_MobileUnit`. |
-| DataAsset unit definitions drive visuals | Blueprint `VisualSourceMode=AuthoredComponents` | Author Worker presentation via BP subclass (S26B2A workflow). |
-| Mine/Repair full command hooks | Mine validate-only; Repair tag-only | Need command/target + executor work before/with Worker. |
-| Auto-cycle mining SM | Not in code | Belongs in MiningComponent stage, not invented inside Worker-only glue. |
-
----
-
-## S23–S28 reconciliation matrix
-
-| Stage | Canonical requirement | Current implementation | Status | Required follow-up | Proposed ownership |
-| --- | --- | --- | --- | --- | --- |
-| **S23** | `UGP_ResourceDefinition` Ferronite metadata | Absent | **Missing** | Optional thin DA or config later; not hard-block if rates temporary on MiningComponent | **GP-S26C** (metadata lite) or deferred post-S27 if rates hardcoded with TODO |
-| **S24** | `AGP_FerroniteDeposit` capacity + soft-cap queue | `AGP_ResourceNode` amounts + `ConsumeResource`; no miner queue | **Superseded by current architecture** (ResourceNode) + **Partially** (capacity only) | Keep ResourceNode as deposit MVP; add miner soft-cap/queue when mining SM needs it; rename/alias Ferronite later | Deposit targeting + consume hooks: **GP-S26C**; queue soft-cap: with **GP-S26D** Mining |
-| **S25** | `UGP_CargoComponent` | Missing; `CarriedFerronite` attr exists unused by economy | **Missing** (attr **Partial**) | Implement CargoComponent; decide attr vs component SoT (prefer component per TDD/07 CANONICAL) | **GP-S26D** |
-| **S26** | `UGP_MiningComponent` auto-cycle SM | Missing; `ConsumeResource` exists | **Missing** | Implement SM; call ConsumeResource; approach deposit via movement | **GP-S26D** |
-| **S27** | `AGP_Worker` mine+carry+repair, no Build | Missing actor; tags only | **Missing** | Assemble Worker on MobileUnit; wire commands; BP visual; no Storage | **GP-S27** (this analysis’s next implementation after prereqs) |
-| **S28** | Storage drop-off + ThreatValue write | ThreatValue field only; no Storage | **Partially** (ThreatValue) / **Missing** (Storage) | MainBase Storage + drop-off mutation | **GP-S28** (out of S27) |
+| Stage | Canonical requirement | Current implementation | Status | Follow-up stage |
+| --- | --- | --- | --- | --- |
+| **S23** | `UGP_ResourceDefinition` Ferronite metadata + DA-driven rates | Absent | **Missing** | **GP-S23R** |
+| **S24** | Ferronite deposit: capacity, tags, soft-cap/queue, mine-targetable | `AGP_ResourceNode` amounts + consume; Ore naming; no definition ref; Mine cannot target it; no miner queue | **Partially implemented** on ResourceNode; BuildingBase subclass **not** required if ResourceNode retained with owner-aligned ADR note | **GP-S24R** |
+| **S25** | `UGP_CargoComponent` | Missing; attr scaffold only | **Missing** | **GP-S25** |
+| **S26** | `UGP_MiningComponent` auto-cycle SM using definition tunables | Missing | **Missing** | **GP-S26** |
+| **S27** | `AGP_Worker` assembles cargo+mining; no Build; no auto-attack | Missing | **Missing** | **GP-S27** |
+| **S28** | Storage drop-off + ThreatValue write | ThreatValue field only | **Partially** / **Missing** | **GP-S28** |
 
 ---
 
-## Worker inheritance options
+## GP-S23R — Resource Definition Reconciliation
 
-### Option A — `AGP_Worker : AGP_Unit`
-- Pros: fastest placeable reuse (capsule + visual component already on Unit)
-- Cons: inherits InfantryMelee-oriented concrete combat unit; muddies unit catalog; auto-attack / combat defaults live on sibling systems tied to “the” unit class; future Salvage Walker also wants a clean combat branch
+**Exact next implementation stage after this analysis is accepted.**
 
-### Option B — Worker under mobile base (existing `AGP_MobileUnit`), sibling of `AGP_Unit`
-- Pros: **matches TDD/13** (`AGP_Worker : AGP_MobileUnit`); shares Move/command/ASC; independent visual BP; combat stays on `AGP_Unit` / future combat classes; minimal hierarchy invention (no new abstract base)
-- Cons: must duplicate/own capsule (or shared helper) + visual component setup on Worker (small, explicit)
+### In scope
+- Runtime type `UGP_ResourceDefinition : UPrimaryDataAsset` (or project-equivalent DataAsset)
+- Ferronite metadata / resource identity / display fields per TDD/07 + TDD/10
+- Mining rate / yield-related tunables required by later MiningComponent
+- Cargo/resource unit metadata where canonical docs require it on the resource DA
+- Soft object references for content
+- Asset Manager / cook registration **only if** required by existing project policy (ADR-0002 soft refs)
+- Content asset e.g. `DA_GP_Resource_Ferronite` (implementation stage — not this analysis)
 
-### Option C — role/config on `AGP_Unit`
-- Pros: zero new actor class
-- Cons: Infantry and Worker share one class forever; Blueprint authoring and AllowedCommands become tangled; worst for Salvage Walker / catalog growth
+### Out of scope
+- Mining state machine
+- Worker
+- Storage / ThreatValue write
+- Map changes
+- Visual primitive DataAsset profiles (abandoned S26B2A experiment — unrelated)
 
-### Selected architecture
-**Option B — `AGP_Worker : AGP_MobileUnit` (sibling of `AGP_Unit`).**
-
-Justification:
-- Canonical TDD/13 hierarchy
-- Preserves S26B2A Blueprint authored visuals (`BP_Worker` with `VisualSourceMode=AuthoredComponents`)
-- Keeps combat infantry (`AGP_Unit`) separate from economic Worker
-- Reuses existing command/movement/ASC stack from `AGP_UnitBase` / `AGP_MobileUnit`
-- Minimizes rework vs inventing a new mobile base (Option B “new base”) or collapsing roles (Option C)
-
-`bAutoAttacks=false` must be introduced as an explicit Worker (or UnitBase) policy flag/command filter — not assumed from a missing `UGP_UnitDefinition`.
+### Conclusion
+ResourceDefinition is **mandatory** before mining balance logic. No hardcoded C++ mining rates.
 
 ---
 
-## Prerequisites (do not fold into GP-S27)
+## GP-S24R — Ferronite Deposit Contract on `AGP_ResourceNode`
 
-Large missing systems must **not** be silently absorbed into Worker.
+### Architecture stance
+Retain **`AGP_ResourceNode` as the deposit actor (`AActor`)** for the near-term Slice-6 path, provided S24R brings it up to the **canonical deposit contract** without inventing a premature `AGP_BuildingBase` rewrite.
 
-### Required before GP-S27 implementation
+This is a **documented adaptation** of canonical class name `AGP_FerroniteDeposit` → existing `AGP_ResourceNode`, not a license to skip S24 contents.
 
-#### GP-S26C — Resource Mine Target Compatibility
-**In scope (proposed):**
-- Allow `GP.Command.Mine` to target `AGP_ResourceNode` (not only `AGP_UnitBase` + capability tag)
-- Document Ore node as Ferronite deposit stand-in for MVP (or add Ferronite alias without full BuildingBase rewrite)
-- Ensure smart-command + validate + HeldCommand path can accept ResourceNode
-- No full mining SM yet; no Worker actor; no Storage
+### In scope
+- Soft reference from node → `UGP_ResourceDefinition`
+- Apply canonical resource tags (`GP.Resource.Node`, Ferronite type tag / naming policy)
+- Ferronite vs Ore naming policy (identity aligned to Ferronite; Ore enum migration or alias documented in S24R implementation task)
+- Keep replicated `MaxAmount` / `CurrentAmount` / authority `ConsumeResource`
+- **Mine target compatibility** as part of deposit contract (command validate/smart-build can target ResourceNode) — **not** a pre-S23 stage
+- Canonical S24 miner occupancy / soft-cap / queue hooks (`ActiveMiners` / `WaitingMiners` / max concurrent) as required by TDD/13 + deposit DA fields
 
-**Out of scope:** auto-cycle, cargo, Worker BP, map population
+### Soft-cap / queue
+Canonical S24 includes soft-cap + queue. **Include these hooks in GP-S24R.**
 
-#### GP-S26D — Cargo + Mining Foundation
-**In scope (proposed):**
-- `UGP_CargoComponent` (replicated cargo state; capacity)
-- `UGP_MiningComponent` (server SM: move-to-deposit, mine via `ConsumeResource`, cargo fill; auto-cycle stubs toward base **without** Storage drop-off completion — or stop at “cargo full / idle notify”)
-- Tick policy: no permanent component tick when idle; event/timer driven
-- Authority: server mining + cargo mutation
+Deferring queue would be an **explicit documented deviation requiring owner approval** — not a silent exclusion. This analysis does **not** recommend that deviation.
 
-**Out of scope:** `AGP_Worker` class assembly (S27); Storage / ThreatValue write (S28); Repair GA (S46)
+### Out of scope
+- `UGP_MiningComponent`
+- `AGP_Worker`
+- `UGP_StorageComponent`
+- Full BuildingBase / footprint rewrite unless forced by ADR conflict during S24R design review
 
-### Deferred / not blocking Worker class creation
-- Full `UGP_ResourceDefinition` DataAsset catalog (S23) — recommend thin rates on MiningComponent with explicit follow-up DA stage if needed
-- `AGP_FerroniteDeposit` BuildingBase rewrite (S24 rename) — ResourceNode remains deposit MVP
-- Storage / orbital delivery (S28 / S36 / ADR-0009)
+---
 
-### Exact proposed implementation split
+## GP-S25 — `UGP_CargoComponent`
+
+Separate stage after S23R/S24R.
+
+### Cargo single source of truth (recommendation)
+
+| Option | Verdict |
+| --- | --- |
+| Dual-write Component + Attribute independently | **Rejected** — undefined authority |
+| AttributeSet-only (`CarriedFerronite`) | **Rejected** — contradicts TDD cargo-component design and Worker composition |
+| **`UGP_CargoComponent` authoritative SoT** | **Selected** |
+
+**Migration impact:**
+
+- Economy / mining / UI cargo bar read **CargoComponent**.
+- Existing `CarriedFerronite` on `UGP_UnitAttributeSet` remains for now as a **non-authoritative legacy GAS field**:
+  - either left unused (0) with a follow-up cleanup to remove/repurpose,
+  - or later given an optional **server one-way mirror** from CargoComponent for GAS/UI convenience.
+- Mining/cargo code must **never** treat the attribute as an independent write target.
+- No unexplained dual-write.
+
+---
+
+## GP-S26 — `UGP_MiningComponent`
+
+After S23R + S24R + S25.
+
+### Requirements
+- Server-authoritative mining state machine
+- Reads **ResourceDefinition** tunables (rate/yield); **no temporary hardcoded balance**
+- Uses deposit `ConsumeResource` + S24R occupancy hooks
+- No permanent idle tick (timers/events/state-driven)
+- Before S28 Storage exists: on full cargo enter explicit **`CargoFull` / `WaitingForDropOff`** (or equivalent) — **do not** fake Storage drop-off
+- Auto-cycle toward base only when a valid drop-off target exists (S28+); until then remain in CargoFull/Waiting
+
+---
+
+## GP-S27 — `AGP_Worker`
+
+### Selected architecture (unchanged)
+**`AGP_Worker : AGP_MobileUnit`** (sibling of `AGP_Unit`).
+
+### Clarifications
+- Worker **assembles** already-shipped `UGP_CargoComponent` + `UGP_MiningComponent` (S25/S26)
+- Worker **must not** re-implement S23–S26 insides
+- `bAutoAttacks=false`; Attack / AttackMove **rejected**
+- Allowed economic commands: Mine / Move / Stop (+ Repair only at documented MVP depth)
+- Repair: **not** “fully ready” in S27 if full `UGP_GA_Repair` / OrbitalFerronite cost remains S46 — S27 may accept command or stub only; must not claim complete repair gameplay
+- Blueprint-authored visuals via S26B2A `VisualSourceMode`
+- No Storage / orbital delivery / Build / Produce
+
+---
+
+## Exact recommended implementation sequence
 
 ```text
-GP-S26C  Resource Mine Target Compatibility   (command ↔ AGP_ResourceNode)
-GP-S26D  UGP_CargoComponent + UGP_MiningComponent
-GP-S27   AGP_Worker actor + BP authored visual + command allow-list
-GP-S28   UGP_StorageComponent drop-off + FerroniteThreatValue write
+GP-S23R  Resource Definition Reconciliation
+   ↓
+GP-S24R  ResourceNode Ferronite Deposit Contract
+         (includes Mine target compatibility + soft-cap/queue hooks)
+   ↓
+GP-S25   UGP_CargoComponent
+   ↓
+GP-S26   UGP_MiningComponent
+   ↓
+GP-S27   AGP_Worker
+   ↓
+GP-S28   UGP_StorageComponent + FerroniteThreatValue write
 ```
 
-**Recommended next implementation task after this analysis is accepted:** **GP-S26C**.
+**Do not** recommend GP-S26C (or any Mine-target-first stage) before S23R/S24R.
+
+**Exact next stage:** **GP-S23R — Resource Definition Reconciliation**.
 
 ---
 
-## Exact GP-S27 Worker scope (when reached)
+## Worker inheritance options (summary)
 
-### In-scope
-- Gameplay actor `AGP_Worker : AGP_MobileUnit`
-- Mobile unit (movement component inherited)
-- Explicit no-auto-attack / Attack command rejected or filtered (`bAutoAttacks=false` policy)
-- Owns / requires Mining + Cargo capabilities (components from S26D)
-- Repair capability **MVP**: command acceptance / stub wiring acceptable; full `UGP_GA_Repair` may remain S46 if called out
-- Server-authoritative mining/cargo behavior
-- Replicated gameplay state via existing patterns (cargo/mining as designed in S26D)
-- Compatible with current Move/Stop command routing
-- Compatible with `AGP_ResourceNode`
-- Compatible with Blueprint-authored visuals (`VisualSourceMode`)
-- Example `BP_Worker` (or equivalent) for operator validation — **implementation stage**, not this analysis
+| Option | Decision |
+| --- | --- |
+| A `AGP_Worker : AGP_Unit` | Rejected — combat/infantry concrete class |
+| **B `AGP_Worker : AGP_MobileUnit`** | **Selected** — matches TDD/13 |
+| C role on `AGP_Unit` | Rejected — conflates roles |
 
-### Out-of-scope for GP-S27
-- `UGP_StorageComponent` / drop-off completion economy
-- Orbital delivery / container launch (ADR-0009 / S36)
-- Build / Produce / Construction / local production
-- Full unit catalog / Salvage Walker
-- Projectile changes
-- Map population / GameDefaultMap change
-- Rewriting ResourceNode into BuildingBase FerroniteDeposit
-- DataAsset visual profiles (abandoned S26B2A experiment)
+---
 
-### Networking rules
-- Server authority for Mine execution, cargo mutation, ConsumeResource
-- No client-authoritative cargo/mining
-- VisualSourceMode remains class/default cosmetic (not gameplay RPC)
-- Listen server + client must see same cargo/mine outcomes via replication
+## Networking / tick (future stages)
 
-### Tick rules
-- No permanent Worker actor tick for idle presentation
-- Mining/cargo driven by timers/events/state changes (same discipline as movement/combat)
+- Server authority: Mine execution, cargo mutation, ConsumeResource, occupancy
+- VisualSourceMode: class/default cosmetic, not gameplay RPC
+- No permanent idle tick on Worker / Mining / Cargo when idle
 - Controller tick remains enabled; visual component tick remains disabled
 
-### Blueprint visual workflow
-- Prefer `BP_Worker` : `AGP_Worker` with `VisualSourceMode=AuthoredComponents`
-- NativeFallback allowed for C++ debug placement
-- Follow S26B2A authored component contract (NoCollision presentation meshes)
-
 ---
 
-## Acceptance criteria (future GP-S27 implementation)
+## Acceptance criteria (future GP-S27 only)
 
-1. `AGP_Worker` placeable (native and/or BP) without combat auto-attack.
-2. Select + Move works via existing command stack.
-3. Attack / AttackMove rejected or no-op per Worker policy.
-4. Mine accepted against `AGP_ResourceNode`; approaches and consumes under authority.
-5. Cargo fills; deplete/idle behavior defined (even if drop-off waits for S28).
-6. Listen + client replication coherent for cargo/mine state.
-7. Authored BP visual works without native mesh overlay.
-8. No Storage / ThreatValue write / Build / Produce in this stage.
-9. No `.umap` persistence unless explicitly requested.
+1. Worker placeable; no auto-attack; Attack rejected.
+2. Move/Stop work.
+3. Mine targets ResourceNode under S24R contract; mining uses S26 + S23 definition rates.
+4. Cargo fills via S25; full cargo → WaitingForDropOff until S28.
+5. Listen+client replication coherent.
+6. Authored BP visual compatible.
+7. No Storage/Build/Produce/map persistence unless requested.
 
 ---
 
 ## Operator validation plan (future GP-S27)
 
-1. Place `BP_Worker` (authored visual) in PIE / listen — do not save map unless asked.
-2. Select Worker; issue Move — arrives.
-3. Issue Attack against enemy unit — rejected / no auto-attack.
-4. Issue Mine on `AGP_ResourceNode` — accepted; Worker approaches; `CurrentAmount` decreases; cargo increases.
-5. Inspect cargo / mining state on server and client.
-6. Place native `AGP_Worker` (if exposed) — NativeFallback visual OK.
-7. Confirm visual component tick off; no authored collision/nav warnings.
-8. Confirm ResourceNode box collision / nav unchanged by mining visuals.
-9. Discard temporary placements (map unchanged).
+1. Place `BP_Worker` — authored visual; do not save map unless asked.
+2. Select + Move.
+3. Attack rejected / no auto-attack.
+4. Mine ResourceNode — approach, consume, cargo increase (definition-driven rates).
+5. Full cargo → WaitingForDropOff (no fake Storage).
+6. Inspect server + client.
+7. Native fallback Worker optional.
+8. Tick / collision / nav checks; discard temp placements.
 
 ---
 
@@ -237,28 +267,43 @@ GP-S28   UGP_StorageComponent drop-off + FerroniteThreatValue write
 
 | Risk | Mitigation |
 | --- | --- |
-| Mine still UnitBase-only | Must ship GP-S26C before Worker validation |
-| Scope creep: Storage inside Worker | Hard out-of-scope; stop at cargo-full / idle notify until S28 |
-| Ore vs Ferronite naming confusion | Document stand-in; optional alias stage |
-| Repair promises vs S46 GA | Limit S27 to command acceptance / stub; full ability later |
-| Worker inherits AGP_Unit combat visuals | Selected Option B avoids this |
-| Auto-cycle without drop-off target | Mining SM must define idle/notify when no Storage yet |
-| `DOCUMENTATION_INDEX` stale vs log | Prefer AI_Project_Log + this analysis for NEXT; INDEX for doc priority rules only |
+| Skipping S23 for speed | Forbidden by this corrected analysis |
+| Hardcoded rates in MiningComponent | Forbidden (ADR-0002) |
+| Mine-target before deposit contract | Belongs in S24R only |
+| Silent skip of miner queue | Not allowed; S24R includes hooks or owner-approved deviation |
+| Dual-write cargo | CargoComponent SoT only |
+| Claiming Repair complete in S27 | Document MVP depth; S46 for full GA |
+| Storage creep in S26/S27 | CargoFull/WaitingForDropOff until S28 |
 
 ---
 
 ## Open questions
 
-1. Should S26C introduce `GP.Resource.Node` tagging on ResourceNode, or a dedicated `IsResourceMineTarget` interface?
-2. Cargo SoT: component-only vs dual-write `CarriedFerronite` attribute?
-3. Is Repair in S27 accept-only, or minimal heal without OrbitalFerronite cost until S46?
-4. When to rename Ore → Ferronite / ResourceNode → FerroniteDeposit for player-facing terms?
-5. Soft-cap concurrent miners: required in S26D or only when multi-worker stress appears?
+### Resolved from canonical docs (not open)
+
+| Topic | Resolution |
+| --- | --- |
+| Implementation order S23→S28 | Mandatory (`TDD/13`) |
+| Data-Driven First for rates | Mandatory (`ADR-0002`); no C++ hardcode |
+| ResourceDefinition before mining | Mandatory |
+| Worker inheritance | `AGP_Worker : AGP_MobileUnit` (`TDD/13`) |
+| Worker no Build / no local production | ADR-0009 |
+| Mine-target before S23 | Invalid sequence |
+
+### Real owner decisions
+
+1. Exact Ferronite/Ore enum+display migration strategy inside S24R (alias vs rename vs dual identity period).
+2. Whether `CarriedFerronite` gets a later one-way mirror from CargoComponent or is removed in a cleanup stage.
+3. S27 Repair depth: command reject vs accept-stub vs minimal heal before S46.
+4. Whether retaining `AGP_ResourceNode : AActor` (vs eventual BuildingBase `AGP_FerroniteDeposit`) needs a short ADR addendum — analysis recommends ResourceNode + S24R contract; confirm with owner.
+5. Soft-cap numbers / replication detail for ActiveMiners count (values from DA; confirm any COND_* nuance).
 
 ---
 
 ## Recommended next task
 
-**GP-S26C — Resource Mine Target Compatibility** (implementation), then **GP-S26D — Cargo + Mining Foundation**, then **GP-S27 — AGP_Worker**.
+**GP-S23R — Resource Definition Reconciliation** (implementation).
 
-Do **not** start GP-S28, orbital delivery, or Worker C++ in this analysis branch.
+Then GP-S24R → GP-S25 → GP-S26 → GP-S27 → GP-S28.
+
+Do **not** start Worker/Cargo/Mining C++, DataAsset content, or map work on this analysis branch.

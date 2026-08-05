@@ -1,10 +1,10 @@
 # Cursor Work Report
 
 ## Task
-GP-S27 — Worker Architecture Reconciliation and Implementation Analysis
+GP-S27 — Worker Architecture Reconciliation Analysis (correction)
 
 ## Status
-GP-S27_WORKER_ANALYSIS_READY_FOR_REVIEW
+GP-S27_WORKER_ANALYSIS_CORRECTED_READY_FOR_REVIEW
 
 ## Branch
 feature/gp-s27-worker-analysis
@@ -12,60 +12,53 @@ feature/gp-s27-worker-analysis
 ## Base
 main @ d81a9bea45f35069636f13df9229685226282311
 
-## Files inspected
-- `Docs/Development/DOCUMENTATION_INDEX.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Claude_Task_Backlog.md`
-- `Docs/TDD/13_Architecture_Proposal.md`
-- `Docs/TDD/05_Unit_Architecture.md`
-- `Docs/TDD/07_Resource_Architecture.md`
-- `Docs/GDD/02_Core_Gameplay_Loop.md`
-- `Docs/GDD/04_Units.md`
-- `Docs/GDD/06_Resources.md`
-- `Docs/Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md`
-- `GP/Source/GPRuntime/**/GPResourceNode.*`
-- `GP/Source/GPRuntime/**/GPUnit*.*`, `GPMobileUnit.*`, `GPUnitBase.*`
-- `GP/Source/GPRuntime/**/GPCommandComponent.*`, `GPUnitCommandComponent.*`, `GPMovementComponent.*`
-- `GP/Source/GPRuntime/**/GPGameState.*`
-- `GP/Source/GPRuntime/**/GP*Visual*`
-- `GP/Source/GPGASRuntime/**/GPGameplayTags.*`, `GPUnitAttributeSet.*`
+## Correction reason
+Initial analysis (`b5526d1…`) correctly found Slice-6 gaps, but violated implementation order and ADR-0002 by proposing non-blocking ResourceDefinition, hardcoded MiningComponent rates, and GP-S26C Mine-target-first. Correction restores S23→S28 Data-Driven sequence.
 
-## Current code findings
-- Economy Worker stack largely **missing**: no `AGP_Worker`, `UGP_CargoComponent`, `UGP_MiningComponent`, `UGP_StorageComponent`, `UGP_ResourceDefinition`, `AGP_FerroniteDeposit`
-- Shipped deposit MVP: `AGP_ResourceNode` (`AActor`, Ore, `ConsumeResource`, replicated amounts)
-- `FerroniteThreatValue` exists on `AGP_GameState` but has no drop-off write path
-- `GP.Command.Mine` validates only against `AGP_UnitBase` + `GP.Resource.Node` → **cannot target ResourceNode**
-- `GP.Command.Repair` tag-only; Move/Attack routing reusable
-- Unit hierarchy: `AGP_UnitBase` → `AGP_MobileUnit` → `AGP_Unit`; `bAutoAttacks` not in C++
-- S26B2A visuals: `VisualSourceMode` NativeFallback / AuthoredComponents on Unit + ResourceNode
-- `CarriedFerronite` attribute exists; unused by economy loop
+## Canonical dependency order
+```
+GP-S23 ResourceDefinition → GP-S24 Deposit → GP-S25 Cargo → GP-S26 Mining → GP-S27 Worker → GP-S28 Storage+ThreatValue
+```
+Revised stage names for reconciliation work: **GP-S23R**, **GP-S24R**, then canonical S25–S28.
 
-## Canonical reconciliation
-Slice 6 S23–S28 mapped: S23 Missing; S24 Superseded/Partial via ResourceNode; S25–S27 Missing; S28 Partial (ThreatValue only). Prototype `GP-S27A*` is arena scaffolding, not canonical Worker.
+## Revised S23–S28 reconciliation
+| Stage | Status | Ownership |
+| --- | --- | --- |
+| S23 ResourceDefinition | Missing | **GP-S23R** (next) |
+| S24 Deposit contract | Partial on `AGP_ResourceNode` | **GP-S24R** (definition soft-ref, tags, Mine target, soft-cap/queue) |
+| S25 Cargo | Missing | **GP-S25** |
+| S26 Mining | Missing | **GP-S26** (uses definition tunables; CargoFull/WaitingForDropOff pre-S28) |
+| S27 Worker | Missing | **GP-S27** (assembles S25/S26 only) |
+| S28 Storage + ThreatValue write | ThreatValue field only | **GP-S28** |
 
-## Selected Worker architecture
-**Option B:** `AGP_Worker : AGP_MobileUnit` (sibling of `AGP_Unit`), matching TDD/13. Reject Option A (`: AGP_Unit`) and Option C (role-on-Unit).
+## Exact next stage
+**GP-S23R — Resource Definition Reconciliation**
 
-## Prerequisite conclusion
-Do **not** implement Worker until:
-1. **GP-S26C** — Mine command ↔ `AGP_ResourceNode` targeting
-2. **GP-S26D** — `UGP_CargoComponent` + `UGP_MiningComponent`
+## ResourceDefinition mandatory conclusion
+Mandatory before mining balance. No skip. No “rates later.”
 
-Storage / ThreatValue write remains **GP-S28**.
+## No-hardcoded-balance conclusion
+Mining rates/yield come from ResourceDefinition (ADR-0002). C++ hardcode forbidden.
 
-## Proposed next implementation stage
-**GP-S26C — Resource Mine Target Compatibility**
+## ResourceNode / S24 reconciliation
+Keep `AGP_ResourceNode` as deposit actor; S24R upgrades it to Ferronite deposit contract (definition soft-ref, tags, naming policy, Mine target compatibility, soft-cap/queue). Queue deferral only via owner-approved explicit deviation — not recommended.
+
+## Cargo SoT recommendation
+`UGP_CargoComponent` authoritative. No dual-write. `CarriedFerronite` unused or later one-way mirror only.
+
+## Worker architecture
+`AGP_Worker : AGP_MobileUnit` (unchanged). Assembles ready Cargo+Mining; no auto-attack; Attack rejected; Repair not falsely “complete” if S46 owns full GA.
 
 ## Files changed
-- `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md` (new)
-- `Docs/Development/AI_Project_Log.md` (S27 analysis + S26B2A marked merged)
-- `Docs/Development/Cursor_Work_Report.md` (overwrite)
+- `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
 ## Build status
 Not required — documentation-only.
 
-## Commit SHA
-b5526d1ebad4d6c76e522005767d0bb162adccd1
+## Correction commit SHA
+(filled after commit)
 
 ## Git state
-Branch `feature/gp-s27-worker-analysis` pushed; main untouched; no PR; no C++/uasset/umap changes.
+Pushed to `feature/gp-s27-worker-analysis`; main untouched; no PR; no C++/uasset/umap.

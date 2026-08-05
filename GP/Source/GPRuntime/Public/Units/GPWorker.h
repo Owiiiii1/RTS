@@ -99,4 +99,7 @@ private:
 	TArray<TWeakObjectPtr<AGP_Worker>> FifoWorkersWeak;
 	TWeakObjectPtr<AGP_Worker> WaitingWorkerWeak;
 	float InteractionRangeCm = 200.0f;
+	int32 MovementWaitTicks = 0;
+	double MovementWaitStartTime = -1.0;
+	static constexpr float MovementWaitTimeoutSeconds = 20.0f;
 };

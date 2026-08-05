@@ -121,6 +121,20 @@ public:
 	AGP_ResourceNode* GetMineTarget() const;
 	bool IsMineApproachActive() const;
 
+	/** GP-S27 approach diagnostics (server orchestration; not replicated). */
+	FVector GetMineApproachDestination() const;
+	float GetMineApproachDesiredNodeDistance() const;
+	float GetMineApproachSafetyMarginCm() const;
+	int32 GetMineApproachAttempt() const;
+	float GetMinePredictedWorstCaseDistance() const;
+	float GetMineLastArrivalDistance() const;
+	float GetMineLastArrivalRangeError() const;
+
+#if !UE_BUILD_SHIPPING
+	/** Next arrival distance check treats Worker as slightly OOR once (contract test). */
+	void DebugForceNextMineArrivalOutOfRangeOnce();
+#endif
+
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Attack")
 	float AttackRange = 250.0f;
 
@@ -187,12 +201,32 @@ private:
 		EGP_MiningState NewState,
 		EGP_MiningStopReason Reason);
 	float ResolveMineInteractionRangeCm(const UGP_MiningComponent* Mining, const AGP_ResourceNode* Node) const;
-	FVector MakeMineApproachDestination(
+
+	/**
+	 * Computes approach destination so even AcceptanceRadius edge completion stays
+	 * strictly inside InteractionRange in 3D (accounts for DeltaZ + safety margin).
+	 */
+	bool TryMakeMineApproachDestination(
 		const AActor* Owner,
 		const AGP_ResourceNode* Node,
 		float InteractionRangeCm,
-		float AcceptanceRadius) const;
+		float AcceptanceRadius,
+		float ExtraInwardMarginCm,
+		FVector& OutDestination,
+		float& OutDesiredHorizontalDistance,
+		float& OutPredictedWorstCaseDistance) const;
+
+	bool RequestMineApproachMove(
+		AActor* Owner,
+		AGP_ResourceNode* Node,
+		uint32 MineSerial,
+		float ExtraInwardMarginCm,
+		const TCHAR* LogLabel);
+
 	static const TCHAR* MineStateToString(EGP_MineExecutionState State);
+
+	/** Inward margin beyond AcceptanceRadius so worst-case arrival stays < InteractionRange. */
+	static constexpr float WorkerMineApproachSafetyMarginCm = 25.0f;
 
 	void SetAttackTickEnabled(bool bEnabled);
 	bool HasExactActiveHeldAttack() const;
@@ -273,4 +307,15 @@ private:
 	TWeakObjectPtr<AGP_ResourceNode> MineTarget;
 	TWeakObjectPtr<UGP_MiningComponent> BoundMiningComponent;
 	bool bFinishingMine = false;
+
+	FVector MineApproachDestination = FVector::ZeroVector;
+	float MineApproachDesiredNodeDistance = -1.0f;
+	float MinePredictedWorstCaseDistance = -1.0f;
+	float MineLastArrivalDistance = -1.0f;
+	float MineLastArrivalRangeError = -1.0f;
+	int32 MineApproachAttempt = 0;
+
+#if !UE_BUILD_SHIPPING
+	bool bDebugForceNextMineArrivalOutOfRange = false;
+#endif
 };

@@ -41,7 +41,10 @@ In range (≤ InteractionRangeCm): stop move → `BeginMining` → Mining or Wai
 Out of range: weak target via Held → `RequestMove(approach, CommandSerial)` → Approaching → on `OnMovementResult` Reached + serial match → revalidate → `BeginMining`. No distance polling Tick.
 
 ## Approach-point policy
-Point along Worker←Node direction at `InteractionRange − AcceptanceRadius − 5`, Z from Worker. Ensures Reached leaves actor-to-node distance ≤ 200. No deposit reservation system.
+Horizontal destination along Worker←Node with 3D-safe budget:
+`D_h = sqrt(Range² − ΔZ²) − AcceptanceRadius − WorkerMineApproachSafetyMarginCm(25)`.
+Predicted worst-case after 2D acceptance must be `< InteractionRange`. Impossible ΔZ → fail (no move).
+One-shot corrective approach if arrival still OOR. Mining InteractionRangeCm=200 unchanged (strict 3D).
 
 ## Movement completion / request-id policy
 Uses existing `UGP_MovementComponent::OnMovementResult` + Held `CommandSerial` as ActiveMineSerial. Stale serial ignored. Cancelled approach clears Held Mine.

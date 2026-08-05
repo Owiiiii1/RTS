@@ -1,8 +1,29 @@
 # Grim Protocol — AI Project Log
 
-## 2026-08-05 — GP-S27 AGP_Worker
+## 2026-08-05 — GP-S27 Worker Mine Approach Range Correction
 
 Status: **GP-S27_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s27-worker`
+- Base: `main` @ `860070c4acbcb85fd5c4334628584372bdd082ca`
+- Candidate: `07e20fbfff36e181076d237d0596ef6f25b40951`
+- Task: `Docs/Development/Claude_Tasks/GP-S27_Worker.md`
+
+### What was done
+- Operator edge: arrival Distance=200.4 > Range=200 (`MineArrivalOutOfRange`) with Acc=50 + ΔZ
+- Approach geometry: 3D-safe `D_h` with SafetyMargin=25; one-shot corrective; Inspect diagnostics
+- Contract edge tests + time-based movement timeout; **Failures=0**
+- GPEditor Dev+UHT **PASSED**; GP Dev/Shipping not run; Mining range unchanged
+
+### Operator next
+- Re-validate far/diagonal Mine (CommandMove 3000 3000 then CommandMine); no MineArrivalOutOfRange
+
+---
+
+## 2026-08-05 — GP-S27 AGP_Worker
+
+Status: **GP-S27_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded by approach correction for validation)*
 
 ### Branch / baseline
 - Branch: `feature/gp-s27-worker`

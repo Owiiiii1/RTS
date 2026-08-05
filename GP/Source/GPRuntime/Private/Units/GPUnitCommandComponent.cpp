@@ -760,14 +760,91 @@ bool UGP_UnitCommandComponent::IsMineApproachActive() const
 	return MineState == EGP_MineExecutionState::Approaching && ActiveMineSerial != 0;
 }
 
-FVector UGP_UnitCommandComponent::MakeMineApproachDestination(
+FVector UGP_UnitCommandComponent::GetMineApproachDestination() const
+{
+	return MineApproachDestination;
+}
+
+float UGP_UnitCommandComponent::GetMineApproachDesiredNodeDistance() const
+{
+	return MineApproachDesiredNodeDistance;
+}
+
+float UGP_UnitCommandComponent::GetMineApproachSafetyMarginCm() const
+{
+	return WorkerMineApproachSafetyMarginCm;
+}
+
+int32 UGP_UnitCommandComponent::GetMineApproachAttempt() const
+{
+	return MineApproachAttempt;
+}
+
+float UGP_UnitCommandComponent::GetMinePredictedWorstCaseDistance() const
+{
+	return MinePredictedWorstCaseDistance;
+}
+
+float UGP_UnitCommandComponent::GetMineLastArrivalDistance() const
+{
+	return MineLastArrivalDistance;
+}
+
+float UGP_UnitCommandComponent::GetMineLastArrivalRangeError() const
+{
+	return MineLastArrivalRangeError;
+}
+
+#if !UE_BUILD_SHIPPING
+void UGP_UnitCommandComponent::DebugForceNextMineArrivalOutOfRangeOnce()
+{
+	bDebugForceNextMineArrivalOutOfRange = true;
+}
+#endif
+
+bool UGP_UnitCommandComponent::TryMakeMineApproachDestination(
 	const AActor* Owner,
 	const AGP_ResourceNode* Node,
 	float InteractionRangeCm,
-	float AcceptanceRadius) const
+	float AcceptanceRadius,
+	float ExtraInwardMarginCm,
+	FVector& OutDestination,
+	float& OutDesiredHorizontalDistance,
+	float& OutPredictedWorstCaseDistance) const
 {
-	const FVector OwnerLocation = Owner != nullptr ? Owner->GetActorLocation() : FVector::ZeroVector;
-	const FVector NodeLocation = Node != nullptr ? Node->GetActorLocation() : FVector::ZeroVector;
+	OutDestination = FVector::ZeroVector;
+	OutDesiredHorizontalDistance = -1.0f;
+	OutPredictedWorstCaseDistance = -1.0f;
+
+	if (Owner == nullptr || Node == nullptr
+		|| !FMath::IsFinite(InteractionRangeCm) || InteractionRangeCm <= 0.0f
+		|| !FMath::IsFinite(AcceptanceRadius) || AcceptanceRadius < 0.0f)
+	{
+		return false;
+	}
+
+	const FVector OwnerLocation = Owner->GetActorLocation();
+	const FVector NodeLocation = Node->GetActorLocation();
+	const float DeltaZ = OwnerLocation.Z - NodeLocation.Z;
+	const float AbsDeltaZ = FMath::Abs(DeltaZ);
+
+	// Movement completes in a 2D acceptance circle; mining validates 3D distance.
+	// Require: sqrt((D_h + Acc)^2 + DeltaZ^2) < Range
+	const float RangeSq = FMath::Square(InteractionRangeCm);
+	const float DeltaZSq = FMath::Square(AbsDeltaZ);
+	if (DeltaZSq >= RangeSq)
+	{
+		return false;
+	}
+
+	const float MaxHorizontalBudget = FMath::Sqrt(RangeSq - DeltaZSq);
+	const float TotalInward = AcceptanceRadius + WorkerMineApproachSafetyMarginCm + FMath::Max(0.0f, ExtraInwardMarginCm);
+	if (MaxHorizontalBudget <= TotalInward + 1.0f)
+	{
+		return false;
+	}
+
+	const float DesiredHorizontal = MaxHorizontalBudget - TotalInward;
 	FVector Away = OwnerLocation - NodeLocation;
 	Away.Z = 0.0f;
 	if (!Away.Normalize())
@@ -775,10 +852,96 @@ FVector UGP_UnitCommandComponent::MakeMineApproachDestination(
 		Away = FVector::ForwardVector;
 	}
 
-	const float Safety = 5.0f;
-	const float DesiredDist = FMath::Max(1.0f, InteractionRangeCm - AcceptanceRadius - Safety);
-	const FVector Destination = NodeLocation + Away * DesiredDist;
-	return FVector(Destination.X, Destination.Y, OwnerLocation.Z);
+	const FVector DestinationXY = NodeLocation + Away * DesiredHorizontal;
+	OutDestination = FVector(DestinationXY.X, DestinationXY.Y, OwnerLocation.Z);
+	OutDesiredHorizontalDistance = DesiredHorizontal;
+	OutPredictedWorstCaseDistance = FMath::Sqrt(FMath::Square(DesiredHorizontal + AcceptanceRadius) + DeltaZSq);
+	return OutPredictedWorstCaseDistance < InteractionRangeCm;
+}
+
+bool UGP_UnitCommandComponent::RequestMineApproachMove(
+	AActor* Owner,
+	AGP_ResourceNode* Node,
+	uint32 MineSerial,
+	float ExtraInwardMarginCm,
+	const TCHAR* LogLabel)
+{
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+	UGP_MovementComponent* Movement = ResolveMovementComponent();
+	AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+	UGP_MiningComponent* Mining = Worker != nullptr ? Worker->GetMiningComponent() : nullptr;
+	if (Movement == nullptr || !IsValid(Node) || !IsValid(Mining))
+	{
+		return false;
+	}
+
+	const float InteractionRange = ResolveMineInteractionRangeCm(Mining, Node);
+	const float AcceptanceRadius = Movement->AcceptanceRadius;
+	FVector Destination = FVector::ZeroVector;
+	float DesiredHorizontal = -1.0f;
+	float PredictedWorst = -1.0f;
+	if (!TryMakeMineApproachDestination(
+		Owner,
+		Node,
+		InteractionRange,
+		AcceptanceRadius,
+		ExtraInwardMarginCm,
+		Destination,
+		DesiredHorizontal,
+		PredictedWorst))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MineApproachGeometryFailed: Unit=%s MineSerial=%u Target=%s Label=%s Range=%.1f Acc=%.1f Safety=%.1f ExtraInward=%.1f Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			MineSerial,
+			*GetNameSafe(Node),
+			LogLabel,
+			InteractionRange,
+			AcceptanceRadius,
+			WorkerMineApproachSafetyMarginCm,
+			ExtraInwardMarginCm,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return false;
+	}
+
+	const FGP_MovementRequestOutcome Outcome = Movement->RequestMove(Destination, MineSerial);
+	if (!Outcome.IsAccepted())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MineApproachMoveRejected: Unit=%s MineSerial=%u Label=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			MineSerial,
+			LogLabel,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return false;
+	}
+
+	MineApproachDestination = Destination;
+	MineApproachDesiredNodeDistance = DesiredHorizontal;
+	MinePredictedWorstCaseDistance = PredictedWorst;
+	MineState = EGP_MineExecutionState::Approaching;
+	ActiveMineSerial = MineSerial;
+	MineTarget = Node;
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution MineApproachRequested: Unit=%s MineSerial=%u Target=%s Label=%s Attempt=%d Destination=%s DesiredHoriz=%.1f PredictedWorst=%.1f Range=%.1f Acc=%.1f Safety=%.1f Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		MineSerial,
+		*GetNameSafe(Node),
+		LogLabel,
+		MineApproachAttempt,
+		*Destination.ToCompactString(),
+		DesiredHorizontal,
+		PredictedWorst,
+		InteractionRange,
+		AcceptanceRadius,
+		WorkerMineApproachSafetyMarginCm,
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+	return true;
 }
 
 void UGP_UnitCommandComponent::UnbindMiningStateEvents()
@@ -854,6 +1017,15 @@ void UGP_UnitCommandComponent::ResetMineExecutor()
 	MineState = EGP_MineExecutionState::Idle;
 	ActiveMineSerial = 0;
 	MineTarget.Reset();
+	MineApproachDestination = FVector::ZeroVector;
+	MineApproachDesiredNodeDistance = -1.0f;
+	MinePredictedWorstCaseDistance = -1.0f;
+	MineLastArrivalDistance = -1.0f;
+	MineLastArrivalRangeError = -1.0f;
+	MineApproachAttempt = 0;
+#if !UE_BUILD_SHIPPING
+	bDebugForceNextMineArrivalOutOfRange = false;
+#endif
 }
 
 void UGP_UnitCommandComponent::ResetMineExecutorForReplacement(
@@ -1025,18 +1197,40 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	}
 
 	const float InteractionRange = ResolveMineInteractionRangeCm(Mining, Node);
-	const float Distance = FVector::Dist(Owner->GetActorLocation(), Node->GetActorLocation());
+	float Distance = FVector::Dist(Owner->GetActorLocation(), Node->GetActorLocation());
+#if !UE_BUILD_SHIPPING
+	if (bDebugForceNextMineArrivalOutOfRange)
+	{
+		bDebugForceNextMineArrivalOutOfRange = false;
+		Distance = InteractionRange + 5.0f;
+	}
+#endif
+	MineLastArrivalDistance = Distance;
+	MineLastArrivalRangeError = Distance - InteractionRange;
+
 	if (Distance > InteractionRange)
 	{
 		UE_LOG(LogGPUnitCommandExecution, Warning,
-			TEXT("GP UnitCommandExecution MineArrivalOutOfRange: Unit=%s MineSerial=%u Target=%s Distance=%.1f Range=%.1f Role=%s NetMode=%s"),
+			TEXT("GP UnitCommandExecution MineArrivalOutOfRange: Unit=%s MineSerial=%u Target=%s Distance=%.1f Range=%.1f Attempt=%d Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			MineSerial,
 			*GetNameSafe(Node),
 			Distance,
 			InteractionRange,
+			MineApproachAttempt,
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+		// One-shot corrective approach (deeper inward); no slot/timer until success.
+		if (MineApproachAttempt < 1)
+		{
+			++MineApproachAttempt;
+			if (RequestMineApproachMove(Owner, Node, MineSerial, WorkerMineApproachSafetyMarginCm, TEXT("Corrective")))
+			{
+				return;
+			}
+		}
+
 		ClearHeldCommand();
 		ResetMineExecutor();
 		return;
@@ -1100,11 +1294,11 @@ bool UGP_UnitCommandComponent::StartMineExecutor()
 	const uint32 MineSerial = Held.CommandSerial;
 	ActiveMineSerial = MineSerial;
 	MineTarget = Node;
+	MineApproachAttempt = 0;
 
 	const float InteractionRange = ResolveMineInteractionRangeCm(Mining, Node);
 	const float Distance = FVector::Dist(Owner->GetActorLocation(), Node->GetActorLocation());
 	UGP_MovementComponent* Movement = ResolveMovementComponent();
-	const float AcceptanceRadius = Movement != nullptr ? Movement->AcceptanceRadius : 50.0f;
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
 		TEXT("GP UnitCommandExecution MineAccepted: Unit=%s MineSerial=%u Target=%s Distance=%.1f Range=%.1f Role=%s NetMode=%s"),
@@ -1139,30 +1333,13 @@ bool UGP_UnitCommandComponent::StartMineExecutor()
 		return false;
 	}
 
-	const FVector Destination = MakeMineApproachDestination(Owner, Node, InteractionRange, AcceptanceRadius);
-	const FGP_MovementRequestOutcome Outcome = Movement->RequestMove(Destination, MineSerial);
-	if (!Outcome.IsAccepted())
+	if (!RequestMineApproachMove(Owner, Node, MineSerial, 0.0f, TEXT("Primary")))
 	{
-		UE_LOG(LogGPUnitCommandExecution, Warning,
-			TEXT("GP UnitCommandExecution MineRejected: Unit=%s MineSerial=%u Reason=MovementRejected Role=%s NetMode=%s"),
-			*GetNameSafe(Owner),
-			MineSerial,
-			GPUnitCommandStatePrivate::RoleToString(Role),
-			GPUnitCommandStatePrivate::NetModeToString(NetMode));
 		ClearHeldCommand();
 		ResetMineExecutor();
 		return false;
 	}
 
-	MineState = EGP_MineExecutionState::Approaching;
-	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution MineApproachRequested: Unit=%s MineSerial=%u Target=%s Destination=%s Role=%s NetMode=%s"),
-		*GetNameSafe(Owner),
-		MineSerial,
-		*GetNameSafe(Node),
-		*Destination.ToCompactString(),
-		GPUnitCommandStatePrivate::RoleToString(Role),
-		GPUnitCommandStatePrivate::NetModeToString(NetMode));
 	return true;
 }
 

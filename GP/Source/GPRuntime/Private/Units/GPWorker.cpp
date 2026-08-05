@@ -408,7 +408,7 @@ namespace GPWorkerDebug
 		const FGP_StoredUnitCommand* Held = Commands != nullptr ? Commands->GetHeldCommand() : nullptr;
 
 		UE_LOG(LogGPWorker, Log,
-			TEXT("GP Worker.Inspect: Owner=%s Path=%s Class=%s Role=%s NetMode=%s HasAuthority=%s TeamId=%d Selectable=%s Activity=%s HeldTag=%s HeldSerial=%u PendingMineNode=%s MiningState=%s MiningStop=%s Cargo=%.1f/%.1f Remaining=%.1f Distance=%.1f InteractionRangeCm=%.1f InRange=%s Moving=%s MoveDest=%s MineExec=%s ActiveMineSerial=%u HasActiveSlot=%s WaitingSlot=%s MiningTimer=%s WorkerTick=%s MoveTick=%s CargoTick=%s MiningTick=%s ValidationOk=%s Errors=%d Warnings=%d Caps=%s"),
+			TEXT("GP Worker.Inspect: Owner=%s Path=%s Class=%s Role=%s NetMode=%s HasAuthority=%s TeamId=%d Selectable=%s Activity=%s HeldTag=%s HeldSerial=%u PendingMineNode=%s MiningState=%s MiningStop=%s Cargo=%.1f/%.1f Remaining=%.1f Distance=%.1f InteractionRangeCm=%.1f InRange=%s Moving=%s MoveDest=%s ApproachDestination=%s ApproachDesiredNodeDistance=%.1f ApproachSafetyMargin=%.1f ApproachAttempt=%d PredictedWorstCaseDistance=%.1f LastArrivalDistance=%.1f LastArrivalRangeError=%.1f MineExec=%s ActiveMineSerial=%u HasActiveSlot=%s WaitingSlot=%s MiningTimer=%s WorkerTick=%s MoveTick=%s CargoTick=%s MiningTick=%s ValidationOk=%s Errors=%d Warnings=%d Caps=%s"),
 			*Worker->GetName(),
 			*Worker->GetPathName(),
 			*Worker->GetClass()->GetName(),
@@ -431,6 +431,13 @@ namespace GPWorkerDebug
 			bInRange ? TEXT("true") : TEXT("false"),
 			Movement != nullptr && Movement->IsMoving() ? TEXT("true") : TEXT("false"),
 			Movement != nullptr ? *Movement->GetMoveDestination().ToCompactString() : TEXT("none"),
+			Commands != nullptr ? *Commands->GetMineApproachDestination().ToCompactString() : TEXT("none"),
+			Commands != nullptr ? Commands->GetMineApproachDesiredNodeDistance() : -1.0f,
+			Commands != nullptr ? Commands->GetMineApproachSafetyMarginCm() : -1.0f,
+			Commands != nullptr ? Commands->GetMineApproachAttempt() : -1,
+			Commands != nullptr ? Commands->GetMinePredictedWorstCaseDistance() : -1.0f,
+			Commands != nullptr ? Commands->GetMineLastArrivalDistance() : -1.0f,
+			Commands != nullptr ? Commands->GetMineLastArrivalRangeError() : -1.0f,
 			Commands != nullptr ? (Commands->GetMineExecutionState() == EGP_MineExecutionState::Approaching ? TEXT("Approaching") : (Commands->GetMineExecutionState() == EGP_MineExecutionState::Active ? TEXT("Active") : TEXT("Idle"))) : TEXT("none"),
 			Commands != nullptr ? Commands->GetActiveMineSerial() : 0u,
 			IsValid(Mining) && IsValid(MineTarget) && MineTarget->HasActiveMiningSlot(Worker) ? TEXT("true") : TEXT("false"),
@@ -539,6 +546,8 @@ void UGP_WorkerContractTestRunner::Start(UWorld* InWorld)
 	WorldWeak = InWorld;
 	StageIndex = 0;
 	Failures = 0;
+	MovementWaitTicks = 0;
+	MovementWaitStartTime = -1.0;
 	UnbindWorldCleanup();
 	WorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(
 		this, &UGP_WorkerContractTestRunner::OnWorldCleanup);
@@ -752,30 +761,58 @@ void UGP_WorkerContractTestRunner::AdvanceStage()
 			|| Worker->GetUnitCommandComponent()->IsMineApproachActive(), TEXT("MovingToMine"));
 		Expect(!Node->HasActiveMiningSlot(Worker), TEXT("NoSlotWhileMoving"));
 		Expect(!Worker->GetMiningComponent()->IsMiningTimerActive(), TEXT("NoTimerWhileMoving"));
+		MovementWaitTicks = 0;
+		MovementWaitStartTime = -1.0;
 		++StageIndex;
 		ScheduleNext();
 		break;
 	}
 	case 4:
 	{
-		// Wait up to several ticks for approach completion (straight-line move).
 		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
 		AGP_ResourceNode* Node = TestNodeWeak.Get();
-		if (!Expect(IsValid(Worker) && IsValid(Node), TEXT("ArrivalObjects")))
+		if (MovementWaitTicks == 0)
 		{
-			Finish();
+			if (!Expect(IsValid(Worker) && IsValid(Node), TEXT("ArrivalObjects")))
+			{
+				Finish();
+				return;
+			}
+			MovementWaitStartTime = World->GetTimeSeconds();
+		}
+		else if (!IsValid(Worker) || !IsValid(Node))
+		{
+			Abort(TEXT("ArrivalObjectsLost"));
 			return;
 		}
+
+		++MovementWaitTicks;
 		if (Worker->GetUnitCommandComponent()->IsMineApproachActive()
 			|| (Worker->GetUnitMovementComponent() && Worker->GetUnitMovementComponent()->IsMoving()))
 		{
+			const double Elapsed = World->GetTimeSeconds() - MovementWaitStartTime;
+			if (Elapsed > MovementWaitTimeoutSeconds)
+			{
+				Expect(false, TEXT("MovementWaitTimeout"));
+				Finish();
+				return;
+			}
+			if ((MovementWaitTicks % 60) == 0)
+			{
+				UE_LOG(LogGPWorker, Log,
+					TEXT("GP Worker.RunContractTest Progress: MovementWaitTicks=%d Elapsed=%.2f Dist=%.1f"),
+					MovementWaitTicks,
+					Elapsed,
+					FVector::Dist(Worker->GetActorLocation(), Node->GetActorLocation()));
+			}
 			ScheduleNext();
 			return;
 		}
 		Expect(Worker->GetMiningComponent()->IsMining() || Worker->GetMiningComponent()->IsWaitingForSlot(),
 			TEXT("ArrivedBeganMining"));
-		Expect(FVector::Dist(Worker->GetActorLocation(), Node->GetActorLocation()) <= InteractionRangeCm + 1.0f,
+		Expect(FVector::Dist(Worker->GetActorLocation(), Node->GetActorLocation()) < InteractionRangeCm,
 			TEXT("ArrivedInRange"));
+		MovementWaitTicks = 0;
 		++StageIndex;
 		ScheduleNext();
 		break;
@@ -975,7 +1012,190 @@ void UGP_WorkerContractTestRunner::AdvanceStage()
 			Node->Destroy();
 		}
 		TestNodeWeak.Reset();
-		// Cargo regression (sync)
+		DestroyWeakWorker(PrimaryWorkerWeak);
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 13:
+	{
+		// Edge: worst-case acceptance boundary + vertical budget + diagonal geometry.
+		AGP_ResourceNode* Node = SpawnNode(FVector(-51000.0f, 0.0f, 40.0f));
+		TestNodeWeak = Node;
+		if (!Expect(IsValid(Node), TEXT("EdgeGeometryNode")))
+		{
+			Finish();
+			return;
+		}
+		const float Acc = 50.0f;
+		const float Safety = 25.0f;
+		const float OldDesired = InteractionRangeCm - Acc - 5.0f; // legacy 145
+		const float OldWorstFlat = OldDesired + Acc; // 195
+		Expect(OldWorstFlat < InteractionRangeCm, TEXT("LegacyFlatWorstUnderRange"));
+
+		AGP_Worker* FlatWorker = SpawnWorkerAt(World, Node->GetActorLocation() + FVector(InteractionRangeCm + 800.0f, 0.0f, 48.0f));
+		PrimaryWorkerWeak = FlatWorker;
+		if (!Expect(IsValid(FlatWorker), TEXT("EdgeFlatWorker")))
+		{
+			Finish();
+			return;
+		}
+		IssueMine(FlatWorker, Node);
+		UGP_UnitCommandComponent* Cmd = FlatWorker->GetUnitCommandComponent();
+		if (!Expect(Cmd != nullptr && Cmd->IsMineApproachActive(), TEXT("EdgeApproachActive")))
+		{
+			Finish();
+			return;
+		}
+		Expect(Cmd->GetMinePredictedWorstCaseDistance() > 0.0f
+			&& Cmd->GetMinePredictedWorstCaseDistance() < InteractionRangeCm,
+			TEXT("ApproachWorstCaseWithinRange"));
+		Expect(Cmd->GetMineApproachDesiredNodeDistance() > 0.0f
+			&& Cmd->GetMineApproachDesiredNodeDistance() <= (InteractionRangeCm - Acc - Safety + 0.1f),
+			TEXT("ApproachDesiredUsesSafetyMargin"));
+		// Vertical offset: Worker Z differs from Node Z=40.
+		Expect(FMath::Abs(FlatWorker->GetActorLocation().Z - Node->GetActorLocation().Z) > 1.0f,
+			TEXT("ApproachVerticalBudgetWithinRange_Setup"));
+		Expect(Cmd->GetMinePredictedWorstCaseDistance() < InteractionRangeCm,
+			TEXT("ApproachVerticalBudgetWithinRange"));
+		FlatWorker->GetMiningComponent()->StopMining(EGP_MiningStopReason::ManualStop);
+		if (UGP_MovementComponent* Move = FlatWorker->GetUnitMovementComponent())
+		{
+			Move->StopMove(EGP_MovementStopReason::Manual);
+		}
+		DestroyWeakWorker(PrimaryWorkerWeak);
+
+		AGP_Worker* DiagWorker = SpawnWorkerAt(
+			World,
+			Node->GetActorLocation() + FVector(3000.0f, 3000.0f, 48.0f));
+		PrimaryWorkerWeak = DiagWorker;
+		IssueMine(DiagWorker, Node);
+		Cmd = DiagWorker->GetUnitCommandComponent();
+		Expect(Cmd != nullptr && Cmd->IsMineApproachActive(), TEXT("DiagonalApproachStarted"));
+		Expect(Cmd->GetMinePredictedWorstCaseDistance() < InteractionRangeCm - 10.0f,
+			TEXT("DiagonalApproachMarginSafe"));
+		MovementWaitTicks = 0;
+		MovementWaitStartTime = -1.0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 14:
+	{
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		if (MovementWaitTicks == 0)
+		{
+			if (!Expect(IsValid(Worker) && IsValid(Node), TEXT("DiagonalArrivalObjects")))
+			{
+				Finish();
+				return;
+			}
+			MovementWaitStartTime = World->GetTimeSeconds();
+		}
+		++MovementWaitTicks;
+		if (IsValid(Worker)
+			&& (Worker->GetUnitCommandComponent()->IsMineApproachActive()
+				|| (Worker->GetUnitMovementComponent() && Worker->GetUnitMovementComponent()->IsMoving())))
+		{
+			if ((World->GetTimeSeconds() - MovementWaitStartTime) > MovementWaitTimeoutSeconds)
+			{
+				Expect(false, TEXT("DiagonalMovementWaitTimeout"));
+				Finish();
+				return;
+			}
+			ScheduleNext();
+			return;
+		}
+		if (!Expect(IsValid(Worker) && IsValid(Node)
+			&& (Worker->GetMiningComponent()->IsMining() || Worker->GetMiningComponent()->IsWaitingForSlot()),
+			TEXT("DiagonalArrivedMining")))
+		{
+			Finish();
+			return;
+		}
+		const float ArrivedDist = FVector::Dist(Worker->GetActorLocation(), Node->GetActorLocation());
+		Expect(ArrivedDist < InteractionRangeCm - 10.0f, TEXT("DiagonalArrivalMarginSafe"));
+		Worker->GetMiningComponent()->StopMining(EGP_MiningStopReason::ManualStop);
+		DestroyWeakWorker(PrimaryWorkerWeak);
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 15:
+	{
+		// One-shot corrective approach after forced OOR arrival.
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		if (!Expect(IsValid(Node), TEXT("CorrectiveNode")))
+		{
+			Finish();
+			return;
+		}
+		AGP_Worker* Worker = SpawnWorkerAt(World, Node->GetActorLocation() + FVector(InteractionRangeCm + 600.0f, 0.0f, 0.0f));
+		PrimaryWorkerWeak = Worker;
+		if (!Expect(IsValid(Worker), TEXT("CorrectiveWorker")))
+		{
+			Finish();
+			return;
+		}
+		IssueMine(Worker, Node);
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		if (!Expect(Cmd != nullptr && Cmd->IsMineApproachActive(), TEXT("CorrectiveApproachActive")))
+		{
+			Finish();
+			return;
+		}
+		Expect(!Node->HasActiveMiningSlot(Worker), TEXT("CorrectiveNoSlotBeforeArrival"));
+		Expect(!Worker->GetMiningComponent()->IsMiningTimerActive(), TEXT("CorrectiveNoTimerBeforeArrival"));
+		Cmd->DebugForceNextMineArrivalOutOfRangeOnce();
+		MovementWaitTicks = 0;
+		MovementWaitStartTime = -1.0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 16:
+	{
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		if (MovementWaitTicks == 0)
+		{
+			if (!Expect(IsValid(Worker) && IsValid(Node), TEXT("CorrectiveWaitObjects")))
+			{
+				Finish();
+				return;
+			}
+			MovementWaitStartTime = World->GetTimeSeconds();
+		}
+		++MovementWaitTicks;
+		if (IsValid(Worker)
+			&& (Worker->GetUnitCommandComponent()->IsMineApproachActive()
+				|| (Worker->GetUnitMovementComponent() && Worker->GetUnitMovementComponent()->IsMoving())))
+		{
+			if ((World->GetTimeSeconds() - MovementWaitStartTime) > (MovementWaitTimeoutSeconds * 2.0f))
+			{
+				Expect(false, TEXT("CorrectiveMovementWaitTimeout"));
+				Finish();
+				return;
+			}
+			ScheduleNext();
+			return;
+		}
+		if (!Expect(IsValid(Worker) && Worker->GetMiningComponent()->IsMining(), TEXT("CorrectiveBeganMining")))
+		{
+			Finish();
+			return;
+		}
+		Expect(Worker->GetUnitCommandComponent()->GetMineApproachAttempt() >= 1, TEXT("CorrectiveAttemptUsed"));
+		Expect(FVector::Dist(Worker->GetActorLocation(), Node->GetActorLocation()) < InteractionRangeCm,
+			TEXT("CorrectiveFinalInRange"));
+		DestroyWeakWorker(PrimaryWorkerWeak);
+		if (IsValid(Node))
+		{
+			Node->Destroy();
+		}
+		TestNodeWeak.Reset();
 		if (GEngine)
 		{
 			GEngine->Exec(World, TEXT("gp.Cargo.RunContractTest"));

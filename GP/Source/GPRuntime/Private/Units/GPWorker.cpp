@@ -1773,6 +1773,117 @@ AGP_Worker* UGP_WorkerHaulingContractTestRunner::SpawnWorker(const FVector& Loc,
 	return GPResourceLoopDiagnostics::SpawnWorkerDeferred(WorldWeak.Get(), Loc, TeamId, OwnerTag);
 }
 
+AGP_ResourceNode* UGP_WorkerHaulingContractTestRunner::SpawnNavigableNodeNearScenario(
+	AGP_MainBase* Base,
+	const AActor* AnchorActor,
+	FString& OutFailReason,
+	float* OutDistanceToBaseCm) const
+{
+	OutFailReason.Reset();
+	if (OutDistanceToBaseCm != nullptr)
+	{
+		*OutDistanceToBaseCm = -1.0f;
+	}
+
+	UWorld* World = WorldWeak.Get();
+	if (!IsValid(World) || !IsValid(Base))
+	{
+		OutFailReason = TEXT("MissingWorldOrBase");
+		return nullptr;
+	}
+
+	const FVector BaseLoc = Base->GetActorLocation();
+	const FVector AnchorLoc = IsValid(AnchorActor) ? AnchorActor->GetActorLocation() : ScenarioNodeLocation;
+	const FVector AnchorFallback = AnchorLoc.IsNearlyZero() ? (BaseLoc + FVector(1800.0f, 0.0f, 0.0f)) : AnchorLoc;
+
+	const float MineApproachDist = FMath::Max(25.0f, InteractionRangeCm - 50.0f - 25.0f);
+	const float DropOffApproachDist = FMath::Max(25.0f, DropOffRangeCm - 50.0f - 25.0f);
+
+	// Local offsets around the scenario node — keep haul distance ~1.5–3 km-uu of the diagnostic corridor.
+	const FVector CandidateOffsets[] = {
+		FVector(400.0f, 0.0f, 0.0f),
+		FVector(-400.0f, 0.0f, 0.0f),
+		FVector(0.0f, 400.0f, 0.0f),
+		FVector(0.0f, -400.0f, 0.0f),
+		FVector(600.0f, 200.0f, 0.0f),
+		FVector(-600.0f, -200.0f, 0.0f),
+		FVector(200.0f, 600.0f, 0.0f),
+		FVector(-200.0f, -600.0f, 0.0f),
+	};
+
+	for (const FVector& Offset : CandidateOffsets)
+	{
+		const FVector Raw = AnchorFallback + Offset;
+		FVector NodeProjected;
+		if (!GPResourceLoopDiagnostics::IsNavPointProjected(World, Raw, &NodeProjected, 800.0f, 800.0f))
+		{
+			continue;
+		}
+
+		const float DistToBase = FVector::Dist(NodeProjected, BaseLoc);
+		if (DistToBase < 800.0f || DistToBase > 4000.0f)
+		{
+			continue;
+		}
+
+		const FVector BaseToNode = (NodeProjected - BaseLoc).GetSafeNormal2D();
+		const FVector NodeApproachRaw = NodeProjected - BaseToNode * MineApproachDist;
+		FVector NodeApproach;
+		if (!GPResourceLoopDiagnostics::IsNavPointProjected(World, NodeApproachRaw, &NodeApproach, 800.0f, 800.0f))
+		{
+			continue;
+		}
+
+		const FVector BaseDropRaw = BaseLoc + BaseToNode * DropOffApproachDist;
+		FVector BaseDropOff;
+		if (!GPResourceLoopDiagnostics::IsNavPointProjected(World, BaseDropRaw, &BaseDropOff, 800.0f, 800.0f))
+		{
+			continue;
+		}
+
+		FString PathFail;
+		if (!GPResourceLoopDiagnostics::IsNavReachable(World, NodeApproach, BaseDropOff, &PathFail))
+		{
+			continue;
+		}
+
+		AGP_ResourceNode* Node = SpawnNode(NodeProjected);
+		if (!IsValid(Node))
+		{
+			OutFailReason = TEXT("SpawnActorFailed");
+			return nullptr;
+		}
+
+		// Post-spawn path re-check (approach points from actual actor location).
+		const FVector SpawnedLoc = Node->GetActorLocation();
+		const FVector PostApproachRaw = SpawnedLoc - (SpawnedLoc - BaseLoc).GetSafeNormal2D() * MineApproachDist;
+		FVector PostApproach;
+		FVector PostDropOff;
+		FString PostFail;
+		const bool bApproachOk = GPResourceLoopDiagnostics::IsNavPointProjected(
+			World, PostApproachRaw, &PostApproach, 800.0f, 800.0f);
+		const bool bDropOk = GPResourceLoopDiagnostics::IsNavPointProjected(
+			World, BaseDropRaw, &PostDropOff, 800.0f, 800.0f);
+		const bool bPathOk = bApproachOk && bDropOk
+			&& GPResourceLoopDiagnostics::IsNavReachable(World, PostApproach, PostDropOff, &PostFail);
+		if (!bPathOk)
+		{
+			Node->Destroy();
+			OutFailReason = FString::Printf(TEXT("PostSpawnNavFailed:%s"), *PostFail);
+			continue;
+		}
+
+		if (OutDistanceToBaseCm != nullptr)
+		{
+			*OutDistanceToBaseCm = FVector::Dist(SpawnedLoc, BaseLoc);
+		}
+		return Node;
+	}
+
+	OutFailReason = TEXT("NoLocalNavigableNodeCandidate");
+	return nullptr;
+}
+
 void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 {
 	UWorld* World = WorldWeak.Get();
@@ -1844,6 +1955,8 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		MainBaseWeak = Base;
 		PrimaryWorkerWeak = Worker;
 		ContractTeamId = Scenario.TeamId;
+		ScenarioBaseLocation = Base->GetActorLocation();
+		ScenarioNodeLocation = Node->GetActorLocation();
 		DropOffRangeCm = Base->GetDropOffRangeCm();
 		Expect(FMath::IsNearlyEqual(DropOffRangeCm, 400.0f), TEXT("DropOffRange400"));
 		if (const UGP_ResourceDefinition* Def = Node->ResolveResourceDefinition(true))
@@ -1984,23 +2097,73 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 	}
 	case 5:
 	{
-		// Partial storage overflow LOST
+		// Partial storage overflow LOST — FreshNode must stay in the local navigable corridor.
 		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
 		AGP_MainBase* Base = MainBaseWeak.Get();
-		AGP_ResourceNode* FreshNode = SpawnNode(FVector(-53000.0f, 200.0f, 100.0f));
-		if (AGP_ResourceNode* Old = TestNodeWeak.Get())
-		{
-			if (IsValid(Old))
-			{
-				Old->Destroy();
-			}
-		}
-		TestNodeWeak = FreshNode;
-		if (!Expect(IsValid(Worker) && IsValid(Base) && IsValid(FreshNode), TEXT("PartialStorageObjects")))
+		AGP_ResourceNode* AnchorNode = TestNodeWeak.Get();
+		if (!Expect(IsValid(Worker) && IsValid(Base), TEXT("PartialStorageObjects")))
 		{
 			Finish();
 			return;
 		}
+
+		FString GeometryFail;
+		float DistanceToBase = -1.0f;
+		AGP_ResourceNode* FreshNode = SpawnNavigableNodeNearScenario(
+			Base,
+			IsValid(AnchorNode) ? AnchorNode : nullptr,
+			GeometryFail,
+			&DistanceToBase);
+		if (!IsValid(FreshNode))
+		{
+			UE_LOG(LogGPWorker, Error,
+				TEXT("GP Worker.RunHaulingContractTest PartialStorageGeometry FAIL Reason=%s Base=%s Anchor=%s"),
+				*GeometryFail,
+				*GetNameSafe(Base),
+				*GetNameSafe(AnchorNode));
+			Expect(false, TEXT("PartialStorageLocalGeometryFailed"));
+			Finish();
+			return;
+		}
+
+		if (IsValid(AnchorNode) && AnchorNode != FreshNode)
+		{
+			AnchorNode->Destroy();
+		}
+		TestNodeWeak = FreshNode;
+
+		const FVector NodeLoc = FreshNode->GetActorLocation();
+		const FVector BaseLoc = Base->GetActorLocation();
+		FVector NodeProjected;
+		FVector DropOffProjected;
+		const bool bNodeProjected = GPResourceLoopDiagnostics::IsNavPointProjected(World, NodeLoc, &NodeProjected);
+		const FVector DropRaw = BaseLoc + (NodeLoc - BaseLoc).GetSafeNormal2D() * FMath::Max(25.0f, DropOffRangeCm - 75.0f);
+		const bool bDropOffProjected = GPResourceLoopDiagnostics::IsNavPointProjected(World, DropRaw, &DropOffProjected);
+		FString NavFail;
+		const bool bNavNodeToBase = bNodeProjected && bDropOffProjected
+			&& GPResourceLoopDiagnostics::IsNavReachable(World, NodeProjected, DropOffProjected, &NavFail);
+		const float ExpectedTravelSeconds = DistanceToBase / AssumedTravelSpeedCmPerSec;
+		UE_LOG(LogGPWorker, Log,
+			TEXT("GP Worker.RunHaulingContractTest PartialStorageGeometry: Node=%s Base=%s Distance=%.1f NodeProjected=%s DropOffProjected=%s NavNodeToBase=%s ExpectedTravelSeconds=%.2f TimeoutSeconds=%.2f"),
+			*NodeLoc.ToCompactString(),
+			*BaseLoc.ToCompactString(),
+			DistanceToBase,
+			bNodeProjected ? TEXT("true") : TEXT("false"),
+			bDropOffProjected ? TEXT("true") : TEXT("false"),
+			bNavNodeToBase ? TEXT("true") : TEXT("false"),
+			ExpectedTravelSeconds,
+			MovementWaitTimeoutSeconds);
+		if (!Expect(bNavNodeToBase, TEXT("PartialStorageNavNodeToBase")))
+		{
+			Finish();
+			return;
+		}
+		if (!Expect(ExpectedTravelSeconds < MovementWaitTimeoutSeconds * 0.75f, TEXT("PartialStorageTravelWithinTimeoutBudget")))
+		{
+			Finish();
+			return;
+		}
+
 		UGP_StorageComponent* Storage = Base->GetStorageComponent();
 		if (!IsValid(Storage) || !IsValid(Worker->GetCargoComponent()) || !IsValid(Worker->GetMiningComponent())
 			|| !IsValid(Worker->GetUnitCommandComponent()))
@@ -2013,14 +2176,6 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		const float Cap = Storage->GetTotalCapacity();
 		Storage->AddPlanetaryFerronite(Cap - 20.0f);
 		Expect(FMath::IsNearlyEqual(Storage->GetTotalRemaining(), 20.0f, 0.1f), TEXT("StorageRemaining20"));
-		Worker->GetCargoComponent()->ClearCargo();
-		Worker->GetCargoComponent()->AddCargo(50.0f);
-		Worker->SetActorLocation(Base->GetActorLocation() + FVector(DropOffRangeCm + 600.0f, 0.0f, 0.0f),
-			false, nullptr, ETeleportType::TeleportPhysics);
-		IssueMine(Worker, FreshNode);
-		// Force haul path: mining terminal CargoFull while held.
-		// Cargo already full — IssueMine may be rejected unless we start haul via mining terminal.
-		// Simulate by filling through mining at node in range after clearing a bit.
 		Worker->GetCargoComponent()->ClearCargo();
 		Worker->SetActorLocation(FreshNode->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f), false, nullptr, ETeleportType::TeleportPhysics);
 		IssueMine(Worker, FreshNode);
@@ -2092,8 +2247,17 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		// Re-open haul via mine + force cycles on a node with amount
 		if (Node->GetCurrentAmount() < 50)
 		{
-			// spawn replacement with stock
-			AGP_ResourceNode* NewNode = SpawnNode(FVector(-53500.0f, 0.0f, 100.0f));
+			FString ReplaceFail;
+			AGP_ResourceNode* NewNode = SpawnNavigableNodeNearScenario(Base, Node, ReplaceFail);
+			if (!IsValid(NewNode))
+			{
+				UE_LOG(LogGPWorker, Error,
+					TEXT("GP Worker.RunHaulingContractTest InterruptReplaceNode FAIL Reason=%s"),
+					*ReplaceFail);
+				Expect(false, TEXT("InterruptLocalGeometryFailed"));
+				Finish();
+				return;
+			}
 			if (IsValid(Node))
 			{
 				Node->Destroy();
@@ -2169,7 +2333,9 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		}
 		DestroyWeakMainBase(MainBaseWeak);
 		const int32 EnemyTeamId = (ContractTeamId == 8) ? 7 : 8;
-		AGP_MainBase* Enemy = SpawnMainBase(FVector(-54000.0f, 0.0f, 100.0f), EnemyTeamId);
+		// Enemy base only needs to exist/register for another team — keep it local to the scenario.
+		const FVector EnemyLoc = ScenarioBaseLocation + FVector(0.0f, 700.0f, 0.0f);
+		AGP_MainBase* Enemy = SpawnMainBase(EnemyLoc, EnemyTeamId);
 		EnemyBaseWeak = Enemy;
 		Expect(IsValid(Enemy), TEXT("EnemyBaseSpawned"));
 		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
@@ -2193,9 +2359,11 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 	}
 	case 10:
 	{
-		// Restore friendly base for lifecycle stage
+		// Restore friendly base for lifecycle stage at original scenario base location.
 		DestroyWeakMainBase(EnemyBaseWeak);
-		MainBaseWeak = SpawnMainBase(FVector(-52400.0f, 0.0f, 100.0f), ContractTeamId);
+		FVector RestoreLoc = ScenarioBaseLocation;
+		GPResourceLoopDiagnostics::IsNavPointProjected(World, ScenarioBaseLocation, &RestoreLoc, 800.0f, 800.0f);
+		MainBaseWeak = SpawnMainBase(RestoreLoc, ContractTeamId);
 		Expect(IsValid(MainBaseWeak.Get()), TEXT("RestoreFriendlyBase"));
 		++StageIndex;
 		ScheduleNext();
@@ -2713,6 +2881,21 @@ AGP_Worker* UGP_WorkerHaulingContractTestRunner::SpawnWorker(const FVector& Loc,
 {
 	(void)Loc;
 	(void)TeamId;
+	return nullptr;
+}
+AGP_ResourceNode* UGP_WorkerHaulingContractTestRunner::SpawnNavigableNodeNearScenario(
+	AGP_MainBase* Base,
+	const AActor* AnchorActor,
+	FString& OutFailReason,
+	float* OutDistanceToBaseCm) const
+{
+	(void)Base;
+	(void)AnchorActor;
+	OutFailReason = TEXT("ShippingStub");
+	if (OutDistanceToBaseCm != nullptr)
+	{
+		*OutDistanceToBaseCm = -1.0f;
+	}
 	return nullptr;
 }
 

@@ -45,6 +45,14 @@ Fixes:
 - Null-safe Hauling stages; remove nested Cargo Exec from Worker contract
 - `gp.Resource.RunS28RegressionSuite` sequential wait; `gp.Resource.RunContractIsolationContractTest`
 
+## Hauling contract local geometry / timeout fix
+Suite Hauling failed `PartialStorageHaulTimeout` after spawning FreshNode at hardcoded `-53000` (~53 km-uu from navigable MainBase).
+
+Fixes:
+- `SpawnNavigableNodeNearScenario` — local offsets from scenario node/base, NavMesh + path validation before accept
+- PartialStorage / interrupt replace / enemy+restore MainBase use scenario-relative positions
+- Geometry log + travel-budget assert; no timeout inflation
+
 ## Diagnostic scenario correction (operator-blocking)
 Operator failure: MainBase registered at TeamId=-1; Worker TeamId=-1; Node=None.
 

@@ -1,7 +1,7 @@
-# Cursor Work Report — GP-S28 Contract Runner Isolation / Ownership / Async Null-Safety
+# Cursor Work Report — GP-S28 Hauling Contract Local Geometry / Timeout Fix
 
 ## Task
-GP-S28 — Contract Runner Isolation, Ownership and Async Null-Safety
+GP-S28 — Hauling Contract Local Geometry / Timeout Fix
 
 ## Status
 **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
@@ -13,67 +13,65 @@ GP-S28 — Contract Runner Isolation, Ownership and Async Null-Safety
 `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
 
 ## Prior correction
-EndPlay occupancy: `7f81d19d236d0cf197c1c650174ef28532245244`
+Contract isolation: `4b5331cb3333b46bb952453540dab6d268bff9cd`
 
-## Crash
-- GUID: `UECC-Windows-989B9A8648D69236AEE3A7ACE8E502A7`
-- `EXCEPTION_ACCESS_VIOLATION` reading `0x0000000000000548`
-- Callstack: `UGP_WorkerHaulingContractTestRunner::AdvanceStage` `GPWorker.cpp:1977`
-- Null `Worker` dereferenced after `WaitHaulOrMove` returned false on invalid weak
+## Isolation test PASS
+`gp.Resource.RunContractIsolationContractTest` → Complete Failures=0  
+(mutual exclusion, ownership cleanup, Team1 preserve / Team2 remap, async actor-loss null-safety)
 
-## Command ordering (GP.log)
-1. Hauling (or Worker suite overlap) still had scheduled `AdvanceStage`
-2. `gp.Resource.RunDiagnosticScenarioContractTest` started with `OperatorTeam1Present=true`
-3. Team1 diagnostic actors EndPlay-destroyed
-4. Diagnostic spawned new Team1 (`T1_1`) and failed remap assertions
-5. Stale Hauling case 6 crashed on destroyed `PrimaryWorkerWeak`
+## Suite progression
+`gp.Resource.RunS28RegressionSuite`:
+- Cargo / Mining / Worker → Complete Failures=0
+- WorkerHauling → FAIL PartialStorageHaulTimeout → suite Complete Failures=1 (correct stop)
 
-## Premature Complete
-`Worker.RunContractTest: Complete Failures=0` could print while another async runner (Hauling) still owned world actors / timers — each runner had only local `GActive*` locks, not global mutual exclusion. Nested `GEngine->Exec(gp.Cargo.RunContractTest)` removed from Worker contract.
+## Exact PartialStorageHaulTimeout log
+- FreshNode `X=-53000 Y=200 Z=100`
+- MainBase ~`X=0 Y=-1500`
+- HaulReturnToBase Distance=`52947.4`
+- MoveStarted from `X=-52920` toward ~`X=-314`
+- Then `FAIL: PartialStorageHaulTimeout`
 
-## Root cause (Team1 destruction)
-Diagnostic cleanup used TeamId + generic `OwnedByContract` and cleaned Team1/Team2 contract leftovers while Hauling still held contract-owned Team1/Team2 actors. That destroyed the live Hauling Worker; Hauling timer continued → AV. Remap then saw Team1 free and respawned `T1_1`.
+## Root cause
+Hauling contract case 5 spawned `SpawnNode(FVector(-53000, 200, 100))` — legacy absolute test strip far from the navigable diagnostic scenario MainBase (~origin). Production haul semantics were fine; contract geometry was wrong.
 
-## Execution coordinator
-`GPContractTestCoordinator` (narrow PIE lock):
-- single active token
-- `TryAcquire` / `Release` / `IsTokenActive` / world tear-down check
-- reject: `ContractTestRejected … Reason=AnotherContractTestRunning`
-- wired into Diagnostic / EndPlay / Hauling / Worker / Mining / Storage / Cargo
+## Why increasing timeout is rejected
+~53 km-uu travel is bad test geometry, not a slow-move flake. Raising timeout would hide the bug and keep later stages on the same broken far strip.
 
-## Runner ownership IDs
-Exact OwnerTags: `GP_DiagOwner_Operator`, `GP_DiagOwner_<Kind>_<ExecutionId>`.  
-Cleanup only via `CleanupScenarioByOwnerTag`. Contract spawn remaps **before** cleanup; never Team-wide contract wipe.
+## Local navigable geometry solution
+- Store `ScenarioBaseLocation` / `ScenarioNodeLocation` from stage-0 navigable spawn
+- `SpawnNavigableNodeNearScenario`: candidate offsets around scenario node; NavMesh project; approach path Node→Base; distance band ~800–4000 cm; spawn only after validation; post-spawn re-check + destroy on fail
+- PartialStorage logs `PartialStorageGeometry` (Distance / projections / Nav / ExpectedTravelSeconds / TimeoutSeconds) and asserts travel budget << timeout
+- Controlled FAIL `PartialStorageLocalGeometryFailed` (no timeout mask)
 
-## Null-safe stage audit
-Hauling `WaitHaulOrMove` + case 6 (and related stages) validate Worker/Base/Cmd/Cargo/Storage before use; controlled `PartialStorageObjectsLost` + Finish. AdvanceStage ignores stale token after Finish.
+## Audit of later hauling stages
+Replaced absolute far coords:
+- case 5 FreshNode `-53000` → local helper
+- case 7 replace node `-53500` → local helper
+- case 9 enemy MainBase `-54000` → `ScenarioBaseLocation + (0,700,0)`
+- case 10 restore MainBase `-52400` → projected `ScenarioBaseLocation`  
+Worker-contract off-map geometry tests (`-48000`…`-51000`) left unchanged (out of scope).
 
-## Sequential S28 suite
-`gp.Resource.RunS28RegressionSuite` — Cargo → Mining → Worker → Hauling → Storage → Diagnostic → EndPlay, waiting on coordinator finish callback.
+## Path validation
+Pre-spawn + post-spawn NodeApproach↔BaseDropOff reachability required before PartialStorage haul begins.
 
-## Isolation contract
-`gp.Resource.RunContractIsolationContractTest`:
-- ContractRunnerMutualExclusion
-- ContractOwnedCleanupIsolation
-- AsyncActorLossNullSafety
+## Suite result
+Compile gate PASSED. Full PIE `RunS28RegressionSuite` Complete Failures=0 — **operator validation pending**.
 
-## Tests / build
-- GPEditor Win64 Development + UHT: **PASSED**
-- GP Dev/Shipping: **Not run**
-- PIE suite / isolation: **operator validation pending**
+## GPEditor / UHT
+**PASSED**
+
+## GP Dev / Shipping
+**Not run**
 
 ## Files changed
-- `Debug/GPContractTestCoordinator.*` — global token
-- `Debug/GPContractIsolationAndSuite.cpp` — suite + isolation commands
-- `GPResourceLoopDiagnostics.*` — OwnerTag spawn/cleanup/remap-before-cleanup
-- `GPWorker.*` / `GPMiningComponent.*` / `GPStorageComponent.*` / `GPCargoComponent.cpp` — coordinator + null-safety
+- `GPWorker.h/.cpp` — `SpawnNavigableNodeNearScenario`, local geometry in hauling late stages, PartialStorageGeometry logging
 - Docs: task, AI log, this report
 
 ## Map / content / LFS
 Unchanged
 
 ## Correction commit
-4b5331cb3333b46bb952453540dab6d268bff9cd
+(see git after push)
 
 ## Git state
 Branch `feature/gp-s28-storage-threat` pushed; main untouched; no PR

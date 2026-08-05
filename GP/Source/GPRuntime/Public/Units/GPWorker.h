@@ -141,6 +141,16 @@ private:
 	AGP_MainBase* SpawnMainBase(const FVector& Loc, int32 TeamId) const;
 	AGP_Worker* SpawnWorker(const FVector& Loc, int32 TeamId) const;
 
+	/**
+	 * Spawn a ResourceNode near the current scenario corridor (not absolute far coords).
+	 * Validates NavMesh projection + approach path to MainBase before accepting the actor.
+	 */
+	AGP_ResourceNode* SpawnNavigableNodeNearScenario(
+		AGP_MainBase* Base,
+		const AActor* AnchorActor,
+		FString& OutFailReason,
+		float* OutDistanceToBaseCm = nullptr) const;
+
 	int32 StageIndex = 0;
 	int32 Failures = 0;
 	bool bFinished = false;
@@ -151,6 +161,8 @@ private:
 	TWeakObjectPtr<AGP_MainBase> MainBaseWeak;
 	TWeakObjectPtr<AGP_MainBase> EnemyBaseWeak;
 	TWeakObjectPtr<AGP_Worker> PrimaryWorkerWeak;
+	FVector ScenarioBaseLocation = FVector::ZeroVector;
+	FVector ScenarioNodeLocation = FVector::ZeroVector;
 	float InteractionRangeCm = 200.0f;
 	float DropOffRangeCm = 400.0f;
 	int32 ContractTeamId = 1;
@@ -163,6 +175,7 @@ private:
 	bool bCancelled = false;
 	FName CancelReason;
 	static constexpr float MovementWaitTimeoutSeconds = 30.0f;
+	static constexpr float AssumedTravelSpeedCmPerSec = 400.0f;
 };
 
 /** Deterministic diagnostic scenario spawn/cleanup contract (GP-S28). */

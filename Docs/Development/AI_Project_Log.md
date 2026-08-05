@@ -1,5 +1,30 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28 Hauling Contract Local Geometry / Timeout Fix
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior isolation: `4b5331cb3333b46bb952453540dab6d268bff9cd`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Operator result
+Isolation Failures=0; suite stopped on Hauling `PartialStorageHaulTimeout` (FreshNode `-53000`, Distance≈52947).
+
+### What was done
+- Scenario-relative navigable node spawn helper; removed hauling far absolute coords
+- PartialStorageGeometry logging + path/travel-budget checks
+- GPEditor Win64 Development + UHT **PASSED**; PIE suite re-run pending
+
+### Operator next
+1. `gp.Resource.RunContractIsolationContractTest` → Failures=0
+2. `gp.Resource.RunS28RegressionSuite` → Complete Failures=0
+
+---
+
 ## 2026-08-05 — GP-S28 Contract Runner Isolation / Ownership / Async Null-Safety
 
 Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**

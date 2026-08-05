@@ -14,6 +14,7 @@ Registry uniqueness correction: `c59b12031d88ea9b3c9dd584e4aa1028c2a846dc`
 EndPlay occupancy cleanup: `7f81d19d236d0cf197c1c650174ef28532245244`
 Contract isolation correction: `4b5331cb3333b46bb952453540dab6d268bff9cd`
 Hauling local geometry correction: `a3a9c87c11425ba0ff4f251e74c54ca3a543708e`
+Finalization: `c7f18d042f3e7ad2ef350be6b394fda3525596ba`
 
 ## Finalization (operator + builds)
 **GP-S28 scope is complete.**

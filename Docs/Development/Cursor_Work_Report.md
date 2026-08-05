@@ -10,7 +10,7 @@
 `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
 
 ## Final HEAD
-(see git after push)
+`c7f18d042f3e7ad2ef350be6b394fda3525596ba`
 
 ## GP-S28 commits (base → tip)
 | SHA | Summary |
@@ -29,7 +29,7 @@
 | `b367529` | Record isolation SHA |
 | `a3a9c87` | Hauling contract local navigable geometry |
 | `9daa6bf` | Record hauling geometry SHA |
-| *(finalization)* | READY_FOR_MERGE docs + build record |
+| `c7f18d0` | Finalize READY_FOR_MERGE docs + build record |
 
 ## Operator validation result
 **PASS** (operator-confirmed)
@@ -101,7 +101,7 @@ Combat reconciliation explicitly deferred until after S28 merge.
 Clean working tree; branch synced with `origin/feature/gp-s28-storage-threat`; `main` untouched; no PR
 
 ## Final commit SHA
-(see git after push)
+`c7f18d042f3e7ad2ef350be6b394fda3525596ba`
 
 ## Status
 **GP-S28_READY_FOR_MERGE**

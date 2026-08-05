@@ -1,5 +1,31 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-05 — GP-S27 AGP_Worker
+
+Status: **GP-S27_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s27-worker`
+- Base: `main` @ `860070c4acbcb85fd5c4334628584372bdd082ca`
+- **GP-S26 merged into main** @ `860070c4acbcb85fd5c4334628584372bdd082ca`
+- Task: `Docs/Development/Claude_Tasks/GP-S27_Worker.md`
+
+### What was done
+- `AGP_Worker : AGP_MobileUnit` with Cargo + Mining composition
+- Mine execution in `UGP_UnitCommandComponent` (serial-aware approach + BeginMining)
+- Command validate filters Mine to Workers (`UnsupportedUnit`)
+- Diagnostics `gp.Worker.*` + staged `RunContractTest` → **Failures=0**
+- GPEditor Win64 Development + UHT **PASSED**
+- GP Win64 Development / Shipping **not run**
+
+### Intentionally not done
+- No Storage / return-to-base / Worker Blueprint / map / GP-S28 / PR / merge
+
+### Operator next
+- Validate Spawn/CommandMine/approach/FIFO/`RunContractTest`; then finalize
+
+---
+
 ## 2026-08-05 — GP-S26 UGP_MiningComponent — finalization
 
 Status: **GP-S26_FINALIZED_READY_FOR_MERGE**

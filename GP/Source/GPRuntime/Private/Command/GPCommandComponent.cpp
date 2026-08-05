@@ -10,6 +10,7 @@
 #include "Resources/GPResourceNode.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPUnitBase.h"
+#include "Units/GPWorker.h"
 
 #if !UE_BUILD_SHIPPING
 #include "EngineUtils.h"
@@ -386,6 +387,24 @@ bool UGP_CommandComponent::ValidateAndNormalizeCommand(
 		{
 			return Fail(EGP_CommandRejectReason::InvalidTargetLocation);
 		}
+
+		// Mine execution is Worker-only (GP-S27). Drop non-Worker issuers.
+		TArray<TObjectPtr<AGP_UnitBase>> WorkerUnits;
+		WorkerUnits.Reserve(AcceptedUnits.Num());
+		for (const TObjectPtr<AGP_UnitBase>& UnitPtr : AcceptedUnits)
+		{
+			if (Cast<AGP_Worker>(UnitPtr.Get()) != nullptr)
+			{
+				WorkerUnits.Add(UnitPtr);
+			}
+		}
+
+		if (WorkerUnits.Num() == 0)
+		{
+			return Fail(EGP_CommandRejectReason::UnsupportedUnit);
+		}
+
+		AcceptedUnits = MoveTemp(WorkerUnits);
 	}
 
 	if (AcceptedUnits.Num() < 1 || AcceptedUnits.Num() > GPCommandPrivate::MaxIssuingUnits || !CommandTag.IsValid())

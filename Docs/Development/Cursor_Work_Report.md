@@ -1,139 +1,119 @@
-# Cursor Work Report — GP-S26 UGP_MiningComponent Finalization
+# Cursor Work Report — GP-S27 AGP_Worker
 
 ## Task
-GP-S26 — UGP_MiningComponent Finalization
+GP-S27 — AGP_Worker
 
 ## Status
-**GP-S26_FINALIZED_READY_FOR_MERGE**
+**GP-S27_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ## Branch
-`feature/gp-s26-mining-component`
+`feature/gp-s27-worker`
 
 ## Base
-`main` @ `693a36b8777babaea6085cb799397e9e0cddb77f`
+`main` @ `860070c4acbcb85fd5c4334628584372bdd082ca`
 
-## Candidate commit
-`4d334a7f4fe331757e4e245d2979a27117a6b660`
+## Canonical dependency
+GP-S26 MiningComponent merged @ `860070c4acbcb85fd5c4334628584372bdd082ca`
 
-## Diagnostic-host correction commit
-`b58fce2072a9340e258a332b701f477c52181e25`
+## Files inspected
+UnitBase/MobileUnit/Unit; UnitCommandComponent Attack/Move path; MovementComponent OnMovementResult; CommandComponent Mine validate; Cargo/Mining APIs; GPGameplayTags; Mining/Cargo diagnostic conventions; S24R–S26 task docs; TDD/GDD/ADR excerpts.
 
-## Crash-correction commit
-`2801c73c8ef02ba4ae4286812d61ffd12c8410e6`
+## Actual existing command architecture
+Tag-based `FGP_UnitCommand` via PC CommandComponent validate → `ReceiveCommand` → `UGP_UnitCommandComponent::HandleCommand` Held + serial. Mine was HeldAccepted-only before S27.
 
-## Finalization commit
-`2330f524bfe7b43ed1939fc463ac53bcb1379169`
+## Actual existing movement architecture
+`UGP_MovementComponent` on MobileUnit: `RequestMove(Dest, Serial)`, `OnMovementResult(Serial, Result, Reason)`, AcceptanceRadius=50, tick only while moving. Attack already consumes completion.
 
-## Operator validation matrix
-| Check | Result |
-| --- | --- |
-| Diagnostic host spawn Dist/Range | **PASS** Dist=100 Range=200 SpawnWithinRange LocationMatchesRequested HasSceneRoot |
-| BeginMining | **PASS** Started / Mining / TimerActive |
-| Normal mining → CargoFull | **PASS** cargo 50/50, node 4950/5000, slot released, ticks off, ValidationOk |
-| `gp.Mining.RunContractTest` | **PASS** Complete Failures=0; Editor alive |
-| Contract coverage (transient node, 10/1/200, rejects, cycles, FIFO, EndPlay) | **PASS** |
-| Prior crash ×2 before correction | **yes** (resolved) |
+## Worker inheritance
+`AGP_Worker : AGP_MobileUnit` (concrete, Blueprintable)
 
-## Diagnostic host result
-`GP_MiningDiagnosticHost_8` near `BP_ResourceNode_AuthoredExample_C_1`: Dist=100, Range=200, SpawnWithinRange=true, LocationMatchesRequested=true, HasSceneRoot=true.
+## Worker composition
+Capsule + Cargo + Mining; inherited Movement/Command/ASC; tags Selectable/Inspectable/Selection.Type.Unit/`GP.Unit.Type.Worker`.
 
-## Normal mining result
-MiningState=CargoFull; LastStopReason=CargoFull; NodeCurrent=4950; CargoCurrent=50/50; HasActiveSlot=false; TimerActive=false; ComponentTick=false; ActorTick=false; ValidationOk=true.
+## Activity state model
+Derived `EGP_WorkerActivityState` from Mining state + Mine approach state.
 
-## Exact ResourceDefinition values
-AmountPerMiningCycle=**10**; MiningCycleDurationSeconds=**1**; InteractionRangeCm=**200**.
+## Mine command routing changes
+- Validate: Mine issuers filtered to Workers; else `UnsupportedUnit`
+- HandleCommand: idempotent same-target; pre-accept rejects; `StartMineExecutor` after sync
+- No new Worker mining RPC
 
-## First-cycle policy
-First cycle after a full **1s** timer (no instant transfer on Begin). Confirmed cargo 0 until first cycle; contract + manual.
+## Immediate Mine flow
+Distance ≤ InteractionRange → stop move → BeginMining → Mining/Waiting; first cycle delayed 1s.
 
-## Transfer transaction
-Authority integer path: `min(cycle, floor(cargo remaining), node amount)` → `ConsumeResource` → `AddCargo(consumed)`; Accepted must equal Consumed or InvariantFailure stop. No duplication / silent loss.
+## Movement-to-Mine flow
+Approach RequestMove with Held serial → Reached → revalidate range/cargo/node → BeginMining.
 
-## CargoFull result
-After five +10 cycles: cargo 50, node −50, state CargoFull, timer stopped, slot released.
+## Approach-point calculation
+`Node + normalize(Worker−Node) * (Range − AcceptanceRadius − 5)`, Z=Worker.
 
-## Partial cargo result
-Cargo 45 → cycle transfers **5** → full 50; node −5; CargoFull.
+## Movement completion delegate/API changes
+None new — reused `OnMovementResult`. Mine consume path added in UnitCommandComponent.
 
-## Depleted node result
-Node prepared with 5 → cycle transfers **5** → DepositDepleted; slot released.
+## Request-id / stale callback protection
+`ActiveMineSerial` == Held.CommandSerial; mismatch ignored; new command ResetMineExecutor.
 
-## Occupancy / FIFO result
-5 miners → 4 active + 1 waiting; stop active → waiting promoted to Mining with timer; cleanup leaves node empty.
+## Interruption / duplicate
+ResetMineExecutor on any replace; duplicate same-target while active → idempotent.
 
-## EndPlay cleanup result
-Destroy host while mining (no prior Stop) → next-tick Active/Waiting counts 0.
+## Mining state delegate integration
+Dynamic `OnMiningStateChanged` → terminal clears Held/orchestration.
 
-## Contract test result
-`GP Mining.RunContractTest: Complete Failures=0` (staged runner); Editor remained alive.
+## CargoFull / DepositDepleted / Waiting/FIFO
+Per MiningComponent; Worker stays put; FIFO via ResourceNode occupancy; activity derived.
 
-## Previous crash root cause
-`StopMining` → `ReleaseMiningSlot` → occupancy Broadcast → `HandleMinerSlotStateChanged` → `StopMining` → recursive stack overflow.
+## Authority / replication
+Authority-only orchestration; no client RPC; Cargo/Mining own replication unchanged.
 
-## Recursion prevention review
-- Occupancy unbound **before** `ReleaseMiningSlot`
-- `bIsStoppingMining` via `TGuardValue` (always resets on scope exit)
-- Handler ignores stopping / invalid self / invalid miner
-- `CleanupInvalidMiners` silent (no broadcast into pending-kill)
-- Broadcast requires IsValid and not being-destroyed
-- EndPlay → StopMining safe under same guards
+## Lifecycle / EndPlay safety
+EndPlay/OwnerDied ResetMineExecutor; runner world-cleanup/BeginDestroy clears guard.
 
-## Staged-runner safety review
-Next-tick stages; `TWeakObjectPtr`; abort on prerequisite failure; no-cargo diagnostic host; transient ResourceNode; FIFO Stop→tick→Destroy; EndPlay verify next tick; concurrent-run guard; guard cleared on Finish / Abort / BeginDestroy / `OnWorldCleanup`.
+## Worker validation
+`ValidateWorkerContract` / editor IsDataValid.
 
-## Authority policy
-Begin/Stop/cycle require owner authority. No client mining RPC. Diagnostic cmds reject clients.
+## Diagnostics
+`gp.Worker.SpawnDiagnostic|Inspect|CommandMine|CommandMove|Stop|RunContractTest`
 
-## Replication review
-Replicated: `CurrentMiningState` (OnRep), `CurrentResourceNode`, `LastStopReason`. Authority broadcasts state in `SetMiningState`; OnRep broadcasts on clients only (no listen-server double-fire). Cargo/Node replication unchanged. No authority inversion.
+## RunContractTest result
+**Complete Failures=0** (`UnrealEditor-Cmd -game`, Editor survived until Complete)
 
-## Timer lifecycle
-Timer only in Mining; cleared on Stop / terminal / EndPlay / invalid. Absent in Idle/Waiting/terminal.
+## Mining / Cargo / Move-Attack regression
+Cargo `RunContractTest` invoked from Worker stage; Mining contract not nested (staged async) — operator should re-run `gp.Mining.RunContractTest`. Move/Attack paths unchanged except shared ResetMine on replace.
 
-## Tick policy
-`PrimaryComponentTick.bCanEverTick=false`; diagnostic hosts actor tick off. No permanent Tick; no slot polling.
+## Content / LFS / map
+No content assets; no LFS; map unchanged. No Worker Blueprint/UnitDefinition asset (known limitation).
 
-## Source-of-truth review
-CargoComponent sole Planetary Ferronite carry store; `CarriedFerronite` absent; no GE for cargo/mining; no currency / Storage / ThreatValue mutation from mining.
+## GPEditor Development + UHT
+**PASSED**
 
-## Regression results
-ConsumeResource semantics unchanged; MaxConcurrentMiners=4; FIFO order preserved; Mine command validation/HeldAccepted only; Move/Attack unchanged; controller Tick unchanged; ResourceNode remains AActor without ASC/team/permanent Tick; Cargo capacity 50; map/LFS/projectiles untouched.
+## GP Development not run
+Yes.
 
-## Files changed during finalization
-- `GP/Source/GPRuntime/Public/Resources/GPMiningComponent.h` — runner BeginDestroy / world-cleanup / bFinished
-- `GP/Source/GPRuntime/Private/Resources/GPMiningComponent.cpp` — teardown guard clear; Shipping stubs for runner
-- `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md`
+## GP Shipping not run
+Yes.
+
+## Files changed
+- `GP/Source/GPRuntime/Public/Units/GPWorker.h` (new)
+- `GP/Source/GPRuntime/Private/Units/GPWorker.cpp` (new)
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `GP/Source/GPRuntime/Public/Command/GPCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
+- `Docs/Development/Claude_Tasks/GP-S27_Worker.md` (new)
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## GPEditor / UHT result
-**PASSED** (rerun — C++ finalization hardening)
-
-## GP Win64 Development result
-**PASSED**
-
-## GP Win64 Shipping result
-**PASSED**
-
-## Map unchanged
-Yes.
-
-## LFS unchanged
-Yes.
-
 ## Scope exclusions
-No Worker; no Mine unit wiring; no Storage/ThreatValue/Orbital/Score; no UI; no map; no projectiles; no GP-S27 start; no PR/merge/main.
+No Storage/return/ThreatValue/Orbital/Score/repair/build/Worker BP/map/projectiles/GP-S28/PR/merge.
 
-## Git status
-Branch `feature/gp-s26-mining-component` pushed; main untouched.
-
-## Merge readiness
-**READY_FOR_MAIN_MERGE** when operator requests. Do not merge in this close-out.
+## Operator validation steps
+See `GP-S27_Worker.md`.
 
 ## Known limitations
-- No Worker / movement / Mine command execution (GP-S27+)
-- Diagnostic hosts / console contract test are non-production tooling
-- Team/visual cosmetics unrelated to mining
+No Worker UnitDefinition asset; no Capability.Mine tag; repair deferred; Attack still inherited if commanded.
 
-## Next canonical stage
-**GP-S27 — AGP_Worker**
+## Commit SHA
+*(recorded after commit)*
+
+## Git state
+`feature/gp-s27-worker` only; main untouched.

@@ -9,9 +9,13 @@
 #include "GPUnitCommandComponent.generated.h"
 
 class AGP_UnitBase;
+class AGP_ResourceNode;
 class UGP_MovementComponent;
+class UGP_MiningComponent;
 enum class EGP_MovementResult : uint8;
 enum class EGP_MovementResultReason : uint8;
+enum class EGP_MiningState : uint8;
+enum class EGP_MiningStopReason : uint8;
 struct FGP_UnitCommand;
 
 /** Attack executor runtime state (GP-S24/S25B). Plain C++ — not UENUM / not Blueprint. */
@@ -20,6 +24,14 @@ enum class EGP_AttackExecutionState : uint8
 	Idle,
 	Approaching,
 	Ready
+};
+
+/** Mine approach / active orchestration (GP-S27). Plain C++ — not UENUM / not Blueprint. */
+enum class EGP_MineExecutionState : uint8
+{
+	Idle,
+	Approaching,
+	Active
 };
 
 /** Terminal Attack outcome. Ready is not terminal. */
@@ -55,6 +67,7 @@ enum class EGP_AttackRangeSource : uint8
  * GP-S21–S23: Held Move sync + serial-aware movement results.
  * GP-S24: authority Attack approach / Ready.
  * GP-S25B: Ready hit cadence + TargetDied binding via GP-S25A ApplyDamageFromUnit.
+ * GP-S27: authority Mine approach / BeginMining for AGP_Worker (serial-aware).
  * No replication, RPC, queue execution, or Blueprint Attack API.
  */
 UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))
@@ -103,6 +116,11 @@ public:
 	EGP_AttackRangeSource GetAttackRangeSource() const;
 	const TCHAR* GetAttackRangeSourceLabel() const;
 
+	EGP_MineExecutionState GetMineExecutionState() const;
+	uint32 GetActiveMineSerial() const;
+	AGP_ResourceNode* GetMineTarget() const;
+	bool IsMineApproachActive() const;
+
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Attack")
 	float AttackRange = 250.0f;
 
@@ -150,6 +168,31 @@ private:
 		uint32 Serial,
 		EGP_MovementResult Result,
 		EGP_MovementResultReason Reason);
+
+	bool TryAcceptIdempotentMineCommand(const FGP_UnitCommand& Command) const;
+	bool TryRejectMineCommandBeforeAccept(const FGP_UnitCommand& Command) const;
+	bool StartMineExecutor();
+	void ResetMineExecutor();
+	void ResetMineExecutorForReplacement(const TOptional<FGP_StoredUnitCommand>& PreviousCommand);
+	bool TryConsumeMineMovementResult(
+		uint32 Serial,
+		EGP_MovementResult Result,
+		EGP_MovementResultReason Reason);
+	void BeginMiningAtHeldTarget(uint32 MineSerial);
+	void BindMiningStateEvents(UGP_MiningComponent* Mining);
+	void UnbindMiningStateEvents();
+	UFUNCTION()
+	void HandleMiningStateChanged(
+		EGP_MiningState PreviousState,
+		EGP_MiningState NewState,
+		EGP_MiningStopReason Reason);
+	float ResolveMineInteractionRangeCm(const UGP_MiningComponent* Mining, const AGP_ResourceNode* Node) const;
+	FVector MakeMineApproachDestination(
+		const AActor* Owner,
+		const AGP_ResourceNode* Node,
+		float InteractionRangeCm,
+		float AcceptanceRadius) const;
+	static const TCHAR* MineStateToString(EGP_MineExecutionState State);
 
 	void SetAttackTickEnabled(bool bEnabled);
 	bool HasExactActiveHeldAttack() const;
@@ -223,4 +266,11 @@ private:
 	float LastReachedOutOfRangeDistance = -1.0f;
 	FVector LastReachedOutOfRangeLocation = FVector::ZeroVector;
 	int32 ConsecutiveNoProgressApproachCount = 0;
+
+	/** GP-S27 Mine orchestration (Worker only). */
+	EGP_MineExecutionState MineState = EGP_MineExecutionState::Idle;
+	uint32 ActiveMineSerial = 0;
+	TWeakObjectPtr<AGP_ResourceNode> MineTarget;
+	TWeakObjectPtr<UGP_MiningComponent> BoundMiningComponent;
+	bool bFinishingMine = false;
 };

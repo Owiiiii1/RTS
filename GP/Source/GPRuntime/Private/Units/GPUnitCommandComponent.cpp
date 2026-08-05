@@ -9,10 +9,15 @@
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Resources/GPCargoComponent.h"
+#include "Resources/GPMiningComponent.h"
+#include "Resources/GPResourceDefinition.h"
+#include "Resources/GPResourceNode.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPMobileUnit.h"
 #include "Units/GPMovementComponent.h"
 #include "Units/GPUnitBase.h"
+#include "Units/GPWorker.h"
 
 #if !UE_BUILD_SHIPPING
 #include "EngineUtils.h"
@@ -249,6 +254,7 @@ void UGP_UnitCommandComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 
 	ResetAttackExecutor();
+	ResetMineExecutor();
 
 	if (BoundMovementComponent.IsValid() && MovementResultHandle.IsValid())
 	{
@@ -721,6 +727,552 @@ void UGP_UnitCommandComponent::ResetAttackExecutorForReplacement(
 
 	(void)PreviousCommand;
 	ResetAttackExecutor();
+}
+
+const TCHAR* UGP_UnitCommandComponent::MineStateToString(EGP_MineExecutionState State)
+{
+	switch (State)
+	{
+	case EGP_MineExecutionState::Idle: return TEXT("Idle");
+	case EGP_MineExecutionState::Approaching: return TEXT("Approaching");
+	case EGP_MineExecutionState::Active: return TEXT("Active");
+	default: return TEXT("Unknown");
+	}
+}
+
+EGP_MineExecutionState UGP_UnitCommandComponent::GetMineExecutionState() const
+{
+	return MineState;
+}
+
+uint32 UGP_UnitCommandComponent::GetActiveMineSerial() const
+{
+	return ActiveMineSerial;
+}
+
+AGP_ResourceNode* UGP_UnitCommandComponent::GetMineTarget() const
+{
+	return MineTarget.Get();
+}
+
+bool UGP_UnitCommandComponent::IsMineApproachActive() const
+{
+	return MineState == EGP_MineExecutionState::Approaching && ActiveMineSerial != 0;
+}
+
+FVector UGP_UnitCommandComponent::MakeMineApproachDestination(
+	const AActor* Owner,
+	const AGP_ResourceNode* Node,
+	float InteractionRangeCm,
+	float AcceptanceRadius) const
+{
+	const FVector OwnerLocation = Owner != nullptr ? Owner->GetActorLocation() : FVector::ZeroVector;
+	const FVector NodeLocation = Node != nullptr ? Node->GetActorLocation() : FVector::ZeroVector;
+	FVector Away = OwnerLocation - NodeLocation;
+	Away.Z = 0.0f;
+	if (!Away.Normalize())
+	{
+		Away = FVector::ForwardVector;
+	}
+
+	const float Safety = 5.0f;
+	const float DesiredDist = FMath::Max(1.0f, InteractionRangeCm - AcceptanceRadius - Safety);
+	const FVector Destination = NodeLocation + Away * DesiredDist;
+	return FVector(Destination.X, Destination.Y, OwnerLocation.Z);
+}
+
+void UGP_UnitCommandComponent::UnbindMiningStateEvents()
+{
+	if (BoundMiningComponent.IsValid())
+	{
+		BoundMiningComponent->OnMiningStateChanged.RemoveDynamic(
+			this,
+			&UGP_UnitCommandComponent::HandleMiningStateChanged);
+	}
+	BoundMiningComponent.Reset();
+}
+
+void UGP_UnitCommandComponent::BindMiningStateEvents(UGP_MiningComponent* Mining)
+{
+	UnbindMiningStateEvents();
+	if (!IsValid(Mining))
+	{
+		return;
+	}
+
+	BoundMiningComponent = Mining;
+	Mining->OnMiningStateChanged.AddDynamic(this, &UGP_UnitCommandComponent::HandleMiningStateChanged);
+}
+
+float UGP_UnitCommandComponent::ResolveMineInteractionRangeCm(
+	const UGP_MiningComponent* Mining,
+	const AGP_ResourceNode* Node) const
+{
+	if (IsValid(Mining) && Mining->GetInteractionRangeCm() > 0.0f)
+	{
+		return Mining->GetInteractionRangeCm();
+	}
+
+	if (IsValid(Node))
+	{
+		if (const UGP_ResourceDefinition* Definition = Node->ResolveResourceDefinition(true))
+		{
+			if (Definition->InteractionRangeCm > 0.0f)
+			{
+				return Definition->InteractionRangeCm;
+			}
+		}
+	}
+
+	return 200.0f;
+}
+
+void UGP_UnitCommandComponent::ResetMineExecutor()
+{
+	if (bFinishingMine)
+	{
+		return;
+	}
+
+	TGuardValue<bool> Guard(bFinishingMine, true);
+	UnbindMiningStateEvents();
+
+	if (AGP_Worker* Worker = Cast<AGP_Worker>(GetOwner()))
+	{
+		if (UGP_MiningComponent* Mining = Worker->GetMiningComponent())
+		{
+			if (IsValid(Mining)
+				&& (Mining->IsMining() || Mining->IsWaitingForSlot()
+					|| Mining->GetMiningState() == EGP_MiningState::Mining
+					|| Mining->GetMiningState() == EGP_MiningState::WaitingForSlot))
+			{
+				Mining->StopMining(EGP_MiningStopReason::ManualStop);
+			}
+		}
+	}
+
+	MineState = EGP_MineExecutionState::Idle;
+	ActiveMineSerial = 0;
+	MineTarget.Reset();
+}
+
+void UGP_UnitCommandComponent::ResetMineExecutorForReplacement(
+	const TOptional<FGP_StoredUnitCommand>& PreviousCommand)
+{
+	if (MineState == EGP_MineExecutionState::Idle && ActiveMineSerial == 0)
+	{
+		return;
+	}
+
+	const AActor* Owner = GetOwner();
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution MineCancelled: Unit=%s MineSerial=%u Target=%s Reason=CommandReplaced PreviousState=%s Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		ActiveMineSerial,
+		*GetNameSafe(MineTarget.Get()),
+		MineStateToString(MineState),
+		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+
+	(void)PreviousCommand;
+	ResetMineExecutor();
+}
+
+bool UGP_UnitCommandComponent::TryAcceptIdempotentMineCommand(const FGP_UnitCommand& Command) const
+{
+	const FGameplayTag MineTag = FGPGameplayTags::Get().Command_Mine;
+	if (!(Command.CommandTag == MineTag))
+	{
+		return false;
+	}
+
+	AGP_ResourceNode* Node = Cast<AGP_ResourceNode>(Command.TargetActor);
+	if (!IsValid(Node))
+	{
+		return false;
+	}
+
+	if (HeldCommand.IsSet()
+		&& HeldCommand.GetValue().CommandTag == MineTag
+		&& HeldCommand.GetValue().TargetActor.Get() == Node
+		&& ActiveMineSerial != 0
+		&& MineState != EGP_MineExecutionState::Idle)
+	{
+		return true;
+	}
+
+	const AGP_Worker* Worker = Cast<AGP_Worker>(GetOwner());
+	if (Worker == nullptr)
+	{
+		return false;
+	}
+
+	const UGP_MiningComponent* Mining = Worker->GetMiningComponent();
+	if (!IsValid(Mining))
+	{
+		return false;
+	}
+
+	return Mining->GetCurrentResourceNode() == Node
+		&& (Mining->IsMining() || Mining->IsWaitingForSlot());
+}
+
+bool UGP_UnitCommandComponent::TryRejectMineCommandBeforeAccept(const FGP_UnitCommand& Command) const
+{
+	const FGameplayTag MineTag = FGPGameplayTags::Get().Command_Mine;
+	if (!(Command.CommandTag == MineTag))
+	{
+		return false;
+	}
+
+	AActor* Owner = GetOwner();
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+
+	const AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+	if (Worker == nullptr)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MineRejected: Unit=%s Reason=UnsupportedUnit Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return true;
+	}
+
+	UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+	UGP_MiningComponent* Mining = Worker->GetMiningComponent();
+	if (!IsValid(Cargo) || !IsValid(Mining))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MineRejected: Unit=%s Reason=MissingCargoOrMining Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return true;
+	}
+
+	if (Cargo->IsFull())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MineRejected: Unit=%s Reason=CargoFull Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return true;
+	}
+
+	AGP_ResourceNode* Node = Cast<AGP_ResourceNode>(Command.TargetActor);
+	if (!IsValid(Node) || Node->IsActorBeingDestroyed())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MineRejected: Unit=%s Reason=InvalidTarget Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return true;
+	}
+
+	FString MineFail;
+	if (!Node->CanAcceptMineCommand(true, &MineFail))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MineRejected: Unit=%s Target=%s Reason=InvalidOrDepleted Detail=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			*GetNameSafe(Node),
+			*MineFail,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return true;
+	}
+
+	return false;
+}
+
+void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
+{
+	AActor* Owner = GetOwner();
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+	AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+	if (Worker == nullptr || !HeldCommand.IsSet())
+	{
+		ResetMineExecutor();
+		return;
+	}
+
+	const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
+	if (!(Held.CommandTag == FGPGameplayTags::Get().Command_Mine) || Held.CommandSerial != MineSerial)
+	{
+		return;
+	}
+
+	AGP_ResourceNode* Node = Cast<AGP_ResourceNode>(Held.TargetActor.Get());
+	UGP_MiningComponent* Mining = Worker->GetMiningComponent();
+	UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+	if (!IsValid(Node) || !IsValid(Mining) || !IsValid(Cargo) || Cargo->IsFull() || Node->IsDepleted())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MineArrivalRejected: Unit=%s MineSerial=%u Target=%s Reason=InvalidArrivalPrereq Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			MineSerial,
+			*GetNameSafe(Node),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		ClearHeldCommand();
+		ResetMineExecutor();
+		return;
+	}
+
+	const float InteractionRange = ResolveMineInteractionRangeCm(Mining, Node);
+	const float Distance = FVector::Dist(Owner->GetActorLocation(), Node->GetActorLocation());
+	if (Distance > InteractionRange)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MineArrivalOutOfRange: Unit=%s MineSerial=%u Target=%s Distance=%.1f Range=%.1f Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			MineSerial,
+			*GetNameSafe(Node),
+			Distance,
+			InteractionRange,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		ClearHeldCommand();
+		ResetMineExecutor();
+		return;
+	}
+
+	MineTarget = Node;
+	MineState = EGP_MineExecutionState::Active;
+	ActiveMineSerial = MineSerial;
+	BindMiningStateEvents(Mining);
+
+	const EGP_BeginMiningResult BeginResult = Mining->BeginMining(Node);
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution MineBegin: Unit=%s MineSerial=%u Target=%s Result=%d Distance=%.1f Range=%.1f Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		MineSerial,
+		*GetNameSafe(Node),
+		static_cast<int32>(BeginResult),
+		Distance,
+		InteractionRange,
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+	if (BeginResult != EGP_BeginMiningResult::Started
+		&& BeginResult != EGP_BeginMiningResult::WaitingForSlot
+		&& BeginResult != EGP_BeginMiningResult::AlreadyMiningTarget)
+	{
+		ClearHeldCommand();
+		ResetMineExecutor();
+	}
+}
+
+bool UGP_UnitCommandComponent::StartMineExecutor()
+{
+	AActor* Owner = GetOwner();
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+
+	if (Owner == nullptr || !Owner->HasAuthority() || !HeldCommand.IsSet())
+	{
+		return HeldCommand.IsSet();
+	}
+
+	const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
+	const FGameplayTag MineTag = FGPGameplayTags::Get().Command_Mine;
+	if (!(Held.CommandTag == MineTag))
+	{
+		return true;
+	}
+
+	AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+	UGP_MiningComponent* Mining = Worker != nullptr ? Worker->GetMiningComponent() : nullptr;
+	UGP_CargoComponent* Cargo = Worker != nullptr ? Worker->GetCargoComponent() : nullptr;
+	AGP_ResourceNode* Node = Cast<AGP_ResourceNode>(Held.TargetActor.Get());
+	if (Worker == nullptr || !IsValid(Mining) || !IsValid(Cargo) || !IsValid(Node))
+	{
+		ClearHeldCommand();
+		ResetMineExecutor();
+		return false;
+	}
+
+	const uint32 MineSerial = Held.CommandSerial;
+	ActiveMineSerial = MineSerial;
+	MineTarget = Node;
+
+	const float InteractionRange = ResolveMineInteractionRangeCm(Mining, Node);
+	const float Distance = FVector::Dist(Owner->GetActorLocation(), Node->GetActorLocation());
+	UGP_MovementComponent* Movement = ResolveMovementComponent();
+	const float AcceptanceRadius = Movement != nullptr ? Movement->AcceptanceRadius : 50.0f;
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution MineAccepted: Unit=%s MineSerial=%u Target=%s Distance=%.1f Range=%.1f Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		MineSerial,
+		*GetNameSafe(Node),
+		Distance,
+		InteractionRange,
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+	if (Distance <= InteractionRange)
+	{
+		if (Movement != nullptr && Movement->IsMoving())
+		{
+			Movement->StopMove(EGP_MovementStopReason::CommandReplaced);
+		}
+		BeginMiningAtHeldTarget(MineSerial);
+		return HeldCommand.IsSet() && ActiveMineSerial == MineSerial;
+	}
+
+	if (Movement == nullptr)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MineRejected: Unit=%s MineSerial=%u Reason=MovementUnavailable Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			MineSerial,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		ClearHeldCommand();
+		ResetMineExecutor();
+		return false;
+	}
+
+	const FVector Destination = MakeMineApproachDestination(Owner, Node, InteractionRange, AcceptanceRadius);
+	const FGP_MovementRequestOutcome Outcome = Movement->RequestMove(Destination, MineSerial);
+	if (!Outcome.IsAccepted())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution MineRejected: Unit=%s MineSerial=%u Reason=MovementRejected Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			MineSerial,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		ClearHeldCommand();
+		ResetMineExecutor();
+		return false;
+	}
+
+	MineState = EGP_MineExecutionState::Approaching;
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution MineApproachRequested: Unit=%s MineSerial=%u Target=%s Destination=%s Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		MineSerial,
+		*GetNameSafe(Node),
+		*Destination.ToCompactString(),
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+	return true;
+}
+
+bool UGP_UnitCommandComponent::TryConsumeMineMovementResult(
+	uint32 Serial,
+	EGP_MovementResult Result,
+	EGP_MovementResultReason Reason)
+{
+	if (MineState == EGP_MineExecutionState::Idle || ActiveMineSerial == 0)
+	{
+		return false;
+	}
+
+	if (Serial != ActiveMineSerial)
+	{
+		return false;
+	}
+
+	AActor* Owner = GetOwner();
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+
+	if (Result == EGP_MovementResult::Cancelled)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution MineApproachCancelled: Unit=%s MineSerial=%u MovementReason=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			Serial,
+			GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+		if (MineState == EGP_MineExecutionState::Approaching)
+		{
+			if (HeldCommand.IsSet()
+				&& HeldCommand.GetValue().CommandTag == FGPGameplayTags::Get().Command_Mine
+				&& HeldCommand.GetValue().CommandSerial == Serial)
+			{
+				ClearHeldCommand();
+			}
+			ResetMineExecutor();
+		}
+		return true;
+	}
+
+	if (Result != EGP_MovementResult::Reached)
+	{
+		return true;
+	}
+
+	if (MineState != EGP_MineExecutionState::Approaching)
+	{
+		return true;
+	}
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution MineApproachReached: Unit=%s MineSerial=%u Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		Serial,
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+	BeginMiningAtHeldTarget(Serial);
+	return true;
+}
+
+void UGP_UnitCommandComponent::HandleMiningStateChanged(
+	EGP_MiningState PreviousState,
+	EGP_MiningState NewState,
+	EGP_MiningStopReason Reason)
+{
+	(void)PreviousState;
+	if (bFinishingMine || ActiveMineSerial == 0)
+	{
+		return;
+	}
+
+	const bool bTerminal =
+		NewState == EGP_MiningState::CargoFull
+		|| NewState == EGP_MiningState::DepositDepleted
+		|| NewState == EGP_MiningState::OutOfRange
+		|| NewState == EGP_MiningState::Invalid
+		|| NewState == EGP_MiningState::Idle;
+
+	if (!bTerminal)
+	{
+		return;
+	}
+
+	AActor* Owner = GetOwner();
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution MineTerminal: Unit=%s MineSerial=%u NewState=%d Reason=%d"),
+		*GetNameSafe(Owner),
+		ActiveMineSerial,
+		static_cast<int32>(NewState),
+		static_cast<int32>(Reason));
+
+	const uint32 Serial = ActiveMineSerial;
+	TGuardValue<bool> Guard(bFinishingMine, true);
+	UnbindMiningStateEvents();
+	MineState = EGP_MineExecutionState::Idle;
+	ActiveMineSerial = 0;
+	MineTarget.Reset();
+
+	if (HeldCommand.IsSet()
+		&& HeldCommand.GetValue().CommandTag == FGPGameplayTags::Get().Command_Mine
+		&& HeldCommand.GetValue().CommandSerial == Serial)
+	{
+		ClearHeldCommand();
+	}
 }
 
 bool UGP_UnitCommandComponent::StartAttackExecutor()
@@ -1642,6 +2194,11 @@ void UGP_UnitCommandComponent::HandleMovementResult(
 		return;
 	}
 
+	if (TryConsumeMineMovementResult(Serial, Result, Reason))
+	{
+		return;
+	}
+
 	AActor* Owner = GetOwner();
 	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
 	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
@@ -1766,6 +2323,22 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 		return;
 	}
 
+	if (TryAcceptIdempotentMineCommand(Command))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution MineIdempotentAccepted: Unit=%s Target=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			*GetNameSafe(Command.TargetActor),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return;
+	}
+
+	if (TryRejectMineCommandBeforeAccept(Command))
+	{
+		return;
+	}
+
 	const TOptional<FGP_StoredUnitCommand> PreviousCommand = HeldCommand;
 	const bool bHadHeldCommand = PreviousCommand.IsSet();
 
@@ -1779,6 +2352,7 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 	HeldCommand = Stored;
 
 	ResetAttackExecutorForReplacement(PreviousCommand);
+	ResetMineExecutorForReplacement(PreviousCommand);
 
 	const bool bHeldRemainsAfterSync = SynchronizeMovementWithHeldCommand(PreviousCommand);
 	if (!bHeldRemainsAfterSync || !HeldCommand.IsSet())
@@ -1786,10 +2360,17 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 		return;
 	}
 
-	const FGameplayTag AttackTag = FGPGameplayTags::Get().Command_Attack;
-	if (HeldCommand.GetValue().CommandTag == AttackTag)
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	if (HeldCommand.GetValue().CommandTag == GPTags.Command_Attack)
 	{
 		if (!StartAttackExecutor() || !HeldCommand.IsSet())
+		{
+			return;
+		}
+	}
+	else if (HeldCommand.GetValue().CommandTag == GPTags.Command_Mine)
+	{
+		if (!StartMineExecutor() || !HeldCommand.IsSet())
 		{
 			return;
 		}
@@ -2054,6 +2635,7 @@ void UGP_UnitCommandComponent::NotifyOwnerDied()
 
 	SetAttackTickEnabled(false);
 	ResetAttackExecutor();
+	ResetMineExecutor();
 
 	if (UGP_MovementComponent* Movement = ResolveMovementComponent())
 	{

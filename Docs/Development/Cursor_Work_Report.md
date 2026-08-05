@@ -1,10 +1,10 @@
-# Cursor Work Report — GP-S24R Ferronite Deposit Contract
+# Cursor Work Report — GP-S24R Ferronite Deposit Contract Finalization
 
 ## Task
-GP-S24R — Ferronite Deposit Contract on `AGP_ResourceNode` (canonical Slice-6 reconciliation coding stage).
+GP-S24R — Ferronite Deposit Contract Finalization on `AGP_ResourceNode`.
 
 ## Status
-**GP-S24R_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S24R_FINALIZED_READY_FOR_MERGE**
 
 ## Branch
 `feature/gp-s24r-ferronite-deposit-contract`
@@ -12,112 +12,107 @@ GP-S24R — Ferronite Deposit Contract on `AGP_ResourceNode` (canonical Slice-6 
 ## Base
 `main` @ `754b133731065eed000fdcce4bbaa5c45f096e60`
 
-## Canonical dependency
-GP-S23R Resource Definition merged into main @ `754b133731065eed000fdcce4bbaa5c45f096e60`. Next after this stage: GP-S25 CargoComponent.
+## Candidate commit
+`42c1c9167ddd607506d32b470763fc8467a67d66`
 
-## Files inspected
-- `Docs/Development/DOCUMENTATION_INDEX.md`
-- `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
-- `Docs/Development/Claude_Tasks/GP-S23R_Resource_Definition_Reconciliation.md`
-- `Docs/TDD/13_Architecture_Proposal.md`, `07_Resource_Architecture.md`, `10_Data_Assets.md`
-- `Docs/GDD/02_Core_Gameplay_Loop.md`, `06_Resources.md`
-- ADR-0002, ADR-0009
-- `GPResourceNode.*`, `GPResourceDefinition.*`, `GPCommandComponent.*`, `GPGameplayTags.*`
-- `GPAuthoredVisualExampleSeedCommandlet.cpp`
+## Finalization commit
+_(filled after commit)_
 
-## ResourceNode class changes
-- Kept `AGP_ResourceNode : AActor` (not renamed; not BuildingBase; no ASC/Team/tick)
-- Soft `ResourceDefinition` → Ferronite DA default
-- Capability tags API: `GP.Resource.Node` + `GP.Resource.Type.Ferronite`
-- Capacity: Max/Current, `IsDepleted`, clamp, authority `ConsumeResource`
-- Occupancy: `MaxConcurrentMiners=4`, Request/Release/HasActive/IsWaiting, FIFO waiting, EndPlay cleanup
-- `ValidateDepositContract` + editor `IsDataValid`
-- Identity policy documented in class comment / task doc
+## Operator validation matrix
 
-## ResourceDefinition reference policy
-- Soft object ptr; EditDefaultsOnly; BlueprintReadOnly
-- Resolve: soft Get → Asset Manager primary object → optional explicit sync load (validate/Mine/diagnostics only, Verbose log)
-- No BeginPlay/Tick silent TryLoad; AlwaysCook primary asset assumed for prototype
+| Item | Result |
+| --- | --- |
+| ResourceDefinition → Ferronite DA; PrimaryAssetId `GPResourceDefinition:DA_GP_Resource_Ferronite` | **PASS** |
+| ResourceType=Ore; tags Node + Type.Ferronite | **PASS** |
+| Max/Current=5000; IsDepleted=false; MaxConcurrentMiners=4 | **PASS** |
+| ValidationOk=true; Errors=0; Warnings=0; CanAcceptMine=true | **PASS** |
+| Mine accept ResourceNode; reject null/depleted/unit/plain | **PASS** |
+| Consume 5000 → After=0 Depleted; CanAcceptMine=false MineFail=Depleted | **PASS** |
+| Active=4; 5th Waiting; AlreadyWaiting; release promotes; AlreadyActive; Active=4 Waiting=0 | **PASS** |
+| ListenServer/Client CurrentAmount=4000; occupancy counts replicate | **PASS** |
+| Client RequestSlot rejected | **PASS** |
+| AuthoredComponents; authored collision/nav warnings=0; TickEnabled=false | **PASS** |
+| Map unchanged | **PASS** |
+
+## ResourceDefinition policy
+Soft `TSoftObjectPtr`; default Ferronite DA; BeginPlay non-sync resolve; explicit sync only on validate/Mine/diagnostics (AlwaysCook); PrimaryAssetId resolves correctly.
 
 ## Exact tags
 - `GP.Resource.Node`
 - `GP.Resource.Type.Ferronite`
-- Native registry only (no duplicates)
 
-## Mine target validation changes
-- `BuildSmartCommand`: `AGP_ResourceNode` with Resource.Node → Mine (before UnitBase branch)
-- `ValidateAndNormalizeCommand`: Mine accepts ResourceNode via `CanAcceptMineCommand` (valid, same world, definition, amount>0, tags)
-- UnitBase Mine path retained as legacy hybrid only
-- Move/Attack unchanged; no Attack expansion; no mining execution
-
-## Slot / queue contract
-- Soft-cap 4 active; excess → waiting FIFO
-- Authority-only mutation; weak actor refs; duplicate prevention; promote on release
-- Replicated counts only (`ActiveMinerCount`, `WaitingMinerCount`)
-
-## Default values
+## Deposit default values
 | Field | Value |
 | --- | --- |
 | ResourceDefinition | `DA_GP_Resource_Ferronite` |
-| MaxAmount / CurrentAmount | 5000 / 5000 (retained) |
-| MaxConcurrentMiners | 4 (TDD MaxConcurrentWorkers) |
-| ResourceType | Ore (internal) |
+| MaxAmount | 5000 |
+| CurrentAmount | 5000 |
+| MaxConcurrentMiners | 4 |
+| ResourceType | Ore |
 
-## Replication / authority
-- ResourceType, MaxAmount, CurrentAmount, Active/Waiting counts replicated
-- ConsumeResource + slot APIs authority-only
-- Client debug slot cmds rejected
+## Mine validation matrix
+| Case | Result |
+| --- | --- |
+| Valid ResourceNode | ACCEPT |
+| Null target | REJECT |
+| Depleted ResourceNode | REJECT |
+| Ordinary unit | REJECT |
+| Actor without resource contract | REJECT |
 
-## Diagnostics
-- Extended `gp.ResourceNode.Inspect`
-- `gp.ResourceNode.InspectOccupancy` / `RequestSlot` / `ReleaseSlot`
-- `gp.Command.InspectMineTarget`
+## Depletion test
+ConsumeResource Requested=5000 → Consumed=5000 Before=5000 After=0 Depleted=true; MineFail=Depleted.
 
-## Blueprint asset changes
-- No visual composition change
-- Seed/Verify updated to ensure Ferronite definition on example BP CDO
-- `-VerifyOnly` **PASSED** without requiring BP resave (C++ default inherited)
-- LFS: no Blueprint/content asset rewrite in this commit
-- Map unchanged
+## FIFO / duplicate / promotion test
+4 active → 5th Waiting → repeated AlreadyWaiting → release active promotes waiting → repeated AlreadyActive → final Active=4 Waiting=0.
 
-## LFS result
-No new/changed LFS content assets committed for this stage (definition DA already on main from S23R).
+## Network replication test
+ListenServer Authority CurrentAmount=4000; Client SimulatedProxy CurrentAmount=4000. Occupancy: server Active=2 Waiting=0; client observed same counts, HasAuthority=false.
 
-## Map unchanged
-Yes — no umap edits.
+## Client authority rejection
+`gp.ResourceNode.RequestSlot` rejected on client.
 
-## GPEditor Development + UHT result
+## Visual compatibility result
+VisualSourceMode=AuthoredComponents; UsesAuthoredComponents=true; GeneratedPartCount=0; AuthoredPrimitiveComponentCount=6; AuthoredCollisionWarnings=0; AuthoredNavigationWarnings=0; DuplicateGeneratedParts=0; TickEnabled=false.
+
+## Validation result
+ValidationOk=true; ValidationErrors=0; ValidationWarnings=0.
+
+## Files changed during finalization
+- `Docs/Development/Claude_Tasks/GP-S24R_Ferronite_Deposit_Contract.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
+
+No C++ changes at finalization. Accidental operator `L_PrototypeArena.umap` dirty state restored; not committed.
+
+## GPEditor / UHT result if rerun
+Not rerun (no C++ changes). Candidate GPEditor Dev+UHT retained as **PASSED**.
+
+## GP Win64 Development result
 **PASSED**
 
-## GP Development not run
-Yes (deferred until after operator validation).
+## GP Win64 Shipping result
+**PASSED**
 
-## GP Shipping not run
-Yes (deferred until after operator validation).
+## LFS result
+No LFS content rewrite during finalization.
 
-## Files changed
-- `GP/Source/GPRuntime/Public/Resources/GPResourceNode.h`
-- `GP/Source/GPRuntime/Private/Resources/GPResourceNode.cpp`
-- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
-- `GP/Source/GPEditor/Private/Visual/GPAuthoredVisualExampleSeedCommandlet.cpp`
-- `Docs/Development/Claude_Tasks/GP-S24R_Ferronite_Deposit_Contract.md` (created)
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md` (rewritten)
+## Map unchanged
+Yes.
 
 ## Scope exclusions
-CargoComponent; MiningComponent; Worker; mining execution; Storage; ThreatValue writes; orbital score; UI; map population; projectiles; visual redesign; PR/merge; main edits.
+No Cargo/Mining/Worker/mining execution/Storage/ThreatValue/orbital/UI/map population/projectiles/visual redesign/GP-S25; no main/PR/merge/branch delete.
 
-## Operator validation steps
-See `Docs/Development/Claude_Tasks/GP-S24R_Ferronite_Deposit_Contract.md` §Operator validation.
+## Git status
+Feature branch finalized and pushed; main untouched; no PR.
+
+## Merge readiness
+Ready for main merge when requested.
 
 ## Known limitations
-- No mining execution
-- Ore enum name retained
-- Occupancy actor lists server-local
-- Soft-cap 4 is prototype TDD value
+- No mining execution / movement / cargo
+- Ore enum name retained until rename stage
+- Soft-cap 4 is TDD prototype value
+- Occupancy actor lists server-local (counts only)
 
-## Commit SHA
-`42c1c9167ddd607506d32b470763fc8467a67d66`
-
-## Git state
-Feature branch pushed; main untouched; no PR created.
+## Next canonical stage
+**GP-S25 — UGP_CargoComponent**

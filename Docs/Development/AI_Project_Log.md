@@ -2,25 +2,26 @@
 
 ## 2026-08-05 — GP-S24R Ferronite Deposit Contract
 
-Status: **GP-S24R_CODE_READY_OPERATOR_VALIDATION_PENDING**
+Status: **GP-S24R_FINALIZED_READY_FOR_MERGE**
 
 ### Branch / baseline
 - Branch: `feature/gp-s24r-ferronite-deposit-contract`
 - Base: `main` @ `754b133731065eed000fdcce4bbaa5c45f096e60` (GP-S23R merged)
+- Candidate: `42c1c9167ddd607506d32b470763fc8467a67d66`
 - Task: `Docs/Development/Claude_Tasks/GP-S24R_Ferronite_Deposit_Contract.md`
 
 ### What was done
 - `AGP_ResourceNode` Ferronite deposit contract: soft `ResourceDefinition`, tags, capacity validation, miner soft-cap/FIFO queue
 - Mine smart-command + server validation accepts `AGP_ResourceNode` (no UnitBase requirement for deposits)
-- Diagnostics: `gp.ResourceNode.Inspect` / occupancy slot cmds / `gp.Command.InspectMineTarget`
-- GPEditor Win64 Development + UHT **PASSED**
-- GP Win64 Development **not run**; GP Win64 Shipping **not run** (after operator validation)
+- Operator validation **PASSED** (identity/tags/Mine matrix/depletion/FIFO/listen+client/authored visuals)
+- Finalization: no C++ changes; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
+- Map unchanged; next stage GP-S25 CargoComponent
 
 ### Intentionally not done
-- No Cargo/MiningComponent/Worker/Storage/mining execution; no map/projectile/visual redesign; no PR/merge
+- No Cargo/MiningComponent/Worker/Storage/mining execution; no PR/merge (ready when requested)
 
 ### Operator next
-- Validate per task doc; then finalize (GP Dev/Shipping) when requested
+- None for S24R; merge when requested; then GP-S25
 
 ---
 

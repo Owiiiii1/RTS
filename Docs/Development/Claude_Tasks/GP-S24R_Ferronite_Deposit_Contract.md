@@ -1,12 +1,14 @@
 # GP-S24R — Ferronite Deposit Contract on AGP_ResourceNode
 
 ## Status
-**GP-S24R_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S24R_FINALIZED_READY_FOR_MERGE**
 
 ## Baseline
 `main` @ `754b133731065eed000fdcce4bbaa5c45f096e60` (GP-S23R merged)
 
-Branch: `feature/gp-s24r-ferronite-deposit-contract`
+Branch: `feature/gp-s24r-ferronite-deposit-contract`  
+Candidate: `42c1c9167ddd607506d32b470763fc8467a67d66`  
+Docs SHA note: `cfc26a4ff8b6bb3c3680b5d92245a1d9881d04b2`
 
 ## Canonical roadmap position
 Slice-6 reconciliation coding stage for GP-S24:
@@ -34,6 +36,7 @@ Soft reference on node:
 - Default: `/Game/GrimProtocol/DataAssets/Resources/DA_GP_Resource_Ferronite`
 - Resolve via already-loaded soft ptr / Asset Manager primary object
 - Explicit sync `LoadSynchronous` only on validate/Mine/diagnostic paths with Verbose log (AlwaysCook primary asset)
+- BeginPlay uses non-sync resolve only
 
 ## Identity and naming policy
 | Layer | Value |
@@ -100,6 +103,7 @@ Legacy UnitBase + `GP.Resource.Node` path retained for hybrid targets.
 - Slot/queue mutation server-only; clients cannot RequestSlot (debug cmds reject client)
 - Command validation server-authoritative
 - Destroy/EndPlay clears occupancy safely
+- Only occupancy counts replicated — not actor arrays
 
 ## Tick policy
 `PrimaryActorTick.bCanEverTick = false`. No polling. Visual component tick remains disabled (S26B2A).
@@ -123,6 +127,26 @@ S26B2A contract unchanged:
 | `gp.ResourceNode.Consume <Amount> [Node]` | Existing consume diagnostic |
 | `gp.Command.InspectMineTarget` | Mine accept/reject cases (null, node, depleted, ordinary unit, plain actor) |
 
+## Operator validation matrix (accepted)
+
+| Item | Result |
+| --- | --- |
+| ResourceDefinition / PrimaryAssetId / Ore / Ferronite tags | **PASS** |
+| Max=5000 Current=5000 IsDepleted=false MaxConcurrentMiners=4 | **PASS** |
+| ValidationOk / Errors=0 / Warnings=0 / CanAcceptMine | **PASS** |
+| Mine accept ResourceNode; reject null/depleted/unit/plain | **PASS** |
+| Consume 5000 → depleted; CanAcceptMine=false MineFail=Depleted | **PASS** |
+| FIFO soft-cap 4 + waiting + promote + Already* duplicates | **PASS** |
+| Listen server + client amount + occupancy count replication | **PASS** |
+| Client RequestSlot rejected | **PASS** |
+| Authored visuals warnings=0; TickEnabled=false | **PASS** |
+| Map unchanged | **PASS** |
+
+## Builds (finalization)
+- GPEditor Dev+UHT: retained from candidate (no C++ changes at finalization)
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+
 ## In scope
 ResourceDefinition soft ref; Ferronite identity/tags; capacity validation; miner slot/queue; Mine target compatibility; diagnostics; BP example compatibility; docs.
 
@@ -130,24 +154,14 @@ ResourceDefinition soft ref; Ferronite identity/tags; capacity validation; miner
 CargoComponent; MiningComponent; Worker; mining timers/cycles; movement-to-deposit; cargo fill; Storage; MainBase; FerroniteThreatValue writes; OrbitalFerronite; FerroniteScore; container launch; regeneration; UI; map population; projectiles; visual redesign.
 
 ## Acceptance criteria
-- [ ] ResourceNode remains AActor with soft Ferronite definition default
-- [ ] Tags Node + Type.Ferronite exposed via capability API
-- [ ] Mine validates ResourceNode; rejects unit/depleted/null/plain
-- [ ] Slot soft-cap 4 + FIFO waiting + promote on release; no duplicates
-- [ ] ConsumeResource authority-only; amounts replicate
-- [ ] Inspect diagnostics cover identity + occupancy + Mine cases
-- [ ] Authored BP still works; authored collision/nav warnings = 0
-- [ ] GPEditor Dev+UHT passed; GP Dev/Shipping deferred until after operator validation
-
-## Operator validation
-1. Open `BP_ResourceNode_AuthoredExample` — confirm ResourceDefinition → Ferronite DA
-2. Place temporary ResourceNode in prototype arena / transient map — **do not save map** unless necessary
-3. `gp.ResourceNode.Inspect` — identity, PrimaryAssetId, tags, Current/Max, VisualSourceMode
-4. Occupancy: RequestSlot until Active=4; next → Waiting; Release promotes; duplicate → Already*
-5. `gp.Command.InspectMineTarget` — accept ResourceNode; reject unit/depleted/null/plain
-6. Deplete via `gp.ResourceNode.Consume`; Mine reject Depleted
-7. Listen server + client: amounts consistent; client RequestSlot rejected
-8. Authored visual collision/nav warnings = 0; native fallback still works
+- [x] ResourceNode remains AActor with soft Ferronite definition default
+- [x] Tags Node + Type.Ferronite exposed via capability API
+- [x] Mine validates ResourceNode; rejects unit/depleted/null/plain
+- [x] Slot soft-cap 4 + FIFO waiting + promote on release; no duplicates
+- [x] ConsumeResource authority-only; amounts replicate
+- [x] Inspect diagnostics cover identity + occupancy + Mine cases
+- [x] Authored BP still works; authored collision/nav warnings = 0
+- [x] GPEditor Dev+UHT passed; GP Dev/Shipping passed at finalization
 
 ## Known limitations
 - No mining execution / movement / cargo
@@ -158,3 +172,5 @@ CargoComponent; MiningComponent; Worker; mining timers/cycles; movement-to-depos
 
 ## Next canonical stage
 **GP-S25 — UGP_CargoComponent**
+
+No known blockers. Ready for main merge when requested.

@@ -1,8 +1,35 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-05 — GP-S26 UGP_MiningComponent — finalization
+
+Status: **GP-S26_FINALIZED_READY_FOR_MERGE**
+
+### Branch / baseline
+- Branch: `feature/gp-s26-mining-component`
+- Base: `main` @ `693a36b8777babaea6085cb799397e9e0cddb77f`
+- Candidate: `4d334a7f4fe331757e4e245d2979a27117a6b660`
+- Host correction: `b58fce2072a9340e258a332b701f477c52181e25`
+- Crash correction: `2801c73c8ef02ba4ae4286812d61ffd12c8410e6`
+- Task: `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md`
+
+### What was done
+- Operator validation **PASSED** (manual mining + `RunContractTest` Failures=0; Editor alive)
+- Finalization review: authority/timer/replication/SoT/FIFO/crash recursion — no merge blockers
+- Minor C++ harden: runner world-cleanup / BeginDestroy clears concurrent guard; Shipping runner stubs
+- Builds: GPEditor Dev+UHT **PASSED**; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
+- Overall: **GP-S26_DONE_MINING_COMPONENT** — ready for main merge when requested
+
+### Intentionally not done
+- No PR/merge/main; no GP-S27 Worker
+
+### Operator next
+- Merge to main when ready; then GP-S27 Worker
+
+---
+
 ## 2026-08-05 — GP-S26 Mining Contract Test Crash Correction
 
-Status: **GP-S26_CODE_READY_OPERATOR_VALIDATION_PENDING**
+Status: **GP-S26_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded by finalization)*
 
 ### Branch / baseline
 - Branch: `feature/gp-s26-mining-component`

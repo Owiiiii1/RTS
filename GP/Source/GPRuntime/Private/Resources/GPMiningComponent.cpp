@@ -1309,8 +1309,34 @@ namespace GPMiningDebug
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&MiningRunContractTest));
 } // namespace GPMiningDebug
 
+void UGP_MiningContractTestRunner::BeginDestroy()
+{
+	Finish();
+	Super::BeginDestroy();
+}
+
+void UGP_MiningContractTestRunner::UnbindWorldCleanup()
+{
+	if (WorldCleanupHandle.IsValid())
+	{
+		FWorldDelegates::OnWorldCleanup.Remove(WorldCleanupHandle);
+		WorldCleanupHandle.Reset();
+	}
+}
+
+void UGP_MiningContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	(void)bSessionEnded;
+	(void)bCleanupResources;
+	if (World == nullptr || World == WorldWeak.Get() || !WorldWeak.IsValid())
+	{
+		Finish();
+	}
+}
+
 void UGP_MiningContractTestRunner::Start(UWorld* InWorld)
 {
+	bFinished = false;
 	WorldWeak = InWorld;
 	StageIndex = 0;
 	Failures = 0;
@@ -1318,12 +1344,20 @@ void UGP_MiningContractTestRunner::Start(UWorld* InWorld)
 	WaitingHostWeak.Reset();
 	PrimaryHostWeak.Reset();
 	TestNodeWeak.Reset();
+	UnbindWorldCleanup();
+	WorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(
+		this,
+		&UGP_MiningContractTestRunner::OnWorldCleanup);
 	UE_LOG(LogGPMining, Log, TEXT("GP Mining.RunContractTest Stage=Start (staged lifecycle-safe runner)"));
 	ScheduleNext();
 }
 
 void UGP_MiningContractTestRunner::Abort(const TCHAR* Reason)
 {
+	if (bFinished)
+	{
+		return;
+	}
 	UE_LOG(LogGPMining, Error, TEXT("GP Mining.RunContractTest ABORT: %s"), Reason);
 	++Failures;
 	Finish();
@@ -1415,6 +1449,14 @@ void UGP_MiningContractTestRunner::SafeStopAndDestroyHost(TWeakObjectPtr<AGP_Min
 
 void UGP_MiningContractTestRunner::Finish()
 {
+	if (bFinished)
+	{
+		return;
+	}
+	bFinished = true;
+
+	UnbindWorldCleanup();
+
 	UWorld* World = WorldWeak.Get();
 	if (IsValid(World))
 	{
@@ -1810,5 +1852,75 @@ void UGP_MiningContractTestRunner::AdvanceStage()
 		Abort(TEXT("UnknownStage"));
 		break;
 	}
+}
+#else
+void UGP_MiningContractTestRunner::BeginDestroy()
+{
+	bFinished = true;
+	Super::BeginDestroy();
+}
+
+void UGP_MiningContractTestRunner::Start(UWorld* InWorld)
+{
+	(void)InWorld;
+}
+
+void UGP_MiningContractTestRunner::Abort(const TCHAR* Reason)
+{
+	(void)Reason;
+}
+
+void UGP_MiningContractTestRunner::ScheduleNext()
+{
+}
+
+void UGP_MiningContractTestRunner::AdvanceStage()
+{
+}
+
+bool UGP_MiningContractTestRunner::Expect(bool bOk, const TCHAR* Label)
+{
+	(void)bOk;
+	(void)Label;
+	return false;
+}
+
+void UGP_MiningContractTestRunner::LogStage(const TCHAR* StageName) const
+{
+	(void)StageName;
+}
+
+void UGP_MiningContractTestRunner::Finish()
+{
+	bFinished = true;
+}
+
+void UGP_MiningContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	(void)World;
+	(void)bSessionEnded;
+	(void)bCleanupResources;
+}
+
+void UGP_MiningContractTestRunner::UnbindWorldCleanup()
+{
+}
+
+AGP_MiningDiagnosticHost* UGP_MiningContractTestRunner::SpawnHostNear(AGP_ResourceNode* Node, float RangeCm) const
+{
+	(void)Node;
+	(void)RangeCm;
+	return nullptr;
+}
+
+AGP_ResourceNode* UGP_MiningContractTestRunner::SpawnTransientNode(const FVector& Location) const
+{
+	(void)Location;
+	return nullptr;
+}
+
+void UGP_MiningContractTestRunner::SafeStopAndDestroyHost(TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak)
+{
+	HostWeak.Reset();
 }
 #endif

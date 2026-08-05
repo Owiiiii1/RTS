@@ -258,6 +258,8 @@ class GPRUNTIME_API UGP_MiningContractTestRunner : public UObject
 	GENERATED_BODY()
 
 public:
+	virtual void BeginDestroy() override;
+
 	void Start(UWorld* InWorld);
 	void Abort(const TCHAR* Reason);
 
@@ -267,12 +269,16 @@ private:
 	bool Expect(bool bOk, const TCHAR* Label);
 	void LogStage(const TCHAR* StageName) const;
 	void Finish();
+	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void UnbindWorldCleanup();
 	AGP_MiningDiagnosticHost* SpawnHostNear(AGP_ResourceNode* Node, float RangeCm) const;
 	AGP_ResourceNode* SpawnTransientNode(const FVector& Location) const;
 	void SafeStopAndDestroyHost(TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak);
 
 	int32 StageIndex = 0;
 	int32 Failures = 0;
+	bool bFinished = false;
+	FDelegateHandle WorldCleanupHandle;
 	TWeakObjectPtr<UWorld> WorldWeak;
 	TWeakObjectPtr<AGP_ResourceNode> TestNodeWeak;
 	TWeakObjectPtr<AGP_MiningDiagnosticHost> PrimaryHostWeak;

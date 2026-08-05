@@ -5,6 +5,9 @@
 #include "CoreMinimal.h"
 #include "GPPrimitiveVisualTypes.generated.h"
 
+class AActor;
+class UActorComponent;
+
 /** Engine basic-shape kind used by primitive MVP visuals (GP-S26B1). */
 UENUM()
 enum class EGP_PrimitiveShape : uint8
@@ -23,6 +26,18 @@ enum class EGP_VisualArchetype : uint8
 {
 	InfantryMelee UMETA(DisplayName = "InfantryMelee")
 	// Future: InfantryRanged, HeavyInfantry, Worker, Tank, Artillery, Turret, Monsters, Buildings, ResourceNode
+};
+
+/**
+ * Who owns presentation for a unit/resource visual component (GP-S26B2A).
+ * NativeFallback: C++ builds Engine basic-shape parts into BuiltVisual.
+ * AuthoredComponents: Blueprint/SCS meshes are the presentation; generated native parts stay cleared.
+ */
+UENUM(BlueprintType)
+enum class EGP_VisualSourceMode : uint8
+{
+	NativeFallback UMETA(DisplayName = "NativeFallback"),
+	AuthoredComponents UMETA(DisplayName = "AuthoredComponents")
 };
 
 /** Collision policy for visual parts (MVP: always NoCollision). */
@@ -115,4 +130,27 @@ namespace GPPrimitiveVisualDefaults
 
 	GPRUNTIME_API const TCHAR* ArchetypeToString(EGP_VisualArchetype Archetype);
 	GPRUNTIME_API const TCHAR* ShapeToString(EGP_PrimitiveShape Shape);
+	GPRUNTIME_API const TCHAR* VisualSourceModeToString(EGP_VisualSourceMode Mode);
+}
+
+/**
+ * Read-only diagnostics for Blueprint/SCS presentation meshes.
+ * Does not mutate components. Excludes generated BuiltVisual parts and gameplay root collision.
+ */
+namespace GPAuthoredVisualDiagnostics
+{
+	struct FSnapshot
+	{
+		int32 AuthoredPrimitiveComponentCount = 0;
+		int32 VisibleAuthoredMeshCount = 0;
+		int32 AuthoredCollisionWarnings = 0;
+		int32 AuthoredNavigationWarnings = 0;
+		int32 AuthoredOverlapWarnings = 0;
+		bool bMissingVisibleAuthoredMesh = false;
+	};
+
+	GPRUNTIME_API void Collect(
+		const AActor* Owner,
+		const TSet<const UActorComponent*>& GeneratedComponents,
+		FSnapshot& OutSnapshot);
 }

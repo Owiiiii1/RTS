@@ -17,6 +17,8 @@ public class GPEditor : ModuleRules
 			"SlateCore",
 			"InputCore",
 			"UnrealEd",
+			"Kismet",
+			"KismetCompiler",
 			"LevelEditor",
 			"ToolMenus",
 			"AssetRegistry",

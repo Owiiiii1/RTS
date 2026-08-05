@@ -19,7 +19,7 @@ GP-S27 — AGP_Worker Finalization
 `4d38a405729fb5766a5498e91436896ef5efda6b`
 
 ## Finalization commit
-*(recorded after commit)*
+`03ced125fed4081f933ce3074ceb50ea344cedb0`
 
 ## Full operator validation matrix
 | Check | Result |

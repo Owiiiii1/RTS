@@ -11,7 +11,7 @@ Overall: **GP-S27_DONE_WORKER** (merge when operator requests)
 Branch: `feature/gp-s27-worker`  
 Candidate: `07e20fbfff36e181076d237d0596ef6f25b40951`  
 Approach correction: `4d38a405729fb5766a5498e91436896ef5efda6b`  
-Finalization: *(see Cursor_Work_Report / HEAD)*
+Finalization: `03ced125fed4081f933ce3074ceb50ea344cedb0`
 
 ## Canonical roadmap position
 `GP-S23R` → `GP-S24R` → `GP-S25` → `GP-S26` → **GP-S27 Worker** → GP-S28 StorageComponent + FerroniteThreatValue

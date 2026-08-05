@@ -2,6 +2,13 @@
 
 #include "Visual/GPPrimitiveVisualTypes.h"
 
+#include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "GameFramework/Actor.h"
+
 namespace GPPrimitiveVisualDefaults
 {
 	FGP_PrimitiveVisualDefinition MakeInfantryMeleeDefinition()
@@ -140,5 +147,97 @@ namespace GPPrimitiveVisualDefaults
 		default:
 			return TEXT("Unknown");
 		}
+	}
+
+	const TCHAR* VisualSourceModeToString(EGP_VisualSourceMode Mode)
+	{
+		switch (Mode)
+		{
+		case EGP_VisualSourceMode::AuthoredComponents:
+			return TEXT("AuthoredComponents");
+		case EGP_VisualSourceMode::NativeFallback:
+		default:
+			return TEXT("NativeFallback");
+		}
+	}
+}
+
+namespace GPAuthoredVisualDiagnostics
+{
+	static bool IsGameplayRootCollision(const AActor* Owner, const UActorComponent* Component)
+	{
+		if (Owner == nullptr || Component == nullptr)
+		{
+			return false;
+		}
+
+		if (Component == Owner->GetRootComponent())
+		{
+			return Component->IsA<UCapsuleComponent>() || Component->IsA<UBoxComponent>();
+		}
+
+		return false;
+	}
+
+	void Collect(
+		const AActor* Owner,
+		const TSet<const UActorComponent*>& GeneratedComponents,
+		FSnapshot& OutSnapshot)
+	{
+		OutSnapshot = FSnapshot();
+		if (Owner == nullptr)
+		{
+			OutSnapshot.bMissingVisibleAuthoredMesh = true;
+			return;
+		}
+
+		TInlineComponentArray<UPrimitiveComponent*> Primitives(Owner);
+		for (UPrimitiveComponent* Primitive : Primitives)
+		{
+			if (Primitive == nullptr || GeneratedComponents.Contains(Primitive))
+			{
+				continue;
+			}
+
+			const bool bMeshPresentation =
+				Primitive->IsA<UStaticMeshComponent>() || Primitive->IsA<USkeletalMeshComponent>();
+			if (!bMeshPresentation)
+			{
+				continue;
+			}
+
+			if (IsGameplayRootCollision(Owner, Primitive))
+			{
+				continue;
+			}
+
+			++OutSnapshot.AuthoredPrimitiveComponentCount;
+
+			if (Primitive->IsVisible()
+				&& ((Cast<UStaticMeshComponent>(Primitive) != nullptr
+						&& Cast<UStaticMeshComponent>(Primitive)->GetStaticMesh() != nullptr)
+					|| (Cast<USkeletalMeshComponent>(Primitive) != nullptr
+						&& Cast<USkeletalMeshComponent>(Primitive)->GetSkeletalMeshAsset() != nullptr)))
+			{
+				++OutSnapshot.VisibleAuthoredMeshCount;
+			}
+
+			if (Primitive->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+			{
+				++OutSnapshot.AuthoredCollisionWarnings;
+			}
+
+			if (Primitive->GetGenerateOverlapEvents())
+			{
+				++OutSnapshot.AuthoredOverlapWarnings;
+			}
+
+			if (Primitive->CanEverAffectNavigation())
+			{
+				++OutSnapshot.AuthoredNavigationWarnings;
+			}
+		}
+
+		OutSnapshot.bMissingVisibleAuthoredMesh = OutSnapshot.VisibleAuthoredMeshCount <= 0;
 	}
 }

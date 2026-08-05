@@ -7,6 +7,10 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Units/GPUnitBase.h"
 
+#if WITH_EDITOR
+#include "Misc/App.h"
+#endif
+
 #if !UE_BUILD_SHIPPING
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
@@ -21,10 +25,22 @@ UGP_UnitVisualComponent::UGP_UnitVisualComponent()
 	SetIsReplicatedByDefault(false);
 }
 
+void UGP_UnitVisualComponent::OnRegister()
+{
+	Super::OnRegister();
+
+#if WITH_EDITOR
+	if (!IsTemplate() && GetWorld() != nullptr && !GetWorld()->IsGameWorld())
+	{
+		RefreshVisualMode();
+	}
+#endif
+}
+
 void UGP_UnitVisualComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	RebuildVisual();
+	RefreshVisualMode();
 }
 
 void UGP_UnitVisualComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -33,9 +49,31 @@ void UGP_UnitVisualComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+#if WITH_EDITOR
+void UGP_UnitVisualComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	if (PropertyChangedEvent.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UGP_UnitVisualComponent, VisualSourceMode)
+		|| PropertyChangedEvent.GetPropertyName() == GET_MEMBER_NAME_CHECKED(UGP_UnitVisualComponent, VisualArchetype))
+	{
+		RefreshVisualMode();
+	}
+}
+#endif
+
 EGP_VisualArchetype UGP_UnitVisualComponent::GetVisualArchetype() const
 {
 	return VisualArchetype;
+}
+
+EGP_VisualSourceMode UGP_UnitVisualComponent::GetVisualSourceMode() const
+{
+	return VisualSourceMode;
+}
+
+bool UGP_UnitVisualComponent::UsesAuthoredComponents() const
+{
+	return VisualSourceMode == EGP_VisualSourceMode::AuthoredComponents;
 }
 
 int32 UGP_UnitVisualComponent::GetPartCount() const
@@ -51,6 +89,39 @@ bool UGP_UnitVisualComponent::IsDedicatedVisualSuppressed() const
 bool UGP_UnitVisualComponent::HasBuiltVisual() const
 {
 	return bVisualBuilt;
+}
+
+int32 UGP_UnitVisualComponent::GetGeneratedPartCount() const
+{
+	return BuiltVisual.PartComponents.Num();
+}
+
+int32 UGP_UnitVisualComponent::GetAuthoredPrimitiveComponentCount() const
+{
+	RefreshAuthoredDiagnostics();
+	return CachedAuthoredSnapshot.AuthoredPrimitiveComponentCount;
+}
+
+int32 UGP_UnitVisualComponent::GetAuthoredCollisionWarningCount() const
+{
+	RefreshAuthoredDiagnostics();
+	return CachedAuthoredSnapshot.AuthoredCollisionWarnings;
+}
+
+int32 UGP_UnitVisualComponent::GetAuthoredNavigationWarningCount() const
+{
+	RefreshAuthoredDiagnostics();
+	return CachedAuthoredSnapshot.AuthoredNavigationWarnings;
+}
+
+int32 UGP_UnitVisualComponent::GetDuplicateGeneratedPartCount() const
+{
+	return FMath::Max(0, BuiltVisual.PartComponents.Num() - BuiltVisual.PartLookup.Num());
+}
+
+bool UGP_UnitVisualComponent::AreGeneratedCollisionsDisabled() const
+{
+	return AreVisualPartCollisionsDisabled();
 }
 
 FName UGP_UnitVisualComponent::GetPresentationRootPartName() const
@@ -73,12 +144,7 @@ bool UGP_UnitVisualComponent::AreVisualPartCollisionsDisabled() const
 
 	for (const TObjectPtr<UStaticMeshComponent>& Part : BuiltVisual.PartComponents)
 	{
-		if (Part == nullptr)
-		{
-			continue;
-		}
-
-		if (Part->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+		if (Part != nullptr && Part->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
 		{
 			return false;
 		}
@@ -87,15 +153,65 @@ bool UGP_UnitVisualComponent::AreVisualPartCollisionsDisabled() const
 	return true;
 }
 
+void UGP_UnitVisualComponent::RefreshAuthoredDiagnostics() const
+{
+	if (!bAuthoredSnapshotDirty)
+	{
+		return;
+	}
+
+	TSet<const UActorComponent*> Generated;
+	for (const TObjectPtr<UStaticMeshComponent>& Part : BuiltVisual.PartComponents)
+	{
+		if (Part != nullptr)
+		{
+			Generated.Add(Part.Get());
+		}
+	}
+
+	GPAuthoredVisualDiagnostics::Collect(GetOwner(), Generated, CachedAuthoredSnapshot);
+	bAuthoredSnapshotDirty = false;
+}
+
 bool UGP_UnitVisualComponent::ShouldSuppressVisualConstruction() const
 {
 	const UWorld* World = GetWorld();
 	return World != nullptr && World->GetNetMode() == NM_DedicatedServer;
 }
 
+void UGP_UnitVisualComponent::SetVisualSourceMode(EGP_VisualSourceMode NewMode)
+{
+	VisualSourceMode = NewMode;
+	RefreshVisualMode();
+}
+
+void UGP_UnitVisualComponent::RefreshVisualMode()
+{
+	bAuthoredSnapshotDirty = true;
+
+	if (UsesAuthoredComponents())
+	{
+		ClearVisual();
+		bDedicatedVisualSuppressed = ShouldSuppressVisualConstruction();
+		UE_LOG(LogGPUnitVisual, Verbose,
+			TEXT("GP UnitVisual: Owner=%s VisualSourceMode=AuthoredComponents GeneratedPartsCleared"),
+			*GetNameSafe(GetOwner()));
+		return;
+	}
+
+	RebuildVisual();
+}
+
 void UGP_UnitVisualComponent::RebuildVisual()
 {
 	ClearVisual();
+	bAuthoredSnapshotDirty = true;
+
+	if (UsesAuthoredComponents())
+	{
+		bDedicatedVisualSuppressed = ShouldSuppressVisualConstruction();
+		return;
+	}
 
 	if (ShouldSuppressVisualConstruction())
 	{
@@ -123,12 +239,19 @@ void UGP_UnitVisualComponent::RebuildVisual()
 
 void UGP_UnitVisualComponent::ClearVisual()
 {
+	// Ownership guarantee: destroy only BuiltVisual generated parts.
 	GPPrimitiveVisualBuilder::DestroyBuiltParts(BuiltVisual);
 	bVisualBuilt = false;
+	bAuthoredSnapshotDirty = true;
 }
 
 void UGP_UnitVisualComponent::ApplyTeamColorFallback()
 {
+	if (UsesAuthoredComponents())
+	{
+		return;
+	}
+
 	const AGP_UnitBase* Unit = Cast<AGP_UnitBase>(GetOwner());
 	if (Unit == nullptr || BuiltVisual.PartComponents.Num() == 0)
 	{
@@ -285,7 +408,7 @@ namespace GPUnitVisualDebug
 		}
 
 		UE_LOG(LogGPUnitVisual, Log,
-			TEXT("GP UnitVisual.Inspect: Source=%s VisualComponent=%s Archetype=%s Parts=%d PartNames=[%s] PresentationRoot=%s Role=%s NetMode=%s DedicatedVisualSuppressed=%s TickEnabled=%s VisualPartCollisionDisabled=%s LegacyVisualMesh=%s HasBuiltVisual=%s"),
+			TEXT("GP UnitVisual.Inspect: Source=%s VisualComponent=%s Archetype=%s Parts=%d PartNames=[%s] PresentationRoot=%s Role=%s NetMode=%s DedicatedVisualSuppressed=%s TickEnabled=%s VisualPartCollisionDisabled=%s LegacyVisualMesh=%s HasBuiltVisual=%s VisualSourceMode=%s GeneratedPartCount=%d AuthoredPrimitiveComponentCount=%d NativeVisualBuilt=%s UsesAuthoredComponents=%s GeneratedCollisionDisabled=%s AuthoredCollisionWarnings=%d AuthoredNavigationWarnings=%d DuplicateGeneratedParts=%d"),
 			*Unit->GetName(),
 			Visual != nullptr ? TEXT("present") : TEXT("missing"),
 			Visual != nullptr
@@ -300,7 +423,18 @@ namespace GPUnitVisualDebug
 			(Visual != nullptr && Visual->IsComponentTickEnabled()) ? TEXT("true") : TEXT("false"),
 			(Visual == nullptr || Visual->AreVisualPartCollisionsDisabled()) ? TEXT("true") : TEXT("false"),
 			Unit->HasLegacyVisualMesh() ? TEXT("present") : TEXT("absent"),
-			(Visual != nullptr && Visual->HasBuiltVisual()) ? TEXT("true") : TEXT("false"));
+			(Visual != nullptr && Visual->HasBuiltVisual()) ? TEXT("true") : TEXT("false"),
+			Visual != nullptr
+				? GPPrimitiveVisualDefaults::VisualSourceModeToString(Visual->GetVisualSourceMode())
+				: TEXT("n/a"),
+			Visual != nullptr ? Visual->GetGeneratedPartCount() : 0,
+			Visual != nullptr ? Visual->GetAuthoredPrimitiveComponentCount() : 0,
+			(Visual != nullptr && Visual->HasBuiltVisual()) ? TEXT("true") : TEXT("false"),
+			(Visual != nullptr && Visual->UsesAuthoredComponents()) ? TEXT("true") : TEXT("false"),
+			(Visual == nullptr || Visual->AreGeneratedCollisionsDisabled()) ? TEXT("true") : TEXT("false"),
+			Visual != nullptr ? Visual->GetAuthoredCollisionWarningCount() : 0,
+			Visual != nullptr ? Visual->GetAuthoredNavigationWarningCount() : 0,
+			Visual != nullptr ? Visual->GetDuplicateGeneratedPartCount() : 0);
 	}
 
 	static FAutoConsoleCommandWithWorldAndArgs GUnitVisualInspectCommand(

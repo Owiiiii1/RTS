@@ -117,7 +117,7 @@ See `Docs/Development/Claude_Tasks/GP-S24R_Ferronite_Deposit_Contract.md` §Oper
 - Soft-cap 4 is prototype TDD value
 
 ## Commit SHA
-_(filled after commit)_
+`42c1c9167ddd607506d32b470763fc8467a67d66`
 
 ## Git state
 Feature branch pushed; main untouched; no PR created.

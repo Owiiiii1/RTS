@@ -1,64 +1,108 @@
 # Cursor Work Report
 
 ## Task
-GP-S27 — Worker Architecture Reconciliation Analysis (correction)
+GP-S23R — Resource Definition Reconciliation
 
 ## Status
-GP-S27_WORKER_ANALYSIS_CORRECTED_READY_FOR_REVIEW
+GP-S23R_CODE_AND_FERRONITE_DATA_ASSET_READY_OPERATOR_VALIDATION_PENDING
 
 ## Branch
-feature/gp-s27-worker-analysis
+feature/gp-s23r-resource-definition
 
 ## Base
-main @ d81a9bea45f35069636f13df9229685226282311
+main @ 9b3ec9997c2544764d0bd10c6bc4cdfb659dcb2f
 
-## Correction reason
-Initial analysis (`b5526d1…`) correctly found Slice-6 gaps, but violated implementation order and ADR-0002 by proposing non-blocking ResourceDefinition, hardcoded MiningComponent rates, and GP-S26C Mine-target-first. Correction restores S23→S28 Data-Driven sequence.
+## Canonical dependency
+GP-S23 (`UGP_ResourceDefinition`) first in Slice 6; next after this stage: **GP-S24R**.
 
-## Canonical dependency order
-```
-GP-S23 ResourceDefinition → GP-S24 Deposit → GP-S25 Cargo → GP-S26 Mining → GP-S27 Worker → GP-S28 Storage+ThreatValue
-```
-Revised stage names for reconciliation work: **GP-S23R**, **GP-S24R**, then canonical S25–S28.
+## Files inspected
+- `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
+- `Docs/TDD/13_Architecture_Proposal.md`, `07_Resource_Architecture.md`, `10_Data_Assets.md`
+- `Docs/GDD/02_Core_Gameplay_Loop.md`, `06_Resources.md`
+- `Docs/Architecture_Decisions/ADR_0002_Data_Driven_First.md`, `ADR_0009_Orbital_Delivery_Pillar.md`
+- `GP/Source/GPRuntime/Public/Resources/GPResourceTypes.h`
+- `GP/Source/GPGASRuntime/**/GPGameplayTags.*`
+- `GP/Config/DefaultGame.ini`
+- Prior GPEditor seed commandlet patterns
 
-## Revised S23–S28 reconciliation
-| Stage | Status | Ownership |
-| --- | --- | --- |
-| S23 ResourceDefinition | Missing | **GP-S23R** (next) |
-| S24 Deposit contract | Partial on `AGP_ResourceNode` | **GP-S24R** (definition soft-ref, tags, Mine target, soft-cap/queue) |
-| S25 Cargo | Missing | **GP-S25** |
-| S26 Mining | Missing | **GP-S26** (uses definition tunables; CargoFull/WaitingForDropOff pre-S28) |
-| S27 Worker | Missing | **GP-S27** (assembles S25/S26 only) |
-| S28 Storage + ThreatValue write | ThreatValue field only | **GP-S28** |
+## ResourceDefinition class
+`UGP_ResourceDefinition : UPrimaryDataAsset`  
+`GP/Source/GPRuntime/Public|Private/Resources/GPResourceDefinition.*`
 
-## Exact next stage
-**GP-S23R — Resource Definition Reconciliation**
+## Exact properties
+ResourceType, DisplayName, Description, ResourceGameplayTag, Icon (soft), AmountPerMiningCycle, MiningCycleDurationSeconds, InteractionRangeCm, MineRatePerWorker, ScoreConversionRate, ThreatPerStoredUnit, Tint
 
-## ResourceDefinition mandatory conclusion
-Mandatory before mining balance. No skip. No “rates later.”
+## Prototype asset path
+`/Game/GrimProtocol/DataAssets/Resources/DA_GP_Resource_Ferronite`
 
-## No-hardcoded-balance conclusion
-Mining rates/yield come from ResourceDefinition (ADR-0002). C++ hardcode forbidden.
+## Prototype values
+| Field | Value |
+| --- | --- |
+| ResourceType | Ore (internal) |
+| DisplayName | Ferronite |
+| Tag | GP.Resource.Type.Ferronite |
+| AmountPerMiningCycle | 10 |
+| MiningCycleDurationSeconds | 1.0 |
+| InteractionRangeCm | 200 |
+| MineRatePerWorker | 10 |
+| ScoreConversionRate | 1.0 |
+| ThreatPerStoredUnit | 0.5 (placeholder) |
+| Icon | unset |
 
-## ResourceNode / S24 reconciliation
-Keep `AGP_ResourceNode` as deposit actor; S24R upgrades it to Ferronite deposit contract (definition soft-ref, tags, naming policy, Mine target compatibility, soft-cap/queue). Queue deferral only via owner-approved explicit deviation — not recommended.
+## Gameplay tag result
+Existing native `GP.Resource.Type.Ferronite` reused; no duplicate registry.
 
-## Cargo SoT recommendation
-`UGP_CargoComponent` authoritative. No dual-write. `CarriedFerronite` unused or later one-way mirror only.
+## PrimaryAssetId
+`GPResourceDefinition:DA_GP_Resource_Ferronite`
 
-## Worker architecture
-`AGP_Worker : AGP_MobileUnit` (unchanged). Assembles ready Cargo+Mining; no auto-attack; Attack rejected; Repair not falsely “complete” if S46 owns full GA.
+## Asset Manager registration
+`DefaultGame.ini` PrimaryAssetTypesToScan + DirectoriesToAlwaysCook for DataAssets/Resources. Seed verify: `AssetManagerSees=true`.
+
+## Validation result
+Seed Verify: `Valid=true`
+
+## Diagnostic command
+`gp.ResourceDefinition.Inspect [SoftObjectPath]`
+
+## Editor commandlet / seed result
+`-run=GPResourceDefinitionSeed` → Save OK; Verify OK; `-VerifyOnly` supported.
 
 ## Files changed
-- `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
+- `GP/Source/GPRuntime/Public/Resources/GPResourceDefinition.h` (new)
+- `GP/Source/GPRuntime/Private/Resources/GPResourceDefinition.cpp` (new)
+- `GP/Source/GPEditor/Public/Resources/GPResourceDefinitionSeedCommandlet.h` (new)
+- `GP/Source/GPEditor/Private/Resources/GPResourceDefinitionSeedCommandlet.cpp` (new)
+- `GP/Source/GPEditor/GPEditor.Build.cs`
+- `GP/Config/DefaultGame.ini`
+- `GP/Content/GrimProtocol/DataAssets/Resources/DA_GP_Resource_Ferronite.uasset` (new, LFS)
+- Docs: task + AI_Project_Log + Cursor_Work_Report
 
-## Build status
-Not required — documentation-only.
+## GPEditor Development + UHT result
+**PASSED**
 
-## Correction commit SHA
-8a46a6c78cce5b928c36c9e891faea07f42f8d38
+## GP Development not run
+Not run (candidate; finalization later)
+
+## GP Shipping not run
+Not run (candidate; finalization later)
+
+## LFS status
+`.uasset` filter=lfs; Ferronite DA tracked via LFS on commit.
+
+## Map unchanged
+No `.umap` edits.
+
+## Scope exclusions
+No ResourceNode integration, Mine target, Cargo, Mining SM, Worker, Storage, ThreatValue writes, orbital conversion, visual profiles, projectiles, UI.
+
+## Operator validation steps
+Open DA → confirm class/identity → edit MiningCycleDuration → Save → Inspect → restore → Save → VerifyOnly → Asset Manager check → no map changes.
+
+## Known limitations
+Ore enum name retained; Icon unset; rates/threat multipliers are prototypes; no deposit wiring until S24R.
+
+## Commit SHA
+(filled after commit)
 
 ## Git state
-Pushed to `feature/gp-s27-worker-analysis`; main untouched; no PR; no C++/uasset/umap.
+Pushed to `feature/gp-s23r-resource-definition`; main untouched; no PR.

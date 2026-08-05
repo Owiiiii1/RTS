@@ -23,6 +23,8 @@ public class GPEditor : ModuleRules
 			"ToolMenus",
 			"AssetRegistry",
 			"NavigationSystem",
+			"GameplayTags",
+			"GPGASRuntime",
 			"GPRuntime"
 		});
 	}

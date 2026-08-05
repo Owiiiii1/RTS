@@ -16,7 +16,7 @@ GP-S24R — Ferronite Deposit Contract Finalization on `AGP_ResourceNode`.
 `42c1c9167ddd607506d32b470763fc8467a67d66`
 
 ## Finalization commit
-_(filled after commit)_
+`b2cdbb329e4ec7500b6083968f43abca25b33949`
 
 ## Operator validation matrix
 

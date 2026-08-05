@@ -1,10 +1,10 @@
-# Cursor Work Report — GP-S27 Worker Mine Approach Range Correction
+# Cursor Work Report — GP-S27 AGP_Worker Finalization
 
 ## Task
-GP-S27 — Worker Mine Approach Range Correction
+GP-S27 — AGP_Worker Finalization
 
-## Status
-**GP-S27_CODE_READY_OPERATOR_VALIDATION_PENDING**
+## Final status
+**GP-S27_FINALIZED_READY_FOR_MERGE**
 
 ## Branch
 `feature/gp-s27-worker`
@@ -12,82 +12,108 @@ GP-S27 — Worker Mine Approach Range Correction
 ## Base
 `main` @ `860070c4acbcb85fd5c4334628584372bdd082ca`
 
-## Candidate
+## Candidate commit
 `07e20fbfff36e181076d237d0596ef6f25b40951`
 
-## Correction commit
+## Approach correction commit
 `4d38a405729fb5766a5498e91436896ef5efda6b`
 
-## Operator manual reproduction
-Worker ~4563.6 cm from ResourceNode → Mine approach Destination≈(1363,-1155,88) → MoveReached Final≈(1381,-1108,88) → Distance=**200.4** Range=**200.0** → `MineArrivalOutOfRange`. Contract test previously passed with Dist≈192.7 (missed edge).
+## Finalization commit
+*(recorded after commit)*
 
-## Root cause
-Movement completes anywhere inside a **2D AcceptanceRadius (50)** circle around destination, while mining validates **3D** `FVector::Dist`.
+## Full operator validation matrix
+| Check | Result |
+| --- | --- |
+| Immediate in-range Mine | **PASS** |
+| First-cycle delay | **PASS** |
+| Cargo 50/50 CargoFull | **PASS** |
+| Slot release / timer stop | **PASS** |
+| No automatic unload | **PASS** |
+| Move interruption | **PASS** |
+| FIFO 4+1 + promotion | **PASS** |
+| Depleted transfer 5 | **PASS** |
+| EndPlay cleanup | **PASS** |
+| Long-distance safe approach | **PASS** (see below) |
+| `gp.Worker.RunContractTest` | **PASS** Failures=0 |
+| `gp.Mining.RunContractTest` | **PASS** Failures=0 |
+| `gp.Cargo.RunContractTest` | **PASS** Failures=0 |
+| Editor alive | **yes** |
 
-Old formula placed destination at horizontal:
-`D_h = Range − Acc − 5 = 145`.
+## Exact manual long-distance scenario
+Worker=`GP_Worker_3`; Move to (3000,3000,100) → Reached (2976.84,2960.69,88).  
+Mine `BP_ResourceNode_AuthoredExample_C_1` @ (1220,-1500,40); InitialDistance=4794.4; Range=200.
 
-Worst-case flat: `145+50=195 < 200`, but with **ΔZ** between Worker and Node:
-`worst = sqrt((D_h+Acc)² + ΔZ²)` exceeds 200 (operator ~200.4). Dest also used Worker Z, so destination itself was already farther in 3D than D_h.
+Safe approach: Destination=(1263.66,-1389.13,88); DesiredHoriz=119.2; **PredictedWorst=175.8**; Acc=50; Safety=25; Attempt=0.
 
-## Old formula
-`Node + normalize2D(Worker−Node) * (Range − AcceptanceRadius − 5)`, Z=Worker.Z
+Arrival Final=(1281.92,-1342.79,88) → MineApproachReached → MineBegin; **ActualDistance=175.6**; Range=200; Result=Started → terminal CargoFull (MineTerminal NewState=3 Reason=2).
 
-## New formula
-Require `sqrt((D_h + Acc)² + ΔZ²) < Range`:
-`D_h = sqrt(Range² − ΔZ²) − Acc − WorkerMineApproachSafetyMarginCm(25) − ExtraInward`
+## Contract results (finalization re-run)
+- Worker: `Complete Failures=0`
+- Mining: `Complete Failures=0`
+- Cargo: `Complete Failures=0`
 
-Private constexpr `WorkerMineApproachSafetyMarginCm = 25.f`. Typical flat: D_h≈125, PredictedWorst≈175.
+## Authority review
+Mine orchestration / BeginMining / movement request authority-only via UnitCommandComponent + MiningComponent. No Worker mining RPC. Command validate filters issuers to `AGP_Worker`.
 
-If `|ΔZ|` consumes the budget → typed geometry failure (no doomed move).
+## Replication review
+Worker uses UnitBase/MobileUnit replication; Mine approach state server-only; Cargo/Mining replicate own state; no client mutation RPC.
 
-## Acceptance-radius proof
-Movement Reached uses 2D Acc. PredictedWorstCaseDistance = `sqrt((D_h+Acc)²+ΔZ²)` asserted `< InteractionRange` before RequestMove. Mining range / BeginMining OOR unchanged (strict).
+## Command serial review
+Held.CommandSerial = ActiveMineSerial; stale OnMovementResult ignored; replace ResetMineExecutor; corrective keeps same serial with Attempt counter.
 
-## Vertical-distance policy
-Horizontal budget shrinks by ΔZ; impossible ΔZ rejects approach. MiningComponent stays 3D.
+## Approach geometry proof
+`D_h = sqrt(Range²−ΔZ²) − Acc − 25`; PredictedWorst=`sqrt((D_h+Acc)²+ΔZ²) < Range`. Operator: PredictedWorst=175.8, Actual=175.6 &lt; 200. Mining InteractionRangeCm remains strict 200 (unchanged).
 
-## Corrective retry policy
-On arrival OOR: at most **one** deeper corrective `RequestMove` (same command serial, Attempt=1, extra inward margin). No slot/timer until success. Second OOR → clear Held / fail. No Tick polling.
+## Corrective-attempt policy
+At most one deeper corrective RequestMove after OOR arrival; no slot/timer until success; no infinite retry.
 
-## Stale callback protection
-Still keyed on `ActiveMineSerial` / Held.CommandSerial; replace resets Mine executor (attempt + diagnostics).
+## Timer / tick policy
+No permanent Worker actor tick; movement tick only while moving; mining timer only in Mining; no distance polling Tick. Contract wait uses time-based timeout + sparse progress logs.
 
-## Contract edge tests
-- `ApproachWorstCaseWithinRange` / safety margin
-- `ApproachVerticalBudgetWithinRange`
-- `DiagonalApproachMarginSafe` (+ arrival margin)
-- Corrective forced OOR once → mining after Attempt≥1
-- Existing immediate/interrupt/FIFO/CargoFull/deplete/EndPlay/Cargo regression retained
-- Movement wait: one-shot prerequisite log; **time-based** timeout (20s); sparse progress logs
+## Interruption / idempotency
+Any new command ResetMineExecutor (StopMining + clear approach). Duplicate same-target Mine while Approaching/Active/Mining/Waiting → idempotent.
 
-## Worker contract post-fix result
-**Complete Failures=0** (Editor alive until Complete)
+## FIFO review
+ResourceNode MaxConcurrentMiners=4; Waiting→Active via occupancy events; Worker activity derived from Mining state.
 
-## Cargo regression
-Invoked from runner (`gp.Cargo.RunContractTest`)
+## Lifecycle review
+EndPlay/OwnerDied ResetMineExecutor; runner reentrancy guard + world cleanup / BeginDestroy; movement wait timeout.
 
-## Mining regression status
-Not nested (staged async); production Mining range untouched — operator may re-run `gp.Mining.RunContractTest`
+## Regressions
+Controller Tick unchanged; Move/Attack paths intact aside from Mine reset hook; ResourceNode AActor no ASC/team/permanent Tick; mining 10/1/200; cargo 50; MaxConcurrentMiners=4; StopMining unbind-before-release + `bIsStoppingMining` intact; no CarriedFerronite; no BP/map/projectile/LFS changes.
 
-## Files changed
-- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPWorker.h`
-- `GP/Source/GPRuntime/Private/Units/GPWorker.cpp`
-- Docs: GP-S27 task, AI log, Cursor report
+## Files changed during finalization
+- `Docs/Development/Claude_Tasks/GP-S27_Worker.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
+- C++ unchanged at finalization
 
 ## GPEditor / UHT
+**not rerun** (no C++ changes during finalization)
+
+## GP Win64 Development
 **PASSED**
 
-## GP Development / Shipping
-**not run**
+## GP Win64 Shipping
+**PASSED**
 
-## Map / LFS
-Unchanged
+## Map unchanged
+Yes.
 
-## No scope expansion
-No Storage/ThreatValue/Worker BP/map/combat/projectiles/GP-S28
+## LFS unchanged
+Yes.
 
-## Git state
-`feature/gp-s27-worker` only; no main/PR/merge
+## Scope exclusions
+No Storage; return-to-base; ThreatValue; Worker Blueprint; map; projectiles; GP-S28; PR/merge/main.
+
+## Merge readiness
+**READY_FOR_MAIN_MERGE** when operator requests. Do not merge in this close-out.
+
+## Known limitations
+- No Worker UnitDefinition / Blueprint asset
+- No `GP.Capability.Mine` tag (class + `GP.Unit.Type.Worker`)
+- Repair / Storage / return-to-base deferred to later stages
+- Attack still inherited if commanded (no auto-attack)
+
+## Next canonical stage
+**GP-S28 — StorageComponent + FerroniteThreatValue**

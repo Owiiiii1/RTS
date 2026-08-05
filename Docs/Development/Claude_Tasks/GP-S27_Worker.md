@@ -1,14 +1,17 @@
 # GP-S27 — AGP_Worker
 
 ## Status
-**GP-S27_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S27_FINALIZED_READY_FOR_MERGE**
+
+Overall: **GP-S27_DONE_WORKER** (merge when operator requests)
 
 ## Baseline
 `main` @ `860070c4acbcb85fd5c4334628584372bdd082ca` (GP-S26 MiningComponent merged)
 
 Branch: `feature/gp-s27-worker`  
 Candidate: `07e20fbfff36e181076d237d0596ef6f25b40951`  
-Approach correction: `4d38a405729fb5766a5498e91436896ef5efda6b`
+Approach correction: `4d38a405729fb5766a5498e91436896ef5efda6b`  
+Finalization: *(see Cursor_Work_Report / HEAD)*
 
 ## Canonical roadmap position
 `GP-S23R` → `GP-S24R` → `GP-S25` → `GP-S26` → **GP-S27 Worker** → GP-S28 StorageComponent + FerroniteThreatValue
@@ -89,33 +92,35 @@ Worker class; Mine orchestration; approach; diagnostics; contract test; docs.
 ## Out of scope
 Storage; return-to-base; ThreatValue; Orbital/Score; repair/build; Worker Blueprint/asset; animations; UI; map; projectiles; GP-S28.
 
-## Acceptance criteria
-- [ ] Worker selectable/replicated mobile unit with Cargo+Mining
-- [ ] In-range Mine → Mining + timer; first cycle delayed
-- [ ] Out-of-range Mine → approach → BeginMining; no slot while moving
-- [ ] Interrupt Move clears mining slot/timer
-- [ ] FIFO 4+1 promote
-- [ ] CargoFull / DepositDepleted slot release, no auto return
-- [ ] EndPlay releases slots; no Editor crash
-- [ ] `gp.Worker.RunContractTest` Failures=0
-- [ ] GPEditor Dev+UHT passed; GP Dev/Shipping deferred
+## Operator validation
+**PASSED** (immediate + long-distance approach PredictedWorst=175.8 / Actual=175.6 / Range=200 → MineBegin → CargoFull; FIFO; interrupt; deplete; EndPlay; contracts Failures=0).
 
-## Operator validation steps
-1. `gp.Worker.SpawnDiagnostic` near ResourceNode; Inspect composition/tags.
-2. `gp.Worker.CommandMine` in range → Mining, timer, cargo 0; wait ~1s → +10.
-3. Far spawn / relocate; Mine → MovingToMine; arrive → Mining.
-4. Mine then Move → slot/timer cleared.
-5. Five Workers FIFO promote.
-6. Mine to CargoFull; no unload.
-7. `gp.Worker.RunContractTest` → Failures=0.
-8. Optional: `gp.Mining.RunContractTest` / `gp.Cargo.RunContractTest`.
+## Builds (finalization)
+- GPEditor Win64 Development + UHT — previously **PASSED** at approach correction; **not rerun** (docs-only finalization)
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+
+## Acceptance criteria
+- [x] Worker selectable/replicated mobile unit with Cargo+Mining
+- [x] In-range Mine → Mining + timer; first cycle delayed
+- [x] Out-of-range Mine → safe approach → BeginMining; no slot while moving
+- [x] Interrupt Move clears mining slot/timer
+- [x] FIFO 4+1 promote
+- [x] CargoFull / DepositDepleted slot release, no auto return
+- [x] EndPlay releases slots; no Editor crash
+- [x] `gp.Worker.RunContractTest` Failures=0
+- [x] `gp.Mining.RunContractTest` / `gp.Cargo.RunContractTest` Failures=0
+- [x] GP Dev + Shipping **PASSED**
 
 ## Known limitations
 - No Worker UnitDefinition / Blueprint asset
 - No `GP.Capability.Mine` tag (class `AGP_Worker` + `GP.Unit.Type.Worker`)
 - No auto-attack flag API (N/A); Worker still inherits Attack path if commanded
 - Repair not in S27
-- Contract test movement wait is next-tick poll of movement active flag (not distance Tick)
+- Contract movement wait uses time-based timeout + active-move poll (not distance Tick)
 
 ## Next canonical stage
 **GP-S28 — StorageComponent + FerroniteThreatValue**
+
+## Stop condition
+Finalized on feature branch. **READY_FOR_MAIN_MERGE** when operator requests. Do **not** merge / PR / start GP-S28 from this close-out.

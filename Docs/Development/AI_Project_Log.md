@@ -1,8 +1,34 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-05 — GP-S27 AGP_Worker — finalization
+
+Status: **GP-S27_FINALIZED_READY_FOR_MERGE**
+
+### Branch / baseline
+- Branch: `feature/gp-s27-worker`
+- Base: `main` @ `860070c4acbcb85fd5c4334628584372bdd082ca`
+- Candidate: `07e20fbfff36e181076d237d0596ef6f25b40951`
+- Approach correction: `4d38a405729fb5766a5498e91436896ef5efda6b`
+- Task: `Docs/Development/Claude_Tasks/GP-S27_Worker.md`
+
+### What was done
+- Operator validation **PASSED** (long-distance PredictedWorst=175.8 / ActualDistance=175.6 / Range=200 → MineBegin → CargoFull; full matrix)
+- Finalization re-run: Worker / Mining / Cargo contract tests **Failures=0**
+- GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
+- GPEditor not rerun (no C++ at finalization)
+- Overall: **GP-S27_DONE_WORKER** — ready for main merge when requested
+
+### Intentionally not done
+- No PR/merge/main; no GP-S28; no Worker Blueprint
+
+### Operator next
+- Merge to main when ready; then GP-S28 StorageComponent + FerroniteThreatValue
+
+---
+
 ## 2026-08-05 — GP-S27 Worker Mine Approach Range Correction
 
-Status: **GP-S27_CODE_READY_OPERATOR_VALIDATION_PENDING**
+Status: **GP-S27_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded by finalization)*
 
 ### Branch / baseline
 - Branch: `feature/gp-s27-worker`

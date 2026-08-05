@@ -103,7 +103,7 @@ See task doc. **Use capacity 50:** Add 30 → Add 30 accepts 20 → full; Remove
 - Capacity may later come from UnitDefinition
 
 ## Commit SHA
-_(filled after commit)_
+`f440838bbcd8963c8230a70f6f7e3363af7dc45a`
 
 ## Git state
 Feature branch pushed; main untouched; no PR.

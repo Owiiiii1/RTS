@@ -1,64 +1,86 @@
 # Cursor Work Report
 
 ## Task
-GP-S27 — Worker Architecture Reconciliation Analysis (correction)
+GP-S23R — Resource Definition Reconciliation (finalization)
 
 ## Status
-GP-S27_WORKER_ANALYSIS_CORRECTED_READY_FOR_REVIEW
+GP-S23R_FINALIZED_READY_FOR_MERGE
 
 ## Branch
-feature/gp-s27-worker-analysis
+feature/gp-s23r-resource-definition
 
 ## Base
-main @ d81a9bea45f35069636f13df9229685226282311
+main @ 9b3ec9997c2544764d0bd10c6bc4cdfb659dcb2f
 
-## Correction reason
-Initial analysis (`b5526d1…`) correctly found Slice-6 gaps, but violated implementation order and ADR-0002 by proposing non-blocking ResourceDefinition, hardcoded MiningComponent rates, and GP-S26C Mine-target-first. Correction restores S23→S28 Data-Driven sequence.
+## Candidate commit
+bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81
 
-## Canonical dependency order
-```
-GP-S23 ResourceDefinition → GP-S24 Deposit → GP-S25 Cargo → GP-S26 Mining → GP-S27 Worker → GP-S28 Storage+ThreatValue
-```
-Revised stage names for reconciliation work: **GP-S23R**, **GP-S24R**, then canonical S25–S28.
+## Correction commit
+fef94837839ed25041fe5dc0256a1472231c0642
 
-## Revised S23–S28 reconciliation
-| Stage | Status | Ownership |
-| --- | --- | --- |
-| S23 ResourceDefinition | Missing | **GP-S23R** (next) |
-| S24 Deposit contract | Partial on `AGP_ResourceNode` | **GP-S24R** (definition soft-ref, tags, Mine target, soft-cap/queue) |
-| S25 Cargo | Missing | **GP-S25** |
-| S26 Mining | Missing | **GP-S26** (uses definition tunables; CargoFull/WaitingForDropOff pre-S28) |
-| S27 Worker | Missing | **GP-S27** (assembles S25/S26 only) |
-| S28 Storage + ThreatValue write | ThreatValue field only | **GP-S28** |
+## Finalization commit
+c01985fabebcb5b5d2ff4ac199a13ea2b11d8e73
 
-## Exact next stage
-**GP-S23R — Resource Definition Reconciliation**
+## Operator validation matrix
 
-## ResourceDefinition mandatory conclusion
-Mandatory before mining balance. No skip. No “rates later.”
+| Item | Result |
+| --- | --- |
+| DA_GP_Resource_Ferronite | **PASS** |
+| Identity Ore / Ferronite / GP.Resource.Type.Ferronite | **PASS** |
+| Mining 10 / 1 / 200 / Effective 10 | **PASS** |
+| Single-source (no stored MineRate) | **PASS** |
+| Inspect Valid / 0 errors / 0 warnings / AssetManager path | **PASS** |
+| Data Validation valid | **PASS** |
+| VerifyOnly Success 0/0 | **PASS** |
+| AssetManagerSees=true | **PASS** |
+| Map unchanged | **PASS** |
 
-## No-hardcoded-balance conclusion
-Mining rates/yield come from ResourceDefinition (ADR-0002). C++ hardcode forbidden.
+## Final exact DataAsset values
+AmountPerMiningCycle=10; MiningCycleDurationSeconds=1; InteractionRangeCm=200; EffectiveMineRatePerWorker=10 (derived).  
+PrimaryAssetId=`GPResourceDefinition:DA_GP_Resource_Ferronite`.
 
-## ResourceNode / S24 reconciliation
-Keep `AGP_ResourceNode` as deposit actor; S24R upgrades it to Ferronite deposit contract (definition soft-ref, tags, naming policy, Mine target compatibility, soft-cap/queue). Queue deferral only via owner-approved explicit deviation — not recommended.
+## Single-source decision
+Stored: Amount + CycleDuration + Range. Derived: GetEffectiveMineRatePerWorker(). Future MiningComponent uses stored fields for gameplay.
 
-## Cargo SoT recommendation
-`UGP_CargoComponent` authoritative. No dual-write. `CarriedFerronite` unused or later one-way mirror only.
+## Inspector / Data Validation / VerifyOnly
+Inspect: Valid=true Errors=0 Warnings=0 Resolution=AssetManagerPrimaryAssetPath.  
+Data Validation: valid.  
+Commandlet VerifyOnly: Success - 0 error(s), 0 warning(s).
 
-## Worker architecture
-`AGP_Worker : AGP_MobileUnit` (unchanged). Assembles ready Cargo+Mining; no auto-attack; Attack rejected; Repair not falsely “complete” if S46 owns full GA.
+## PrimaryAssetId / Asset Manager
+Stable `GPResourceDefinition:DA_GP_Resource_Ferronite`. Single PrimaryAssetTypesToScan entry; AlwaysCook directory retained.
 
-## Files changed
-- `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
+## LFS result
+`.uasset` filter=lfs; Ferronite DA tracked.
 
-## Build status
-Not required — documentation-only.
+## Files changed during finalization
+- Docs task / AI_Project_Log / Cursor_Work_Report
+- `DA_GP_Resource_Ferronite.uasset` (operator-validated resave; values confirmed 10/1/200)
+- No C++ changes
 
-## Correction commit SHA
-8a46a6c78cce5b928c36c9e891faea07f42f8d38
+## GPEditor / UHT
+Not rerun — no C++ at finalization; **PASSED** at correction `fef9483…`
 
-## Git state
-Pushed to `feature/gp-s27-worker-analysis`; main untouched; no PR; no C++/uasset/umap.
+## GP Win64 Development result
+**PASSED**
+
+## GP Win64 Shipping result
+**PASSED**
+
+## Map unchanged
+No `.umap` edits.
+
+## Scope exclusions
+No ResourceNode, Mine target, queue, Cargo, Mining SM, Worker, Storage, ThreatValue writes, orbital conversion, UI, visual profiles, projectiles, map population, S24R.
+
+## Git status
+Clean on `feature/gp-s23r-resource-definition` tracking origin after push.
+
+## Merge readiness
+**Ready for merge when requested.** No PR created. Main untouched.
+
+## Known limitations
+Ore enum name retained; Icon unset; prototype balance placeholders; no deposit wiring.
+
+## Next canonical stage
+**GP-S24R — Ferronite Deposit Contract on AGP_ResourceNode**

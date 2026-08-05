@@ -1,29 +1,49 @@
 # Grim Protocol — AI Project Log
 
-## 2026-08-05 — GP-S27 Worker Architecture Reconciliation Analysis
+## 2026-08-05 — GP-S23R Resource Definition Reconciliation
 
-Status: GP-S27_WORKER_ANALYSIS_CORRECTED_READY_FOR_REVIEW
+Status: GP-S23R_FINALIZED_READY_FOR_MERGE
 
 ### Branch / baseline
-- Branch: `feature/gp-s27-worker-analysis`
-- Base: `main` @ `d81a9bea45f35069636f13df9229685226282311`
+- Branch: `feature/gp-s23r-resource-definition`
+- Base: `main` @ `9b3ec9997c2544764d0bd10c6bc4cdfb659dcb2f`
+- Candidate: `bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81`
+- Correction: `fef94837839ed25041fe5dc0256a1472231c0642`
+- Finalization: `c01985fabebcb5b5d2ff4ac199a13ea2b11d8e73`
+- Task: `Docs/Development/Claude_Tasks/GP-S23R_Resource_Definition_Reconciliation.md`
+
+### What was done
+- `UGP_ResourceDefinition` + Ferronite DA; mining SoT Amount+Duration+Range; EffectiveRate derived
+- Operator validation **PASSED** (Inspect/DataValidation/VerifyOnly/AssetManager; values 10/1/200/Effective10)
+- Finalization: no C++ changes; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
+- Map unchanged; next stage GP-S24R
+
+### Intentionally not done
+- No ResourceNode/Cargo/Mining/Worker/Storage; no PR/merge (ready when requested)
+
+### Operator next
+- None for S23R; merge when requested; then GP-S24R
+
+---
+
+## 2026-08-05 — GP-S27 Worker Architecture Reconciliation Analysis
+
+Status: **GP-S27_WORKER_ANALYSIS_MERGED_TO_MAIN** @ `9b3ec9997c2544764d0bd10c6bc4cdfb659dcb2f`
+
+### Branch / baseline
+- Branch: `feature/gp-s27-worker-analysis` (merged)
+- Base (pre-merge): `main` @ `d81a9bea45f35069636f13df9229685226282311`
 - Initial analysis: `b5526d1ebad4d6c76e522005767d0bb162adccd1`
 - Correction: `8a46a6c78cce5b928c36c9e891faea07f42f8d38`
 - Task: `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
-- Type: documentation / analysis only (no production C++ / assets / map)
 
-### Correction
-- Restored mandatory Slice-6 order + ADR-0002 Data-Driven First
-- Rejected skip-S23 / hardcoded mining rates / GP-S26C-first recommendations
-- Next stage: **GP-S23R** → **GP-S24R** → S25 Cargo → S26 Mining → S27 Worker → S28 Storage
-- Worker architecture unchanged: `AGP_Worker : AGP_MobileUnit`
-- Cargo SoT: `UGP_CargoComponent`; no dual-write with `CarriedFerronite`
-
-### Intentionally not done
-- No Worker/Cargo/Mining/Storage/ResourceDefinition C++; no uasset/umap; no PR/merge
+### What was done
+- Slice-6 reconciliation; Worker = `AGP_Worker : AGP_MobileUnit`
+- Sequence: S23R → S24R → S25 → S26 → S27 → S28
+- Merged to main @ `9b3ec99…`
 
 ### Operator next
-- Review corrected analysis; approve **GP-S23R** as next implementation stage
+- None for analysis (merged); implementation continues at S23R
 
 ---
 

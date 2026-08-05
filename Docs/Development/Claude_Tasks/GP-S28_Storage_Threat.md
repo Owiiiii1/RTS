@@ -12,6 +12,7 @@ Diagnostic TeamId correction: `61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`
 Diagnostic nav correction: `caf5bf0c947176ce5c72affadae41cbbd60be590`
 Registry uniqueness correction: `c59b12031d88ea9b3c9dd584e4aa1028c2a846dc`
 EndPlay occupancy cleanup: `7f81d19d236d0cf197c1c650174ef28532245244`
+Contract isolation correction: `4b5331cb3333b46bb952453540dab6d268bff9cd`
 
 ## MainBase registry uniqueness + contract isolation
 Operator failure after nav-ready Team1 scenario: `RunDiagnosticScenarioContractTest` logged duplicate MainBase for TeamId=1 then **still Add** → Count=2 → `MainBaseRegistryResolveFailed`.

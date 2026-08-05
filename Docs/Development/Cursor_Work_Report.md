@@ -73,7 +73,7 @@ Hauling `WaitHaulOrMove` + case 6 (and related stages) validate Worker/Base/Cmd/
 Unchanged
 
 ## Correction commit
-(see git after push)
+4b5331cb3333b46bb952453540dab6d268bff9cd
 
 ## Git state
 Branch `feature/gp-s28-storage-threat` pushed; main untouched; no PR

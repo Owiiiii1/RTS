@@ -134,9 +134,25 @@ void AGP_ResourceNode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (HasAuthority())
 	{
+		for (const TWeakObjectPtr<AActor>& Ptr : ActiveMiners)
+		{
+			if (AActor* Miner = Ptr.Get())
+			{
+				BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Active, EGP_MinerOccupancyState::None);
+			}
+		}
+		for (const TWeakObjectPtr<AActor>& Ptr : WaitingMiners)
+		{
+			if (AActor* Miner = Ptr.Get())
+			{
+				BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Waiting, EGP_MinerOccupancyState::None);
+			}
+		}
+
 		ActiveMiners.Reset();
 		WaitingMiners.Reset();
 		RefreshOccupancyCounts();
+		OnMinerSlotStateChanged.Clear();
 	}
 
 	CachedResourceDefinition.Reset();
@@ -446,16 +462,46 @@ bool AGP_ResourceNode::IsValidMinerActor(const AActor* Miner) const
 	return IsValid(Miner) && !Miner->IsActorBeingDestroyed() && Miner->GetWorld() == GetWorld();
 }
 
+void AGP_ResourceNode::BroadcastMinerSlotStateChanged(
+	AActor* Miner,
+	EGP_MinerOccupancyState OldState,
+	EGP_MinerOccupancyState NewState)
+{
+	if (Miner == nullptr || OldState == NewState)
+	{
+		return;
+	}
+
+	OnMinerSlotStateChanged.Broadcast(Miner, OldState, NewState);
+}
+
 void AGP_ResourceNode::CleanupInvalidMiners()
 {
-	ActiveMiners.RemoveAll([](const TWeakObjectPtr<AActor>& Ptr)
+	for (int32 Index = ActiveMiners.Num() - 1; Index >= 0; --Index)
 	{
-		return !Ptr.IsValid() || Ptr->IsActorBeingDestroyed();
-	});
-	WaitingMiners.RemoveAll([](const TWeakObjectPtr<AActor>& Ptr)
+		AActor* Miner = ActiveMiners[Index].Get();
+		if (!IsValid(Miner) || Miner->IsActorBeingDestroyed())
+		{
+			if (Miner != nullptr)
+			{
+				BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Active, EGP_MinerOccupancyState::None);
+			}
+			ActiveMiners.RemoveAt(Index);
+		}
+	}
+
+	for (int32 Index = WaitingMiners.Num() - 1; Index >= 0; --Index)
 	{
-		return !Ptr.IsValid() || Ptr->IsActorBeingDestroyed();
-	});
+		AActor* Miner = WaitingMiners[Index].Get();
+		if (!IsValid(Miner) || Miner->IsActorBeingDestroyed())
+		{
+			if (Miner != nullptr)
+			{
+				BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Waiting, EGP_MinerOccupancyState::None);
+			}
+			WaitingMiners.RemoveAt(Index);
+		}
+	}
 }
 
 void AGP_ResourceNode::RefreshOccupancyCounts()
@@ -464,8 +510,9 @@ void AGP_ResourceNode::RefreshOccupancyCounts()
 	WaitingMinerCount = WaitingMiners.Num();
 }
 
-void AGP_ResourceNode::PromoteWaitingMiners()
+void AGP_ResourceNode::PromoteWaitingMiners(TArray<AActor*>& OutPromotedMiners)
 {
+	OutPromotedMiners.Reset();
 	CleanupInvalidMiners();
 
 	const int32 Cap = FMath::Max(0, MaxConcurrentMiners);
@@ -473,12 +520,15 @@ void AGP_ResourceNode::PromoteWaitingMiners()
 	{
 		TWeakObjectPtr<AActor> Next = WaitingMiners[0];
 		WaitingMiners.RemoveAt(0);
-		if (!Next.IsValid() || Next->IsActorBeingDestroyed())
+		AActor* Miner = Next.Get();
+		if (!IsValid(Miner) || Miner->IsActorBeingDestroyed())
 		{
 			continue;
 		}
 
-		ActiveMiners.Add(Next);
+		ActiveMiners.Add(Miner);
+		OutPromotedMiners.Add(Miner);
+		BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Waiting, EGP_MinerOccupancyState::Active);
 	}
 }
 
@@ -521,11 +571,13 @@ EGP_MiningSlotRequestResult AGP_ResourceNode::RequestMiningSlot(AActor* Miner)
 	{
 		ActiveMiners.Add(Miner);
 		RefreshOccupancyCounts();
+		BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::None, EGP_MinerOccupancyState::Active);
 		return EGP_MiningSlotRequestResult::Granted;
 	}
 
 	WaitingMiners.Add(Miner);
 	RefreshOccupancyCounts();
+	BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::None, EGP_MinerOccupancyState::Waiting);
 	return EGP_MiningSlotRequestResult::Waiting;
 }
 
@@ -543,6 +595,7 @@ void AGP_ResourceNode::ReleaseMiningSlot(AActor* Miner)
 	CleanupInvalidMiners();
 
 	bool bWasActive = false;
+	bool bWasWaiting = false;
 	for (int32 Index = ActiveMiners.Num() - 1; Index >= 0; --Index)
 	{
 		if (ActiveMiners[Index].Get() == Miner)
@@ -557,12 +610,19 @@ void AGP_ResourceNode::ReleaseMiningSlot(AActor* Miner)
 		if (WaitingMiners[Index].Get() == Miner)
 		{
 			WaitingMiners.RemoveAt(Index);
+			bWasWaiting = true;
 		}
 	}
 
 	if (bWasActive)
 	{
-		PromoteWaitingMiners();
+		BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Active, EGP_MinerOccupancyState::None);
+		TArray<AActor*> Promoted;
+		PromoteWaitingMiners(Promoted);
+	}
+	else if (bWasWaiting)
+	{
+		BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Waiting, EGP_MinerOccupancyState::None);
 	}
 
 	RefreshOccupancyCounts();
@@ -600,6 +660,19 @@ bool AGP_ResourceNode::IsWaitingForMiningSlot(AActor* Miner) const
 		}
 	}
 	return false;
+}
+
+EGP_MinerOccupancyState AGP_ResourceNode::GetMinerOccupancyState(AActor* Miner) const
+{
+	if (HasActiveMiningSlot(Miner))
+	{
+		return EGP_MinerOccupancyState::Active;
+	}
+	if (IsWaitingForMiningSlot(Miner))
+	{
+		return EGP_MinerOccupancyState::Waiting;
+	}
+	return EGP_MinerOccupancyState::None;
 }
 
 bool AGP_ResourceNode::ValidateDepositContract(TArray<FText>& OutErrors, TArray<FText>& OutWarnings) const

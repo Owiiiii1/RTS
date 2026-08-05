@@ -1,132 +1,136 @@
-# Cursor Work Report — GP-S25 UGP_CargoComponent Finalization
+# Cursor Work Report — GP-S26 UGP_MiningComponent
 
 ## Task
-GP-S25 — `UGP_CargoComponent` Finalization.
+GP-S26 — `UGP_MiningComponent` (ResourceNode → CargoComponent mining cycles).
 
 ## Status
-**GP-S25_FINALIZED_READY_FOR_MERGE**
+**GP-S26_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ## Branch
-`feature/gp-s25-cargo-component`
+`feature/gp-s26-mining-component`
 
 ## Base
-`main` @ `1fedf1933ac406c3a53a89af4a92a03afcf5a646`
+`main` @ `693a36b8777babaea6085cb799397e9e0cddb77f`
 
-## Candidate commit
-`f440838bbcd8963c8230a70f6f7e3363af7dc45a`
+## Canonical dependency
+GP-S25 CargoComponent merged @ `693a36b8777babaea6085cb799397e9e0cddb77f`. Next: GP-S27 Worker.
 
-## Finalization commit
-`c02a67fd65519034bdefb5116b977b66aa4ccba3`
+## Files inspected
+- DOCUMENTATION_INDEX, TDD 13/07/10, GDD 02/06, ADR-0002/0009
+- GP-S24R / GP-S25 task docs
+- `GPResourceNode.*`, `GPCargoComponent.*`, Mine validation, timer conventions (`GPGameMode`)
 
-## Operator validation matrix
+## MiningComponent class
+`UGP_MiningComponent` — `GP/Source/GPRuntime/Public|Private/Resources/GPMiningComponent.*`
 
-| Item | Result |
-| --- | --- |
-| Default Cap=50 Current=0 Remaining=50 Fill=0 Empty | **PASS** |
-| Soft Ferronite + PrimaryAssetId + Ore + Type.Ferronite | **PASS** |
-| ValidationOk Errors=0 Warnings=0 | **PASS** |
-| Add 30→30; Add 30→Accepted20 full; Add full→0 | **PASS** |
-| Remove 30→20; Remove 100→Removed20 empty | **PASS** |
-| Invalid 0/neg/NaN/Inf rejected; no mutation | **PASS** |
-| Clear after Add 25 → Removed 25 | **PASS** |
-| RunContractTest Failures=0 | **PASS** |
-| ListenServer/Client Cap/Current/Fill match | **PASS** |
-| Client Add rejected | **PASS** |
-| ComponentTickEnabled=false ActorTickEnabled=false | **PASS** |
-| Transient host; no map/content save | **PASS** |
+## Diagnostic host
+`AGP_MiningDiagnosticHost` — Transient, NotPlaceable, replicated, AlwaysRelevant; Cargo + Mining; console spawn only.
 
-## Exact cargo properties
-| Property | Value / notes |
-| --- | --- |
-| `CargoCapacity` | 50, replicated |
-| `CurrentCargoAmount` | 0 default, ReplicatedUsing OnRep |
-| `ResourceDefinition` | Soft Ferronite DA |
-| `OnCargoAmountChanged` | Prev, New, Cap, Delta |
+## Exact state enum
+Idle, WaitingForSlot, Mining, CargoFull, DepositDepleted, OutOfRange, Invalid
 
-## Prototype capacity
-**50** (TDD CarryCapacity / MaxCargo).
+## BeginMining result enum
+Started, WaitingForSlot, AlreadyMiningTarget, RejectedNoAuthority, RejectedInvalidOwner, RejectedMissingCargo, RejectedInvalidNode, RejectedDepleted, RejectedCargoFull, RejectedOutOfRange, RejectedResourceMismatch
 
-## Resource identity
-Soft `/Game/GrimProtocol/DataAssets/Resources/DA_GP_Resource_Ferronite`; PrimaryAssetId `GPResourceDefinition:DA_GP_Resource_Ferronite`; Ore; `GP.Resource.Type.Ferronite`.
+## Stop reason model
+`EGP_MiningStopReason` mapped to terminal states (Idle / CargoFull / DepositDepleted / OutOfRange / Invalid)
 
-## Source-of-truth decision
-`UGP_CargoComponent` sole writable runtime SoT for carried Planetary Ferronite. No GE cargo; no player currency/storage mutation.
+## First-cycle policy
+Looping timer; first fire after full `MiningCycleDurationSeconds` (no instant Begin transfer).
 
-## CarriedFerronite removal result
-Removed from `UGP_UnitAttributeSet` (attribute, replication, clamps). No compatibility mirror. No remaining Source reads/writes.
+## ResourceDefinition values
+AmountPerMiningCycle=10, MiningCycleDurationSeconds=1, InteractionRangeCm=200 (from Ferronite DA).
 
-## Add / overflow / full contract
-Add 30 accepted 30; second Add 30 accepted 20 → full 50; Add while full accepted 0.
+## Range policy
+Begin rejects OutOfRange without slot; cycles re-check; failure releases slot.
 
-## Remove / over-remove contract
-Remove 30 → 20; Remove 100 → Removed 20 → empty.
+## Occupancy integration
+Full use of Request/Release/HasActive/IsWaiting; no bypass.
 
-## Invalid-input contract
-Add/Remove 0 and negatives → 0; ContractTest RejectNanAdd/RejectInfAdd/NoMutationOnRejectedAdd **PASS**.
+## ResourceNode delegate / API changes
+- `EGP_MinerOccupancyState` + server-local `FGP_OnMinerSlotStateChanged`
+- `GetOnMinerSlotStateChanged()`, `GetMinerOccupancyState()`
+- Broadcasts on grant/wait/release/FIFO promotion/invalid cleanup/EndPlay
 
-## Clear contract
-Add 25; Clear Removed=25 After=0.
+## FIFO promotion model
+Waiting → Active event starts Mining timer on subscribed MiningComponent (no polling).
 
-## RunContractTest result
-`Complete Failures=0` (CapacityPositive through ComponentTickDisabled — all listed checks).
+## Transfer transaction
+Integer `min(cycle, floor(cargo remaining), node)` → ConsumeResource → AddCargo; Accepted must equal Consumed.
+
+## Partial cycle contract
+Remainder 5 on node or cargo → transfer 5 → DepositDepleted or CargoFull.
+
+## Timer lifecycle
+Only while Mining; cleared on all stop/EndPlay/target-change paths.
 
 ## Authority policy
-Add/Remove/Clear require owner authority; diagnostics reject clients.
+Begin/Stop/cycle authority-only; no client mining RPC.
 
-## Replication test
-ListenServer Authority Current=30 Cap=50 Fill=0.6; Client SimulatedProxy same values.
+## Replication
+CurrentMiningState (OnRep), CurrentResourceNode, LastStopReason. Authority broadcasts state once; clients via OnRep.
 
-## Client mutation rejection
-`gp.Cargo.Add 10` → rejected on client (authority required).
+## Delegate / RepNotify model
+OnMiningStateChanged + OnMiningCycleCompleted; no Tick.
 
-## Delegate / RepNotify review
-Authority `ApplyCargoAmount` broadcasts once locally. `OnRep_CurrentCargoAmount` runs on remotes only (UE default) — no double-fire for the same local server mutation. No client-to-server cargo RPC.
+## Lifecycle safety
+EndPlay clears timer, unbinds, releases slot; node EndPlay notifies miners.
 
-## Diagnostic host policy
-`AGP_CargoDiagnosticHost`: Transient, NotPlaceable, replicated, console-spawned; not on combat units; no production dependency; do not save maps.
+## Diagnostics
+`gp.Mining.SpawnDiagnosticHost|Inspect|Begin|Stop|RunContractTest`
 
-## Tick policy
-Component and diagnostic host actor tick disabled; no timers; no polling.
+## RunContractTest result
+Implemented (debug force uses production `ExecuteMiningCycle`). Operator to execute → expect Failures=0.
 
-## Validation result
-ValidationOk=true; Errors=0; Warnings=0.
+## Cargo regression result
+CargoComponent unchanged as SoT; CarriedFerronite not restored. Operator: re-run `gp.Cargo.RunContractTest` if desired.
 
-## Files changed during finalization
-- `Docs/Development/Claude_Tasks/GP-S25_Cargo_Component.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
+## ResourceNode regression result
+Consume/occupancy retained; occupancy events additive. Operator: FIFO still via mining hosts / existing slot cmds.
 
-No C++ changes at finalization.
+## Mine validation regression result
+Command Mine validation untouched (still HeldAccepted only).
 
-## GPEditor / UHT result if rerun
-Not rerun (no C++ changes). Candidate GPEditor Dev+UHT retained as **PASSED**.
-
-## GP Win64 Development result
-**PASSED**
-
-## GP Win64 Shipping result
-**PASSED**
+## Test host / content changes
+No permanent Blueprint/content; transient host only. Map unchanged.
 
 ## LFS result
-No LFS content changes.
+No LFS changes.
 
 ## Map unchanged
 Yes.
 
+## GPEditor Development + UHT result
+**PASSED**
+
+## GP Development not run
+Yes (deferred).
+
+## GP Shipping not run
+Yes (deferred).
+
+## Files changed
+- `GP/Source/GPRuntime/Public/Resources/GPMiningComponent.h` (new)
+- `GP/Source/GPRuntime/Private/Resources/GPMiningComponent.cpp` (new)
+- `GP/Source/GPRuntime/Public/Resources/GPResourceNode.h`
+- `GP/Source/GPRuntime/Private/Resources/GPResourceNode.cpp`
+- `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md` (new)
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
+
 ## Scope exclusions
-No Mining/Worker/mining execution/Storage/ThreatValue/orbital/UI/map/projectiles/visuals/GP-S26; no main/PR/merge/branch delete.
+No Worker/movement/Mine unit wiring/Storage/ThreatValue/orbital/UI/map/projectiles/GP-S27; no main/PR/merge.
 
-## Git status
-Feature branch finalized and pushed; main untouched; no PR.
-
-## Merge readiness
-Ready for main merge when requested.
+## Operator validation steps
+See `GP-S26_Mining_Component.md` §Operator validation steps.
 
 ## Known limitations
-- No Worker ownership yet
-- Capacity 50 is TDD prototype
-- Single-resource Ferronite MVP
-- Diagnostic host debug-only
+- No Worker/movement
+- Contract test depletes/mutates node amounts in PIE
+- Debug force cycle for deterministic console tests only
 
-## Next canonical stage
-**GP-S26 — UGP_MiningComponent**
+## Commit SHA
+_(filled after commit)_
+
+## Git state
+Feature branch pushed; main untouched; no PR.

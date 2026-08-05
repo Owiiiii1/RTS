@@ -1,28 +1,49 @@
 # Grim Protocol — AI Project Log
 
-## 2026-08-05 — GP-S25 UGP_CargoComponent
+## 2026-08-05 — GP-S26 UGP_MiningComponent
 
-Status: **GP-S25_FINALIZED_READY_FOR_MERGE**
+Status: **GP-S26_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ### Branch / baseline
-- Branch: `feature/gp-s25-cargo-component`
-- Base: `main` @ `1fedf1933ac406c3a53a89af4a92a03afcf5a646` (GP-S24R merged)
+- Branch: `feature/gp-s26-mining-component`
+- Base: `main` @ `693a36b8777babaea6085cb799397e9e0cddb77f` (GP-S25 merged)
+- Task: `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md`
+
+### What was done
+- `UGP_MiningComponent` authority timer mining: ResourceNode → CargoComponent
+- ResourceNode server-local `OnMinerSlotStateChanged` for FIFO promotion
+- Transient `AGP_MiningDiagnosticHost` + `gp.Mining.*` / RunContractTest
+- GPEditor Win64 Development + UHT **PASSED**
+- GP Win64 Development **not run**; GP Win64 Shipping **not run** (after operator validation)
+
+### Intentionally not done
+- No Worker/movement/Mine command unit wiring/Storage; no PR/merge
+
+### Operator next
+- Validate per task doc; then finalize
+
+---
+
+## 2026-08-05 — GP-S25 UGP_CargoComponent
+
+Status: **GP-S25_MERGED_TO_MAIN** @ `693a36b8777babaea6085cb799397e9e0cddb77f`
+
+### Branch / baseline
+- Branch: `feature/gp-s25-cargo-component` (merged)
+- Base (pre-merge): `main` @ `1fedf1933ac406c3a53a89af4a92a03afcf5a646`
 - Candidate: `f440838bbcd8963c8230a70f6f7e3363af7dc45a`
 - Task: `Docs/Development/Claude_Tasks/GP-S25_Cargo_Component.md`
 
 ### What was done
-- `UGP_CargoComponent` replicated Ferronite cargo SoT (capacity 50, add/remove/clear, soft definition)
-- Removed unused `UGP_UnitAttributeSet::CarriedFerronite` (no dual writable store / no mirror)
-- Transient `AGP_CargoDiagnosticHost` + `gp.Cargo.*` diagnostics / RunContractTest
-- Operator validation **PASSED** (add/overflow/remove/clear/invalid/contract test Failures=0 / listen+client / tick off)
-- Finalization: no C++ changes; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
-- Map unchanged; next stage GP-S26 MiningComponent
+- `UGP_CargoComponent` Ferronite cargo SoT; CarriedFerronite removed from AttributeSet
+- Operator validation **PASSED**; GP Dev/Shipping **PASSED**
+- Merged to main @ `693a36b8777babaea6085cb799397e9e0cddb77f`
 
 ### Intentionally not done
-- No MiningComponent/Worker/mining execution/Storage; no PR/merge (ready when requested)
+- No Mining/Worker at S25
 
 ### Operator next
-- None for S25; merge when requested; then GP-S26
+- None for S25 (merged); continue at GP-S26
 
 ---
 

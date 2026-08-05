@@ -1,156 +1,64 @@
 # Cursor Work Report
 
 ## Task
-GP-S26B2A — Blueprint Authored Visuals (finalization)
+GP-S27 — Worker Architecture Reconciliation Analysis (correction)
 
 ## Status
-GP-S26B2A_FINALIZED_READY_FOR_MERGE
+GP-S27_WORKER_ANALYSIS_CORRECTED_READY_FOR_REVIEW
 
 ## Branch
-feature/gp-s26b2a-blueprint-authored-visuals
+feature/gp-s27-worker-analysis
 
 ## Base
-main @ 215b4b603e7fd333ef9b379103329bfac03edbf4
+main @ d81a9bea45f35069636f13df9229685226282311
 
-## Candidate commit
-3a6d9533039180a4b75d40dc6063abd01d1b91e2
+## Correction reason
+Initial analysis (`b5526d1…`) correctly found Slice-6 gaps, but violated implementation order and ADR-0002 by proposing non-blocking ResourceDefinition, hardcoded MiningComponent rates, and GP-S26C Mine-target-first. Correction restores S23→S28 Data-Driven sequence.
 
-## Finalization commit
-a503a1b505021683ebef1279f177b68ef27b1073
-
-## Operator validation matrix
-
-| Item | Result |
-| --- | --- |
-| BP_Unit_AuthoredExample authored presentation | **PASS** |
-| BP_ResourceNode_AuthoredExample authored presentation | **PASS** |
-| Direct AGP_Unit native fallback | **PASS** |
-| Direct AGP_ResourceNode native fallback | **PASS** |
-| No native overlay on authored | **PASS** |
-| Authored components survive cleanup | **PASS** |
-| AuthoredCollisionWarnings / AuthoredNavigationWarnings | **PASS** (=0) |
-| ResourceType/Max/Current + CollisionBox gameplay | **PASS** |
-| Listen server | **PASS** |
-| Map placements not committed | **PASS** |
-
-## Exact inspector results
-
-### BP_ResourceNode_AuthoredExample
+## Canonical dependency order
 ```
-VisualSourceMode=AuthoredComponents
-GeneratedPartCount=0
-AuthoredPrimitiveComponentCount=6
-NativeVisualBuilt=false
-UsesAuthoredComponents=true
-GeneratedCollisionDisabled=true
-AuthoredCollisionWarnings=0
-AuthoredNavigationWarnings=0
-DuplicateGeneratedParts=0
-TickEnabled=false
-ResourceType=Ore MaxAmount=5000 CurrentAmount=5000
-CollisionComponent=CollisionBox CollisionEnabled=QueryAndPhysics AffectsNavigation=true
+GP-S23 ResourceDefinition → GP-S24 Deposit → GP-S25 Cargo → GP-S26 Mining → GP-S27 Worker → GP-S28 Storage+ThreatValue
 ```
+Revised stage names for reconciliation work: **GP-S23R**, **GP-S24R**, then canonical S25–S28.
 
-### Direct AGP_ResourceNode
-```
-VisualSourceMode=NativeFallback
-GeneratedPartCount=5
-PartNames=[Base,Core,AccentA,AccentB,AccentC]
-NativeVisualBuilt=true
-UsesAuthoredComponents=false
-AuthoredPrimitiveComponentCount=0
-GeneratedCollisionDisabled=true
-AuthoredCollisionWarnings=0
-AuthoredNavigationWarnings=0
-DuplicateGeneratedParts=0
-TickEnabled=false
-```
+## Revised S23–S28 reconciliation
+| Stage | Status | Ownership |
+| --- | --- | --- |
+| S23 ResourceDefinition | Missing | **GP-S23R** (next) |
+| S24 Deposit contract | Partial on `AGP_ResourceNode` | **GP-S24R** (definition soft-ref, tags, Mine target, soft-cap/queue) |
+| S25 Cargo | Missing | **GP-S25** |
+| S26 Mining | Missing | **GP-S26** (uses definition tunables; CargoFull/WaitingForDropOff pre-S28) |
+| S27 Worker | Missing | **GP-S27** (assembles S25/S26 only) |
+| S28 Storage + ThreatValue write | ThreatValue field only | **GP-S28** |
 
-### Direct AGP_Unit
-```
-VisualSourceMode=NativeFallback
-GeneratedPartCount=3
-PartNames=[Body,Forward,Weapon]
-PresentationRoot=Body
-NativeVisualBuilt=true
-UsesAuthoredComponents=false
-AuthoredPrimitiveComponentCount=0
-GeneratedCollisionDisabled=true
-AuthoredCollisionWarnings=0
-AuthoredNavigationWarnings=0
-DuplicateGeneratedParts=0
-TickEnabled=false
-```
+## Exact next stage
+**GP-S23R — Resource Definition Reconciliation**
 
-### BP_Unit_AuthoredExample
-```
-VisualSourceMode=AuthoredComponents
-GeneratedPartCount=0
-PartNames=[none]
-PresentationRoot=None
-AuthoredPrimitiveComponentCount=4
-NativeVisualBuilt=false
-UsesAuthoredComponents=true
-GeneratedCollisionDisabled=true
-AuthoredCollisionWarnings=0
-AuthoredNavigationWarnings=0
-DuplicateGeneratedParts=0
-TickEnabled=false
-```
+## ResourceDefinition mandatory conclusion
+Mandatory before mining balance. No skip. No “rates later.”
 
-## Native fallback result
-Direct C++ actors retain native Engine basic-shape compositions; definitions/builder unchanged.
+## No-hardcoded-balance conclusion
+Mining rates/yield come from ResourceDefinition (ADR-0002). C++ hardcode forbidden.
 
-## Authored mode result
-Blueprint meshes visible; native generated parts cleared (count 0); no double visual.
+## ResourceNode / S24 reconciliation
+Keep `AGP_ResourceNode` as deposit actor; S24R upgrades it to Ferronite deposit contract (definition soft-ref, tags, naming policy, Mine target compatibility, soft-cap/queue). Queue deferral only via owner-approved explicit deviation — not recommended.
 
-## Collision / navigation result
-Generated visual parts NoCollision; authored examples warning counts 0; ResourceNode gameplay Box remains QueryAndPhysics + AffectsNavigation=true.
+## Cargo SoT recommendation
+`UGP_CargoComponent` authoritative. No dual-write. `CarriedFerronite` unused or later one-way mirror only.
 
-## Networking result
-Listen server validation **PASSED**; mode is class/default content (no visual mode RPC); gameplay replication unchanged.
+## Worker architecture
+`AGP_Worker : AGP_MobileUnit` (unchanged). Assembles ready Cargo+Mining; no auto-attack; Attack rejected; Repair not falsely “complete” if S46 owns full GA.
 
-## Map unchanged
-No `.umap` changes. Temporary placements not committed to `L_PrototypeArena`.
-
-## Abandoned DataAsset branch status
-`feature/gp-s26b2a-editable-visual-profiles` @ `54bfe62…` — abandoned, never merged, unused, not deleted.
-
-## Files changed during finalization
-- `Docs/Development/Claude_Tasks/GP-S26B2A_Blueprint_Authored_Visuals.md`
+## Files changed
+- `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
-- `GP/Content/GrimProtocol/Units/BP_Unit_AuthoredExample.uasset` (operator-validated LFS update)
-- `GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset` (operator-validated LFS update)
 
-No C++ changes in finalization.
+## Build status
+Not required — documentation-only.
 
-## GPEditor / UHT result if rerun
-Not rerun — no C++ changes; retained from candidate `3a6d953…` (**PASSED**).
+## Correction commit SHA
+8a46a6c78cce5b928c36c9e891faea07f42f8d38
 
-## GP Win64 Development result
-**PASSED**
-
-## GP Win64 Shipping result
-**PASSED**
-
-## LFS verification
-Both example `.uasset` files use `filter=lfs` and are tracked by Git LFS.
-
-## Tick verification
-- `AGP_PlayerController` PrimaryActorTick.bCanEverTick = true (controller tick remains enabled)
-- Unit / ResourceNode visual components: PrimaryComponentTick.bCanEverTick = false
-
-## Cleanup verification
-`ClearVisual` → `DestroyBuiltParts(BuiltVisual)` only; authored SCS components not destroyed.
-
-## Git status
-Branch ahead of origin before push; clean after push to `origin/feature/gp-s26b2a-blueprint-authored-visuals`.
-
-## Merge readiness
-**Ready for merge when requested.** No PR created. Main untouched.
-
-## Known limitations
-- Authored team tint not automatic
-- Example BPs are Engine BasicShapes placeholders, not production archetypes
-- DataAsset visual profile experiment abandoned
+## Git state
+Pushed to `feature/gp-s27-worker-analysis`; main untouched; no PR; no C++/uasset/umap.

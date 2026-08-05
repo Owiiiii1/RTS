@@ -1,12 +1,39 @@
 # Grim Protocol — AI Project Log
 
-## 2026-08-05 — GP-S26B2A Blueprint Authored Visuals
+## 2026-08-05 — GP-S27 Worker Architecture Reconciliation Analysis
 
-Status: GP-S26B2A_FINALIZED_READY_FOR_MERGE
+Status: GP-S27_WORKER_ANALYSIS_CORRECTED_READY_FOR_REVIEW
 
 ### Branch / baseline
-- Branch: `feature/gp-s26b2a-blueprint-authored-visuals`
-- Base: `main` @ `215b4b603e7fd333ef9b379103329bfac03edbf4`
+- Branch: `feature/gp-s27-worker-analysis`
+- Base: `main` @ `d81a9bea45f35069636f13df9229685226282311`
+- Initial analysis: `b5526d1ebad4d6c76e522005767d0bb162adccd1`
+- Correction: `8a46a6c78cce5b928c36c9e891faea07f42f8d38`
+- Task: `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
+- Type: documentation / analysis only (no production C++ / assets / map)
+
+### Correction
+- Restored mandatory Slice-6 order + ADR-0002 Data-Driven First
+- Rejected skip-S23 / hardcoded mining rates / GP-S26C-first recommendations
+- Next stage: **GP-S23R** → **GP-S24R** → S25 Cargo → S26 Mining → S27 Worker → S28 Storage
+- Worker architecture unchanged: `AGP_Worker : AGP_MobileUnit`
+- Cargo SoT: `UGP_CargoComponent`; no dual-write with `CarriedFerronite`
+
+### Intentionally not done
+- No Worker/Cargo/Mining/Storage/ResourceDefinition C++; no uasset/umap; no PR/merge
+
+### Operator next
+- Review corrected analysis; approve **GP-S23R** as next implementation stage
+
+---
+
+## 2026-08-05 — GP-S26B2A Blueprint Authored Visuals
+
+Status: **GP-S26B2A_MERGED_TO_MAIN** @ `d81a9bea45f35069636f13df9229685226282311`
+
+### Branch / baseline
+- Branch: `feature/gp-s26b2a-blueprint-authored-visuals` (merged)
+- Base (pre-merge): `main` @ `215b4b603e7fd333ef9b379103329bfac03edbf4`
 - Candidate: `3a6d9533039180a4b75d40dc6063abd01d1b91e2`
 - Finalization: `a503a1b505021683ebef1279f177b68ef27b1073`
 - Task: `Docs/Development/Claude_Tasks/GP-S26B2A_Blueprint_Authored_Visuals.md`
@@ -14,16 +41,14 @@ Status: GP-S26B2A_FINALIZED_READY_FOR_MERGE
 
 ### What was done
 - `EGP_VisualSourceMode` NativeFallback / AuthoredComponents; BuiltVisual-only cleanup; example BPs (LFS)
-- Operator validation **PASSED** (authored + native fallbacks, collision/nav warnings 0, listen server)
-- Finalization: no C++ changes; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
-- Map unchanged; controller tick remains enabled; visual component tick remains disabled
+- Operator validation **PASSED**; GP Dev/Shipping **PASSED**
+- Merged to main @ `d81a9be…`
 
 ### Intentionally not done
-- No DataAssets/profiles/catalog/materials/animations/map population/S27A3
-- No PR / merge to main (ready when requested)
+- No DataAsset visual profiles; no unit catalog; no map population; no S27A3
 
 ### Operator next
-- None for S26B2A; merge when requested
+- None for S26B2A (merged)
 
 ---
 

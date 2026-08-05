@@ -58,7 +58,7 @@ Keep `AGP_ResourceNode` as deposit actor; S24R upgrades it to Ferronite deposit 
 Not required — documentation-only.
 
 ## Correction commit SHA
-(filled after commit)
+8a46a6c78cce5b928c36c9e891faea07f42f8d38
 
 ## Git state
 Pushed to `feature/gp-s27-worker-analysis`; main untouched; no PR; no C++/uasset/umap.

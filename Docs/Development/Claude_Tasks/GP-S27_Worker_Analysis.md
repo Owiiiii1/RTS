@@ -9,6 +9,7 @@
 
 Branch: `feature/gp-s27-worker-analysis`  
 Initial analysis: `b5526d1ebad4d6c76e522005767d0bb162adccd1`  
+Correction: `8a46a6c78cce5b928c36c9e891faea07f42f8d38`  
 Type: **analysis / documentation only** — no production C++, no content assets, no map edits.
 
 ## Correction reason

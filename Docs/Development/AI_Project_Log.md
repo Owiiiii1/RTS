@@ -1,12 +1,37 @@
 # Grim Protocol — AI Project Log
 
-## 2026-08-05 — GP-S26B2A Blueprint Authored Visuals
+## 2026-08-05 — GP-S27 Worker Architecture Reconciliation Analysis
 
-Status: GP-S26B2A_FINALIZED_READY_FOR_MERGE
+Status: GP-S27_WORKER_ANALYSIS_READY_FOR_REVIEW
 
 ### Branch / baseline
-- Branch: `feature/gp-s26b2a-blueprint-authored-visuals`
-- Base: `main` @ `215b4b603e7fd333ef9b379103329bfac03edbf4`
+- Branch: `feature/gp-s27-worker-analysis`
+- Base: `main` @ `d81a9bea45f35069636f13df9229685226282311`
+- Task: `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
+- Type: documentation / analysis only (no production C++ / assets / map)
+
+### What was done
+- Reconciled canonical Slice 6 (S23–S28) against post-S26B2A main inventory
+- Selected Worker architecture: `AGP_Worker : AGP_MobileUnit` (sibling of `AGP_Unit`)
+- Prerequisites split proposed: **GP-S26C** (Mine→ResourceNode) → **GP-S26D** (Cargo+Mining) → **GP-S27** (Worker)
+- Documented supersession: `AGP_FerroniteDeposit` → current `AGP_ResourceNode` MVP deposit
+- Operator validation plan drafted for future Worker implementation
+
+### Intentionally not done
+- No Worker/Cargo/Mining/Storage C++; no uasset/umap; no PR/merge; no S28
+
+### Operator next
+- Review analysis; approve GP-S26C as next implementation stage
+
+---
+
+## 2026-08-05 — GP-S26B2A Blueprint Authored Visuals
+
+Status: **GP-S26B2A_MERGED_TO_MAIN** @ `d81a9bea45f35069636f13df9229685226282311`
+
+### Branch / baseline
+- Branch: `feature/gp-s26b2a-blueprint-authored-visuals` (merged)
+- Base (pre-merge): `main` @ `215b4b603e7fd333ef9b379103329bfac03edbf4`
 - Candidate: `3a6d9533039180a4b75d40dc6063abd01d1b91e2`
 - Finalization: `a503a1b505021683ebef1279f177b68ef27b1073`
 - Task: `Docs/Development/Claude_Tasks/GP-S26B2A_Blueprint_Authored_Visuals.md`
@@ -14,16 +39,14 @@ Status: GP-S26B2A_FINALIZED_READY_FOR_MERGE
 
 ### What was done
 - `EGP_VisualSourceMode` NativeFallback / AuthoredComponents; BuiltVisual-only cleanup; example BPs (LFS)
-- Operator validation **PASSED** (authored + native fallbacks, collision/nav warnings 0, listen server)
-- Finalization: no C++ changes; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
-- Map unchanged; controller tick remains enabled; visual component tick remains disabled
+- Operator validation **PASSED**; GP Dev/Shipping **PASSED**
+- Merged to main @ `d81a9be…`
 
 ### Intentionally not done
-- No DataAssets/profiles/catalog/materials/animations/map population/S27A3
-- No PR / merge to main (ready when requested)
+- No DataAsset visual profiles; no unit catalog; no map population; no S27A3
 
 ### Operator next
-- None for S26B2A; merge when requested
+- None for S26B2A (merged)
 
 ---
 

@@ -16,7 +16,7 @@ GP-S26 — Mining Diagnostic Host Correction (operator validation defect).
 `4d334a7f4fe331757e4e245d2979a27117a6b660`
 
 ## Correction commit
-_(filled after commit)_
+`b58fce2072a9340e258a332b701f477c52181e25`
 
 ## Detected operator defect
 `gp.Mining.SpawnDiagnosticHost` logged Dist=1840.5 vs Range=200; `Begin` → RejectedOutOfRange. Inspect before Begin showed AmountPerCycle/CycleDuration/InteractionRangeCm=0 and Distance=FLT_MAX despite valid Ferronite definition.

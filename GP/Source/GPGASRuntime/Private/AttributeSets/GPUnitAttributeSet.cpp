@@ -26,7 +26,6 @@ void UGP_UnitAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME_CONDITION_NOTIFY(UGP_UnitAttributeSet, AttackRange, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UGP_UnitAttributeSet, AttackSpeed, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UGP_UnitAttributeSet, MoveSpeed, COND_None, REPNOTIFY_Always);
-	DOREPLIFETIME_CONDITION_NOTIFY(UGP_UnitAttributeSet, CarriedFerronite, COND_None, REPNOTIFY_Always);
 }
 
 void UGP_UnitAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
@@ -40,11 +39,6 @@ void UGP_UnitAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribut
 	else if (Attribute == GetHealthAttribute())
 	{
 		NewValue = FMath::Clamp(NewValue, 0.0f, GetMaxHealth());
-	}
-	else if (Attribute == GetCarriedFerroniteAttribute())
-	{
-		// Upper clamp deferred until WorkerCarryCapacity / cargo slice (no MaxCargo attribute in MVP AttributeSet).
-		NewValue = FMath::Max(NewValue, 0.0f);
 	}
 }
 
@@ -179,9 +173,4 @@ void UGP_UnitAttributeSet::OnRep_AttackSpeed(const FGameplayAttributeData& OldAt
 void UGP_UnitAttributeSet::OnRep_MoveSpeed(const FGameplayAttributeData& OldMoveSpeed)
 {
 	GAMEPLAYATTRIBUTE_REPNOTIFY(UGP_UnitAttributeSet, MoveSpeed, OldMoveSpeed);
-}
-
-void UGP_UnitAttributeSet::OnRep_CarriedFerronite(const FGameplayAttributeData& OldCarriedFerronite)
-{
-	GAMEPLAYATTRIBUTE_REPNOTIFY(UGP_UnitAttributeSet, CarriedFerronite, OldCarriedFerronite);
 }

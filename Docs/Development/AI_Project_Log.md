@@ -1,27 +1,51 @@
 # Grim Protocol — AI Project Log
 
-## 2026-08-05 — GP-S24R Ferronite Deposit Contract
+## 2026-08-05 — GP-S25 UGP_CargoComponent
 
-Status: **GP-S24R_FINALIZED_READY_FOR_MERGE**
+Status: **GP-S25_FINALIZED_READY_FOR_MERGE**
 
 ### Branch / baseline
-- Branch: `feature/gp-s24r-ferronite-deposit-contract`
-- Base: `main` @ `754b133731065eed000fdcce4bbaa5c45f096e60` (GP-S23R merged)
+- Branch: `feature/gp-s25-cargo-component`
+- Base: `main` @ `1fedf1933ac406c3a53a89af4a92a03afcf5a646` (GP-S24R merged)
+- Candidate: `f440838bbcd8963c8230a70f6f7e3363af7dc45a`
+- Task: `Docs/Development/Claude_Tasks/GP-S25_Cargo_Component.md`
+
+### What was done
+- `UGP_CargoComponent` replicated Ferronite cargo SoT (capacity 50, add/remove/clear, soft definition)
+- Removed unused `UGP_UnitAttributeSet::CarriedFerronite` (no dual writable store / no mirror)
+- Transient `AGP_CargoDiagnosticHost` + `gp.Cargo.*` diagnostics / RunContractTest
+- Operator validation **PASSED** (add/overflow/remove/clear/invalid/contract test Failures=0 / listen+client / tick off)
+- Finalization: no C++ changes; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
+- Map unchanged; next stage GP-S26 MiningComponent
+
+### Intentionally not done
+- No MiningComponent/Worker/mining execution/Storage; no PR/merge (ready when requested)
+
+### Operator next
+- None for S25; merge when requested; then GP-S26
+
+---
+
+## 2026-08-05 — GP-S24R Ferronite Deposit Contract
+
+Status: **GP-S24R_MERGED_TO_MAIN** @ `1fedf1933ac406c3a53a89af4a92a03afcf5a646`
+
+### Branch / baseline
+- Branch: `feature/gp-s24r-ferronite-deposit-contract` (merged)
+- Base (pre-merge): `main` @ `754b133731065eed000fdcce4bbaa5c45f096e60`
 - Candidate: `42c1c9167ddd607506d32b470763fc8467a67d66`
 - Task: `Docs/Development/Claude_Tasks/GP-S24R_Ferronite_Deposit_Contract.md`
 
 ### What was done
-- `AGP_ResourceNode` Ferronite deposit contract: soft `ResourceDefinition`, tags, capacity validation, miner soft-cap/FIFO queue
-- Mine smart-command + server validation accepts `AGP_ResourceNode` (no UnitBase requirement for deposits)
-- Operator validation **PASSED** (identity/tags/Mine matrix/depletion/FIFO/listen+client/authored visuals)
-- Finalization: no C++ changes; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
-- Map unchanged; next stage GP-S25 CargoComponent
+- `AGP_ResourceNode` Ferronite deposit contract; Mine target validation; occupancy FIFO
+- Operator validation **PASSED**; GP Dev/Shipping **PASSED**
+- Merged to main @ `1fedf1933ac406c3a53a89af4a92a03afcf5a646`
 
 ### Intentionally not done
-- No Cargo/MiningComponent/Worker/Storage/mining execution; no PR/merge (ready when requested)
+- No Cargo/Mining/Worker at S24R
 
 ### Operator next
-- None for S24R; merge when requested; then GP-S25
+- None for S24R (merged); continue at GP-S25
 
 ---
 

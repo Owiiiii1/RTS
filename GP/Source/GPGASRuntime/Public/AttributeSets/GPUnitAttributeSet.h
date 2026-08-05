@@ -9,7 +9,8 @@
 #include "GPUnitAttributeSet.generated.h"
 
 /**
- * Unit/building-scoped GAS attributes (survivability, combat stats, worker carry).
+ * Unit/building-scoped GAS attributes (survivability, combat stats).
+ * Carried Ferronite lives on UGP_CargoComponent (GP-S25), not on this AttributeSet.
  * Defaults stay 0; initialization comes from external Init GEs / DataAssets later.
  */
 UCLASS()
@@ -62,11 +63,6 @@ public:
 	FGameplayAttributeData MoveSpeed;
 	ATTRIBUTE_ACCESSORS(UGP_UnitAttributeSet, MoveSpeed)
 
-	/** Worker carry amount. Floor clamp only in GP-S03; upper cap deferred (WorkerCarryCapacity / cargo slice). */
-	UPROPERTY(BlueprintReadOnly, Category = "GP|Attributes|Unit", ReplicatedUsing = OnRep_CarriedFerronite)
-	FGameplayAttributeData CarriedFerronite;
-	ATTRIBUTE_ACCESSORS(UGP_UnitAttributeSet, CarriedFerronite)
-
 protected:
 	UFUNCTION()
 	void OnRep_Health(const FGameplayAttributeData& OldHealth);
@@ -94,9 +90,6 @@ protected:
 
 	UFUNCTION()
 	void OnRep_MoveSpeed(const FGameplayAttributeData& OldMoveSpeed);
-
-	UFUNCTION()
-	void OnRep_CarriedFerronite(const FGameplayAttributeData& OldCarriedFerronite);
 
 private:
 	/** Captured in PreGameplayEffectExecute; Health is already modified by PostGameplayEffectExecute. */

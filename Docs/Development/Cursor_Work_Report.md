@@ -1,88 +1,102 @@
-# Cursor Work Report — GP-S24R Ferronite Deposit Contract Finalization
+# Cursor Work Report — GP-S25 UGP_CargoComponent Finalization
 
 ## Task
-GP-S24R — Ferronite Deposit Contract Finalization on `AGP_ResourceNode`.
+GP-S25 — `UGP_CargoComponent` Finalization.
 
 ## Status
-**GP-S24R_FINALIZED_READY_FOR_MERGE**
+**GP-S25_FINALIZED_READY_FOR_MERGE**
 
 ## Branch
-`feature/gp-s24r-ferronite-deposit-contract`
+`feature/gp-s25-cargo-component`
 
 ## Base
-`main` @ `754b133731065eed000fdcce4bbaa5c45f096e60`
+`main` @ `1fedf1933ac406c3a53a89af4a92a03afcf5a646`
 
 ## Candidate commit
-`42c1c9167ddd607506d32b470763fc8467a67d66`
+`f440838bbcd8963c8230a70f6f7e3363af7dc45a`
 
 ## Finalization commit
-`b2cdbb329e4ec7500b6083968f43abca25b33949`
+`c02a67fd65519034bdefb5116b977b66aa4ccba3`
 
 ## Operator validation matrix
 
 | Item | Result |
 | --- | --- |
-| ResourceDefinition → Ferronite DA; PrimaryAssetId `GPResourceDefinition:DA_GP_Resource_Ferronite` | **PASS** |
-| ResourceType=Ore; tags Node + Type.Ferronite | **PASS** |
-| Max/Current=5000; IsDepleted=false; MaxConcurrentMiners=4 | **PASS** |
-| ValidationOk=true; Errors=0; Warnings=0; CanAcceptMine=true | **PASS** |
-| Mine accept ResourceNode; reject null/depleted/unit/plain | **PASS** |
-| Consume 5000 → After=0 Depleted; CanAcceptMine=false MineFail=Depleted | **PASS** |
-| Active=4; 5th Waiting; AlreadyWaiting; release promotes; AlreadyActive; Active=4 Waiting=0 | **PASS** |
-| ListenServer/Client CurrentAmount=4000; occupancy counts replicate | **PASS** |
-| Client RequestSlot rejected | **PASS** |
-| AuthoredComponents; authored collision/nav warnings=0; TickEnabled=false | **PASS** |
-| Map unchanged | **PASS** |
+| Default Cap=50 Current=0 Remaining=50 Fill=0 Empty | **PASS** |
+| Soft Ferronite + PrimaryAssetId + Ore + Type.Ferronite | **PASS** |
+| ValidationOk Errors=0 Warnings=0 | **PASS** |
+| Add 30→30; Add 30→Accepted20 full; Add full→0 | **PASS** |
+| Remove 30→20; Remove 100→Removed20 empty | **PASS** |
+| Invalid 0/neg/NaN/Inf rejected; no mutation | **PASS** |
+| Clear after Add 25 → Removed 25 | **PASS** |
+| RunContractTest Failures=0 | **PASS** |
+| ListenServer/Client Cap/Current/Fill match | **PASS** |
+| Client Add rejected | **PASS** |
+| ComponentTickEnabled=false ActorTickEnabled=false | **PASS** |
+| Transient host; no map/content save | **PASS** |
 
-## ResourceDefinition policy
-Soft `TSoftObjectPtr`; default Ferronite DA; BeginPlay non-sync resolve; explicit sync only on validate/Mine/diagnostics (AlwaysCook); PrimaryAssetId resolves correctly.
-
-## Exact tags
-- `GP.Resource.Node`
-- `GP.Resource.Type.Ferronite`
-
-## Deposit default values
-| Field | Value |
+## Exact cargo properties
+| Property | Value / notes |
 | --- | --- |
-| ResourceDefinition | `DA_GP_Resource_Ferronite` |
-| MaxAmount | 5000 |
-| CurrentAmount | 5000 |
-| MaxConcurrentMiners | 4 |
-| ResourceType | Ore |
+| `CargoCapacity` | 50, replicated |
+| `CurrentCargoAmount` | 0 default, ReplicatedUsing OnRep |
+| `ResourceDefinition` | Soft Ferronite DA |
+| `OnCargoAmountChanged` | Prev, New, Cap, Delta |
 
-## Mine validation matrix
-| Case | Result |
-| --- | --- |
-| Valid ResourceNode | ACCEPT |
-| Null target | REJECT |
-| Depleted ResourceNode | REJECT |
-| Ordinary unit | REJECT |
-| Actor without resource contract | REJECT |
+## Prototype capacity
+**50** (TDD CarryCapacity / MaxCargo).
 
-## Depletion test
-ConsumeResource Requested=5000 → Consumed=5000 Before=5000 After=0 Depleted=true; MineFail=Depleted.
+## Resource identity
+Soft `/Game/GrimProtocol/DataAssets/Resources/DA_GP_Resource_Ferronite`; PrimaryAssetId `GPResourceDefinition:DA_GP_Resource_Ferronite`; Ore; `GP.Resource.Type.Ferronite`.
 
-## FIFO / duplicate / promotion test
-4 active → 5th Waiting → repeated AlreadyWaiting → release active promotes waiting → repeated AlreadyActive → final Active=4 Waiting=0.
+## Source-of-truth decision
+`UGP_CargoComponent` sole writable runtime SoT for carried Planetary Ferronite. No GE cargo; no player currency/storage mutation.
 
-## Network replication test
-ListenServer Authority CurrentAmount=4000; Client SimulatedProxy CurrentAmount=4000. Occupancy: server Active=2 Waiting=0; client observed same counts, HasAuthority=false.
+## CarriedFerronite removal result
+Removed from `UGP_UnitAttributeSet` (attribute, replication, clamps). No compatibility mirror. No remaining Source reads/writes.
 
-## Client authority rejection
-`gp.ResourceNode.RequestSlot` rejected on client.
+## Add / overflow / full contract
+Add 30 accepted 30; second Add 30 accepted 20 → full 50; Add while full accepted 0.
 
-## Visual compatibility result
-VisualSourceMode=AuthoredComponents; UsesAuthoredComponents=true; GeneratedPartCount=0; AuthoredPrimitiveComponentCount=6; AuthoredCollisionWarnings=0; AuthoredNavigationWarnings=0; DuplicateGeneratedParts=0; TickEnabled=false.
+## Remove / over-remove contract
+Remove 30 → 20; Remove 100 → Removed 20 → empty.
+
+## Invalid-input contract
+Add/Remove 0 and negatives → 0; ContractTest RejectNanAdd/RejectInfAdd/NoMutationOnRejectedAdd **PASS**.
+
+## Clear contract
+Add 25; Clear Removed=25 After=0.
+
+## RunContractTest result
+`Complete Failures=0` (CapacityPositive through ComponentTickDisabled — all listed checks).
+
+## Authority policy
+Add/Remove/Clear require owner authority; diagnostics reject clients.
+
+## Replication test
+ListenServer Authority Current=30 Cap=50 Fill=0.6; Client SimulatedProxy same values.
+
+## Client mutation rejection
+`gp.Cargo.Add 10` → rejected on client (authority required).
+
+## Delegate / RepNotify review
+Authority `ApplyCargoAmount` broadcasts once locally. `OnRep_CurrentCargoAmount` runs on remotes only (UE default) — no double-fire for the same local server mutation. No client-to-server cargo RPC.
+
+## Diagnostic host policy
+`AGP_CargoDiagnosticHost`: Transient, NotPlaceable, replicated, console-spawned; not on combat units; no production dependency; do not save maps.
+
+## Tick policy
+Component and diagnostic host actor tick disabled; no timers; no polling.
 
 ## Validation result
-ValidationOk=true; ValidationErrors=0; ValidationWarnings=0.
+ValidationOk=true; Errors=0; Warnings=0.
 
 ## Files changed during finalization
-- `Docs/Development/Claude_Tasks/GP-S24R_Ferronite_Deposit_Contract.md`
+- `Docs/Development/Claude_Tasks/GP-S25_Cargo_Component.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-No C++ changes at finalization. Accidental operator `L_PrototypeArena.umap` dirty state restored; not committed.
+No C++ changes at finalization.
 
 ## GPEditor / UHT result if rerun
 Not rerun (no C++ changes). Candidate GPEditor Dev+UHT retained as **PASSED**.
@@ -94,13 +108,13 @@ Not rerun (no C++ changes). Candidate GPEditor Dev+UHT retained as **PASSED**.
 **PASSED**
 
 ## LFS result
-No LFS content rewrite during finalization.
+No LFS content changes.
 
 ## Map unchanged
 Yes.
 
 ## Scope exclusions
-No Cargo/Mining/Worker/mining execution/Storage/ThreatValue/orbital/UI/map population/projectiles/visual redesign/GP-S25; no main/PR/merge/branch delete.
+No Mining/Worker/mining execution/Storage/ThreatValue/orbital/UI/map/projectiles/visuals/GP-S26; no main/PR/merge/branch delete.
 
 ## Git status
 Feature branch finalized and pushed; main untouched; no PR.
@@ -109,10 +123,10 @@ Feature branch finalized and pushed; main untouched; no PR.
 Ready for main merge when requested.
 
 ## Known limitations
-- No mining execution / movement / cargo
-- Ore enum name retained until rename stage
-- Soft-cap 4 is TDD prototype value
-- Occupancy actor lists server-local (counts only)
+- No Worker ownership yet
+- Capacity 50 is TDD prototype
+- Single-resource Ferronite MVP
+- Diagnostic host debug-only
 
 ## Next canonical stage
-**GP-S25 — UGP_CargoComponent**
+**GP-S26 — UGP_MiningComponent**

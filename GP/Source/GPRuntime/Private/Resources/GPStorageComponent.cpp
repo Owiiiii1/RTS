@@ -623,7 +623,7 @@ namespace GPStorageDebug
 
 		// Prefer full GP-S28 scenario so operator is not left with MainBase-only incompleteness.
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
-			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId);
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId, /*bOwnedByContract*/ false);
 		if (!Scenario.bOk)
 		{
 			UE_LOG(LogGPStorage, Error,

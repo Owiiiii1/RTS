@@ -388,7 +388,6 @@ namespace GPWorkerDebug
 		}
 
 		int32 TeamId = 1;
-		FString OptionalNodeName;
 		if (Args.Num() > 0)
 		{
 			int32 ParsedTeam = 1;
@@ -396,73 +395,33 @@ namespace GPWorkerDebug
 			{
 				TeamId = ParsedTeam;
 			}
-			else
-			{
-				OptionalNodeName = Args[0];
-			}
 		}
 
-		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
-		AGP_MainBase* ExistingBase = GS != nullptr ? GS->FindMainBaseForTeam(TeamId) : nullptr;
-		if (!IsValid(ExistingBase))
-		{
-			const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
-				GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId);
-			if (!Scenario.bOk)
-			{
-				UE_LOG(LogGPWorker, Error,
-					TEXT("GP Worker.SpawnDiagnostic: MainBase missing for TeamId=%d — full scenario failed (%s). Use gp.Resource.SpawnDiagnosticScenario %d"),
-					TeamId,
-					*Scenario.Error,
-					TeamId);
-				return;
-			}
-			UE_LOG(LogGPWorker, Log,
-				TEXT("GP Worker.SpawnDiagnostic: CreatedFullScenario Worker=%s TeamId=%d Node=%s MainBase=%s WorkerLoc=%s NodeLoc=%s BaseLoc=%s"),
-				*GetNameSafe(Scenario.Worker),
-				Scenario.Worker != nullptr ? Scenario.Worker->GetTeamId() : -1,
-				*GetNameSafe(Scenario.ResourceNode),
-				*GetNameSafe(Scenario.MainBase),
-				Scenario.Worker != nullptr ? *Scenario.Worker->GetActorLocation().ToCompactString() : TEXT("n/a"),
-				Scenario.ResourceNode != nullptr ? *Scenario.ResourceNode->GetActorLocation().ToCompactString() : TEXT("n/a"),
-				Scenario.MainBase != nullptr ? *Scenario.MainBase->GetActorLocation().ToCompactString() : TEXT("n/a"));
-			return;
-		}
-
-		AGP_ResourceNode* Node = !OptionalNodeName.IsEmpty() ? FindNode(World, OptionalNodeName) : nullptr;
-		if (!IsValid(Node))
-		{
-			Node = GPResourceLoopDiagnostics::SpawnResourceNodeTransient(
-				World,
-				GPResourceLoopDiagnostics::GetDiagnosticResourceNodeLocation());
-		}
-		if (!IsValid(Node))
+		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId, /*bOwnedByContract*/ false);
+		if (!Scenario.bOk)
 		{
 			UE_LOG(LogGPWorker, Error,
-				TEXT("GP Worker.SpawnDiagnostic: failed to create ResourceNode. Use gp.Resource.SpawnDiagnosticScenario %d"),
+				TEXT("GP Worker.SpawnDiagnostic: FAILED TeamId=%d Error=%s PathFailure=%s — use gp.Resource.SpawnDiagnosticScenario %d"),
+				TeamId,
+				*Scenario.Error,
+				*Scenario.PathFailureReason,
 				TeamId);
 			return;
 		}
 
-		AGP_Worker* Worker = GPResourceLoopDiagnostics::SpawnWorkerDeferred(
-			World,
-			Node->GetActorLocation() + FVector(150.0f, 0.0f, 0.0f),
-			TeamId);
-		if (!IsValid(Worker) || Worker->GetTeamId() != TeamId)
-		{
-			UE_LOG(LogGPWorker, Error, TEXT("GP Worker.SpawnDiagnostic: Worker spawn/team failed TeamId=%d"), TeamId);
-			return;
-		}
-
 		UE_LOG(LogGPWorker, Log,
-			TEXT("GP Worker.SpawnDiagnostic: Worker=%s TeamId=%d Node=%s MainBase=%s WorkerLoc=%s NodeLoc=%s BaseLoc=%s"),
-			*Worker->GetName(),
-			Worker->GetTeamId(),
-			*Node->GetName(),
-			*GetNameSafe(ExistingBase),
-			*Worker->GetActorLocation().ToCompactString(),
-			*Node->GetActorLocation().ToCompactString(),
-			*ExistingBase->GetActorLocation().ToCompactString());
+			TEXT("GP Worker.SpawnDiagnostic: Worker=%s TeamId=%d Node=%s MainBase=%s WorkerLoc=%s NodeLoc=%s BaseLoc=%s ReadyForHaulingTest=%s SuggestedCommand=gp.Worker.CommandMine %s %s"),
+			*GetNameSafe(Scenario.Worker),
+			Scenario.Worker != nullptr ? Scenario.Worker->GetTeamId() : -1,
+			*GetNameSafe(Scenario.ResourceNode),
+			*GetNameSafe(Scenario.MainBase),
+			Scenario.Worker != nullptr ? *Scenario.Worker->GetActorLocation().ToCompactString() : TEXT("n/a"),
+			Scenario.ResourceNode != nullptr ? *Scenario.ResourceNode->GetActorLocation().ToCompactString() : TEXT("n/a"),
+			Scenario.MainBase != nullptr ? *Scenario.MainBase->GetActorLocation().ToCompactString() : TEXT("n/a"),
+			Scenario.bReadyForHaulingTest ? TEXT("true") : TEXT("false"),
+			*GetNameSafe(Scenario.Worker),
+			*GetNameSafe(Scenario.ResourceNode));
 	}
 
 	static void WorkerInspect(const TArray<FString>& Args, UWorld* World)
@@ -663,18 +622,25 @@ namespace GPWorkerDebug
 			BaseCount,
 			NetModeToString(World->GetNetMode()));
 		UE_LOG(LogGPWorker, Log,
-			TEXT("GP Worker.List ScenarioValidation: PlayableTeamValid=%s WorkerHasMainBase=%s WorkerHasResourceNode=%s MainBaseRegisteredForTeam=%s WorkerAndBaseSameTeam=%s NodeMineable=%s NavReachableWorkerToNode=%s NavReachableNodeToBase=%s ReadyForHaulingTest=%s Errors=%d Warnings=%d"),
+			TEXT("GP Worker.List ScenarioValidation: NavSystemPresent=%s PlayableTeamValid=%s WorkerHasMainBase=%s WorkerHasResourceNode=%s MainBaseRegisteredForTeam=%s WorkerAndBaseSameTeam=%s NodeMineable=%s WorkerProjected=%s NodeApproachProjected=%s BaseDropOffProjected=%s NavWorkerToNode=%s NavNodeToBase=%s NavBaseToNode=%s ReadyForHaulingTest=%s Errors=%d Warnings=%d PathFailure=%s SuggestedCommand=%s"),
+			Validation.bNavSystemPresent ? TEXT("true") : TEXT("false"),
 			Validation.bPlayableTeamValid ? TEXT("true") : TEXT("false"),
 			Validation.bWorkerHasMainBase ? TEXT("true") : TEXT("false"),
 			Validation.bWorkerHasResourceNode ? TEXT("true") : TEXT("false"),
 			Validation.bMainBaseRegisteredForTeam ? TEXT("true") : TEXT("false"),
 			Validation.bWorkerAndBaseSameTeam ? TEXT("true") : TEXT("false"),
 			Validation.bNodeMineable ? TEXT("true") : TEXT("false"),
+			Validation.bWorkerProjected ? TEXT("true") : TEXT("false"),
+			Validation.bNodeApproachProjected ? TEXT("true") : TEXT("false"),
+			Validation.bBaseDropOffProjected ? TEXT("true") : TEXT("false"),
 			Validation.bNavReachableWorkerToNode ? TEXT("true") : TEXT("false"),
 			Validation.bNavReachableNodeToBase ? TEXT("true") : TEXT("false"),
+			Validation.bNavReachableBaseToNode ? TEXT("true") : TEXT("false"),
 			Validation.bReadyForHaulingTest ? TEXT("true") : TEXT("false"),
 			Validation.Errors,
-			Validation.Warnings);
+			Validation.Warnings,
+			*Validation.PathFailureReason,
+			*Validation.SuggestedCommand);
 	}
 
 	static void WorkerCommandMine(const TArray<FString>& Args, UWorld* World)
@@ -1529,23 +1495,28 @@ namespace GPWorkerDebug
 		}
 
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
-			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId);
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId, /*bOwnedByContract*/ false);
 		if (!Scenario.bOk)
 		{
 			UE_LOG(LogGPWorker, Error,
-				TEXT("GP Resource.SpawnDiagnosticScenario: FAILED TeamId=%d Error=%s"),
+				TEXT("GP Resource.SpawnDiagnosticScenario: FAILED TeamId=%d Error=%s PathFailure=%s CreatedBase=false CreatedWorker=false CreatedNode=false"),
 				TeamId,
-				*Scenario.Error);
+				*Scenario.Error,
+				*Scenario.PathFailureReason);
 			return;
 		}
 
 		const GPResourceLoopDiagnostics::FGP_ScenarioValidation Validation =
 			GPResourceLoopDiagnostics::ValidateHaulingScenario(World, TeamId, Scenario.Worker);
 		UE_LOG(LogGPWorker, Log,
-			TEXT("GP Resource.SpawnDiagnosticScenario: ReadyForHaulingTest=%s Errors=%d Warnings=%d"),
+			TEXT("GP Resource.SpawnDiagnosticScenario: ReadyForHaulingTest=%s NavWorkerToNode=%s NavNodeToBase=%s NavBaseToNode=%s Errors=%d Warnings=%d SuggestedCommand=%s"),
 			Validation.bReadyForHaulingTest ? TEXT("true") : TEXT("false"),
+			Validation.bNavReachableWorkerToNode ? TEXT("true") : TEXT("false"),
+			Validation.bNavReachableNodeToBase ? TEXT("true") : TEXT("false"),
+			Validation.bNavReachableBaseToNode ? TEXT("true") : TEXT("false"),
 			Validation.Errors,
-			Validation.Warnings);
+			Validation.Warnings,
+			*Validation.SuggestedCommand);
 	}
 
 	TWeakObjectPtr<UGP_DiagnosticScenarioContractTestRunner> GActiveDiagnosticScenarioContractTest;
@@ -1721,25 +1692,25 @@ void UGP_WorkerHaulingContractTestRunner::Finish()
 
 AGP_ResourceNode* UGP_WorkerHaulingContractTestRunner::SpawnNode(const FVector& Loc) const
 {
-	UWorld* World = WorldWeak.Get();
-	if (!IsValid(World))
+	AGP_ResourceNode* Node = GPResourceLoopDiagnostics::SpawnResourceNodeTransient(
+		WorldWeak.Get(),
+		Loc,
+		/*bOwnedByContract*/ true);
+	if (IsValid(Node))
 	{
-		return nullptr;
+		Node->Tags.AddUnique(GPResourceLoopDiagnostics::MakeTeamScenarioTag(1));
 	}
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	Params.ObjectFlags |= RF_Transient;
-	return World->SpawnActor<AGP_ResourceNode>(AGP_ResourceNode::StaticClass(), Loc, FRotator::ZeroRotator, Params);
+	return Node;
 }
 
 AGP_MainBase* UGP_WorkerHaulingContractTestRunner::SpawnMainBase(const FVector& Loc, int32 TeamId) const
 {
-	return GPResourceLoopDiagnostics::SpawnMainBaseDeferred(WorldWeak.Get(), Loc, TeamId);
+	return GPResourceLoopDiagnostics::SpawnMainBaseDeferred(WorldWeak.Get(), Loc, TeamId, /*bOwnedByContract*/ true);
 }
 
 AGP_Worker* UGP_WorkerHaulingContractTestRunner::SpawnWorker(const FVector& Loc, int32 TeamId) const
 {
-	return GPResourceLoopDiagnostics::SpawnWorkerDeferred(WorldWeak.Get(), Loc, TeamId);
+	return GPResourceLoopDiagnostics::SpawnWorkerDeferred(WorldWeak.Get(), Loc, TeamId, /*bOwnedByContract*/ true);
 }
 
 void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
@@ -1786,27 +1757,25 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 	{
 	case 0:
 	{
-		AGP_ResourceNode* Node = SpawnNode(FVector(-52000.0f, 0.0f, 100.0f));
-		AGP_MainBase* Base = SpawnMainBase(FVector(-52400.0f, 0.0f, 100.0f), 1);
-		if (!Expect(IsValid(Node) && IsValid(Base), TEXT("SpawnNodeAndMainBase")))
+		// Navigable layout (same discovery as operator diagnostic) — not hardcoded off-mesh coords.
+		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, /*bOwnedByContract*/ true);
+		if (!Expect(Scenario.bOk && Scenario.bReadyForHaulingTest, TEXT("SpawnNavigableHaulingScenario")))
 		{
 			Finish();
 			return;
 		}
+		AGP_ResourceNode* Node = Scenario.ResourceNode;
+		AGP_MainBase* Base = Scenario.MainBase;
+		AGP_Worker* Worker = Scenario.Worker;
 		TestNodeWeak = Node;
 		MainBaseWeak = Base;
+		PrimaryWorkerWeak = Worker;
 		DropOffRangeCm = Base->GetDropOffRangeCm();
 		Expect(FMath::IsNearlyEqual(DropOffRangeCm, 400.0f), TEXT("DropOffRange400"));
 		if (const UGP_ResourceDefinition* Def = Node->ResolveResourceDefinition(true))
 		{
 			InteractionRangeCm = Def->InteractionRangeCm;
-		}
-		AGP_Worker* Worker = SpawnWorker(Node->GetActorLocation() + FVector(100.0f, 0.0f, 0.0f), 1);
-		PrimaryWorkerWeak = Worker;
-		if (!Expect(IsValid(Worker), TEXT("SpawnWorkerTeam1")))
-		{
-			Finish();
-			return;
 		}
 		Expect(Worker->GetTeamId() == 1 && Base->GetTeamId() == 1, TEXT("TeamMatch"));
 		++StageIndex;
@@ -2235,48 +2204,11 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 	{
 	case 0:
 	{
-		// Deterministic cleanup of prior Team1 diagnostic leftovers.
-		TArray<AGP_MainBase*> BasesToDestroy;
-		for (TActorIterator<AGP_MainBase> It(World); It; ++It)
-		{
-			if (IsValid(*It) && ((*It)->GetTeamId() == 1 || (*It)->HasAnyFlags(RF_Transient)))
-			{
-				BasesToDestroy.Add(*It);
-			}
-		}
-		for (AGP_MainBase* Base : BasesToDestroy)
-		{
-			Base->Destroy();
-		}
-		TArray<AGP_Worker*> WorkersToDestroy;
-		for (TActorIterator<AGP_Worker> It(World); It; ++It)
-		{
-			if (IsValid(*It) && ((*It)->GetTeamId() == 1 || (*It)->HasAnyFlags(RF_Transient)))
-			{
-				WorkersToDestroy.Add(*It);
-			}
-		}
-		for (AGP_Worker* Worker : WorkersToDestroy)
-		{
-			Worker->Destroy();
-		}
-		TArray<AGP_ResourceNode*> NodesToDestroy;
-		const FVector PreferredNode = GPResourceLoopDiagnostics::GetDiagnosticResourceNodeLocation();
-		for (TActorIterator<AGP_ResourceNode> It(World); It; ++It)
-		{
-			if (IsValid(*It) && (*It)->HasAnyFlags(RF_Transient)
-				&& FVector::DistSquared((*It)->GetActorLocation(), PreferredNode) <= FMath::Square(600.0f))
-			{
-				NodesToDestroy.Add(*It);
-			}
-		}
-		for (AGP_ResourceNode* Node : NodesToDestroy)
-		{
-			Node->Destroy();
-		}
+		// Only prior contract-owned leftovers — never wipe operator scenarios.
+		GPResourceLoopDiagnostics::CleanupTaggedScenarioForTeam(World, 1, /*bContractOwnedOnly*/ true);
 
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
-			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1);
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, /*bOwnedByContract*/ true);
 		if (!Expect(Scenario.bOk, TEXT("DiagnosticScenarioSpawnOk")))
 		{
 			Finish();
@@ -2286,35 +2218,26 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 		WorkerWeak = Scenario.Worker;
 		NodeWeak = Scenario.ResourceNode;
 
+		Expect(Scenario.bReadyForHaulingTest, TEXT("ReadyForHaulingTest"));
+		Expect(Scenario.bNavSystemPresent, TEXT("NavigationSystemPresent"));
+		Expect(Scenario.bWorkerProjected, TEXT("WorkerProjected"));
+		Expect(Scenario.bNodeApproachProjected, TEXT("NodeApproachProjected"));
+		Expect(Scenario.bBaseDropOffProjected, TEXT("BaseDropOffProjected"));
+		Expect(Scenario.bNavWorkerToNode, TEXT("WorkerToNodePathReachable"));
+		Expect(Scenario.bNavNodeToBase, TEXT("NodeToBasePathReachable"));
+		Expect(Scenario.bNavBaseToNode, TEXT("BaseToNodePathReachable"));
+
 		Expect(IsValid(Scenario.MainBase) && Scenario.MainBase->GetTeamId() == 1, TEXT("MainBaseTeam1"));
 		Expect(IsValid(Scenario.Worker) && Scenario.Worker->GetTeamId() == 1, TEXT("WorkerTeam1"));
 		Expect(IsValid(Scenario.ResourceNode) && Scenario.ResourceNode->GetCurrentAmount() > 0, TEXT("NodeMineableAmount"));
 		Expect(Scenario.ResourceNode->HasAnyFlags(RF_Transient), TEXT("NodeTransient"));
 		Expect(Scenario.MainBase->HasAnyFlags(RF_Transient), TEXT("MainBaseTransient"));
 		Expect(Scenario.Worker->HasAnyFlags(RF_Transient), TEXT("WorkerTransient"));
+		Expect(Scenario.MainBase->Tags.Contains(GPResourceLoopDiagnostics::TagOwnedByContract), TEXT("ContractOwnedTag"));
 
 		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
 		Expect(IsValid(GS) && GS->FindMainBaseForTeam(1) == Scenario.MainBase, TEXT("RegistryResolvesMainBase"));
 		Expect(Scenario.Worker->GetTeamId() != -1 && Scenario.MainBase->GetTeamId() != -1, TEXT("NoUnassignedTeam"));
-
-		int32 BaseCountTeam1 = 0;
-		int32 WorkerCountTeam1 = 0;
-		for (TActorIterator<AGP_MainBase> It(World); It; ++It)
-		{
-			if (IsValid(*It) && (*It)->GetTeamId() == 1)
-			{
-				++BaseCountTeam1;
-			}
-		}
-		for (TActorIterator<AGP_Worker> It(World); It; ++It)
-		{
-			if (IsValid(*It) && (*It)->GetTeamId() == 1)
-			{
-				++WorkerCountTeam1;
-			}
-		}
-		Expect(BaseCountTeam1 == 1, TEXT("ExactlyOneMainBaseTeam1"));
-		Expect(WorkerCountTeam1 >= 1, TEXT("AtLeastOneWorkerTeam1"));
 
 		const GPResourceLoopDiagnostics::FGP_ScenarioValidation Validation =
 			GPResourceLoopDiagnostics::ValidateHaulingScenario(World, 1, Scenario.Worker);
@@ -2322,14 +2245,19 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 		Expect(Validation.bMainBaseRegisteredForTeam, TEXT("MainBaseRegisteredForTeam"));
 		Expect(Validation.bWorkerAndBaseSameTeam, TEXT("WorkerAndBaseSameTeam"));
 		Expect(Validation.bNodeMineable, TEXT("NodeMineable"));
+		Expect(Validation.bReadyForHaulingTest, TEXT("ValidationReadyForHaulingTest"));
+		Expect(Validation.bNavReachableWorkerToNode, TEXT("ValidationWorkerToNode"));
+		Expect(Validation.bNavReachableNodeToBase, TEXT("ValidationNodeToBase"));
+		Expect(Validation.bNavReachableBaseToNode, TEXT("ValidationBaseToNode"));
 
 		// Team change refresh: reassign then restore must not leave stale registry.
-		Scenario.MainBase->SetTeamId(2);
-		Expect(GS->FindMainBaseForTeam(1) == nullptr, TEXT("NoStaleTeam1AfterReassign"));
-		Expect(GS->FindMainBaseForTeam(2) == Scenario.MainBase, TEXT("RegisteredUnderTeam2"));
+		// Use a high temp team id so operator Team1 MainBase (if any) is not disturbed.
+		Scenario.MainBase->SetTeamId(99);
+		Expect(GS->FindMainBaseForTeam(99) == Scenario.MainBase, TEXT("RegisteredUnderTempTeam"));
+		Expect(GS->FindMainBaseForTeam(1) != Scenario.MainBase, TEXT("NoStaleOnTeam1"));
 		Scenario.MainBase->SetTeamId(1);
-		Expect(GS->FindMainBaseForTeam(1) == Scenario.MainBase, TEXT("ReRegisteredTeam1"));
-		Expect(GS->FindMainBaseForTeam(2) == nullptr, TEXT("NoStaleTeam2"));
+		Expect(Scenario.MainBase->GetTeamId() == 1, TEXT("RestoredTeam1"));
+		Expect(GS->FindMainBaseForTeam(99) == nullptr, TEXT("TempTeamCleared"));
 
 		++StageIndex;
 		ScheduleNext();
@@ -2351,8 +2279,14 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 	case 2:
 	{
 		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
-		Expect(IsValid(GS) && GS->FindMainBaseForTeam(1) == nullptr, TEXT("RegistryEmptyAfterCleanup"));
-		Expect(!MainBaseWeak.IsValid() && !WorkerWeak.IsValid(), TEXT("ActorsDestroyed"));
+		// Contract cleanup must not require wiping operator MainBases — only our destroyed actor.
+		Expect(!MainBaseWeak.IsValid() && !WorkerWeak.IsValid() && !NodeWeak.IsValid(), TEXT("ContractActorsDestroyed"));
+		if (IsValid(GS))
+		{
+			AGP_MainBase* Remaining = GS->FindMainBaseForTeam(1);
+			Expect(Remaining == nullptr || !Remaining->Tags.Contains(GPResourceLoopDiagnostics::TagOwnedByContract),
+				TEXT("ContractBaseUnregistered"));
+		}
 		Finish();
 		break;
 	}

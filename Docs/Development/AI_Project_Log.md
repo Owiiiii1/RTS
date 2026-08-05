@@ -1,8 +1,33 @@
 # Grim Protocol — AI Project Log
 
-## 2026-08-05 — GP-S28 Diagnostic Scenario Correction
+## 2026-08-05 — GP-S28 Diagnostic Nav-Reachability Correction
 
 Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior TeamId correction: `61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Replaced hardcoded off-mesh (-45000) layout with NavMesh anchor discovery + approach-point path tests
+- Atomic scenario spawn (no leftover Ready=false actors); tag-scoped cleanup
+- ReadyForHaulingTest requires NavSystem + three paths; contract asserts nav (no false-positive)
+- Hauling contract stage-0 uses navigable scenario
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping not run
+
+### Operator next
+1. `gp.Resource.SpawnDiagnosticScenario 1` → Ok=true, ReadyForHaulingTest=true, all Nav*=true
+2. `gp.Worker.List` + SuggestedCommand Mine
+3. Contract suite including DiagnosticScenario
+
+---
+
+## 2026-08-05 — GP-S28 Diagnostic Scenario Correction
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded for nav by Nav-Reachability Correction)*
 
 ### Branch / baseline
 - Branch: `feature/gp-s28-storage-threat`

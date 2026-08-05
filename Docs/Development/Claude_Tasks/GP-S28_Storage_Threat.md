@@ -8,7 +8,8 @@
 
 Branch: `feature/gp-s28-storage-threat`  
 Candidate: `cd83858390db086c6913669f348a7402ae0a5ad3`  
-Diagnostic correction: `61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`
+Diagnostic TeamId correction: `61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`  
+Diagnostic nav correction: *(see Cursor_Work_Report after push)*
 
 ## Diagnostic scenario correction (operator-blocking)
 Operator failure: MainBase registered at TeamId=-1; Worker TeamId=-1; Node=None.
@@ -17,9 +18,18 @@ Fixes:
 - Production-safe MainBase registry via `NotifyTeamIdChanged` + register only TeamId≥1
 - Primary command: `gp.Resource.SpawnDiagnosticScenario 1` (alias `gp.Storage.SpawnDiagnosticScenario`)
 - `gp.Storage.SpawnDiagnostic` / `gp.Worker.SpawnDiagnostic` create coherent full scenario
-- Layout: MainBase (-45000,0,100), Node +2000cm, Worker +150cm from Node
 - `gp.Worker.List` → ScenarioValidation + ReadyForHaulingTest
 - Contract: `gp.Resource.RunDiagnosticScenarioContractTest`
+
+## Diagnostic nav-reachability correction
+Operator failure after TeamId fix: actors OK but NavWorkerToNode/NavNodeToBase=false (hardcoded -45000 off mesh).
+
+Fixes:
+- Discover navigable anchor (authored node / mobile / PlayerStart / arena candidates / random)
+- Build projected MainBase / Node / Worker; path-test approach points (not actor origins)
+- Atomic spawn: validate paths first; cleanup on failure; Ok=false leaves no actors
+- ReadyForHaulingTest requires NavSystemPresent + three paths (missing nav = error)
+- Contract asserts nav paths; tag-scoped cleanup (operator vs contract-owned)
 
 ## Canonical roadmap position
 `GP-S23R` → `GP-S24R` → `GP-S25` → `GP-S26` → `GP-S27` → **GP-S28 Storage + Threat write** → (later) GP-S36 launch / GP-S39 content MainBase → Slice 7
@@ -150,10 +160,10 @@ Orbital/Score GEs; launch VFX/UI/timers; SWARM curves; Logistics Hub; HUD; Worke
 
 ## Operator validation steps
 1. PIE listen server: `gp.Resource.SpawnDiagnosticScenario 1`
-2. `gp.Worker.List` → WorkerTeam=1, MainBaseTeam=1, Node present, ReadyForHaulingTest=true
-3. Mine to cargo full → observe return → Storage 50 → Threat += Accepted×ThreatPerStoredUnit → return to deposit
-4. Depleted partial 5 → drop → Idle
-5. `gp.Resource.RunDiagnosticScenarioContractTest` + Storage/Hauling/Worker/Mining/Cargo contract tests
+2. Expect Ok=true, NavWorkerToNode/NavNodeToBase/NavBaseToNode=true, ReadyForHaulingTest=true
+3. `gp.Worker.List` → ScenarioValidation Ready=true + SuggestedCommand
+4. Mine via SuggestedCommand → haul → Storage/Threat → return to deposit
+5. `gp.Resource.RunDiagnosticScenarioContractTest` (nav asserts) + Storage/Hauling/Worker/Mining/Cargo
 6. Confirm no Orbital/Score change on drop-off
 
 ## Known limitations

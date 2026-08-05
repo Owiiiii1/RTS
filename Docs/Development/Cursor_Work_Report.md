@@ -130,7 +130,7 @@ See `GP-S26_Mining_Component.md` §Operator validation steps.
 - Debug force cycle for deterministic console tests only
 
 ## Commit SHA
-_(filled after commit)_
+`4d334a7f4fe331757e4e245d2979a27117a6b660`
 
 ## Git state
 Feature branch pushed; main untouched; no PR.

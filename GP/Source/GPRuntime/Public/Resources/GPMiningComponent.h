@@ -184,6 +184,9 @@ private:
 	TWeakObjectPtr<UGP_CargoComponent> CachedCargoComponent;
 	TWeakObjectPtr<AGP_ResourceNode> BoundOccupancyNode;
 
+	/** Guards StopMining against occupancy-delegate reentrancy (Release→Broadcast→Stop). */
+	bool bIsStoppingMining = false;
+
 	float CachedAmountPerMiningCycle = 0.0f;
 	float CachedMiningCycleDurationSeconds = 0.0f;
 	float CachedInteractionRangeCm = 0.0f;
@@ -220,4 +223,62 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Mining")
 	TObjectPtr<UGP_MiningComponent> MiningComponent;
+};
+
+/**
+ * Debug-only host with MiningComponent but no CargoComponent (missing-cargo rejection tests).
+ * Does not destroy default subobjects at runtime.
+ */
+UCLASS(NotPlaceable, Transient)
+class GPRUNTIME_API AGP_MiningNoCargoDiagnosticHost : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	AGP_MiningNoCargoDiagnosticHost();
+
+	UFUNCTION(BlueprintPure, Category = "GP|Mining")
+	UGP_MiningComponent* GetMiningComponent() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Mining")
+	USceneComponent* GetSceneRoot() const;
+
+protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Mining")
+	TObjectPtr<USceneComponent> SceneRoot;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Mining")
+	TObjectPtr<UGP_MiningComponent> MiningComponent;
+};
+
+/** Staged contract test runner (debug console). Next-tick stages; weak refs; reentrancy guard. */
+UCLASS()
+class GPRUNTIME_API UGP_MiningContractTestRunner : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	void Start(UWorld* InWorld);
+	void Abort(const TCHAR* Reason);
+
+private:
+	void ScheduleNext();
+	void AdvanceStage();
+	bool Expect(bool bOk, const TCHAR* Label);
+	void LogStage(const TCHAR* StageName) const;
+	void Finish();
+	AGP_MiningDiagnosticHost* SpawnHostNear(AGP_ResourceNode* Node, float RangeCm) const;
+	AGP_ResourceNode* SpawnTransientNode(const FVector& Location) const;
+	void SafeStopAndDestroyHost(TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak);
+
+	int32 StageIndex = 0;
+	int32 Failures = 0;
+	TWeakObjectPtr<UWorld> WorldWeak;
+	TWeakObjectPtr<AGP_ResourceNode> TestNodeWeak;
+	TWeakObjectPtr<AGP_MiningDiagnosticHost> PrimaryHostWeak;
+	TArray<TWeakObjectPtr<AGP_MiningDiagnosticHost>> FifoHostsWeak;
+	TWeakObjectPtr<AGP_MiningDiagnosticHost> WaitingHostWeak;
+	int32 NodeAmountBeforeCycles = 0;
+	float InteractionRangeCm = 200.0f;
+	FTimerHandle StageTimerHandle;
 };

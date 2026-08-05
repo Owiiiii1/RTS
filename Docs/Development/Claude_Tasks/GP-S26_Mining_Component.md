@@ -8,7 +8,8 @@
 
 Branch: `feature/gp-s26-mining-component`  
 Candidate: `4d334a7f4fe331757e4e245d2979a27117a6b660`  
-Diagnostic-host correction: `b58fce2072a9340e258a332b701f477c52181e25`
+Diagnostic-host correction: `b58fce2072a9340e258a332b701f477c52181e25`  
+Contract-test crash correction: *(see HEAD / Cursor_Work_Report)*
 
 ## Canonical roadmap position
 `GP-S23R` → `GP-S24R` → `GP-S25` → **GP-S26 MiningComponent** → GP-S27 Worker → GP-S28 Storage+ThreatValue
@@ -74,8 +75,9 @@ Replicated: CurrentMiningState (OnRep), CurrentResourceNode, LastStopReason. Tim
 ## Authority policy
 Begin/Stop/cycle mutation require owner authority. Diagnostic cmds reject clients.
 
-## Diagnostic host
-`AGP_MiningDiagnosticHost`: Transient, NotPlaceable, replicated, AlwaysRelevant, no actor tick; **USceneComponent SceneRoot** (no nav); Cargo+Mining as actor components; spawn near node via console; do not save maps.
+## Diagnostic hosts
+- `AGP_MiningDiagnosticHost`: Transient, NotPlaceable, replicated, AlwaysRelevant, no actor tick; **USceneComponent SceneRoot** (no nav); Cargo+Mining as actor components; spawn near node via console; do not save maps.
+- `AGP_MiningNoCargoDiagnosticHost`: SceneRoot + Mining only (missing-cargo rejection; no runtime DestroyComponent).
 
 ### Spawn-near-node invariant
 `SpawnHostNearNode` places host at `Node + min(Range*0.5, 100)` with AlwaysSpawn, verifies actual location matches requested (±1) and `Dist < InteractionRangeCm`, else destroys host and errors. Logs `SpawnWithinRange`.
@@ -87,10 +89,13 @@ When `CurrentResourceNode == null`, Inspect uses a **DiagnosticNode** fallback f
 `gp.Mining.SpawnDiagnosticHost`, `Inspect`, `Begin`, `Stop`, `RunContractTest` (uses production `ExecuteMiningCycle` via debug force path).
 
 ## Contract test
-Covers scene root / location match / within-range spawn, initial tunables 10/1/200, missing cargo, invalid node, out-of-range far host, slot grant, first-cycle delay, 10/cycle, fill 50, deplete partial, Stop idempotent, duplicate Begin, FIFO promotion, EndPlay slot release, ticks off.
+Staged `UGP_MiningContractTestRunner` (next-tick stages, weak refs, reentrancy guard). Transient test ResourceNode. Covers scene root / location / range, tunables 10/1/200, missing cargo (NoCargo host), invalid node, out-of-range, Begin, first-cycle delay, exact 10, fill 50, node −50, CargoFull, slot release, partial cargo/node, duplicate Begin, idempotent Stop, FIFO promote, EndPlay Destroy-without-Stop slot cleanup, ticks off. Does not mutate authored map nodes for cycle math.
+
+### Crash correction (blocking defect)
+Operator crash ×2 on sync `RunContractTest`: `StopMining` → `ReleaseMiningSlot` → occupancy Broadcast → `HandleMinerSlotStateChanged` → `StopMining` reentrancy. Fix: unbind-before-release + `bIsStoppingMining`; staged lifecycle-safe runner; silent invalid-miner cleanup.
 
 ## Lifecycle / EndPlay
-Clear timer; unbind; release slot; clear refs. Node EndPlay broadcasts slot None → miners stop.
+Clear timer; **unbind before release**; release slot; clear refs. `bIsStoppingMining` blocks occupancy reentrancy. Node EndPlay broadcasts slot None → miners stop (broadcast skips pending-kill).
 
 ## In scope
 MiningComponent; state machine; timer cycles; Node→Cargo transfer; definition tunables; range; occupancy+FIFO events; replication; diagnostics; host; docs.
@@ -124,7 +129,7 @@ Worker; movement; Mine command unit wiring; Storage; MainBase; ThreatValue; Orbi
 - No Worker / movement / Mine command execution
 - Diagnostic host only for testing
 - Contract test uses debug force cycle (same production function)
-- Live node amount may be reduced by contract/manual tests
+- Manual Spawn/Begin may still touch authored map nodes; contract test uses transient nodes
 
 ## Next canonical stage
 **GP-S27 — AGP_Worker**

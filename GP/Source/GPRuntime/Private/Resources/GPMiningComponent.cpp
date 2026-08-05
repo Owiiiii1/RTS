@@ -8,6 +8,7 @@
 #include "Resources/GPCargoComponent.h"
 #include "Resources/GPResourceDefinition.h"
 #include "TimerManager.h"
+#include "UObject/Package.h"
 
 #include <limits>
 
@@ -163,11 +164,23 @@ UGP_CargoComponent* UGP_MiningComponent::FindOwnerCargoComponent() const
 
 UGP_CargoComponent* UGP_MiningComponent::GetCargoComponent() const
 {
-	if (CachedCargoComponent.IsValid())
+	if (UGP_CargoComponent* Cached = CachedCargoComponent.Get())
 	{
-		return CachedCargoComponent.Get();
+		if (IsValid(Cached))
+		{
+			return Cached;
+		}
 	}
-	return FindOwnerCargoComponent();
+
+	UGP_CargoComponent* Found = FindOwnerCargoComponent();
+	if (IsValid(Found))
+	{
+		const_cast<UGP_MiningComponent*>(this)->CachedCargoComponent = Found;
+		return Found;
+	}
+
+	const_cast<UGP_MiningComponent*>(this)->CachedCargoComponent.Reset();
+	return nullptr;
 }
 
 bool UGP_MiningComponent::IsMining() const
@@ -314,12 +327,14 @@ void UGP_MiningComponent::ReleaseSlotOnCurrentNode()
 
 	AGP_ResourceNode* Node = CurrentResourceNode;
 	AActor* Owner = GetOwner();
-	if (IsValid(Node) && IsValid(Owner))
+	if (!IsValid(Node) || !IsValid(Owner) || Node->IsActorBeingDestroyed())
 	{
-		if (Node->HasActiveMiningSlot(Owner) || Node->IsWaitingForMiningSlot(Owner))
-		{
-			Node->ReleaseMiningSlot(Owner);
-		}
+		return;
+	}
+
+	if (Node->HasActiveMiningSlot(Owner) || Node->IsWaitingForMiningSlot(Owner))
+	{
+		Node->ReleaseMiningSlot(Owner);
 	}
 }
 
@@ -412,7 +427,8 @@ void UGP_MiningComponent::HandleMinerSlotStateChanged(
 	EGP_MinerOccupancyState OldState,
 	EGP_MinerOccupancyState NewState)
 {
-	if (!HasAuthorityOwner() || Miner != GetOwner())
+	if (!IsValid(this) || bIsStoppingMining || !HasAuthorityOwner()
+		|| !IsValid(GetOwner()) || !IsValid(Miner) || Miner != GetOwner())
 	{
 		return;
 	}
@@ -452,7 +468,7 @@ void UGP_MiningComponent::HandleMinerSlotStateChanged(
 	else if (NewState == EGP_MinerOccupancyState::None
 		&& (CurrentMiningState == EGP_MiningState::Mining || CurrentMiningState == EGP_MiningState::WaitingForSlot))
 	{
-		// Target EndPlay / cleanup removed our slot.
+		// External removal only (node EndPlay / cleanup). Own StopMining unbinds before Release.
 		StopMining(EGP_MiningStopReason::TargetEndPlay);
 	}
 }
@@ -467,16 +483,24 @@ void UGP_MiningComponent::StopMining(EGP_MiningStopReason Reason)
 		return;
 	}
 
+	if (bIsStoppingMining)
+	{
+		return;
+	}
+
+	TGuardValue<bool> StoppingGuard(bIsStoppingMining, true);
+
 	const bool bBusy =
 		CurrentMiningState == EGP_MiningState::Mining
 		|| CurrentMiningState == EGP_MiningState::WaitingForSlot;
 
 	ClearMiningTimer();
+	// Unbind before ReleaseMiningSlot so occupancy Broadcast(None) cannot re-enter StopMining.
+	UnbindOccupancyEvents();
 	if (bBusy)
 	{
 		ReleaseSlotOnCurrentNode();
 	}
-	UnbindOccupancyEvents();
 	ClearTargetReferences();
 
 	EGP_MiningState Terminal = EGP_MiningState::Idle;
@@ -862,9 +886,36 @@ USceneComponent* AGP_MiningDiagnosticHost::GetSceneRoot() const
 	return SceneRoot;
 }
 
+AGP_MiningNoCargoDiagnosticHost::AGP_MiningNoCargoDiagnosticHost()
+{
+	PrimaryActorTick.bCanEverTick = false;
+	bReplicates = true;
+	SetReplicateMovement(false);
+	bAlwaysRelevant = true;
+
+	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
+	SetRootComponent(SceneRoot);
+	SceneRoot->SetMobility(EComponentMobility::Movable);
+	SceneRoot->SetCanEverAffectNavigation(false);
+	SceneRoot->SetVisibility(false);
+
+	MiningComponent = CreateDefaultSubobject<UGP_MiningComponent>(TEXT("MiningComponent"));
+}
+
+UGP_MiningComponent* AGP_MiningNoCargoDiagnosticHost::GetMiningComponent() const
+{
+	return MiningComponent;
+}
+
+USceneComponent* AGP_MiningNoCargoDiagnosticHost::GetSceneRoot() const
+{
+	return SceneRoot;
+}
+
 #if !UE_BUILD_SHIPPING
 namespace GPMiningDebug
 {
+	TWeakObjectPtr<UGP_MiningContractTestRunner> GActiveContractTestRunner;
 	static AGP_ResourceNode* FindNode(UWorld* World, const FString& OptionalName)
 	{
 		if (World == nullptr)
@@ -929,7 +980,7 @@ namespace GPMiningDebug
 		return Best;
 	}
 
-	static AGP_MiningDiagnosticHost* SpawnHostNearNode(UWorld* World, AGP_ResourceNode* Node, float RangeCm)
+	AGP_MiningDiagnosticHost* SpawnHostNearNode(UWorld* World, AGP_ResourceNode* Node, float RangeCm)
 	{
 		if (World == nullptr || !IsValid(Node) || !FMath::IsFinite(RangeCm) || RangeCm <= 0.0f)
 		{
@@ -1219,243 +1270,17 @@ namespace GPMiningDebug
 			UE_LOG(LogGPMining, Warning, TEXT("GP Mining.RunContractTest: rejected on client"));
 			return;
 		}
-
-		int32 Failures = 0;
-		auto Expect = [&Failures](bool bOk, const TCHAR* Label)
+		if (GActiveContractTestRunner.IsValid())
 		{
-			if (!bOk)
-			{
-				++Failures;
-				UE_LOG(LogGPMining, Error, TEXT("GP Mining.RunContractTest FAIL: %s"), Label);
-			}
-			else
-			{
-				UE_LOG(LogGPMining, Log, TEXT("GP Mining.RunContractTest PASS: %s"), Label);
-			}
-		};
-
-		AGP_ResourceNode* LiveNode = FindNode(World, FString());
-		Expect(LiveNode != nullptr, TEXT("HasResourceNode"));
-
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		Params.ObjectFlags |= RF_Transient;
-
-		if (LiveNode == nullptr)
-		{
-			UE_LOG(LogGPMining, Log, TEXT("GP Mining.RunContractTest: Complete Failures=%d (no node)"), Failures);
+			UE_LOG(LogGPMining, Warning,
+				TEXT("GP Mining.RunContractTest: rejected — previous staged test still running"));
 			return;
 		}
 
-		const int32 NodeBefore = LiveNode->GetCurrentAmount();
-		const UGP_ResourceDefinition* LiveDef = LiveNode->ResolveResourceDefinition(true);
-		const float LiveRange = LiveDef != nullptr ? LiveDef->InteractionRangeCm : 200.0f;
-		AGP_MiningDiagnosticHost* Host = SpawnHostNearNode(World, LiveNode, LiveRange);
-		Expect(Host != nullptr && Host->GetMiningComponent() != nullptr && Host->GetCargoComponent() != nullptr, TEXT("SpawnHost"));
-		UGP_MiningComponent* Mining = Host != nullptr ? Host->GetMiningComponent() : nullptr;
-		UGP_CargoComponent* Cargo = Host != nullptr ? Host->GetCargoComponent() : nullptr;
-		if (Host == nullptr || Mining == nullptr || Cargo == nullptr)
-		{
-			UE_LOG(LogGPMining, Log, TEXT("GP Mining.RunContractTest: Complete Failures=%d (host spawn failed)"), Failures);
-			return;
-		}
-
-		Expect(Host->GetSceneRoot() != nullptr && Host->GetRootComponent() == Host->GetSceneRoot(), TEXT("SpawnedHostHasSceneRoot"));
-		{
-			const float HostDist = FVector::Dist(Host->GetActorLocation(), LiveNode->GetActorLocation());
-			Expect(HostDist < LiveRange, TEXT("SpawnedHostWithinInteractionRange"));
-			const float ExpectedOffset = FMath::Min(LiveRange * 0.5f, 100.0f);
-			const FVector ExpectedLoc = LiveNode->GetActorLocation() + FVector(ExpectedOffset, 0.0f, 0.0f);
-			Expect(Host->GetActorLocation().Equals(ExpectedLoc, 1.0f), TEXT("SpawnedHostLocationMatchesRequested"));
-		}
-		Expect(LiveDef != nullptr, TEXT("LiveNodeDefinitionResolved"));
-		if (LiveDef != nullptr)
-		{
-			Expect(FMath::IsNearlyEqual(LiveDef->AmountPerMiningCycle, 10.0f), TEXT("InitialAmountPerCycle10"));
-			Expect(FMath::IsNearlyEqual(LiveDef->MiningCycleDurationSeconds, 1.0f), TEXT("InitialCycleDuration1"));
-			Expect(FMath::IsNearlyEqual(LiveDef->InteractionRangeCm, 200.0f), TEXT("InitialInteractionRange200"));
-		}
-
-		Expect(Mining->IsComponentTickEnabled() == false, TEXT("ComponentTickDisabled"));
-		Expect(Host->IsActorTickEnabled() == false, TEXT("ActorTickDisabled"));
-
-		// Missing cargo: destroy cargo component then BeginMining.
-		AGP_MiningDiagnosticHost* NoCargoHost = SpawnHostNearNode(World, LiveNode, LiveRange);
-		Expect(NoCargoHost != nullptr, TEXT("SpawnNoCargoHost"));
-		if (NoCargoHost != nullptr)
-		{
-			Expect(FVector::Dist(NoCargoHost->GetActorLocation(), LiveNode->GetActorLocation()) < LiveRange, TEXT("NoCargoHostWithinRange"));
-			if (NoCargoHost->GetCargoComponent() != nullptr)
-			{
-				NoCargoHost->GetCargoComponent()->DestroyComponent();
-				Expect(NoCargoHost->GetMiningComponent()->BeginMining(LiveNode) == EGP_BeginMiningResult::RejectedMissingCargo, TEXT("MissingCargoRejection"));
-			}
-			NoCargoHost->Destroy();
-		}
-
-		const FVector FarLocation = LiveNode->GetActorLocation() + FVector(5000.0f, 0.0f, 0.0f);
-		AGP_MiningDiagnosticHost* FarHost = World->SpawnActor<AGP_MiningDiagnosticHost>(
-			AGP_MiningDiagnosticHost::StaticClass(),
-			FarLocation,
-			FRotator::ZeroRotator,
-			Params);
-		Expect(FarHost != nullptr, TEXT("SpawnFarHost"));
-		if (FarHost != nullptr)
-		{
-			if (!FarHost->GetActorLocation().Equals(FarLocation, 1.0f))
-			{
-				FarHost->SetActorLocation(FarLocation, false, nullptr, ETeleportType::TeleportPhysics);
-			}
-			Expect(FVector::Dist(FarHost->GetActorLocation(), LiveNode->GetActorLocation()) > LiveRange, TEXT("FarHostRemainsOutOfRange"));
-			Expect(FarHost->GetMiningComponent()->BeginMining(LiveNode) == EGP_BeginMiningResult::RejectedOutOfRange, TEXT("OutOfRangeRejection"));
-			Expect(!LiveNode->HasActiveMiningSlot(FarHost) && !LiveNode->IsWaitingForMiningSlot(FarHost), TEXT("OutOfRangeNoSlot"));
-			FarHost->Destroy();
-		}
-
-		Expect(Mining->BeginMining(nullptr) == EGP_BeginMiningResult::RejectedInvalidNode, TEXT("InvalidNodeRejection"));
-
-		const EGP_BeginMiningResult BeginResult = Mining->BeginMining(LiveNode);
-		Expect(BeginResult == EGP_BeginMiningResult::Started, TEXT("ValidSlotGrant"));
-		Expect(Mining->GetMiningState() == EGP_MiningState::Mining, TEXT("StateMiningAfterBegin"));
-		Expect(Mining->IsMiningTimerActive(), TEXT("TimerActiveAfterBegin"));
-		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 0.0f), TEXT("FirstCycleDelayNoInstantTransfer"));
-		Expect(Mining->BeginMining(LiveNode) == EGP_BeginMiningResult::AlreadyMiningTarget, TEXT("DuplicateBeginSameTarget"));
-		Expect(Mining->IsMiningTimerActive(), TEXT("NoDuplicateTimerBreak"));
-
-		Mining->DebugForceExecuteMiningCycle();
-		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 10.0f), TEXT("OneCycleTransfers10"));
-		Expect(LiveNode->GetCurrentAmount() == NodeBefore - 10, TEXT("NodeDecreasedBy10"));
-
-		for (int32 Cycle = 0; Cycle < 4; ++Cycle)
-		{
-			Mining->DebugForceExecuteMiningCycle();
-		}
-		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 50.0f), TEXT("FiveCyclesFillCargo50"));
-		Expect(LiveNode->GetCurrentAmount() == NodeBefore - 50, TEXT("NodeDecreasedBy50"));
-		Expect(Mining->GetMiningState() == EGP_MiningState::CargoFull, TEXT("FullCargoStops"));
-		Expect(!Mining->IsMiningTimerActive(), TEXT("FullCargoTimerStopped"));
-		Expect(!LiveNode->HasActiveMiningSlot(Host), TEXT("FullCargoReleasesSlot"));
-
-		Cargo->ClearCargo();
-		Expect(Mining->BeginMining(LiveNode) == EGP_BeginMiningResult::Started, TEXT("RestartAfterClear"));
-
-		// Partial deplete cycle on remaining capacity path: fill cargo to 45, force cycle of 5.
-		Cargo->ClearCargo();
-		Cargo->AddCargo(45.0f);
-		Mining->StopMining(EGP_MiningStopReason::ManualStop);
-		Expect(Mining->BeginMining(LiveNode) == EGP_BeginMiningResult::Started, TEXT("BeginForPartialCargo"));
-		const int32 NodeBeforePartial = LiveNode->GetCurrentAmount();
-		Mining->DebugForceExecuteMiningCycle();
-		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 50.0f), TEXT("PartialCargoCycleFills"));
-		Expect(LiveNode->GetCurrentAmount() == NodeBeforePartial - 5, TEXT("PartialCargoNodeMinus5"));
-		Expect(Mining->GetMiningState() == EGP_MiningState::CargoFull, TEXT("PartialCargoStateFull"));
-
-		// Depleted partial: consume node to 5 remaining, clear cargo, mine once.
-		Cargo->ClearCargo();
-		Mining->StopMining(EGP_MiningStopReason::ManualStop);
-		const int32 ToLeave = 5;
-		const int32 ToConsume = LiveNode->GetCurrentAmount() - ToLeave;
-		if (ToConsume > 0)
-		{
-			LiveNode->ConsumeResource(ToConsume);
-		}
-		Expect(LiveNode->GetCurrentAmount() == ToLeave, TEXT("NodePreparedWith5"));
-		Expect(Mining->BeginMining(LiveNode) == EGP_BeginMiningResult::Started, TEXT("BeginDepletedPartial"));
-		Mining->DebugForceExecuteMiningCycle();
-		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 5.0f), TEXT("DepletedPartialTransfers5"));
-		Expect(LiveNode->IsDepleted(), TEXT("NodeDepletedAfterPartial"));
-		Expect(Mining->GetMiningState() == EGP_MiningState::DepositDepleted, TEXT("StateDepositDepleted"));
-		Expect(!LiveNode->HasActiveMiningSlot(Host), TEXT("DepletedReleasesSlot"));
-
-		Mining->StopMining(EGP_MiningStopReason::ManualStop);
-		Mining->StopMining(EGP_MiningStopReason::ManualStop);
-		Expect(Mining->GetMiningState() == EGP_MiningState::Idle, TEXT("StopMiningIdempotent"));
-
-		// FIFO promotion: restore node amount for slot tests via... we can't restore easily.
-		// Use a fresh temporary ResourceNode for occupancy if possible.
-		AGP_ResourceNode* SlotNode = World->SpawnActor<AGP_ResourceNode>(
-			AGP_ResourceNode::StaticClass(),
-			FVector(-40000.0f, 0.0f, 100.0f),
-			FRotator::ZeroRotator,
-			Params);
-		Expect(SlotNode != nullptr, TEXT("SpawnSlotTestNode"));
-		TArray<AGP_MiningDiagnosticHost*> SlotHosts;
-		if (SlotNode != nullptr)
-		{
-			for (int32 Index = 0; Index < 5; ++Index)
-			{
-				AGP_MiningDiagnosticHost* SlotHost = SpawnHostNearNode(World, SlotNode, 200.0f);
-				if (SlotHost != nullptr)
-				{
-					SlotHosts.Add(SlotHost);
-					SlotHost->GetMiningComponent()->BeginMining(SlotNode);
-				}
-			}
-			Expect(SlotHosts.Num() == 5, TEXT("SpawnedFiveMiners"));
-			int32 MiningCount = 0;
-			int32 WaitingCount = 0;
-			AGP_MiningDiagnosticHost* WaitingHost = nullptr;
-			for (AGP_MiningDiagnosticHost* SlotHost : SlotHosts)
-			{
-				if (SlotHost->GetMiningComponent()->GetMiningState() == EGP_MiningState::Mining)
-				{
-					++MiningCount;
-				}
-				else if (SlotHost->GetMiningComponent()->GetMiningState() == EGP_MiningState::WaitingForSlot)
-				{
-					++WaitingCount;
-					WaitingHost = SlotHost;
-				}
-			}
-			Expect(MiningCount == 4, TEXT("FourActiveMiners"));
-			Expect(WaitingCount == 1, TEXT("OneWaitingMiner"));
-			Expect(SlotNode->GetActiveMinerCount() == 4 && SlotNode->GetWaitingMinerCount() == 1, TEXT("NodeOccupancyCounts"));
-
-			if (SlotHosts.Num() > 0 && WaitingHost != nullptr)
-			{
-				AGP_MiningDiagnosticHost* ActiveToStop = nullptr;
-				for (AGP_MiningDiagnosticHost* SlotHost : SlotHosts)
-				{
-					if (SlotHost != WaitingHost && SlotHost->GetMiningComponent()->IsMining())
-					{
-						ActiveToStop = SlotHost;
-						break;
-					}
-				}
-				Expect(ActiveToStop != nullptr, TEXT("FoundActiveToStop"));
-				if (ActiveToStop != nullptr)
-				{
-					ActiveToStop->GetMiningComponent()->StopMining(EGP_MiningStopReason::ManualStop);
-					Expect(WaitingHost->GetMiningComponent()->GetMiningState() == EGP_MiningState::Mining, TEXT("WaitingPromotedToMining"));
-					Expect(WaitingHost->GetMiningComponent()->IsMiningTimerActive(), TEXT("PromotedTimerStarted"));
-				}
-			}
-
-			// Duplicate queue entry: AlreadyWaiting
-			if (WaitingHost == nullptr && SlotHosts.Num() > 0)
-			{
-				// after promotion no waiter — request again on full node from a stopped host
-			}
-
-			for (AGP_MiningDiagnosticHost* SlotHost : SlotHosts)
-			{
-				if (IsValid(SlotHost))
-				{
-					SlotHost->Destroy();
-				}
-			}
-			Expect(SlotNode->GetActiveMinerCount() == 0 && SlotNode->GetWaitingMinerCount() == 0, TEXT("EndPlayReleasesSlots"));
-			SlotNode->Destroy();
-		}
-
-		if (IsValid(Host))
-		{
-			Host->Destroy();
-		}
-
-		UE_LOG(LogGPMining, Log,
-			TEXT("GP Mining.RunContractTest: Complete Failures=%d (map/assets not saved)"),
-			Failures);
+		UGP_MiningContractTestRunner* Runner = NewObject<UGP_MiningContractTestRunner>(GetTransientPackage());
+		Runner->AddToRoot();
+		GActiveContractTestRunner = Runner;
+		Runner->Start(World);
 	}
 
 	static FAutoConsoleCommandWithWorldAndArgs GMiningSpawnHost(
@@ -1480,7 +1305,510 @@ namespace GPMiningDebug
 
 	static FAutoConsoleCommandWithWorldAndArgs GMiningRunContractTest(
 		TEXT("gp.Mining.RunContractTest"),
-		TEXT("Authority deterministic mining contract checks (uses DebugForceExecuteMiningCycle). Does not save maps."),
+		TEXT("Authority staged mining contract checks (lifecycle-safe). Does not save maps."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&MiningRunContractTest));
+} // namespace GPMiningDebug
+
+void UGP_MiningContractTestRunner::Start(UWorld* InWorld)
+{
+	WorldWeak = InWorld;
+	StageIndex = 0;
+	Failures = 0;
+	FifoHostsWeak.Reset();
+	WaitingHostWeak.Reset();
+	PrimaryHostWeak.Reset();
+	TestNodeWeak.Reset();
+	UE_LOG(LogGPMining, Log, TEXT("GP Mining.RunContractTest Stage=Start (staged lifecycle-safe runner)"));
+	ScheduleNext();
+}
+
+void UGP_MiningContractTestRunner::Abort(const TCHAR* Reason)
+{
+	UE_LOG(LogGPMining, Error, TEXT("GP Mining.RunContractTest ABORT: %s"), Reason);
+	++Failures;
+	Finish();
+}
+
+void UGP_MiningContractTestRunner::ScheduleNext()
+{
+	UWorld* World = WorldWeak.Get();
+	if (!IsValid(World))
+	{
+		Abort(TEXT("WorldInvalid"));
+		return;
+	}
+
+	StageTimerHandle = World->GetTimerManager().SetTimerForNextTick(
+		FTimerDelegate::CreateUObject(this, &UGP_MiningContractTestRunner::AdvanceStage));
+}
+
+bool UGP_MiningContractTestRunner::Expect(bool bOk, const TCHAR* Label)
+{
+	if (!bOk)
+	{
+		++Failures;
+		UE_LOG(LogGPMining, Error, TEXT("GP Mining.RunContractTest FAIL: %s"), Label);
+		return false;
+	}
+
+	UE_LOG(LogGPMining, Log, TEXT("GP Mining.RunContractTest PASS: %s"), Label);
+	return true;
+}
+
+void UGP_MiningContractTestRunner::LogStage(const TCHAR* StageName) const
+{
+	AGP_ResourceNode* Node = TestNodeWeak.Get();
+	AGP_MiningDiagnosticHost* Host = PrimaryHostWeak.Get();
+	UE_LOG(LogGPMining, Log,
+		TEXT("GP Mining.RunContractTest Stage=%s Failures=%d TestNodeValid=%s HostValid=%s NodeActive=%d NodeWaiting=%d"),
+		StageName,
+		Failures,
+		IsValid(Node) ? TEXT("true") : TEXT("false"),
+		IsValid(Host) ? TEXT("true") : TEXT("false"),
+		IsValid(Node) ? Node->GetActiveMinerCount() : -1,
+		IsValid(Node) ? Node->GetWaitingMinerCount() : -1);
+}
+
+AGP_ResourceNode* UGP_MiningContractTestRunner::SpawnTransientNode(const FVector& Location) const
+{
+	UWorld* World = WorldWeak.Get();
+	if (!IsValid(World))
+	{
+		return nullptr;
+	}
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Params.ObjectFlags |= RF_Transient;
+	return World->SpawnActor<AGP_ResourceNode>(
+		AGP_ResourceNode::StaticClass(),
+		Location,
+		FRotator::ZeroRotator,
+		Params);
+}
+
+AGP_MiningDiagnosticHost* UGP_MiningContractTestRunner::SpawnHostNear(AGP_ResourceNode* Node, float RangeCm) const
+{
+	return GPMiningDebug::SpawnHostNearNode(WorldWeak.Get(), Node, RangeCm);
+}
+
+void UGP_MiningContractTestRunner::SafeStopAndDestroyHost(TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak)
+{
+	AGP_MiningDiagnosticHost* Host = HostWeak.Get();
+	if (!IsValid(Host))
+	{
+		HostWeak.Reset();
+		return;
+	}
+
+	if (UGP_MiningComponent* Mining = Host->GetMiningComponent())
+	{
+		if (IsValid(Mining))
+		{
+			Mining->StopMining(EGP_MiningStopReason::ManualStop);
+		}
+	}
+
+	Host->Destroy();
+	HostWeak.Reset();
+}
+
+void UGP_MiningContractTestRunner::Finish()
+{
+	UWorld* World = WorldWeak.Get();
+	if (IsValid(World))
+	{
+		World->GetTimerManager().ClearTimer(StageTimerHandle);
+	}
+
+	SafeStopAndDestroyHost(PrimaryHostWeak);
+	for (TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak : FifoHostsWeak)
+	{
+		SafeStopAndDestroyHost(HostWeak);
+	}
+	FifoHostsWeak.Reset();
+
+	if (AGP_ResourceNode* Node = TestNodeWeak.Get())
+	{
+		if (IsValid(Node))
+		{
+			Node->Destroy();
+		}
+	}
+	TestNodeWeak.Reset();
+
+	UE_LOG(LogGPMining, Log,
+		TEXT("GP Mining.RunContractTest: Complete Failures=%d (map/assets not saved; staged runner)"),
+		Failures);
+
+	RemoveFromRoot();
+	GPMiningDebug::GActiveContractTestRunner.Reset();
+	WorldWeak.Reset();
+}
+
+void UGP_MiningContractTestRunner::AdvanceStage()
+{
+	UWorld* World = WorldWeak.Get();
+	if (!IsValid(World))
+	{
+		Abort(TEXT("WorldInvalidDuringStage"));
+		return;
+	}
+
+	switch (StageIndex)
+	{
+	case 0:
+	{
+		LogStage(TEXT("SpawnTransientNodeAndPrimaryHost"));
+		AGP_ResourceNode* Node = SpawnTransientNode(FVector(-45000.0f, 0.0f, 100.0f));
+		if (!Expect(IsValid(Node), TEXT("SpawnTransientTestNode")))
+		{
+			Finish();
+			return;
+		}
+		TestNodeWeak = Node;
+
+		const UGP_ResourceDefinition* Def = Node->ResolveResourceDefinition(true);
+		InteractionRangeCm = Def != nullptr ? Def->InteractionRangeCm : 200.0f;
+		Expect(Def != nullptr, TEXT("TestNodeDefinitionResolved"));
+		if (Def != nullptr)
+		{
+			Expect(FMath::IsNearlyEqual(Def->AmountPerMiningCycle, 10.0f), TEXT("InitialAmountPerCycle10"));
+			Expect(FMath::IsNearlyEqual(Def->MiningCycleDurationSeconds, 1.0f), TEXT("InitialCycleDuration1"));
+			Expect(FMath::IsNearlyEqual(Def->InteractionRangeCm, 200.0f), TEXT("InitialInteractionRange200"));
+		}
+
+		AGP_MiningDiagnosticHost* Host = SpawnHostNear(Node, InteractionRangeCm);
+		if (!Expect(IsValid(Host) && IsValid(Host->GetMiningComponent()) && IsValid(Host->GetCargoComponent()), TEXT("SpawnHost")))
+		{
+			Finish();
+			return;
+		}
+		PrimaryHostWeak = Host;
+		Expect(Host->GetSceneRoot() != nullptr && Host->GetRootComponent() == Host->GetSceneRoot(), TEXT("SpawnedHostHasSceneRoot"));
+		Expect(FVector::Dist(Host->GetActorLocation(), Node->GetActorLocation()) < InteractionRangeCm, TEXT("SpawnedHostWithinInteractionRange"));
+		{
+			const float ExpectedOffset = FMath::Min(InteractionRangeCm * 0.5f, 100.0f);
+			Expect(Host->GetActorLocation().Equals(Node->GetActorLocation() + FVector(ExpectedOffset, 0.0f, 0.0f), 1.0f),
+				TEXT("SpawnedHostLocationMatchesRequested"));
+		}
+		Expect(Host->GetMiningComponent()->IsComponentTickEnabled() == false, TEXT("ComponentTickDisabled"));
+		Expect(Host->IsActorTickEnabled() == false, TEXT("ActorTickDisabled"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 1:
+	{
+		LogStage(TEXT("MissingCargoAndRangeRejects"));
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		if (!Expect(IsValid(Node), TEXT("TestNodeStillValid")))
+		{
+			Finish();
+			return;
+		}
+
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.ObjectFlags |= RF_Transient;
+		const float Offset = FMath::Min(InteractionRangeCm * 0.5f, 100.0f);
+		AGP_MiningNoCargoDiagnosticHost* NoCargo = World->SpawnActor<AGP_MiningNoCargoDiagnosticHost>(
+			AGP_MiningNoCargoDiagnosticHost::StaticClass(),
+			Node->GetActorLocation() + FVector(Offset, 0.0f, 0.0f),
+			FRotator::ZeroRotator,
+			Params);
+		if (!Expect(IsValid(NoCargo) && IsValid(NoCargo->GetMiningComponent()), TEXT("SpawnNoCargoHost")))
+		{
+			Finish();
+			return;
+		}
+		Expect(FVector::Dist(NoCargo->GetActorLocation(), Node->GetActorLocation()) < InteractionRangeCm, TEXT("NoCargoHostWithinRange"));
+		Expect(NoCargo->GetMiningComponent()->BeginMining(Node) == EGP_BeginMiningResult::RejectedMissingCargo, TEXT("MissingCargoRejection"));
+		NoCargo->Destroy();
+
+		const FVector FarLocation = Node->GetActorLocation() + FVector(5000.0f, 0.0f, 0.0f);
+		AGP_MiningDiagnosticHost* FarHost = World->SpawnActor<AGP_MiningDiagnosticHost>(
+			AGP_MiningDiagnosticHost::StaticClass(),
+			FarLocation,
+			FRotator::ZeroRotator,
+			Params);
+		if (!Expect(IsValid(FarHost), TEXT("SpawnFarHost")))
+		{
+			Finish();
+			return;
+		}
+		if (!FarHost->GetActorLocation().Equals(FarLocation, 1.0f))
+		{
+			FarHost->SetActorLocation(FarLocation, false, nullptr, ETeleportType::TeleportPhysics);
+		}
+		Expect(FVector::Dist(FarHost->GetActorLocation(), Node->GetActorLocation()) > InteractionRangeCm, TEXT("FarHostRemainsOutOfRange"));
+		Expect(FarHost->GetMiningComponent()->BeginMining(Node) == EGP_BeginMiningResult::RejectedOutOfRange, TEXT("OutOfRangeRejection"));
+		Expect(!Node->HasActiveMiningSlot(FarHost) && !Node->IsWaitingForMiningSlot(FarHost), TEXT("OutOfRangeNoSlot"));
+		if (UGP_MiningComponent* FarMining = FarHost->GetMiningComponent())
+		{
+			FarMining->StopMining(EGP_MiningStopReason::ManualStop);
+		}
+		FarHost->Destroy();
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 2:
+	{
+		LogStage(TEXT("CyclesFillAndPartial"));
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		AGP_MiningDiagnosticHost* Host = PrimaryHostWeak.Get();
+		if (!Expect(IsValid(Node) && IsValid(Host), TEXT("PrimaryObjectsValid")))
+		{
+			Finish();
+			return;
+		}
+		UGP_MiningComponent* Mining = Host->GetMiningComponent();
+		UGP_CargoComponent* Cargo = Host->GetCargoComponent();
+		if (!Expect(IsValid(Mining) && IsValid(Cargo), TEXT("PrimaryComponentsValid")))
+		{
+			Finish();
+			return;
+		}
+
+		Expect(Mining->BeginMining(nullptr) == EGP_BeginMiningResult::RejectedInvalidNode, TEXT("InvalidNodeRejection"));
+		NodeAmountBeforeCycles = Node->GetCurrentAmount();
+		Expect(Mining->BeginMining(Node) == EGP_BeginMiningResult::Started, TEXT("ValidSlotGrant"));
+		Expect(Mining->GetMiningState() == EGP_MiningState::Mining, TEXT("StateMiningAfterBegin"));
+		Expect(Mining->IsMiningTimerActive(), TEXT("TimerActiveAfterBegin"));
+		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 0.0f), TEXT("FirstCycleDelayNoInstantTransfer"));
+		Expect(Mining->BeginMining(Node) == EGP_BeginMiningResult::AlreadyMiningTarget, TEXT("DuplicateBeginSameTarget"));
+		Expect(Mining->IsMiningTimerActive(), TEXT("NoDuplicateTimerBreak"));
+
+		Mining->DebugForceExecuteMiningCycle();
+		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 10.0f), TEXT("OneCycleTransfers10"));
+		Expect(Node->GetCurrentAmount() == NodeAmountBeforeCycles - 10, TEXT("NodeDecreasedBy10"));
+		for (int32 Cycle = 0; Cycle < 4; ++Cycle)
+		{
+			Mining->DebugForceExecuteMiningCycle();
+		}
+		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 50.0f), TEXT("FiveCyclesFillCargo50"));
+		Expect(Node->GetCurrentAmount() == NodeAmountBeforeCycles - 50, TEXT("NodeDecreasedBy50"));
+		Expect(Mining->GetMiningState() == EGP_MiningState::CargoFull, TEXT("FullCargoStops"));
+		Expect(!Mining->IsMiningTimerActive(), TEXT("FullCargoTimerStopped"));
+		Expect(!Node->HasActiveMiningSlot(Host), TEXT("FullCargoReleasesSlot"));
+
+		Cargo->ClearCargo();
+		Expect(Mining->BeginMining(Node) == EGP_BeginMiningResult::Started, TEXT("RestartAfterClear"));
+		Cargo->ClearCargo();
+		Cargo->AddCargo(45.0f);
+		Mining->StopMining(EGP_MiningStopReason::ManualStop);
+		Expect(Mining->BeginMining(Node) == EGP_BeginMiningResult::Started, TEXT("BeginForPartialCargo"));
+		const int32 NodeBeforePartial = Node->GetCurrentAmount();
+		Mining->DebugForceExecuteMiningCycle();
+		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 50.0f), TEXT("PartialCargoCycleFills"));
+		Expect(Node->GetCurrentAmount() == NodeBeforePartial - 5, TEXT("PartialCargoNodeMinus5"));
+		Expect(Mining->GetMiningState() == EGP_MiningState::CargoFull, TEXT("PartialCargoStateFull"));
+
+		Cargo->ClearCargo();
+		Mining->StopMining(EGP_MiningStopReason::ManualStop);
+		const int32 ToLeave = 5;
+		const int32 ToConsume = Node->GetCurrentAmount() - ToLeave;
+		if (ToConsume > 0)
+		{
+			Node->ConsumeResource(ToConsume);
+		}
+		Expect(Node->GetCurrentAmount() == ToLeave, TEXT("NodePreparedWith5"));
+		Expect(Mining->BeginMining(Node) == EGP_BeginMiningResult::Started, TEXT("BeginDepletedPartial"));
+		Mining->DebugForceExecuteMiningCycle();
+		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 5.0f), TEXT("DepletedPartialTransfers5"));
+		Expect(Node->IsDepleted(), TEXT("NodeDepletedAfterPartial"));
+		Expect(Mining->GetMiningState() == EGP_MiningState::DepositDepleted, TEXT("StateDepositDepleted"));
+		Expect(!Node->HasActiveMiningSlot(Host), TEXT("DepletedReleasesSlot"));
+		Mining->StopMining(EGP_MiningStopReason::ManualStop);
+		Mining->StopMining(EGP_MiningStopReason::ManualStop);
+		Expect(Mining->GetMiningState() == EGP_MiningState::Idle, TEXT("StopMiningIdempotent"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 3:
+	{
+		LogStage(TEXT("FifoSpawnAndBegin"));
+		// Fresh transient node for occupancy (do not reuse depleted test node).
+		if (AGP_ResourceNode* OldNode = TestNodeWeak.Get())
+		{
+			if (IsValid(OldNode))
+			{
+				OldNode->Destroy();
+			}
+		}
+		TestNodeWeak.Reset();
+		SafeStopAndDestroyHost(PrimaryHostWeak);
+
+		AGP_ResourceNode* SlotNode = SpawnTransientNode(FVector(-46000.0f, 0.0f, 100.0f));
+		if (!Expect(IsValid(SlotNode), TEXT("SpawnSlotTestNode")))
+		{
+			Finish();
+			return;
+		}
+		TestNodeWeak = SlotNode;
+		FifoHostsWeak.Reset();
+		WaitingHostWeak.Reset();
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			AGP_MiningDiagnosticHost* SlotHost = SpawnHostNear(SlotNode, InteractionRangeCm);
+			if (!IsValid(SlotHost) || !IsValid(SlotHost->GetMiningComponent()))
+			{
+				Expect(false, TEXT("SpawnedFiveMiners"));
+				Finish();
+				return;
+			}
+			FifoHostsWeak.Add(SlotHost);
+			SlotHost->GetMiningComponent()->BeginMining(SlotNode);
+		}
+		Expect(FifoHostsWeak.Num() == 5, TEXT("SpawnedFiveMiners"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 4:
+	{
+		LogStage(TEXT("FifoPromotion"));
+		AGP_ResourceNode* SlotNode = TestNodeWeak.Get();
+		if (!Expect(IsValid(SlotNode), TEXT("FifoNodeValid")))
+		{
+			Finish();
+			return;
+		}
+
+		int32 MiningCount = 0;
+		int32 WaitingCount = 0;
+		WaitingHostWeak.Reset();
+		TWeakObjectPtr<AGP_MiningDiagnosticHost> ActiveToStopWeak;
+		for (TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak : FifoHostsWeak)
+		{
+			AGP_MiningDiagnosticHost* SlotHost = HostWeak.Get();
+			if (!Expect(IsValid(SlotHost) && IsValid(SlotHost->GetMiningComponent()), TEXT("FifoHostStillValid")))
+			{
+				Finish();
+				return;
+			}
+			const EGP_MiningState State = SlotHost->GetMiningComponent()->GetMiningState();
+			if (State == EGP_MiningState::Mining)
+			{
+				++MiningCount;
+				if (!ActiveToStopWeak.IsValid())
+				{
+					ActiveToStopWeak = SlotHost;
+				}
+			}
+			else if (State == EGP_MiningState::WaitingForSlot)
+			{
+				++WaitingCount;
+				WaitingHostWeak = SlotHost;
+			}
+		}
+		Expect(MiningCount == 4, TEXT("FourActiveMiners"));
+		Expect(WaitingCount == 1, TEXT("OneWaitingMiner"));
+		Expect(SlotNode->GetActiveMinerCount() == 4 && SlotNode->GetWaitingMinerCount() == 1, TEXT("NodeOccupancyCounts"));
+
+		AGP_MiningDiagnosticHost* ActiveToStop = ActiveToStopWeak.Get();
+		AGP_MiningDiagnosticHost* WaitingHost = WaitingHostWeak.Get();
+		if (!Expect(IsValid(ActiveToStop) && IsValid(WaitingHost), TEXT("FoundActiveToStop")))
+		{
+			Finish();
+			return;
+		}
+		ActiveToStop->GetMiningComponent()->StopMining(EGP_MiningStopReason::ManualStop);
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 5:
+	{
+		LogStage(TEXT("FifoPromotionVerify"));
+		AGP_MiningDiagnosticHost* WaitingHost = WaitingHostWeak.Get();
+		if (!Expect(IsValid(WaitingHost) && IsValid(WaitingHost->GetMiningComponent()), TEXT("WaitingHostValidAfterPromote")))
+		{
+			Finish();
+			return;
+		}
+		Expect(WaitingHost->GetMiningComponent()->GetMiningState() == EGP_MiningState::Mining, TEXT("WaitingPromotedToMining"));
+		Expect(WaitingHost->GetMiningComponent()->IsMiningTimerActive(), TEXT("PromotedTimerStarted"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 6:
+	{
+		LogStage(TEXT("FifoCleanupStop"));
+		for (TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak : FifoHostsWeak)
+		{
+			if (AGP_MiningDiagnosticHost* Host = HostWeak.Get())
+			{
+				if (IsValid(Host) && IsValid(Host->GetMiningComponent()))
+				{
+					Host->GetMiningComponent()->StopMining(EGP_MiningStopReason::ManualStop);
+				}
+			}
+		}
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 7:
+	{
+		LogStage(TEXT("FifoCleanupDestroy"));
+		for (TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak : FifoHostsWeak)
+		{
+			SafeStopAndDestroyHost(HostWeak);
+		}
+		FifoHostsWeak.Reset();
+		WaitingHostWeak.Reset();
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 8:
+	{
+		LogStage(TEXT("EndPlayDestroyWhileMining"));
+		AGP_ResourceNode* SlotNode = TestNodeWeak.Get();
+		if (!Expect(IsValid(SlotNode) && SlotNode->GetActiveMinerCount() == 0 && SlotNode->GetWaitingMinerCount() == 0,
+			TEXT("FifoCleanupLeftNodeEmpty")))
+		{
+			Finish();
+			return;
+		}
+
+		AGP_MiningDiagnosticHost* EndPlayHost = SpawnHostNear(SlotNode, InteractionRangeCm);
+		if (!Expect(IsValid(EndPlayHost) && IsValid(EndPlayHost->GetMiningComponent()), TEXT("SpawnEndPlayHost")))
+		{
+			Finish();
+			return;
+		}
+		PrimaryHostWeak = EndPlayHost;
+		Expect(EndPlayHost->GetMiningComponent()->BeginMining(SlotNode) == EGP_BeginMiningResult::Started, TEXT("EndPlayHostBegan"));
+		Expect(SlotNode->HasActiveMiningSlot(EndPlayHost), TEXT("EndPlayHostHasSlot"));
+		// Destroy without prior StopMining — EndPlay must release the slot.
+		EndPlayHost->Destroy();
+		PrimaryHostWeak.Reset();
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 9:
+	{
+		LogStage(TEXT("EndPlaySlotCleanupVerify"));
+		AGP_ResourceNode* SlotNode = TestNodeWeak.Get();
+		Expect(IsValid(SlotNode) && SlotNode->GetActiveMinerCount() == 0 && SlotNode->GetWaitingMinerCount() == 0,
+			TEXT("EndPlayReleasesSlots"));
+		if (IsValid(SlotNode))
+		{
+			SlotNode->Destroy();
+		}
+		TestNodeWeak.Reset();
+		Finish();
+		break;
+	}
+	default:
+		Abort(TEXT("UnknownStage"));
+		break;
+	}
 }
 #endif

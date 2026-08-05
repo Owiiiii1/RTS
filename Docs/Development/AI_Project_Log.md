@@ -1,5 +1,31 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-05 — GP-S26 Mining Contract Test Crash Correction
+
+Status: **GP-S26_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s26-mining-component`
+- Base: `main` @ `693a36b8777babaea6085cb799397e9e0cddb77f`
+- Candidate: `4d334a7f4fe331757e4e245d2979a27117a6b660`
+- Prior host correction: `b58fce2072a9340e258a332b701f477c52181e25`
+- Task: `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md`
+
+### What was done
+- Root cause: occupancy Broadcast reentrancy into `StopMining` (Editor crash ×2 on `gp.Mining.RunContractTest`)
+- Production: unbind-before-release, `bIsStoppingMining`, IsValid hardening; silent invalid-miner cleanup
+- Staged `UGP_MiningContractTestRunner` + `AGP_MiningNoCargoDiagnosticHost` + transient test nodes + reentrancy guard
+- Post-fix run: `Complete Failures=0`; process alive until Complete
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping **not run**
+
+### Intentionally not done
+- No finalization / PR / merge / GP-S27; balance unchanged
+
+### Operator next
+- Re-validate `gp.Mining.RunContractTest` Failures=0 (Editor stays up); then finalize
+
+---
+
 ## 2026-08-05 — GP-S26 UGP_MiningComponent
 
 Status: **GP-S26_CODE_READY_OPERATOR_VALIDATION_PENDING**

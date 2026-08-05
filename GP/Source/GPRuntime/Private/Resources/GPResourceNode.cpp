@@ -467,7 +467,7 @@ void AGP_ResourceNode::BroadcastMinerSlotStateChanged(
 	EGP_MinerOccupancyState OldState,
 	EGP_MinerOccupancyState NewState)
 {
-	if (Miner == nullptr || OldState == NewState)
+	if (!IsValid(Miner) || Miner->IsActorBeingDestroyed() || OldState == NewState)
 	{
 		return;
 	}
@@ -477,15 +477,12 @@ void AGP_ResourceNode::BroadcastMinerSlotStateChanged(
 
 void AGP_ResourceNode::CleanupInvalidMiners()
 {
+	// Silent removal only — do not broadcast into pending-kill / destroyed miners.
 	for (int32 Index = ActiveMiners.Num() - 1; Index >= 0; --Index)
 	{
 		AActor* Miner = ActiveMiners[Index].Get();
 		if (!IsValid(Miner) || Miner->IsActorBeingDestroyed())
 		{
-			if (Miner != nullptr)
-			{
-				BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Active, EGP_MinerOccupancyState::None);
-			}
 			ActiveMiners.RemoveAt(Index);
 		}
 	}
@@ -495,10 +492,6 @@ void AGP_ResourceNode::CleanupInvalidMiners()
 		AActor* Miner = WaitingMiners[Index].Get();
 		if (!IsValid(Miner) || Miner->IsActorBeingDestroyed())
 		{
-			if (Miner != nullptr)
-			{
-				BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Waiting, EGP_MinerOccupancyState::None);
-			}
 			WaitingMiners.RemoveAt(Index);
 		}
 	}

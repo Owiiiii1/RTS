@@ -290,10 +290,8 @@ void AGP_GameState::RegisterMainBase(AGP_MainBase* MainBase)
 	const int32 TeamId = MainBase->GetTeamId();
 	if (TeamId < 1)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("AGP_GameState::RegisterMainBase: MainBase=%s TeamId=%d is not a playable team; registry skipped until TeamId assigned."),
-			*GetNameSafe(MainBase),
-			TeamId);
+		// Production-safe: refuse invalid registration. Caller must assign TeamId first.
+		return;
 	}
 
 	for (const TWeakObjectPtr<AGP_MainBase>& ExistingWeak : RegisteredMainBases)
@@ -304,7 +302,7 @@ void AGP_GameState::RegisterMainBase(AGP_MainBase* MainBase)
 			{
 				return;
 			}
-			if (Existing->GetTeamId() == TeamId && TeamId >= 1)
+			if (Existing->GetTeamId() == TeamId)
 			{
 				UE_LOG(LogTemp, Error,
 					TEXT("AGP_GameState::RegisterMainBase: duplicate MainBase for TeamId=%d Existing=%s New=%s"),

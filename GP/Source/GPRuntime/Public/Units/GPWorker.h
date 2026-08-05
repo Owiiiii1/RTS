@@ -152,3 +152,33 @@ private:
 	float ThreatBefore = 0.0f;
 	static constexpr float MovementWaitTimeoutSeconds = 30.0f;
 };
+
+/** Deterministic diagnostic scenario spawn/cleanup contract (GP-S28). */
+UCLASS()
+class GPRUNTIME_API UGP_DiagnosticScenarioContractTestRunner : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual void BeginDestroy() override;
+	void Start(UWorld* InWorld);
+
+private:
+	void ScheduleNext();
+	void AdvanceStage();
+	bool Expect(bool bOk, const TCHAR* Label);
+	void Abort(const TCHAR* Reason);
+	void Finish();
+	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void UnbindWorldCleanup();
+
+	int32 StageIndex = 0;
+	int32 Failures = 0;
+	bool bFinished = false;
+	FDelegateHandle WorldCleanupHandle;
+	FTimerHandle StageTimerHandle;
+	TWeakObjectPtr<UWorld> WorldWeak;
+	TWeakObjectPtr<AGP_MainBase> MainBaseWeak;
+	TWeakObjectPtr<AGP_Worker> WorkerWeak;
+	TWeakObjectPtr<AGP_ResourceNode> NodeWeak;
+};

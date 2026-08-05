@@ -1,8 +1,34 @@
 # Grim Protocol — AI Project Log
 
-## 2026-08-05 — GP-S28 StorageComponent + FerroniteThreatValue
+## 2026-08-05 — GP-S28 Diagnostic Scenario Correction
 
 Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior candidate: `cd83858390db086c6913669f348a7402ae0a5ad3`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Production-safe MainBase registry: register only TeamId≥1; refresh on `NotifyTeamIdChanged`
+- `gp.Resource.SpawnDiagnosticScenario` (+ Storage alias) — full MainBase+Worker+Node
+- Fixed `gp.Worker.SpawnDiagnostic` / `gp.Storage.SpawnDiagnostic` coherence
+- `gp.Worker.List` ScenarioValidation + ReadyForHaulingTest
+- `gp.Resource.RunDiagnosticScenarioContractTest`
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping not run
+
+### Operator next
+1. `gp.Resource.SpawnDiagnosticScenario 1`
+2. `gp.Worker.List` → ReadyForHaulingTest=true
+3. Haul validation + contract tests; then finalize
+
+---
+
+## 2026-08-05 — GP-S28 StorageComponent + FerroniteThreatValue
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded for operator flow by Diagnostic Scenario Correction)*
 
 ### Branch / baseline
 - Branch: `feature/gp-s28-storage-threat`

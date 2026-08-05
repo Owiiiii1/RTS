@@ -474,7 +474,10 @@ EDataValidationResult UGP_StorageComponent::IsDataValid(FDataValidationContext& 
 #include "Buildings/GPMainBase.h"
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
+#include "Resources/GPResourceLoopDiagnostics.h"
+#include "Resources/GPResourceNode.h"
 #include "TimerManager.h"
+#include "Units/GPWorker.h"
 #include "UObject/Package.h"
 
 #include <limits>
@@ -618,24 +621,33 @@ namespace GPStorageDebug
 			TeamId = 1;
 		}
 
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		Params.ObjectFlags |= RF_Transient;
-		const FVector Loc(-45000.0f, 0.0f, 100.0f);
-		AGP_MainBase* Base = World->SpawnActor<AGP_MainBase>(AGP_MainBase::StaticClass(), Loc, FRotator::ZeroRotator, Params);
-		if (IsValid(Base))
+		// Prefer full GP-S28 scenario so operator is not left with MainBase-only incompleteness.
+		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId);
+		if (!Scenario.bOk)
 		{
-			Base->SetTeamId(TeamId);
+			UE_LOG(LogGPStorage, Error,
+				TEXT("GP Storage.SpawnDiagnostic: full scenario FAILED TeamId=%d Error=%s — try gp.Resource.SpawnDiagnosticScenario %d"),
+				TeamId,
+				*Scenario.Error,
+				TeamId);
+			return;
 		}
-		UGP_StorageComponent* Storage = IsValid(Base) ? Base->GetStorageComponent() : nullptr;
+
+		UGP_StorageComponent* Storage = Scenario.MainBase->GetStorageComponent();
+		const GPResourceLoopDiagnostics::FGP_ScenarioValidation Validation =
+			GPResourceLoopDiagnostics::ValidateHaulingScenario(World, TeamId, Scenario.Worker);
 		UE_LOG(LogGPStorage, Log,
-			TEXT("GP Storage.SpawnDiagnostic: MainBase=%s TeamId=%d Storage=%s Cap=%.1f Containers=%d DropOff=%.1f"),
-			*GetNameSafe(Base),
-			TeamId,
+			TEXT("GP Storage.SpawnDiagnostic: FullScenario=true MainBase=%s TeamId=%d Worker=%s Node=%s Storage=%s Cap=%.1f Containers=%d DropOff=%.1f ReadyForHaulingTest=%s"),
+			*GetNameSafe(Scenario.MainBase),
+			Scenario.MainBase->GetTeamId(),
+			*GetNameSafe(Scenario.Worker),
+			*GetNameSafe(Scenario.ResourceNode),
 			*GetNameSafe(Storage),
 			IsValid(Storage) ? Storage->GetTotalCapacity() : -1.0f,
 			IsValid(Storage) ? Storage->GetContainerCount() : -1,
-			IsValid(Base) ? Base->GetDropOffRangeCm() : -1.0f);
+			Scenario.MainBase->GetDropOffRangeCm(),
+			Validation.bReadyForHaulingTest ? TEXT("true") : TEXT("false"));
 	}
 
 	static void StorageInspect(const TArray<FString>& Args, UWorld* World)
@@ -738,7 +750,7 @@ namespace GPStorageDebug
 
 	static FAutoConsoleCommandWithWorldAndArgs GStorageSpawn(
 		TEXT("gp.Storage.SpawnDiagnostic"),
-		TEXT("Authority: spawn transient AGP_MainBase. Usage: gp.Storage.SpawnDiagnostic [TeamId=1]"),
+		TEXT("Authority: spawn full GP-S28 diagnostic scenario (MainBase+Worker+Node). Usage: gp.Storage.SpawnDiagnostic [TeamId=1]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&StorageSpawnDiagnostic));
 
 	static FAutoConsoleCommandWithWorldAndArgs GStorageInspect(

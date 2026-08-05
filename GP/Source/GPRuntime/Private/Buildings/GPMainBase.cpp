@@ -38,7 +38,8 @@ AGP_MainBase::AGP_MainBase()
 void AGP_MainBase::BeginPlay()
 {
 	Super::BeginPlay();
-	RegisterWithGameState();
+	// Register only when TeamId is already playable (deferred spawn sets TeamId before FinishSpawning).
+	RefreshMainBaseRegistration();
 }
 
 void AGP_MainBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -51,6 +52,49 @@ void AGP_MainBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AGP_MainBase, DropOffRangeCm);
+}
+
+void AGP_MainBase::NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId)
+{
+	Super::NotifyTeamIdChanged(OldTeamId, NewTeamId);
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// Drop stale registry entry when team changes (including to unassigned).
+	if (bRegisteredWithGameState)
+	{
+		UnregisterFromGameState();
+	}
+
+	if (NewTeamId >= 1)
+	{
+		RegisterWithGameState();
+	}
+}
+
+void AGP_MainBase::RefreshMainBaseRegistration()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (GetTeamId() < 1)
+	{
+		// Production-safe: wait for authority TeamId assignment. No warning spam.
+		if (bRegisteredWithGameState)
+		{
+			UnregisterFromGameState();
+		}
+		return;
+	}
+
+	if (!bRegisteredWithGameState)
+	{
+		RegisterWithGameState();
+	}
 }
 
 UGP_StorageComponent* AGP_MainBase::GetStorageComponent() const
@@ -66,6 +110,11 @@ UCapsuleComponent* AGP_MainBase::GetCapsuleComponent() const
 void AGP_MainBase::RegisterWithGameState()
 {
 	if (!HasAuthority() || bRegisteredWithGameState)
+	{
+		return;
+	}
+
+	if (GetTeamId() < 1)
 	{
 		return;
 	}

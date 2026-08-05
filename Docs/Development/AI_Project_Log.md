@@ -1,8 +1,38 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-05 — GP-S28 StorageComponent + FerroniteThreatValue
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- **GP-S27 merged into main** @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- `UGP_StorageComponent` container fill (Empty/Filling/Ready; Launching scaffold only)
+- Minimal `AGP_BuildingBase` + `AGP_MainBase` host + GameState team registry
+- Per-team `FerroniteThreatValue` SoT + legacy scalar mirror
+- Worker haul: CargoFull / depleted-partial → own MainBase drop-off → optional return-to-deposit
+- Drop-off transaction + rollback; GDD overflow LOST; no Orbital/Score write
+- Diagnostics `gp.Storage.*`, `gp.Worker.List`, `gp.Worker.RunHaulingContractTest`
+- GPEditor Win64 Development + UHT **PASSED**
+- GP Win64 Development / Shipping **not run**
+
+### Intentionally not done
+- No container launch / Orbital / Score (GP-S36); no content MainBase BP (GP-S39)
+- No PR/merge/main; no map/LFS/Blueprints; no Slice 7
+
+### Operator next
+- Validate haul PIE + Storage/Hauling/Worker/Mining/Cargo contract tests; then finalize
+
+---
+
 ## 2026-08-05 — GP-S27 AGP_Worker — finalization
 
-Status: **GP-S27_FINALIZED_READY_FOR_MERGE**
+Status: **GP-S27_FINALIZED_READY_FOR_MERGE** *(merged to main @ 4aae012)*
 
 ### Branch / baseline
 - Branch: `feature/gp-s27-worker`

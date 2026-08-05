@@ -1,119 +1,147 @@
-# Cursor Work Report — GP-S27 AGP_Worker Finalization
+# Cursor Work Report — GP-S28 Storage + FerroniteThreatValue
 
 ## Task
-GP-S27 — AGP_Worker Finalization
+GP-S28 — `UGP_StorageComponent` + FerroniteThreatValue write + Worker auto-return/drop-off haul chain
 
-## Final status
-**GP-S27_FINALIZED_READY_FOR_MERGE**
+## Status
+**GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ## Branch
-`feature/gp-s27-worker`
+`feature/gp-s28-storage-threat`
 
 ## Base
-`main` @ `860070c4acbcb85fd5c4334628584372bdd082ca`
+`main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
 
-## Candidate commit
-`07e20fbfff36e181076d237d0596ef6f25b40951`
+## Canonical dependencies
+GP-S23R → GP-S24R → GP-S25 → GP-S26 → GP-S27 (merged) → **GP-S28**
 
-## Approach correction commit
-`4d38a405729fb5766a5498e91436896ef5efda6b`
+## Docs inspected
+- Docs/README.md, DOCUMENTATION_INDEX.md
+- GDD/02_Core_Gameplay_Loop.md, GDD/06_Resources.md
+- TDD/07_Resource_Architecture.md, TDD/13_Architecture_Proposal.md, TDD/05_Unit_Architecture.md, TDD/06_Building_Architecture.md
+- ADR_0002, ADR_0003, ADR_0006; ADR_0009 no-local-production (scope)
+- Claude_Tasks GP-S23R…GP-S27
+- Live: GameState, Worker, Cargo, Mining, UnitCommand, Movement, UnitBase/MobileUnit, PlayerState TeamId, GameplayTags, diagnostic runners
 
-## Finalization commit
-`03ced125fed4081f933ce3074ceb50ea344cedb0`
+## Superseded docs rejected
+- Pre-pivot CarriedFerronite / GE_GP_AddFerronite drop-off income
+- TDD leftover-wait overflow when conflicting with GDD Two-State “overflow lost”
+- Auto-launch / Orbital / Score as part of S28 (belongs GP-S36)
 
-## Full operator validation matrix
-| Check | Result |
-| --- | --- |
-| Immediate in-range Mine | **PASS** |
-| First-cycle delay | **PASS** |
-| Cargo 50/50 CargoFull | **PASS** |
-| Slot release / timer stop | **PASS** |
-| No automatic unload | **PASS** |
-| Move interruption | **PASS** |
-| FIFO 4+1 + promotion | **PASS** |
-| Depleted transfer 5 | **PASS** |
-| EndPlay cleanup | **PASS** |
-| Long-distance safe approach | **PASS** (see below) |
-| `gp.Worker.RunContractTest` | **PASS** Failures=0 |
-| `gp.Mining.RunContractTest` | **PASS** Failures=0 |
-| `gp.Cargo.RunContractTest` | **PASS** Failures=0 |
-| Editor alive | **yes** |
+## Actual existing MainBase architecture
+**None in C++ before S28.** No BuildingBase/MainBase/BuildingDefinition/DropOffRange. Tags only (`GP.Building.Type.MainBase`).
 
-## Exact manual long-distance scenario
-Worker=`GP_Worker_3`; Move to (3000,3000,100) → Reached (2976.84,2960.69,88).  
-Mine `BP_ResourceNode_AuthoredExample_C_1` @ (1220,-1500,40); InitialDistance=4794.4; Range=200.
+## Actual existing GameState threat architecture
+Single replicated `float FerroniteThreatValue` (global). Docs require per-player stock.
 
-Safe approach: Destination=(1263.66,-1389.13,88); DesiredHoriz=119.2; **PredictedWorst=175.8**; Acc=50; Safety=25; Attempt=0.
+## Selected host / reference solution
+- Minimal `AGP_BuildingBase` + `AGP_MainBase` (adaptation: S34/S39 deferred for content)
+- Authority `AGP_GameState` MainBase registry (`Register/Unregister/FindMainBaseForTeam`) — no GetActorOfClass / name lookup
+- Per-team threat array SoT + legacy scalar synced from Team 1 / first entry
 
-Arrival Final=(1281.92,-1342.79,88) → MineApproachReached → MineBegin; **ActualDistance=175.6**; Range=200; Result=Started → terminal CargoFull (MineTerminal NewState=3 Reason=2).
-
-## Contract results (finalization re-run)
-- Worker: `Complete Failures=0`
-- Mining: `Complete Failures=0`
-- Cargo: `Complete Failures=0`
-
-## Authority review
-Mine orchestration / BeginMining / movement request authority-only via UnitCommandComponent + MiningComponent. No Worker mining RPC. Command validate filters issuers to `AGP_Worker`.
-
-## Replication review
-Worker uses UnitBase/MobileUnit replication; Mine approach state server-only; Cargo/Mining replicate own state; no client mutation RPC.
-
-## Command serial review
-Held.CommandSerial = ActiveMineSerial; stale OnMovementResult ignored; replace ResetMineExecutor; corrective keeps same serial with Attempt counter.
-
-## Approach geometry proof
-`D_h = sqrt(Range²−ΔZ²) − Acc − 25`; PredictedWorst=`sqrt((D_h+Acc)²+ΔZ²) < Range`. Operator: PredictedWorst=175.8, Actual=175.6 &lt; 200. Mining InteractionRangeCm remains strict 200 (unchanged).
-
-## Corrective-attempt policy
-At most one deeper corrective RequestMove after OOR arrival; no slot/timer until success; no infinite retry.
-
-## Timer / tick policy
-No permanent Worker actor tick; movement tick only while moving; mining timer only in Mining; no distance polling Tick. Contract wait uses time-based timeout + sparse progress logs.
-
-## Interruption / idempotency
-Any new command ResetMineExecutor (StopMining + clear approach). Duplicate same-target Mine while Approaching/Active/Mining/Waiting → idempotent.
-
-## FIFO review
-ResourceNode MaxConcurrentMiners=4; Waiting→Active via occupancy events; Worker activity derived from Mining state.
-
-## Lifecycle review
-EndPlay/OwnerDied ResetMineExecutor; runner reentrancy guard + world cleanup / BeginDestroy; movement wait timeout.
-
-## Regressions
-Controller Tick unchanged; Move/Attack paths intact aside from Mine reset hook; ResourceNode AActor no ASC/team/permanent Tick; mining 10/1/200; cargo 50; MaxConcurrentMiners=4; StopMining unbind-before-release + `bIsStoppingMining` intact; no CarriedFerronite; no BP/map/projectile/LFS changes.
-
-## Files changed during finalization
-- `Docs/Development/Claude_Tasks/GP-S27_Worker.md`
+## Files changed
+- `GP/Source/GPRuntime/Public|Private/Resources/GPStorageComponent.*` (new)
+- `GP/Source/GPRuntime/Public|Private/Buildings/GPBuildingBase.*` (new)
+- `GP/Source/GPRuntime/Public|Private/Buildings/GPMainBase.*` (new)
+- `GP/Source/GPRuntime/Public|Private/Game/GPGameState.*`
+- `GP/Source/GPRuntime/Public|Private/Units/GPUnitCommandComponent.*`
+- `GP/Source/GPRuntime/Public|Private/Units/GPWorker.*`
+- `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md` (new)
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
-- C++ unchanged at finalization
+- `Docs/Development/Cursor_Work_Report.md` (this file)
 
-## GPEditor / UHT
-**not rerun** (no C++ changes during finalization)
+## StorageComponent API
+`AddPlanetaryFerronite` → `FGP_StorageAddResult`; `RemovePlanetaryFerronite` rollback; totals/Ready/Launching counts; `GetThreatPerStoredUnit`; `ValidateStorageContract`; no permanent Tick
 
-## GP Win64 Development
-**PASSED**
+## Container data model
+`FGP_StorageContainer` + `EGP_StorageContainerState` Empty/Filling/Ready/Launching(scaffold)
 
-## GP Win64 Shipping
-**PASSED**
+## Container defaults / data source
+Capacity **100**, Count **5**, soft Ferronite ResourceDefinition — temporary placeholders until BuildingDefinition
 
-## Map unchanged
-Yes.
+## Fill / partial / full behavior
+Index-order fill; Ready on full; partial accept; full storage Accepted=0; invalid inputs rejected without mutation
 
-## LFS unchanged
-Yes.
+## Launch boundary
+S28: fill to Ready only. Launch/Orbital/Score/Threat decrease → GP-S36
+
+## FerroniteThreatValue implementation
+`AddFerroniteThreatValueForTeam(TeamId, Accepted × ThreatPerStoredUnit)` on successful drop-off only
+
+## Per-player / team semantics
+`TArray<FGP_TeamFerroniteThreat>` replicated; getters/setters/add; legacy float mirrored
+
+## Threat invariant
+Per-team stock × ThreatPerStoredUnit (DA field, code default 0.5)
+
+## Worker auto-return flow
+CargoFull → return own MainBase → drop-off → return live deposit → BeginMining (serial-aware)
+
+## Depleted partial flow
+DepositDepleted + cargo>0 → return → drop → Idle (no return to depleted). Cargo==0 → Idle immediately
+
+## MainBase lookup
+`GameState->FindMainBaseForTeam(Worker->GetTeamId())`
+
+## DropOffRange
+`AGP_MainBase::DropOffRangeCm = 400` (TDD placeholder)
+
+## Safe approach
+GP-S27 3D-safe geometry reused for DropOffRange; safety 25; one corrective
+
+## Command serial / stale callback protection
+Haul shares Mine CommandSerial; replacements reset haul; stale movement ignored
+
+## Interruption
+Move/Stop/new command cancels haul; Cargo retained unless LOST overflow already applied
+
+## Transaction / rollback
+Storage accept → Cargo remove exact → Threat; mismatch rolls back Storage
+
+## Storage-full policy
+GDD LOST overflow + `HaulLostOverflow` log; Threat on Accepted only
+
+## Replication
+Storage containers/config; GameState team threat + legacy scalar; haul state server-only
+
+## Tick policy
+Storage/MainBase/BuildingBase: no permanent Tick. UnitCommand Attack tick unchanged policy
+
+## Lifecycle
+MainBase register/unregister; EndPlay haul reset; runners world-cleanup
+
+## Diagnostics
+`gp.Storage.*`, `gp.Worker.List`, extended Inspect, `gp.Worker.RunHaulingContractTest`
+
+## Contract results (code-side)
+Staged Storage + Hauling runners implemented; operator must confirm Failures=0 in PIE
+
+## Worker / Mining / Cargo / Move-Attack regression
+Existing runners unchanged entry points; haul hooks only on Mine terminals + cancel paths; Attack/Move paths not redesigned
+
+## Map / LFS / content
+No map, LFS, Blueprint, or projectile changes
+
+## GPEditor / UHT result
+**PASSED** — GPEditor Win64 Development (+UHT)
+
+## GP Development
+**Not run** (post-operator finalization)
+
+## GP Shipping
+**Not run** (post-operator finalization)
 
 ## Scope exclusions
-No Storage; return-to-base; ThreatValue; Worker Blueprint; map; projectiles; GP-S28; PR/merge/main.
+Orbital/Score GEs; launch VFX/UI/timers; SWARM; Logistics Hub; HUD; content MainBase/Worker BP; map; Slice 7; PR/merge
 
-## Merge readiness
-**READY_FOR_MAIN_MERGE** when operator requests. Do not merge in this close-out.
+## Operator validation steps
+See `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md` — SpawnDiagnostic, List/Inspect, haul PIE, contract tests, confirm no Orbital/Score on drop-off
 
 ## Known limitations
-- No Worker UnitDefinition / Blueprint asset
-- No `GP.Capability.Mine` tag (class + `GP.Unit.Type.Worker`)
-- Repair / Storage / return-to-base deferred to later stages
-- Attack still inherited if commanded (no auto-attack)
+Minimal code MainBase; placeholder DropOff/containers; legacy threat scalar Team1 mirror; WaitingForStorage unused (LOST policy)
 
-## Next canonical stage
-**GP-S28 — StorageComponent + FerroniteThreatValue**
+## Commit SHA
+*(filled after commit)*
+
+## Git state
+Branch `feature/gp-s28-storage-threat` pushed; main untouched; no PR

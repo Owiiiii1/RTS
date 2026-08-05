@@ -2,15 +2,18 @@
 
 #include "Units/GPWorker.h"
 
+#include "Buildings/GPMainBase.h"
 #include "Components/CapsuleComponent.h"
 #include "Command/GPUnitCommand.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Game/GPGameState.h"
 #include "Resources/GPCargoComponent.h"
 #include "Resources/GPMiningComponent.h"
 #include "Resources/GPResourceDefinition.h"
 #include "Resources/GPResourceNode.h"
+#include "Resources/GPStorageComponent.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPMovementComponent.h"
 #include "Units/GPUnitCommandComponent.h"
@@ -81,6 +84,30 @@ UCapsuleComponent* AGP_Worker::GetCapsuleComponent() const
 
 EGP_WorkerActivityState AGP_Worker::GetWorkerActivityState() const
 {
+	if (const UGP_UnitCommandComponent* Commands = GetUnitCommandComponent())
+	{
+		switch (Commands->GetHaulExecutionState())
+		{
+		case EGP_HaulExecutionState::ReturningToBase:
+			return EGP_WorkerActivityState::ReturningToBase;
+		case EGP_HaulExecutionState::DroppingOff:
+			return EGP_WorkerActivityState::DroppingOff;
+		case EGP_HaulExecutionState::ReturningToDeposit:
+			return EGP_WorkerActivityState::ReturningToDeposit;
+		case EGP_HaulExecutionState::WaitingForStorage:
+			return EGP_WorkerActivityState::WaitingForStorage;
+		case EGP_HaulExecutionState::Failed:
+			return EGP_WorkerActivityState::CommandFailed;
+		default:
+			break;
+		}
+
+		if (Commands->GetMineExecutionState() == EGP_MineExecutionState::Approaching)
+		{
+			return EGP_WorkerActivityState::MovingToMine;
+		}
+	}
+
 	const UGP_MiningComponent* Mining = GetMiningComponent();
 	if (IsValid(Mining))
 	{
@@ -96,14 +123,6 @@ EGP_WorkerActivityState AGP_Worker::GetWorkerActivityState() const
 			return EGP_WorkerActivityState::Mining;
 		default:
 			break;
-		}
-	}
-
-	if (const UGP_UnitCommandComponent* Commands = GetUnitCommandComponent())
-	{
-		if (Commands->GetMineExecutionState() == EGP_MineExecutionState::Approaching)
-		{
-			return EGP_WorkerActivityState::MovingToMine;
 		}
 	}
 
@@ -215,7 +234,25 @@ namespace GPWorkerDebug
 		case EGP_WorkerActivityState::Mining: return TEXT("Mining");
 		case EGP_WorkerActivityState::CargoFull: return TEXT("CargoFull");
 		case EGP_WorkerActivityState::DepositDepleted: return TEXT("DepositDepleted");
+		case EGP_WorkerActivityState::ReturningToBase: return TEXT("ReturningToBase");
+		case EGP_WorkerActivityState::DroppingOff: return TEXT("DroppingOff");
+		case EGP_WorkerActivityState::ReturningToDeposit: return TEXT("ReturningToDeposit");
+		case EGP_WorkerActivityState::WaitingForStorage: return TEXT("WaitingForStorage");
 		case EGP_WorkerActivityState::CommandFailed: return TEXT("CommandFailed");
+		default: return TEXT("Unknown");
+		}
+	}
+
+	static const TCHAR* HaulStateToString(EGP_HaulExecutionState State)
+	{
+		switch (State)
+		{
+		case EGP_HaulExecutionState::Idle: return TEXT("Idle");
+		case EGP_HaulExecutionState::ReturningToBase: return TEXT("ReturningToBase");
+		case EGP_HaulExecutionState::DroppingOff: return TEXT("DroppingOff");
+		case EGP_HaulExecutionState::ReturningToDeposit: return TEXT("ReturningToDeposit");
+		case EGP_HaulExecutionState::WaitingForStorage: return TEXT("WaitingForStorage");
+		case EGP_HaulExecutionState::Failed: return TEXT("Failed");
 		default: return TEXT("Unknown");
 		}
 	}
@@ -408,7 +445,7 @@ namespace GPWorkerDebug
 		const FGP_StoredUnitCommand* Held = Commands != nullptr ? Commands->GetHeldCommand() : nullptr;
 
 		UE_LOG(LogGPWorker, Log,
-			TEXT("GP Worker.Inspect: Owner=%s Path=%s Class=%s Role=%s NetMode=%s HasAuthority=%s TeamId=%d Selectable=%s Activity=%s HeldTag=%s HeldSerial=%u PendingMineNode=%s MiningState=%s MiningStop=%s Cargo=%.1f/%.1f Remaining=%.1f Distance=%.1f InteractionRangeCm=%.1f InRange=%s Moving=%s MoveDest=%s ApproachDestination=%s ApproachDesiredNodeDistance=%.1f ApproachSafetyMargin=%.1f ApproachAttempt=%d PredictedWorstCaseDistance=%.1f LastArrivalDistance=%.1f LastArrivalRangeError=%.1f MineExec=%s ActiveMineSerial=%u HasActiveSlot=%s WaitingSlot=%s MiningTimer=%s WorkerTick=%s MoveTick=%s CargoTick=%s MiningTick=%s ValidationOk=%s Errors=%d Warnings=%d Caps=%s"),
+			TEXT("GP Worker.Inspect: Owner=%s Path=%s Class=%s Role=%s NetMode=%s HasAuthority=%s TeamId=%d Selectable=%s Activity=%s HeldTag=%s HeldSerial=%u PendingMineNode=%s MiningState=%s MiningStop=%s Cargo=%.1f/%.1f Remaining=%.1f Distance=%.1f InteractionRangeCm=%.1f InRange=%s Moving=%s MoveDest=%s ApproachDestination=%s ApproachDesiredNodeDistance=%.1f ApproachSafetyMargin=%.1f ApproachAttempt=%d PredictedWorstCaseDistance=%.1f LastArrivalDistance=%.1f LastArrivalRangeError=%.1f MineExec=%s ActiveMineSerial=%u HaulExec=%s ActiveHaulSerial=%u LastHaulDeposit=%s HaulMainBase=%s HaulAccepted=%.1f HaulRejected=%.1f HaulThreatDelta=%.3f HaulDropOffRange=%.1f HaulApproachDest=%s HaulApproachAttempt=%d ReturnToDeposit=%s HasActiveSlot=%s WaitingSlot=%s MiningTimer=%s WorkerTick=%s MoveTick=%s CargoTick=%s MiningTick=%s ValidationOk=%s Errors=%d Warnings=%d Caps=%s"),
 			*Worker->GetName(),
 			*Worker->GetPathName(),
 			*Worker->GetClass()->GetName(),
@@ -440,6 +477,17 @@ namespace GPWorkerDebug
 			Commands != nullptr ? Commands->GetMineLastArrivalRangeError() : -1.0f,
 			Commands != nullptr ? (Commands->GetMineExecutionState() == EGP_MineExecutionState::Approaching ? TEXT("Approaching") : (Commands->GetMineExecutionState() == EGP_MineExecutionState::Active ? TEXT("Active") : TEXT("Idle"))) : TEXT("none"),
 			Commands != nullptr ? Commands->GetActiveMineSerial() : 0u,
+			Commands != nullptr ? HaulStateToString(Commands->GetHaulExecutionState()) : TEXT("none"),
+			Commands != nullptr ? Commands->GetActiveHaulSerial() : 0u,
+			Commands != nullptr ? *GetNameSafe(Commands->GetLastHaulDeposit()) : TEXT("none"),
+			Commands != nullptr ? *GetNameSafe(Commands->GetHaulMainBase()) : TEXT("none"),
+			Commands != nullptr ? Commands->GetLastHaulAcceptedAmount() : -1.0f,
+			Commands != nullptr ? Commands->GetLastHaulRejectedAmount() : -1.0f,
+			Commands != nullptr ? Commands->GetLastHaulThreatDelta() : -1.0f,
+			Commands != nullptr ? Commands->GetHaulDropOffRangeCm() : -1.0f,
+			Commands != nullptr ? *Commands->GetHaulApproachDestination().ToCompactString() : TEXT("none"),
+			Commands != nullptr ? Commands->GetHaulApproachAttempt() : -1,
+			Commands != nullptr && Commands->ShouldReturnToDepositAfterHaul() ? TEXT("true") : TEXT("false"),
 			IsValid(Mining) && IsValid(MineTarget) && MineTarget->HasActiveMiningSlot(Worker) ? TEXT("true") : TEXT("false"),
 			IsValid(Mining) && IsValid(MineTarget) && MineTarget->IsWaitingForMiningSlot(Worker) ? TEXT("true") : TEXT("false"),
 			IsValid(Mining) && Mining->IsMiningTimerActive() ? TEXT("true") : TEXT("false"),
@@ -451,6 +499,83 @@ namespace GPWorkerDebug
 			Errors.Num(),
 			Warnings.Num(),
 			*Worker->GetCapabilityTags().ToStringSimple());
+	}
+
+	static void WorkerList(const TArray<FString>& Args, UWorld* World)
+	{
+		(void)Args;
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPWorker, Warning, TEXT("GP Worker.List: missing world"));
+			return;
+		}
+
+		int32 WorkerCount = 0;
+		for (TActorIterator<AGP_Worker> It(World); It; ++It)
+		{
+			AGP_Worker* Worker = *It;
+			if (!IsValid(Worker))
+			{
+				continue;
+			}
+			++WorkerCount;
+			UGP_UnitCommandComponent* Commands = Worker->GetUnitCommandComponent();
+			UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+			UE_LOG(LogGPWorker, Log,
+				TEXT("GP Worker.List Worker: Name=%s TeamId=%d Activity=%s Cargo=%.1f/%.1f Haul=%s MineSerial=%u HaulSerial=%u"),
+				*Worker->GetName(),
+				Worker->GetTeamId(),
+				ActivityToString(Worker->GetWorkerActivityState()),
+				IsValid(Cargo) ? Cargo->GetCurrentCargoAmount() : -1.0f,
+				IsValid(Cargo) ? Cargo->GetCargoCapacity() : -1.0f,
+				Commands != nullptr ? HaulStateToString(Commands->GetHaulExecutionState()) : TEXT("none"),
+				Commands != nullptr ? Commands->GetActiveMineSerial() : 0u,
+				Commands != nullptr ? Commands->GetActiveHaulSerial() : 0u);
+		}
+
+		int32 NodeCount = 0;
+		for (TActorIterator<AGP_ResourceNode> It(World); It; ++It)
+		{
+			AGP_ResourceNode* Node = *It;
+			if (!IsValid(Node))
+			{
+				continue;
+			}
+			++NodeCount;
+			UE_LOG(LogGPWorker, Log,
+				TEXT("GP Worker.List ResourceNode: Name=%s Amount=%d Depleted=%s Loc=%s"),
+				*Node->GetName(),
+				Node->GetCurrentAmount(),
+				Node->IsDepleted() ? TEXT("true") : TEXT("false"),
+				*Node->GetActorLocation().ToCompactString());
+		}
+
+		int32 BaseCount = 0;
+		for (TActorIterator<AGP_MainBase> It(World); It; ++It)
+		{
+			AGP_MainBase* Base = *It;
+			if (!IsValid(Base))
+			{
+				continue;
+			}
+			++BaseCount;
+			UGP_StorageComponent* Storage = Base->GetStorageComponent();
+			UE_LOG(LogGPWorker, Log,
+				TEXT("GP Worker.List MainBase: Name=%s TeamId=%d DropOffRange=%.1f Stored=%.1f/%.1f Ready=%d"),
+				*Base->GetName(),
+				Base->GetTeamId(),
+				Base->GetDropOffRangeCm(),
+				IsValid(Storage) ? Storage->GetTotalStored() : -1.0f,
+				IsValid(Storage) ? Storage->GetTotalCapacity() : -1.0f,
+				IsValid(Storage) ? Storage->GetReadyCount() : -1);
+		}
+
+		UE_LOG(LogGPWorker, Log,
+			TEXT("GP Worker.List Summary: Workers=%d ResourceNodes=%d MainBases=%d NetMode=%s"),
+			WorkerCount,
+			NodeCount,
+			BaseCount,
+			NetModeToString(World->GetNetMode()));
 	}
 
 	static void WorkerCommandMine(const TArray<FString>& Args, UWorld* World)
@@ -1260,6 +1385,618 @@ namespace GPWorkerDebug
 		TEXT("gp.Worker.RunContractTest"),
 		TEXT("Staged Worker Mine orchestration contract test."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&WorkerRunContractTest));
+
+	static FAutoConsoleCommandWithWorldAndArgs GWorkerList(
+		TEXT("gp.Worker.List"),
+		TEXT("List Workers + ResourceNodes + MainBases summary."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&WorkerList));
+
+	TWeakObjectPtr<UGP_WorkerHaulingContractTestRunner> GActiveHaulingContractTest;
+
+	static void WorkerRunHaulingContractTest(const TArray<FString>& Args, UWorld* World)
+	{
+		(void)Args;
+		if (World == nullptr || World->GetNetMode() == NM_Client)
+		{
+			UE_LOG(LogGPWorker, Warning, TEXT("GP Worker.RunHaulingContractTest: missing world or client"));
+			return;
+		}
+		if (GActiveHaulingContractTest.IsValid())
+		{
+			UE_LOG(LogGPWorker, Warning, TEXT("GP Worker.RunHaulingContractTest: rejected — already running"));
+			return;
+		}
+		UGP_WorkerHaulingContractTestRunner* Runner = NewObject<UGP_WorkerHaulingContractTestRunner>(GetTransientPackage());
+		Runner->AddToRoot();
+		GActiveHaulingContractTest = Runner;
+		Runner->Start(World);
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs GWorkerHaulingContract(
+		TEXT("gp.Worker.RunHaulingContractTest"),
+		TEXT("Staged Worker haul/drop-off contract test (GP-S28)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&WorkerRunHaulingContractTest));
+}
+
+void UGP_WorkerHaulingContractTestRunner::BeginDestroy()
+{
+	Finish();
+	Super::BeginDestroy();
+}
+
+void UGP_WorkerHaulingContractTestRunner::UnbindWorldCleanup()
+{
+	if (WorldCleanupHandle.IsValid())
+	{
+		FWorldDelegates::OnWorldCleanup.Remove(WorldCleanupHandle);
+		WorldCleanupHandle.Reset();
+	}
+}
+
+void UGP_WorkerHaulingContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	(void)bSessionEnded;
+	(void)bCleanupResources;
+	if (World == nullptr || World == WorldWeak.Get() || !WorldWeak.IsValid())
+	{
+		Finish();
+	}
+}
+
+void UGP_WorkerHaulingContractTestRunner::Start(UWorld* InWorld)
+{
+	bFinished = false;
+	WorldWeak = InWorld;
+	StageIndex = 0;
+	Failures = 0;
+	MovementWaitTicks = 0;
+	MovementWaitStartTime = -1.0;
+	StaleHaulSerial = 0;
+	ThreatBefore = 0.0f;
+	UnbindWorldCleanup();
+	WorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(
+		this, &UGP_WorkerHaulingContractTestRunner::OnWorldCleanup);
+	UE_LOG(LogGPWorker, Log, TEXT("GP Worker.RunHaulingContractTest Stage=Start"));
+	ScheduleNext();
+}
+
+void UGP_WorkerHaulingContractTestRunner::ScheduleNext()
+{
+	UWorld* World = WorldWeak.Get();
+	if (!IsValid(World))
+	{
+		Abort(TEXT("WorldInvalid"));
+		return;
+	}
+	StageTimerHandle = World->GetTimerManager().SetTimerForNextTick(
+		FTimerDelegate::CreateUObject(this, &UGP_WorkerHaulingContractTestRunner::AdvanceStage));
+}
+
+bool UGP_WorkerHaulingContractTestRunner::Expect(bool bOk, const TCHAR* Label)
+{
+	if (!bOk)
+	{
+		++Failures;
+		UE_LOG(LogGPWorker, Error, TEXT("GP Worker.RunHaulingContractTest FAIL: %s"), Label);
+		return false;
+	}
+	UE_LOG(LogGPWorker, Log, TEXT("GP Worker.RunHaulingContractTest PASS: %s"), Label);
+	return true;
+}
+
+void UGP_WorkerHaulingContractTestRunner::Abort(const TCHAR* Reason)
+{
+	if (bFinished)
+	{
+		return;
+	}
+	UE_LOG(LogGPWorker, Error, TEXT("GP Worker.RunHaulingContractTest ABORT: %s"), Reason);
+	++Failures;
+	Finish();
+}
+
+void UGP_WorkerHaulingContractTestRunner::DestroyWeakWorker(TWeakObjectPtr<AGP_Worker>& Weak)
+{
+	if (AGP_Worker* Worker = Weak.Get())
+	{
+		if (IsValid(Worker))
+		{
+			if (UGP_MiningComponent* Mining = Worker->GetMiningComponent())
+			{
+				Mining->StopMining(EGP_MiningStopReason::ManualStop);
+			}
+			Worker->Destroy();
+		}
+	}
+	Weak.Reset();
+}
+
+void UGP_WorkerHaulingContractTestRunner::DestroyWeakMainBase(TWeakObjectPtr<AGP_MainBase>& Weak)
+{
+	if (AGP_MainBase* Base = Weak.Get())
+	{
+		if (IsValid(Base))
+		{
+			Base->Destroy();
+		}
+	}
+	Weak.Reset();
+}
+
+void UGP_WorkerHaulingContractTestRunner::Finish()
+{
+	if (bFinished)
+	{
+		return;
+	}
+	bFinished = true;
+	UnbindWorldCleanup();
+	if (UWorld* World = WorldWeak.Get())
+	{
+		World->GetTimerManager().ClearTimer(StageTimerHandle);
+	}
+	DestroyWeakWorker(PrimaryWorkerWeak);
+	DestroyWeakMainBase(MainBaseWeak);
+	DestroyWeakMainBase(EnemyBaseWeak);
+	if (AGP_ResourceNode* Node = TestNodeWeak.Get())
+	{
+		if (IsValid(Node))
+		{
+			Node->Destroy();
+		}
+	}
+	TestNodeWeak.Reset();
+	UE_LOG(LogGPWorker, Log, TEXT("GP Worker.RunHaulingContractTest: Complete Failures=%d"), Failures);
+	RemoveFromRoot();
+	GPWorkerDebug::GActiveHaulingContractTest.Reset();
+	WorldWeak.Reset();
+}
+
+AGP_ResourceNode* UGP_WorkerHaulingContractTestRunner::SpawnNode(const FVector& Loc) const
+{
+	UWorld* World = WorldWeak.Get();
+	if (!IsValid(World))
+	{
+		return nullptr;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Params.ObjectFlags |= RF_Transient;
+	return World->SpawnActor<AGP_ResourceNode>(AGP_ResourceNode::StaticClass(), Loc, FRotator::ZeroRotator, Params);
+}
+
+AGP_MainBase* UGP_WorkerHaulingContractTestRunner::SpawnMainBase(const FVector& Loc, int32 TeamId) const
+{
+	UWorld* World = WorldWeak.Get();
+	if (!IsValid(World))
+	{
+		return nullptr;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Params.ObjectFlags |= RF_Transient;
+	AGP_MainBase* Base = World->SpawnActor<AGP_MainBase>(AGP_MainBase::StaticClass(), Loc, FRotator::ZeroRotator, Params);
+	if (IsValid(Base))
+	{
+		Base->SetTeamId(TeamId);
+		if (!Base->GetActorLocation().Equals(Loc, 1.0f))
+		{
+			Base->SetActorLocation(Loc, false, nullptr, ETeleportType::TeleportPhysics);
+		}
+	}
+	return Base;
+}
+
+AGP_Worker* UGP_WorkerHaulingContractTestRunner::SpawnWorker(const FVector& Loc, int32 TeamId) const
+{
+	UWorld* World = WorldWeak.Get();
+	if (!IsValid(World))
+	{
+		return nullptr;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Params.ObjectFlags |= RF_Transient;
+	AGP_Worker* Worker = World->SpawnActor<AGP_Worker>(AGP_Worker::StaticClass(), Loc, FRotator::ZeroRotator, Params);
+	if (IsValid(Worker))
+	{
+		Worker->SetTeamId(TeamId);
+		if (!Worker->GetActorLocation().Equals(Loc, 1.0f))
+		{
+			Worker->SetActorLocation(Loc, false, nullptr, ETeleportType::TeleportPhysics);
+		}
+	}
+	return Worker;
+}
+
+void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
+{
+	UWorld* World = WorldWeak.Get();
+	if (!IsValid(World))
+	{
+		Abort(TEXT("WorldInvalidDuringStage"));
+		return;
+	}
+
+	using namespace GPWorkerDebug;
+
+	auto WaitHaulOrMove = [&](AGP_Worker* Worker, const TCHAR* TimeoutLabel) -> bool
+	{
+		if (!IsValid(Worker))
+		{
+			return false;
+		}
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		const bool bBusy = (Cmd != nullptr && Cmd->IsHaulActive())
+			|| (Worker->GetUnitMovementComponent() && Worker->GetUnitMovementComponent()->IsMoving())
+			|| (Cmd != nullptr && Cmd->GetMineExecutionState() == EGP_MineExecutionState::Approaching);
+		if (!bBusy)
+		{
+			return false;
+		}
+		if (MovementWaitTicks == 0)
+		{
+			MovementWaitStartTime = World->GetTimeSeconds();
+		}
+		++MovementWaitTicks;
+		if ((World->GetTimeSeconds() - MovementWaitStartTime) > MovementWaitTimeoutSeconds)
+		{
+			Expect(false, TimeoutLabel);
+			Finish();
+			return true;
+		}
+		ScheduleNext();
+		return true;
+	};
+
+	switch (StageIndex)
+	{
+	case 0:
+	{
+		AGP_ResourceNode* Node = SpawnNode(FVector(-52000.0f, 0.0f, 100.0f));
+		AGP_MainBase* Base = SpawnMainBase(FVector(-52400.0f, 0.0f, 100.0f), 1);
+		if (!Expect(IsValid(Node) && IsValid(Base), TEXT("SpawnNodeAndMainBase")))
+		{
+			Finish();
+			return;
+		}
+		TestNodeWeak = Node;
+		MainBaseWeak = Base;
+		DropOffRangeCm = Base->GetDropOffRangeCm();
+		Expect(FMath::IsNearlyEqual(DropOffRangeCm, 400.0f), TEXT("DropOffRange400"));
+		if (const UGP_ResourceDefinition* Def = Node->ResolveResourceDefinition(true))
+		{
+			InteractionRangeCm = Def->InteractionRangeCm;
+		}
+		AGP_Worker* Worker = SpawnWorker(Node->GetActorLocation() + FVector(100.0f, 0.0f, 0.0f), 1);
+		PrimaryWorkerWeak = Worker;
+		if (!Expect(IsValid(Worker), TEXT("SpawnWorkerTeam1")))
+		{
+			Finish();
+			return;
+		}
+		Expect(Worker->GetTeamId() == 1 && Base->GetTeamId() == 1, TEXT("TeamMatch"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 1:
+	{
+		// Cargo-full haul + return-to-deposit
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		if (!Expect(IsValid(Worker) && IsValid(Node) && IsValid(Base), TEXT("CargoFullObjects")))
+		{
+			Finish();
+			return;
+		}
+		Worker->GetCargoComponent()->ClearCargo();
+		IssueMine(Worker, Node);
+		for (int32 i = 0; i < 5; ++i)
+		{
+			Worker->GetMiningComponent()->DebugForceExecuteMiningCycle();
+		}
+		Expect(Worker->GetCargoComponent()->IsFull(), TEXT("CargoFullBeforeHaul"));
+		Expect(Worker->GetUnitCommandComponent()->IsHaulActive()
+			|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::ReturningToBase,
+			TEXT("HaulStartedOnCargoFull"));
+		Expect(Worker->GetUnitCommandComponent()->HasHeldCommand(), TEXT("HeldMineKeptDuringHaul"));
+		ThreatBefore = 0.0f;
+		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
+		{
+			ThreatBefore = GS->GetFerroniteThreatValueForTeam(1);
+		}
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 2:
+	{
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		if (WaitHaulOrMove(Worker, TEXT("CargoFullHaulTimeout")))
+		{
+			return;
+		}
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		Expect(IsValid(Storage) && Storage->GetTotalStored() >= 49.0f, TEXT("StorageReceivedCargoFull"));
+		Expect(FMath::IsNearlyEqual(Worker->GetCargoComponent()->GetCurrentCargoAmount(), 0.0f), TEXT("CargoEmptyAfterDropOff"));
+		Expect(Cmd->GetLastHaulAcceptedAmount() >= 49.0f, TEXT("HaulAccepted50"));
+		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
+		{
+			const float ThreatAfter = GS->GetFerroniteThreatValueForTeam(1);
+			Expect(ThreatAfter > ThreatBefore + KINDA_SMALL_NUMBER, TEXT("ThreatIncreasedOnAccepted"));
+			Expect(FMath::IsNearlyEqual(Cmd->GetLastHaulThreatDelta(), Cmd->GetLastHaulAcceptedAmount() * Storage->GetThreatPerStoredUnit(), 0.05f),
+				TEXT("ThreatDeltaMatchesAccepted"));
+		}
+		// May already be ReturningToDeposit / mining again.
+		Expect(Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::ReturningToDeposit
+			|| Cmd->GetMineExecutionState() != EGP_MineExecutionState::Idle
+			|| Worker->GetMiningComponent()->IsMining()
+			|| Worker->GetMiningComponent()->IsWaitingForSlot(),
+			TEXT("ReturnedOrMiningAfterHaul"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 3:
+	{
+		// Depleted partial haul — no return to deposit
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		if (!Expect(IsValid(Worker) && IsValid(Node), TEXT("DepleteObjects")))
+		{
+			Finish();
+			return;
+		}
+		Worker->GetMiningComponent()->StopMining(EGP_MiningStopReason::ManualStop);
+		Worker->GetCargoComponent()->ClearCargo();
+		Worker->SetActorLocation(Node->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f), false, nullptr, ETeleportType::TeleportPhysics);
+		const int32 Leave = 5;
+		const int32 Consume = Node->GetCurrentAmount() - Leave;
+		if (Consume > 0)
+		{
+			Node->ConsumeResource(Consume);
+		}
+		IssueMine(Worker, Node);
+		Worker->GetMiningComponent()->DebugForceExecuteMiningCycle();
+		Expect(FMath::IsNearlyEqual(Worker->GetCargoComponent()->GetCurrentCargoAmount(), 5.0f), TEXT("DepleteCargo5"));
+		Expect(Worker->GetUnitCommandComponent()->IsHaulActive()
+			|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::ReturningToBase,
+			TEXT("HaulStartedOnDepletedPartial"));
+		Expect(!Worker->GetUnitCommandComponent()->ShouldReturnToDepositAfterHaul(), TEXT("NoReturnOnDepleted"));
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 4:
+	{
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		if (WaitHaulOrMove(Worker, TEXT("DepleteHaulTimeout")))
+		{
+			return;
+		}
+		Expect(FMath::IsNearlyEqual(Worker->GetCargoComponent()->GetCurrentCargoAmount(), 0.0f), TEXT("DepleteDropped"));
+		Expect(!Worker->GetUnitCommandComponent()->HasHeldCommand(), TEXT("HeldClearedAfterDepleteHaul"));
+		Expect(Worker->GetUnitCommandComponent()->GetHaulExecutionState() == EGP_HaulExecutionState::Idle, TEXT("HaulIdleAfterDeplete"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 5:
+	{
+		// Partial storage overflow LOST
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		AGP_ResourceNode* FreshNode = SpawnNode(FVector(-53000.0f, 200.0f, 100.0f));
+		if (AGP_ResourceNode* Old = TestNodeWeak.Get())
+		{
+			if (IsValid(Old))
+			{
+				Old->Destroy();
+			}
+		}
+		TestNodeWeak = FreshNode;
+		if (!Expect(IsValid(Worker) && IsValid(Base) && IsValid(FreshNode), TEXT("PartialStorageObjects")))
+		{
+			Finish();
+			return;
+		}
+		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		Storage->RemovePlanetaryFerronite(Storage->GetTotalStored());
+		const float Cap = Storage->GetTotalCapacity();
+		Storage->AddPlanetaryFerronite(Cap - 20.0f);
+		Expect(FMath::IsNearlyEqual(Storage->GetTotalRemaining(), 20.0f, 0.1f), TEXT("StorageRemaining20"));
+		Worker->GetCargoComponent()->ClearCargo();
+		Worker->GetCargoComponent()->AddCargo(50.0f);
+		Worker->SetActorLocation(Base->GetActorLocation() + FVector(DropOffRangeCm + 600.0f, 0.0f, 0.0f),
+			false, nullptr, ETeleportType::TeleportPhysics);
+		IssueMine(Worker, FreshNode);
+		// Force haul path: mining terminal CargoFull while held.
+		// Cargo already full — IssueMine may be rejected unless we start haul via mining terminal.
+		// Simulate by filling through mining at node in range after clearing a bit.
+		Worker->GetCargoComponent()->ClearCargo();
+		Worker->SetActorLocation(FreshNode->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f), false, nullptr, ETeleportType::TeleportPhysics);
+		IssueMine(Worker, FreshNode);
+		for (int32 i = 0; i < 5; ++i)
+		{
+			Worker->GetMiningComponent()->DebugForceExecuteMiningCycle();
+		}
+		Expect(Worker->GetUnitCommandComponent()->IsHaulActive(), TEXT("PartialStorageHaulActive"));
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 6:
+	{
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		if (WaitHaulOrMove(Worker, TEXT("PartialStorageHaulTimeout")))
+		{
+			return;
+		}
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		Expect(Cmd->GetLastHaulAcceptedAmount() <= 20.0f + 0.1f, TEXT("PartialAcceptedAtMost20"));
+		Expect(Cmd->GetLastHaulRejectedAmount() >= 29.0f, TEXT("PartialRejectedOverflow"));
+		Expect(FMath::IsNearlyEqual(Worker->GetCargoComponent()->GetCurrentCargoAmount(), 0.0f), TEXT("OverflowLostClearedCargo"));
+		Expect(Base->GetStorageComponent()->IsStorageFull(), TEXT("StorageFullAfterPartial"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 7:
+	{
+		// Interruption by Move during haul
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		if (!Expect(IsValid(Worker) && IsValid(Node) && IsValid(Base), TEXT("InterruptObjects")))
+		{
+			Finish();
+			return;
+		}
+		Base->GetStorageComponent()->RemovePlanetaryFerronite(Base->GetStorageComponent()->GetTotalStored());
+		Worker->GetCargoComponent()->ClearCargo();
+		Worker->GetCargoComponent()->AddCargo(50.0f);
+		Worker->SetActorLocation(Node->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f), false, nullptr, ETeleportType::TeleportPhysics);
+		// Re-open haul via mine + force cycles on a node with amount
+		if (Node->GetCurrentAmount() < 50)
+		{
+			// spawn replacement with stock
+			AGP_ResourceNode* NewNode = SpawnNode(FVector(-53500.0f, 0.0f, 100.0f));
+			if (IsValid(Node))
+			{
+				Node->Destroy();
+			}
+			TestNodeWeak = NewNode;
+			Node = NewNode;
+		}
+		Worker->GetCargoComponent()->ClearCargo();
+		Worker->SetActorLocation(Node->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f), false, nullptr, ETeleportType::TeleportPhysics);
+		IssueMine(Worker, Node);
+		for (int32 i = 0; i < 5; ++i)
+		{
+			Worker->GetMiningComponent()->DebugForceExecuteMiningCycle();
+		}
+		Expect(Worker->GetUnitCommandComponent()->IsHaulActive(), TEXT("InterruptHaulActive"));
+		IssueMove(Worker, Worker->GetActorLocation() + FVector(0.0f, 1500.0f, 0.0f));
+		Expect(!Worker->GetUnitCommandComponent()->IsHaulActive(), TEXT("MoveClearsHaul"));
+		Expect(Worker->GetCargoComponent()->IsFull(), TEXT("InterruptKeepsCargo"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 8:
+	{
+		// Stale callback ignored: force haul, capture serial, replace command, ensure idle
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		if (!Expect(IsValid(Worker) && IsValid(Node), TEXT("StaleObjects")))
+		{
+			Finish();
+			return;
+		}
+		Worker->GetCargoComponent()->ClearCargo();
+		IssueMine(Worker, Node);
+		for (int32 i = 0; i < 5 && !Worker->GetCargoComponent()->IsFull(); ++i)
+		{
+			Worker->GetMiningComponent()->DebugForceExecuteMiningCycle();
+		}
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		StaleHaulSerial = Cmd->GetActiveHaulSerial();
+		Expect(StaleHaulSerial != 0, TEXT("StaleSerialCaptured"));
+		IssueMove(Worker, Worker->GetActorLocation() + FVector(500.0f, 0.0f, 0.0f));
+		Expect(Cmd->GetActiveHaulSerial() == 0, TEXT("StaleSerialClearedAfterReplace"));
+		Expect(!Cmd->IsHaulActive(), TEXT("StaleHaulInactive"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 9:
+	{
+		// Ownership: only enemy-team MainBase registered → haul must fail
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_MainBase* Friendly = MainBaseWeak.Get();
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		if (!Expect(IsValid(Worker) && IsValid(Friendly) && IsValid(Node), TEXT("OwnershipObjects")))
+		{
+			Finish();
+			return;
+		}
+		DestroyWeakMainBase(MainBaseWeak);
+		AGP_MainBase* Enemy = SpawnMainBase(FVector(-54000.0f, 0.0f, 100.0f), 2);
+		EnemyBaseWeak = Enemy;
+		Expect(IsValid(Enemy), TEXT("EnemyBaseSpawned"));
+		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
+		{
+			Expect(GS->FindMainBaseForTeam(1) == nullptr, TEXT("NoTeam1MainBase"));
+		}
+		Worker->SetTeamId(1);
+		Worker->GetCargoComponent()->ClearCargo();
+		Worker->SetActorLocation(Node->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f), false, nullptr, ETeleportType::TeleportPhysics);
+		IssueMine(Worker, Node);
+		for (int32 i = 0; i < 5; ++i)
+		{
+			Worker->GetMiningComponent()->DebugForceExecuteMiningCycle();
+		}
+		Expect(!Worker->GetUnitCommandComponent()->IsHaulActive(), TEXT("OwnershipHaulFailedImmediately"));
+		Expect(!Worker->GetUnitCommandComponent()->HasHeldCommand(), TEXT("OwnershipClearedHeld"));
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 10:
+	{
+		// Restore friendly base for lifecycle stage
+		DestroyWeakMainBase(EnemyBaseWeak);
+		MainBaseWeak = SpawnMainBase(FVector(-52400.0f, 0.0f, 100.0f), 1);
+		Expect(IsValid(MainBaseWeak.Get()), TEXT("RestoreFriendlyBase"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 11:
+	{
+		// Lifecycle: EndPlay while hauling releases cleanly
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		if (!Expect(IsValid(Worker) && IsValid(Node) && IsValid(Base), TEXT("LifecycleObjects")))
+		{
+			Finish();
+			return;
+		}
+		Worker->GetCargoComponent()->ClearCargo();
+		Worker->SetActorLocation(Node->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f), false, nullptr, ETeleportType::TeleportPhysics);
+		IssueMine(Worker, Node);
+		for (int32 i = 0; i < 5; ++i)
+		{
+			Worker->GetMiningComponent()->DebugForceExecuteMiningCycle();
+		}
+		Expect(Worker->GetUnitCommandComponent()->IsHaulActive() || Worker->GetCargoComponent()->IsFull(),
+			TEXT("LifecycleHaulOrFull"));
+		Worker->Destroy();
+		PrimaryWorkerWeak.Reset();
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 12:
+	{
+		Expect(!PrimaryWorkerWeak.IsValid(), TEXT("LifecycleWorkerDestroyed"));
+		Finish();
+		break;
+	}
+	default:
+		Abort(TEXT("UnknownStage"));
+		break;
+	}
 }
 
 #else
@@ -1304,6 +2041,49 @@ void UGP_WorkerContractTestRunner::DestroyWeakWorker(TWeakObjectPtr<AGP_Worker>&
 AGP_ResourceNode* UGP_WorkerContractTestRunner::SpawnNode(const FVector& Loc) const
 {
 	(void)Loc;
+	return nullptr;
+}
+
+void UGP_WorkerHaulingContractTestRunner::BeginDestroy()
+{
+	bFinished = true;
+	Super::BeginDestroy();
+}
+void UGP_WorkerHaulingContractTestRunner::Start(UWorld* InWorld) { (void)InWorld; }
+void UGP_WorkerHaulingContractTestRunner::ScheduleNext() {}
+void UGP_WorkerHaulingContractTestRunner::AdvanceStage() {}
+bool UGP_WorkerHaulingContractTestRunner::Expect(bool bOk, const TCHAR* Label)
+{
+	(void)bOk;
+	(void)Label;
+	return false;
+}
+void UGP_WorkerHaulingContractTestRunner::Abort(const TCHAR* Reason) { (void)Reason; }
+void UGP_WorkerHaulingContractTestRunner::Finish() { bFinished = true; }
+void UGP_WorkerHaulingContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	(void)World;
+	(void)bSessionEnded;
+	(void)bCleanupResources;
+}
+void UGP_WorkerHaulingContractTestRunner::UnbindWorldCleanup() {}
+void UGP_WorkerHaulingContractTestRunner::DestroyWeakWorker(TWeakObjectPtr<AGP_Worker>& Weak) { Weak.Reset(); }
+void UGP_WorkerHaulingContractTestRunner::DestroyWeakMainBase(TWeakObjectPtr<AGP_MainBase>& Weak) { Weak.Reset(); }
+AGP_ResourceNode* UGP_WorkerHaulingContractTestRunner::SpawnNode(const FVector& Loc) const
+{
+	(void)Loc;
+	return nullptr;
+}
+AGP_MainBase* UGP_WorkerHaulingContractTestRunner::SpawnMainBase(const FVector& Loc, int32 TeamId) const
+{
+	(void)Loc;
+	(void)TeamId;
+	return nullptr;
+}
+AGP_Worker* UGP_WorkerHaulingContractTestRunner::SpawnWorker(const FVector& Loc, int32 TeamId) const
+{
+	(void)Loc;
+	(void)TeamId;
 	return nullptr;
 }
 #endif

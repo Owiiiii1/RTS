@@ -10,6 +10,7 @@
 
 class AGP_UnitBase;
 class AGP_ResourceNode;
+class AGP_MainBase;
 class UGP_MovementComponent;
 class UGP_MiningComponent;
 enum class EGP_MovementResult : uint8;
@@ -32,6 +33,17 @@ enum class EGP_MineExecutionState : uint8
 	Idle,
 	Approaching,
 	Active
+};
+
+/** Haul / return-to-base orchestration (GP-S28). Plain C++ — not UENUM / not Blueprint. */
+enum class EGP_HaulExecutionState : uint8
+{
+	Idle,
+	ReturningToBase,
+	DroppingOff,
+	ReturningToDeposit,
+	WaitingForStorage,
+	Failed
 };
 
 /** Terminal Attack outcome. Ready is not terminal. */
@@ -68,6 +80,7 @@ enum class EGP_AttackRangeSource : uint8
  * GP-S24: authority Attack approach / Ready.
  * GP-S25B: Ready hit cadence + TargetDied binding via GP-S25A ApplyDamageFromUnit.
  * GP-S27: authority Mine approach / BeginMining for AGP_Worker (serial-aware).
+ * GP-S28: authority haul / drop-off / return-to-deposit chain (serial-aware).
  * No replication, RPC, queue execution, or Blueprint Attack API.
  */
 UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))
@@ -130,9 +143,25 @@ public:
 	float GetMineLastArrivalDistance() const;
 	float GetMineLastArrivalRangeError() const;
 
+	EGP_HaulExecutionState GetHaulExecutionState() const;
+	uint32 GetActiveHaulSerial() const;
+	AGP_ResourceNode* GetLastHaulDeposit() const;
+	AGP_MainBase* GetHaulMainBase() const;
+	bool IsHaulActive() const;
+	bool ShouldReturnToDepositAfterHaul() const;
+	float GetLastHaulAcceptedAmount() const;
+	float GetLastHaulRejectedAmount() const;
+	float GetLastHaulThreatDelta() const;
+	FVector GetHaulApproachDestination() const;
+	float GetHaulApproachDesiredDistance() const;
+	int32 GetHaulApproachAttempt() const;
+	float GetHaulLastArrivalDistance() const;
+	float GetHaulDropOffRangeCm() const;
+
 #if !UE_BUILD_SHIPPING
 	/** Next arrival distance check treats Worker as slightly OOR once (contract test). */
 	void DebugForceNextMineArrivalOutOfRangeOnce();
+	void DebugForceNextHaulArrivalOutOfRangeOnce();
 #endif
 
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Attack")
@@ -206,6 +235,16 @@ private:
 	 * Computes approach destination so even AcceptanceRadius edge completion stays
 	 * strictly inside InteractionRange in 3D (accounts for DeltaZ + safety margin).
 	 */
+	bool TryMakeRangeApproachDestination(
+		const AActor* Owner,
+		const AActor* Target,
+		float InteractionRangeCm,
+		float AcceptanceRadius,
+		float ExtraInwardMarginCm,
+		FVector& OutDestination,
+		float& OutDesiredHorizontalDistance,
+		float& OutPredictedWorstCaseDistance) const;
+
 	bool TryMakeMineApproachDestination(
 		const AActor* Owner,
 		const AGP_ResourceNode* Node,
@@ -223,7 +262,26 @@ private:
 		float ExtraInwardMarginCm,
 		const TCHAR* LogLabel);
 
+	bool IsActiveHaulChainForDeposit(const AGP_ResourceNode* Node) const;
+	void ResetHaulExecutor();
+	void ResetHaulExecutorForReplacement(const TOptional<FGP_StoredUnitCommand>& PreviousCommand);
+	void StartHaulReturnToBase(uint32 ChainSerial, AGP_ResourceNode* Deposit, bool bReturnToDeposit);
+	bool RequestHaulApproachMove(
+		AActor* Owner,
+		AGP_MainBase* MainBase,
+		uint32 HaulSerial,
+		float ExtraInwardMarginCm,
+		const TCHAR* LogLabel);
+	bool TryConsumeHaulMovementResult(
+		uint32 Serial,
+		EGP_MovementResult Result,
+		EGP_MovementResultReason Reason);
+	void BeginDropOffAtMainBase(uint32 HaulSerial);
+	void FinishHaulChain(bool bClearHeld);
+	void ContinueMineAfterSuccessfulHaul(uint32 ChainSerial);
+
 	static const TCHAR* MineStateToString(EGP_MineExecutionState State);
+	static const TCHAR* HaulStateToString(EGP_HaulExecutionState State);
 
 	/** Inward margin beyond AcceptanceRadius so worst-case arrival stays < InteractionRange. */
 	static constexpr float WorkerMineApproachSafetyMarginCm = 25.0f;
@@ -315,7 +373,27 @@ private:
 	float MineLastArrivalRangeError = -1.0f;
 	int32 MineApproachAttempt = 0;
 
+	/** GP-S28 Haul orchestration (Worker only; shares Mine command serial as chain id). */
+	EGP_HaulExecutionState HaulState = EGP_HaulExecutionState::Idle;
+	uint32 ActiveHaulSerial = 0;
+	TWeakObjectPtr<AGP_ResourceNode> LastHaulDeposit;
+	TWeakObjectPtr<AGP_MainBase> HaulMainBase;
+	bool bShouldReturnToDepositAfterHaul = false;
+	bool bFinishingHaul = false;
+	float LastHaulAcceptedAmount = 0.0f;
+	float LastHaulRejectedAmount = 0.0f;
+	float LastHaulThreatDelta = 0.0f;
+	float HaulDropOffRangeCm = 400.0f;
+
+	FVector HaulApproachDestination = FVector::ZeroVector;
+	float HaulApproachDesiredDistance = -1.0f;
+	float HaulPredictedWorstCaseDistance = -1.0f;
+	float HaulLastArrivalDistance = -1.0f;
+	float HaulLastArrivalRangeError = -1.0f;
+	int32 HaulApproachAttempt = 0;
+
 #if !UE_BUILD_SHIPPING
 	bool bDebugForceNextMineArrivalOutOfRange = false;
+	bool bDebugForceNextHaulArrivalOutOfRange = false;
 #endif
 };

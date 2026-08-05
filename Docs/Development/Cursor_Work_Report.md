@@ -141,7 +141,7 @@ See `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md` — SpawnDiagnostic
 Minimal code MainBase; placeholder DropOff/containers; legacy threat scalar Team1 mirror; WaitingForStorage unused (LOST policy)
 
 ## Commit SHA
-*(filled after commit)*
+`cd83858390db086c6913669f348a7402ae0a5ad3`
 
 ## Git state
 Branch `feature/gp-s28-storage-threat` pushed; main untouched; no PR

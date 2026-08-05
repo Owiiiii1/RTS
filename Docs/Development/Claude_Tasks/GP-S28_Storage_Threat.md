@@ -6,7 +6,8 @@
 ## Baseline
 `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e` (GP-S27 Worker merged)
 
-Branch: `feature/gp-s28-storage-threat`
+Branch: `feature/gp-s28-storage-threat`  
+Candidate: `cd83858390db086c6913669f348a7402ae0a5ad3`
 
 ## Canonical roadmap position
 `GP-S23R` → `GP-S24R` → `GP-S25` → `GP-S26` → `GP-S27` → **GP-S28 Storage + Threat write** → (later) GP-S36 launch / GP-S39 content MainBase → Slice 7

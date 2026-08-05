@@ -8,6 +8,7 @@ Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Branch: `feature/gp-s28-storage-threat`
 - Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
 - **GP-S27 merged into main** @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Candidate: `cd83858390db086c6913669f348a7402ae0a5ad3`
 - Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
 - Report: `Docs/Development/Cursor_Work_Report.md`
 

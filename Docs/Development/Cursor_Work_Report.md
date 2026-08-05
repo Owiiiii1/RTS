@@ -16,7 +16,7 @@ main @ 215b4b603e7fd333ef9b379103329bfac03edbf4
 3a6d9533039180a4b75d40dc6063abd01d1b91e2
 
 ## Finalization commit
-(filled after commit)
+a503a1b505021683ebef1279f177b68ef27b1073
 
 ## Operator validation matrix
 
@@ -145,7 +145,7 @@ Both example `.uasset` files use `filter=lfs` and are tracked by Git LFS.
 `ClearVisual` → `DestroyBuiltParts(BuiltVisual)` only; authored SCS components not destroyed.
 
 ## Git status
-(filled after push)
+Branch ahead of origin before push; clean after push to `origin/feature/gp-s26b2a-blueprint-authored-visuals`.
 
 ## Merge readiness
 **Ready for merge when requested.** No PR created. Main untouched.

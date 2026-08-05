@@ -8,6 +8,7 @@ Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Branch: `feature/gp-s28-storage-threat`
 - Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
 - Prior TeamId correction: `61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`
+- Nav correction: `caf5bf0c947176ce5c72affadae41cbbd60be590`
 - Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
 - Report: `Docs/Development/Cursor_Work_Report.md`
 

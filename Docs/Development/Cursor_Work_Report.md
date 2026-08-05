@@ -82,7 +82,7 @@ TeamId registration lifecycle preserved; hauling contract stage-0 now uses navig
 Unchanged (no NavMeshBoundsVolume edit)
 
 ## Correction commit
-*(filled after commit)*
+`caf5bf0c947176ce5c72affadae41cbbd60be590`
 
 ## Git state
 Branch pushed; main untouched; no PR

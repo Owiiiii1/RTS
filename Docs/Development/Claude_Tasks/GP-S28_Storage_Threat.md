@@ -9,7 +9,7 @@
 Branch: `feature/gp-s28-storage-threat`  
 Candidate: `cd83858390db086c6913669f348a7402ae0a5ad3`  
 Diagnostic TeamId correction: `61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`  
-Diagnostic nav correction: *(see Cursor_Work_Report after push)*
+Diagnostic nav correction: `caf5bf0c947176ce5c72affadae41cbbd60be590`
 
 ## Diagnostic scenario correction (operator-blocking)
 Operator failure: MainBase registered at TeamId=-1; Worker TeamId=-1; Node=None.

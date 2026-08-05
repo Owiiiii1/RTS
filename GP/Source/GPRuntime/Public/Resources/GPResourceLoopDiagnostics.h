@@ -15,6 +15,7 @@ class UWorld;
 namespace GPResourceLoopDiagnostics
 {
 	inline const FName TagScenario(TEXT("GP_DiagScenario"));
+	/** Legacy marker — prefer exact OwnerTag from GPContractTestCoordinator. */
 	inline const FName TagOwnedByContract(TEXT("GP_DiagScenario_OwnedByContract"));
 
 	FName MakeTeamScenarioTag(int32 TeamId);
@@ -25,6 +26,7 @@ namespace GPResourceLoopDiagnostics
 		AGP_Worker* Worker = nullptr;
 		AGP_ResourceNode* ResourceNode = nullptr;
 		int32 TeamId = 1;
+		FName OwnerTag;
 		bool bOk = false;
 		bool bCreatedMainBase = false;
 		bool bCreatedWorker = false;
@@ -82,25 +84,31 @@ namespace GPResourceLoopDiagnostics
 	bool IsNavPointProjected(UWorld* World, const FVector& Location, FVector* OutProjected = nullptr, float ExtentXY = 800.0f, float ExtentZ = 800.0f);
 	bool IsNavReachable(UWorld* World, const FVector& From, const FVector& To, FString* OutFailReason = nullptr);
 
-	AGP_MainBase* SpawnMainBaseDeferred(UWorld* World, const FVector& Location, int32 TeamId, bool bOwnedByContract);
-	AGP_Worker* SpawnWorkerDeferred(UWorld* World, const FVector& Location, int32 TeamId, bool bOwnedByContract);
-	AGP_ResourceNode* SpawnResourceNodeTransient(UWorld* World, const FVector& Location, bool bOwnedByContract);
+	AGP_MainBase* SpawnMainBaseDeferred(UWorld* World, const FVector& Location, int32 TeamId, FName OwnerTag);
+	AGP_Worker* SpawnWorkerDeferred(UWorld* World, const FVector& Location, int32 TeamId, FName OwnerTag);
+	AGP_ResourceNode* SpawnResourceNodeTransient(UWorld* World, const FVector& Location, FName OwnerTag);
+
+	/** Destroy actors that carry the exact OwnerTag (any team). Never touches other owners. */
+	void CleanupScenarioByOwnerTag(UWorld* World, FName OwnerTag);
 
 	/**
-	 * Destroy previous diagnostic scenario actors for TeamId (tag-scoped).
-	 * bContractOwnedOnly=true → only OwnedByContract; false → only non-contract operator scenarios.
+	 * Operator re-spawn helper: destroy prior operator-owned scenario for TeamId only.
+	 * Does not destroy contract-owned or authored/production actors.
 	 */
-	void CleanupTaggedScenarioForTeam(UWorld* World, int32 TeamId, bool bContractOwnedOnly);
+	void CleanupOperatorScenarioForTeam(UWorld* World, int32 TeamId);
 
 	/**
 	 * Authority: discover navigable layout, validate paths, then spawn coherent Team scenario.
+	 * OwnerTag selects cleanup/ownership scope. Contract owners never cleanup other owners' teams.
 	 * On nav failure: Ok=false and no leftover actors (atomic).
 	 */
-	FGP_DiagnosticScenarioActors SpawnDiagnosticScenario(UWorld* World, int32 TeamId, bool bOwnedByContract = false);
+	FGP_DiagnosticScenarioActors SpawnDiagnosticScenario(UWorld* World, int32 TeamId, FName OwnerTag);
 
 	FGP_ScenarioValidation ValidateHaulingScenario(UWorld* World, int32 TeamId, AGP_Worker* WorkerHint = nullptr);
 
 	void DestroyDiagnosticScenarioActors(AGP_MainBase* MainBase, AGP_Worker* Worker, AGP_ResourceNode* Node);
+
+	bool ActorHasOwnerTag(const AActor* Actor, FName OwnerTag);
 }
 
 #endif // !UE_BUILD_SHIPPING

@@ -1,7 +1,7 @@
-# Cursor Work Report — GP-S28 ResourceNode EndPlay Reentrant Occupancy Cleanup
+# Cursor Work Report — GP-S28 Contract Runner Isolation / Ownership / Async Null-Safety
 
 ## Task
-GP-S28 — ResourceNode EndPlay Reentrant Occupancy Cleanup Fix
+GP-S28 — Contract Runner Isolation, Ownership and Async Null-Safety
 
 ## Status
 **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
@@ -13,75 +13,67 @@ GP-S28 — ResourceNode EndPlay Reentrant Occupancy Cleanup Fix
 `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
 
 ## Prior correction
-Registry uniqueness: `c59b12031d88ea9b3c9dd584e4aa1028c2a846dc`
+EndPlay occupancy: `7f81d19d236d0cf197c1c650174ef28532245244`
 
-## Operator PIE teardown ensure
-Full haul loop worked (Mining → CargoFull → ReturnToBase → DropOff → ReturnToDeposit → Mining; Storage 150/500). On PIE Stop:
+## Crash
+- GUID: `UECC-Windows-989B9A8648D69236AEE3A7ACE8E502A7`
+- `EXCEPTION_ACCESS_VIOLATION` reading `0x0000000000000548`
+- Callstack: `UGP_WorkerHaulingContractTestRunner::AdvanceStage` `GPWorker.cpp:1977`
+- Null `Worker` dereferenced after `WaitHaulOrMove` returned false on invalid weak
 
-```
-Ensure condition failed: Array has changed during ranged-for iteration!
-AGP_ResourceNode::EndPlay() GPResourceNode.cpp:137
-```
+## Command ordering (GP.log)
+1. Hauling (or Worker suite overlap) still had scheduled `AdvanceStage`
+2. `gp.Resource.RunDiagnosticScenarioContractTest` started with `OperatorTeam1Present=true`
+3. Team1 diagnostic actors EndPlay-destroyed
+4. Diagnostic spawned new Team1 (`T1_1`) and failed remap assertions
+5. Stale Hauling case 6 crashed on destroyed `PrimaryWorkerWeak`
 
-## Exact stack / source
-- `AGP_ResourceNode::EndPlay` ranged-for over `ActiveMiners` then `WaitingMiners`
-- Line ~137: `BroadcastMinerSlotStateChanged(... Active → None)`
+## Premature Complete
+`Worker.RunContractTest: Complete Failures=0` could print while another async runner (Hauling) still owned world actors / timers — each runner had only local `GActive*` locks, not global mutual exclusion. Nested `GEngine->Exec(gp.Cargo.RunContractTest)` removed from Worker contract.
 
-## Root cause
-Live-array callback mutation: occupancy Broadcast → `UGP_MiningComponent::HandleMinerSlotStateChanged` → `StopMining(TargetEndPlay)` → `ReleaseMiningSlot` removes from `ActiveMiners`/`WaitingMiners` (and could PromoteWaiting) during the ranged-for.
+## Root cause (Team1 destruction)
+Diagnostic cleanup used TeamId + generic `OwnedByContract` and cleaned Team1/Team2 contract leftovers while Hauling still held contract-owned Team1/Team2 actors. That destroyed the live Hauling Worker; Hauling timer continued → AV. Remap then saw Team1 free and respawned `T1_1`.
 
-## Snapshot / clear / guard solution
-1. Copy Active + Waiting snapshots  
-2. Set `bIsClearingOccupancy`  
-3. Reset production arrays; counts = 0  
-4. Broadcast terminal None from snapshots only  
-5. `OnMinerSlotStateChanged.Clear()`  
-6. `Super::EndPlay`
+## Execution coordinator
+`GPContractTestCoordinator` (narrow PIE lock):
+- single active token
+- `TryAcquire` / `Release` / `IsTokenActive` / world tear-down check
+- reject: `ContractTestRejected … Reason=AnotherContractTestRunning`
+- wired into Diagnostic / EndPlay / Hauling / Worker / Mining / Storage / Cargo
 
-## Release / Promote during teardown
-- `RequestMiningSlot` → `RejectedDepositInvalid`
-- `ReleaseMiningSlot` → idempotent no-op (no Broadcast, no Promote)
-- `PromoteWaitingMiners` → forbidden
-- `CleanupInvalidMiners` / `RefreshOccupancyCounts` → no-op / zeros
-- No new delegate broadcasts except controlled snapshot notifications
+## Runner ownership IDs
+Exact OwnerTags: `GP_DiagOwner_Operator`, `GP_DiagOwner_<Kind>_<ExecutionId>`.  
+Cleanup only via `CleanupScenarioByOwnerTag`. Contract spawn remaps **before** cleanup; never Team-wide contract wipe.
 
-## Listener review
-- **MiningComponent:** Unbind before Release; skip Release when `IsClearingOccupancy`; Waiting→Active ignored while clearing → `TargetEndPlay`
-- **UnitCommand:** TargetEndPlay + cargo>0 may start haul without return-to-deposit; zero cargo does not haul; no false threat without drop-off
-- Contract runners use production MiningComponent path for occupancy teardown stage
+## Null-safe stage audit
+Hauling `WaitHaulOrMove` + case 6 (and related stages) validate Worker/Base/Cmd/Cargo/Storage before use; controlled `PartialStorageObjectsLost` + Finish. AdvanceStage ignores stale token after Finish.
 
-## EndPlay contract test
-`gp.Resource.RunEndPlayContractTest`
-- `ResourceNodeEndPlayWithActiveAndWaitingMiners` — 5 miners (4 Active + 1 Waiting), Destroy node; assert no promote, 5× None, timers off, TargetEndPlay
-- `ResourceNodeEndPlayDuringHaulLoop` — navigable Worker scenario, partial cargo, Destroy node; no false threat; no stale node ref
+## Sequential S28 suite
+`gp.Resource.RunS28RegressionSuite` — Cargo → Mining → Worker → Hauling → Storage → Diagnostic → EndPlay, waiting on coordinator finish callback.
 
-## Haul-loop teardown test
-Covered in contract stage above; operator still validates infinite haul + PIE Stop.
+## Isolation contract
+`gp.Resource.RunContractIsolationContractTest`:
+- ContractRunnerMutualExclusion
+- ContractOwnedCleanupIsolation
+- AsyncActorLossNullSafety
 
-## Full regression results
-GPEditor compile: **PASSED**.  
-Console suite (`RunEndPlayContractTest`, DiagnosticScenario, Storage, Hauling, Worker, Mining, Cargo) + PIE Stop after haul: **operator validation pending**.
-
-## Non-blocking note
-`LogCrowdFollowing: Unable to find RecastNavMesh instance while trying to create UCrowdManager` after `BeginTearingDown` — engine teardown warning; not the ensure root cause; NavigationSystem scope not expanded.
-
-## GPEditor / UHT
-**PASSED**
-
-## GP Dev / Shipping
-**Not run**
+## Tests / build
+- GPEditor Win64 Development + UHT: **PASSED**
+- GP Dev/Shipping: **Not run**
+- PIE suite / isolation: **operator validation pending**
 
 ## Files changed
-- `GPResourceNode.h/.cpp` — EndPlay snapshot/guard; API guards; `IsClearingOccupancy`
-- `GPMiningComponent.h/.cpp` — Release skip while clearing; EndPlay contract runner + `gp.Resource.RunEndPlayContractTest`
-- `GPUnitCommandComponent.cpp` — TargetEndPlay partial cargo haul without return-to-deposit
+- `Debug/GPContractTestCoordinator.*` — global token
+- `Debug/GPContractIsolationAndSuite.cpp` — suite + isolation commands
+- `GPResourceLoopDiagnostics.*` — OwnerTag spawn/cleanup/remap-before-cleanup
+- `GPWorker.*` / `GPMiningComponent.*` / `GPStorageComponent.*` / `GPCargoComponent.cpp` — coordinator + null-safety
 - Docs: task, AI log, this report
 
 ## Map / content / LFS
 Unchanged
 
 ## Correction commit
-7f81d19d236d0cf197c1c650174ef28532245244
+(see git after push)
 
 ## Git state
 Branch `feature/gp-s28-storage-threat` pushed; main untouched; no PR

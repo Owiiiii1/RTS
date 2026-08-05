@@ -260,6 +260,7 @@ class GPRUNTIME_API UGP_MiningContractTestRunner : public UObject
 public:
 	virtual void BeginDestroy() override;
 
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
 	void Start(UWorld* InWorld);
 	void Abort(const TCHAR* Reason);
 
@@ -287,6 +288,10 @@ private:
 	int32 NodeAmountBeforeCycles = 0;
 	float InteractionRangeCm = 200.0f;
 	FTimerHandle StageTimerHandle;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
 };
 
 /**
@@ -300,6 +305,7 @@ class GPRUNTIME_API UGP_ResourceNodeEndPlayContractTestRunner : public UObject
 
 public:
 	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
 	void Start(UWorld* InWorld);
 
 private:
@@ -331,4 +337,8 @@ private:
 	int32 TerminalNoneCount = 0;
 	int32 PromotionCount = 0;
 	FDelegateHandle OccupancyObserveHandle;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
 };

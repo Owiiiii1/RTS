@@ -35,6 +35,15 @@ Fixes:
 - Contract: `gp.Resource.RunEndPlayContractTest` (active+waiting destroy + haul-loop destroy)
 - `LogCrowdFollowing` RecastNavMesh warning on teardown: non-blocking engine noise (not the ensure root cause)
 
+## Contract runner isolation / ownership / async null-safety
+Crash GUID `UECC-Windows-989B9A8648D69236AEE3A7ACE8E502A7`: Hauling `AdvanceStage` AV on null Worker after Diagnostic cleaned contract Team actors mid-run.
+
+Fixes:
+- `GPContractTestCoordinator` — one async contract token; reject overlapping starts
+- Exact OwnerTag cleanup (`GP_DiagOwner_*_<ExecutionId>`); remap before cleanup; never wipe other owners
+- Null-safe Hauling stages; remove nested Cargo Exec from Worker contract
+- `gp.Resource.RunS28RegressionSuite` sequential wait; `gp.Resource.RunContractIsolationContractTest`
+
 ## Diagnostic scenario correction (operator-blocking)
 Operator failure: MainBase registered at TeamId=-1; Worker TeamId=-1; Node=None.
 

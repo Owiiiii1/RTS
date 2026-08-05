@@ -5,6 +5,7 @@
 #include "Buildings/GPMainBase.h"
 #include "Components/CapsuleComponent.h"
 #include "Command/GPUnitCommand.h"
+#include "Debug/GPContractTestCoordinator.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -398,7 +399,7 @@ namespace GPWorkerDebug
 		}
 
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
-			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId, /*bOwnedByContract*/ false);
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId, GPContractTestCoordinator::OwnerTagOperator);
 		if (!Scenario.bOk)
 		{
 			UE_LOG(LogGPWorker, Error,
@@ -756,13 +757,15 @@ void UGP_WorkerContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEn
 	(void)bCleanupResources;
 	if (World == nullptr || World == WorldWeak.Get() || !WorldWeak.IsValid())
 	{
-		Finish();
+		Abort(TEXT("WorldEndPlay"));
 	}
 }
 
 void UGP_WorkerContractTestRunner::Start(UWorld* InWorld)
 {
 	bFinished = false;
+	bCancelled = false;
+	CancelReason = NAME_None;
 	WorldWeak = InWorld;
 	StageIndex = 0;
 	Failures = 0;
@@ -853,6 +856,7 @@ void UGP_WorkerContractTestRunner::Finish()
 	}
 	TestNodeWeak.Reset();
 	UE_LOG(LogGPWorker, Log, TEXT("GP Worker.RunContractTest: Complete Failures=%d"), Failures);
+	GPContractTestCoordinator::Release(ExecutionId, Failures, bCancelled, *CancelReason.ToString());
 	RemoveFromRoot();
 	GPWorkerDebug::GActiveWorkerContractTest.Reset();
 	WorldWeak.Reset();
@@ -1416,11 +1420,6 @@ void UGP_WorkerContractTestRunner::AdvanceStage()
 			Node->Destroy();
 		}
 		TestNodeWeak.Reset();
-		if (GEngine)
-		{
-			GEngine->Exec(World, TEXT("gp.Cargo.RunContractTest"));
-		}
-		Expect(true, TEXT("CargoRegressionInvoked"));
 		Finish();
 		break;
 	}
@@ -1445,9 +1444,15 @@ namespace GPWorkerDebug
 			UE_LOG(LogGPWorker, Warning, TEXT("GP Worker.RunContractTest: rejected — already running"));
 			return;
 		}
+		GPContractTestCoordinator::FExecutionToken Token;
+		if (!GPContractTestCoordinator::TryAcquire(World, TEXT("WorkerContract"), TEXT("Worker"), Token))
+		{
+			return;
+		}
 		UGP_WorkerContractTestRunner* Runner = NewObject<UGP_WorkerContractTestRunner>(GetTransientPackage());
 		Runner->AddToRoot();
 		GActiveWorkerContractTest = Runner;
+		Runner->SetExecutionToken(Token.ExecutionId, Token.OwnerTag);
 		Runner->Start(World);
 	}
 
@@ -1501,9 +1506,15 @@ namespace GPWorkerDebug
 			UE_LOG(LogGPWorker, Warning, TEXT("GP Worker.RunHaulingContractTest: rejected — already running"));
 			return;
 		}
+		GPContractTestCoordinator::FExecutionToken Token;
+		if (!GPContractTestCoordinator::TryAcquire(World, TEXT("WorkerHaulingContract"), TEXT("WorkerHauling"), Token))
+		{
+			return;
+		}
 		UGP_WorkerHaulingContractTestRunner* Runner = NewObject<UGP_WorkerHaulingContractTestRunner>(GetTransientPackage());
 		Runner->AddToRoot();
 		GActiveHaulingContractTest = Runner;
+		Runner->SetExecutionToken(Token.ExecutionId, Token.OwnerTag);
 		Runner->Start(World);
 	}
 
@@ -1525,7 +1536,7 @@ namespace GPWorkerDebug
 		}
 
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
-			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId, /*bOwnedByContract*/ false);
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId, GPContractTestCoordinator::OwnerTagOperator);
 		if (!Scenario.bOk)
 		{
 			UE_LOG(LogGPWorker, Error,
@@ -1564,9 +1575,15 @@ namespace GPWorkerDebug
 			UE_LOG(LogGPWorker, Warning, TEXT("GP Resource.RunDiagnosticScenarioContractTest: rejected — already running"));
 			return;
 		}
+		GPContractTestCoordinator::FExecutionToken Token;
+		if (!GPContractTestCoordinator::TryAcquire(World, TEXT("DiagnosticScenarioContract"), TEXT("DiagnosticScenario"), Token))
+		{
+			return;
+		}
 		UGP_DiagnosticScenarioContractTestRunner* Runner = NewObject<UGP_DiagnosticScenarioContractTestRunner>(GetTransientPackage());
 		Runner->AddToRoot();
 		GActiveDiagnosticScenarioContractTest = Runner;
+		Runner->SetExecutionToken(Token.ExecutionId, Token.OwnerTag);
 		Runner->Start(World);
 	}
 
@@ -1607,13 +1624,15 @@ void UGP_WorkerHaulingContractTestRunner::OnWorldCleanup(UWorld* World, bool bSe
 	(void)bCleanupResources;
 	if (World == nullptr || World == WorldWeak.Get() || !WorldWeak.IsValid())
 	{
-		Finish();
+		Cancel(TEXT("WorldEndPlay"));
 	}
 }
 
 void UGP_WorkerHaulingContractTestRunner::Start(UWorld* InWorld)
 {
 	bFinished = false;
+	bCancelled = false;
+	CancelReason = NAME_None;
 	WorldWeak = InWorld;
 	StageIndex = 0;
 	Failures = 0;
@@ -1663,6 +1682,19 @@ void UGP_WorkerHaulingContractTestRunner::Abort(const TCHAR* Reason)
 	Finish();
 }
 
+void UGP_WorkerHaulingContractTestRunner::Cancel(const TCHAR* Reason)
+{
+	if (bFinished)
+	{
+		return;
+	}
+	bCancelled = true;
+	CancelReason = FName(Reason);
+	++Failures;
+	UE_LOG(LogGPWorker, Warning, TEXT("GP Worker.RunHaulingContractTest CANCELLED: %s"), Reason);
+	Finish();
+}
+
 void UGP_WorkerHaulingContractTestRunner::DestroyWeakWorker(TWeakObjectPtr<AGP_Worker>& Weak)
 {
 	if (AGP_Worker* Worker = Weak.Get())
@@ -1703,18 +1735,16 @@ void UGP_WorkerHaulingContractTestRunner::Finish()
 	{
 		World->GetTimerManager().ClearTimer(StageTimerHandle);
 	}
-	DestroyWeakWorker(PrimaryWorkerWeak);
-	DestroyWeakMainBase(MainBaseWeak);
-	DestroyWeakMainBase(EnemyBaseWeak);
-	if (AGP_ResourceNode* Node = TestNodeWeak.Get())
+	if (UWorld* World = WorldWeak.Get())
 	{
-		if (IsValid(Node))
-		{
-			Node->Destroy();
-		}
+		GPResourceLoopDiagnostics::CleanupScenarioByOwnerTag(World, OwnerTag);
 	}
+	PrimaryWorkerWeak.Reset();
+	MainBaseWeak.Reset();
+	EnemyBaseWeak.Reset();
 	TestNodeWeak.Reset();
 	UE_LOG(LogGPWorker, Log, TEXT("GP Worker.RunHaulingContractTest: Complete Failures=%d"), Failures);
+	GPContractTestCoordinator::Release(ExecutionId, Failures, bCancelled, *CancelReason.ToString());
 	RemoveFromRoot();
 	GPWorkerDebug::GActiveHaulingContractTest.Reset();
 	WorldWeak.Reset();
@@ -1725,7 +1755,7 @@ AGP_ResourceNode* UGP_WorkerHaulingContractTestRunner::SpawnNode(const FVector& 
 	AGP_ResourceNode* Node = GPResourceLoopDiagnostics::SpawnResourceNodeTransient(
 		WorldWeak.Get(),
 		Loc,
-		/*bOwnedByContract*/ true);
+		OwnerTag);
 	if (IsValid(Node))
 	{
 		Node->Tags.AddUnique(GPResourceLoopDiagnostics::MakeTeamScenarioTag(ContractTeamId));
@@ -1735,17 +1765,26 @@ AGP_ResourceNode* UGP_WorkerHaulingContractTestRunner::SpawnNode(const FVector& 
 
 AGP_MainBase* UGP_WorkerHaulingContractTestRunner::SpawnMainBase(const FVector& Loc, int32 TeamId) const
 {
-	return GPResourceLoopDiagnostics::SpawnMainBaseDeferred(WorldWeak.Get(), Loc, TeamId, /*bOwnedByContract*/ true);
+	return GPResourceLoopDiagnostics::SpawnMainBaseDeferred(WorldWeak.Get(), Loc, TeamId, OwnerTag);
 }
 
 AGP_Worker* UGP_WorkerHaulingContractTestRunner::SpawnWorker(const FVector& Loc, int32 TeamId) const
 {
-	return GPResourceLoopDiagnostics::SpawnWorkerDeferred(WorldWeak.Get(), Loc, TeamId, /*bOwnedByContract*/ true);
+	return GPResourceLoopDiagnostics::SpawnWorkerDeferred(WorldWeak.Get(), Loc, TeamId, OwnerTag);
 }
 
 void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 {
 	UWorld* World = WorldWeak.Get();
+	if (bFinished || !GPContractTestCoordinator::IsTokenActive(ExecutionId))
+	{
+		return;
+	}
+	if (GPContractTestCoordinator::IsWorldTearingDown(World))
+	{
+		Cancel(TEXT("WorldEndPlay"));
+		return;
+	}
 	if (!IsValid(World))
 	{
 		Abort(TEXT("WorldInvalidDuringStage"));
@@ -1758,7 +1797,9 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 	{
 		if (!IsValid(Worker))
 		{
-			return false;
+			Expect(false, TEXT("PartialStorageObjectsLost"));
+			Finish();
+			return true;
 		}
 		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
 		const bool bBusy = (Cmd != nullptr && Cmd->IsHaulActive())
@@ -1790,7 +1831,7 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		// Navigable layout (same discovery as operator diagnostic) — not hardcoded off-mesh coords.
 		// Isolates onto a free playable team when Team 1 is occupied by operator scenario.
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
-			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, /*bOwnedByContract*/ true);
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
 		if (!Expect(Scenario.bOk && Scenario.bReadyForHaulingTest, TEXT("SpawnNavigableHaulingScenario")))
 		{
 			Finish();
@@ -1854,8 +1895,21 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		{
 			return;
 		}
+		if (!IsValid(Worker) || !IsValid(Base) || !IsValid(Worker->GetCargoComponent())
+			|| !IsValid(Worker->GetMiningComponent()))
+		{
+			Expect(false, TEXT("PartialStorageObjectsLost"));
+			Finish();
+			return;
+		}
 		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
 		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		if (!IsValid(Cmd) || !IsValid(Storage))
+		{
+			Expect(false, TEXT("PartialStorageObjectsLost"));
+			Finish();
+			return;
+		}
 		Expect(IsValid(Storage) && Storage->GetTotalStored() >= 49.0f, TEXT("StorageReceivedCargoFull"));
 		Expect(FMath::IsNearlyEqual(Worker->GetCargoComponent()->GetCurrentCargoAmount(), 0.0f), TEXT("CargoEmptyAfterDropOff"));
 		Expect(Cmd->GetLastHaulAcceptedAmount() >= 49.0f, TEXT("HaulAccepted50"));
@@ -1910,8 +1964,15 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 	case 4:
 	{
 		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
 		if (WaitHaulOrMove(Worker, TEXT("DepleteHaulTimeout")))
 		{
+			return;
+		}
+		if (!IsValid(Worker) || !IsValid(Base) || !IsValid(Worker->GetUnitCommandComponent()) || !IsValid(Worker->GetCargoComponent()))
+		{
+			Expect(false, TEXT("PartialStorageObjectsLost"));
+			Finish();
 			return;
 		}
 		Expect(FMath::IsNearlyEqual(Worker->GetCargoComponent()->GetCurrentCargoAmount(), 0.0f), TEXT("DepleteDropped"));
@@ -1941,6 +2002,13 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 			return;
 		}
 		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		if (!IsValid(Storage) || !IsValid(Worker->GetCargoComponent()) || !IsValid(Worker->GetMiningComponent())
+			|| !IsValid(Worker->GetUnitCommandComponent()))
+		{
+			Expect(false, TEXT("PartialStorageObjectsLost"));
+			Finish();
+			return;
+		}
 		Storage->RemovePlanetaryFerronite(Storage->GetTotalStored());
 		const float Cap = Storage->GetTotalCapacity();
 		Storage->AddPlanetaryFerronite(Cap - 20.0f);
@@ -1974,11 +2042,24 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		{
 			return;
 		}
+		if (!IsValid(Worker) || !IsValid(Base) || !IsValid(Worker->GetCargoComponent()))
+		{
+			Expect(false, TEXT("PartialStorageObjectsLost"));
+			Finish();
+			return;
+		}
 		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		if (!IsValid(Cmd) || !IsValid(Storage))
+		{
+			Expect(false, TEXT("PartialStorageObjectsLost"));
+			Finish();
+			return;
+		}
 		Expect(Cmd->GetLastHaulAcceptedAmount() <= 20.0f + 0.1f, TEXT("PartialAcceptedAtMost20"));
 		Expect(Cmd->GetLastHaulRejectedAmount() >= 29.0f, TEXT("PartialRejectedOverflow"));
 		Expect(FMath::IsNearlyEqual(Worker->GetCargoComponent()->GetCurrentCargoAmount(), 0.0f), TEXT("OverflowLostClearedCargo"));
-		Expect(Base->GetStorageComponent()->IsStorageFull(), TEXT("StorageFullAfterPartial"));
+		Expect(Storage->IsStorageFull(), TEXT("StorageFullAfterPartial"));
 		++StageIndex;
 		ScheduleNext();
 		break;
@@ -1994,7 +2075,17 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 			Finish();
 			return;
 		}
-		Base->GetStorageComponent()->RemovePlanetaryFerronite(Base->GetStorageComponent()->GetTotalStored());
+		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+		UGP_MiningComponent* Mining = Worker->GetMiningComponent();
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		if (!IsValid(Storage) || !IsValid(Cargo) || !IsValid(Mining) || !IsValid(Cmd))
+		{
+			Expect(false, TEXT("OwnedActorDestroyed"));
+			Finish();
+			return;
+		}
+		Storage->RemovePlanetaryFerronite(Storage->GetTotalStored());
 		Worker->GetCargoComponent()->ClearCargo();
 		Worker->GetCargoComponent()->AddCargo(50.0f);
 		Worker->SetActorLocation(Node->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f), false, nullptr, ETeleportType::TeleportPhysics);
@@ -2035,6 +2126,13 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 			Finish();
 			return;
 		}
+		if (!IsValid(Worker->GetCargoComponent()) || !IsValid(Worker->GetMiningComponent())
+			|| !IsValid(Worker->GetUnitCommandComponent()))
+		{
+			Expect(false, TEXT("OwnedActorDestroyed"));
+			Finish();
+			return;
+		}
 		Worker->GetCargoComponent()->ClearCargo();
 		IssueMine(Worker, Node);
 		for (int32 i = 0; i < 5 && !Worker->GetCargoComponent()->IsFull(); ++i)
@@ -2059,6 +2157,13 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		AGP_ResourceNode* Node = TestNodeWeak.Get();
 		if (!Expect(IsValid(Worker) && IsValid(Friendly) && IsValid(Node), TEXT("OwnershipObjects")))
 		{
+			Finish();
+			return;
+		}
+		if (!IsValid(Worker->GetCargoComponent()) || !IsValid(Worker->GetMiningComponent())
+			|| !IsValid(Worker->GetUnitCommandComponent()))
+		{
+			Expect(false, TEXT("OwnedActorDestroyed"));
 			Finish();
 			return;
 		}
@@ -2155,13 +2260,15 @@ void UGP_DiagnosticScenarioContractTestRunner::OnWorldCleanup(UWorld* World, boo
 	(void)bCleanupResources;
 	if (World == nullptr || World == WorldWeak.Get() || !WorldWeak.IsValid())
 	{
-		Finish();
+		Cancel(TEXT("WorldEndPlay"));
 	}
 }
 
 void UGP_DiagnosticScenarioContractTestRunner::Start(UWorld* InWorld)
 {
 	bFinished = false;
+	bCancelled = false;
+	CancelReason = NAME_None;
 	WorldWeak = InWorld;
 	StageIndex = 0;
 	Failures = 0;
@@ -2181,7 +2288,9 @@ void UGP_DiagnosticScenarioContractTestRunner::Start(UWorld* InWorld)
 			GS->PruneInvalidMainBaseRegistrations();
 			if (AGP_MainBase* OpBase = GS->FindMainBaseForTeam(1))
 			{
-				bOperatorTeam1PresentAtStart = true;
+				bOperatorTeam1PresentAtStart =
+					GPResourceLoopDiagnostics::ActorHasOwnerTag(OpBase, GPContractTestCoordinator::OwnerTagOperator)
+					|| !OpBase->Tags.Contains(GPResourceLoopDiagnostics::TagOwnedByContract);
 				OperatorTeam1MainBaseWeak = OpBase;
 			}
 		}
@@ -2223,8 +2332,25 @@ bool UGP_DiagnosticScenarioContractTestRunner::Expect(bool bOk, const TCHAR* Lab
 
 void UGP_DiagnosticScenarioContractTestRunner::Abort(const TCHAR* Reason)
 {
+	if (bFinished)
+	{
+		return;
+	}
 	UE_LOG(LogGPWorker, Error, TEXT("GP Resource.RunDiagnosticScenarioContractTest ABORT: %s"), Reason);
 	++Failures;
+	Finish();
+}
+
+void UGP_DiagnosticScenarioContractTestRunner::Cancel(const TCHAR* Reason)
+{
+	if (bFinished)
+	{
+		return;
+	}
+	bCancelled = true;
+	CancelReason = FName(Reason);
+	++Failures;
+	UE_LOG(LogGPWorker, Warning, TEXT("GP Resource.RunDiagnosticScenarioContractTest CANCELLED: %s"), Reason);
 	Finish();
 }
 
@@ -2238,8 +2364,7 @@ void UGP_DiagnosticScenarioContractTestRunner::Finish()
 	if (UWorld* World = WorldWeak.Get())
 	{
 		World->GetTimerManager().ClearTimer(StageTimerHandle);
-		// Best-effort: destroy only contract-owned leftovers for the contract team.
-		GPResourceLoopDiagnostics::CleanupTaggedScenarioForTeam(World, ContractTeamId, /*bContractOwnedOnly*/ true);
+		GPResourceLoopDiagnostics::CleanupScenarioByOwnerTag(World, OwnerTag);
 		if (AGP_MainBase* Rejected = RejectedMainBaseWeak.Get())
 		{
 			if (IsValid(Rejected))
@@ -2257,6 +2382,7 @@ void UGP_DiagnosticScenarioContractTestRunner::Finish()
 	}
 	UnbindWorldCleanup();
 	UE_LOG(LogGPWorker, Log, TEXT("GP Resource.RunDiagnosticScenarioContractTest: Complete Failures=%d"), Failures);
+	GPContractTestCoordinator::Release(ExecutionId, Failures, bCancelled, *CancelReason.ToString());
 	RemoveFromRoot();
 	GPWorkerDebug::GActiveDiagnosticScenarioContractTest.Reset();
 	WorldWeak.Reset();
@@ -2271,6 +2397,15 @@ void UGP_DiagnosticScenarioContractTestRunner::Finish()
 void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 {
 	UWorld* World = WorldWeak.Get();
+	if (bFinished || !GPContractTestCoordinator::IsTokenActive(ExecutionId))
+	{
+		return;
+	}
+	if (GPContractTestCoordinator::IsWorldTearingDown(World))
+	{
+		Cancel(TEXT("WorldEndPlay"));
+		return;
+	}
 	if (!IsValid(World))
 	{
 		Abort(TEXT("WorldInvalidDuringStage"));
@@ -2281,12 +2416,8 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 	{
 	case 0:
 	{
-		// Prior contract leftovers only — never wipe operator scenarios.
-		GPResourceLoopDiagnostics::CleanupTaggedScenarioForTeam(World, 1, /*bContractOwnedOnly*/ true);
-		GPResourceLoopDiagnostics::CleanupTaggedScenarioForTeam(World, 2, /*bContractOwnedOnly*/ true);
-
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
-			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, /*bOwnedByContract*/ true);
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
 		if (Scenario.Error == TEXT("BlockedByOccupiedPlayableTeams"))
 		{
 			Expect(false, TEXT("BlockedByOccupiedPlayableTeams"));
@@ -2319,7 +2450,9 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 		Expect(Scenario.ResourceNode->HasAnyFlags(RF_Transient), TEXT("NodeTransient"));
 		Expect(Scenario.MainBase->HasAnyFlags(RF_Transient), TEXT("MainBaseTransient"));
 		Expect(Scenario.Worker->HasAnyFlags(RF_Transient), TEXT("WorkerTransient"));
-		Expect(Scenario.MainBase->Tags.Contains(GPResourceLoopDiagnostics::TagOwnedByContract), TEXT("ContractOwnedTag"));
+		Expect(GPResourceLoopDiagnostics::ActorHasOwnerTag(Scenario.MainBase, OwnerTag), TEXT("MainBaseOwnerTag"));
+		Expect(GPResourceLoopDiagnostics::ActorHasOwnerTag(Scenario.Worker, OwnerTag), TEXT("WorkerOwnerTag"));
+		Expect(GPResourceLoopDiagnostics::ActorHasOwnerTag(Scenario.ResourceNode, OwnerTag), TEXT("NodeOwnerTag"));
 
 		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
 		if (!Expect(IsValid(GS), TEXT("GameStatePresent")))
@@ -2393,7 +2526,7 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 
 		const FVector DupLoc = BaseA->GetActorLocation() + FVector(300.0f, 0.0f, 0.0f);
 		AGP_MainBase* BaseB = GPResourceLoopDiagnostics::SpawnMainBaseDeferred(
-			World, DupLoc, ContractTeamId, /*bOwnedByContract*/ true);
+			World, DupLoc, ContractTeamId, OwnerTag);
 		RejectedMainBaseWeak = BaseB;
 		if (!Expect(IsValid(BaseB), TEXT("DuplicateCandidateSpawned")))
 		{
@@ -2440,7 +2573,7 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 			? Worker->GetActorLocation() + FVector(-400.0f, 0.0f, 0.0f)
 			: FVector::ZeroVector;
 		AGP_MainBase* BaseC = GPResourceLoopDiagnostics::SpawnMainBaseDeferred(
-			World, ReplaceLoc, ContractTeamId, /*bOwnedByContract*/ true);
+			World, ReplaceLoc, ContractTeamId, OwnerTag);
 		ReplacementMainBaseWeak = BaseC;
 		if (!Expect(IsValid(BaseC), TEXT("ReplacementBaseSpawned")))
 		{
@@ -2458,7 +2591,7 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 		WorkerWeak.Reset();
 		NodeWeak.Reset();
 		Expect(GS->FindMainBaseForTeam(ContractTeamId) == nullptr
-			|| !GS->FindMainBaseForTeam(ContractTeamId)->Tags.Contains(GPResourceLoopDiagnostics::TagOwnedByContract),
+			|| !GPResourceLoopDiagnostics::ActorHasOwnerTag(GS->FindMainBaseForTeam(ContractTeamId), OwnerTag),
 			TEXT("ContractBaseUnregistered"));
 
 		++StageIndex;
@@ -2482,7 +2615,7 @@ void UGP_DiagnosticScenarioContractTestRunner::AdvanceStage()
 		else if (IsValid(GS))
 		{
 			AGP_MainBase* Remaining = GS->FindMainBaseForTeam(1);
-			Expect(Remaining == nullptr || !Remaining->Tags.Contains(GPResourceLoopDiagnostics::TagOwnedByContract),
+			Expect(Remaining == nullptr || !GPResourceLoopDiagnostics::ActorHasOwnerTag(Remaining, OwnerTag),
 				TEXT("NoContractResidueOnTeam1"));
 		}
 		Finish();
@@ -2554,6 +2687,7 @@ bool UGP_WorkerHaulingContractTestRunner::Expect(bool bOk, const TCHAR* Label)
 	return false;
 }
 void UGP_WorkerHaulingContractTestRunner::Abort(const TCHAR* Reason) { (void)Reason; }
+void UGP_WorkerHaulingContractTestRunner::Cancel(const TCHAR* Reason) { (void)Reason; }
 void UGP_WorkerHaulingContractTestRunner::Finish() { bFinished = true; }
 void UGP_WorkerHaulingContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
 {
@@ -2597,6 +2731,7 @@ bool UGP_DiagnosticScenarioContractTestRunner::Expect(bool bOk, const TCHAR* Lab
 	return false;
 }
 void UGP_DiagnosticScenarioContractTestRunner::Abort(const TCHAR* Reason) { (void)Reason; }
+void UGP_DiagnosticScenarioContractTestRunner::Cancel(const TCHAR* Reason) { (void)Reason; }
 void UGP_DiagnosticScenarioContractTestRunner::Finish() { bFinished = true; }
 void UGP_DiagnosticScenarioContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
 {

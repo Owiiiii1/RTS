@@ -5,6 +5,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Buildings/GPMainBase.h"
+#include "Debug/GPContractTestCoordinator.h"
 #include "EngineUtils.h"
 #include "Game/GPGameState.h"
 #include "GameFramework/PlayerStart.h"
@@ -33,7 +34,12 @@ namespace GPResourceLoopDiagnostics
 		return FName(*FString::Printf(TEXT("GP_DiagScenario_T%d"), TeamId));
 	}
 
-	static void ApplyScenarioTags(AActor* Actor, int32 TeamId, bool bOwnedByContract)
+	bool ActorHasOwnerTag(const AActor* Actor, FName OwnerTag)
+	{
+		return IsValid(Actor) && OwnerTag != NAME_None && Actor->Tags.Contains(OwnerTag);
+	}
+
+	static void ApplyScenarioTags(AActor* Actor, int32 TeamId, FName OwnerTag)
 	{
 		if (!IsValid(Actor))
 		{
@@ -41,7 +47,11 @@ namespace GPResourceLoopDiagnostics
 		}
 		Actor->Tags.AddUnique(TagScenario);
 		Actor->Tags.AddUnique(MakeTeamScenarioTag(TeamId));
-		if (bOwnedByContract)
+		if (OwnerTag != NAME_None)
+		{
+			Actor->Tags.AddUnique(OwnerTag);
+		}
+		if (OwnerTag != NAME_None && OwnerTag != GPContractTestCoordinator::OwnerTagOperator)
 		{
 			Actor->Tags.AddUnique(TagOwnedByContract);
 		}
@@ -383,7 +393,45 @@ namespace GPResourceLoopDiagnostics
 		return false;
 	}
 
-	void CleanupTaggedScenarioForTeam(UWorld* World, int32 TeamId, bool bContractOwnedOnly)
+	void CleanupScenarioByOwnerTag(UWorld* World, FName OwnerTag)
+	{
+		if (!IsValid(World) || OwnerTag == NAME_None)
+		{
+			return;
+		}
+
+		TArray<AActor*> ToDestroy;
+		auto Consider = [&](AActor* Actor)
+		{
+			if (ActorHasOwnerTag(Actor, OwnerTag))
+			{
+				ToDestroy.AddUnique(Actor);
+			}
+		};
+
+		for (TActorIterator<AGP_MainBase> It(World); It; ++It)
+		{
+			Consider(*It);
+		}
+		for (TActorIterator<AGP_Worker> It(World); It; ++It)
+		{
+			Consider(*It);
+		}
+		for (TActorIterator<AGP_ResourceNode> It(World); It; ++It)
+		{
+			Consider(*It);
+		}
+
+		for (AActor* Actor : ToDestroy)
+		{
+			if (IsValid(Actor))
+			{
+				Actor->Destroy();
+			}
+		}
+	}
+
+	void CleanupOperatorScenarioForTeam(UWorld* World, int32 TeamId)
 	{
 		if (!IsValid(World) || TeamId < 1)
 		{
@@ -397,8 +445,8 @@ namespace GPResourceLoopDiagnostics
 			{
 				return;
 			}
-			const bool bIsContract = Actor->Tags.Contains(TagOwnedByContract);
-			if (bContractOwnedOnly != bIsContract)
+			// Exact operator ownership only — never contract / other runners.
+			if (!ActorHasOwnerTag(Actor, GPContractTestCoordinator::OwnerTagOperator))
 			{
 				return;
 			}
@@ -427,7 +475,7 @@ namespace GPResourceLoopDiagnostics
 		}
 	}
 
-	AGP_MainBase* SpawnMainBaseDeferred(UWorld* World, const FVector& Location, int32 TeamId, bool bOwnedByContract)
+	AGP_MainBase* SpawnMainBaseDeferred(UWorld* World, const FVector& Location, int32 TeamId, FName OwnerTag)
 	{
 		if (!IsValid(World) || TeamId < 1)
 		{
@@ -448,7 +496,7 @@ namespace GPResourceLoopDiagnostics
 
 		Base->SetFlags(RF_Transient);
 		MakeTransientUniqueName(Base, TEXT("GP_DiagMainBase"), TeamId);
-		ApplyScenarioTags(Base, TeamId, bOwnedByContract);
+		ApplyScenarioTags(Base, TeamId, OwnerTag);
 		Base->SetTeamId(TeamId);
 		Base->FinishSpawning(Xform);
 		if (Base->GetTeamId() != TeamId)
@@ -466,7 +514,7 @@ namespace GPResourceLoopDiagnostics
 		return Base;
 	}
 
-	AGP_Worker* SpawnWorkerDeferred(UWorld* World, const FVector& Location, int32 TeamId, bool bOwnedByContract)
+	AGP_Worker* SpawnWorkerDeferred(UWorld* World, const FVector& Location, int32 TeamId, FName OwnerTag)
 	{
 		if (!IsValid(World) || TeamId < 1)
 		{
@@ -487,13 +535,13 @@ namespace GPResourceLoopDiagnostics
 
 		Worker->SetFlags(RF_Transient);
 		MakeTransientUniqueName(Worker, TEXT("GP_DiagWorker"), TeamId);
+		ApplyScenarioTags(Worker, TeamId, OwnerTag);
 		Worker->SetTeamId(TeamId);
 		Worker->FinishSpawning(Xform);
 		if (Worker->GetTeamId() != TeamId)
 		{
 			Worker->SetTeamId(TeamId);
 		}
-		ApplyScenarioTags(Worker, TeamId, bOwnedByContract);
 		if (!Worker->GetActorLocation().Equals(Location, 1.0f))
 		{
 			Worker->SetActorLocation(Location, false, nullptr, ETeleportType::TeleportPhysics);
@@ -501,7 +549,7 @@ namespace GPResourceLoopDiagnostics
 		return Worker;
 	}
 
-	AGP_ResourceNode* SpawnResourceNodeTransient(UWorld* World, const FVector& Location, bool bOwnedByContract)
+	AGP_ResourceNode* SpawnResourceNodeTransient(UWorld* World, const FVector& Location, FName OwnerTag)
 	{
 		if (!IsValid(World))
 		{
@@ -525,8 +573,7 @@ namespace GPResourceLoopDiagnostics
 			FSoftObjectPath(UGP_ResourceDefinition::DefaultFerroniteAssetPath())));
 		Node->ResolveResourceDefinition(true);
 		MakeTransientUniqueName(Node, TEXT("GP_DiagResourceNode"), 0);
-		ApplyScenarioTags(Node, 0, bOwnedByContract);
-		// Also stamp team-agnostic scenario tag already applied; team tag added by caller if needed.
+		ApplyScenarioTags(Node, 0, OwnerTag);
 		if (!Node->GetActorLocation().Equals(Location, 1.0f))
 		{
 			Node->SetActorLocation(Location, false, nullptr, ETeleportType::TeleportPhysics);
@@ -600,11 +647,12 @@ namespace GPResourceLoopDiagnostics
 		return INDEX_NONE;
 	}
 
-	FGP_DiagnosticScenarioActors SpawnDiagnosticScenario(UWorld* World, int32 TeamId, bool bOwnedByContract)
+	FGP_DiagnosticScenarioActors SpawnDiagnosticScenario(UWorld* World, int32 TeamId, FName OwnerTag)
 	{
 		FGP_DiagnosticScenarioActors Result;
 		Result.TeamId = TeamId < 1 ? 1 : TeamId;
 		TeamId = Result.TeamId;
+		Result.OwnerTag = OwnerTag.IsNone() ? GPContractTestCoordinator::OwnerTagOperator : OwnerTag;
 
 		if (!IsValid(World) || World->GetNetMode() == NM_Client)
 		{
@@ -618,33 +666,39 @@ namespace GPResourceLoopDiagnostics
 			GSEarly->PruneInvalidMainBaseRegistrations();
 		}
 
-		if (bOwnedByContract)
+		const bool bOperatorOwned = (Result.OwnerTag == GPContractTestCoordinator::OwnerTagOperator);
+		if (!bOperatorOwned)
 		{
-			// Never collide with an existing operator/authored MainBase registry entry.
+			// Select free team BEFORE any cleanup — never destroy other owners' Team1 actors.
 			if (GSEarly != nullptr && GSEarly->FindMainBaseForTeam(TeamId) != nullptr)
 			{
+				const int32 OccupiedTeam = TeamId;
 				const int32 FreeTeam = FindFreePlayableTeamId(World);
 				if (FreeTeam == INDEX_NONE)
 				{
 					Result.Error = TEXT("BlockedByOccupiedPlayableTeams");
 					UE_LOG(LogGPResourceLoopDiag, Error,
 						TEXT("GP Resource.SpawnDiagnosticScenario: Ok=false Reason=BlockedByOccupiedPlayableTeams RequestedTeam=%d"),
-						TeamId);
+						OccupiedTeam);
 					return Result;
 				}
 				UE_LOG(LogGPResourceLoopDiag, Log,
-					TEXT("GP Resource.SpawnDiagnosticScenario: Contract team remapped Requested=%d -> Free=%d"),
-					TeamId,
-					FreeTeam);
+					TEXT("GP Resource.SpawnDiagnosticScenario: Contract team remapped Requested=%d OccupiedOperatorTeam=%d -> Free=%d OwnerTag=%s"),
+					OccupiedTeam,
+					OccupiedTeam,
+					FreeTeam,
+					*Result.OwnerTag.ToString());
 				TeamId = FreeTeam;
 				Result.TeamId = TeamId;
 			}
-			CleanupTaggedScenarioForTeam(World, TeamId, /*bContractOwnedOnly*/ true);
+
+			// Only destroy leftovers owned by THIS OwnerTag (never Team-wide contract cleanup).
+			CleanupScenarioByOwnerTag(World, Result.OwnerTag);
 		}
 		else
 		{
-			// Operator re-spawn: replace prior operator diagnostic only (never authored/production).
-			CleanupTaggedScenarioForTeam(World, TeamId, /*bContractOwnedOnly*/ false);
+			// Operator re-spawn: replace prior operator diagnostic for this team only.
+			CleanupOperatorScenarioForTeam(World, TeamId);
 			if (GSEarly != nullptr && GSEarly->FindMainBaseForTeam(TeamId) != nullptr)
 			{
 				Result.Error = TEXT("TeamMainBaseOccupied");
@@ -708,15 +762,15 @@ namespace GPResourceLoopDiagnostics
 		Result.bNavNodeToBase = Layout.bNavNodeToBase;
 		Result.bNavBaseToNode = Layout.bNavBaseToNode;
 
-		Result.MainBase = SpawnMainBaseDeferred(World, Layout.BaseLoc, TeamId, bOwnedByContract);
+		Result.MainBase = SpawnMainBaseDeferred(World, Layout.BaseLoc, TeamId, Result.OwnerTag);
 		Result.bCreatedMainBase = IsValid(Result.MainBase);
-		Result.ResourceNode = SpawnResourceNodeTransient(World, Layout.NodeLoc, bOwnedByContract);
+		Result.ResourceNode = SpawnResourceNodeTransient(World, Layout.NodeLoc, Result.OwnerTag);
 		if (IsValid(Result.ResourceNode))
 		{
 			Result.ResourceNode->Tags.AddUnique(MakeTeamScenarioTag(TeamId));
 			Result.bCreatedResourceNode = true;
 		}
-		Result.Worker = SpawnWorkerDeferred(World, Layout.WorkerLoc, TeamId, bOwnedByContract);
+		Result.Worker = SpawnWorkerDeferred(World, Layout.WorkerLoc, TeamId, Result.OwnerTag);
 		Result.bCreatedWorker = IsValid(Result.Worker);
 
 		auto FailAtomic = [&](const TCHAR* Reason)

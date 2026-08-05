@@ -192,6 +192,7 @@ class GPRUNTIME_API UGP_StorageContractTestRunner : public UObject
 
 public:
 	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
 	void Start(UWorld* InWorld);
 
 private:
@@ -210,4 +211,8 @@ private:
 	FTimerHandle StageTimerHandle;
 	TWeakObjectPtr<UWorld> WorldWeak;
 	TWeakObjectPtr<class AGP_MainBase> MainBaseWeak;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
 };

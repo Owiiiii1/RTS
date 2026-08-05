@@ -79,6 +79,7 @@ class GPRUNTIME_API UGP_WorkerContractTestRunner : public UObject
 
 public:
 	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
 	void Start(UWorld* InWorld);
 
 private:
@@ -105,6 +106,10 @@ private:
 	float InteractionRangeCm = 200.0f;
 	int32 MovementWaitTicks = 0;
 	double MovementWaitStartTime = -1.0;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
 	static constexpr float MovementWaitTimeoutSeconds = 20.0f;
 };
 
@@ -118,6 +123,7 @@ class GPRUNTIME_API UGP_WorkerHaulingContractTestRunner : public UObject
 
 public:
 	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
 	void Start(UWorld* InWorld);
 
 private:
@@ -125,6 +131,7 @@ private:
 	void AdvanceStage();
 	bool Expect(bool bOk, const TCHAR* Label);
 	void Abort(const TCHAR* Reason);
+	void Cancel(const TCHAR* Reason);
 	void Finish();
 	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
 	void UnbindWorldCleanup();
@@ -151,6 +158,10 @@ private:
 	double MovementWaitStartTime = -1.0;
 	uint32 StaleHaulSerial = 0;
 	float ThreatBefore = 0.0f;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
 	static constexpr float MovementWaitTimeoutSeconds = 30.0f;
 };
 
@@ -162,6 +173,7 @@ class GPRUNTIME_API UGP_DiagnosticScenarioContractTestRunner : public UObject
 
 public:
 	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
 	void Start(UWorld* InWorld);
 
 private:
@@ -169,6 +181,7 @@ private:
 	void AdvanceStage();
 	bool Expect(bool bOk, const TCHAR* Label);
 	void Abort(const TCHAR* Reason);
+	void Cancel(const TCHAR* Reason);
 	void Finish();
 	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
 	void UnbindWorldCleanup();
@@ -187,4 +200,68 @@ private:
 	int32 ContractTeamId = 1;
 	bool bOperatorTeam1PresentAtStart = false;
 	TWeakObjectPtr<AGP_MainBase> OperatorTeam1MainBaseWeak;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
+};
+
+/** Sequential GP-S28 PIE regression suite (waits for each contract token release). */
+UCLASS()
+class GPRUNTIME_API UGP_S28RegressionSuiteRunner : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual void BeginDestroy() override;
+	void Start(UWorld* InWorld);
+
+private:
+	void StartNext();
+	void OnChildFinished(uint64 ExecutionId, int32 ChildFailures);
+	void Finish();
+	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void UnbindWorldCleanup();
+
+	int32 SuiteIndex = 0;
+	int32 Failures = 0;
+	bool bFinished = false;
+	FDelegateHandle WorldCleanupHandle;
+	TWeakObjectPtr<UWorld> WorldWeak;
+	uint64 WaitingForExecutionId = 0;
+};
+
+/** Coordinator isolation + ownership + null-safety contract stages. */
+UCLASS()
+class GPRUNTIME_API UGP_ContractIsolationContractTestRunner : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
+	void Start(UWorld* InWorld);
+
+private:
+	void ScheduleNext();
+	void AdvanceStage();
+	bool Expect(bool bOk, const TCHAR* Label);
+	void Abort(const TCHAR* Reason);
+	void Finish();
+	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void UnbindWorldCleanup();
+
+	int32 StageIndex = 0;
+	int32 Failures = 0;
+	bool bFinished = false;
+	FDelegateHandle WorldCleanupHandle;
+	FTimerHandle StageTimerHandle;
+	TWeakObjectPtr<UWorld> WorldWeak;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	TWeakObjectPtr<AGP_MainBase> OperatorBaseWeak;
+	TWeakObjectPtr<AGP_Worker> OperatorWorkerWeak;
+	TWeakObjectPtr<AGP_ResourceNode> OperatorNodeWeak;
+	TWeakObjectPtr<AGP_Worker> HaulWorkerWeak;
+	int32 ContractTeamId = 2;
 };

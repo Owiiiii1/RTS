@@ -1,5 +1,32 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-05 — GP-S28 Contract Runner Isolation / Ownership / Async Null-Safety
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior EndPlay cleanup: `7f81d19d236d0cf197c1c650174ef28532245244`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Crash
+AV `0x548` in Hauling `AdvanceStage` after Diagnostic destroyed live Hauling actors via Team/contract cleanup; Worker.Complete could print while Hauling still scheduled.
+
+### What was done
+- Global PIE contract coordinator token; OwnerTag-scoped cleanup; remap-before-cleanup
+- Null-safe hauling stages; sequential `RunS28RegressionSuite`; isolation contract
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping not run
+- PIE validation pending
+
+### Operator next
+1. `gp.Resource.RunContractIsolationContractTest`
+2. `gp.Resource.RunS28RegressionSuite` → Complete Failures=0
+3. Do not fire-and-forget seven contract commands without waiting
+
+---
+
 ## 2026-08-05 — GP-S28 ResourceNode EndPlay Reentrant Occupancy Cleanup
 
 Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**

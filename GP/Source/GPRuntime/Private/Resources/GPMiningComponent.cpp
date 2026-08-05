@@ -19,6 +19,7 @@
 #if !UE_BUILD_SHIPPING
 #include "Buildings/GPMainBase.h"
 #include "Command/GPUnitCommand.h"
+#include "Debug/GPContractTestCoordinator.h"
 #include "EngineUtils.h"
 #include "Game/GPGameState.h"
 #include "HAL/IConsoleManager.h"
@@ -1289,10 +1290,16 @@ namespace GPMiningDebug
 				TEXT("GP Mining.RunContractTest: rejected — previous staged test still running"));
 			return;
 		}
+		GPContractTestCoordinator::FExecutionToken Token;
+		if (!GPContractTestCoordinator::TryAcquire(World, TEXT("MiningContract"), TEXT("Mining"), Token))
+		{
+			return;
+		}
 
 		UGP_MiningContractTestRunner* Runner = NewObject<UGP_MiningContractTestRunner>(GetTransientPackage());
 		Runner->AddToRoot();
 		GActiveContractTestRunner = Runner;
+		Runner->SetExecutionToken(Token.ExecutionId, Token.OwnerTag);
 		Runner->Start(World);
 	}
 
@@ -1335,11 +1342,17 @@ namespace GPMiningDebug
 				TEXT("GP Resource.RunEndPlayContractTest: rejected — previous staged test still running"));
 			return;
 		}
+		GPContractTestCoordinator::FExecutionToken Token;
+		if (!GPContractTestCoordinator::TryAcquire(World, TEXT("ResourceEndPlayContract"), TEXT("ResourceEndPlay"), Token))
+		{
+			return;
+		}
 
 		UGP_ResourceNodeEndPlayContractTestRunner* Runner =
 			NewObject<UGP_ResourceNodeEndPlayContractTestRunner>(GetTransientPackage());
 		Runner->AddToRoot();
 		GActiveEndPlayContractTestRunner = Runner;
+		Runner->SetExecutionToken(Token.ExecutionId, Token.OwnerTag);
 		Runner->Start(World);
 	}
 
@@ -1370,13 +1383,15 @@ void UGP_MiningContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEn
 	(void)bCleanupResources;
 	if (World == nullptr || World == WorldWeak.Get() || !WorldWeak.IsValid())
 	{
-		Finish();
+		Abort(TEXT("WorldEndPlay"));
 	}
 }
 
 void UGP_MiningContractTestRunner::Start(UWorld* InWorld)
 {
 	bFinished = false;
+	bCancelled = false;
+	CancelReason = NAME_None;
 	WorldWeak = InWorld;
 	StageIndex = 0;
 	Failures = 0;
@@ -1523,6 +1538,7 @@ void UGP_MiningContractTestRunner::Finish()
 		TEXT("GP Mining.RunContractTest: Complete Failures=%d (map/assets not saved; staged runner)"),
 		Failures);
 
+	GPContractTestCoordinator::Release(ExecutionId, Failures, bCancelled, *CancelReason.ToString());
 	RemoveFromRoot();
 	GPMiningDebug::GActiveContractTestRunner.Reset();
 	WorldWeak.Reset();
@@ -1531,6 +1547,17 @@ void UGP_MiningContractTestRunner::Finish()
 void UGP_MiningContractTestRunner::AdvanceStage()
 {
 	UWorld* World = WorldWeak.Get();
+	if (bFinished || !GPContractTestCoordinator::IsTokenActive(ExecutionId))
+	{
+		return;
+	}
+	if (GPContractTestCoordinator::IsWorldTearingDown(World))
+	{
+		bCancelled = true;
+		CancelReason = FName(TEXT("WorldEndPlay"));
+		Abort(TEXT("WorldEndPlay"));
+		return;
+	}
 	if (!IsValid(World))
 	{
 		Abort(TEXT("WorldInvalidDuringStage"));
@@ -1915,13 +1942,15 @@ void UGP_ResourceNodeEndPlayContractTestRunner::OnWorldCleanup(UWorld* World, bo
 	(void)bCleanupResources;
 	if (World == nullptr || World == WorldWeak.Get() || !WorldWeak.IsValid())
 	{
-		Finish();
+		Abort(TEXT("WorldEndPlay"));
 	}
 }
 
 void UGP_ResourceNodeEndPlayContractTestRunner::Start(UWorld* InWorld)
 {
 	bFinished = false;
+	bCancelled = false;
+	CancelReason = NAME_None;
 	WorldWeak = InWorld;
 	StageIndex = 0;
 	Failures = 0;
@@ -2027,6 +2056,7 @@ void UGP_ResourceNodeEndPlayContractTestRunner::Finish()
 	if (UWorld* World = WorldWeak.Get())
 	{
 		World->GetTimerManager().ClearTimer(StageTimerHandle);
+		GPResourceLoopDiagnostics::CleanupScenarioByOwnerTag(World, OwnerTag);
 	}
 
 	if (AGP_ResourceNode* Node = TestNodeWeak.Get())
@@ -2073,6 +2103,7 @@ void UGP_ResourceNodeEndPlayContractTestRunner::Finish()
 	TestNodeWeak.Reset();
 
 	UE_LOG(LogGPMining, Log, TEXT("GP Resource.RunEndPlayContractTest: Complete Failures=%d"), Failures);
+	GPContractTestCoordinator::Release(ExecutionId, Failures, bCancelled, *CancelReason.ToString());
 	RemoveFromRoot();
 	GPMiningDebug::GActiveEndPlayContractTestRunner.Reset();
 	WorldWeak.Reset();
@@ -2081,6 +2112,17 @@ void UGP_ResourceNodeEndPlayContractTestRunner::Finish()
 void UGP_ResourceNodeEndPlayContractTestRunner::AdvanceStage()
 {
 	UWorld* World = WorldWeak.Get();
+	if (bFinished || !GPContractTestCoordinator::IsTokenActive(ExecutionId))
+	{
+		return;
+	}
+	if (GPContractTestCoordinator::IsWorldTearingDown(World))
+	{
+		bCancelled = true;
+		CancelReason = FName(TEXT("WorldEndPlay"));
+		Abort(TEXT("WorldEndPlay"));
+		return;
+	}
 	if (!IsValid(World))
 	{
 		Abort(TEXT("WorldInvalidDuringStage"));
@@ -2224,7 +2266,7 @@ void UGP_ResourceNodeEndPlayContractTestRunner::AdvanceStage()
 		UE_LOG(LogGPMining, Log, TEXT("GP Resource.RunEndPlayContractTest Stage=ResourceNodeEndPlayDuringHaulLoop"));
 
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
-			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, /*bOwnedByContract*/ true);
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
 		if (!Expect(Scenario.bOk && IsValid(Scenario.Worker) && IsValid(Scenario.ResourceNode) && IsValid(Scenario.MainBase),
 			TEXT("HaulLoopScenarioSpawnOk")))
 		{

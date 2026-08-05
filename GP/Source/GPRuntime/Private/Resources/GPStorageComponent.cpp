@@ -5,6 +5,7 @@
 #include "Engine/AssetManager.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
+#include "Debug/GPContractTestCoordinator.h"
 #include "Net/UnrealNetwork.h"
 #include "Resources/GPResourceDefinition.h"
 
@@ -623,7 +624,7 @@ namespace GPStorageDebug
 
 		// Prefer full GP-S28 scenario so operator is not left with MainBase-only incompleteness.
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
-			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId, /*bOwnedByContract*/ false);
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, TeamId, GPContractTestCoordinator::OwnerTagOperator);
 		if (!Scenario.bOk)
 		{
 			UE_LOG(LogGPStorage, Error,
@@ -737,9 +738,15 @@ namespace GPStorageDebug
 			UE_LOG(LogGPStorage, Warning, TEXT("GP Storage.RunContractTest: rejected — already running"));
 			return;
 		}
+		GPContractTestCoordinator::FExecutionToken Token;
+		if (!GPContractTestCoordinator::TryAcquire(World, TEXT("StorageContract"), TEXT("Storage"), Token))
+		{
+			return;
+		}
 		UGP_StorageContractTestRunner* Runner = NewObject<UGP_StorageContractTestRunner>(GetTransientPackage());
 		Runner->AddToRoot();
 		GActiveStorageContractTest = Runner;
+		Runner->SetExecutionToken(Token.ExecutionId, Token.OwnerTag);
 		Runner->Start(World);
 	}
 
@@ -790,13 +797,17 @@ void UGP_StorageContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionE
 	(void)bCleanupResources;
 	if (World == nullptr || World == WorldWeak.Get() || !WorldWeak.IsValid())
 	{
-		Finish();
+		bCancelled = true;
+		CancelReason = FName(TEXT("WorldEndPlay"));
+		Abort(TEXT("WorldEndPlay"));
 	}
 }
 
 void UGP_StorageContractTestRunner::Start(UWorld* InWorld)
 {
 	bFinished = false;
+	bCancelled = false;
+	CancelReason = NAME_None;
 	WorldWeak = InWorld;
 	StageIndex = 0;
 	Failures = 0;
@@ -863,6 +874,7 @@ void UGP_StorageContractTestRunner::Finish()
 	}
 	MainBaseWeak.Reset();
 	UE_LOG(LogGPStorage, Log, TEXT("GP Storage.RunContractTest: Complete Failures=%d"), Failures);
+	GPContractTestCoordinator::Release(ExecutionId, Failures, bCancelled, *CancelReason.ToString());
 	RemoveFromRoot();
 	GPStorageDebug::GActiveStorageContractTest.Reset();
 	WorldWeak.Reset();
@@ -871,6 +883,17 @@ void UGP_StorageContractTestRunner::Finish()
 void UGP_StorageContractTestRunner::AdvanceStage()
 {
 	UWorld* World = WorldWeak.Get();
+	if (bFinished || !GPContractTestCoordinator::IsTokenActive(ExecutionId))
+	{
+		return;
+	}
+	if (GPContractTestCoordinator::IsWorldTearingDown(World))
+	{
+		bCancelled = true;
+		CancelReason = FName(TEXT("WorldEndPlay"));
+		Abort(TEXT("WorldEndPlay"));
+		return;
+	}
 	if (!IsValid(World))
 	{
 		Abort(TEXT("WorldInvalidDuringStage"));

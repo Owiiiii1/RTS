@@ -87,7 +87,7 @@ In-editor console suite (`RunDiagnosticScenarioContractTest`, Storage/Hauling/Wo
 Unchanged
 
 ## Correction commit
-(see git after push)
+c59b12031d88ea9b3c9dd584e4aa1028c2a846dc
 
 ## Git state
 Branch `feature/gp-s28-storage-threat` pushed; main untouched; no PR

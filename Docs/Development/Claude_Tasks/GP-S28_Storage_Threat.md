@@ -10,6 +10,7 @@ Branch: `feature/gp-s28-storage-threat`
 Candidate: `cd83858390db086c6913669f348a7402ae0a5ad3`  
 Diagnostic TeamId correction: `61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`  
 Diagnostic nav correction: `caf5bf0c947176ce5c72affadae41cbbd60be590`
+Registry uniqueness correction: `c59b12031d88ea9b3c9dd584e4aa1028c2a846dc`
 
 ## MainBase registry uniqueness + contract isolation
 Operator failure after nav-ready Team1 scenario: `RunDiagnosticScenarioContractTest` logged duplicate MainBase for TeamId=1 then **still Add** → Count=2 → `MainBaseRegistryResolveFailed`.

@@ -16,7 +16,7 @@ GP-S27 — Worker Mine Approach Range Correction
 `07e20fbfff36e181076d237d0596ef6f25b40951`
 
 ## Correction commit
-*(recorded after commit)*
+`4d38a405729fb5766a5498e91436896ef5efda6b`
 
 ## Operator manual reproduction
 Worker ~4563.6 cm from ResourceNode → Mine approach Destination≈(1363,-1155,88) → MoveReached Final≈(1381,-1108,88) → Distance=**200.4** Range=**200.0** → `MineArrivalOutOfRange`. Contract test previously passed with Dist≈192.7 (missed edge).

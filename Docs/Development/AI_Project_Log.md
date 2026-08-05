@@ -8,6 +8,7 @@ Status: **GP-S27_CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Branch: `feature/gp-s27-worker`
 - Base: `main` @ `860070c4acbcb85fd5c4334628584372bdd082ca`
 - Candidate: `07e20fbfff36e181076d237d0596ef6f25b40951`
+- Approach correction: `4d38a405729fb5766a5498e91436896ef5efda6b`
 - Task: `Docs/Development/Claude_Tasks/GP-S27_Worker.md`
 
 ### What was done

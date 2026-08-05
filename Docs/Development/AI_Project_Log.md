@@ -2,7 +2,7 @@
 
 ## 2026-08-05 — GP-S23R Resource Definition Reconciliation
 
-Status: GP-S23R_CODE_AND_FERRONITE_DATA_ASSET_READY_OPERATOR_VALIDATION_PENDING
+Status: GP-S23R_FINALIZED_READY_FOR_MERGE
 
 ### Branch / baseline
 - Branch: `feature/gp-s23r-resource-definition`
@@ -12,17 +12,16 @@ Status: GP-S23R_CODE_AND_FERRONITE_DATA_ASSET_READY_OPERATOR_VALIDATION_PENDING
 - Task: `Docs/Development/Claude_Tasks/GP-S23R_Resource_Definition_Reconciliation.md`
 
 ### What was done
-- `UGP_ResourceDefinition` + `DA_GP_Resource_Ferronite` (LFS); Asset Manager; Inspect; seed/verify
-- **Correction:** removed stored `MineRatePerWorker`; mining SoT = AmountPerCycle + CycleDuration; EffectiveRate derived only
-- Future MiningComponent contract documented (Amount/Duration/Range for gameplay; EffectiveRate for UI/diagnostics)
-- GPEditor Win64 Development + UHT **PASSED** (candidate + correction)
-- No ResourceNode / Cargo / Mining / Worker / map changes
+- `UGP_ResourceDefinition` + Ferronite DA; mining SoT Amount+Duration+Range; EffectiveRate derived
+- Operator validation **PASSED** (Inspect/DataValidation/VerifyOnly/AssetManager; values 10/1/200/Effective10)
+- Finalization: no C++ changes; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
+- Map unchanged; next stage GP-S24R
 
 ### Intentionally not done
-- Operator validation pending; no GP Dev/Shipping; no S24R; no PR/merge
+- No ResourceNode/Cargo/Mining/Worker/Storage; no PR/merge (ready when requested)
 
 ### Operator next
-- Validate DA (no MineRate property) + Inspect derived rate + VerifyOnly; then finalize
+- None for S23R; merge when requested; then GP-S24R
 
 ---
 

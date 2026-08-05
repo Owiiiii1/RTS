@@ -1,7 +1,7 @@
 # GP-S23R — Resource Definition Reconciliation
 
 ## Status
-**GP-S23R_CODE_AND_FERRONITE_DATA_ASSET_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S23R_FINALIZED_READY_FOR_MERGE**
 
 ## Baseline
 `main` @ `9b3ec9997c2544764d0bd10c6bc4cdfb659dcb2f`
@@ -10,73 +10,55 @@ Branch: `feature/gp-s23r-resource-definition`
 Candidate: `bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81`  
 Correction: `fef94837839ed25041fe5dc0256a1472231c0642`
 
-## Canonical roadmap position
-Canonical **GP-S23**. Next after finalization: **GP-S24R**.
+## Canonical position
+GP-S23 (`UGP_ResourceDefinition`). Next: **GP-S24R**.
 
-## Correction — single-source mining balance
-Removed editable `MineRatePerWorker` UPROPERTY. Dual balance sources are forbidden.
+## Shipped
+- `UGP_ResourceDefinition` PrimaryDataAsset; PrimaryAssetId type `GPResourceDefinition`
+- `DA_GP_Resource_Ferronite` (LFS)
+- Mining SoT: AmountPerMiningCycle + MiningCycleDurationSeconds + InteractionRangeCm
+- `GetEffectiveMineRatePerWorker()` derived only
+- Asset Manager scan + AlwaysCook (single registration)
+- Seed/VerifyOnly commandlet; `gp.ResourceDefinition.Inspect`
+- No ResourceNode / Cargo / Mining / Worker / map changes
 
-**Canonical stored mining fields:**
-- `AmountPerMiningCycle`
-- `MiningCycleDurationSeconds`
-- `InteractionRangeCm`
+## Operator validation matrix (accepted)
 
-**Derived only (not stored):**
-- `GetEffectiveMineRatePerWorker()` = Amount / Duration
-
-### Future MiningComponent contract
-`UGP_MiningComponent` must use:
-- `AmountPerMiningCycle` → ResourceNode consume / cargo delta
-- `MiningCycleDurationSeconds` → cycle timer
-- `InteractionRangeCm` → interaction distance
-- `GetEffectiveMineRatePerWorker()` → UI / diagnostics / analytics only
-
-## Architecture
-`UGP_ResourceDefinition : UPrimaryDataAsset` — immutable tunables; no tick; no economy execution.  
-Internal `EGP_ResourceType::Ore` + Ferronite identity (`DisplayName`, `GP.Resource.Type.Ferronite`).
-
-## Final exact properties
-| Field | Kind |
+| Item | Result |
 | --- | --- |
-| ResourceType | Stored |
-| DisplayName / Description | Stored |
-| ResourceGameplayTag | Stored |
-| Icon (soft) | Stored |
-| AmountPerMiningCycle | Stored (mining SoT) |
-| MiningCycleDurationSeconds | Stored (mining SoT) |
-| InteractionRangeCm | Stored |
-| ScoreConversionRate | Stored (metadata) |
-| ThreatPerStoredUnit | Stored (metadata) |
-| Tint | Stored (metadata) |
-| GetEffectiveMineRatePerWorker | Derived |
+| DA opens / class correct | **PASS** |
+| Identity Ore + Ferronite + tag | **PASS** |
+| Mining values 10 / 1 / 200 / Effective 10 | **PASS** |
+| No stored MineRatePerWorker | **PASS** |
+| Inspect Valid=true Errors=0 Warnings=0 AssetManager path | **PASS** |
+| Data Validation valid | **PASS** |
+| VerifyOnly Success 0 error 0 warning | **PASS** |
+| AssetManagerSees=true | **PASS** |
+| Map unchanged | **PASS** |
 
-## PrimaryAssetId / Asset Manager
-`GPResourceDefinition:DA_GP_Resource_Ferronite`  
-Scan + AlwaysCook: `/Game/GrimProtocol/DataAssets/Resources` (unchanged).
-
-## Prototype values
-| Property | Value |
+## Final DataAsset values
+| Field | Value |
 | --- | --- |
+| ResourceType | Ore |
+| DisplayName | Ferronite |
+| GameplayTag | GP.Resource.Type.Ferronite |
+| PrimaryAssetId | GPResourceDefinition:DA_GP_Resource_Ferronite |
 | AmountPerMiningCycle | 10 |
-| MiningCycleDurationSeconds | 1.0 |
+| MiningCycleDurationSeconds | 1 |
 | InteractionRangeCm | 200 |
-| EffectiveMineRatePerWorker | **10 u/s derived** |
-| ScoreConversionRate | 1.0 |
-| ThreatPerStoredUnit | 0.5 (placeholder) |
+| EffectiveMineRatePerWorker | 10 (derived) |
 
-## Validation
-No MineRate field/mismatch checks. Retains ResourceType, DisplayName, tag, Amount>0, Cycle>0, Range>0, Score/Threat finite ≥0.
-
-## Diagnostics
-`gp.ResourceDefinition.Inspect` logs Amount, CycleDuration, **EffectiveMineRatePerWorker**, InteractionRangeCm — not a stored MineRate.
-
-Seed: `-run=GPResourceDefinitionSeed` / `-VerifyOnly`
-
-## Operator validation
-Open DA → confirm no MineRate property → edit CycleDuration → Inspect shows derived rate → restore → VerifyOnly → Asset Manager → no map changes.
+## Builds (finalization)
+- GPEditor Dev+UHT: retained from correction `fef9483…` (C++ unchanged at finalization)
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
 
 ## Known limitations
-Ore enum name retained; Icon unset; orbital metadata not executed; no ResourceNode wiring until S24R.
+- Ore enum name retained until rename stage
+- Icon unset; ThreatPerStoredUnit / rates are prototypes
+- No deposit integration until S24R
 
 ## Next stage
 **GP-S24R — Ferronite Deposit Contract on AGP_ResourceNode**
+
+No known blockers. Ready for main merge when requested.

@@ -30,6 +30,21 @@ enum class EGP_MiningSlotRequestResult : uint8
 	RejectedDepositInvalid UMETA(DisplayName = "Rejected Deposit Invalid")
 };
 
+/** Server-local miner occupancy state for deposit slot events (GP-S26). */
+UENUM(BlueprintType)
+enum class EGP_MinerOccupancyState : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Waiting UMETA(DisplayName = "Waiting"),
+	Active UMETA(DisplayName = "Active")
+};
+
+DECLARE_MULTICAST_DELEGATE_ThreeParams(
+	FGP_OnMinerSlotStateChanged,
+	AActor* /* Miner */,
+	EGP_MinerOccupancyState /* OldState */,
+	EGP_MinerOccupancyState /* NewState */);
+
 /**
  * Canonical Ferronite Deposit runtime actor (GP-S24R / GP-S27A1).
  *
@@ -124,6 +139,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Resource|Occupancy")
 	bool IsWaitingForMiningSlot(AActor* Miner) const;
 
+	UFUNCTION(BlueprintPure, Category = "GP|Resource|Occupancy")
+	EGP_MinerOccupancyState GetMinerOccupancyState(AActor* Miner) const;
+
+	/**
+	 * Server-local occupancy change notifications (Granted/Waiting/release/FIFO promotion/cleanup).
+	 * Not replicated. MiningComponent binds while targeting this node.
+	 */
+	FGP_OnMinerSlotStateChanged& GetOnMinerSlotStateChanged() { return OnMinerSlotStateChanged; }
+
 	bool ValidateDepositContract(TArray<FText>& OutErrors, TArray<FText>& OutWarnings) const;
 
 #if WITH_EDITOR
@@ -141,8 +165,9 @@ protected:
 	void NormalizeAmountsOnConstruction();
 	void ApplyIdentityFromDefinition(const UGP_ResourceDefinition* Definition);
 	void CleanupInvalidMiners();
-	void PromoteWaitingMiners();
+	void PromoteWaitingMiners(TArray<AActor*>& OutPromotedMiners);
 	void RefreshOccupancyCounts();
+	void BroadcastMinerSlotStateChanged(AActor* Miner, EGP_MinerOccupancyState OldState, EGP_MinerOccupancyState NewState);
 	bool IsValidMinerActor(const AActor* Miner) const;
 	bool IsDepositStateValidForMining() const;
 
@@ -193,4 +218,7 @@ private:
 
 	/** Authority-only waiting FIFO. Not replicated. */
 	TArray<TWeakObjectPtr<AActor>> WaitingMiners;
+
+	/** Server-local only. */
+	FGP_OnMinerSlotStateChanged OnMinerSlotStateChanged;
 };

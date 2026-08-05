@@ -1,28 +1,106 @@
 # Grim Protocol — AI Project Log
 
-## 2026-08-05 — GP-S25 UGP_CargoComponent
+## 2026-08-05 — GP-S26 UGP_MiningComponent — finalization
 
-Status: **GP-S25_FINALIZED_READY_FOR_MERGE**
+Status: **GP-S26_FINALIZED_READY_FOR_MERGE**
 
 ### Branch / baseline
-- Branch: `feature/gp-s25-cargo-component`
-- Base: `main` @ `1fedf1933ac406c3a53a89af4a92a03afcf5a646` (GP-S24R merged)
+- Branch: `feature/gp-s26-mining-component`
+- Base: `main` @ `693a36b8777babaea6085cb799397e9e0cddb77f`
+- Candidate: `4d334a7f4fe331757e4e245d2979a27117a6b660`
+- Host correction: `b58fce2072a9340e258a332b701f477c52181e25`
+- Crash correction: `2801c73c8ef02ba4ae4286812d61ffd12c8410e6`
+- Finalization: `2330f524bfe7b43ed1939fc463ac53bcb1379169`
+- Task: `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md`
+
+### What was done
+- Operator validation **PASSED** (manual mining + `RunContractTest` Failures=0; Editor alive)
+- Finalization review: authority/timer/replication/SoT/FIFO/crash recursion — no merge blockers
+- Minor C++ harden: runner world-cleanup / BeginDestroy clears concurrent guard; Shipping runner stubs
+- Builds: GPEditor Dev+UHT **PASSED**; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
+- Overall: **GP-S26_DONE_MINING_COMPONENT** — ready for main merge when requested
+
+### Intentionally not done
+- No PR/merge/main; no GP-S27 Worker
+
+### Operator next
+- Merge to main when ready; then GP-S27 Worker
+
+---
+
+## 2026-08-05 — GP-S26 Mining Contract Test Crash Correction
+
+Status: **GP-S26_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded by finalization)*
+
+### Branch / baseline
+- Branch: `feature/gp-s26-mining-component`
+- Base: `main` @ `693a36b8777babaea6085cb799397e9e0cddb77f`
+- Candidate: `4d334a7f4fe331757e4e245d2979a27117a6b660`
+- Prior host correction: `b58fce2072a9340e258a332b701f477c52181e25`
+- Crash correction: `2801c73c8ef02ba4ae4286812d61ffd12c8410e6`
+- Task: `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md`
+
+### What was done
+- Root cause: occupancy Broadcast reentrancy into `StopMining` (Editor crash ×2 on `gp.Mining.RunContractTest`)
+- Production: unbind-before-release, `bIsStoppingMining`, IsValid hardening; silent invalid-miner cleanup
+- Staged `UGP_MiningContractTestRunner` + `AGP_MiningNoCargoDiagnosticHost` + transient test nodes + reentrancy guard
+- Post-fix run: `Complete Failures=0`; process alive until Complete
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping **not run**
+
+### Intentionally not done
+- No finalization / PR / merge / GP-S27; balance unchanged
+
+### Operator next
+- Re-validate `gp.Mining.RunContractTest` Failures=0 (Editor stays up); then finalize
+
+---
+
+## 2026-08-05 — GP-S26 UGP_MiningComponent
+
+Status: **GP-S26_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s26-mining-component`
+- Base: `main` @ `693a36b8777babaea6085cb799397e9e0cddb77f` (GP-S25 merged)
+- Candidate: `4d334a7f4fe331757e4e245d2979a27117a6b660`
+- Task: `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md`
+
+### What was done
+- `UGP_MiningComponent` authority timer mining: ResourceNode → CargoComponent
+- ResourceNode server-local `OnMinerSlotStateChanged` for FIFO promotion
+- Transient `AGP_MiningDiagnosticHost` + `gp.Mining.*` / RunContractTest
+- **Correction:** diagnostic host SceneRoot + spawn-within-range invariant + Inspect DiagnosticNode metadata (operator found Dist=1840 vs Range=200)
+- GPEditor Win64 Development + UHT **PASSED** (candidate + correction)
+- GP Win64 Development **not run**; GP Win64 Shipping **not run** (after operator validation)
+
+### Intentionally not done
+- No Worker/movement/Mine command unit wiring/Storage; no PR/merge; production range validation unchanged
+
+### Operator next
+- Re-validate SpawnDiagnosticHost Dist < Range, Begin→Started, Inspect tunables before Begin; then finalize
+
+---
+
+## 2026-08-05 — GP-S25 UGP_CargoComponent
+
+Status: **GP-S25_MERGED_TO_MAIN** @ `693a36b8777babaea6085cb799397e9e0cddb77f`
+
+### Branch / baseline
+- Branch: `feature/gp-s25-cargo-component` (merged)
+- Base (pre-merge): `main` @ `1fedf1933ac406c3a53a89af4a92a03afcf5a646`
 - Candidate: `f440838bbcd8963c8230a70f6f7e3363af7dc45a`
 - Task: `Docs/Development/Claude_Tasks/GP-S25_Cargo_Component.md`
 
 ### What was done
-- `UGP_CargoComponent` replicated Ferronite cargo SoT (capacity 50, add/remove/clear, soft definition)
-- Removed unused `UGP_UnitAttributeSet::CarriedFerronite` (no dual writable store / no mirror)
-- Transient `AGP_CargoDiagnosticHost` + `gp.Cargo.*` diagnostics / RunContractTest
-- Operator validation **PASSED** (add/overflow/remove/clear/invalid/contract test Failures=0 / listen+client / tick off)
-- Finalization: no C++ changes; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
-- Map unchanged; next stage GP-S26 MiningComponent
+- `UGP_CargoComponent` Ferronite cargo SoT; CarriedFerronite removed from AttributeSet
+- Operator validation **PASSED**; GP Dev/Shipping **PASSED**
+- Merged to main @ `693a36b8777babaea6085cb799397e9e0cddb77f`
 
 ### Intentionally not done
-- No MiningComponent/Worker/mining execution/Storage; no PR/merge (ready when requested)
+- No Mining/Worker at S25
 
 ### Operator next
-- None for S25; merge when requested; then GP-S26
+- None for S25 (merged); continue at GP-S26
 
 ---
 

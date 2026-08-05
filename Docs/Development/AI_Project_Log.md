@@ -7,22 +7,21 @@ Status: GP-S23R_CODE_AND_FERRONITE_DATA_ASSET_READY_OPERATOR_VALIDATION_PENDING
 ### Branch / baseline
 - Branch: `feature/gp-s23r-resource-definition`
 - Base: `main` @ `9b3ec9997c2544764d0bd10c6bc4cdfb659dcb2f`
-- Implementation: `bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81`
+- Candidate: `bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81`
 - Task: `Docs/Development/Claude_Tasks/GP-S23R_Resource_Definition_Reconciliation.md`
 
 ### What was done
-- `UGP_ResourceDefinition` PrimaryDataAsset + validation + PrimaryAssetId `GPResourceDefinition`
-- Prototype `DA_GP_Resource_Ferronite` (LFS); seed/verify commandlet; `gp.ResourceDefinition.Inspect`
-- Asset Manager scan + AlwaysCook for `/Game/GrimProtocol/DataAssets/Resources`
-- Tag `GP.Resource.Type.Ferronite` (existing native); Ore enum retained as internal type
-- GPEditor Win64 Development + UHT **PASSED**
+- `UGP_ResourceDefinition` + `DA_GP_Resource_Ferronite` (LFS); Asset Manager; Inspect; seed/verify
+- **Correction:** removed stored `MineRatePerWorker`; mining SoT = AmountPerCycle + CycleDuration; EffectiveRate derived only
+- Future MiningComponent contract documented (Amount/Duration/Range for gameplay; EffectiveRate for UI/diagnostics)
+- GPEditor Win64 Development + UHT **PASSED** (candidate + correction)
 - No ResourceNode / Cargo / Mining / Worker / map changes
 
 ### Intentionally not done
 - Operator validation pending; no GP Dev/Shipping; no S24R; no PR/merge
 
 ### Operator next
-- Validate DA edit + Inspect + VerifyOnly; then finalize
+- Validate DA (no MineRate property) + Inspect derived rate + VerifyOnly; then finalize
 
 ---
 

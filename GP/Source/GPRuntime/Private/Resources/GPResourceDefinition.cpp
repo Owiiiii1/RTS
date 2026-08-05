@@ -34,7 +34,6 @@ UGP_ResourceDefinition::UGP_ResourceDefinition()
 	AmountPerMiningCycle = 10.0f;
 	MiningCycleDurationSeconds = 1.0f;
 	InteractionRangeCm = 200.0f;
-	MineRatePerWorker = 10.0f;
 	ScoreConversionRate = 1.0f;
 	ThreatPerStoredUnit = 0.5f;
 	Tint = FLinearColor(0.15f, 0.75f, 0.85f, 1.0f);
@@ -111,14 +110,6 @@ bool UGP_ResourceDefinition::ValidateDefinition(TArray<FText>& OutErrors, TArray
 			"InteractionRangeCm must be finite and > 0."));
 	}
 
-	if (!FMath::IsFinite(MineRatePerWorker) || MineRatePerWorker <= 0.0f)
-	{
-		OutErrors.Add(NSLOCTEXT(
-			"GPResourceDefinition",
-			"ErrMineRate",
-			"MineRatePerWorker must be finite and > 0."));
-	}
-
 	if (!FMath::IsFinite(ScoreConversionRate) || ScoreConversionRate < 0.0f)
 	{
 		OutErrors.Add(NSLOCTEXT(
@@ -133,23 +124,6 @@ bool UGP_ResourceDefinition::ValidateDefinition(TArray<FText>& OutErrors, TArray
 			"GPResourceDefinition",
 			"ErrThreat",
 			"ThreatPerStoredUnit must be finite and >= 0."));
-	}
-
-	const float EffectiveRate = GetEffectiveMineRatePerWorker();
-	if (EffectiveRate > 0.0f && MineRatePerWorker > 0.0f)
-	{
-		const float RelErr = FMath::Abs(EffectiveRate - MineRatePerWorker)
-			/ FMath::Max(MineRatePerWorker, KINDA_SMALL_NUMBER);
-		if (RelErr > 0.05f)
-		{
-			OutWarnings.Add(FText::Format(
-				NSLOCTEXT(
-					"GPResourceDefinition",
-					"WarnRateMismatch",
-					"MineRatePerWorker ({0}) differs from Amount/Duration ({1}) by more than 5%. Align content fields."),
-				FText::AsNumber(MineRatePerWorker),
-				FText::AsNumber(EffectiveRate)));
-		}
 	}
 
 	if (ResourceType == EGP_ResourceType::Ore
@@ -224,7 +198,7 @@ namespace GPResourceDefinitionDebug
 		}
 
 		UE_LOG(LogGPResourceDefinition, Log,
-			TEXT("GP ResourceDefinition.Inspect: Path=%s PrimaryAssetId=%s ResourceType=%s DisplayName=%s GameplayTag=%s AmountPerCycle=%.3f CycleDuration=%.3f InteractionRangeCm=%.1f MineRatePerWorker=%.3f EffectiveRate=%.3f ScoreConversionRate=%.3f ThreatPerStoredUnit=%.3f Valid=%s Errors=%d Warnings=%d Resolution=%s"),
+			TEXT("GP ResourceDefinition.Inspect: Path=%s PrimaryAssetId=%s ResourceType=%s DisplayName=%s GameplayTag=%s AmountPerMiningCycle=%.3f MiningCycleDurationSeconds=%.3f EffectiveMineRatePerWorker=%.3f InteractionRangeCm=%.1f ScoreConversionRate=%.3f ThreatPerStoredUnit=%.3f Valid=%s Errors=%d Warnings=%d Resolution=%s"),
 			*Definition->GetPathName(),
 			*Definition->GetPrimaryAssetId().ToString(),
 			GPResourceTypePrivate::ToString(Definition->ResourceType),
@@ -232,9 +206,8 @@ namespace GPResourceDefinitionDebug
 			*Definition->ResourceGameplayTag.ToString(),
 			Definition->AmountPerMiningCycle,
 			Definition->MiningCycleDurationSeconds,
-			Definition->InteractionRangeCm,
-			Definition->MineRatePerWorker,
 			Definition->GetEffectiveMineRatePerWorker(),
+			Definition->InteractionRangeCm,
 			Definition->ScoreConversionRate,
 			Definition->ThreatPerStoredUnit,
 			bValid ? TEXT("true") : TEXT("false"),

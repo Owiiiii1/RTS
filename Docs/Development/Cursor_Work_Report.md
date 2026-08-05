@@ -1,7 +1,7 @@
 # Cursor Work Report
 
 ## Task
-GP-S23R — Resource Definition Reconciliation
+GP-S23R — Resource Definition Reconciliation Correction
 
 ## Status
 GP-S23R_CODE_AND_FERRONITE_DATA_ASSET_READY_OPERATOR_VALIDATION_PENDING
@@ -12,97 +12,62 @@ feature/gp-s23r-resource-definition
 ## Base
 main @ 9b3ec9997c2544764d0bd10c6bc4cdfb659dcb2f
 
-## Canonical dependency
-GP-S23 (`UGP_ResourceDefinition`) first in Slice 6; next after this stage: **GP-S24R**.
+## Candidate commit
+bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81
 
-## Files inspected
-- `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
-- `Docs/TDD/13_Architecture_Proposal.md`, `07_Resource_Architecture.md`, `10_Data_Assets.md`
-- `Docs/GDD/02_Core_Gameplay_Loop.md`, `06_Resources.md`
-- `Docs/Architecture_Decisions/ADR_0002_Data_Driven_First.md`, `ADR_0009_Orbital_Delivery_Pillar.md`
-- `GP/Source/GPRuntime/Public/Resources/GPResourceTypes.h`
-- `GP/Source/GPGASRuntime/**/GPGameplayTags.*`
-- `GP/Config/DefaultGame.ini`
-- Prior GPEditor seed commandlet patterns
+## Correction reason
+Candidate stored both cycle fields and editable `MineRatePerWorker`, creating two mining balance sources. Removed stored MineRate; EffectiveRate is derived only.
 
-## ResourceDefinition class
-`UGP_ResourceDefinition : UPrimaryDataAsset`  
-`GP/Source/GPRuntime/Public|Private/Resources/GPResourceDefinition.*`
+## Single-source mining balance decision
+**SoT:** `AmountPerMiningCycle` + `MiningCycleDurationSeconds` (+ `InteractionRangeCm` for range).  
+**Derived:** `GetEffectiveMineRatePerWorker()` = Amount / Duration — UI/diagnostics only.  
+**Future MiningComponent:** uses Amount, Duration, Range for gameplay; EffectiveRate not a balance authority.
 
-## Exact properties
-ResourceType, DisplayName, Description, ResourceGameplayTag, Icon (soft), AmountPerMiningCycle, MiningCycleDurationSeconds, InteractionRangeCm, MineRatePerWorker, ScoreConversionRate, ThreatPerStoredUnit, Tint
+## Final exact properties
+ResourceType, DisplayName, Description, ResourceGameplayTag, Icon, AmountPerMiningCycle, MiningCycleDurationSeconds, InteractionRangeCm, ScoreConversionRate, ThreatPerStoredUnit, Tint (+ derived EffectiveMineRate getter).
 
-## Prototype asset path
-`/Game/GrimProtocol/DataAssets/Resources/DA_GP_Resource_Ferronite`
+## Derived effective mine rate
+Prototype: 10 / 1.0 = **10 u/s**
 
-## Prototype values
+## Prototype asset values
 | Field | Value |
 | --- | --- |
-| ResourceType | Ore (internal) |
-| DisplayName | Ferronite |
-| Tag | GP.Resource.Type.Ferronite |
 | AmountPerMiningCycle | 10 |
 | MiningCycleDurationSeconds | 1.0 |
 | InteractionRangeCm | 200 |
-| MineRatePerWorker | 10 |
-| ScoreConversionRate | 1.0 |
-| ThreatPerStoredUnit | 0.5 (placeholder) |
-| Icon | unset |
+| EffectiveMineRatePerWorker | 10 (derived) |
 
-## Gameplay tag result
-Existing native `GP.Resource.Type.Ferronite` reused; no duplicate registry.
-
-## PrimaryAssetId
-`GPResourceDefinition:DA_GP_Resource_Ferronite`
-
-## Asset Manager registration
-`DefaultGame.ini` PrimaryAssetTypesToScan + DirectoriesToAlwaysCook for DataAssets/Resources. Seed verify: `AssetManagerSees=true`.
+Path: `/Game/GrimProtocol/DataAssets/Resources/DA_GP_Resource_Ferronite`
 
 ## Validation result
-Seed Verify: `Valid=true`
+Valid=true (no MineRate / mismatch checks)
 
-## Diagnostic command
-`gp.ResourceDefinition.Inspect [SoftObjectPath]`
+## Diagnostic output fields
+AmountPerMiningCycle, MiningCycleDurationSeconds, EffectiveMineRatePerWorker, InteractionRangeCm (+ identity/orbital/Valid/Resolution). No stored MineRatePerWorker.
 
-## Editor commandlet / seed result
-`-run=GPResourceDefinitionSeed` → Save OK; Verify OK; `-VerifyOnly` supported.
+## Seed / VerifyOnly result
+Save OK; Verify: EffectiveMineRatePerWorker=10.000; Valid=true; AssetManagerSees=true
+
+## Asset Manager result
+Existing `GPResourceDefinition` + AlwaysCook registration retained; verify sees asset.
+
+## GPEditor + UHT result
+**PASSED** (correction rebuild)
+
+## LFS state
+Ferronite `.uasset` filter=lfs; re-seeded and tracked.
 
 ## Files changed
-- `GP/Source/GPRuntime/Public/Resources/GPResourceDefinition.h` (new)
-- `GP/Source/GPRuntime/Private/Resources/GPResourceDefinition.cpp` (new)
-- `GP/Source/GPEditor/Public/Resources/GPResourceDefinitionSeedCommandlet.h` (new)
-- `GP/Source/GPEditor/Private/Resources/GPResourceDefinitionSeedCommandlet.cpp` (new)
-- `GP/Source/GPEditor/GPEditor.Build.cs`
-- `GP/Config/DefaultGame.ini`
-- `GP/Content/GrimProtocol/DataAssets/Resources/DA_GP_Resource_Ferronite.uasset` (new, LFS)
-- Docs: task + AI_Project_Log + Cursor_Work_Report
+- `GP/Source/GPRuntime/Public/Resources/GPResourceDefinition.h`
+- `GP/Source/GPRuntime/Private/Resources/GPResourceDefinition.cpp`
+- `GP/Source/GPEditor/Private/Resources/GPResourceDefinitionSeedCommandlet.cpp`
+- `GP/Content/GrimProtocol/DataAssets/Resources/DA_GP_Resource_Ferronite.uasset`
+- `Docs/Development/Claude_Tasks/GP-S23R_Resource_Definition_Reconciliation.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
-## GPEditor Development + UHT result
-**PASSED**
-
-## GP Development not run
-Not run (candidate; finalization later)
-
-## GP Shipping not run
-Not run (candidate; finalization later)
-
-## LFS status
-`.uasset` filter=lfs; Ferronite DA tracked via LFS on commit.
-
-## Map unchanged
-No `.umap` edits.
-
-## Scope exclusions
-No ResourceNode integration, Mine target, Cargo, Mining SM, Worker, Storage, ThreatValue writes, orbital conversion, visual profiles, projectiles, UI.
-
-## Operator validation steps
-Open DA → confirm class/identity → edit MiningCycleDuration → Save → Inspect → restore → Save → VerifyOnly → Asset Manager check → no map changes.
-
-## Known limitations
-Ore enum name retained; Icon unset; rates/threat multipliers are prototypes; no deposit wiring until S24R.
-
-## Commit SHA
-bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81
+## Correction commit SHA
+(filled after commit)
 
 ## Git state
-Pushed to `feature/gp-s23r-resource-definition`; main untouched; no PR.
+Pushed to `feature/gp-s23r-resource-definition`; main untouched; no PR; no S24R / map / finalization builds.

@@ -42,26 +42,19 @@ public:
 	TSoftObjectPtr<UTexture2D> Icon;
 
 	/**
-	 * Amount extracted into cargo per completed mining cycle (authority mining reads this).
-	 * Prototype default pairs with MiningCycleDurationSeconds to match MineRatePerWorker ≈ 10/s.
+	 * Amount extracted into cargo per completed mining cycle.
+	 * Canonical mining SoT with MiningCycleDurationSeconds (future MiningComponent reads these).
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Mining", meta = (ClampMin = "0.01", ForceUnits = "u"))
 	float AmountPerMiningCycle = 10.0f;
 
-	/** Seconds per mining cycle. Must be > 0. */
+	/** Seconds per mining cycle. Must be > 0. Canonical mining SoT with AmountPerMiningCycle. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Mining", meta = (ClampMin = "0.01", ForceUnits = "s"))
 	float MiningCycleDurationSeconds = 1.0f;
 
 	/** Interaction / mining range in centimeters. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Mining", meta = (ClampMin = "1.0", ForceUnits = "cm"))
 	float InteractionRangeCm = 200.0f;
-
-	/**
-	 * Documented canonical rate (units/sec). Prototype default 10.
-	 * Effective cycle rate = AmountPerMiningCycle / MiningCycleDurationSeconds; keep aligned in content.
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Mining", meta = (ClampMin = "0.01", ForceUnits = "u/s"))
-	float MineRatePerWorker = 10.0f;
 
 	/** 1 shipped unit → FerroniteScore units at orbital launch (metadata only; no execution in S23R). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Orbital", meta = (ClampMin = "0.0"))
@@ -80,7 +73,10 @@ public:
 
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
 
-	/** Effective units/sec from cycle fields. */
+	/**
+	 * Derived units/sec = AmountPerMiningCycle / MiningCycleDurationSeconds.
+	 * UI/diagnostics only — MiningComponent must not treat this as a stored balance field.
+	 */
 	UFUNCTION(BlueprintPure, Category = "GP|Resource|Mining")
 	float GetEffectiveMineRatePerWorker() const;
 

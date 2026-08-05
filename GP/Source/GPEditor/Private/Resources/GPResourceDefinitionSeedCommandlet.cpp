@@ -36,7 +36,6 @@ namespace GPResourceDefinitionSeedPrivate
 		Definition->AmountPerMiningCycle = 10.0f;
 		Definition->MiningCycleDurationSeconds = 1.0f;
 		Definition->InteractionRangeCm = 200.0f;
-		Definition->MineRatePerWorker = 10.0f;
 		Definition->ScoreConversionRate = 1.0f;
 		Definition->ThreatPerStoredUnit = 0.5f;
 		Definition->Tint = FLinearColor(0.15f, 0.75f, 0.85f, 1.0f);
@@ -95,13 +94,14 @@ namespace GPResourceDefinitionSeedPrivate
 		}
 
 		UE_LOG(LogGPResourceDefinitionSeed, Log,
-			TEXT("Verify Ferronite Path=%s PrimaryAssetId=%s ResourceType=%s Tag=%s Amount=%.3f Cycle=%.3f Range=%.1f Valid=%s AssetManagerSees=%s"),
+			TEXT("Verify Ferronite Path=%s PrimaryAssetId=%s ResourceType=%s Tag=%s AmountPerMiningCycle=%.3f MiningCycleDurationSeconds=%.3f EffectiveMineRatePerWorker=%.3f InteractionRangeCm=%.1f Valid=%s AssetManagerSees=%s"),
 			*Definition->GetPathName(),
 			*Definition->GetPrimaryAssetId().ToString(),
 			GPResourceTypePrivate::ToString(Definition->ResourceType),
 			*Definition->ResourceGameplayTag.ToString(),
 			Definition->AmountPerMiningCycle,
 			Definition->MiningCycleDurationSeconds,
+			Definition->GetEffectiveMineRatePerWorker(),
 			Definition->InteractionRangeCm,
 			bValid ? TEXT("true") : TEXT("false"),
 			bAssetManagerSees ? TEXT("true") : TEXT("false"));

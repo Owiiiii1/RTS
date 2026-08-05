@@ -16,7 +16,7 @@ GP-S25 — `UGP_CargoComponent` Finalization.
 `f440838bbcd8963c8230a70f6f7e3363af7dc45a`
 
 ## Finalization commit
-_(filled after commit)_
+`c02a67fd65519034bdefb5116b977b66aa4ccba3`
 
 ## Operator validation matrix
 

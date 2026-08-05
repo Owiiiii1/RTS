@@ -2,27 +2,27 @@
 
 ## 2026-08-05 — GP-S26B2A Blueprint Authored Visuals
 
-Status: GP-S26B2A_CODE_AND_BLUEPRINT_EXAMPLES_READY_OPERATOR_VALIDATION_PENDING
+Status: GP-S26B2A_FINALIZED_READY_FOR_MERGE
 
 ### Branch / baseline
 - Branch: `feature/gp-s26b2a-blueprint-authored-visuals`
 - Base: `main` @ `215b4b603e7fd333ef9b379103329bfac03edbf4`
-- Implementation: `3a6d9533039180a4b75d40dc6063abd01d1b91e2`
+- Candidate: `3a6d9533039180a4b75d40dc6063abd01d1b91e2`
 - Task: `Docs/Development/Claude_Tasks/GP-S26B2A_Blueprint_Authored_Visuals.md`
-- Abandoned: `feature/gp-s26b2a-editable-visual-profiles` @ `54bfe62…` (never merged; not used)
+- Abandoned: `feature/gp-s26b2a-editable-visual-profiles` @ `54bfe62…` (never merged; unused)
 
 ### What was done
-- `EGP_VisualSourceMode` NativeFallback / AuthoredComponents on Unit + ResourceNode visual components
-- `RefreshVisualMode` CallInEditor; ClearVisual only destroys BuiltVisual generated parts
-- Example BPs: `BP_Unit_AuthoredExample`, `BP_ResourceNode_AuthoredExample` (LFS); seed commandlet
-- Inspect fields extended; no map / DataAsset profiles / AssetManager cook rules
-- GPEditor Win64 Development + UHT **PASSED**; seed verify AuthoredComponents **PASSED**
+- `EGP_VisualSourceMode` NativeFallback / AuthoredComponents; BuiltVisual-only cleanup; example BPs (LFS)
+- Operator validation **PASSED** (authored + native fallbacks, collision/nav warnings 0, listen server)
+- Finalization: no C++ changes; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
+- Map unchanged; controller tick remains enabled; visual component tick remains disabled
 
 ### Intentionally not done
-- Operator validation pending; no GP Dev/Shipping; no PR/merge; no DataAssets; no catalog; no S27A3
+- No DataAssets/profiles/catalog/materials/animations/map population/S27A3
+- No PR / merge to main (ready when requested)
 
 ### Operator next
-- Validate Unit/Resource Blueprint Viewport edits, native fallbacks, mode toggle, listen+client
+- None for S26B2A; merge when requested
 
 ---
 

@@ -110,7 +110,7 @@ Unchanged
 3. Mine via `gp.Worker.CommandMine` using listed names
 
 ## Correction commit SHA
-*(filled after commit)*
+`61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`
 
 ## Git state
 Branch `feature/gp-s28-storage-threat` pushed; main untouched; no PR

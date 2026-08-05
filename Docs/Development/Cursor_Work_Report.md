@@ -113,7 +113,7 @@ See `GP-S27_Worker.md`.
 No Worker UnitDefinition asset; no Capability.Mine tag; repair deferred; Attack still inherited if commanded.
 
 ## Commit SHA
-*(recorded after commit)*
+`07e20fbfff36e181076d237d0596ef6f25b40951`
 
 ## Git state
 `feature/gp-s27-worker` only; main untouched.

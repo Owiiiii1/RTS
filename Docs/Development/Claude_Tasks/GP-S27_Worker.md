@@ -6,7 +6,8 @@
 ## Baseline
 `main` @ `860070c4acbcb85fd5c4334628584372bdd082ca` (GP-S26 MiningComponent merged)
 
-Branch: `feature/gp-s27-worker`
+Branch: `feature/gp-s27-worker`  
+Candidate: `07e20fbfff36e181076d237d0596ef6f25b40951`
 
 ## Canonical roadmap position
 `GP-S23R` → `GP-S24R` → `GP-S25` → `GP-S26` → **GP-S27 Worker** → GP-S28 StorageComponent + FerroniteThreatValue

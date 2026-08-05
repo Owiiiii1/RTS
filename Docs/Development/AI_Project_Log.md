@@ -7,6 +7,7 @@ Status: GP-S27_WORKER_ANALYSIS_READY_FOR_REVIEW
 ### Branch / baseline
 - Branch: `feature/gp-s27-worker-analysis`
 - Base: `main` @ `d81a9bea45f35069636f13df9229685226282311`
+- Analysis: `b5526d1ebad4d6c76e522005767d0bb162adccd1`
 - Task: `Docs/Development/Claude_Tasks/GP-S27_Worker_Analysis.md`
 - Type: documentation / analysis only (no production C++ / assets / map)
 

@@ -8,6 +8,7 @@
 (includes merged GP-S26B2A Blueprint Authored Visuals)
 
 Branch: `feature/gp-s27-worker-analysis`  
+Analysis commit: `b5526d1ebad4d6c76e522005767d0bb162adccd1`  
 Type: **analysis / documentation only** — no production C++, no content assets, no map edits.
 
 ## Canonical place in roadmap

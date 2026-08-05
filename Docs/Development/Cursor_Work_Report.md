@@ -65,7 +65,7 @@ Storage / ThreatValue write remains **GP-S28**.
 Not required — documentation-only.
 
 ## Commit SHA
-(filled after commit)
+b5526d1ebad4d6c76e522005767d0bb162adccd1
 
 ## Git state
 Branch `feature/gp-s27-worker-analysis` pushed; main untouched; no PR; no C++/uasset/umap changes.

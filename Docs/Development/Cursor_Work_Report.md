@@ -102,7 +102,7 @@ Open DA → confirm class/identity → edit MiningCycleDuration → Save → Ins
 Ore enum name retained; Icon unset; rates/threat multipliers are prototypes; no deposit wiring until S24R.
 
 ## Commit SHA
-(filled after commit)
+bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81
 
 ## Git state
 Pushed to `feature/gp-s23r-resource-definition`; main untouched; no PR.

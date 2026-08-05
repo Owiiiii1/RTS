@@ -6,7 +6,8 @@
 ## Baseline
 `main` @ `9b3ec9997c2544764d0bd10c6bc4cdfb659dcb2f`
 
-Branch: `feature/gp-s23r-resource-definition`
+Branch: `feature/gp-s23r-resource-definition`  
+Implementation: `bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81`
 
 ## Canonical roadmap position
 Canonical **GP-S23** (`UGP_ResourceDefinition`).  

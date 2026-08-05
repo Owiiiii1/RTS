@@ -19,7 +19,7 @@ GP-S26 — Mining Contract Test Crash Correction
 `b58fce2072a9340e258a332b701f477c52181e25`
 
 ## Correction commit
-*(this push — see git HEAD after commit)*
+`2801c73c8ef02ba4ae4286812d61ffd12c8410e6`
 
 ## Operator crash reproduced twice
 **yes** (operator: two identical Editor crashes on `gp.Mining.RunContractTest`)

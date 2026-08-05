@@ -9,6 +9,7 @@ Status: **GP-S26_CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Base: `main` @ `693a36b8777babaea6085cb799397e9e0cddb77f`
 - Candidate: `4d334a7f4fe331757e4e245d2979a27117a6b660`
 - Prior host correction: `b58fce2072a9340e258a332b701f477c52181e25`
+- Crash correction: `2801c73c8ef02ba4ae4286812d61ffd12c8410e6`
 - Task: `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md`
 
 ### What was done

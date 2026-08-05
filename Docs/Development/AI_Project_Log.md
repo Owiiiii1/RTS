@@ -1,8 +1,27 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28 Storage + ThreatValue Finalization
+
+Status: **GP-S28_READY_FOR_MERGE**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Last functional correction: `a3a9c87c11425ba0ff4f251e74c54ca3a543708e`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Summary
+GP-S28 delivers Planetary Storage (5×100), Ready-without-launch, Accepted-only Threat write, unique MainBase registry, Worker haul chain, ResourceNode EndPlay teardown, and PIE contract isolation/suite. Operator suite Failures=0. Builds: GPEditor Dev+UHT, GP Dev, GP Shipping — all **PASSED**. No map/content/LFS. Launch/Orbital/Score deferred to GP-S36. No Slice 7 work in this branch.
+
+### Next after merge
+Reconcile already-implemented combat against canonical Slice 7; close only real gaps; do not rewrite confirmed systems.
+
+---
+
 ## 2026-08-06 — GP-S28 Hauling Contract Local Geometry / Timeout Fix
 
-Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded by Finalization)*
 
 ### Branch / baseline
 - Branch: `feature/gp-s28-storage-threat`

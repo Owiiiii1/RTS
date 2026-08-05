@@ -1,7 +1,7 @@
 # GP-S28 — UGP_StorageComponent + FerroniteThreatValue write
 
 ## Status
-**GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S28_READY_FOR_MERGE**
 
 ## Baseline
 `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e` (GP-S27 Worker merged)
@@ -14,6 +14,25 @@ Registry uniqueness correction: `c59b12031d88ea9b3c9dd584e4aa1028c2a846dc`
 EndPlay occupancy cleanup: `7f81d19d236d0cf197c1c650174ef28532245244`
 Contract isolation correction: `4b5331cb3333b46bb952453540dab6d268bff9cd`
 Hauling local geometry correction: `a3a9c87c11425ba0ff4f251e74c54ca3a543708e`
+
+## Finalization (operator + builds)
+**GP-S28 scope is complete.**
+
+Confirmed:
+- Storage capacity **500** = **5 containers × 100**
+- Ready boundary without launch (Launching scaffold only)
+- `ThreatPerStoredUnit` from `UGP_ResourceDefinition` (runtime default **0.5**)
+- Accepted-only threat transaction; overflow **LOST**
+- MainBase registry authority-owned, unique per playable TeamId
+- Worker CargoFull / DepositDepleted→haul with optional return-to-deposit
+- ResourceNode EndPlay occupancy teardown (snapshot/guard)
+- Contract isolation coordinator + sequential `gp.Resource.RunS28RegressionSuite`
+- Operator validation **PASS** (`RunContractIsolationContractTest` Failures=0; `RunS28RegressionSuite` Failures=0; clean PIE Stop)
+- Builds **PASS**: GPEditor Dev+UHT, GP Win64 Development, GP Win64 Shipping
+- No map / content / Blueprint / LFS changes
+- Deferred boundary: **GP-S36** launch / OrbitalFerronite / FerroniteScore
+
+Next after merge: reconcile already-implemented combat against canonical Slice 7; close only real gaps — do not rewrite confirmed systems.
 
 ## MainBase registry uniqueness + contract isolation
 Operator failure after nav-ready Team1 scenario: `RunDiagnosticScenarioContractTest` logged duplicate MainBase for TeamId=1 then **still Add** → Count=2 → `MainBaseRegistryResolveFailed`.
@@ -194,26 +213,21 @@ UGP_StorageComponent; minimal MainBase/BuildingBase; registry; container fill; P
 Orbital/Score GEs; launch VFX/UI/timers; SWARM curves; Logistics Hub; HUD; Worker/MainBase Blueprints; map; projectiles; Slice 7.
 
 ## Acceptance criteria
-- Drop-off never writes Orbital/Score
-- Threat rises by Accepted × ThreatPerStoredUnit only
-- Cargo/Storage conservation on success; rollback on remove mismatch
-- Own-team MainBase only
-- GPEditor Dev+UHT builds
-- Contract tests Failures=0 in operator PIE
+- Drop-off never writes Orbital/Score — **met**
+- Threat rises by Accepted × ThreatPerStoredUnit only — **met** (e.g. 50 × 0.5 = 25)
+- Cargo/Storage conservation on success; rollback on remove mismatch — **met**
+- Own-team MainBase only — **met**
+- GPEditor Dev+UHT + GP Dev + GP Shipping — **PASSED**
+- Isolation + S28 regression suite Failures=0 — **met** (operator PIE)
 
 ## Operator validation steps
-1. PIE listen server: `gp.Resource.SpawnDiagnosticScenario 1`
-2. Expect Ok=true, NavWorkerToNode/NavNodeToBase/NavBaseToNode=true, ReadyForHaulingTest=true
-3. `gp.Worker.List` → ScenarioValidation Ready=true + SuggestedCommand
-4. Mine via SuggestedCommand → haul → Storage/Threat → return to deposit
-5. `gp.Resource.RunDiagnosticScenarioContractTest` (nav asserts) + Storage/Hauling/Worker/Mining/Cargo
-6. Confirm no Orbital/Score change on drop-off
+Completed. Primary commands: `gp.Resource.SpawnDiagnosticScenario 1`, haul loop, `RunContractIsolationContractTest`, `RunS28RegressionSuite`.
 
 ## Known limitations
-- MainBase is code-minimal (no content BP); DropOffRange/container counts are placeholders
+- MainBase is code-minimal (no content BP); DropOffRange/container counts are placeholders until GP-S39 / BuildingDefinition
 - Legacy GameState scalar mirrors Team 1 / first entry only
 - WaitingForStorage activity enum reserved; overflow policy is LOST (not wait)
 - Launching state scaffold only
 
 ## Next roadmap action after Slice 6
-Operator validate → finalize → merge S28; then Slice 7 combat reconciliation / later GP-S36 launch + GP-S39 content MainBase.
+**Merge GP-S28** → reconcile already-implemented combat vs canonical Slice 7 (gaps only) → later GP-S36 launch + GP-S39 content MainBase.

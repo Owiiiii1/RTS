@@ -1,10 +1,7 @@
-# Cursor Work Report — GP-S28 Hauling Contract Local Geometry / Timeout Fix
-
-## Task
-GP-S28 — Hauling Contract Local Geometry / Timeout Fix
+# Cursor Work Report — GP-S28 Storage + ThreatValue Finalization
 
 ## Status
-**GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S28_READY_FOR_MERGE**
 
 ## Branch
 `feature/gp-s28-storage-threat`
@@ -12,66 +9,99 @@ GP-S28 — Hauling Contract Local Geometry / Timeout Fix
 ## Base
 `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
 
-## Prior correction
-Contract isolation: `4b5331cb3333b46bb952453540dab6d268bff9cd`
+## Final HEAD
+(see git after push)
 
-## Isolation test PASS
-`gp.Resource.RunContractIsolationContractTest` → Complete Failures=0  
-(mutual exclusion, ownership cleanup, Team1 preserve / Team2 remap, async actor-loss null-safety)
+## GP-S28 commits (base → tip)
+| SHA | Summary |
+|-----|---------|
+| `cd83858` | Add StorageComponent, MainBase host, Worker haul drop-off threat write |
+| `8080646` | Record candidate SHA in docs |
+| `61f69df` | Diagnostic scenario TeamId registry + coherent spawn |
+| `b884080` | Record diagnostic correction SHA |
+| `caf5bf0` | Diagnostic spawn only on reachable NavMesh |
+| `fe2048b` | Record nav-reachability SHA |
+| `c59b120` | MainBase registry uniqueness + contract team isolation |
+| `38f9890` | Record registry uniqueness SHA |
+| `7f81d19` | ResourceNode EndPlay reentrant occupancy cleanup |
+| `6a73b70` | Record EndPlay cleanup SHA |
+| `4b5331c` | Contract runner isolation / ownership / async null-safety |
+| `b367529` | Record isolation SHA |
+| `a3a9c87` | Hauling contract local navigable geometry |
+| `9daa6bf` | Record hauling geometry SHA |
+| *(finalization)* | READY_FOR_MERGE docs + build record |
 
-## Suite progression
-`gp.Resource.RunS28RegressionSuite`:
-- Cargo / Mining / Worker → Complete Failures=0
-- WorkerHauling → FAIL PartialStorageHaulTimeout → suite Complete Failures=1 (correct stop)
+## Operator validation result
+**PASS** (operator-confirmed)
 
-## Exact PartialStorageHaulTimeout log
-- FreshNode `X=-53000 Y=200 Z=100`
-- MainBase ~`X=0 Y=-1500`
-- HaulReturnToBase Distance=`52947.4`
-- MoveStarted from `X=-52920` toward ~`X=-314`
-- Then `FAIL: PartialStorageHaulTimeout`
+- Navigable diagnostic scenario; unique MainBase registry; Team1 operator preserved; contract Team2 remap; duplicate rejected; cleanup safe
+- Runtime loop: Mining → CargoFull 50/50 → ReturnToBase → DropOff → ThreatDelta=25 (Accepted=50 × 0.5) → ReturnToDeposit → Mining
+- Storage: 5×100=500, Ready on full container, overflow LOST, Accepted-only threat; no launch/orbital/score
+- EndPlay occupancy: no ranged-for ensure; clean PIE teardown
+- Contract infra: mutual exclusion, ownership cleanup, null-safe stages, sequential suite
 
-## Root cause
-Hauling contract case 5 spawned `SpawnNode(FVector(-53000, 200, 100))` — legacy absolute test strip far from the navigable diagnostic scenario MainBase (~origin). Production haul semantics were fine; contract geometry was wrong.
+## Isolation result
+`gp.Resource.RunContractIsolationContractTest` → **Complete Failures=0**
 
-## Why increasing timeout is rejected
-~53 km-uu travel is bad test geometry, not a slow-move flake. Raising timeout would hide the bug and keep later stages on the same broken far strip.
+## Regression suite result
+`gp.Resource.RunS28RegressionSuite` → **GP-S28 RegressionSuite Complete Failures=0**
 
-## Local navigable geometry solution
-- Store `ScenarioBaseLocation` / `ScenarioNodeLocation` from stage-0 navigable spawn
-- `SpawnNavigableNodeNearScenario`: candidate offsets around scenario node; NavMesh project; approach path Node→Base; distance band ~800–4000 cm; spawn only after validation; post-spawn re-check + destroy on fail
-- PartialStorage logs `PartialStorageGeometry` (Distance / projections / Nav / ExpectedTravelSeconds / TimeoutSeconds) and asserts travel budget << timeout
-- Controlled FAIL `PartialStorageLocalGeometryFailed` (no timeout mask)
+## PIE teardown result
+**PASS** (operator) — no ensure / AV; timers and node refs cleared; CrowdFollowing Recast warning non-blocking
 
-## Audit of later hauling stages
-Replaced absolute far coords:
-- case 5 FreshNode `-53000` → local helper
-- case 7 replace node `-53500` → local helper
-- case 9 enemy MainBase `-54000` → `ScenarioBaseLocation + (0,700,0)`
-- case 10 restore MainBase `-52400` → projected `ScenarioBaseLocation`  
-Worker-contract off-map geometry tests (`-48000`…`-51000`) left unchanged (out of scope).
+## Builds
+| Target | Result |
+|--------|--------|
+| GPEditor Win64 Development + UHT | **PASSED** |
+| GP Win64 Development | **PASSED** |
+| GP Win64 Shipping | **PASSED** |
 
-## Path validation
-Pre-spawn + post-spawn NodeApproach↔BaseDropOff reachability required before PartialStorage haul begins.
+## Final code review findings
+Reviewed full diff vs `main` @ `4aae012…`:
 
-## Suite result
-Compile gate PASSED. Full PIE `RunS28RegressionSuite` Complete Failures=0 — **operator validation pending**.
+- Authority-only Storage / Threat / registry / haul drop-off mutations
+- Replicated Storage containers + per-team threat array + legacy scalar mirror
+- MainBase via GameState registry only (no `GetActorOfClass` gameplay lookup)
+- Duplicate RegisterMainBase rejected without Add; unique per playable TeamId
+- BuildingBase/MainBase `PrimaryActorTick` off; Storage no permanent Tick
+- ResourceNode EndPlay: snapshot → clear → guard → notify
+- Contract OwnerTag cleanup; coordinator single-token; null-safe AdvanceStage
+- Hauling late stages scenario-relative NavMesh geometry (no `-53000` strip)
+- No OrbitalFerronite / FerroniteScore / launch execution; Launching scaffold only
+- No Slice 7 / combat / UI / map / Blueprint / LFS changes in this branch
 
-## GPEditor / UHT
-**PASSED**
+No blocking issues. Ready for merge.
 
-## GP Dev / Shipping
-**Not run**
+## Production files changed
+- `Buildings/GPBuildingBase.*`, `GPMainBase.*`
+- `Game/GPGameState.*` — registry + per-team threat
+- `Resources/GPStorageComponent.*`, `GPResourceNode.*` (EndPlay)
+- `Units/GPUnitCommandComponent.*`, `GPWorker.*` (haul orchestration), `GPUnitBase.*` (TeamId notify)
 
-## Files changed
-- `GPWorker.h/.cpp` — `SpawnNavigableNodeNearScenario`, local geometry in hauling late stages, PartialStorageGeometry logging
-- Docs: task, AI log, this report
+## Diagnostic / test infrastructure changed
+- `Resources/GPResourceLoopDiagnostics.*`
+- `Debug/GPContractTestCoordinator.*`, `GPContractIsolationAndSuite.cpp`
+- Mining/Storage/Cargo/Worker contract runners + `gp.Resource.RunS28RegressionSuite`
+
+## Docs changed
+- `Claude_Tasks/GP-S28_Storage_Threat.md`
+- `AI_Project_Log.md`
+- `Cursor_Work_Report.md` (this file)
 
 ## Map / content / LFS
-Unchanged
+**Unchanged**
 
-## Correction commit
-a3a9c87c11425ba0ff4f251e74c54ca3a543708e
+## Deferred (GP-S36+)
+Container launch; OrbitalFerronite; FerroniteScore; Threat decrease on launch; VFX/UI/timers
 
-## Git state
-Branch `feature/gp-s28-storage-threat` pushed; main untouched; no PR
+## No Slice 7 work
+Combat reconciliation explicitly deferred until after S28 merge.
+
+## Git status
+Clean working tree; branch synced with `origin/feature/gp-s28-storage-threat`; `main` untouched; no PR
+
+## Final commit SHA
+(see git after push)
+
+## Status
+**GP-S28_READY_FOR_MERGE**

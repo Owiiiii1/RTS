@@ -837,6 +837,12 @@ AGP_MiningDiagnosticHost::AGP_MiningDiagnosticHost()
 	SetReplicateMovement(false);
 	bAlwaysRelevant = true;
 
+	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
+	SetRootComponent(SceneRoot);
+	SceneRoot->SetMobility(EComponentMobility::Movable);
+	SceneRoot->SetCanEverAffectNavigation(false);
+	SceneRoot->SetVisibility(false);
+
 	CargoComponent = CreateDefaultSubobject<UGP_CargoComponent>(TEXT("CargoComponent"));
 	MiningComponent = CreateDefaultSubobject<UGP_MiningComponent>(TEXT("MiningComponent"));
 }
@@ -849,6 +855,11 @@ UGP_CargoComponent* AGP_MiningDiagnosticHost::GetCargoComponent() const
 UGP_MiningComponent* AGP_MiningDiagnosticHost::GetMiningComponent() const
 {
 	return MiningComponent;
+}
+
+USceneComponent* AGP_MiningDiagnosticHost::GetSceneRoot() const
+{
+	return SceneRoot;
 }
 
 #if !UE_BUILD_SHIPPING
@@ -920,22 +931,73 @@ namespace GPMiningDebug
 
 	static AGP_MiningDiagnosticHost* SpawnHostNearNode(UWorld* World, AGP_ResourceNode* Node, float RangeCm)
 	{
-		if (World == nullptr || !IsValid(Node))
+		if (World == nullptr || !IsValid(Node) || !FMath::IsFinite(RangeCm) || RangeCm <= 0.0f)
 		{
 			return nullptr;
 		}
 
-		const float Offset = FMath::Clamp(RangeCm * 0.5f, 50.0f, 150.0f);
-		const FVector Location = Node->GetActorLocation() + FVector(Offset, 0.0f, 0.0f);
+		// Guaranteed inside InteractionRangeCm (half range, capped). No collision-driven teleport.
+		const float OffsetDistance = FMath::Min(RangeCm * 0.5f, 100.0f);
+		const FVector NodeLocation = Node->GetActorLocation();
+		const FVector RequestedLocation = NodeLocation + FVector(OffsetDistance, 0.0f, 0.0f);
 
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		Params.ObjectFlags |= RF_Transient;
-		return World->SpawnActor<AGP_MiningDiagnosticHost>(
+
+		AGP_MiningDiagnosticHost* Host = World->SpawnActor<AGP_MiningDiagnosticHost>(
 			AGP_MiningDiagnosticHost::StaticClass(),
-			Location,
+			RequestedLocation,
 			FRotator::ZeroRotator,
 			Params);
+		if (Host == nullptr)
+		{
+			UE_LOG(LogGPMining, Error, TEXT("GP Mining.SpawnHostNearNode: SpawnActor failed Node=%s"), *Node->GetName());
+			return nullptr;
+		}
+
+		if (Host->GetSceneRoot() == nullptr || Host->GetRootComponent() != Host->GetSceneRoot())
+		{
+			UE_LOG(LogGPMining, Error,
+				TEXT("GP Mining.SpawnHostNearNode: Host=%s missing SceneRoot — destroying"),
+				*Host->GetName());
+			Host->Destroy();
+			return nullptr;
+		}
+
+		float Dist = FVector::Dist(Host->GetActorLocation(), NodeLocation);
+		if (Dist > RangeCm || !Host->GetActorLocation().Equals(RequestedLocation, 1.0f))
+		{
+			Host->SetActorLocation(RequestedLocation, false, nullptr, ETeleportType::TeleportPhysics);
+			Dist = FVector::Dist(Host->GetActorLocation(), NodeLocation);
+		}
+
+		const bool bWithinRange = Dist < RangeCm;
+		const bool bLocationOk = Host->GetActorLocation().Equals(RequestedLocation, 1.0f);
+		UE_LOG(LogGPMining, Log,
+			TEXT("GP Mining.SpawnHostNearNode: Host=%s Node=%s Requested=(%.1f,%.1f,%.1f) Actual=(%.1f,%.1f,%.1f) Dist=%.1f Range=%.1f SpawnWithinRange=%s LocationMatchesRequested=%s HasSceneRoot=%s"),
+			*Host->GetName(),
+			*Node->GetName(),
+			RequestedLocation.X, RequestedLocation.Y, RequestedLocation.Z,
+			Host->GetActorLocation().X, Host->GetActorLocation().Y, Host->GetActorLocation().Z,
+			Dist,
+			RangeCm,
+			bWithinRange ? TEXT("true") : TEXT("false"),
+			bLocationOk ? TEXT("true") : TEXT("false"),
+			Host->GetSceneRoot() != nullptr ? TEXT("true") : TEXT("false"));
+
+		if (!bWithinRange || !bLocationOk)
+		{
+			UE_LOG(LogGPMining, Error,
+				TEXT("GP Mining.SpawnHostNearNode: invariant failed — destroying Host=%s Dist=%.1f Range=%.1f"),
+				*Host->GetName(),
+				Dist,
+				RangeCm);
+			Host->Destroy();
+			return nullptr;
+		}
+
+		return Host;
 	}
 
 	static void MiningSpawnHost(const TArray<FString>& Args, UWorld* World)
@@ -962,12 +1024,17 @@ namespace GPMiningDebug
 		const UGP_ResourceDefinition* Def = Node->ResolveResourceDefinition(true);
 		const float Range = Def != nullptr ? Def->InteractionRangeCm : 200.0f;
 		AGP_MiningDiagnosticHost* Host = SpawnHostNearNode(World, Node, Range);
+		const float Dist = (Host != nullptr)
+			? FVector::Dist(Host->GetActorLocation(), Node->GetActorLocation())
+			: -1.0f;
 		UE_LOG(LogGPMining, Log,
-			TEXT("GP Mining.SpawnDiagnosticHost: Host=%s Node=%s Dist=%.1f Range=%.1f"),
+			TEXT("GP Mining.SpawnDiagnosticHost: Host=%s Node=%s Dist=%.1f Range=%.1f SpawnWithinRange=%s HasSceneRoot=%s"),
 			*GetNameSafe(Host),
 			*Node->GetName(),
-			Host != nullptr ? FVector::Dist(Host->GetActorLocation(), Node->GetActorLocation()) : -1.0f,
-			Range);
+			Dist,
+			Range,
+			(Host != nullptr && Dist >= 0.0f && Dist < Range) ? TEXT("true") : TEXT("false"),
+			(Host != nullptr && Host->GetSceneRoot() != nullptr) ? TEXT("true") : TEXT("false"));
 	}
 
 	static void MiningInspect(const TArray<FString>& Args, UWorld* World)
@@ -988,17 +1055,51 @@ namespace GPMiningDebug
 
 		UGP_MiningComponent* Mining = Host->GetMiningComponent();
 		UGP_CargoComponent* Cargo = Host->GetCargoComponent();
-		AGP_ResourceNode* Node = Mining != nullptr ? Mining->GetCurrentResourceNode() : nullptr;
-		if (Node == nullptr)
+		AGP_ResourceNode* CurrentNode = Mining != nullptr ? Mining->GetCurrentResourceNode() : nullptr;
+		AGP_ResourceNode* DiagnosticNode = CurrentNode;
+		if (DiagnosticNode == nullptr)
 		{
-			Node = FindNode(World, FString());
+			DiagnosticNode = FindNode(World, FString());
 		}
 
-		UGP_ResourceDefinition* Resolved = Node != nullptr ? Node->ResolveResourceDefinition(true) : nullptr;
+		UGP_ResourceDefinition* Resolved = DiagnosticNode != nullptr
+			? DiagnosticNode->ResolveResourceDefinition(true)
+			: nullptr;
 		FString PrimaryId = TEXT("none");
+		float AmountPerCycle = 0.0f;
+		float CycleDuration = 0.0f;
+		float InteractionRange = 0.0f;
 		if (Resolved != nullptr)
 		{
 			PrimaryId = Resolved->GetPrimaryAssetId().ToString();
+			AmountPerCycle = Resolved->AmountPerMiningCycle;
+			CycleDuration = Resolved->MiningCycleDurationSeconds;
+			InteractionRange = Resolved->InteractionRangeCm;
+		}
+
+		// Prefer live MiningComponent tunables when already targeting a node.
+		if (CurrentNode != nullptr && Mining != nullptr)
+		{
+			if (Mining->GetAmountPerMiningCycle() > 0.0f)
+			{
+				AmountPerCycle = Mining->GetAmountPerMiningCycle();
+			}
+			if (Mining->GetMiningCycleDuration() > 0.0f)
+			{
+				CycleDuration = Mining->GetMiningCycleDuration();
+			}
+			if (Mining->GetInteractionRangeCm() > 0.0f)
+			{
+				InteractionRange = Mining->GetInteractionRangeCm();
+			}
+		}
+
+		float Distance = -1.0f;
+		bool bInRange = false;
+		if (DiagnosticNode != nullptr)
+		{
+			Distance = FVector::Dist(Host->GetActorLocation(), DiagnosticNode->GetActorLocation());
+			bInRange = FMath::IsFinite(InteractionRange) && InteractionRange > 0.0f && Distance <= InteractionRange;
 		}
 
 		TArray<FText> Errors;
@@ -1006,7 +1107,7 @@ namespace GPMiningDebug
 		const bool bValid = Mining != nullptr && Mining->ValidateMiningContract(Errors, Warnings);
 
 		UE_LOG(LogGPMining, Log,
-			TEXT("GP Mining.Inspect: Owner=%s Path=%s Class=%s Role=%s NetMode=%s HasAuthority=%s MiningState=%s LastStopReason=%s CurrentNode=%s SoftDefinition=%s PrimaryAssetId=%s AmountPerCycle=%.3f CycleDuration=%.3f InteractionRangeCm=%.3f Distance=%.3f InRange=%s HasActiveSlot=%s IsWaitingForSlot=%s NodeCurrent=%d NodeMax=%d CargoCurrent=%.3f CargoCapacity=%.3f CargoRemaining=%.3f TimerActive=%s ComponentTick=%s ActorTick=%s Replicates=%s ValidationOk=%s Errors=%d Warnings=%d"),
+			TEXT("GP Mining.Inspect: Owner=%s Path=%s Class=%s Role=%s NetMode=%s HasAuthority=%s MiningState=%s LastStopReason=%s CurrentNode=%s DiagnosticNode=%s SoftDefinition=%s PrimaryAssetId=%s AmountPerCycle=%.3f CycleDuration=%.3f InteractionRangeCm=%.3f Distance=%.3f InRange=%s HasActiveSlot=%s IsWaitingForSlot=%s NodeCurrent=%d NodeMax=%d CargoCurrent=%.3f CargoCapacity=%.3f CargoRemaining=%.3f TimerActive=%s ComponentTick=%s ActorTick=%s HasSceneRoot=%s Replicates=%s ValidationOk=%s Errors=%d Warnings=%d"),
 			*Host->GetName(),
 			*Host->GetPathName(),
 			*GetNameSafe(Host->GetClass()),
@@ -1015,24 +1116,26 @@ namespace GPMiningDebug
 			Host->HasAuthority() ? TEXT("true") : TEXT("false"),
 			Mining != nullptr ? GPMiningPrivate::MiningStateToString(Mining->GetMiningState()) : TEXT("n/a"),
 			Mining != nullptr ? GPMiningPrivate::StopReasonToString(Mining->GetLastStopReason()) : TEXT("n/a"),
-			*GetNameSafe(Node),
-			Node != nullptr ? *Node->GetResourceDefinitionSoft().ToSoftObjectPath().ToString() : TEXT("none"),
+			CurrentNode != nullptr ? *CurrentNode->GetName() : TEXT("none"),
+			DiagnosticNode != nullptr ? *DiagnosticNode->GetName() : TEXT("none"),
+			DiagnosticNode != nullptr ? *DiagnosticNode->GetResourceDefinitionSoft().ToSoftObjectPath().ToString() : TEXT("none"),
 			*PrimaryId,
-			Mining != nullptr ? Mining->GetAmountPerMiningCycle() : 0.0f,
-			Mining != nullptr ? Mining->GetMiningCycleDuration() : 0.0f,
-			Mining != nullptr ? Mining->GetInteractionRangeCm() : 0.0f,
-			Mining != nullptr ? Mining->GetDistanceToCurrentNode() : -1.0f,
-			(Mining != nullptr && Mining->IsInRangeOfCurrentNode()) ? TEXT("true") : TEXT("false"),
-			(Node != nullptr && Node->HasActiveMiningSlot(Host)) ? TEXT("true") : TEXT("false"),
+			AmountPerCycle,
+			CycleDuration,
+			InteractionRange,
+			Distance,
+			bInRange ? TEXT("true") : TEXT("false"),
+			(DiagnosticNode != nullptr && DiagnosticNode->HasActiveMiningSlot(Host)) ? TEXT("true") : TEXT("false"),
 			(Mining != nullptr && Mining->IsWaitingForSlot()) ? TEXT("true") : TEXT("false"),
-			Node != nullptr ? Node->GetCurrentAmount() : -1,
-			Node != nullptr ? Node->GetMaxAmount() : -1,
+			DiagnosticNode != nullptr ? DiagnosticNode->GetCurrentAmount() : -1,
+			DiagnosticNode != nullptr ? DiagnosticNode->GetMaxAmount() : -1,
 			Cargo != nullptr ? Cargo->GetCurrentCargoAmount() : -1.0f,
 			Cargo != nullptr ? Cargo->GetCargoCapacity() : -1.0f,
 			Cargo != nullptr ? Cargo->GetRemainingCapacity() : -1.0f,
 			(Mining != nullptr && Mining->IsMiningTimerActive()) ? TEXT("true") : TEXT("false"),
 			(Mining != nullptr && Mining->IsComponentTickEnabled()) ? TEXT("true") : TEXT("false"),
 			Host->IsActorTickEnabled() ? TEXT("true") : TEXT("false"),
+			Host->GetSceneRoot() != nullptr ? TEXT("true") : TEXT("false"),
 			(Mining != nullptr && Mining->GetIsReplicated()) ? TEXT("true") : TEXT("false"),
 			bValid ? TEXT("true") : TEXT("false"),
 			Errors.Num(),
@@ -1145,32 +1248,65 @@ namespace GPMiningDebug
 		}
 
 		const int32 NodeBefore = LiveNode->GetCurrentAmount();
-		AGP_MiningDiagnosticHost* Host = SpawnHostNearNode(World, LiveNode, 200.0f);
+		const UGP_ResourceDefinition* LiveDef = LiveNode->ResolveResourceDefinition(true);
+		const float LiveRange = LiveDef != nullptr ? LiveDef->InteractionRangeCm : 200.0f;
+		AGP_MiningDiagnosticHost* Host = SpawnHostNearNode(World, LiveNode, LiveRange);
 		Expect(Host != nullptr && Host->GetMiningComponent() != nullptr && Host->GetCargoComponent() != nullptr, TEXT("SpawnHost"));
-		UGP_MiningComponent* Mining = Host->GetMiningComponent();
-		UGP_CargoComponent* Cargo = Host->GetCargoComponent();
+		UGP_MiningComponent* Mining = Host != nullptr ? Host->GetMiningComponent() : nullptr;
+		UGP_CargoComponent* Cargo = Host != nullptr ? Host->GetCargoComponent() : nullptr;
+		if (Host == nullptr || Mining == nullptr || Cargo == nullptr)
+		{
+			UE_LOG(LogGPMining, Log, TEXT("GP Mining.RunContractTest: Complete Failures=%d (host spawn failed)"), Failures);
+			return;
+		}
+
+		Expect(Host->GetSceneRoot() != nullptr && Host->GetRootComponent() == Host->GetSceneRoot(), TEXT("SpawnedHostHasSceneRoot"));
+		{
+			const float HostDist = FVector::Dist(Host->GetActorLocation(), LiveNode->GetActorLocation());
+			Expect(HostDist < LiveRange, TEXT("SpawnedHostWithinInteractionRange"));
+			const float ExpectedOffset = FMath::Min(LiveRange * 0.5f, 100.0f);
+			const FVector ExpectedLoc = LiveNode->GetActorLocation() + FVector(ExpectedOffset, 0.0f, 0.0f);
+			Expect(Host->GetActorLocation().Equals(ExpectedLoc, 1.0f), TEXT("SpawnedHostLocationMatchesRequested"));
+		}
+		Expect(LiveDef != nullptr, TEXT("LiveNodeDefinitionResolved"));
+		if (LiveDef != nullptr)
+		{
+			Expect(FMath::IsNearlyEqual(LiveDef->AmountPerMiningCycle, 10.0f), TEXT("InitialAmountPerCycle10"));
+			Expect(FMath::IsNearlyEqual(LiveDef->MiningCycleDurationSeconds, 1.0f), TEXT("InitialCycleDuration1"));
+			Expect(FMath::IsNearlyEqual(LiveDef->InteractionRangeCm, 200.0f), TEXT("InitialInteractionRange200"));
+		}
 
 		Expect(Mining->IsComponentTickEnabled() == false, TEXT("ComponentTickDisabled"));
 		Expect(Host->IsActorTickEnabled() == false, TEXT("ActorTickDisabled"));
 
 		// Missing cargo: destroy cargo component then BeginMining.
-		AGP_MiningDiagnosticHost* NoCargoHost = SpawnHostNearNode(World, LiveNode, 200.0f);
+		AGP_MiningDiagnosticHost* NoCargoHost = SpawnHostNearNode(World, LiveNode, LiveRange);
 		Expect(NoCargoHost != nullptr, TEXT("SpawnNoCargoHost"));
-		if (NoCargoHost != nullptr && NoCargoHost->GetCargoComponent() != nullptr)
+		if (NoCargoHost != nullptr)
 		{
-			NoCargoHost->GetCargoComponent()->DestroyComponent();
-			Expect(NoCargoHost->GetMiningComponent()->BeginMining(LiveNode) == EGP_BeginMiningResult::RejectedMissingCargo, TEXT("MissingCargoRejection"));
+			Expect(FVector::Dist(NoCargoHost->GetActorLocation(), LiveNode->GetActorLocation()) < LiveRange, TEXT("NoCargoHostWithinRange"));
+			if (NoCargoHost->GetCargoComponent() != nullptr)
+			{
+				NoCargoHost->GetCargoComponent()->DestroyComponent();
+				Expect(NoCargoHost->GetMiningComponent()->BeginMining(LiveNode) == EGP_BeginMiningResult::RejectedMissingCargo, TEXT("MissingCargoRejection"));
+			}
 			NoCargoHost->Destroy();
 		}
 
+		const FVector FarLocation = LiveNode->GetActorLocation() + FVector(5000.0f, 0.0f, 0.0f);
 		AGP_MiningDiagnosticHost* FarHost = World->SpawnActor<AGP_MiningDiagnosticHost>(
 			AGP_MiningDiagnosticHost::StaticClass(),
-			LiveNode->GetActorLocation() + FVector(5000.0f, 0.0f, 0.0f),
+			FarLocation,
 			FRotator::ZeroRotator,
 			Params);
 		Expect(FarHost != nullptr, TEXT("SpawnFarHost"));
 		if (FarHost != nullptr)
 		{
+			if (!FarHost->GetActorLocation().Equals(FarLocation, 1.0f))
+			{
+				FarHost->SetActorLocation(FarLocation, false, nullptr, ETeleportType::TeleportPhysics);
+			}
+			Expect(FVector::Dist(FarHost->GetActorLocation(), LiveNode->GetActorLocation()) > LiveRange, TEXT("FarHostRemainsOutOfRange"));
 			Expect(FarHost->GetMiningComponent()->BeginMining(LiveNode) == EGP_BeginMiningResult::RejectedOutOfRange, TEXT("OutOfRangeRejection"));
 			Expect(!LiveNode->HasActiveMiningSlot(FarHost) && !LiveNode->IsWaitingForMiningSlot(FarHost), TEXT("OutOfRangeNoSlot"));
 			FarHost->Destroy();

@@ -6,7 +6,9 @@
 ## Baseline
 `main` @ `693a36b8777babaea6085cb799397e9e0cddb77f` (GP-S25 merged)
 
-Branch: `feature/gp-s26-mining-component`
+Branch: `feature/gp-s26-mining-component`  
+Candidate: `4d334a7f4fe331757e4e245d2979a27117a6b660`  
+Diagnostic-host correction: _(see Cursor work report)_
 
 ## Canonical roadmap position
 `GP-S23R` → `GP-S24R` → `GP-S25` → **GP-S26 MiningComponent** → GP-S27 Worker → GP-S28 Storage+ThreatValue
@@ -73,13 +75,19 @@ Replicated: CurrentMiningState (OnRep), CurrentResourceNode, LastStopReason. Tim
 Begin/Stop/cycle mutation require owner authority. Diagnostic cmds reject clients.
 
 ## Diagnostic host
-`AGP_MiningDiagnosticHost`: Transient, NotPlaceable, replicated, AlwaysRelevant, no actor tick; Cargo+Mining; spawn near node via console; do not save maps.
+`AGP_MiningDiagnosticHost`: Transient, NotPlaceable, replicated, AlwaysRelevant, no actor tick; **USceneComponent SceneRoot** (no nav); Cargo+Mining as actor components; spawn near node via console; do not save maps.
+
+### Spawn-near-node invariant
+`SpawnHostNearNode` places host at `Node + min(Range*0.5, 100)` with AlwaysSpawn, verifies actual location matches requested (±1) and `Dist < InteractionRangeCm`, else destroys host and errors. Logs `SpawnWithinRange`.
+
+### Inspect before BeginMining
+When `CurrentResourceNode == null`, Inspect uses a **DiagnosticNode** fallback for SoftDefinition / PrimaryAssetId / AmountPerCycle / CycleDuration / InteractionRangeCm / Distance / InRange. Does not mutate MiningComponent. Reports `CurrentNode=none` separately from `DiagnosticNode`.
 
 ## Diagnostics
 `gp.Mining.SpawnDiagnosticHost`, `Inspect`, `Begin`, `Stop`, `RunContractTest` (uses production `ExecuteMiningCycle` via debug force path).
 
 ## Contract test
-Covers missing cargo, invalid node, out-of-range, slot grant, first-cycle delay, 10/cycle, fill 50, deplete partial, Stop idempotent, duplicate Begin, FIFO promotion, EndPlay slot release, ticks off.
+Covers scene root / location match / within-range spawn, initial tunables 10/1/200, missing cargo, invalid node, out-of-range far host, slot grant, first-cycle delay, 10/cycle, fill 50, deplete partial, Stop idempotent, duplicate Begin, FIFO promotion, EndPlay slot release, ticks off.
 
 ## Lifecycle / EndPlay
 Clear timer; unbind; release slot; clear refs. Node EndPlay broadcasts slot None → miners stop.

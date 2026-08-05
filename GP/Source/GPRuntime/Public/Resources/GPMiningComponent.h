@@ -4,12 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Components/SceneComponent.h"
 #include "Resources/GPResourceNode.h"
 #include "GPMiningComponent.generated.h"
 
 class AGP_ResourceNode;
 class UGP_CargoComponent;
 class UGP_ResourceDefinition;
+class USceneComponent;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogGPMining, Log, All);
 
@@ -189,6 +191,7 @@ private:
 
 /**
  * Transient host for mining diagnostics (Cargo + Mining). Not a Worker/Unit. Do not save to maps.
+ * Owns a USceneComponent root so spawn/set transforms apply to actor location.
  */
 UCLASS(NotPlaceable, Transient)
 class GPRUNTIME_API AGP_MiningDiagnosticHost : public AActor
@@ -204,7 +207,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Mining")
 	UGP_MiningComponent* GetMiningComponent() const;
 
+	UFUNCTION(BlueprintPure, Category = "GP|Mining")
+	USceneComponent* GetSceneRoot() const;
+
 protected:
+	/** Root for spawn transform / GetActorLocation. No collision, not nav-relevant. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Mining")
+	TObjectPtr<USceneComponent> SceneRoot;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Mining")
 	TObjectPtr<UGP_CargoComponent> CargoComponent;
 

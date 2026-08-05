@@ -7,20 +7,22 @@ Status: **GP-S26_CODE_READY_OPERATOR_VALIDATION_PENDING**
 ### Branch / baseline
 - Branch: `feature/gp-s26-mining-component`
 - Base: `main` @ `693a36b8777babaea6085cb799397e9e0cddb77f` (GP-S25 merged)
+- Candidate: `4d334a7f4fe331757e4e245d2979a27117a6b660`
 - Task: `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md`
 
 ### What was done
 - `UGP_MiningComponent` authority timer mining: ResourceNode → CargoComponent
 - ResourceNode server-local `OnMinerSlotStateChanged` for FIFO promotion
 - Transient `AGP_MiningDiagnosticHost` + `gp.Mining.*` / RunContractTest
-- GPEditor Win64 Development + UHT **PASSED**
+- **Correction:** diagnostic host SceneRoot + spawn-within-range invariant + Inspect DiagnosticNode metadata (operator found Dist=1840 vs Range=200)
+- GPEditor Win64 Development + UHT **PASSED** (candidate + correction)
 - GP Win64 Development **not run**; GP Win64 Shipping **not run** (after operator validation)
 
 ### Intentionally not done
-- No Worker/movement/Mine command unit wiring/Storage; no PR/merge
+- No Worker/movement/Mine command unit wiring/Storage; no PR/merge; production range validation unchanged
 
 ### Operator next
-- Validate per task doc; then finalize
+- Re-validate SpawnDiagnosticHost Dist < Range, Begin→Started, Inspect tunables before Begin; then finalize
 
 ---
 

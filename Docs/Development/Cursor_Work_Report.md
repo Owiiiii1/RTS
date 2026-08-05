@@ -1,7 +1,7 @@
-# Cursor Work Report — GP-S26 UGP_MiningComponent
+# Cursor Work Report — GP-S26 Mining Diagnostic Host Correction
 
 ## Task
-GP-S26 — `UGP_MiningComponent` (ResourceNode → CargoComponent mining cycles).
+GP-S26 — Mining Diagnostic Host Correction (operator validation defect).
 
 ## Status
 **GP-S26_CODE_READY_OPERATOR_VALIDATION_PENDING**
@@ -12,125 +12,75 @@ GP-S26 — `UGP_MiningComponent` (ResourceNode → CargoComponent mining cycles)
 ## Base
 `main` @ `693a36b8777babaea6085cb799397e9e0cddb77f`
 
-## Canonical dependency
-GP-S25 CargoComponent merged @ `693a36b8777babaea6085cb799397e9e0cddb77f`. Next: GP-S27 Worker.
+## Candidate commit
+`4d334a7f4fe331757e4e245d2979a27117a6b660`
 
-## Files inspected
-- DOCUMENTATION_INDEX, TDD 13/07/10, GDD 02/06, ADR-0002/0009
-- GP-S24R / GP-S25 task docs
-- `GPResourceNode.*`, `GPCargoComponent.*`, Mine validation, timer conventions (`GPGameMode`)
+## Correction commit
+_(filled after commit)_
 
-## MiningComponent class
-`UGP_MiningComponent` — `GP/Source/GPRuntime/Public|Private/Resources/GPMiningComponent.*`
+## Detected operator defect
+`gp.Mining.SpawnDiagnosticHost` logged Dist=1840.5 vs Range=200; `Begin` → RejectedOutOfRange. Inspect before Begin showed AmountPerCycle/CycleDuration/InteractionRangeCm=0 and Distance=FLT_MAX despite valid Ferronite definition.
 
-## Diagnostic host
-`AGP_MiningDiagnosticHost` — Transient, NotPlaceable, replicated, AlwaysRelevant; Cargo + Mining; console spawn only.
+## Root cause
+1. `AGP_MiningDiagnosticHost` had **no USceneComponent root** — spawn transform did not become actor location.
+2. Inspect used MiningComponent getters bound to null `CurrentResourceNode` while only a fallback node was found for SoftDefinition/PrimaryAssetId.
 
-## Exact state enum
-Idle, WaitingForSlot, Mining, CargoFull, DepositDepleted, OutOfRange, Invalid
+## Diagnostic host root component correction
+Added `SceneRoot` (`USceneComponent`): SetRootComponent; Movable; not nav-relevant; visibility false; no actor tick. Cargo/Mining remain actor components. Host still Transient / NotPlaceable / replicated / AlwaysRelevant.
 
-## BeginMining result enum
-Started, WaitingForSlot, AlreadyMiningTarget, RejectedNoAuthority, RejectedInvalidOwner, RejectedMissingCargo, RejectedInvalidNode, RejectedDepleted, RejectedCargoFull, RejectedOutOfRange, RejectedResourceMismatch
+## Requested vs actual spawn location
+`SpawnHostNearNode` requests `NodeLocation + (min(Range*0.5, 100), 0, 0)` with AlwaysSpawn; if actual ≠ requested (±1) or Dist ≥ Range, SetActorLocation then re-check; on failure Destroy host and return null. Logs Requested/Actual/Dist/SpawnWithinRange/LocationMatchesRequested/HasSceneRoot.
 
-## Stop reason model
-`EGP_MiningStopReason` mapped to terminal states (Idle / CargoFull / DepositDepleted / OutOfRange / Invalid)
+## Final distance / range invariant
+Successful spawn requires Dist < InteractionRangeCm and location match. Production BeginMining range threshold unchanged.
 
-## First-cycle policy
-Looping timer; first fire after full `MiningCycleDurationSeconds` (no instant Begin transfer).
+## Initial Inspect metadata correction
+Inspect reports `CurrentNode` vs `DiagnosticNode`. When CurrentNode is null, tunables/Distance/InRange come from DiagnosticNode ResourceDefinition + host↔node distance — no MiningComponent mutation. No FLT_MAX/zero metadata when a valid diagnostic node exists.
 
-## ResourceDefinition values
-AmountPerMiningCycle=10, MiningCycleDurationSeconds=1, InteractionRangeCm=200 (from Ferronite DA).
+## RunContractTest additions
+- SpawnedHostHasSceneRoot
+- SpawnedHostLocationMatchesRequested
+- SpawnedHostWithinInteractionRange
+- InitialAmountPerCycle10 / InitialCycleDuration1 / InitialInteractionRange200
+- NoCargoHostWithinRange
+- FarHostRemainsOutOfRange
 
-## Range policy
-Begin rejects OutOfRange without slot; cycles re-check; failure releases slot.
+## Files changed
+- `GP/Source/GPRuntime/Public/Resources/GPMiningComponent.h`
+- `GP/Source/GPRuntime/Private/Resources/GPMiningComponent.cpp`
+- `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
-## Occupancy integration
-Full use of Request/Release/HasActive/IsWaiting; no bypass.
+## GPEditor / UHT result
+**PASSED**
 
-## ResourceNode delegate / API changes
-- `EGP_MinerOccupancyState` + server-local `FGP_OnMinerSlotStateChanged`
-- `GetOnMinerSlotStateChanged()`, `GetMinerOccupancyState()`
-- Broadcasts on grant/wait/release/FIFO promotion/invalid cleanup/EndPlay
+## GP Development not run
+Yes.
 
-## FIFO promotion model
-Waiting → Active event starts Mining timer on subscribed MiningComponent (no polling).
-
-## Transfer transaction
-Integer `min(cycle, floor(cargo remaining), node)` → ConsumeResource → AddCargo; Accepted must equal Consumed.
-
-## Partial cycle contract
-Remainder 5 on node or cargo → transfer 5 → DepositDepleted or CargoFull.
-
-## Timer lifecycle
-Only while Mining; cleared on all stop/EndPlay/target-change paths.
-
-## Authority policy
-Begin/Stop/cycle authority-only; no client mining RPC.
-
-## Replication
-CurrentMiningState (OnRep), CurrentResourceNode, LastStopReason. Authority broadcasts state once; clients via OnRep.
-
-## Delegate / RepNotify model
-OnMiningStateChanged + OnMiningCycleCompleted; no Tick.
-
-## Lifecycle safety
-EndPlay clears timer, unbinds, releases slot; node EndPlay notifies miners.
-
-## Diagnostics
-`gp.Mining.SpawnDiagnosticHost|Inspect|Begin|Stop|RunContractTest`
-
-## RunContractTest result
-Implemented (debug force uses production `ExecuteMiningCycle`). Operator to execute → expect Failures=0.
-
-## Cargo regression result
-CargoComponent unchanged as SoT; CarriedFerronite not restored. Operator: re-run `gp.Cargo.RunContractTest` if desired.
-
-## ResourceNode regression result
-Consume/occupancy retained; occupancy events additive. Operator: FIFO still via mining hosts / existing slot cmds.
-
-## Mine validation regression result
-Command Mine validation untouched (still HeldAccepted only).
-
-## Test host / content changes
-No permanent Blueprint/content; transient host only. Map unchanged.
-
-## LFS result
-No LFS changes.
+## GP Shipping not run
+Yes.
 
 ## Map unchanged
 Yes.
 
-## GPEditor Development + UHT result
-**PASSED**
+## LFS result
+No LFS changes.
 
-## GP Development not run
-Yes (deferred).
+## No scope expansion
+Production mining/range/Cargo/Node/FIFO/Mine command/Worker/movement/Storage/UI unchanged.
 
-## GP Shipping not run
-Yes (deferred).
-
-## Files changed
-- `GP/Source/GPRuntime/Public/Resources/GPMiningComponent.h` (new)
-- `GP/Source/GPRuntime/Private/Resources/GPMiningComponent.cpp` (new)
-- `GP/Source/GPRuntime/Public/Resources/GPResourceNode.h`
-- `GP/Source/GPRuntime/Private/Resources/GPResourceNode.cpp`
-- `Docs/Development/Claude_Tasks/GP-S26_Mining_Component.md` (new)
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
-
-## Scope exclusions
-No Worker/movement/Mine unit wiring/Storage/ThreatValue/orbital/UI/map/projectiles/GP-S27; no main/PR/merge.
-
-## Operator validation steps
-See `GP-S26_Mining_Component.md` §Operator validation steps.
+## Operator re-validation (minimal)
+1. `gp.Mining.SpawnDiagnosticHost` → Dist < Range, SpawnWithinRange=true, HasSceneRoot=true
+2. `gp.Mining.Inspect` before Begin → AmountPerCycle=10, CycleDuration=1, InteractionRangeCm=200, Distance finite, InRange=true, CurrentNode=none, DiagnosticNode set
+3. `gp.Mining.Begin` → Started / Mining / TimerActive=true
+4. Optional: `gp.Mining.RunContractTest`
 
 ## Known limitations
-- No Worker/movement
-- Contract test depletes/mutates node amounts in PIE
-- Debug force cycle for deterministic console tests only
+Same as S26 candidate (no Worker/movement); correction is diagnostics/host only.
 
-## Commit SHA
-`4d334a7f4fe331757e4e245d2979a27117a6b660`
+## Next canonical stage
+GP-S27 Worker (after S26 finalization).
 
 ## Git state
 Feature branch pushed; main untouched; no PR.

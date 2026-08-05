@@ -67,7 +67,7 @@ Ferronite `.uasset` filter=lfs; re-seeded and tracked.
 - `Docs/Development/Cursor_Work_Report.md`
 
 ## Correction commit SHA
-(filled after commit)
+fef94837839ed25041fe5dc0256a1472231c0642
 
 ## Git state
 Pushed to `feature/gp-s23r-resource-definition`; main untouched; no PR; no S24R / map / finalization builds.

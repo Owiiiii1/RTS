@@ -71,7 +71,7 @@ Compile gate PASSED. Full PIE `RunS28RegressionSuite` Complete Failures=0 — **
 Unchanged
 
 ## Correction commit
-(see git after push)
+a3a9c87c11425ba0ff4f251e74c54ca3a543708e
 
 ## Git state
 Branch `feature/gp-s28-storage-threat` pushed; main untouched; no PR

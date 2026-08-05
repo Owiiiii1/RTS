@@ -81,7 +81,7 @@ Console suite (`RunEndPlayContractTest`, DiagnosticScenario, Storage, Hauling, W
 Unchanged
 
 ## Correction commit
-(see git after push)
+7f81d19d236d0cf197c1c650174ef28532245244
 
 ## Git state
 Branch `feature/gp-s28-storage-threat` pushed; main untouched; no PR

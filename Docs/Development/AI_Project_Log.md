@@ -1,8 +1,223 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28 Storage + ThreatValue Finalization
+
+Status: **GP-S28_READY_FOR_MERGE**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Last functional correction: `a3a9c87c11425ba0ff4f251e74c54ca3a543708e`
+- Finalization: `c7f18d042f3e7ad2ef350be6b394fda3525596ba`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Summary
+GP-S28 delivers Planetary Storage (5×100), Ready-without-launch, Accepted-only Threat write, unique MainBase registry, Worker haul chain, ResourceNode EndPlay teardown, and PIE contract isolation/suite. Operator suite Failures=0. Builds: GPEditor Dev+UHT, GP Dev, GP Shipping — all **PASSED**. No map/content/LFS. Launch/Orbital/Score deferred to GP-S36. No Slice 7 work in this branch.
+
+### Next after merge
+Reconcile already-implemented combat against canonical Slice 7; close only real gaps; do not rewrite confirmed systems.
+
+---
+
+## 2026-08-06 — GP-S28 Hauling Contract Local Geometry / Timeout Fix
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded by Finalization)*
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior isolation: `4b5331cb3333b46bb952453540dab6d268bff9cd`
+- Hauling local geometry: `a3a9c87c11425ba0ff4f251e74c54ca3a543708e`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Operator result
+Isolation Failures=0; suite stopped on Hauling `PartialStorageHaulTimeout` (FreshNode `-53000`, Distance≈52947).
+
+### What was done
+- Scenario-relative navigable node spawn helper; removed hauling far absolute coords
+- PartialStorageGeometry logging + path/travel-budget checks
+- GPEditor Win64 Development + UHT **PASSED**; PIE suite re-run pending
+
+### Operator next
+1. `gp.Resource.RunContractIsolationContractTest` → Failures=0
+2. `gp.Resource.RunS28RegressionSuite` → Complete Failures=0
+
+---
+
+## 2026-08-05 — GP-S28 Contract Runner Isolation / Ownership / Async Null-Safety
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior EndPlay cleanup: `7f81d19d236d0cf197c1c650174ef28532245244`
+- Contract isolation: `4b5331cb3333b46bb952453540dab6d268bff9cd`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Crash
+AV `0x548` in Hauling `AdvanceStage` after Diagnostic destroyed live Hauling actors via Team/contract cleanup; Worker.Complete could print while Hauling still scheduled.
+
+### What was done
+- Global PIE contract coordinator token; OwnerTag-scoped cleanup; remap-before-cleanup
+- Null-safe hauling stages; sequential `RunS28RegressionSuite`; isolation contract
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping not run
+- PIE validation pending
+
+### Operator next
+1. `gp.Resource.RunContractIsolationContractTest`
+2. `gp.Resource.RunS28RegressionSuite` → Complete Failures=0
+3. Do not fire-and-forget seven contract commands without waiting
+
+---
+
+## 2026-08-05 — GP-S28 ResourceNode EndPlay Reentrant Occupancy Cleanup
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior registry uniqueness: `c59b12031d88ea9b3c9dd584e4aa1028c2a846dc`
+- EndPlay occupancy cleanup: `7f81d19d236d0cf197c1c650174ef28532245244`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Root cause
+`EndPlay` ranged-for over live `ActiveMiners`/`WaitingMiners` while `BroadcastMinerSlotStateChanged` → MiningComponent `StopMining` → `ReleaseMiningSlot` mutated the arrays.
+
+### What was done
+- Snapshot/clear/guard EndPlay teardown; Request/Release/Promote guarded; listener hardening
+- `gp.Resource.RunEndPlayContractTest` (occupancy 4+1 destroy + haul-loop destroy)
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping not run
+- Runtime PIE Stop after haul + full console suite: operator validation pending
+
+### Operator next
+1. `gp.Resource.RunEndPlayContractTest` → Complete Failures=0
+2. Spawn scenario → Mine → ≥1 haul → PIE Stop → no ensure / no crash
+3. Remaining contract suite Failures=0
+
+---
+
+## 2026-08-05 — GP-S28 MainBase Registry Uniqueness + Contract Isolation
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior: candidate `cd83858` / TeamId `61f69df` / nav `caf5bf0`
+- Registry uniqueness: `c59b12031d88ea9b3c9dd584e4aa1028c2a846dc`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Root cause
+`RegisterMainBase` logged DuplicateMainBaseForTeam Error then still `Add` → Count=2. Contract reused Team1 while operator scenario occupied it.
+
+### What was done
+- Registry uniqueness invariant: one MainBase per playable TeamId; typed register result; no Add after reject; stale prune; same-actor idempotent
+- MainBase lifecycle respects reject / EndPlay / TeamId change
+- Contract team isolation + duplicate-rejection stages; operator Team1 preservation
+- Operator re-spawn policy; Worker.List registry uniqueness fields; Ready requires unique count=1
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping not run
+- Runtime regression console suite: operator validation pending (code ready)
+
+### Operator next
+1. Sequence B: `SpawnDiagnosticScenario 1` → `RunDiagnosticScenarioContractTest` → `Worker.List` (Team1 preserved, Ready=true, Count=1)
+2. Full contract suite; confirm Failures=0 with and without prior Team1 scenario
+
+---
+
+## 2026-08-05 — GP-S28 Diagnostic Nav-Reachability Correction
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior TeamId correction: `61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`
+- Nav correction: `caf5bf0c947176ce5c72affadae41cbbd60be590`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Replaced hardcoded off-mesh (-45000) layout with NavMesh anchor discovery + approach-point path tests
+- Atomic scenario spawn (no leftover Ready=false actors); tag-scoped cleanup
+- ReadyForHaulingTest requires NavSystem + three paths; contract asserts nav (no false-positive)
+- Hauling contract stage-0 uses navigable scenario
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping not run
+
+### Operator next
+1. `gp.Resource.SpawnDiagnosticScenario 1` → Ok=true, ReadyForHaulingTest=true, all Nav*=true
+2. `gp.Worker.List` + SuggestedCommand Mine
+3. Contract suite including DiagnosticScenario
+
+---
+
+## 2026-08-05 — GP-S28 Diagnostic Scenario Correction
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded for nav by Nav-Reachability Correction)*
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior candidate: `cd83858390db086c6913669f348a7402ae0a5ad3`
+- Correction: `61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- Production-safe MainBase registry: register only TeamId≥1; refresh on `NotifyTeamIdChanged`
+- `gp.Resource.SpawnDiagnosticScenario` (+ Storage alias) — full MainBase+Worker+Node
+- Fixed `gp.Worker.SpawnDiagnostic` / `gp.Storage.SpawnDiagnostic` coherence
+- `gp.Worker.List` ScenarioValidation + ReadyForHaulingTest
+- `gp.Resource.RunDiagnosticScenarioContractTest`
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping not run
+
+### Operator next
+1. `gp.Resource.SpawnDiagnosticScenario 1`
+2. `gp.Worker.List` → ReadyForHaulingTest=true
+3. Haul validation + contract tests; then finalize
+
+---
+
+## 2026-08-05 — GP-S28 StorageComponent + FerroniteThreatValue
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING** *(superseded for operator flow by Diagnostic Scenario Correction)*
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- **GP-S27 merged into main** @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Candidate: `cd83858390db086c6913669f348a7402ae0a5ad3`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### What was done
+- `UGP_StorageComponent` container fill (Empty/Filling/Ready; Launching scaffold only)
+- Minimal `AGP_BuildingBase` + `AGP_MainBase` host + GameState team registry
+- Per-team `FerroniteThreatValue` SoT + legacy scalar mirror
+- Worker haul: CargoFull / depleted-partial → own MainBase drop-off → optional return-to-deposit
+- Drop-off transaction + rollback; GDD overflow LOST; no Orbital/Score write
+- Diagnostics `gp.Storage.*`, `gp.Worker.List`, `gp.Worker.RunHaulingContractTest`
+- GPEditor Win64 Development + UHT **PASSED**
+- GP Win64 Development / Shipping **not run**
+
+### Intentionally not done
+- No container launch / Orbital / Score (GP-S36); no content MainBase BP (GP-S39)
+- No PR/merge/main; no map/LFS/Blueprints; no Slice 7
+
+### Operator next
+- Validate haul PIE + Storage/Hauling/Worker/Mining/Cargo contract tests; then finalize
+
+---
+
 ## 2026-08-05 — GP-S27 AGP_Worker — finalization
 
-Status: **GP-S27_FINALIZED_READY_FOR_MERGE**
+Status: **GP-S27_FINALIZED_READY_FOR_MERGE** *(merged to main @ 4aae012)*
 
 ### Branch / baseline
 - Branch: `feature/gp-s27-worker`

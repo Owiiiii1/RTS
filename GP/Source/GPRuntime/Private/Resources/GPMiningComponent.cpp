@@ -17,8 +17,16 @@
 #endif
 
 #if !UE_BUILD_SHIPPING
+#include "Buildings/GPMainBase.h"
+#include "Command/GPUnitCommand.h"
+#include "Debug/GPContractTestCoordinator.h"
 #include "EngineUtils.h"
+#include "Game/GPGameState.h"
 #include "HAL/IConsoleManager.h"
+#include "Resources/GPResourceLoopDiagnostics.h"
+#include "Tags/GPGameplayTags.h"
+#include "Units/GPUnitCommandComponent.h"
+#include "Units/GPWorker.h"
 #endif
 
 DEFINE_LOG_CATEGORY(LogGPMining);
@@ -327,7 +335,7 @@ void UGP_MiningComponent::ReleaseSlotOnCurrentNode()
 
 	AGP_ResourceNode* Node = CurrentResourceNode;
 	AActor* Owner = GetOwner();
-	if (!IsValid(Node) || !IsValid(Owner) || Node->IsActorBeingDestroyed())
+	if (!IsValid(Node) || !IsValid(Owner) || Node->IsActorBeingDestroyed() || Node->IsClearingOccupancy())
 	{
 		return;
 	}
@@ -437,7 +445,12 @@ void UGP_MiningComponent::HandleMinerSlotStateChanged(
 		&& OldState == EGP_MinerOccupancyState::Waiting
 		&& NewState == EGP_MinerOccupancyState::Active)
 	{
-		if (!IsValid(CurrentResourceNode) || CurrentResourceNode->IsDepleted())
+		if (!IsValid(CurrentResourceNode) || CurrentResourceNode->IsClearingOccupancy())
+		{
+			StopMining(EGP_MiningStopReason::TargetEndPlay);
+			return;
+		}
+		if (CurrentResourceNode->IsDepleted())
 		{
 			StopMining(EGP_MiningStopReason::DepositDepleted);
 			return;
@@ -916,6 +929,7 @@ USceneComponent* AGP_MiningNoCargoDiagnosticHost::GetSceneRoot() const
 namespace GPMiningDebug
 {
 	TWeakObjectPtr<UGP_MiningContractTestRunner> GActiveContractTestRunner;
+	TWeakObjectPtr<UGP_ResourceNodeEndPlayContractTestRunner> GActiveEndPlayContractTestRunner;
 	static AGP_ResourceNode* FindNode(UWorld* World, const FString& OptionalName)
 	{
 		if (World == nullptr)
@@ -1276,10 +1290,16 @@ namespace GPMiningDebug
 				TEXT("GP Mining.RunContractTest: rejected — previous staged test still running"));
 			return;
 		}
+		GPContractTestCoordinator::FExecutionToken Token;
+		if (!GPContractTestCoordinator::TryAcquire(World, TEXT("MiningContract"), TEXT("Mining"), Token))
+		{
+			return;
+		}
 
 		UGP_MiningContractTestRunner* Runner = NewObject<UGP_MiningContractTestRunner>(GetTransientPackage());
 		Runner->AddToRoot();
 		GActiveContractTestRunner = Runner;
+		Runner->SetExecutionToken(Token.ExecutionId, Token.OwnerTag);
 		Runner->Start(World);
 	}
 
@@ -1307,6 +1327,39 @@ namespace GPMiningDebug
 		TEXT("gp.Mining.RunContractTest"),
 		TEXT("Authority staged mining contract checks (lifecycle-safe). Does not save maps."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&MiningRunContractTest));
+
+	static void ResourceRunEndPlayContractTest(const TArray<FString>& Args, UWorld* World)
+	{
+		(void)Args;
+		if (World == nullptr || World->GetNetMode() == NM_Client)
+		{
+			UE_LOG(LogGPMining, Warning, TEXT("GP Resource.RunEndPlayContractTest: missing world or client"));
+			return;
+		}
+		if (GActiveEndPlayContractTestRunner.IsValid())
+		{
+			UE_LOG(LogGPMining, Warning,
+				TEXT("GP Resource.RunEndPlayContractTest: rejected — previous staged test still running"));
+			return;
+		}
+		GPContractTestCoordinator::FExecutionToken Token;
+		if (!GPContractTestCoordinator::TryAcquire(World, TEXT("ResourceEndPlayContract"), TEXT("ResourceEndPlay"), Token))
+		{
+			return;
+		}
+
+		UGP_ResourceNodeEndPlayContractTestRunner* Runner =
+			NewObject<UGP_ResourceNodeEndPlayContractTestRunner>(GetTransientPackage());
+		Runner->AddToRoot();
+		GActiveEndPlayContractTestRunner = Runner;
+		Runner->SetExecutionToken(Token.ExecutionId, Token.OwnerTag);
+		Runner->Start(World);
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs GResourceRunEndPlayContractTest(
+		TEXT("gp.Resource.RunEndPlayContractTest"),
+		TEXT("Authority: ResourceNode EndPlay occupancy teardown contract (active+waiting + haul-loop)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ResourceRunEndPlayContractTest));
 } // namespace GPMiningDebug
 
 void UGP_MiningContractTestRunner::BeginDestroy()
@@ -1330,13 +1383,15 @@ void UGP_MiningContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEn
 	(void)bCleanupResources;
 	if (World == nullptr || World == WorldWeak.Get() || !WorldWeak.IsValid())
 	{
-		Finish();
+		Abort(TEXT("WorldEndPlay"));
 	}
 }
 
 void UGP_MiningContractTestRunner::Start(UWorld* InWorld)
 {
 	bFinished = false;
+	bCancelled = false;
+	CancelReason = NAME_None;
 	WorldWeak = InWorld;
 	StageIndex = 0;
 	Failures = 0;
@@ -1483,6 +1538,7 @@ void UGP_MiningContractTestRunner::Finish()
 		TEXT("GP Mining.RunContractTest: Complete Failures=%d (map/assets not saved; staged runner)"),
 		Failures);
 
+	GPContractTestCoordinator::Release(ExecutionId, Failures, bCancelled, *CancelReason.ToString());
 	RemoveFromRoot();
 	GPMiningDebug::GActiveContractTestRunner.Reset();
 	WorldWeak.Reset();
@@ -1491,6 +1547,17 @@ void UGP_MiningContractTestRunner::Finish()
 void UGP_MiningContractTestRunner::AdvanceStage()
 {
 	UWorld* World = WorldWeak.Get();
+	if (bFinished || !GPContractTestCoordinator::IsTokenActive(ExecutionId))
+	{
+		return;
+	}
+	if (GPContractTestCoordinator::IsWorldTearingDown(World))
+	{
+		bCancelled = true;
+		CancelReason = FName(TEXT("WorldEndPlay"));
+		Abort(TEXT("WorldEndPlay"));
+		return;
+	}
 	if (!IsValid(World))
 	{
 		Abort(TEXT("WorldInvalidDuringStage"));
@@ -1853,6 +1920,456 @@ void UGP_MiningContractTestRunner::AdvanceStage()
 		break;
 	}
 }
+
+void UGP_ResourceNodeEndPlayContractTestRunner::BeginDestroy()
+{
+	Finish();
+	Super::BeginDestroy();
+}
+
+void UGP_ResourceNodeEndPlayContractTestRunner::UnbindWorldCleanup()
+{
+	if (WorldCleanupHandle.IsValid())
+	{
+		FWorldDelegates::OnWorldCleanup.Remove(WorldCleanupHandle);
+		WorldCleanupHandle.Reset();
+	}
+}
+
+void UGP_ResourceNodeEndPlayContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	(void)bSessionEnded;
+	(void)bCleanupResources;
+	if (World == nullptr || World == WorldWeak.Get() || !WorldWeak.IsValid())
+	{
+		Abort(TEXT("WorldEndPlay"));
+	}
+}
+
+void UGP_ResourceNodeEndPlayContractTestRunner::Start(UWorld* InWorld)
+{
+	bFinished = false;
+	bCancelled = false;
+	CancelReason = NAME_None;
+	WorldWeak = InWorld;
+	StageIndex = 0;
+	Failures = 0;
+	TerminalNoneCount = 0;
+	PromotionCount = 0;
+	ThreatBeforeNodeDestroy = 0.0f;
+	OccupancyHostsWeak.Reset();
+	WaitingHostWeak.Reset();
+	HaulHostWeak.Reset();
+	HaulWorkerWeak.Reset();
+	HaulMainBaseWeak.Reset();
+	TestNodeWeak.Reset();
+	OccupancyObserveHandle.Reset();
+
+	UnbindWorldCleanup();
+	WorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(
+		this, &UGP_ResourceNodeEndPlayContractTestRunner::OnWorldCleanup);
+	UE_LOG(LogGPMining, Log, TEXT("GP Resource.RunEndPlayContractTest Stage=Start"));
+	ScheduleNext();
+}
+
+void UGP_ResourceNodeEndPlayContractTestRunner::ScheduleNext()
+{
+	UWorld* World = WorldWeak.Get();
+	if (!IsValid(World))
+	{
+		Abort(TEXT("WorldInvalid"));
+		return;
+	}
+	StageTimerHandle = World->GetTimerManager().SetTimerForNextTick(
+		FTimerDelegate::CreateUObject(this, &UGP_ResourceNodeEndPlayContractTestRunner::AdvanceStage));
+}
+
+bool UGP_ResourceNodeEndPlayContractTestRunner::Expect(bool bOk, const TCHAR* Label)
+{
+	if (!bOk)
+	{
+		++Failures;
+		UE_LOG(LogGPMining, Error, TEXT("GP Resource.RunEndPlayContractTest FAIL: %s"), Label);
+		return false;
+	}
+	UE_LOG(LogGPMining, Log, TEXT("GP Resource.RunEndPlayContractTest PASS: %s"), Label);
+	return true;
+}
+
+void UGP_ResourceNodeEndPlayContractTestRunner::Abort(const TCHAR* Reason)
+{
+	UE_LOG(LogGPMining, Error, TEXT("GP Resource.RunEndPlayContractTest ABORT: %s"), Reason);
+	++Failures;
+	Finish();
+}
+
+void UGP_ResourceNodeEndPlayContractTestRunner::SafeStopAndDestroyHost(TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak)
+{
+	AGP_MiningDiagnosticHost* Host = HostWeak.Get();
+	if (!IsValid(Host))
+	{
+		HostWeak.Reset();
+		return;
+	}
+	if (UGP_MiningComponent* Mining = Host->GetMiningComponent())
+	{
+		if (IsValid(Mining))
+		{
+			Mining->StopMining(EGP_MiningStopReason::ManualStop);
+		}
+	}
+	Host->Destroy();
+	HostWeak.Reset();
+}
+
+AGP_ResourceNode* UGP_ResourceNodeEndPlayContractTestRunner::SpawnTransientNode(const FVector& Location) const
+{
+	UWorld* World = WorldWeak.Get();
+	if (!IsValid(World))
+	{
+		return nullptr;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Params.ObjectFlags |= RF_Transient;
+	return World->SpawnActor<AGP_ResourceNode>(
+		AGP_ResourceNode::StaticClass(),
+		Location,
+		FRotator::ZeroRotator,
+		Params);
+}
+
+AGP_MiningDiagnosticHost* UGP_ResourceNodeEndPlayContractTestRunner::SpawnHostNear(AGP_ResourceNode* Node, float RangeCm) const
+{
+	return GPMiningDebug::SpawnHostNearNode(WorldWeak.Get(), Node, RangeCm);
+}
+
+void UGP_ResourceNodeEndPlayContractTestRunner::Finish()
+{
+	if (bFinished)
+	{
+		return;
+	}
+	bFinished = true;
+
+	UnbindWorldCleanup();
+	if (UWorld* World = WorldWeak.Get())
+	{
+		World->GetTimerManager().ClearTimer(StageTimerHandle);
+		GPResourceLoopDiagnostics::CleanupScenarioByOwnerTag(World, OwnerTag);
+	}
+
+	if (AGP_ResourceNode* Node = TestNodeWeak.Get())
+	{
+		if (IsValid(Node) && OccupancyObserveHandle.IsValid())
+		{
+			Node->GetOnMinerSlotStateChanged().Remove(OccupancyObserveHandle);
+		}
+	}
+	OccupancyObserveHandle.Reset();
+
+	for (TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak : OccupancyHostsWeak)
+	{
+		SafeStopAndDestroyHost(HostWeak);
+	}
+	OccupancyHostsWeak.Reset();
+	SafeStopAndDestroyHost(HaulHostWeak);
+	WaitingHostWeak.Reset();
+
+	if (AGP_Worker* Worker = HaulWorkerWeak.Get())
+	{
+		if (IsValid(Worker))
+		{
+			Worker->Destroy();
+		}
+	}
+	HaulWorkerWeak.Reset();
+	if (AGP_MainBase* Base = HaulMainBaseWeak.Get())
+	{
+		if (IsValid(Base))
+		{
+			Base->Destroy();
+		}
+	}
+	HaulMainBaseWeak.Reset();
+
+	if (AGP_ResourceNode* Node = TestNodeWeak.Get())
+	{
+		if (IsValid(Node))
+		{
+			Node->Destroy();
+		}
+	}
+	TestNodeWeak.Reset();
+
+	UE_LOG(LogGPMining, Log, TEXT("GP Resource.RunEndPlayContractTest: Complete Failures=%d"), Failures);
+	GPContractTestCoordinator::Release(ExecutionId, Failures, bCancelled, *CancelReason.ToString());
+	RemoveFromRoot();
+	GPMiningDebug::GActiveEndPlayContractTestRunner.Reset();
+	WorldWeak.Reset();
+}
+
+void UGP_ResourceNodeEndPlayContractTestRunner::AdvanceStage()
+{
+	UWorld* World = WorldWeak.Get();
+	if (bFinished || !GPContractTestCoordinator::IsTokenActive(ExecutionId))
+	{
+		return;
+	}
+	if (GPContractTestCoordinator::IsWorldTearingDown(World))
+	{
+		bCancelled = true;
+		CancelReason = FName(TEXT("WorldEndPlay"));
+		Abort(TEXT("WorldEndPlay"));
+		return;
+	}
+	if (!IsValid(World))
+	{
+		Abort(TEXT("WorldInvalidDuringStage"));
+		return;
+	}
+
+	switch (StageIndex)
+	{
+	case 0:
+	{
+		UE_LOG(LogGPMining, Log, TEXT("GP Resource.RunEndPlayContractTest Stage=ResourceNodeEndPlayWithActiveAndWaitingMiners"));
+		AGP_ResourceNode* Node = SpawnTransientNode(FVector(-47000.0f, 0.0f, 100.0f));
+		if (!Expect(IsValid(Node), TEXT("SpawnEndPlayOccupancyNode")))
+		{
+			Finish();
+			return;
+		}
+		TestNodeWeak = Node;
+		if (const UGP_ResourceDefinition* Def = Node->ResolveResourceDefinition(true))
+		{
+			InteractionRangeCm = Def->InteractionRangeCm;
+		}
+
+		OccupancyHostsWeak.Reset();
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			AGP_MiningDiagnosticHost* Host = SpawnHostNear(Node, InteractionRangeCm);
+			if (!Expect(IsValid(Host) && IsValid(Host->GetMiningComponent()), TEXT("SpawnOccupancyMiner")))
+			{
+				Finish();
+				return;
+			}
+			OccupancyHostsWeak.Add(Host);
+			Expect(Host->GetMiningComponent()->BeginMining(Node) == EGP_BeginMiningResult::Started
+				|| Host->GetMiningComponent()->IsWaitingForSlot()
+				|| Host->GetMiningComponent()->IsMining(),
+				TEXT("OccupancyMinerBeganOrQueued"));
+		}
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 1:
+	{
+		AGP_ResourceNode* Node = TestNodeWeak.Get();
+		if (!Expect(IsValid(Node), TEXT("OccupancyNodeStillValid")))
+		{
+			Finish();
+			return;
+		}
+
+		int32 MiningCount = 0;
+		int32 WaitingCount = 0;
+		WaitingHostWeak.Reset();
+		for (TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak : OccupancyHostsWeak)
+		{
+			AGP_MiningDiagnosticHost* Host = HostWeak.Get();
+			if (!Expect(IsValid(Host) && IsValid(Host->GetMiningComponent()), TEXT("OccupancyHostAlive")))
+			{
+				Finish();
+				return;
+			}
+			const EGP_MiningState State = Host->GetMiningComponent()->GetMiningState();
+			if (State == EGP_MiningState::Mining)
+			{
+				++MiningCount;
+			}
+			else if (State == EGP_MiningState::WaitingForSlot)
+			{
+				++WaitingCount;
+				WaitingHostWeak = Host;
+			}
+		}
+		Expect(MiningCount == 4, TEXT("FourActiveMinersBeforeNodeDestroy"));
+		Expect(WaitingCount == 1, TEXT("OneWaitingMinerBeforeNodeDestroy"));
+		Expect(Node->GetActiveMinerCount() == 4 && Node->GetWaitingMinerCount() == 1, TEXT("NodeOccupancyCountsBeforeDestroy"));
+		Expect(IsValid(WaitingHostWeak.Get()), TEXT("WaitingHostCaptured"));
+
+		TerminalNoneCount = 0;
+		PromotionCount = 0;
+		OccupancyObserveHandle = Node->GetOnMinerSlotStateChanged().AddLambda(
+			[this](AActor* /*Miner*/, EGP_MinerOccupancyState OldState, EGP_MinerOccupancyState NewState)
+			{
+				if (OldState == EGP_MinerOccupancyState::Waiting && NewState == EGP_MinerOccupancyState::Active)
+				{
+					++PromotionCount;
+				}
+				if (NewState == EGP_MinerOccupancyState::None
+					&& (OldState == EGP_MinerOccupancyState::Active || OldState == EGP_MinerOccupancyState::Waiting))
+				{
+					++TerminalNoneCount;
+				}
+			});
+
+		// Destroy while 4 Active + 1 Waiting — must not ensure on ranged-for mutation.
+		Node->Destroy();
+		TestNodeWeak.Reset();
+		OccupancyObserveHandle.Reset();
+
+		Expect(PromotionCount == 0, TEXT("WaitingMinerNotPromotedOnNodeEndPlay"));
+		Expect(TerminalNoneCount == 5, TEXT("AllMinersReceivedNoneTerminal"));
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 2:
+	{
+		for (TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak : OccupancyHostsWeak)
+		{
+			AGP_MiningDiagnosticHost* Host = HostWeak.Get();
+			if (!Expect(IsValid(Host) && IsValid(Host->GetMiningComponent()), TEXT("HostAliveAfterNodeEndPlay")))
+			{
+				Finish();
+				return;
+			}
+			UGP_MiningComponent* Mining = Host->GetMiningComponent();
+			Expect(Mining->GetMiningState() == EGP_MiningState::Invalid, TEXT("MinerTerminalInvalidAfterNodeEndPlay"));
+			Expect(Mining->GetLastStopReason() == EGP_MiningStopReason::TargetEndPlay, TEXT("MinerStopReasonTargetEndPlay"));
+			Expect(!Mining->IsMiningTimerActive(), TEXT("MiningTimerOffAfterNodeEndPlay"));
+			Expect(Mining->GetCurrentResourceNode() == nullptr, TEXT("MinerNodeRefCleared"));
+		}
+
+		AGP_MiningDiagnosticHost* WaitingHost = WaitingHostWeak.Get();
+		Expect(IsValid(WaitingHost)
+			&& WaitingHost->GetMiningComponent()->GetLastStopReason() == EGP_MiningStopReason::TargetEndPlay,
+			TEXT("WaitingMinerTerminalNotPromoted"));
+
+		for (TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak : OccupancyHostsWeak)
+		{
+			SafeStopAndDestroyHost(HostWeak);
+		}
+		OccupancyHostsWeak.Reset();
+		WaitingHostWeak.Reset();
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 3:
+	{
+		UE_LOG(LogGPMining, Log, TEXT("GP Resource.RunEndPlayContractTest Stage=ResourceNodeEndPlayDuringHaulLoop"));
+
+		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
+		if (!Expect(Scenario.bOk && IsValid(Scenario.Worker) && IsValid(Scenario.ResourceNode) && IsValid(Scenario.MainBase),
+			TEXT("HaulLoopScenarioSpawnOk")))
+		{
+			Finish();
+			return;
+		}
+
+		TestNodeWeak = Scenario.ResourceNode;
+		HaulWorkerWeak = Scenario.Worker;
+		HaulMainBaseWeak = Scenario.MainBase;
+
+		AGP_Worker* Worker = Scenario.Worker;
+		AGP_ResourceNode* Node = Scenario.ResourceNode;
+		FGP_UnitCommand Command;
+		Command.CommandTag = FGPGameplayTags::Get().Command_Mine;
+		Command.TargetActor = Node;
+		Command.TargetLocation = Node->GetActorLocation();
+		Command.bQueue = false;
+		Worker->ReceiveCommand(Command);
+
+		UGP_MiningComponent* Mining = Worker->GetMiningComponent();
+		UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+		if (!Expect(IsValid(Mining) && IsValid(Cargo), TEXT("HaulLoopWorkerComponents")))
+		{
+			Finish();
+			return;
+		}
+
+		// Place in range and force a partial cargo cycle (not CargoFull).
+		Worker->SetActorLocation(Node->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f),
+			false, nullptr, ETeleportType::TeleportPhysics);
+		if (Mining->GetMiningState() != EGP_MiningState::Mining
+			&& Mining->GetMiningState() != EGP_MiningState::WaitingForSlot)
+		{
+			Mining->BeginMining(Node);
+		}
+		Mining->DebugForceExecuteMiningCycle();
+		Expect(Cargo->GetCurrentCargoAmount() > KINDA_SMALL_NUMBER, TEXT("HaulLoopPartialCargoBeforeNodeDestroy"));
+
+		ThreatBeforeNodeDestroy = 0.0f;
+		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
+		{
+			ThreatBeforeNodeDestroy = GS->GetFerroniteThreatValueForTeam(Worker->GetTeamId());
+		}
+
+		Node->Destroy();
+		TestNodeWeak.Reset();
+
+		Expect(Mining->GetLastStopReason() == EGP_MiningStopReason::TargetEndPlay
+			|| Mining->GetCurrentResourceNode() == nullptr,
+			TEXT("HaulLoopMiningStoppedOnNodeDestroy"));
+		Expect(!Mining->IsMiningTimerActive(), TEXT("HaulLoopMiningTimerOff"));
+
+		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
+		{
+			const float ThreatAfter = GS->GetFerroniteThreatValueForTeam(Worker->GetTeamId());
+			Expect(FMath::IsNearlyEqual(ThreatAfter, ThreatBeforeNodeDestroy, 0.01f),
+				TEXT("HaulLoopNoFalseThreatTransaction"));
+		}
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 4:
+	{
+		AGP_Worker* Worker = HaulWorkerWeak.Get();
+		AGP_MainBase* Base = HaulMainBaseWeak.Get();
+		if (IsValid(Worker))
+		{
+			UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+			UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+			const float CargoAmount = IsValid(Cargo) ? Cargo->GetCurrentCargoAmount() : 0.0f;
+			// Zero cargo must not start haul; partial cargo may haul without return-to-deposit.
+			if (CargoAmount <= KINDA_SMALL_NUMBER)
+			{
+				Expect(Cmd == nullptr || !Cmd->IsHaulActive(), TEXT("HaulLoopNoHaulWithZeroCargo"));
+			}
+			Expect(IsValid(Worker->GetMiningComponent())
+				&& Worker->GetMiningComponent()->GetCurrentResourceNode() == nullptr,
+				TEXT("HaulLoopNoStaleNodeRef"));
+		}
+
+		if (IsValid(Worker))
+		{
+			Worker->Destroy();
+		}
+		HaulWorkerWeak.Reset();
+		if (IsValid(Base))
+		{
+			Base->Destroy();
+		}
+		HaulMainBaseWeak.Reset();
+
+		Expect(true, TEXT("ResourceNodeEndPlayDuringHaulLoop"));
+		Finish();
+		break;
+	}
+	default:
+		Abort(TEXT("UnknownStage"));
+		break;
+	}
+}
 #else
 void UGP_MiningContractTestRunner::BeginDestroy()
 {
@@ -1920,6 +2437,56 @@ AGP_ResourceNode* UGP_MiningContractTestRunner::SpawnTransientNode(const FVector
 }
 
 void UGP_MiningContractTestRunner::SafeStopAndDestroyHost(TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak)
+{
+	HostWeak.Reset();
+}
+
+void UGP_ResourceNodeEndPlayContractTestRunner::BeginDestroy()
+{
+	bFinished = true;
+	Super::BeginDestroy();
+}
+
+void UGP_ResourceNodeEndPlayContractTestRunner::Start(UWorld* InWorld)
+{
+	(void)InWorld;
+}
+
+void UGP_ResourceNodeEndPlayContractTestRunner::ScheduleNext() {}
+void UGP_ResourceNodeEndPlayContractTestRunner::AdvanceStage() {}
+bool UGP_ResourceNodeEndPlayContractTestRunner::Expect(bool bOk, const TCHAR* Label)
+{
+	(void)bOk;
+	(void)Label;
+	return false;
+}
+void UGP_ResourceNodeEndPlayContractTestRunner::Abort(const TCHAR* Reason)
+{
+	(void)Reason;
+}
+void UGP_ResourceNodeEndPlayContractTestRunner::Finish()
+{
+	bFinished = true;
+}
+void UGP_ResourceNodeEndPlayContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	(void)World;
+	(void)bSessionEnded;
+	(void)bCleanupResources;
+}
+void UGP_ResourceNodeEndPlayContractTestRunner::UnbindWorldCleanup() {}
+AGP_ResourceNode* UGP_ResourceNodeEndPlayContractTestRunner::SpawnTransientNode(const FVector& Location) const
+{
+	(void)Location;
+	return nullptr;
+}
+AGP_MiningDiagnosticHost* UGP_ResourceNodeEndPlayContractTestRunner::SpawnHostNear(AGP_ResourceNode* Node, float RangeCm) const
+{
+	(void)Node;
+	(void)RangeCm;
+	return nullptr;
+}
+void UGP_ResourceNodeEndPlayContractTestRunner::SafeStopAndDestroyHost(TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak)
 {
 	HostWeak.Reset();
 }

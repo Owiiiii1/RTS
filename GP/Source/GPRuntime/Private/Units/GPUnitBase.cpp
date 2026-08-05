@@ -296,7 +296,15 @@ void AGP_UnitBase::SetTeamId(int32 NewTeamId)
 		return;
 	}
 
+	const int32 OldTeamId = TeamId;
 	TeamId = NewTeamId;
+	NotifyTeamIdChanged(OldTeamId, TeamId);
+}
+
+void AGP_UnitBase::NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId)
+{
+	(void)OldTeamId;
+	(void)NewTeamId;
 }
 
 bool AGP_UnitBase::IsNeutral() const

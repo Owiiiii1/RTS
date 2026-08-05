@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Game/GPGameState.h"
+
+#include "Buildings/GPMainBase.h"
 #include "Net/UnrealNetwork.h"
 #include "Tags/GPGameplayTags.h"
 
@@ -35,6 +37,7 @@ void AGP_GameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, MatchStateTag, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, MatchTimeRemaining, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, FerroniteThreatValue, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, TeamFerroniteThreatValues, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, WinnerTeamId, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, WinReasonTag, COND_None, REPNOTIFY_Always);
 }
@@ -59,6 +62,47 @@ bool AGP_GameState::IsWinReasonBranchTag(const FGameplayTag& Tag)
 
 	const FGameplayTag WinReasonRoot = FGPGameplayTags::Get().Match_WinReason_DeliveryQuota.RequestDirectParent();
 	return WinReasonRoot.IsValid() && Tag.MatchesTag(WinReasonRoot);
+}
+
+int32 AGP_GameState::FindTeamThreatIndex(int32 InTeamId) const
+{
+	for (int32 Index = 0; Index < TeamFerroniteThreatValues.Num(); ++Index)
+	{
+		if (TeamFerroniteThreatValues[Index].TeamId == InTeamId)
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
+float AGP_GameState::GetFerroniteThreatValueForTeam(int32 InTeamId) const
+{
+	const int32 Index = FindTeamThreatIndex(InTeamId);
+	return Index != INDEX_NONE ? TeamFerroniteThreatValues[Index].ThreatValue : 0.0f;
+}
+
+void AGP_GameState::SyncLegacyFerroniteThreatScalar()
+{
+	float Mirrored = 0.0f;
+	const int32 Team1Index = FindTeamThreatIndex(1);
+	if (Team1Index != INDEX_NONE)
+	{
+		Mirrored = TeamFerroniteThreatValues[Team1Index].ThreatValue;
+	}
+	else if (TeamFerroniteThreatValues.Num() > 0)
+	{
+		Mirrored = TeamFerroniteThreatValues[0].ThreatValue;
+	}
+
+	if (FMath::IsNearlyEqual(FerroniteThreatValue, Mirrored))
+	{
+		return;
+	}
+
+	const float OldThreat = FerroniteThreatValue;
+	FerroniteThreatValue = Mirrored;
+	OnFerroniteThreatValueChanged.Broadcast(OldThreat, FerroniteThreatValue);
 }
 
 void AGP_GameState::SetMatchStateTag(FGameplayTag NewStateTag)
@@ -108,21 +152,76 @@ void AGP_GameState::SetMatchTimeRemaining(float NewTimeRemaining)
 
 void AGP_GameState::SetFerroniteThreatValue(float NewThreatValue)
 {
+	SetFerroniteThreatValueForTeam(1, NewThreatValue);
+}
+
+void AGP_GameState::SetFerroniteThreatValueForTeam(int32 InTeamId, float NewThreatValue)
+{
 	if (!HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AGP_GameState::SetFerroniteThreatValue denied without authority."));
+		UE_LOG(LogTemp, Warning, TEXT("AGP_GameState::SetFerroniteThreatValueForTeam denied without authority."));
+		return;
+	}
+
+	if (InTeamId < 0)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("AGP_GameState::SetFerroniteThreatValueForTeam rejected TeamId=%d."),
+			InTeamId);
+		return;
+	}
+
+	if (!FMath::IsFinite(NewThreatValue))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("AGP_GameState::SetFerroniteThreatValueForTeam rejected non-finite threat for TeamId=%d."),
+			InTeamId);
 		return;
 	}
 
 	const float ClampedThreat = FMath::Max(0.0f, NewThreatValue);
-	if (FMath::IsNearlyEqual(FerroniteThreatValue, ClampedThreat))
+	int32 Index = FindTeamThreatIndex(InTeamId);
+	float OldThreat = 0.0f;
+	if (Index == INDEX_NONE)
 	{
-		return;
+		FGP_TeamFerroniteThreat Entry;
+		Entry.TeamId = InTeamId;
+		Entry.ThreatValue = ClampedThreat;
+		TeamFerroniteThreatValues.Add(Entry);
+		Index = TeamFerroniteThreatValues.Num() - 1;
+	}
+	else
+	{
+		OldThreat = TeamFerroniteThreatValues[Index].ThreatValue;
+		if (FMath::IsNearlyEqual(OldThreat, ClampedThreat))
+		{
+			SyncLegacyFerroniteThreatScalar();
+			return;
+		}
+		TeamFerroniteThreatValues[Index].ThreatValue = ClampedThreat;
 	}
 
-	const float OldThreat = FerroniteThreatValue;
-	FerroniteThreatValue = ClampedThreat;
-	OnFerroniteThreatValueChanged.Broadcast(OldThreat, FerroniteThreatValue);
+	OnTeamFerroniteThreatValueChanged.Broadcast(InTeamId, OldThreat, ClampedThreat);
+	SyncLegacyFerroniteThreatScalar();
+}
+
+float AGP_GameState::AddFerroniteThreatValueForTeam(int32 InTeamId, float Delta)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AGP_GameState::AddFerroniteThreatValueForTeam denied without authority."));
+		return 0.0f;
+	}
+
+	if (!FMath::IsFinite(Delta) || FMath::IsNearlyZero(Delta))
+	{
+		return 0.0f;
+	}
+
+	const float Previous = GetFerroniteThreatValueForTeam(InTeamId);
+	const float Next = FMath::Max(0.0f, Previous + Delta);
+	SetFerroniteThreatValueForTeam(InTeamId, Next);
+	return Next - Previous;
 }
 
 void AGP_GameState::SetMatchResult(int32 InWinnerTeamId, FGameplayTag InWinReasonTag)
@@ -181,6 +280,151 @@ void AGP_GameState::ClearMatchResult()
 	BroadcastMatchResultChanged(OldWinner, WinnerTeamId, OldReason, WinReasonTag);
 }
 
+void AGP_GameState::PruneInvalidMainBaseRegistrations()
+{
+	RegisteredMainBases.RemoveAll([](const TWeakObjectPtr<AGP_MainBase>& Weak)
+	{
+		return !Weak.IsValid();
+	});
+}
+
+AGP_GameState::EGP_MainBaseRegisterResult AGP_GameState::RegisterMainBase(AGP_MainBase* MainBase)
+{
+	if (!HasAuthority())
+	{
+		return EGP_MainBaseRegisterResult::RejectedNoAuthority;
+	}
+	if (!IsValid(MainBase))
+	{
+		return EGP_MainBaseRegisterResult::RejectedInvalidActor;
+	}
+
+	PruneInvalidMainBaseRegistrations();
+
+	const int32 TeamId = MainBase->GetTeamId();
+	if (TeamId < 1)
+	{
+		return EGP_MainBaseRegisterResult::RejectedInvalidTeam;
+	}
+
+	AGP_MainBase* ExistingForTeam = nullptr;
+	for (const TWeakObjectPtr<AGP_MainBase>& ExistingWeak : RegisteredMainBases)
+	{
+		AGP_MainBase* Existing = ExistingWeak.Get();
+		if (!IsValid(Existing))
+		{
+			continue;
+		}
+		if (Existing == MainBase)
+		{
+			UE_LOG(LogTemp, Log,
+				TEXT("AGP_GameState::RegisterMainBase: AlreadyRegistered MainBase=%s TeamId=%d CountForTeam=%d"),
+				*GetNameSafe(MainBase),
+				TeamId,
+				CountRegisteredMainBasesForTeam(TeamId));
+			return EGP_MainBaseRegisterResult::AlreadyRegistered;
+		}
+		if (Existing->GetTeamId() == TeamId)
+		{
+			ExistingForTeam = Existing;
+		}
+	}
+
+	if (ExistingForTeam != nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_GameState::RegisterMainBase: Rejected DuplicateMainBaseForTeam TeamId=%d Existing=%s New=%s Registered=false CountForTeam=%d ResolvedMainBase=%s"),
+			TeamId,
+			*GetNameSafe(ExistingForTeam),
+			*GetNameSafe(MainBase),
+			CountRegisteredMainBasesForTeam(TeamId),
+			*GetNameSafe(ExistingForTeam));
+		return EGP_MainBaseRegisterResult::RejectedDuplicate;
+	}
+
+	RegisteredMainBases.Add(MainBase);
+	UE_LOG(LogTemp, Log,
+		TEXT("AGP_GameState::RegisterMainBase: Registered=true MainBase=%s TeamId=%d CountForTeam=%d RegistrySize=%d"),
+		*GetNameSafe(MainBase),
+		TeamId,
+		CountRegisteredMainBasesForTeam(TeamId),
+		RegisteredMainBases.Num());
+	return EGP_MainBaseRegisterResult::Registered;
+}
+
+void AGP_GameState::UnregisterMainBase(AGP_MainBase* MainBase)
+{
+	PruneInvalidMainBaseRegistrations();
+
+	if (MainBase == nullptr)
+	{
+		return;
+	}
+
+	RegisteredMainBases.RemoveAll([MainBase](const TWeakObjectPtr<AGP_MainBase>& Weak)
+	{
+		return !Weak.IsValid() || Weak.Get() == MainBase;
+	});
+}
+
+AGP_MainBase* AGP_GameState::FindMainBaseForTeam(int32 InTeamId) const
+{
+	if (InTeamId < 1)
+	{
+		return nullptr;
+	}
+
+	AGP_MainBase* Found = nullptr;
+	int32 Count = 0;
+	for (const TWeakObjectPtr<AGP_MainBase>& Weak : RegisteredMainBases)
+	{
+		AGP_MainBase* Candidate = Weak.Get();
+		if (!IsValid(Candidate) || Candidate->GetTeamId() != InTeamId)
+		{
+			continue;
+		}
+		++Count;
+		if (Found == nullptr)
+		{
+			Found = Candidate;
+		}
+	}
+
+	if (Count > 1)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_GameState::FindMainBaseForTeam: invariant broken TeamId=%d Count=%d using first=%s"),
+			InTeamId,
+			Count,
+			*GetNameSafe(Found));
+	}
+	return Found;
+}
+
+int32 AGP_GameState::CountRegisteredMainBasesForTeam(int32 InTeamId) const
+{
+	if (InTeamId < 1)
+	{
+		return 0;
+	}
+
+	int32 Count = 0;
+	for (const TWeakObjectPtr<AGP_MainBase>& Weak : RegisteredMainBases)
+	{
+		AGP_MainBase* Candidate = Weak.Get();
+		if (IsValid(Candidate) && Candidate->GetTeamId() == InTeamId)
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+bool AGP_GameState::IsMainBaseRegistryUniqueForTeam(int32 InTeamId) const
+{
+	return CountRegisteredMainBasesForTeam(InTeamId) <= 1;
+}
+
 void AGP_GameState::BroadcastMatchResultChanged(
 	int32 OldWinnerTeamIdValue,
 	int32 NewWinnerTeamIdValue,
@@ -207,6 +451,14 @@ void AGP_GameState::OnRep_MatchTimeRemaining(float OldMatchTimeRemaining)
 void AGP_GameState::OnRep_FerroniteThreatValue(float OldFerroniteThreatValue)
 {
 	OnFerroniteThreatValueChanged.Broadcast(OldFerroniteThreatValue, FerroniteThreatValue);
+}
+
+void AGP_GameState::OnRep_TeamFerroniteThreatValues()
+{
+	for (const FGP_TeamFerroniteThreat& Entry : TeamFerroniteThreatValues)
+	{
+		OnTeamFerroniteThreatValueChanged.Broadcast(Entry.TeamId, Entry.ThreatValue, Entry.ThreatValue);
+	}
 }
 
 void AGP_GameState::OnRep_WinnerTeamId(int32 OldWinnerTeamId)

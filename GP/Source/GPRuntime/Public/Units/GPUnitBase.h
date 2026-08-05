@@ -75,6 +75,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Team")
 	bool IsNeutral() const;
 
+	/**
+	 * Authority hook after TeamId mutates (GP-S28).
+	 * Used by MainBase registry refresh; default no-op.
+	 */
+	virtual void NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
+
 	UFUNCTION(BlueprintPure, Category = "GP|Team")
 	bool HasAssignedTeam() const;
 

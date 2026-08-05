@@ -1,119 +1,107 @@
-# Cursor Work Report — GP-S27 AGP_Worker Finalization
+# Cursor Work Report — GP-S28 Storage + ThreatValue Finalization
 
-## Task
-GP-S27 — AGP_Worker Finalization
-
-## Final status
-**GP-S27_FINALIZED_READY_FOR_MERGE**
+## Status
+**GP-S28_READY_FOR_MERGE**
 
 ## Branch
-`feature/gp-s27-worker`
+`feature/gp-s28-storage-threat`
 
 ## Base
-`main` @ `860070c4acbcb85fd5c4334628584372bdd082ca`
+`main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
 
-## Candidate commit
-`07e20fbfff36e181076d237d0596ef6f25b40951`
+## Final HEAD
+`c7f18d042f3e7ad2ef350be6b394fda3525596ba`
 
-## Approach correction commit
-`4d38a405729fb5766a5498e91436896ef5efda6b`
+## GP-S28 commits (base → tip)
+| SHA | Summary |
+|-----|---------|
+| `cd83858` | Add StorageComponent, MainBase host, Worker haul drop-off threat write |
+| `8080646` | Record candidate SHA in docs |
+| `61f69df` | Diagnostic scenario TeamId registry + coherent spawn |
+| `b884080` | Record diagnostic correction SHA |
+| `caf5bf0` | Diagnostic spawn only on reachable NavMesh |
+| `fe2048b` | Record nav-reachability SHA |
+| `c59b120` | MainBase registry uniqueness + contract team isolation |
+| `38f9890` | Record registry uniqueness SHA |
+| `7f81d19` | ResourceNode EndPlay reentrant occupancy cleanup |
+| `6a73b70` | Record EndPlay cleanup SHA |
+| `4b5331c` | Contract runner isolation / ownership / async null-safety |
+| `b367529` | Record isolation SHA |
+| `a3a9c87` | Hauling contract local navigable geometry |
+| `9daa6bf` | Record hauling geometry SHA |
+| `c7f18d0` | Finalize READY_FOR_MERGE docs + build record |
 
-## Finalization commit
-`03ced125fed4081f933ce3074ceb50ea344cedb0`
+## Operator validation result
+**PASS** (operator-confirmed)
 
-## Full operator validation matrix
-| Check | Result |
-| --- | --- |
-| Immediate in-range Mine | **PASS** |
-| First-cycle delay | **PASS** |
-| Cargo 50/50 CargoFull | **PASS** |
-| Slot release / timer stop | **PASS** |
-| No automatic unload | **PASS** |
-| Move interruption | **PASS** |
-| FIFO 4+1 + promotion | **PASS** |
-| Depleted transfer 5 | **PASS** |
-| EndPlay cleanup | **PASS** |
-| Long-distance safe approach | **PASS** (see below) |
-| `gp.Worker.RunContractTest` | **PASS** Failures=0 |
-| `gp.Mining.RunContractTest` | **PASS** Failures=0 |
-| `gp.Cargo.RunContractTest` | **PASS** Failures=0 |
-| Editor alive | **yes** |
+- Navigable diagnostic scenario; unique MainBase registry; Team1 operator preserved; contract Team2 remap; duplicate rejected; cleanup safe
+- Runtime loop: Mining → CargoFull 50/50 → ReturnToBase → DropOff → ThreatDelta=25 (Accepted=50 × 0.5) → ReturnToDeposit → Mining
+- Storage: 5×100=500, Ready on full container, overflow LOST, Accepted-only threat; no launch/orbital/score
+- EndPlay occupancy: no ranged-for ensure; clean PIE teardown
+- Contract infra: mutual exclusion, ownership cleanup, null-safe stages, sequential suite
 
-## Exact manual long-distance scenario
-Worker=`GP_Worker_3`; Move to (3000,3000,100) → Reached (2976.84,2960.69,88).  
-Mine `BP_ResourceNode_AuthoredExample_C_1` @ (1220,-1500,40); InitialDistance=4794.4; Range=200.
+## Isolation result
+`gp.Resource.RunContractIsolationContractTest` → **Complete Failures=0**
 
-Safe approach: Destination=(1263.66,-1389.13,88); DesiredHoriz=119.2; **PredictedWorst=175.8**; Acc=50; Safety=25; Attempt=0.
+## Regression suite result
+`gp.Resource.RunS28RegressionSuite` → **GP-S28 RegressionSuite Complete Failures=0**
 
-Arrival Final=(1281.92,-1342.79,88) → MineApproachReached → MineBegin; **ActualDistance=175.6**; Range=200; Result=Started → terminal CargoFull (MineTerminal NewState=3 Reason=2).
+## PIE teardown result
+**PASS** (operator) — no ensure / AV; timers and node refs cleared; CrowdFollowing Recast warning non-blocking
 
-## Contract results (finalization re-run)
-- Worker: `Complete Failures=0`
-- Mining: `Complete Failures=0`
-- Cargo: `Complete Failures=0`
+## Builds
+| Target | Result |
+|--------|--------|
+| GPEditor Win64 Development + UHT | **PASSED** |
+| GP Win64 Development | **PASSED** |
+| GP Win64 Shipping | **PASSED** |
 
-## Authority review
-Mine orchestration / BeginMining / movement request authority-only via UnitCommandComponent + MiningComponent. No Worker mining RPC. Command validate filters issuers to `AGP_Worker`.
+## Final code review findings
+Reviewed full diff vs `main` @ `4aae012…`:
 
-## Replication review
-Worker uses UnitBase/MobileUnit replication; Mine approach state server-only; Cargo/Mining replicate own state; no client mutation RPC.
+- Authority-only Storage / Threat / registry / haul drop-off mutations
+- Replicated Storage containers + per-team threat array + legacy scalar mirror
+- MainBase via GameState registry only (no `GetActorOfClass` gameplay lookup)
+- Duplicate RegisterMainBase rejected without Add; unique per playable TeamId
+- BuildingBase/MainBase `PrimaryActorTick` off; Storage no permanent Tick
+- ResourceNode EndPlay: snapshot → clear → guard → notify
+- Contract OwnerTag cleanup; coordinator single-token; null-safe AdvanceStage
+- Hauling late stages scenario-relative NavMesh geometry (no `-53000` strip)
+- No OrbitalFerronite / FerroniteScore / launch execution; Launching scaffold only
+- No Slice 7 / combat / UI / map / Blueprint / LFS changes in this branch
 
-## Command serial review
-Held.CommandSerial = ActiveMineSerial; stale OnMovementResult ignored; replace ResetMineExecutor; corrective keeps same serial with Attempt counter.
+No blocking issues. Ready for merge.
 
-## Approach geometry proof
-`D_h = sqrt(Range²−ΔZ²) − Acc − 25`; PredictedWorst=`sqrt((D_h+Acc)²+ΔZ²) < Range`. Operator: PredictedWorst=175.8, Actual=175.6 &lt; 200. Mining InteractionRangeCm remains strict 200 (unchanged).
+## Production files changed
+- `Buildings/GPBuildingBase.*`, `GPMainBase.*`
+- `Game/GPGameState.*` — registry + per-team threat
+- `Resources/GPStorageComponent.*`, `GPResourceNode.*` (EndPlay)
+- `Units/GPUnitCommandComponent.*`, `GPWorker.*` (haul orchestration), `GPUnitBase.*` (TeamId notify)
 
-## Corrective-attempt policy
-At most one deeper corrective RequestMove after OOR arrival; no slot/timer until success; no infinite retry.
+## Diagnostic / test infrastructure changed
+- `Resources/GPResourceLoopDiagnostics.*`
+- `Debug/GPContractTestCoordinator.*`, `GPContractIsolationAndSuite.cpp`
+- Mining/Storage/Cargo/Worker contract runners + `gp.Resource.RunS28RegressionSuite`
 
-## Timer / tick policy
-No permanent Worker actor tick; movement tick only while moving; mining timer only in Mining; no distance polling Tick. Contract wait uses time-based timeout + sparse progress logs.
+## Docs changed
+- `Claude_Tasks/GP-S28_Storage_Threat.md`
+- `AI_Project_Log.md`
+- `Cursor_Work_Report.md` (this file)
 
-## Interruption / idempotency
-Any new command ResetMineExecutor (StopMining + clear approach). Duplicate same-target Mine while Approaching/Active/Mining/Waiting → idempotent.
+## Map / content / LFS
+**Unchanged**
 
-## FIFO review
-ResourceNode MaxConcurrentMiners=4; Waiting→Active via occupancy events; Worker activity derived from Mining state.
+## Deferred (GP-S36+)
+Container launch; OrbitalFerronite; FerroniteScore; Threat decrease on launch; VFX/UI/timers
 
-## Lifecycle review
-EndPlay/OwnerDied ResetMineExecutor; runner reentrancy guard + world cleanup / BeginDestroy; movement wait timeout.
+## No Slice 7 work
+Combat reconciliation explicitly deferred until after S28 merge.
 
-## Regressions
-Controller Tick unchanged; Move/Attack paths intact aside from Mine reset hook; ResourceNode AActor no ASC/team/permanent Tick; mining 10/1/200; cargo 50; MaxConcurrentMiners=4; StopMining unbind-before-release + `bIsStoppingMining` intact; no CarriedFerronite; no BP/map/projectile/LFS changes.
+## Git status
+Clean working tree; branch synced with `origin/feature/gp-s28-storage-threat`; `main` untouched; no PR
 
-## Files changed during finalization
-- `Docs/Development/Claude_Tasks/GP-S27_Worker.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
-- C++ unchanged at finalization
+## Final commit SHA
+`c7f18d042f3e7ad2ef350be6b394fda3525596ba`
 
-## GPEditor / UHT
-**not rerun** (no C++ changes during finalization)
-
-## GP Win64 Development
-**PASSED**
-
-## GP Win64 Shipping
-**PASSED**
-
-## Map unchanged
-Yes.
-
-## LFS unchanged
-Yes.
-
-## Scope exclusions
-No Storage; return-to-base; ThreatValue; Worker Blueprint; map; projectiles; GP-S28; PR/merge/main.
-
-## Merge readiness
-**READY_FOR_MAIN_MERGE** when operator requests. Do not merge in this close-out.
-
-## Known limitations
-- No Worker UnitDefinition / Blueprint asset
-- No `GP.Capability.Mine` tag (class + `GP.Unit.Type.Worker`)
-- Repair / Storage / return-to-base deferred to later stages
-- Attack still inherited if commanded (no auto-attack)
-
-## Next canonical stage
-**GP-S28 — StorageComponent + FerroniteThreatValue**
+## Status
+**GP-S28_READY_FOR_MERGE**

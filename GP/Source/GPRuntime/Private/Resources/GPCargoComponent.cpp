@@ -16,6 +16,7 @@
 #endif
 
 #if !UE_BUILD_SHIPPING
+#include "Debug/GPContractTestCoordinator.h"
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
 #endif
@@ -740,11 +741,17 @@ namespace GPCargoDebug
 			UE_LOG(LogGPCargo, Warning, TEXT("GP Cargo.RunContractTest: rejected on client"));
 			return;
 		}
+		GPContractTestCoordinator::FExecutionToken Token;
+		if (!GPContractTestCoordinator::TryAcquire(World, TEXT("CargoContract"), TEXT("Cargo"), Token))
+		{
+			return;
+		}
 
 		UGP_CargoComponent* Cargo = EnsureCargo(World, FString(), true);
 		if (Cargo == nullptr)
 		{
 			UE_LOG(LogGPCargo, Error, TEXT("GP Cargo.RunContractTest: failed to obtain cargo host"));
+			GPContractTestCoordinator::Release(Token.ExecutionId, 1, false, TEXT("CargoHostMissing"));
 			return;
 		}
 
@@ -802,6 +809,7 @@ namespace GPCargoDebug
 			Failures,
 			*GetNameSafe(Cargo->GetOwner()),
 			Cap);
+		GPContractTestCoordinator::Release(Token.ExecutionId, Failures, false, TEXT("None"));
 	}
 
 	static FAutoConsoleCommandWithWorldAndArgs GCargoInspectCommand(

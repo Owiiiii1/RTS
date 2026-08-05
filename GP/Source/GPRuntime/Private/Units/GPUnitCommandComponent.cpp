@@ -3,16 +3,19 @@
 #include "Units/GPUnitCommandComponent.h"
 
 #include "AttributeSets/GPUnitAttributeSet.h"
+#include "Buildings/GPMainBase.h"
 #include "Combat/GPCombatPresentationComponent.h"
 #include "Combat/GPDamageApplication.h"
 #include "Command/GPUnitCommand.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
+#include "Game/GPGameState.h"
 #include "GameFramework/Actor.h"
 #include "Resources/GPCargoComponent.h"
 #include "Resources/GPMiningComponent.h"
 #include "Resources/GPResourceDefinition.h"
 #include "Resources/GPResourceNode.h"
+#include "Resources/GPStorageComponent.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPMobileUnit.h"
 #include "Units/GPMovementComponent.h"
@@ -800,11 +803,111 @@ void UGP_UnitCommandComponent::DebugForceNextMineArrivalOutOfRangeOnce()
 {
 	bDebugForceNextMineArrivalOutOfRange = true;
 }
+
+void UGP_UnitCommandComponent::DebugForceNextHaulArrivalOutOfRangeOnce()
+{
+	bDebugForceNextHaulArrivalOutOfRange = true;
+}
 #endif
 
-bool UGP_UnitCommandComponent::TryMakeMineApproachDestination(
+const TCHAR* UGP_UnitCommandComponent::HaulStateToString(EGP_HaulExecutionState State)
+{
+	switch (State)
+	{
+	case EGP_HaulExecutionState::Idle: return TEXT("Idle");
+	case EGP_HaulExecutionState::ReturningToBase: return TEXT("ReturningToBase");
+	case EGP_HaulExecutionState::DroppingOff: return TEXT("DroppingOff");
+	case EGP_HaulExecutionState::ReturningToDeposit: return TEXT("ReturningToDeposit");
+	case EGP_HaulExecutionState::WaitingForStorage: return TEXT("WaitingForStorage");
+	case EGP_HaulExecutionState::Failed: return TEXT("Failed");
+	default: return TEXT("Unknown");
+	}
+}
+
+EGP_HaulExecutionState UGP_UnitCommandComponent::GetHaulExecutionState() const
+{
+	return HaulState;
+}
+
+uint32 UGP_UnitCommandComponent::GetActiveHaulSerial() const
+{
+	return ActiveHaulSerial;
+}
+
+AGP_ResourceNode* UGP_UnitCommandComponent::GetLastHaulDeposit() const
+{
+	return LastHaulDeposit.Get();
+}
+
+AGP_MainBase* UGP_UnitCommandComponent::GetHaulMainBase() const
+{
+	return HaulMainBase.Get();
+}
+
+bool UGP_UnitCommandComponent::IsHaulActive() const
+{
+	return HaulState != EGP_HaulExecutionState::Idle
+		&& HaulState != EGP_HaulExecutionState::Failed
+		&& ActiveHaulSerial != 0;
+}
+
+bool UGP_UnitCommandComponent::ShouldReturnToDepositAfterHaul() const
+{
+	return bShouldReturnToDepositAfterHaul;
+}
+
+float UGP_UnitCommandComponent::GetLastHaulAcceptedAmount() const
+{
+	return LastHaulAcceptedAmount;
+}
+
+float UGP_UnitCommandComponent::GetLastHaulRejectedAmount() const
+{
+	return LastHaulRejectedAmount;
+}
+
+float UGP_UnitCommandComponent::GetLastHaulThreatDelta() const
+{
+	return LastHaulThreatDelta;
+}
+
+FVector UGP_UnitCommandComponent::GetHaulApproachDestination() const
+{
+	return HaulApproachDestination;
+}
+
+float UGP_UnitCommandComponent::GetHaulApproachDesiredDistance() const
+{
+	return HaulApproachDesiredDistance;
+}
+
+int32 UGP_UnitCommandComponent::GetHaulApproachAttempt() const
+{
+	return HaulApproachAttempt;
+}
+
+float UGP_UnitCommandComponent::GetHaulLastArrivalDistance() const
+{
+	return HaulLastArrivalDistance;
+}
+
+float UGP_UnitCommandComponent::GetHaulDropOffRangeCm() const
+{
+	return HaulDropOffRangeCm;
+}
+
+bool UGP_UnitCommandComponent::IsActiveHaulChainForDeposit(const AGP_ResourceNode* Node) const
+{
+	if (!IsValid(Node) || ActiveHaulSerial == 0 || !IsHaulActive())
+	{
+		return false;
+	}
+	return LastHaulDeposit.Get() == Node;
+}
+
+bool UGP_UnitCommandComponent::TryMakeRangeApproachDestination(
 	const AActor* Owner,
-	const AGP_ResourceNode* Node,
+	const AActor* Target,
 	float InteractionRangeCm,
 	float AcceptanceRadius,
 	float ExtraInwardMarginCm,
@@ -816,7 +919,7 @@ bool UGP_UnitCommandComponent::TryMakeMineApproachDestination(
 	OutDesiredHorizontalDistance = -1.0f;
 	OutPredictedWorstCaseDistance = -1.0f;
 
-	if (Owner == nullptr || Node == nullptr
+	if (Owner == nullptr || Target == nullptr
 		|| !FMath::IsFinite(InteractionRangeCm) || InteractionRangeCm <= 0.0f
 		|| !FMath::IsFinite(AcceptanceRadius) || AcceptanceRadius < 0.0f)
 	{
@@ -824,11 +927,11 @@ bool UGP_UnitCommandComponent::TryMakeMineApproachDestination(
 	}
 
 	const FVector OwnerLocation = Owner->GetActorLocation();
-	const FVector NodeLocation = Node->GetActorLocation();
-	const float DeltaZ = OwnerLocation.Z - NodeLocation.Z;
+	const FVector TargetLocation = Target->GetActorLocation();
+	const float DeltaZ = OwnerLocation.Z - TargetLocation.Z;
 	const float AbsDeltaZ = FMath::Abs(DeltaZ);
 
-	// Movement completes in a 2D acceptance circle; mining validates 3D distance.
+	// Movement completes in a 2D acceptance circle; interaction validates 3D distance.
 	// Require: sqrt((D_h + Acc)^2 + DeltaZ^2) < Range
 	const float RangeSq = FMath::Square(InteractionRangeCm);
 	const float DeltaZSq = FMath::Square(AbsDeltaZ);
@@ -845,18 +948,39 @@ bool UGP_UnitCommandComponent::TryMakeMineApproachDestination(
 	}
 
 	const float DesiredHorizontal = MaxHorizontalBudget - TotalInward;
-	FVector Away = OwnerLocation - NodeLocation;
+	FVector Away = OwnerLocation - TargetLocation;
 	Away.Z = 0.0f;
 	if (!Away.Normalize())
 	{
 		Away = FVector::ForwardVector;
 	}
 
-	const FVector DestinationXY = NodeLocation + Away * DesiredHorizontal;
+	const FVector DestinationXY = TargetLocation + Away * DesiredHorizontal;
 	OutDestination = FVector(DestinationXY.X, DestinationXY.Y, OwnerLocation.Z);
 	OutDesiredHorizontalDistance = DesiredHorizontal;
 	OutPredictedWorstCaseDistance = FMath::Sqrt(FMath::Square(DesiredHorizontal + AcceptanceRadius) + DeltaZSq);
 	return OutPredictedWorstCaseDistance < InteractionRangeCm;
+}
+
+bool UGP_UnitCommandComponent::TryMakeMineApproachDestination(
+	const AActor* Owner,
+	const AGP_ResourceNode* Node,
+	float InteractionRangeCm,
+	float AcceptanceRadius,
+	float ExtraInwardMarginCm,
+	FVector& OutDestination,
+	float& OutDesiredHorizontalDistance,
+	float& OutPredictedWorstCaseDistance) const
+{
+	return TryMakeRangeApproachDestination(
+		Owner,
+		Node,
+		InteractionRangeCm,
+		AcceptanceRadius,
+		ExtraInwardMarginCm,
+		OutDestination,
+		OutDesiredHorizontalDistance,
+		OutPredictedWorstCaseDistance);
 }
 
 bool UGP_UnitCommandComponent::RequestMineApproachMove(
@@ -990,6 +1114,54 @@ float UGP_UnitCommandComponent::ResolveMineInteractionRangeCm(
 	return 200.0f;
 }
 
+void UGP_UnitCommandComponent::ResetHaulExecutor()
+{
+	if (bFinishingHaul)
+	{
+		return;
+	}
+
+	TGuardValue<bool> Guard(bFinishingHaul, true);
+	HaulState = EGP_HaulExecutionState::Idle;
+	ActiveHaulSerial = 0;
+	LastHaulDeposit.Reset();
+	HaulMainBase.Reset();
+	bShouldReturnToDepositAfterHaul = false;
+	HaulApproachDestination = FVector::ZeroVector;
+	HaulApproachDesiredDistance = -1.0f;
+	HaulPredictedWorstCaseDistance = -1.0f;
+	HaulLastArrivalDistance = -1.0f;
+	HaulLastArrivalRangeError = -1.0f;
+	HaulApproachAttempt = 0;
+	HaulDropOffRangeCm = 400.0f;
+#if !UE_BUILD_SHIPPING
+	bDebugForceNextHaulArrivalOutOfRange = false;
+#endif
+}
+
+void UGP_UnitCommandComponent::ResetHaulExecutorForReplacement(
+	const TOptional<FGP_StoredUnitCommand>& PreviousCommand)
+{
+	if (HaulState == EGP_HaulExecutionState::Idle && ActiveHaulSerial == 0)
+	{
+		return;
+	}
+
+	const AActor* Owner = GetOwner();
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution HaulCancelled: Unit=%s HaulSerial=%u Deposit=%s MainBase=%s Reason=CommandReplaced PreviousState=%s Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		ActiveHaulSerial,
+		*GetNameSafe(LastHaulDeposit.Get()),
+		*GetNameSafe(HaulMainBase.Get()),
+		HaulStateToString(HaulState),
+		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+
+	(void)PreviousCommand;
+	ResetHaulExecutor();
+}
+
 void UGP_UnitCommandComponent::ResetMineExecutor()
 {
 	if (bFinishingMine)
@@ -1026,25 +1198,44 @@ void UGP_UnitCommandComponent::ResetMineExecutor()
 #if !UE_BUILD_SHIPPING
 	bDebugForceNextMineArrivalOutOfRange = false;
 #endif
+
+	ResetHaulExecutor();
 }
 
 void UGP_UnitCommandComponent::ResetMineExecutorForReplacement(
 	const TOptional<FGP_StoredUnitCommand>& PreviousCommand)
 {
-	if (MineState == EGP_MineExecutionState::Idle && ActiveMineSerial == 0)
+	const bool bMineIdle = MineState == EGP_MineExecutionState::Idle && ActiveMineSerial == 0;
+	const bool bHaulIdle = HaulState == EGP_HaulExecutionState::Idle && ActiveHaulSerial == 0;
+	if (bMineIdle && bHaulIdle)
 	{
 		return;
 	}
 
 	const AActor* Owner = GetOwner();
-	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution MineCancelled: Unit=%s MineSerial=%u Target=%s Reason=CommandReplaced PreviousState=%s Role=%s NetMode=%s"),
-		*GetNameSafe(Owner),
-		ActiveMineSerial,
-		*GetNameSafe(MineTarget.Get()),
-		MineStateToString(MineState),
-		GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
-		GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+	if (!bMineIdle)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution MineCancelled: Unit=%s MineSerial=%u Target=%s Reason=CommandReplaced PreviousState=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			ActiveMineSerial,
+			*GetNameSafe(MineTarget.Get()),
+			MineStateToString(MineState),
+			GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+	}
+	if (!bHaulIdle)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution HaulCancelled: Unit=%s HaulSerial=%u Deposit=%s MainBase=%s Reason=CommandReplaced PreviousState=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			ActiveHaulSerial,
+			*GetNameSafe(LastHaulDeposit.Get()),
+			*GetNameSafe(HaulMainBase.Get()),
+			HaulStateToString(HaulState),
+			GPUnitCommandStatePrivate::RoleToString(Owner != nullptr ? Owner->GetLocalRole() : ROLE_None),
+			GPUnitCommandStatePrivate::NetModeToString(GPUnitCommandStatePrivate::GetOwnerNetMode(Owner)));
+	}
 
 	(void)PreviousCommand;
 	ResetMineExecutor();
@@ -1069,6 +1260,15 @@ bool UGP_UnitCommandComponent::TryAcceptIdempotentMineCommand(const FGP_UnitComm
 		&& HeldCommand.GetValue().TargetActor.Get() == Node
 		&& ActiveMineSerial != 0
 		&& MineState != EGP_MineExecutionState::Idle)
+	{
+		return true;
+	}
+
+	// Same deposit while hauling: accept, do not restart a second route.
+	if (IsActiveHaulChainForDeposit(Node)
+		&& HeldCommand.IsSet()
+		&& HeldCommand.GetValue().CommandTag == MineTag
+		&& HeldCommand.GetValue().TargetActor.Get() == Node)
 	{
 		return true;
 	}
@@ -1124,21 +1324,21 @@ bool UGP_UnitCommandComponent::TryRejectMineCommandBeforeAccept(const FGP_UnitCo
 		return true;
 	}
 
-	if (Cargo->IsFull())
+	AGP_ResourceNode* Node = Cast<AGP_ResourceNode>(Command.TargetActor);
+	if (!IsValid(Node) || Node->IsActorBeingDestroyed())
 	{
 		UE_LOG(LogGPUnitCommandExecution, Warning,
-			TEXT("GP UnitCommandExecution MineRejected: Unit=%s Reason=CargoFull Role=%s NetMode=%s"),
+			TEXT("GP UnitCommandExecution MineRejected: Unit=%s Reason=InvalidTarget Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
 		return true;
 	}
 
-	AGP_ResourceNode* Node = Cast<AGP_ResourceNode>(Command.TargetActor);
-	if (!IsValid(Node) || Node->IsActorBeingDestroyed())
+	if (Cargo->IsFull() && !IsActiveHaulChainForDeposit(Node))
 	{
 		UE_LOG(LogGPUnitCommandExecution, Warning,
-			TEXT("GP UnitCommandExecution MineRejected: Unit=%s Reason=InvalidTarget Role=%s NetMode=%s"),
+			TEXT("GP UnitCommandExecution MineRejected: Unit=%s Reason=CargoFull Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
@@ -1171,6 +1371,15 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	{
 		ResetMineExecutor();
 		return;
+	}
+
+	// Post-haul return-to-deposit ends when mining execution begins.
+	if (HaulState == EGP_HaulExecutionState::ReturningToDeposit)
+	{
+		HaulState = EGP_HaulExecutionState::Idle;
+		ActiveHaulSerial = 0;
+		bShouldReturnToDepositAfterHaul = false;
+		HaulMainBase.Reset();
 	}
 
 	const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
@@ -1239,6 +1448,15 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	MineTarget = Node;
 	MineState = EGP_MineExecutionState::Active;
 	ActiveMineSerial = MineSerial;
+	// Successful re-entry into mining ends the haul leg of the chain.
+	if (HaulState == EGP_HaulExecutionState::ReturningToDeposit
+		|| HaulState == EGP_HaulExecutionState::DroppingOff)
+	{
+		HaulState = EGP_HaulExecutionState::Idle;
+		ActiveHaulSerial = 0;
+		HaulMainBase.Reset();
+		bShouldReturnToDepositAfterHaul = false;
+	}
 	BindMiningStateEvents(Mining);
 
 	const EGP_BeginMiningResult BeginResult = Mining->BeginMining(Node);
@@ -1406,6 +1624,498 @@ bool UGP_UnitCommandComponent::TryConsumeMineMovementResult(
 	return true;
 }
 
+void UGP_UnitCommandComponent::StartHaulReturnToBase(
+	uint32 ChainSerial,
+	AGP_ResourceNode* Deposit,
+	bool bReturnToDeposit)
+{
+	AActor* Owner = GetOwner();
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+	AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+	if (Worker == nullptr || ChainSerial == 0)
+	{
+		FinishHaulChain(true);
+		return;
+	}
+
+	UWorld* World = Owner->GetWorld();
+	AGP_GameState* GameState = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	AGP_MainBase* MainBase = GameState != nullptr
+		? GameState->FindMainBaseForTeam(Worker->GetTeamId())
+		: nullptr;
+	UGP_StorageComponent* Storage = IsValid(MainBase) ? MainBase->GetStorageComponent() : nullptr;
+	if (!IsValid(MainBase) || !IsValid(Storage))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution HaulFailed: Unit=%s HaulSerial=%u Reason=MissingMainBaseOrStorage TeamId=%d Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			ChainSerial,
+			Worker->GetTeamId(),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		HaulState = EGP_HaulExecutionState::Failed;
+		ActiveHaulSerial = ChainSerial;
+		ActiveMineSerial = ChainSerial;
+		FinishHaulChain(true);
+		return;
+	}
+
+	ActiveMineSerial = ChainSerial;
+	ActiveHaulSerial = ChainSerial;
+	LastHaulDeposit = Deposit;
+	HaulMainBase = MainBase;
+	bShouldReturnToDepositAfterHaul = bReturnToDeposit;
+	HaulDropOffRangeCm = MainBase->GetDropOffRangeCm();
+	HaulApproachAttempt = 0;
+	LastHaulAcceptedAmount = 0.0f;
+	LastHaulRejectedAmount = 0.0f;
+	LastHaulThreatDelta = 0.0f;
+
+	const float Distance = FVector::Dist(Owner->GetActorLocation(), MainBase->GetActorLocation());
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution HaulReturnToBase: Unit=%s HaulSerial=%u Deposit=%s MainBase=%s Distance=%.1f DropOffRange=%.1f ReturnToDeposit=%s Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		ChainSerial,
+		*GetNameSafe(Deposit),
+		*GetNameSafe(MainBase),
+		Distance,
+		HaulDropOffRangeCm,
+		bReturnToDeposit ? TEXT("true") : TEXT("false"),
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+	if (Distance <= HaulDropOffRangeCm)
+	{
+		if (UGP_MovementComponent* Movement = ResolveMovementComponent())
+		{
+			if (Movement->IsMoving())
+			{
+				Movement->StopMove(EGP_MovementStopReason::CommandReplaced);
+			}
+		}
+		BeginDropOffAtMainBase(ChainSerial);
+		return;
+	}
+
+	if (!RequestHaulApproachMove(Owner, MainBase, ChainSerial, 0.0f, TEXT("Primary")))
+	{
+		HaulState = EGP_HaulExecutionState::Failed;
+		FinishHaulChain(true);
+	}
+}
+
+bool UGP_UnitCommandComponent::RequestHaulApproachMove(
+	AActor* Owner,
+	AGP_MainBase* MainBase,
+	uint32 HaulSerial,
+	float ExtraInwardMarginCm,
+	const TCHAR* LogLabel)
+{
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+	UGP_MovementComponent* Movement = ResolveMovementComponent();
+	if (Movement == nullptr || !IsValid(MainBase))
+	{
+		return false;
+	}
+
+	const float DropOffRange = MainBase->GetDropOffRangeCm();
+	const float AcceptanceRadius = Movement->AcceptanceRadius;
+	FVector Destination = FVector::ZeroVector;
+	float DesiredHorizontal = -1.0f;
+	float PredictedWorst = -1.0f;
+	if (!TryMakeRangeApproachDestination(
+		Owner,
+		MainBase,
+		DropOffRange,
+		AcceptanceRadius,
+		ExtraInwardMarginCm,
+		Destination,
+		DesiredHorizontal,
+		PredictedWorst))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution HaulApproachGeometryFailed: Unit=%s HaulSerial=%u MainBase=%s Label=%s Range=%.1f Acc=%.1f Safety=%.1f ExtraInward=%.1f Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			HaulSerial,
+			*GetNameSafe(MainBase),
+			LogLabel,
+			DropOffRange,
+			AcceptanceRadius,
+			WorkerMineApproachSafetyMarginCm,
+			ExtraInwardMarginCm,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return false;
+	}
+
+	const FGP_MovementRequestOutcome Outcome = Movement->RequestMove(Destination, HaulSerial);
+	if (!Outcome.IsAccepted())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution HaulApproachMoveRejected: Unit=%s HaulSerial=%u Label=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			HaulSerial,
+			LogLabel,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return false;
+	}
+
+	HaulApproachDestination = Destination;
+	HaulApproachDesiredDistance = DesiredHorizontal;
+	HaulPredictedWorstCaseDistance = PredictedWorst;
+	HaulDropOffRangeCm = DropOffRange;
+	HaulState = EGP_HaulExecutionState::ReturningToBase;
+	ActiveHaulSerial = HaulSerial;
+	ActiveMineSerial = HaulSerial;
+	HaulMainBase = MainBase;
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution HaulApproachRequested: Unit=%s HaulSerial=%u MainBase=%s Label=%s Attempt=%d Destination=%s DesiredHoriz=%.1f PredictedWorst=%.1f Range=%.1f Acc=%.1f Safety=%.1f Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		HaulSerial,
+		*GetNameSafe(MainBase),
+		LogLabel,
+		HaulApproachAttempt,
+		*Destination.ToCompactString(),
+		DesiredHorizontal,
+		PredictedWorst,
+		DropOffRange,
+		AcceptanceRadius,
+		WorkerMineApproachSafetyMarginCm,
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+	return true;
+}
+
+void UGP_UnitCommandComponent::BeginDropOffAtMainBase(uint32 HaulSerial)
+{
+	AActor* Owner = GetOwner();
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+	AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+	if (Worker == nullptr || HaulSerial == 0 || ActiveHaulSerial != HaulSerial)
+	{
+		return;
+	}
+
+	HaulState = EGP_HaulExecutionState::DroppingOff;
+
+	AGP_MainBase* MainBase = HaulMainBase.Get();
+	UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+	UGP_StorageComponent* Storage = IsValid(MainBase) ? MainBase->GetStorageComponent() : nullptr;
+	if (!IsValid(MainBase) || !IsValid(Storage) || !IsValid(Cargo))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution HaulDropOffFailed: Unit=%s HaulSerial=%u Reason=MissingActors Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			HaulSerial,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		HaulState = EGP_HaulExecutionState::Failed;
+		FinishHaulChain(true);
+		return;
+	}
+
+	if (Worker->GetTeamId() != MainBase->GetTeamId() || Worker->GetTeamId() < 1)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution HaulDropOffFailed: Unit=%s HaulSerial=%u Reason=TeamMismatch WorkerTeam=%d BaseTeam=%d Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			HaulSerial,
+			Worker->GetTeamId(),
+			MainBase->GetTeamId(),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		HaulState = EGP_HaulExecutionState::Failed;
+		FinishHaulChain(true);
+		return;
+	}
+
+	float Distance = FVector::Dist(Owner->GetActorLocation(), MainBase->GetActorLocation());
+#if !UE_BUILD_SHIPPING
+	if (bDebugForceNextHaulArrivalOutOfRange)
+	{
+		bDebugForceNextHaulArrivalOutOfRange = false;
+		Distance = MainBase->GetDropOffRangeCm() + 5.0f;
+	}
+#endif
+	HaulLastArrivalDistance = Distance;
+	HaulLastArrivalRangeError = Distance - MainBase->GetDropOffRangeCm();
+	HaulDropOffRangeCm = MainBase->GetDropOffRangeCm();
+
+	if (Distance > HaulDropOffRangeCm)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution HaulArrivalOutOfRange: Unit=%s HaulSerial=%u MainBase=%s Distance=%.1f Range=%.1f Attempt=%d Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			HaulSerial,
+			*GetNameSafe(MainBase),
+			Distance,
+			HaulDropOffRangeCm,
+			HaulApproachAttempt,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+		if (HaulApproachAttempt < 1)
+		{
+			++HaulApproachAttempt;
+			if (RequestHaulApproachMove(Owner, MainBase, HaulSerial, WorkerMineApproachSafetyMarginCm, TEXT("Corrective")))
+			{
+				return;
+			}
+		}
+
+		HaulState = EGP_HaulExecutionState::Failed;
+		FinishHaulChain(true);
+		return;
+	}
+
+	const float CargoAmount = Cargo->GetCurrentCargoAmount();
+	if (!(CargoAmount > KINDA_SMALL_NUMBER))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution HaulDropOffEmptyCargo: Unit=%s HaulSerial=%u Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			HaulSerial,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		FinishHaulChain(true);
+		return;
+	}
+
+	const FGP_StorageAddResult AddResult = Storage->AddPlanetaryFerronite(CargoAmount);
+	LastHaulAcceptedAmount = AddResult.Accepted;
+	LastHaulRejectedAmount = AddResult.Rejected;
+
+	if (AddResult.Accepted > KINDA_SMALL_NUMBER)
+	{
+		const float Removed = Cargo->RemoveCargo(AddResult.Accepted);
+		if (!FMath::IsNearlyEqual(Removed, AddResult.Accepted, 0.01f))
+		{
+			UE_LOG(LogGPUnitCommandExecution, Error,
+				TEXT("GP UnitCommandExecution HaulInvariantFailure: Unit=%s HaulSerial=%u Accepted=%.3f Removed=%.3f — rolling back storage"),
+				*GetNameSafe(Owner),
+				HaulSerial,
+				AddResult.Accepted,
+				Removed);
+			Storage->RemovePlanetaryFerronite(AddResult.Accepted);
+			HaulState = EGP_HaulExecutionState::Failed;
+			FinishHaulChain(true);
+			return;
+		}
+
+		const float ThreatPerUnit = Storage->GetThreatPerStoredUnit();
+		LastHaulThreatDelta = AddResult.Accepted * ThreatPerUnit;
+		if (UWorld* World = Owner->GetWorld())
+		{
+			if (AGP_GameState* GameState = World->GetGameState<AGP_GameState>())
+			{
+				GameState->AddFerroniteThreatValueForTeam(Worker->GetTeamId(), LastHaulThreatDelta);
+			}
+		}
+	}
+
+	if (AddResult.Rejected > KINDA_SMALL_NUMBER)
+	{
+		const float Lost = Cargo->ClearCargo();
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution HaulLostOverflow: Unit=%s HaulSerial=%u Accepted=%.3f Rejected=%.3f LostCargo=%.3f StorageFull=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			HaulSerial,
+			AddResult.Accepted,
+			AddResult.Rejected,
+			Lost,
+			AddResult.bStorageFullAfter ? TEXT("true") : TEXT("false"),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+	}
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution HaulDropOffComplete: Unit=%s HaulSerial=%u Accepted=%.3f Rejected=%.3f ThreatDelta=%.3f ThreatPerUnit=%.3f ReturnToDeposit=%s Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		HaulSerial,
+		LastHaulAcceptedAmount,
+		LastHaulRejectedAmount,
+		LastHaulThreatDelta,
+		Storage->GetThreatPerStoredUnit(),
+		bShouldReturnToDepositAfterHaul ? TEXT("true") : TEXT("false"),
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+	ContinueMineAfterSuccessfulHaul(HaulSerial);
+}
+
+void UGP_UnitCommandComponent::ContinueMineAfterSuccessfulHaul(uint32 ChainSerial)
+{
+	AActor* Owner = GetOwner();
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+
+	const bool bHeldMineSameSerial =
+		HeldCommand.IsSet()
+		&& HeldCommand.GetValue().CommandTag == FGPGameplayTags::Get().Command_Mine
+		&& HeldCommand.GetValue().CommandSerial == ChainSerial;
+
+	AGP_ResourceNode* Deposit = LastHaulDeposit.Get();
+	const bool bDepositOk = IsValid(Deposit) && !Deposit->IsDepleted() && !Deposit->IsActorBeingDestroyed();
+
+	if (bShouldReturnToDepositAfterHaul && bDepositOk && bHeldMineSameSerial)
+	{
+		HaulState = EGP_HaulExecutionState::ReturningToDeposit;
+		HaulMainBase.Reset();
+		HaulApproachAttempt = 0;
+		ActiveHaulSerial = ChainSerial;
+		ActiveMineSerial = ChainSerial;
+		MineTarget = Deposit;
+		MineApproachAttempt = 0;
+
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution HaulReturnToDeposit: Unit=%s ChainSerial=%u Deposit=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			ChainSerial,
+			*GetNameSafe(Deposit),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+		AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+		UGP_MiningComponent* Mining = Worker != nullptr ? Worker->GetMiningComponent() : nullptr;
+		const float InteractionRange = ResolveMineInteractionRangeCm(Mining, Deposit);
+		const float Distance = FVector::Dist(Owner->GetActorLocation(), Deposit->GetActorLocation());
+		if (Distance <= InteractionRange)
+		{
+			// Haul phase ends when mining resumes; keep haul diagnostics fields.
+			HaulState = EGP_HaulExecutionState::Idle;
+			ActiveHaulSerial = 0;
+			bShouldReturnToDepositAfterHaul = false;
+			BeginMiningAtHeldTarget(ChainSerial);
+			return;
+		}
+
+		if (!RequestMineApproachMove(Owner, Deposit, ChainSerial, 0.0f, TEXT("PostHaul")))
+		{
+			FinishHaulChain(true);
+		}
+		return;
+	}
+
+	FinishHaulChain(true);
+}
+
+void UGP_UnitCommandComponent::FinishHaulChain(bool bClearHeld)
+{
+	if (bFinishingHaul)
+	{
+		return;
+	}
+
+	TGuardValue<bool> Guard(bFinishingHaul, true);
+	AActor* Owner = GetOwner();
+	const uint32 Serial = ActiveHaulSerial != 0 ? ActiveHaulSerial : ActiveMineSerial;
+	const EGP_HaulExecutionState Previous = HaulState;
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution HaulFinished: Unit=%s HaulSerial=%u PreviousState=%s ClearHeld=%s Accepted=%.3f Rejected=%.3f ThreatDelta=%.3f"),
+		*GetNameSafe(Owner),
+		Serial,
+		HaulStateToString(Previous),
+		bClearHeld ? TEXT("true") : TEXT("false"),
+		LastHaulAcceptedAmount,
+		LastHaulRejectedAmount,
+		LastHaulThreatDelta);
+
+	HaulState = EGP_HaulExecutionState::Idle;
+	ActiveHaulSerial = 0;
+	LastHaulDeposit.Reset();
+	HaulMainBase.Reset();
+	bShouldReturnToDepositAfterHaul = false;
+	HaulApproachDestination = FVector::ZeroVector;
+	HaulApproachDesiredDistance = -1.0f;
+	HaulPredictedWorstCaseDistance = -1.0f;
+	HaulLastArrivalDistance = -1.0f;
+	HaulLastArrivalRangeError = -1.0f;
+	HaulApproachAttempt = 0;
+
+	if (bClearHeld
+		&& Serial != 0
+		&& HeldCommand.IsSet()
+		&& HeldCommand.GetValue().CommandTag == FGPGameplayTags::Get().Command_Mine
+		&& HeldCommand.GetValue().CommandSerial == Serial)
+	{
+		ClearHeldCommand();
+	}
+
+	// Clear mine chain identity without recursing into ResetHaulExecutor.
+	UnbindMiningStateEvents();
+	MineState = EGP_MineExecutionState::Idle;
+	ActiveMineSerial = 0;
+	MineTarget.Reset();
+	MineApproachAttempt = 0;
+}
+
+bool UGP_UnitCommandComponent::TryConsumeHaulMovementResult(
+	uint32 Serial,
+	EGP_MovementResult Result,
+	EGP_MovementResultReason Reason)
+{
+	if (ActiveHaulSerial == 0 || Serial != ActiveHaulSerial)
+	{
+		return false;
+	}
+
+	if (HaulState != EGP_HaulExecutionState::ReturningToBase
+		&& HaulState != EGP_HaulExecutionState::WaitingForStorage)
+	{
+		return false;
+	}
+
+	AActor* Owner = GetOwner();
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+
+	if (Result == EGP_MovementResult::Cancelled)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution HaulApproachCancelled: Unit=%s HaulSerial=%u MovementReason=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			Serial,
+			GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+		if (Reason == EGP_MovementResultReason::CommandReplaced
+			|| Reason == EGP_MovementResultReason::Manual
+			|| Reason == EGP_MovementResultReason::Superseded)
+		{
+			// Command replacement already resets via ResetMineExecutorForReplacement.
+			// Manual/Superseded during haul without Held replacement → fail chain.
+			if (Reason != EGP_MovementResultReason::CommandReplaced)
+			{
+				HaulState = EGP_HaulExecutionState::Failed;
+				FinishHaulChain(true);
+			}
+		}
+		return true;
+	}
+
+	if (Result != EGP_MovementResult::Reached)
+	{
+		return true;
+	}
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution HaulApproachReached: Unit=%s HaulSerial=%u Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		Serial,
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+	BeginDropOffAtMainBase(Serial);
+	return true;
+}
+
 void UGP_UnitCommandComponent::HandleMiningStateChanged(
 	EGP_MiningState PreviousState,
 	EGP_MiningState NewState,
@@ -1438,17 +2148,60 @@ void UGP_UnitCommandComponent::HandleMiningStateChanged(
 		static_cast<int32>(Reason));
 
 	const uint32 Serial = ActiveMineSerial;
-	TGuardValue<bool> Guard(bFinishingMine, true);
-	UnbindMiningStateEvents();
-	MineState = EGP_MineExecutionState::Idle;
-	ActiveMineSerial = 0;
-	MineTarget.Reset();
+	AGP_ResourceNode* DepositBeforeReset = MineTarget.Get();
+	AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+	UGP_CargoComponent* Cargo = Worker != nullptr ? Worker->GetCargoComponent() : nullptr;
+	const float CargoAmount = IsValid(Cargo) ? Cargo->GetCurrentCargoAmount() : 0.0f;
 
-	if (HeldCommand.IsSet()
-		&& HeldCommand.GetValue().CommandTag == FGPGameplayTags::Get().Command_Mine
-		&& HeldCommand.GetValue().CommandSerial == Serial)
+	const bool bHaulCargoFull = NewState == EGP_MiningState::CargoFull;
+	const bool bHaulDepletedPartial =
+		NewState == EGP_MiningState::DepositDepleted && CargoAmount > KINDA_SMALL_NUMBER;
+	// Destroyed/teardown deposit with leftover cargo: haul without return-to-deposit (same as depleted partial).
+	const bool bHaulDestroyedPartial =
+		Reason == EGP_MiningStopReason::TargetEndPlay && CargoAmount > KINDA_SMALL_NUMBER;
+
+	bool bStartHaul = false;
+	bool bReturnToDeposit = false;
 	{
-		ClearHeldCommand();
+		TGuardValue<bool> Guard(bFinishingMine, true);
+		UnbindMiningStateEvents();
+		MineState = EGP_MineExecutionState::Idle;
+		// Keep ActiveMineSerial as haul/mine chain identity for haul terminals.
+		MineTarget.Reset();
+
+		if (bHaulCargoFull || bHaulDepletedPartial || bHaulDestroyedPartial)
+		{
+			bReturnToDeposit =
+				bHaulCargoFull
+				&& IsValid(DepositBeforeReset)
+				&& !DepositBeforeReset->IsDepleted()
+				&& !DepositBeforeReset->IsActorBeingDestroyed()
+				&& !DepositBeforeReset->IsClearingOccupancy();
+			bStartHaul = true;
+		}
+		else
+		{
+			ActiveMineSerial = 0;
+			if (HeldCommand.IsSet()
+				&& HeldCommand.GetValue().CommandTag == FGPGameplayTags::Get().Command_Mine
+				&& HeldCommand.GetValue().CommandSerial == Serial)
+			{
+				ClearHeldCommand();
+			}
+			ResetHaulExecutor();
+		}
+	}
+
+	if (bStartHaul)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution MineTerminalHaul: Unit=%s MineSerial=%u Deposit=%s Cargo=%.1f ReturnToDeposit=%s"),
+			*GetNameSafe(Owner),
+			Serial,
+			*GetNameSafe(DepositBeforeReset),
+			CargoAmount,
+			bReturnToDeposit ? TEXT("true") : TEXT("false"));
+		StartHaulReturnToBase(Serial, DepositBeforeReset, bReturnToDeposit);
 	}
 }
 
@@ -2367,6 +3120,11 @@ void UGP_UnitCommandComponent::HandleMovementResult(
 	EGP_MovementResultReason Reason)
 {
 	if (TryConsumeAttackMovementResult(Serial, Result, Reason))
+	{
+		return;
+	}
+
+	if (TryConsumeHaulMovementResult(Serial, Result, Reason))
 	{
 		return;
 	}

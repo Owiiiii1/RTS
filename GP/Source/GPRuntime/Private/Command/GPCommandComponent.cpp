@@ -7,8 +7,14 @@
 #include "Player/GPPlayerController.h"
 #include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
+#include "Resources/GPResourceNode.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPUnitBase.h"
+
+#if !UE_BUILD_SHIPPING
+#include "EngineUtils.h"
+#include "HAL/IConsoleManager.h"
+#endif
 
 DEFINE_LOG_CATEGORY(LogGPCommandServer);
 
@@ -123,6 +129,20 @@ bool UGP_CommandComponent::BuildSmartCommand(
 	{
 		CommandTag = GPTags.Command_Move;
 	}
+	else if (const AGP_ResourceNode* ResourceNode = Cast<AGP_ResourceNode>(TargetActor))
+	{
+		// Canonical Ferronite deposit: AGP_ResourceNode (AActor), not UnitBase.
+		if (ResourceNode->HasResourceCapabilityTag(GPTags.Resource_Node))
+		{
+			CommandTag = GPTags.Command_Mine;
+			RequestTargetActor = TargetActor;
+		}
+		else
+		{
+			CommandTag = GPTags.Command_Move;
+			RequestTargetActor = nullptr;
+		}
+	}
 	else if (const AGP_UnitBase* TargetUnit = Cast<AGP_UnitBase>(TargetActor))
 	{
 		const int32 TargetTeamId = TargetUnit->GetTeamId();
@@ -135,7 +155,7 @@ bool UGP_CommandComponent::BuildSmartCommand(
 		}
 		else if (TargetUnit->HasCapabilityTag(GPTags.Resource_Node))
 		{
-			// Canonical path: UnitBase CapabilityTags + GP.Resource.Node.
+			// Legacy/hybrid UnitBase path if a unit ever carries Resource.Node.
 			CommandTag = GPTags.Command_Mine;
 			RequestTargetActor = TargetActor;
 		}
@@ -153,8 +173,6 @@ bool UGP_CommandComponent::BuildSmartCommand(
 	}
 	else
 	{
-		// Non-UnitBase: no canonical Resource.Node accessor outside UnitBase CapabilityTags.
-		// Mine mapping deferred for non-UnitBase actors. Deterministic Move fallback.
 		CommandTag = GPTags.Command_Move;
 		RequestTargetActor = nullptr;
 	}
@@ -320,14 +338,50 @@ bool UGP_CommandComponent::ValidateAndNormalizeCommand(
 	}
 	else // Mine
 	{
-		AGP_UnitBase* ResourceUnit = Cast<AGP_UnitBase>(ClientRequest.TargetActor.Get());
-		if (!IsValid(ResourceUnit) || !ResourceUnit->HasCapabilityTag(GPTags.Resource_Node))
+		AActor* TargetActor = ClientRequest.TargetActor.Get();
+		if (!IsValid(TargetActor) || TargetActor->IsActorBeingDestroyed())
 		{
 			return Fail(EGP_CommandRejectReason::InvalidResourceTarget);
 		}
 
-		NormalizedTargetActor = ResourceUnit;
-		NormalizedLocation = ResourceUnit->GetActorLocation();
+		const UWorld* OwnerWorld = GetWorld();
+		if (OwnerWorld == nullptr || TargetActor->GetWorld() != OwnerWorld)
+		{
+			return Fail(EGP_CommandRejectReason::InvalidResourceTarget);
+		}
+
+		AGP_ResourceNode* ResourceNode = Cast<AGP_ResourceNode>(TargetActor);
+		if (ResourceNode != nullptr)
+		{
+			FString MineFail;
+			if (!ResourceNode->CanAcceptMineCommand(true, &MineFail))
+			{
+				UE_LOG(LogGPCommandServer, Verbose,
+					TEXT("GP CommandServer Mine rejected ResourceNode: Target=%s Reason=%s"),
+					*GetNameSafe(ResourceNode),
+					*MineFail);
+				return Fail(EGP_CommandRejectReason::InvalidResourceTarget);
+			}
+
+			NormalizedTargetActor = ResourceNode;
+			NormalizedLocation = ResourceNode->GetActorLocation();
+		}
+		else if (AGP_UnitBase* ResourceUnit = Cast<AGP_UnitBase>(TargetActor))
+		{
+			// Legacy UnitBase resource-capable target (not the Ferronite deposit path).
+			if (!ResourceUnit->HasCapabilityTag(GPTags.Resource_Node))
+			{
+				return Fail(EGP_CommandRejectReason::InvalidResourceTarget);
+			}
+
+			NormalizedTargetActor = ResourceUnit;
+			NormalizedLocation = ResourceUnit->GetActorLocation();
+		}
+		else
+		{
+			return Fail(EGP_CommandRejectReason::InvalidResourceTarget);
+		}
+
 		if (!GPCommandPrivate::IsCommandLocationSane(NormalizedLocation))
 		{
 			return Fail(EGP_CommandRejectReason::InvalidTargetLocation);
@@ -381,3 +435,188 @@ int32 UGP_CommandComponent::DispatchValidatedCommand(const FGP_CommandRequest& V
 
 	return DeliveredUnits;
 }
+
+#if !UE_BUILD_SHIPPING
+namespace GPCommandMineDebug
+{
+	static const TCHAR* EvaluateMineTargetAcceptance(AActor* TargetActor, const UWorld* World, FString& OutDetail)
+	{
+		const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+
+		if (!IsValid(TargetActor) || TargetActor->IsActorBeingDestroyed())
+		{
+			OutDetail = TEXT("InvalidOrNullTarget");
+			return TEXT("REJECT");
+		}
+
+		if (World == nullptr || TargetActor->GetWorld() != World)
+		{
+			OutDetail = TEXT("InvalidWorld");
+			return TEXT("REJECT");
+		}
+
+		if (AGP_ResourceNode* ResourceNode = Cast<AGP_ResourceNode>(TargetActor))
+		{
+			FString MineFail;
+			if (!ResourceNode->CanAcceptMineCommand(true, &MineFail))
+			{
+				OutDetail = FString::Printf(TEXT("ResourceNodeFail=%s"), *MineFail);
+				return TEXT("REJECT");
+			}
+
+			OutDetail = TEXT("ResourceNodeAccepted");
+			return TEXT("ACCEPT");
+		}
+
+		if (AGP_UnitBase* ResourceUnit = Cast<AGP_UnitBase>(TargetActor))
+		{
+			if (!ResourceUnit->HasCapabilityTag(GPTags.Resource_Node))
+			{
+				OutDetail = TEXT("UnitWithoutResourceNodeCapability");
+				return TEXT("REJECT");
+			}
+
+			OutDetail = TEXT("UnitBaseResourceNodeLegacyAccepted");
+			return TEXT("ACCEPT");
+		}
+
+		OutDetail = TEXT("ActorWithoutResourceContract");
+		return TEXT("REJECT");
+	}
+
+	static void InspectMineTarget(const TArray<FString>& Args, UWorld* World)
+	{
+		(void)Args;
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPCommandServer, Warning, TEXT("GP Command.InspectMineTarget: missing world"));
+			return;
+		}
+
+		FString Detail;
+		const TCHAR* NullResult = EvaluateMineTargetAcceptance(nullptr, World, Detail);
+		UE_LOG(LogGPCommandServer, Log,
+			TEXT("GP Command.InspectMineTarget: Case=NullTarget Result=%s Detail=%s"),
+			NullResult,
+			*Detail);
+
+		AGP_ResourceNode* Node = nullptr;
+		AGP_ResourceNode* DepletedNode = nullptr;
+		for (TActorIterator<AGP_ResourceNode> It(World); It; ++It)
+		{
+			AGP_ResourceNode* Candidate = *It;
+			if (!IsValid(Candidate))
+			{
+				continue;
+			}
+			if (Node == nullptr)
+			{
+				Node = Candidate;
+			}
+			if (Candidate->IsDepleted() && DepletedNode == nullptr)
+			{
+				DepletedNode = Candidate;
+			}
+		}
+
+		if (Node != nullptr)
+		{
+			const TCHAR* NodeResult = EvaluateMineTargetAcceptance(Node, World, Detail);
+			UE_LOG(LogGPCommandServer, Log,
+				TEXT("GP Command.InspectMineTarget: Case=ResourceNode Actor=%s Current=%d Depleted=%s Result=%s Detail=%s"),
+				*Node->GetName(),
+				Node->GetCurrentAmount(),
+				Node->IsDepleted() ? TEXT("true") : TEXT("false"),
+				NodeResult,
+				*Detail);
+		}
+		else
+		{
+			UE_LOG(LogGPCommandServer, Log,
+				TEXT("GP Command.InspectMineTarget: Case=ResourceNode Result=SKIP Detail=NoResourceNodeInWorld"));
+		}
+
+		if (DepletedNode != nullptr)
+		{
+			const TCHAR* DepletedResult = EvaluateMineTargetAcceptance(DepletedNode, World, Detail);
+			UE_LOG(LogGPCommandServer, Log,
+				TEXT("GP Command.InspectMineTarget: Case=DepletedResourceNode Actor=%s Result=%s Detail=%s"),
+				*DepletedNode->GetName(),
+				DepletedResult,
+				*Detail);
+		}
+		else
+		{
+			UE_LOG(LogGPCommandServer, Log,
+				TEXT("GP Command.InspectMineTarget: Case=DepletedResourceNode Result=SKIP Detail=NoDepletedNode (use gp.ResourceNode.Consume to deplete)"));
+		}
+
+		AGP_UnitBase* OrdinaryUnit = nullptr;
+		for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
+		{
+			AGP_UnitBase* Unit = *It;
+			if (!IsValid(Unit))
+			{
+				continue;
+			}
+			if (!Unit->HasCapabilityTag(FGPGameplayTags::Get().Resource_Node))
+			{
+				OrdinaryUnit = Unit;
+				break;
+			}
+		}
+
+		if (OrdinaryUnit != nullptr)
+		{
+			const TCHAR* UnitResult = EvaluateMineTargetAcceptance(OrdinaryUnit, World, Detail);
+			UE_LOG(LogGPCommandServer, Log,
+				TEXT("GP Command.InspectMineTarget: Case=OrdinaryUnit Actor=%s Result=%s Detail=%s"),
+				*OrdinaryUnit->GetName(),
+				UnitResult,
+				*Detail);
+		}
+		else
+		{
+			UE_LOG(LogGPCommandServer, Log,
+				TEXT("GP Command.InspectMineTarget: Case=OrdinaryUnit Result=SKIP Detail=NoOrdinaryUnitInWorld"));
+		}
+
+		AActor* PlainActor = nullptr;
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			AActor* Actor = *It;
+			if (!IsValid(Actor))
+			{
+				continue;
+			}
+			if (Cast<AGP_ResourceNode>(Actor) != nullptr || Cast<AGP_UnitBase>(Actor) != nullptr)
+			{
+				continue;
+			}
+			PlainActor = Actor;
+			break;
+		}
+
+		if (PlainActor != nullptr)
+		{
+			const TCHAR* PlainResult = EvaluateMineTargetAcceptance(PlainActor, World, Detail);
+			UE_LOG(LogGPCommandServer, Log,
+				TEXT("GP Command.InspectMineTarget: Case=ActorWithoutResourceContract Actor=%s Class=%s Result=%s Detail=%s"),
+				*PlainActor->GetName(),
+				*GetNameSafe(PlainActor->GetClass()),
+				PlainResult,
+				*Detail);
+		}
+		else
+		{
+			UE_LOG(LogGPCommandServer, Log,
+				TEXT("GP Command.InspectMineTarget: Case=ActorWithoutResourceContract Result=SKIP Detail=NoPlainActorInWorld"));
+		}
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs GInspectMineTargetCommand(
+		TEXT("gp.Command.InspectMineTarget"),
+		TEXT("Non-shipping: log Mine target accept/reject cases (null, ResourceNode, depleted, ordinary unit, plain actor)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&InspectMineTarget));
+}
+#endif

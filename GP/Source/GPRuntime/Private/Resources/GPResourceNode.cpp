@@ -3,11 +3,18 @@
 #include "Resources/GPResourceNode.h"
 
 #include "Components/BoxComponent.h"
+#include "Engine/AssetManager.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "Resources/GPResourceDefinition.h"
+#include "Tags/GPGameplayTags.h"
 #include "Visual/GPPrimitiveVisualTypes.h"
 #include "Visual/GPResourceNodeVisualComponent.h"
+
+#if WITH_EDITOR
+#include "Misc/DataValidation.h"
+#endif
 
 #if !UE_BUILD_SHIPPING
 #include "EngineUtils.h"
@@ -54,6 +61,29 @@ namespace GPResourceNodePrivate
 			return TEXT("Unknown");
 		}
 	}
+
+	static const TCHAR* MiningSlotResultToString(EGP_MiningSlotRequestResult Result)
+	{
+		switch (Result)
+		{
+		case EGP_MiningSlotRequestResult::Granted:
+			return TEXT("Granted");
+		case EGP_MiningSlotRequestResult::Waiting:
+			return TEXT("Waiting");
+		case EGP_MiningSlotRequestResult::AlreadyActive:
+			return TEXT("AlreadyActive");
+		case EGP_MiningSlotRequestResult::AlreadyWaiting:
+			return TEXT("AlreadyWaiting");
+		case EGP_MiningSlotRequestResult::RejectedInvalidMiner:
+			return TEXT("RejectedInvalidMiner");
+		case EGP_MiningSlotRequestResult::RejectedNoAuthority:
+			return TEXT("RejectedNoAuthority");
+		case EGP_MiningSlotRequestResult::RejectedDepositInvalid:
+			return TEXT("RejectedDepositInvalid");
+		default:
+			return TEXT("Unknown");
+		}
+	}
 }
 
 AGP_ResourceNode::AGP_ResourceNode()
@@ -76,9 +106,14 @@ AGP_ResourceNode::AGP_ResourceNode()
 
 	ResourceNodeVisualComponent = CreateDefaultSubobject<UGP_ResourceNodeVisualComponent>(TEXT("ResourceNodeVisualComponent"));
 
+	ResourceDefinition = TSoftObjectPtr<UGP_ResourceDefinition>(
+		FSoftObjectPath(UGP_ResourceDefinition::DefaultFerroniteAssetPath()));
 	ResourceType = EGP_ResourceType::Ore;
 	MaxAmount = 5000;
 	CurrentAmount = 5000;
+	MaxConcurrentMiners = 4;
+	ActiveMinerCount = 0;
+	WaitingMinerCount = 0;
 }
 
 void AGP_ResourceNode::BeginPlay()
@@ -87,7 +122,25 @@ void AGP_ResourceNode::BeginPlay()
 	if (HasAuthority())
 	{
 		NormalizeAmountsOnConstruction();
+		// Prefer already-loaded AlwaysCook primary asset; no silent sync load here.
+		if (UGP_ResourceDefinition* Definition = ResolveResourceDefinition(false))
+		{
+			ApplyIdentityFromDefinition(Definition);
+		}
 	}
+}
+
+void AGP_ResourceNode::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (HasAuthority())
+	{
+		ActiveMiners.Reset();
+		WaitingMiners.Reset();
+		RefreshOccupancyCounts();
+	}
+
+	CachedResourceDefinition.Reset();
+	Super::EndPlay(EndPlayReason);
 }
 
 void AGP_ResourceNode::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -97,6 +150,8 @@ void AGP_ResourceNode::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(AGP_ResourceNode, ResourceType);
 	DOREPLIFETIME(AGP_ResourceNode, MaxAmount);
 	DOREPLIFETIME(AGP_ResourceNode, CurrentAmount);
+	DOREPLIFETIME(AGP_ResourceNode, ActiveMinerCount);
+	DOREPLIFETIME(AGP_ResourceNode, WaitingMinerCount);
 }
 
 void AGP_ResourceNode::NormalizeAmountsOnConstruction()
@@ -113,8 +168,28 @@ void AGP_ResourceNode::ClampCurrentAmountToMax()
 	CurrentAmount = FMath::Clamp(CurrentAmount, 0, MaxAmount);
 }
 
+void AGP_ResourceNode::ApplyIdentityFromDefinition(const UGP_ResourceDefinition* Definition)
+{
+	if (Definition == nullptr)
+	{
+		return;
+	}
+
+	if (Definition->ResourceType != EGP_ResourceType::None)
+	{
+		ResourceType = Definition->ResourceType;
+	}
+}
+
 EGP_ResourceType AGP_ResourceNode::GetResourceType() const
 {
+	if (const UGP_ResourceDefinition* Definition = GetResolvedResourceDefinition())
+	{
+		if (Definition->ResourceType != EGP_ResourceType::None)
+		{
+			return Definition->ResourceType;
+		}
+	}
 	return ResourceType;
 }
 
@@ -131,6 +206,196 @@ int32 AGP_ResourceNode::GetCurrentAmount() const
 bool AGP_ResourceNode::IsDepleted() const
 {
 	return CurrentAmount <= 0;
+}
+
+TSoftObjectPtr<UGP_ResourceDefinition> AGP_ResourceNode::GetResourceDefinitionSoft() const
+{
+	return ResourceDefinition;
+}
+
+void AGP_ResourceNode::SetResourceDefinitionSoft(TSoftObjectPtr<UGP_ResourceDefinition> InDefinition)
+{
+	ResourceDefinition = MoveTemp(InDefinition);
+	CachedResourceDefinition.Reset();
+}
+
+UGP_ResourceDefinition* AGP_ResourceNode::GetResolvedResourceDefinition() const
+{
+	return ResolveResourceDefinition(false);
+}
+
+UGP_ResourceDefinition* AGP_ResourceNode::ResolveResourceDefinition(bool bAllowSynchronousLoad) const
+{
+	if (CachedResourceDefinition.IsValid())
+	{
+		return CachedResourceDefinition.Get();
+	}
+
+	if (ResourceDefinition.IsNull())
+	{
+		return nullptr;
+	}
+
+	if (UGP_ResourceDefinition* AlreadyLoaded = ResourceDefinition.Get())
+	{
+		CachedResourceDefinition = AlreadyLoaded;
+		return AlreadyLoaded;
+	}
+
+	if (UAssetManager::IsInitialized())
+	{
+		const FSoftObjectPath SoftPath = ResourceDefinition.ToSoftObjectPath();
+		const FPrimaryAssetId PrimaryAssetId(
+			FPrimaryAssetType(UGP_ResourceDefinition::PrimaryAssetTypeName()),
+			FName(*SoftPath.GetAssetName()));
+		if (UObject* PrimaryObject = UAssetManager::Get().GetPrimaryAssetObject(PrimaryAssetId))
+		{
+			if (UGP_ResourceDefinition* AsDefinition = Cast<UGP_ResourceDefinition>(PrimaryObject))
+			{
+				CachedResourceDefinition = AsDefinition;
+				return AsDefinition;
+			}
+		}
+	}
+
+	if (bAllowSynchronousLoad)
+	{
+		// Explicit AlwaysCook primary-asset resolve for Mine validation / diagnostics only.
+		UE_LOG(LogGPResourceNode, Verbose,
+			TEXT("GP ResourceNode.ResolveResourceDefinition sync load (AlwaysCook primary): Actor=%s Path=%s"),
+			*GetName(),
+			*ResourceDefinition.ToSoftObjectPath().ToString());
+		if (UGP_ResourceDefinition* Loaded = ResourceDefinition.LoadSynchronous())
+		{
+			CachedResourceDefinition = Loaded;
+			return Loaded;
+		}
+	}
+
+	return nullptr;
+}
+
+void AGP_ResourceNode::GetResourceCapabilityTags(FGameplayTagContainer& OutTags) const
+{
+	OutTags.Reset();
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	OutTags.AddTag(GPTags.Resource_Node);
+
+	if (const UGP_ResourceDefinition* Definition = GetResolvedResourceDefinition())
+	{
+		if (Definition->ResourceGameplayTag.IsValid())
+		{
+			OutTags.AddTag(Definition->ResourceGameplayTag);
+			return;
+		}
+	}
+
+	// Ferronite deposit contract default when definition is not yet resolved.
+	OutTags.AddTag(GPTags.Resource_Type_Ferronite);
+}
+
+bool AGP_ResourceNode::HasResourceCapabilityTag(FGameplayTag CapabilityTag) const
+{
+	if (!CapabilityTag.IsValid())
+	{
+		return false;
+	}
+
+	FGameplayTagContainer CapabilityTags;
+	GetResourceCapabilityTags(CapabilityTags);
+	return CapabilityTags.HasTagExact(CapabilityTag);
+}
+
+bool AGP_ResourceNode::IsDepositStateValidForMining() const
+{
+	if (!IsValid(this) || IsActorBeingDestroyed())
+	{
+		return false;
+	}
+
+	if (MaxAmount <= 0 || CurrentAmount <= 0)
+	{
+		return false;
+	}
+
+	if (ResourceDefinition.IsNull())
+	{
+		return false;
+	}
+
+	return true;
+}
+
+bool AGP_ResourceNode::CanAcceptMineCommand(bool bAllowSynchronousDefinitionLoad, FString* OutFailReason) const
+{
+	auto Fail = [OutFailReason](const TCHAR* Reason) -> bool
+	{
+		if (OutFailReason != nullptr)
+		{
+			*OutFailReason = Reason;
+		}
+		return false;
+	};
+
+	if (!IsValid(this) || IsActorBeingDestroyed())
+	{
+		return Fail(TEXT("InvalidOrPendingKill"));
+	}
+
+	const UWorld* World = GetWorld();
+	if (World == nullptr || World->bIsTearingDown)
+	{
+		return Fail(TEXT("InvalidWorld"));
+	}
+
+	if (MaxAmount <= 0)
+	{
+		return Fail(TEXT("MaxAmountInvalid"));
+	}
+
+	if (CurrentAmount <= 0)
+	{
+		return Fail(TEXT("Depleted"));
+	}
+
+	if (ResourceDefinition.IsNull())
+	{
+		return Fail(TEXT("ResourceDefinitionUnset"));
+	}
+
+	const UGP_ResourceDefinition* Definition = ResolveResourceDefinition(bAllowSynchronousDefinitionLoad);
+	if (Definition == nullptr)
+	{
+		return Fail(TEXT("ResourceDefinitionUnresolved"));
+	}
+
+	if (Definition->ResourceType == EGP_ResourceType::None)
+	{
+		return Fail(TEXT("ResourceTypeNone"));
+	}
+
+	if (!Definition->ResourceGameplayTag.IsValid())
+	{
+		return Fail(TEXT("ResourceGameplayTagInvalid"));
+	}
+
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	if (!HasResourceCapabilityTag(GPTags.Resource_Node))
+	{
+		return Fail(TEXT("MissingResourceNodeTag"));
+	}
+
+	if (!HasResourceCapabilityTag(Definition->ResourceGameplayTag)
+		&& !HasResourceCapabilityTag(GPTags.Resource_Type_Ferronite))
+	{
+		return Fail(TEXT("MissingResourceTypeTag"));
+	}
+
+	if (OutFailReason != nullptr)
+	{
+		OutFailReason->Reset();
+	}
+	return true;
 }
 
 int32 AGP_ResourceNode::ConsumeResource(int32 RequestedAmount)
@@ -161,6 +426,292 @@ int32 AGP_ResourceNode::ConsumeResource(int32 RequestedAmount)
 	return Consumed;
 }
 
+int32 AGP_ResourceNode::GetMaxConcurrentMiners() const
+{
+	return MaxConcurrentMiners;
+}
+
+int32 AGP_ResourceNode::GetActiveMinerCount() const
+{
+	return ActiveMinerCount;
+}
+
+int32 AGP_ResourceNode::GetWaitingMinerCount() const
+{
+	return WaitingMinerCount;
+}
+
+bool AGP_ResourceNode::IsValidMinerActor(const AActor* Miner) const
+{
+	return IsValid(Miner) && !Miner->IsActorBeingDestroyed() && Miner->GetWorld() == GetWorld();
+}
+
+void AGP_ResourceNode::CleanupInvalidMiners()
+{
+	ActiveMiners.RemoveAll([](const TWeakObjectPtr<AActor>& Ptr)
+	{
+		return !Ptr.IsValid() || Ptr->IsActorBeingDestroyed();
+	});
+	WaitingMiners.RemoveAll([](const TWeakObjectPtr<AActor>& Ptr)
+	{
+		return !Ptr.IsValid() || Ptr->IsActorBeingDestroyed();
+	});
+}
+
+void AGP_ResourceNode::RefreshOccupancyCounts()
+{
+	ActiveMinerCount = ActiveMiners.Num();
+	WaitingMinerCount = WaitingMiners.Num();
+}
+
+void AGP_ResourceNode::PromoteWaitingMiners()
+{
+	CleanupInvalidMiners();
+
+	const int32 Cap = FMath::Max(0, MaxConcurrentMiners);
+	while (ActiveMiners.Num() < Cap && WaitingMiners.Num() > 0)
+	{
+		TWeakObjectPtr<AActor> Next = WaitingMiners[0];
+		WaitingMiners.RemoveAt(0);
+		if (!Next.IsValid() || Next->IsActorBeingDestroyed())
+		{
+			continue;
+		}
+
+		ActiveMiners.Add(Next);
+	}
+}
+
+EGP_MiningSlotRequestResult AGP_ResourceNode::RequestMiningSlot(AActor* Miner)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogGPResourceNode, Warning,
+			TEXT("GP ResourceNode.RequestMiningSlot rejected (no authority): Deposit=%s Miner=%s"),
+			*GetName(),
+			*GetNameSafe(Miner));
+		return EGP_MiningSlotRequestResult::RejectedNoAuthority;
+	}
+
+	if (!IsValidMinerActor(Miner))
+	{
+		return EGP_MiningSlotRequestResult::RejectedInvalidMiner;
+	}
+
+	if (!IsDepositStateValidForMining() || MaxConcurrentMiners <= 0)
+	{
+		return EGP_MiningSlotRequestResult::RejectedDepositInvalid;
+	}
+
+	CleanupInvalidMiners();
+
+	if (HasActiveMiningSlot(Miner))
+	{
+		RefreshOccupancyCounts();
+		return EGP_MiningSlotRequestResult::AlreadyActive;
+	}
+
+	if (IsWaitingForMiningSlot(Miner))
+	{
+		RefreshOccupancyCounts();
+		return EGP_MiningSlotRequestResult::AlreadyWaiting;
+	}
+
+	if (ActiveMiners.Num() < MaxConcurrentMiners)
+	{
+		ActiveMiners.Add(Miner);
+		RefreshOccupancyCounts();
+		return EGP_MiningSlotRequestResult::Granted;
+	}
+
+	WaitingMiners.Add(Miner);
+	RefreshOccupancyCounts();
+	return EGP_MiningSlotRequestResult::Waiting;
+}
+
+void AGP_ResourceNode::ReleaseMiningSlot(AActor* Miner)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogGPResourceNode, Warning,
+			TEXT("GP ResourceNode.ReleaseMiningSlot rejected (no authority): Deposit=%s Miner=%s"),
+			*GetName(),
+			*GetNameSafe(Miner));
+		return;
+	}
+
+	CleanupInvalidMiners();
+
+	bool bWasActive = false;
+	for (int32 Index = ActiveMiners.Num() - 1; Index >= 0; --Index)
+	{
+		if (ActiveMiners[Index].Get() == Miner)
+		{
+			ActiveMiners.RemoveAt(Index);
+			bWasActive = true;
+		}
+	}
+
+	for (int32 Index = WaitingMiners.Num() - 1; Index >= 0; --Index)
+	{
+		if (WaitingMiners[Index].Get() == Miner)
+		{
+			WaitingMiners.RemoveAt(Index);
+		}
+	}
+
+	if (bWasActive)
+	{
+		PromoteWaitingMiners();
+	}
+
+	RefreshOccupancyCounts();
+}
+
+bool AGP_ResourceNode::HasActiveMiningSlot(AActor* Miner) const
+{
+	if (!IsValid(Miner))
+	{
+		return false;
+	}
+
+	for (const TWeakObjectPtr<AActor>& Ptr : ActiveMiners)
+	{
+		if (Ptr.Get() == Miner)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool AGP_ResourceNode::IsWaitingForMiningSlot(AActor* Miner) const
+{
+	if (!IsValid(Miner))
+	{
+		return false;
+	}
+
+	for (const TWeakObjectPtr<AActor>& Ptr : WaitingMiners)
+	{
+		if (Ptr.Get() == Miner)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool AGP_ResourceNode::ValidateDepositContract(TArray<FText>& OutErrors, TArray<FText>& OutWarnings) const
+{
+	OutErrors.Reset();
+	OutWarnings.Reset();
+
+	if (ResourceDefinition.IsNull())
+	{
+		OutErrors.Add(NSLOCTEXT(
+			"GPResourceNode",
+			"ErrDefinitionUnset",
+			"ResourceDefinition soft reference must be assigned."));
+	}
+	else
+	{
+		const UGP_ResourceDefinition* Definition = ResolveResourceDefinition(true);
+		if (Definition == nullptr)
+		{
+			OutErrors.Add(FText::Format(
+				NSLOCTEXT(
+					"GPResourceNode",
+					"ErrDefinitionUnresolved",
+					"ResourceDefinition could not be resolved: {0}"),
+				FText::FromString(ResourceDefinition.ToSoftObjectPath().ToString())));
+		}
+		else
+		{
+			if (Definition->ResourceType == EGP_ResourceType::None)
+			{
+				OutErrors.Add(NSLOCTEXT(
+					"GPResourceNode",
+					"ErrDefinitionTypeNone",
+					"ResourceDefinition.ResourceType must not be None."));
+			}
+			else if (ResourceType != EGP_ResourceType::None && ResourceType != Definition->ResourceType)
+			{
+				OutWarnings.Add(FText::Format(
+					NSLOCTEXT(
+						"GPResourceNode",
+						"WarnTypeMismatch",
+						"ResourceNode.ResourceType ({0}) differs from ResourceDefinition ({1}); definition wins at runtime."),
+					FText::FromString(GPResourceTypePrivate::ToString(ResourceType)),
+					FText::FromString(GPResourceTypePrivate::ToString(Definition->ResourceType))));
+			}
+
+			if (!Definition->ResourceGameplayTag.IsValid())
+			{
+				OutErrors.Add(NSLOCTEXT(
+					"GPResourceNode",
+					"ErrDefinitionTagInvalid",
+					"ResourceDefinition.ResourceGameplayTag must be valid."));
+			}
+
+			TArray<FText> DefErrors;
+			TArray<FText> DefWarnings;
+			Definition->ValidateDefinition(DefErrors, DefWarnings);
+			OutErrors.Append(DefErrors);
+			OutWarnings.Append(DefWarnings);
+		}
+	}
+
+	if (MaxAmount <= 0)
+	{
+		OutErrors.Add(NSLOCTEXT(
+			"GPResourceNode",
+			"ErrMaxAmount",
+			"MaxAmount must be > 0."));
+	}
+
+	if (CurrentAmount < 0 || CurrentAmount > MaxAmount)
+	{
+		OutErrors.Add(NSLOCTEXT(
+			"GPResourceNode",
+			"ErrCurrentAmount",
+			"CurrentAmount must be in range [0, MaxAmount]."));
+	}
+
+	if (MaxConcurrentMiners <= 0)
+	{
+		OutErrors.Add(NSLOCTEXT(
+			"GPResourceNode",
+			"ErrMaxConcurrent",
+			"MaxConcurrentMiners must be > 0."));
+	}
+
+	return OutErrors.Num() == 0;
+}
+
+#if WITH_EDITOR
+EDataValidationResult AGP_ResourceNode::IsDataValid(FDataValidationContext& Context) const
+{
+	TArray<FText> Errors;
+	TArray<FText> Warnings;
+	const bool bOk = ValidateDepositContract(Errors, Warnings);
+	for (const FText& Warning : Warnings)
+	{
+		Context.AddWarning(Warning);
+	}
+	for (const FText& Error : Errors)
+	{
+		Context.AddError(Error);
+	}
+
+	if (!bOk)
+	{
+		return EDataValidationResult::Invalid;
+	}
+	return EDataValidationResult::Valid;
+}
+#endif
+
 UGP_ResourceNodeVisualComponent* AGP_ResourceNode::GetResourceNodeVisualComponent() const
 {
 	return ResourceNodeVisualComponent;
@@ -184,7 +735,7 @@ void AGP_ResourceNode::OnRep_CurrentAmount()
 #if !UE_BUILD_SHIPPING
 namespace GPResourceNodeDebug
 {
-	static AGP_ResourceNode* FindFirstNode(UWorld* World)
+	static AGP_ResourceNode* FindNode(UWorld* World, const FString& OptionalName)
 	{
 		if (World == nullptr)
 		{
@@ -200,6 +751,16 @@ namespace GPResourceNodeDebug
 				continue;
 			}
 
+			if (!OptionalName.IsEmpty())
+			{
+				if (Node->GetName().Equals(OptionalName, ESearchCase::IgnoreCase)
+					|| Node->GetPathName().Contains(OptionalName))
+				{
+					return Node;
+				}
+				continue;
+			}
+
 			if (Best == nullptr || Node->GetName() < Best->GetName())
 			{
 				Best = Node;
@@ -209,16 +770,39 @@ namespace GPResourceNodeDebug
 		return Best;
 	}
 
+	static AActor* FindActorByName(UWorld* World, const FString& Name)
+	{
+		if (World == nullptr || Name.IsEmpty())
+		{
+			return nullptr;
+		}
+
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			AActor* Actor = *It;
+			if (!IsValid(Actor))
+			{
+				continue;
+			}
+			if (Actor->GetName().Equals(Name, ESearchCase::IgnoreCase)
+				|| Actor->GetPathName().Contains(Name))
+			{
+				return Actor;
+			}
+		}
+		return nullptr;
+	}
+
 	static void ResourceNodeInspect(const TArray<FString>& Args, UWorld* World)
 	{
-		(void)Args;
 		if (World == nullptr)
 		{
 			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.Inspect: missing world"));
 			return;
 		}
 
-		AGP_ResourceNode* Node = FindFirstNode(World);
+		const FString OptionalName = Args.Num() > 0 ? Args[0] : FString();
+		AGP_ResourceNode* Node = FindNode(World, OptionalName);
 		if (Node == nullptr)
 		{
 			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.Inspect: no AGP_ResourceNode found"));
@@ -247,13 +831,45 @@ namespace GPResourceNodeDebug
 			}
 		}
 
+		const TSoftObjectPtr<UGP_ResourceDefinition> SoftDef = Node->GetResourceDefinitionSoft();
+		UGP_ResourceDefinition* Resolved = Node->ResolveResourceDefinition(true);
+		FString PrimaryAssetIdStr = TEXT("none");
+		FString ResourceTagStr = TEXT("none");
+		if (Resolved != nullptr)
+		{
+			PrimaryAssetIdStr = Resolved->GetPrimaryAssetId().ToString();
+			ResourceTagStr = Resolved->ResourceGameplayTag.ToString();
+		}
+
+		FGameplayTagContainer CapabilityTags;
+		Node->GetResourceCapabilityTags(CapabilityTags);
+
+		TArray<FText> Errors;
+		TArray<FText> Warnings;
+		const bool bValid = Node->ValidateDepositContract(Errors, Warnings);
+		FString MineFail;
+		const bool bCanMine = Node->CanAcceptMineCommand(true, &MineFail);
+
 		UE_LOG(LogGPResourceNode, Log,
-			TEXT("GP ResourceNode.Inspect: Actor=%s ResourceType=%s MaxAmount=%d CurrentAmount=%d Depleted=%s Role=%s NetMode=%s Replicates=%s AlwaysRelevant=%s CollisionComponent=%s CollisionEnabled=%s CollisionProfile=%s AffectsNavigation=%s VisualComponent=%s VisualBuilt=%s Parts=%d PartNames=[%s] DedicatedVisualSuppressed=%s TickEnabled=%s VisualCollisionDisabled=%s VisualSourceMode=%s GeneratedPartCount=%d AuthoredPrimitiveComponentCount=%d NativeVisualBuilt=%s UsesAuthoredComponents=%s GeneratedCollisionDisabled=%s AuthoredCollisionWarnings=%d AuthoredNavigationWarnings=%d DuplicateGeneratedParts=%d"),
+			TEXT("GP ResourceNode.Inspect: Actor=%s Path=%s SoftDefinition=%s ResolvedPrimaryAssetId=%s ResourceType=%s ResourceTag=%s CapabilityTags=%s MaxAmount=%d CurrentAmount=%d Depleted=%s MaxConcurrentMiners=%d ActiveMinerCount=%d WaitingMinerCount=%d ValidationOk=%s ValidationErrors=%d ValidationWarnings=%d CanAcceptMine=%s MineFail=%s Role=%s NetMode=%s Replicates=%s AlwaysRelevant=%s CollisionComponent=%s CollisionEnabled=%s CollisionProfile=%s AffectsNavigation=%s VisualComponent=%s VisualBuilt=%s Parts=%d PartNames=[%s] DedicatedVisualSuppressed=%s TickEnabled=%s VisualCollisionDisabled=%s VisualSourceMode=%s GeneratedPartCount=%d AuthoredPrimitiveComponentCount=%d NativeVisualBuilt=%s UsesAuthoredComponents=%s GeneratedCollisionDisabled=%s AuthoredCollisionWarnings=%d AuthoredNavigationWarnings=%d DuplicateGeneratedParts=%d"),
 			*Node->GetName(),
+			*Node->GetPathName(),
+			*SoftDef.ToSoftObjectPath().ToString(),
+			*PrimaryAssetIdStr,
 			GPResourceTypePrivate::ToString(Node->GetResourceType()),
+			*ResourceTagStr,
+			*CapabilityTags.ToStringSimple(),
 			Node->GetMaxAmount(),
 			Node->GetCurrentAmount(),
 			Node->IsDepleted() ? TEXT("true") : TEXT("false"),
+			Node->GetMaxConcurrentMiners(),
+			Node->GetActiveMinerCount(),
+			Node->GetWaitingMinerCount(),
+			bValid ? TEXT("true") : TEXT("false"),
+			Errors.Num(),
+			Warnings.Num(),
+			bCanMine ? TEXT("true") : TEXT("false"),
+			MineFail.IsEmpty() ? TEXT("none") : *MineFail,
 			GPResourceNodePrivate::RoleToString(Node->GetLocalRole()),
 			GPResourceNodePrivate::NetModeToString(World->GetNetMode()),
 			Node->GetIsReplicated() ? TEXT("true") : TEXT("false"),
@@ -308,11 +924,12 @@ namespace GPResourceNodeDebug
 		int32 Requested = 0;
 		if (Args.Num() < 1 || !LexTryParseString(Requested, *Args[0]))
 		{
-			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.Consume: usage gp.ResourceNode.Consume <Amount>"));
+			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.Consume: usage gp.ResourceNode.Consume <Amount> [NodeName]"));
 			return;
 		}
 
-		AGP_ResourceNode* Node = FindFirstNode(World);
+		const FString OptionalName = Args.Num() > 1 ? Args[1] : FString();
+		AGP_ResourceNode* Node = FindNode(World, OptionalName);
 		if (Node == nullptr)
 		{
 			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.Consume: no AGP_ResourceNode found"));
@@ -341,14 +958,149 @@ namespace GPResourceNodeDebug
 			Node->IsDepleted() ? TEXT("true") : TEXT("false"));
 	}
 
+	static void ResourceNodeInspectOccupancy(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.InspectOccupancy: missing world"));
+			return;
+		}
+
+		const FString OptionalName = Args.Num() > 0 ? Args[0] : FString();
+		AGP_ResourceNode* Node = FindNode(World, OptionalName);
+		if (Node == nullptr)
+		{
+			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.InspectOccupancy: no AGP_ResourceNode found"));
+			return;
+		}
+
+		UE_LOG(LogGPResourceNode, Log,
+			TEXT("GP ResourceNode.InspectOccupancy: Actor=%s MaxConcurrentMiners=%d ActiveMinerCount=%d WaitingMinerCount=%d HasAuthority=%s"),
+			*Node->GetName(),
+			Node->GetMaxConcurrentMiners(),
+			Node->GetActiveMinerCount(),
+			Node->GetWaitingMinerCount(),
+			Node->HasAuthority() ? TEXT("true") : TEXT("false"));
+	}
+
+	static void ResourceNodeRequestSlot(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.RequestSlot: missing world"));
+			return;
+		}
+
+		if (World->GetNetMode() == NM_Client)
+		{
+			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.RequestSlot: rejected on client"));
+			return;
+		}
+
+		if (Args.Num() < 1)
+		{
+			UE_LOG(LogGPResourceNode, Warning,
+				TEXT("GP ResourceNode.RequestSlot: usage gp.ResourceNode.RequestSlot <MinerActorName> [NodeName]"));
+			return;
+		}
+
+		AActor* Miner = FindActorByName(World, Args[0]);
+		if (Miner == nullptr)
+		{
+			UE_LOG(LogGPResourceNode, Warning,
+				TEXT("GP ResourceNode.RequestSlot: miner not found Name=%s"),
+				*Args[0]);
+			return;
+		}
+
+		const FString OptionalNode = Args.Num() > 1 ? Args[1] : FString();
+		AGP_ResourceNode* Node = FindNode(World, OptionalNode);
+		if (Node == nullptr)
+		{
+			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.RequestSlot: no AGP_ResourceNode found"));
+			return;
+		}
+
+		const EGP_MiningSlotRequestResult Result = Node->RequestMiningSlot(Miner);
+		UE_LOG(LogGPResourceNode, Log,
+			TEXT("GP ResourceNode.RequestSlot: Deposit=%s Miner=%s Result=%s Active=%d Waiting=%d"),
+			*Node->GetName(),
+			*Miner->GetName(),
+			GPResourceNodePrivate::MiningSlotResultToString(Result),
+			Node->GetActiveMinerCount(),
+			Node->GetWaitingMinerCount());
+	}
+
+	static void ResourceNodeReleaseSlot(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.ReleaseSlot: missing world"));
+			return;
+		}
+
+		if (World->GetNetMode() == NM_Client)
+		{
+			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.ReleaseSlot: rejected on client"));
+			return;
+		}
+
+		if (Args.Num() < 1)
+		{
+			UE_LOG(LogGPResourceNode, Warning,
+				TEXT("GP ResourceNode.ReleaseSlot: usage gp.ResourceNode.ReleaseSlot <MinerActorName> [NodeName]"));
+			return;
+		}
+
+		AActor* Miner = FindActorByName(World, Args[0]);
+		if (Miner == nullptr)
+		{
+			UE_LOG(LogGPResourceNode, Warning,
+				TEXT("GP ResourceNode.ReleaseSlot: miner not found Name=%s"),
+				*Args[0]);
+			return;
+		}
+
+		const FString OptionalNode = Args.Num() > 1 ? Args[1] : FString();
+		AGP_ResourceNode* Node = FindNode(World, OptionalNode);
+		if (Node == nullptr)
+		{
+			UE_LOG(LogGPResourceNode, Warning, TEXT("GP ResourceNode.ReleaseSlot: no AGP_ResourceNode found"));
+			return;
+		}
+
+		Node->ReleaseMiningSlot(Miner);
+		UE_LOG(LogGPResourceNode, Log,
+			TEXT("GP ResourceNode.ReleaseSlot: Deposit=%s Miner=%s Active=%d Waiting=%d"),
+			*Node->GetName(),
+			*Miner->GetName(),
+			Node->GetActiveMinerCount(),
+			Node->GetWaitingMinerCount());
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs GResourceNodeInspectCommand(
 		TEXT("gp.ResourceNode.Inspect"),
-		TEXT("Inspect the first AGP_ResourceNode in the world (non-shipping)."),
+		TEXT("Inspect AGP_ResourceNode (optional name). Non-shipping."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ResourceNodeInspect));
 
 	static FAutoConsoleCommandWithWorldAndArgs GResourceNodeConsumeCommand(
 		TEXT("gp.ResourceNode.Consume"),
-		TEXT("Authority-only: ConsumeResource on the first AGP_ResourceNode. Usage: gp.ResourceNode.Consume <Amount>"),
+		TEXT("Authority-only ConsumeResource. Usage: gp.ResourceNode.Consume <Amount> [NodeName]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ResourceNodeConsume));
+
+	static FAutoConsoleCommandWithWorldAndArgs GResourceNodeInspectOccupancyCommand(
+		TEXT("gp.ResourceNode.InspectOccupancy"),
+		TEXT("Inspect deposit miner occupancy counts. Usage: gp.ResourceNode.InspectOccupancy [NodeName]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ResourceNodeInspectOccupancy));
+
+	static FAutoConsoleCommandWithWorldAndArgs GResourceNodeRequestSlotCommand(
+		TEXT("gp.ResourceNode.RequestSlot"),
+		TEXT("Authority debug: request mining slot. Usage: gp.ResourceNode.RequestSlot <MinerActorName> [NodeName]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ResourceNodeRequestSlot));
+
+	static FAutoConsoleCommandWithWorldAndArgs GResourceNodeReleaseSlotCommand(
+		TEXT("gp.ResourceNode.ReleaseSlot"),
+		TEXT("Authority debug: release mining slot. Usage: gp.ResourceNode.ReleaseSlot <MinerActorName> [NodeName]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ResourceNodeReleaseSlot));
 }
 #endif

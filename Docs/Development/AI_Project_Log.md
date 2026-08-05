@@ -1,12 +1,36 @@
 # Grim Protocol — AI Project Log
 
-## 2026-08-05 — GP-S23R Resource Definition Reconciliation
+## 2026-08-05 — GP-S24R Ferronite Deposit Contract
 
-Status: GP-S23R_FINALIZED_READY_FOR_MERGE
+Status: **GP-S24R_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ### Branch / baseline
-- Branch: `feature/gp-s23r-resource-definition`
-- Base: `main` @ `9b3ec9997c2544764d0bd10c6bc4cdfb659dcb2f`
+- Branch: `feature/gp-s24r-ferronite-deposit-contract`
+- Base: `main` @ `754b133731065eed000fdcce4bbaa5c45f096e60` (GP-S23R merged)
+- Task: `Docs/Development/Claude_Tasks/GP-S24R_Ferronite_Deposit_Contract.md`
+
+### What was done
+- `AGP_ResourceNode` Ferronite deposit contract: soft `ResourceDefinition`, tags, capacity validation, miner soft-cap/FIFO queue
+- Mine smart-command + server validation accepts `AGP_ResourceNode` (no UnitBase requirement for deposits)
+- Diagnostics: `gp.ResourceNode.Inspect` / occupancy slot cmds / `gp.Command.InspectMineTarget`
+- GPEditor Win64 Development + UHT **PASSED**
+- GP Win64 Development **not run**; GP Win64 Shipping **not run** (after operator validation)
+
+### Intentionally not done
+- No Cargo/MiningComponent/Worker/Storage/mining execution; no map/projectile/visual redesign; no PR/merge
+
+### Operator next
+- Validate per task doc; then finalize (GP Dev/Shipping) when requested
+
+---
+
+## 2026-08-05 — GP-S23R Resource Definition Reconciliation
+
+Status: **GP-S23R_MERGED_TO_MAIN** @ `754b133731065eed000fdcce4bbaa5c45f096e60`
+
+### Branch / baseline
+- Branch: `feature/gp-s23r-resource-definition` (merged)
+- Base (pre-merge): `main` @ `9b3ec9997c2544764d0bd10c6bc4cdfb659dcb2f`
 - Candidate: `bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81`
 - Correction: `fef94837839ed25041fe5dc0256a1472231c0642`
 - Finalization: `c01985fabebcb5b5d2ff4ac199a13ea2b11d8e73`
@@ -14,15 +38,14 @@ Status: GP-S23R_FINALIZED_READY_FOR_MERGE
 
 ### What was done
 - `UGP_ResourceDefinition` + Ferronite DA; mining SoT Amount+Duration+Range; EffectiveRate derived
-- Operator validation **PASSED** (Inspect/DataValidation/VerifyOnly/AssetManager; values 10/1/200/Effective10)
-- Finalization: no C++ changes; GP Win64 Development **PASSED**; GP Win64 Shipping **PASSED**
-- Map unchanged; next stage GP-S24R
+- Operator validation **PASSED**; GP Dev/Shipping **PASSED**
+- Merged to main @ `754b133731065eed000fdcce4bbaa5c45f096e60`
 
 ### Intentionally not done
-- No ResourceNode/Cargo/Mining/Worker/Storage; no PR/merge (ready when requested)
+- No ResourceNode/Cargo/Mining/Worker/Storage at S23R
 
 ### Operator next
-- None for S23R; merge when requested; then GP-S24R
+- None for S23R (merged); continue at GP-S24R
 
 ---
 

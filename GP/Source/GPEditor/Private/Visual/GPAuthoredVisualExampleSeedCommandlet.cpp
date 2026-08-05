@@ -14,6 +14,7 @@
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Misc/PackageName.h"
 #include "Misc/Parse.h"
+#include "Resources/GPResourceDefinition.h"
 #include "Resources/GPResourceNode.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
@@ -318,6 +319,19 @@ namespace GPAuthoredVisualSeedPrivate
 			return false;
 		}
 
+		if (UBlueprintGeneratedClass* BPGC = Cast<UBlueprintGeneratedClass>(Blueprint->GeneratedClass))
+		{
+			if (AGP_ResourceNode* CDO = Cast<AGP_ResourceNode>(BPGC->GetDefaultObject()))
+			{
+				const FSoftObjectPath FerroniteSoftPath(UGP_ResourceDefinition::DefaultFerroniteAssetPath());
+				if (CDO->GetResourceDefinitionSoft().ToSoftObjectPath() != FerroniteSoftPath)
+				{
+					CDO->SetResourceDefinitionSoft(TSoftObjectPtr<UGP_ResourceDefinition>(FerroniteSoftPath));
+					CDO->MarkPackageDirty();
+				}
+			}
+		}
+
 		return SaveBlueprintPackage(Blueprint);
 	}
 
@@ -366,6 +380,9 @@ namespace GPAuthoredVisualSeedPrivate
 				? ResourceBP->SimpleConstructionScript->GetAllNodes().Num()
 				: 0;
 			EGP_VisualSourceMode Mode = EGP_VisualSourceMode::NativeFallback;
+			FString SoftDefinitionPath;
+			bool bDefinitionOk = false;
+			const FString ExpectedDefinition = UGP_ResourceDefinition::DefaultFerroniteAssetPath();
 			if (UBlueprintGeneratedClass* BPGC = Cast<UBlueprintGeneratedClass>(ResourceBP->GeneratedClass))
 			{
 				if (AGP_ResourceNode* CDO = Cast<AGP_ResourceNode>(BPGC->GetDefaultObject()))
@@ -374,17 +391,22 @@ namespace GPAuthoredVisualSeedPrivate
 					{
 						Mode = Visual->GetVisualSourceMode();
 					}
+					SoftDefinitionPath = CDO->GetResourceDefinitionSoft().ToSoftObjectPath().ToString();
+					bDefinitionOk = SoftDefinitionPath.Equals(ExpectedDefinition, ESearchCase::IgnoreCase)
+						|| SoftDefinitionPath.Contains(TEXT("DA_GP_Resource_Ferronite"));
 				}
 			}
 
 			UE_LOG(LogGPAuthoredVisualSeed, Log,
-				TEXT("Verify Resource BP=%s SCSNodes=%d VisualSourceMode=%s Parent=%s"),
+				TEXT("Verify Resource BP=%s SCSNodes=%d VisualSourceMode=%s Parent=%s SoftDefinition=%s DefinitionOk=%s"),
 				*ResourceBP->GetPathName(),
 				ScsNodes,
 				GPPrimitiveVisualDefaults::VisualSourceModeToString(Mode),
-				*GetNameSafe(ResourceBP->ParentClass));
+				*GetNameSafe(ResourceBP->ParentClass),
+				*SoftDefinitionPath,
+				bDefinitionOk ? TEXT("true") : TEXT("false"));
 
-			if (Mode != EGP_VisualSourceMode::AuthoredComponents || ScsNodes < 4)
+			if (Mode != EGP_VisualSourceMode::AuthoredComponents || ScsNodes < 4 || !bDefinitionOk)
 			{
 				bOk = false;
 			}

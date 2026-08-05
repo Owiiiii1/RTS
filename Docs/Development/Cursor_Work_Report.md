@@ -1,65 +1,91 @@
-# Cursor Work Report
+# Cursor Work Report — GP-S24R Ferronite Deposit Contract Finalization
 
 ## Task
-GP-S23R — Resource Definition Reconciliation (finalization)
+GP-S24R — Ferronite Deposit Contract Finalization on `AGP_ResourceNode`.
 
 ## Status
-GP-S23R_FINALIZED_READY_FOR_MERGE
+**GP-S24R_FINALIZED_READY_FOR_MERGE**
 
 ## Branch
-feature/gp-s23r-resource-definition
+`feature/gp-s24r-ferronite-deposit-contract`
 
 ## Base
-main @ 9b3ec9997c2544764d0bd10c6bc4cdfb659dcb2f
+`main` @ `754b133731065eed000fdcce4bbaa5c45f096e60`
 
 ## Candidate commit
-bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81
-
-## Correction commit
-fef94837839ed25041fe5dc0256a1472231c0642
+`42c1c9167ddd607506d32b470763fc8467a67d66`
 
 ## Finalization commit
-c01985fabebcb5b5d2ff4ac199a13ea2b11d8e73
+`b2cdbb329e4ec7500b6083968f43abca25b33949`
 
 ## Operator validation matrix
 
 | Item | Result |
 | --- | --- |
-| DA_GP_Resource_Ferronite | **PASS** |
-| Identity Ore / Ferronite / GP.Resource.Type.Ferronite | **PASS** |
-| Mining 10 / 1 / 200 / Effective 10 | **PASS** |
-| Single-source (no stored MineRate) | **PASS** |
-| Inspect Valid / 0 errors / 0 warnings / AssetManager path | **PASS** |
-| Data Validation valid | **PASS** |
-| VerifyOnly Success 0/0 | **PASS** |
-| AssetManagerSees=true | **PASS** |
+| ResourceDefinition → Ferronite DA; PrimaryAssetId `GPResourceDefinition:DA_GP_Resource_Ferronite` | **PASS** |
+| ResourceType=Ore; tags Node + Type.Ferronite | **PASS** |
+| Max/Current=5000; IsDepleted=false; MaxConcurrentMiners=4 | **PASS** |
+| ValidationOk=true; Errors=0; Warnings=0; CanAcceptMine=true | **PASS** |
+| Mine accept ResourceNode; reject null/depleted/unit/plain | **PASS** |
+| Consume 5000 → After=0 Depleted; CanAcceptMine=false MineFail=Depleted | **PASS** |
+| Active=4; 5th Waiting; AlreadyWaiting; release promotes; AlreadyActive; Active=4 Waiting=0 | **PASS** |
+| ListenServer/Client CurrentAmount=4000; occupancy counts replicate | **PASS** |
+| Client RequestSlot rejected | **PASS** |
+| AuthoredComponents; authored collision/nav warnings=0; TickEnabled=false | **PASS** |
 | Map unchanged | **PASS** |
 
-## Final exact DataAsset values
-AmountPerMiningCycle=10; MiningCycleDurationSeconds=1; InteractionRangeCm=200; EffectiveMineRatePerWorker=10 (derived).  
-PrimaryAssetId=`GPResourceDefinition:DA_GP_Resource_Ferronite`.
+## ResourceDefinition policy
+Soft `TSoftObjectPtr`; default Ferronite DA; BeginPlay non-sync resolve; explicit sync only on validate/Mine/diagnostics (AlwaysCook); PrimaryAssetId resolves correctly.
 
-## Single-source decision
-Stored: Amount + CycleDuration + Range. Derived: GetEffectiveMineRatePerWorker(). Future MiningComponent uses stored fields for gameplay.
+## Exact tags
+- `GP.Resource.Node`
+- `GP.Resource.Type.Ferronite`
 
-## Inspector / Data Validation / VerifyOnly
-Inspect: Valid=true Errors=0 Warnings=0 Resolution=AssetManagerPrimaryAssetPath.  
-Data Validation: valid.  
-Commandlet VerifyOnly: Success - 0 error(s), 0 warning(s).
+## Deposit default values
+| Field | Value |
+| --- | --- |
+| ResourceDefinition | `DA_GP_Resource_Ferronite` |
+| MaxAmount | 5000 |
+| CurrentAmount | 5000 |
+| MaxConcurrentMiners | 4 |
+| ResourceType | Ore |
 
-## PrimaryAssetId / Asset Manager
-Stable `GPResourceDefinition:DA_GP_Resource_Ferronite`. Single PrimaryAssetTypesToScan entry; AlwaysCook directory retained.
+## Mine validation matrix
+| Case | Result |
+| --- | --- |
+| Valid ResourceNode | ACCEPT |
+| Null target | REJECT |
+| Depleted ResourceNode | REJECT |
+| Ordinary unit | REJECT |
+| Actor without resource contract | REJECT |
 
-## LFS result
-`.uasset` filter=lfs; Ferronite DA tracked.
+## Depletion test
+ConsumeResource Requested=5000 → Consumed=5000 Before=5000 After=0 Depleted=true; MineFail=Depleted.
+
+## FIFO / duplicate / promotion test
+4 active → 5th Waiting → repeated AlreadyWaiting → release active promotes waiting → repeated AlreadyActive → final Active=4 Waiting=0.
+
+## Network replication test
+ListenServer Authority CurrentAmount=4000; Client SimulatedProxy CurrentAmount=4000. Occupancy: server Active=2 Waiting=0; client observed same counts, HasAuthority=false.
+
+## Client authority rejection
+`gp.ResourceNode.RequestSlot` rejected on client.
+
+## Visual compatibility result
+VisualSourceMode=AuthoredComponents; UsesAuthoredComponents=true; GeneratedPartCount=0; AuthoredPrimitiveComponentCount=6; AuthoredCollisionWarnings=0; AuthoredNavigationWarnings=0; DuplicateGeneratedParts=0; TickEnabled=false.
+
+## Validation result
+ValidationOk=true; ValidationErrors=0; ValidationWarnings=0.
 
 ## Files changed during finalization
-- Docs task / AI_Project_Log / Cursor_Work_Report
-- `DA_GP_Resource_Ferronite.uasset` (operator-validated resave; values confirmed 10/1/200)
-- No C++ changes
+- `Docs/Development/Claude_Tasks/GP-S24R_Ferronite_Deposit_Contract.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
-## GPEditor / UHT
-Not rerun — no C++ at finalization; **PASSED** at correction `fef9483…`
+No C++ changes at finalization. Accidental operator `L_PrototypeArena.umap` dirty state restored; not committed.
+
+## GPEditor / UHT result if rerun
+Not rerun (no C++ changes). Candidate GPEditor Dev+UHT retained as **PASSED**.
 
 ## GP Win64 Development result
 **PASSED**
@@ -67,20 +93,26 @@ Not rerun — no C++ at finalization; **PASSED** at correction `fef9483…`
 ## GP Win64 Shipping result
 **PASSED**
 
+## LFS result
+No LFS content rewrite during finalization.
+
 ## Map unchanged
-No `.umap` edits.
+Yes.
 
 ## Scope exclusions
-No ResourceNode, Mine target, queue, Cargo, Mining SM, Worker, Storage, ThreatValue writes, orbital conversion, UI, visual profiles, projectiles, map population, S24R.
+No Cargo/Mining/Worker/mining execution/Storage/ThreatValue/orbital/UI/map population/projectiles/visual redesign/GP-S25; no main/PR/merge/branch delete.
 
 ## Git status
-Clean on `feature/gp-s23r-resource-definition` tracking origin after push.
+Feature branch finalized and pushed; main untouched; no PR.
 
 ## Merge readiness
-**Ready for merge when requested.** No PR created. Main untouched.
+Ready for main merge when requested.
 
 ## Known limitations
-Ore enum name retained; Icon unset; prototype balance placeholders; no deposit wiring.
+- No mining execution / movement / cargo
+- Ore enum name retained until rename stage
+- Soft-cap 4 is TDD prototype value
+- Occupancy actor lists server-local (counts only)
 
 ## Next canonical stage
-**GP-S24R — Ferronite Deposit Contract on AGP_ResourceNode**
+**GP-S25 — UGP_CargoComponent**

@@ -8,7 +8,8 @@
 
 Branch: `feature/gp-s23r-resource-definition`  
 Candidate: `bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81`  
-Correction: `fef94837839ed25041fe5dc0256a1472231c0642`
+Correction: `fef94837839ed25041fe5dc0256a1472231c0642`  
+Finalization: `c01985fabebcb5b5d2ff4ac199a13ea2b11d8e73`
 
 ## Canonical position
 GP-S23 (`UGP_ResourceDefinition`). Next: **GP-S24R**.

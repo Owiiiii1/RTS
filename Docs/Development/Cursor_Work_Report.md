@@ -19,7 +19,7 @@ bed8fb3adbbcd0e7dcd9f0d3069616c522afcb81
 fef94837839ed25041fe5dc0256a1472231c0642
 
 ## Finalization commit
-(filled after commit)
+c01985fabebcb5b5d2ff4ac199a13ea2b11d8e73
 
 ## Operator validation matrix
 
@@ -74,7 +74,7 @@ No `.umap` edits.
 No ResourceNode, Mine target, queue, Cargo, Mining SM, Worker, Storage, ThreatValue writes, orbital conversion, UI, visual profiles, projectiles, map population, S24R.
 
 ## Git status
-(filled after push)
+Clean on `feature/gp-s23r-resource-definition` tracking origin after push.
 
 ## Merge readiness
 **Ready for merge when requested.** No PR created. Main untouched.

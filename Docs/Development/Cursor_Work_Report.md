@@ -88,7 +88,7 @@ See task doc: Unit Viewport edit → place; Resource edit → place; direct nati
 - Prior DataAsset profile experiment abandoned
 
 ## Commit SHA
-(filled after commit)
+3a6d9533039180a4b75d40dc6063abd01d1b91e2
 
 ## Git state
 Branch `feature/gp-s26b2a-blueprint-authored-visuals` pushed; main untouched; no PR; abandoned DataAsset remote branch not deleted.

@@ -6,7 +6,8 @@
 ## Baseline
 `main` @ `215b4b603e7fd333ef9b379103329bfac03edbf4`
 
-Branch: `feature/gp-s26b2a-blueprint-authored-visuals`
+Branch: `feature/gp-s26b2a-blueprint-authored-visuals`  
+Implementation: `3a6d9533039180a4b75d40dc6063abd01d1b91e2`
 
 ## Abandoned experiment
 `feature/gp-s26b2a-editable-visual-profiles` @ `54bfe62d5c6b54edfa7cdff02ff48e221f9a98ff` — **abandoned, never merged**. Do not cherry-pick / merge / continue that branch. No DataAsset visual profiles in this stage.

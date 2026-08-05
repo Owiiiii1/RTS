@@ -1,12 +1,14 @@
 # GP-S25 — UGP_CargoComponent
 
 ## Status
-**GP-S25_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S25_FINALIZED_READY_FOR_MERGE**
 
 ## Baseline
 `main` @ `1fedf1933ac406c3a53a89af4a92a03afcf5a646` (GP-S24R merged)
 
-Branch: `feature/gp-s25-cargo-component`
+Branch: `feature/gp-s25-cargo-component`  
+Candidate: `f440838bbcd8963c8230a70f6f7e3363af7dc45a`  
+Docs SHA note: `9b633115069b57266f209a829ac8254d60e032ea`
 
 ## Canonical roadmap position
 Slice-6 coding stage:
@@ -40,15 +42,14 @@ No competing DisplayName on the component. Capacity is cargo/unit tuning — **n
 ## Source-of-truth decision
 **`UGP_CargoComponent` is the sole writable runtime SoT** for temporary carried Planetary Ferronite.
 
-No GameplayEffect cargo transactions. No OrbitalFerronite / FerroniteScore mutation from cargo.
+No GameplayEffect cargo transactions. No OrbitalFerronite / FerroniteScore / Storage mutation from cargo.
 
 ## Legacy CarriedFerronite reconciliation
 | Finding | Resolution |
 | --- | --- |
-| `UGP_UnitAttributeSet::CarriedFerronite` existed, replicated, unused by any gameplay/UI code | **Removed** from AttributeSet + replication + clamps |
+| `UGP_UnitAttributeSet::CarriedFerronite` existed, replicated, unused | **Removed** from AttributeSet + replication + clamps |
 | Dual writable stores | Eliminated |
-
-Docs elsewhere may still mention CarriedFerronite historically; runtime SoT is CargoComponent only.
+| Compatibility mirror | Not kept |
 
 ## Mutation API (authority-only)
 | API | Semantics |
@@ -65,7 +66,8 @@ Rejects negative / zero / NaN / Inf safely; no public setter for current amount;
 - `CurrentCargoAmount` + `CargoCapacity` replicated
 - ResourceDefinition soft not replicated (shared Ferronite default)
 - No client-owned mutation RPCs
-- `OnRep_CurrentCargoAmount` + `OnCargoAmountChanged` (Previous, New, Capacity, Delta)
+- Authority `ApplyCargoAmount` broadcasts once; `OnRep` fires on remotes only (no double-fire on local server mutation)
+- `OnCargoAmountChanged` (Previous, New, Capacity, Delta)
 
 ## Delegates / notifications
 BlueprintAssignable `OnCargoAmountChanged`. Fired on authority apply and client RepNotify. No Tick polling.
@@ -87,6 +89,27 @@ All mutation requires owner authority. Diagnostic Add/Remove/Clear/Spawn/RunCont
 ## Tick policy
 `PrimaryComponentTick.bCanEverTick = false`. No timers. No polling.
 
+## Operator validation matrix (accepted)
+
+| Item | Result |
+| --- | --- |
+| Default Cap=50 Current=0 Empty Remaining=50 Fill=0 | **PASS** |
+| Ferronite soft / PrimaryAssetId / Ore / tag | **PASS** |
+| ValidationOk Errors=0 Warnings=0 | **PASS** |
+| Add 30 → 30; Add 30 → Accepted 20 full; Add while full → 0 | **PASS** |
+| Remove 30 → 20; Remove 100 → Removed 20 empty | **PASS** |
+| Invalid 0/neg / NaN / Inf rejected; no mutation | **PASS** |
+| Clear after Add 25 → Removed 25 | **PASS** |
+| RunContractTest Failures=0 (all listed checks) | **PASS** |
+| Listen server/client Cap/Current/Fill match; client Add rejected | **PASS** |
+| Component/Actor tick disabled | **PASS** |
+| Transient host; map/content unchanged | **PASS** |
+
+## Builds (finalization)
+- GPEditor Dev+UHT: retained from candidate (no C++ changes at finalization)
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+
 ## In scope
 CargoComponent; replicated state; Ferronite identity; add/remove/clear; validation; CarriedFerronite removal; diagnostics; diagnostic host; docs.
 
@@ -94,28 +117,14 @@ CargoComponent; replicated state; Ferronite identity; add/remove/clear; validati
 MiningComponent; Worker; mining execution; ResourceNode consumption; occupancy; movement; Storage; MainBase; ThreatValue; Orbital/Score; UI; map; projectiles; visuals; cargo on every unit.
 
 ## Acceptance criteria
-- [ ] Component replicates; no tick
-- [ ] Capacity 50; empty default; clamp/overflow/remove semantics
-- [ ] Ferronite soft definition resolves
-- [ ] CarriedFerronite gone from AttributeSet
-- [ ] Client mutation rejected
-- [ ] Contract test + inspect diagnostics work
-- [ ] Map unchanged; no permanent unit attachment
-- [ ] GPEditor Dev+UHT passed; GP Dev/Shipping deferred
-
-## Operator validation
-Capacity prototype = **50** (not 100).
-
-1. PIE: `gp.Cargo.SpawnDiagnosticHost` then `gp.Cargo.Inspect` — empty, Cap=50, Current=0
-2. `gp.Cargo.Add 30` → Current=30
-3. `gp.Cargo.Add 30` → Accepted=20, Current=50, IsFull=true
-4. Invalid inputs (neg/0) → accepted 0, no mutation
-5. `gp.Cargo.Remove 20` → Current=30
-6. `gp.Cargo.Remove 100` → Removed=30, Current=0
-7. `gp.Cargo.Clear` after refill
-8. `gp.Cargo.RunContractTest` — Failures=0
-9. Listen server: Add on server; client Inspect shows same Current/Fill; client Add rejected
-10. ComponentTickEnabled=false; do not save map
+- [x] Component replicates; no tick
+- [x] Capacity 50; empty default; clamp/overflow/remove semantics
+- [x] Ferronite soft definition resolves
+- [x] CarriedFerronite gone from AttributeSet
+- [x] Client mutation rejected
+- [x] Contract test + inspect diagnostics work
+- [x] Map unchanged; no permanent unit attachment
+- [x] GPEditor Dev+UHT passed; GP Dev/Shipping passed at finalization
 
 ## Known limitations
 - No Worker ownership yet
@@ -125,3 +134,5 @@ Capacity prototype = **50** (not 100).
 
 ## Next canonical stage
 **GP-S26 — UGP_MiningComponent**
+
+No known blockers. Ready for main merge when requested.

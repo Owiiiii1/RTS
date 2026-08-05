@@ -23,6 +23,17 @@ Fixes:
 - Operator re-spawn cleans prior operator diagnostic only; never authored/production; never second MainBase for same team
 - `gp.Worker.List`: `MainBaseCountForWorkerTeam`, `RegistryUniqueForTeam`, `ResolvedMainBaseMatchesListedBase`; Ready requires count=1 + unique
 
+## ResourceNode EndPlay reentrant occupancy cleanup
+Operator PIE Stop after working haul loop (Storage 150/500) hit ensure: `Array has changed during ranged-for iteration` in `AGP_ResourceNode::EndPlay` (broadcast → MiningComponent `ReleaseMiningSlot` mutated live `ActiveMiners`/`WaitingMiners`).
+
+Fixes:
+- Snapshot Active/Waiting → clear arrays + counts → `bIsClearingOccupancy` → broadcast from snapshots → Clear delegate → Super::EndPlay
+- Request reject / Release no-op / Promote forbidden during teardown
+- MiningComponent skips Release while clearing; Waiting→Active ignored during clearing
+- UnitCommand: TargetEndPlay with cargo>0 may haul without return-to-deposit; zero cargo does not haul
+- Contract: `gp.Resource.RunEndPlayContractTest` (active+waiting destroy + haul-loop destroy)
+- `LogCrowdFollowing` RecastNavMesh warning on teardown: non-blocking engine noise (not the ensure root cause)
+
 ## Diagnostic scenario correction (operator-blocking)
 Operator failure: MainBase registered at TeamId=-1; Worker TeamId=-1; Node=None.
 

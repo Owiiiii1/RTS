@@ -132,16 +132,26 @@ void AGP_ResourceNode::BeginPlay()
 
 void AGP_ResourceNode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (HasAuthority())
+	if (HasAuthority() && !bIsClearingOccupancy)
 	{
-		for (const TWeakObjectPtr<AActor>& Ptr : ActiveMiners)
+		// Snapshot → clear production arrays → guard → notify. Listeners must not mutate live queues.
+		const TArray<TWeakObjectPtr<AActor>> ActiveSnapshot = ActiveMiners;
+		const TArray<TWeakObjectPtr<AActor>> WaitingSnapshot = WaitingMiners;
+
+		bIsClearingOccupancy = true;
+		ActiveMiners.Reset();
+		WaitingMiners.Reset();
+		ActiveMinerCount = 0;
+		WaitingMinerCount = 0;
+
+		for (const TWeakObjectPtr<AActor>& Ptr : ActiveSnapshot)
 		{
 			if (AActor* Miner = Ptr.Get())
 			{
 				BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Active, EGP_MinerOccupancyState::None);
 			}
 		}
-		for (const TWeakObjectPtr<AActor>& Ptr : WaitingMiners)
+		for (const TWeakObjectPtr<AActor>& Ptr : WaitingSnapshot)
 		{
 			if (AActor* Miner = Ptr.Get())
 			{
@@ -149,9 +159,6 @@ void AGP_ResourceNode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 			}
 		}
 
-		ActiveMiners.Reset();
-		WaitingMiners.Reset();
-		RefreshOccupancyCounts();
 		OnMinerSlotStateChanged.Clear();
 	}
 
@@ -324,7 +331,7 @@ bool AGP_ResourceNode::HasResourceCapabilityTag(FGameplayTag CapabilityTag) cons
 
 bool AGP_ResourceNode::IsDepositStateValidForMining() const
 {
-	if (!IsValid(this) || IsActorBeingDestroyed())
+	if (!IsValid(this) || IsActorBeingDestroyed() || bIsClearingOccupancy)
 	{
 		return false;
 	}
@@ -477,6 +484,11 @@ void AGP_ResourceNode::BroadcastMinerSlotStateChanged(
 
 void AGP_ResourceNode::CleanupInvalidMiners()
 {
+	if (bIsClearingOccupancy)
+	{
+		return;
+	}
+
 	// Silent removal only — do not broadcast into pending-kill / destroyed miners.
 	for (int32 Index = ActiveMiners.Num() - 1; Index >= 0; --Index)
 	{
@@ -499,6 +511,13 @@ void AGP_ResourceNode::CleanupInvalidMiners()
 
 void AGP_ResourceNode::RefreshOccupancyCounts()
 {
+	if (bIsClearingOccupancy)
+	{
+		ActiveMinerCount = 0;
+		WaitingMinerCount = 0;
+		return;
+	}
+
 	ActiveMinerCount = ActiveMiners.Num();
 	WaitingMinerCount = WaitingMiners.Num();
 }
@@ -506,6 +525,11 @@ void AGP_ResourceNode::RefreshOccupancyCounts()
 void AGP_ResourceNode::PromoteWaitingMiners(TArray<AActor*>& OutPromotedMiners)
 {
 	OutPromotedMiners.Reset();
+	if (bIsClearingOccupancy)
+	{
+		return;
+	}
+
 	CleanupInvalidMiners();
 
 	const int32 Cap = FMath::Max(0, MaxConcurrentMiners);
@@ -534,6 +558,11 @@ EGP_MiningSlotRequestResult AGP_ResourceNode::RequestMiningSlot(AActor* Miner)
 			*GetName(),
 			*GetNameSafe(Miner));
 		return EGP_MiningSlotRequestResult::RejectedNoAuthority;
+	}
+
+	if (bIsClearingOccupancy)
+	{
+		return EGP_MiningSlotRequestResult::RejectedDepositInvalid;
 	}
 
 	if (!IsValidMinerActor(Miner))
@@ -582,6 +611,13 @@ void AGP_ResourceNode::ReleaseMiningSlot(AActor* Miner)
 			TEXT("GP ResourceNode.ReleaseMiningSlot rejected (no authority): Deposit=%s Miner=%s"),
 			*GetName(),
 			*GetNameSafe(Miner));
+		return;
+	}
+
+	// EndPlay already cleared queues and emits snapshot terminal transitions.
+	// Listener Release during teardown must be a harmless idempotent no-op.
+	if (bIsClearingOccupancy)
+	{
 		return;
 	}
 

@@ -142,6 +142,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Resource|Occupancy")
 	EGP_MinerOccupancyState GetMinerOccupancyState(AActor* Miner) const;
 
+	/** True while EndPlay occupancy teardown is in progress (reject new slots / no promote). */
+	UFUNCTION(BlueprintPure, Category = "GP|Resource|Occupancy")
+	bool IsClearingOccupancy() const { return bIsClearingOccupancy; }
+
 	/**
 	 * Server-local occupancy change notifications (Granted/Waiting/release/FIFO promotion/cleanup).
 	 * Not replicated. MiningComponent binds while targeting this node.
@@ -221,4 +225,10 @@ private:
 
 	/** Server-local only. */
 	FGP_OnMinerSlotStateChanged OnMinerSlotStateChanged;
+
+	/**
+	 * Set during EndPlay occupancy teardown.
+	 * Production APIs become no-op / reject; snapshot broadcasts are the only notifications.
+	 */
+	bool bIsClearingOccupancy = false;
 };

@@ -288,3 +288,47 @@ private:
 	float InteractionRangeCm = 200.0f;
 	FTimerHandle StageTimerHandle;
 };
+
+/**
+ * ResourceNode EndPlay occupancy teardown contract (GP-S28).
+ * Verifies snapshot/clear/guard path: no live-array mutation during listener cleanup.
+ */
+UCLASS()
+class GPRUNTIME_API UGP_ResourceNodeEndPlayContractTestRunner : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual void BeginDestroy() override;
+	void Start(UWorld* InWorld);
+
+private:
+	void ScheduleNext();
+	void AdvanceStage();
+	bool Expect(bool bOk, const TCHAR* Label);
+	void Abort(const TCHAR* Reason);
+	void Finish();
+	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void UnbindWorldCleanup();
+	AGP_ResourceNode* SpawnTransientNode(const FVector& Location) const;
+	AGP_MiningDiagnosticHost* SpawnHostNear(AGP_ResourceNode* Node, float RangeCm) const;
+	void SafeStopAndDestroyHost(TWeakObjectPtr<AGP_MiningDiagnosticHost>& HostWeak);
+
+	int32 StageIndex = 0;
+	int32 Failures = 0;
+	bool bFinished = false;
+	FDelegateHandle WorldCleanupHandle;
+	FTimerHandle StageTimerHandle;
+	TWeakObjectPtr<UWorld> WorldWeak;
+	TWeakObjectPtr<AGP_ResourceNode> TestNodeWeak;
+	TArray<TWeakObjectPtr<AGP_MiningDiagnosticHost>> OccupancyHostsWeak;
+	TWeakObjectPtr<AGP_MiningDiagnosticHost> WaitingHostWeak;
+	TWeakObjectPtr<AGP_MiningDiagnosticHost> HaulHostWeak;
+	TWeakObjectPtr<class AGP_Worker> HaulWorkerWeak;
+	TWeakObjectPtr<class AGP_MainBase> HaulMainBaseWeak;
+	float ThreatBeforeNodeDestroy = 0.0f;
+	float InteractionRangeCm = 200.0f;
+	int32 TerminalNoneCount = 0;
+	int32 PromotionCount = 0;
+	FDelegateHandle OccupancyObserveHandle;
+};

@@ -2156,6 +2156,9 @@ void UGP_UnitCommandComponent::HandleMiningStateChanged(
 	const bool bHaulCargoFull = NewState == EGP_MiningState::CargoFull;
 	const bool bHaulDepletedPartial =
 		NewState == EGP_MiningState::DepositDepleted && CargoAmount > KINDA_SMALL_NUMBER;
+	// Destroyed/teardown deposit with leftover cargo: haul without return-to-deposit (same as depleted partial).
+	const bool bHaulDestroyedPartial =
+		Reason == EGP_MiningStopReason::TargetEndPlay && CargoAmount > KINDA_SMALL_NUMBER;
 
 	bool bStartHaul = false;
 	bool bReturnToDeposit = false;
@@ -2166,13 +2169,14 @@ void UGP_UnitCommandComponent::HandleMiningStateChanged(
 		// Keep ActiveMineSerial as haul/mine chain identity for haul terminals.
 		MineTarget.Reset();
 
-		if (bHaulCargoFull || bHaulDepletedPartial)
+		if (bHaulCargoFull || bHaulDepletedPartial || bHaulDestroyedPartial)
 		{
 			bReturnToDeposit =
 				bHaulCargoFull
 				&& IsValid(DepositBeforeReset)
 				&& !DepositBeforeReset->IsDepleted()
-				&& !DepositBeforeReset->IsActorBeingDestroyed();
+				&& !DepositBeforeReset->IsActorBeingDestroyed()
+				&& !DepositBeforeReset->IsClearingOccupancy();
 			bStartHaul = true;
 		}
 		else

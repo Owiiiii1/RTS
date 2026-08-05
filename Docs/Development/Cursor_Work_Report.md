@@ -1,7 +1,7 @@
-# Cursor Work Report — GP-S28 MainBase Registry Uniqueness + Contract Isolation
+# Cursor Work Report — GP-S28 ResourceNode EndPlay Reentrant Occupancy Cleanup
 
 ## Task
-GP-S28 — MainBase Registry Uniqueness + Diagnostic Contract Isolation
+GP-S28 — ResourceNode EndPlay Reentrant Occupancy Cleanup Fix
 
 ## Status
 **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
@@ -12,70 +12,58 @@ GP-S28 — MainBase Registry Uniqueness + Diagnostic Contract Isolation
 ## Base
 `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
 
-## Prior commits
-- Candidate: `cd83858390db086c6913669f348a7402ae0a5ad3`
-- TeamId diagnostic correction: `61f69dff98bb2b79f795a74d93e0b2c8a2b12b76`
-- Nav correction: `caf5bf0c947176ce5c72affadae41cbbd60be590`
+## Prior correction
+Registry uniqueness: `c59b12031d88ea9b3c9dd584e4aa1028c2a846dc`
 
-## Successful nav-ready operator scenario
-Operator validated Team1 navigable scenario:
-- MainBase=`GP_DiagMainBase_T1_0`, Worker=`GP_DiagWorker_T1_0`, Node=`GP_DiagResourceNode_T0_0`
-- NavSystemPresent / NavWorkerToNode / NavNodeToBase / NavBaseToNode = true
-- ReadyForHaulingTest=true, Errors=0, Warnings=0
+## Operator PIE teardown ensure
+Full haul loop worked (Mining → CargoFull → ReturnToBase → DropOff → ReturnToDeposit → Mining; Storage 150/500). On PIE Stop:
 
-## Duplicate registry operator log
-With Team1 operator scenario live, `gp.Resource.RunDiagnosticScenarioContractTest` logged:
-- `AGP_GameState::RegisterMainBase: duplicate MainBase for TeamId=1 Existing=…_T1_0 New=…_T1_1`
-- Then registry Count=2
-- `FindMainBaseForTeam` warned multiple; used first
-- Contract: Ok=false Reason=MainBaseRegistryResolveFailed, Complete Failures=1
+```
+Ensure condition failed: Array has changed during ranged-for iteration!
+AGP_ResourceNode::EndPlay() GPResourceNode.cpp:137
+```
+
+## Exact stack / source
+- `AGP_ResourceNode::EndPlay` ranged-for over `ActiveMiners` then `WaitingMiners`
+- Line ~137: `BroadcastMinerSlotStateChanged(... Active → None)`
 
 ## Root cause
-Error was logged for duplicate, but **Add still executed** after the error. Contract also collided with occupied Team1.
+Live-array callback mutation: occupancy Broadcast → `UGP_MiningComponent::HandleMinerSlotStateChanged` → `StopMining(TargetEndPlay)` → `ReleaseMiningSlot` removes from `ActiveMiners`/`WaitingMiners` (and could PromoteWaiting) during the ranged-for.
 
-## Registry uniqueness invariant
-Exactly one registered MainBase per playable TeamId. Stale/invalid weaks pruned before mutate/query.
+## Snapshot / clear / guard solution
+1. Copy Active + Waiting snapshots  
+2. Set `bIsClearingOccupancy`  
+3. Reset production arrays; counts = 0  
+4. Broadcast terminal None from snapshots only  
+5. `OnMinerSlotStateChanged.Clear()`  
+6. `Super::EndPlay`
 
-## Updated RegisterMainBase result
-`EGP_MainBaseRegisterResult`:
-- Registered
-- AlreadyRegistered (same actor, idempotent, no second Add, no Error)
-- RejectedNoAuthority / RejectedInvalidActor / RejectedInvalidTeam
-- RejectedDuplicate (other actor; no Add; CountForTeam stays 1; Existing preserved)
+## Release / Promote during teardown
+- `RequestMiningSlot` → `RejectedDepositInvalid`
+- `ReleaseMiningSlot` → idempotent no-op (no Broadcast, no Promote)
+- `PromoteWaitingMiners` → forbidden
+- `CleanupInvalidMiners` / `RefreshOccupancyCounts` → no-op / zeros
+- No new delegate broadcasts except controlled snapshot notifications
 
-## Idempotent same-actor behavior
-Re-registering the already-registered actor returns AlreadyRegistered; count unchanged.
+## Listener review
+- **MiningComponent:** Unbind before Release; skip Release when `IsClearingOccupancy`; Waiting→Active ignored while clearing → `TargetEndPlay`
+- **UnitCommand:** TargetEndPlay + cargo>0 may start haul without return-to-deposit; zero cargo does not haul; no false threat without drop-off
+- Contract runners use production MiningComponent path for occupancy teardown stage
 
-## Duplicate rejection
-Incoming ≠ existing for same TeamId → RejectedDuplicate; actor not inserted; Find resolves existing.
+## EndPlay contract test
+`gp.Resource.RunEndPlayContractTest`
+- `ResourceNodeEndPlayWithActiveAndWaitingMiners` — 5 miners (4 Active + 1 Waiting), Destroy node; assert no promote, 5× None, timers off, TargetEndPlay
+- `ResourceNodeEndPlayDuringHaulLoop` — navigable Worker scenario, partial cargo, Destroy node; no false threat; no stale node ref
 
-## Stale cleanup
-`PruneInvalidMainBaseRegistrations` removes invalid weaks. Destroyed existing clears team slot so a replacement can Register successfully.
-
-## Contract team isolation
-Contract spawn remaps to first free playable TeamId (typically Team2 when Team1 occupied). Contract-owned tag `GP_DiagScenario_OwnedByContract`. Cleanup destroys only contract-owned actors. If all playable teams occupied → `BlockedByOccupiedPlayableTeams` (not masked as production failure).
-
-## Operator scenario preservation
-Sequence B (Spawn Team1 then Contract) keeps operator Team1 MainBase/Worker/Node and registry Count=1 for Team1.
-
-## Repeat-spawn policy
-`gp.Resource.SpawnDiagnosticScenario 1` cleans prior **operator** diagnostic for that team only, then spawns new; never deletes authored/production MainBase; never creates a second Team1 MainBase (`TeamMainBaseOccupied` if non-diagnostic occupies team).
-
-## New assertions
-Contract: FirstMainBaseRegistered, SameActorRegistrationIdempotent, DuplicateMainBaseRejected, RegistryCountRemainsOne, ExistingMainBasePreserved, RejectedBaseCleanupDoesNotRemoveExisting, DestroyedExistingClearsRegistry, ReplacementAfterCleanupSucceeds, plus operator-preservation checks when Team1 was present.
-
-Worker.List ScenarioValidation: MainBaseCountForWorkerTeam, RegistryUniqueForTeam, ResolvedMainBaseMatchesListedBase. ReadyForHaulingTest requires Count=1 and Unique=true.
+## Haul-loop teardown test
+Covered in contract stage above; operator still validates infinite haul + PIE Stop.
 
 ## Full regression results
-GPEditor compile gate: **PASSED**.  
-In-editor console suite (`RunDiagnosticScenarioContractTest`, Storage/Hauling/Worker/Mining/Cargo contracts, sequence B + Worker.List): **operator validation pending** (runtime PIE not executed in this pass).
+GPEditor compile: **PASSED**.  
+Console suite (`RunEndPlayContractTest`, DiagnosticScenario, Storage, Hauling, Worker, Mining, Cargo) + PIE Stop after haul: **operator validation pending**.
 
-## Files changed
-- `GPGameState.h/.cpp` — typed RegisterMainBase, prune/count/unique helpers
-- `GPMainBase.cpp` — register flag only on success/idempotent; reject-safe EndPlay
-- `GPResourceLoopDiagnostics.h/.cpp` — free TeamId, contract remap, operator re-spawn policy, validation uniqueness fields
-- `GPWorker.h/.cpp` — contract isolation stages, hauling ContractTeamId, Worker.List fields
-- Docs: task, AI log, this report
+## Non-blocking note
+`LogCrowdFollowing: Unable to find RecastNavMesh instance while trying to create UCrowdManager` after `BeginTearingDown` — engine teardown warning; not the ensure root cause; NavigationSystem scope not expanded.
 
 ## GPEditor / UHT
 **PASSED**
@@ -83,11 +71,17 @@ In-editor console suite (`RunDiagnosticScenarioContractTest`, Storage/Hauling/Wo
 ## GP Dev / Shipping
 **Not run**
 
+## Files changed
+- `GPResourceNode.h/.cpp` — EndPlay snapshot/guard; API guards; `IsClearingOccupancy`
+- `GPMiningComponent.h/.cpp` — Release skip while clearing; EndPlay contract runner + `gp.Resource.RunEndPlayContractTest`
+- `GPUnitCommandComponent.cpp` — TargetEndPlay partial cargo haul without return-to-deposit
+- Docs: task, AI log, this report
+
 ## Map / content / LFS
 Unchanged
 
 ## Correction commit
-c59b12031d88ea9b3c9dd584e4aa1028c2a846dc
+(see git after push)
 
 ## Git state
 Branch `feature/gp-s28-storage-threat` pushed; main untouched; no PR

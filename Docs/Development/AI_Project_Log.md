@@ -1,5 +1,32 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-05 — GP-S28 ResourceNode EndPlay Reentrant Occupancy Cleanup
+
+Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28-storage-threat`
+- Base: `main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+- Prior registry uniqueness: `c59b12031d88ea9b3c9dd584e4aa1028c2a846dc`
+- Task: `Docs/Development/Claude_Tasks/GP-S28_Storage_Threat.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Root cause
+`EndPlay` ranged-for over live `ActiveMiners`/`WaitingMiners` while `BroadcastMinerSlotStateChanged` → MiningComponent `StopMining` → `ReleaseMiningSlot` mutated the arrays.
+
+### What was done
+- Snapshot/clear/guard EndPlay teardown; Request/Release/Promote guarded; listener hardening
+- `gp.Resource.RunEndPlayContractTest` (occupancy 4+1 destroy + haul-loop destroy)
+- GPEditor Win64 Development + UHT **PASSED**; GP Dev/Shipping not run
+- Runtime PIE Stop after haul + full console suite: operator validation pending
+
+### Operator next
+1. `gp.Resource.RunEndPlayContractTest` → Complete Failures=0
+2. Spawn scenario → Mine → ≥1 haul → PIE Stop → no ensure / no crash
+3. Remaining contract suite Failures=0
+
+---
+
 ## 2026-08-05 — GP-S28 MainBase Registry Uniqueness + Contract Isolation
 
 Status: **GP-S28_CODE_READY_OPERATOR_VALIDATION_PENDING**

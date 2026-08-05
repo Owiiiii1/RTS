@@ -22,7 +22,7 @@ GP-S26 — UGP_MiningComponent Finalization
 `2801c73c8ef02ba4ae4286812d61ffd12c8410e6`
 
 ## Finalization commit
-*(recorded after commit — see HEAD / follow-up SHA note)*
+`2330f524bfe7b43ed1939fc463ac53bcb1379169`
 
 ## Operator validation matrix
 | Check | Result |

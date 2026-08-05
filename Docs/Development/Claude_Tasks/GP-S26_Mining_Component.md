@@ -12,7 +12,7 @@ Branch: `feature/gp-s26-mining-component`
 Candidate: `4d334a7f4fe331757e4e245d2979a27117a6b660`  
 Diagnostic-host correction: `b58fce2072a9340e258a332b701f477c52181e25`  
 Contract-test crash correction: `2801c73c8ef02ba4ae4286812d61ffd12c8410e6`  
-Finalization: *(see Cursor_Work_Report / HEAD)*
+Finalization: `2330f524bfe7b43ed1939fc463ac53bcb1379169`
 
 ## Canonical roadmap position
 `GP-S23R` → `GP-S24R` → `GP-S25` → **GP-S26 MiningComponent** → GP-S27 Worker → GP-S28 Storage+ThreatValue

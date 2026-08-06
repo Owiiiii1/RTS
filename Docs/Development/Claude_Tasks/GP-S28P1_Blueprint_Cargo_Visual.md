@@ -6,6 +6,7 @@
 ## Baseline
 - Branch: `feature/gp-s28p1-blueprint-cargo-visual`
 - Base audit: `audit/gp-s28p-resource-playable-pass` @ `377b9b8c28dc09929efbae061a05e351b0dbad3f`
+- Implementation: `e196a43e124e4c9fb0b0fe7f56ae299ac61f459a`
 - Main: `035c486758059032bb2551520834dd73f8667ef5` (untouched)
 
 ## Goal

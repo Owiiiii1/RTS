@@ -68,7 +68,7 @@ Cargo amount replicates; OnRep → cargo delegate → Worker visual sync. Late j
 4. PIE: presentation contract + RMB Mine smoke.
 
 ## Commit SHA
-(see git after push)
+`e196a43e124e4c9fb0b0fe7f56ae299ac61f459a`
 
 ## Git status
 (to verify: clean; synced; audit + main untouched)

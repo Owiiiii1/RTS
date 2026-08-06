@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28P2 Depletion / Registry / Reassignment (Candidate)
+
+Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- `feature/gp-s28p2-depletion-resource-reassignment` from `main` @ `86bcc9740fde0f19ac40c70f2f49298680f5f7d6`
+- Task: `Docs/Development/Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md`
+
+### Summary
+One-shot ResourceNode depletion + deferred Destroy; GameState ResourceNode registry + path-aware FindResourceCandidates; Worker search tunables; UnitCommand reassignment / WaitingForResource; contract test + suite entry. GPEditor Dev+UHT **PASSED**. Operator-local BP/materials/map/config left uncommitted. PIE suite **operator pending**.
+
+---
+
 ## 2026-08-06 — GP-S28P1 Finalization
 
 Status: **GP-S28P1_READY_FOR_MERGE**

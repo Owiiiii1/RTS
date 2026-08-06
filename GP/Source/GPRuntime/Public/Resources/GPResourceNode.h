@@ -46,8 +46,14 @@ DECLARE_MULTICAST_DELEGATE_ThreeParams(
 	EGP_MinerOccupancyState /* OldState */,
 	EGP_MinerOccupancyState /* NewState */);
 
+/** Blueprint presentation signal — fires once when deposit crosses into depleted (GP-S28P2). */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FGP_OnResourceDepleted,
+	AGP_ResourceNode*, ResourceNode,
+	int32, PreviousAmount);
+
 /**
- * Canonical Ferronite Deposit runtime actor (GP-S24R / GP-S27A1).
+ * Canonical Ferronite Deposit runtime actor (GP-S24R / GP-S27A1 / GP-S28P2).
  *
  * Gameplay identity: Ferronite Deposit.
  * Implementation class: AGP_ResourceNode (AActor; not BuildingBase).
@@ -84,6 +90,17 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "GP|Resource")
 	bool IsDepleted() const;
+
+	/** True after one-shot authority depletion transition completed (replicated). */
+	UFUNCTION(BlueprintPure, Category = "GP|Resource|Depletion")
+	bool HasCompletedDepletionTransition() const { return bHasDepleted; }
+
+	/** True while deferred destroy timer is armed (authority). */
+	UFUNCTION(BlueprintPure, Category = "GP|Resource|Depletion")
+	bool IsDestroyPending() const { return bDestroyPending; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|Resource|Depletion")
+	float GetDepletionDestroyDelaySeconds() const { return DepletionDestroyDelaySeconds; }
 
 	/**
 	 * Attach parent for Blueprint/SCS meshes (CollisionBox root).
@@ -139,9 +156,14 @@ public:
 
 	/**
 	 * Authority-only. Consumes up to RequestedAmount; returns actual consumed.
-	 * Does not destroy the actor or change visuals on depletion.
+	 * Crossing PreviousAmount>0 → NewAmount<=0 triggers one-shot depletion transition
+	 * (occupancy clear without promote, collision off, OnResourceDepleted, deferred Destroy).
 	 */
 	int32 ConsumeResource(int32 RequestedAmount);
+
+	/** Blueprint presentation: one-shot depleted signal (authority + client OnRep). */
+	UPROPERTY(BlueprintAssignable, Category = "GP|Resource|Presentation")
+	FGP_OnResourceDepleted OnResourceDepleted;
 
 	UFUNCTION(BlueprintPure, Category = "GP|Resource|Occupancy")
 	int32 GetMaxConcurrentMiners() const;
@@ -188,9 +210,17 @@ public:
 	UGP_ResourceNodeVisualComponent* GetResourceNodeVisualComponent() const;
 	UBoxComponent* GetCollisionBox() const;
 
+#if !UE_BUILD_SHIPPING
+	/** Contract helper: force CurrentAmount and optionally trip depletion transition. */
+	void DebugSetCurrentAmountForTest(int32 NewAmount, bool bAllowDepletionTransition);
+#endif
+
 protected:
 	UFUNCTION()
 	void OnRep_CurrentAmount();
+
+	UFUNCTION()
+	void OnRep_bHasDepleted();
 
 	void ClampCurrentAmountToMax();
 	void NormalizeAmountsOnConstruction();
@@ -201,6 +231,15 @@ protected:
 	void BroadcastMinerSlotStateChanged(AActor* Miner, EGP_MinerOccupancyState OldState, EGP_MinerOccupancyState NewState);
 	bool IsValidMinerActor(const AActor* Miner) const;
 	bool IsDepositStateValidForMining() const;
+
+	void HandleDepletionTransition(int32 PreviousAmount);
+	void ClearOccupancyWithoutPromotion();
+	void DisableGameplayInteraction();
+	void ScheduleDeferredDestroy();
+	void ExecuteDeferredDestroy();
+	void BroadcastDepletionPresentation(int32 PreviousAmount);
+	void RegisterWithGameState();
+	void UnregisterFromGameState();
 
 	/** Gameplay collision root — blocks movement/nav. Visual parts are separate NoCollision. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Resource", meta = (AllowPrivateAccess = "true"))
@@ -235,6 +274,20 @@ protected:
 	int32 CurrentAmount = 5000;
 
 	/**
+	 * One-shot depleted transition flag (GP-S28P2).
+	 * Not derived from CurrentAmount alone — prevents OnRep double-fire.
+	 */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_bHasDepleted, Category = "GP|Resource|Depletion")
+	bool bHasDepleted = false;
+
+	/**
+	 * Delay before Destroy after depletion transition.
+	 * 0 → next-tick deferred destroy (never Destroy inside ConsumeResource stack).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Resource|Depletion", meta = (ClampMin = "0.0"))
+	float DepletionDestroyDelaySeconds = 0.25f;
+
+	/**
 	 * Soft-cap for concurrent active miners (TDD MaxConcurrentWorkers = 4).
 	 * Excess miners enter waiting FIFO queue. Not Worker-specific.
 	 */
@@ -266,4 +319,10 @@ private:
 	 * Production APIs become no-op / reject; snapshot broadcasts are the only notifications.
 	 */
 	bool bIsClearingOccupancy = false;
+
+	bool bDestroyPending = false;
+	bool bDepletionPresentationBroadcast = false;
+	int32 DepletionPreviousAmountCached = 0;
+	FTimerHandle DepletionDestroyTimerHandle;
+	bool bRegisteredWithGameState = false;
 };

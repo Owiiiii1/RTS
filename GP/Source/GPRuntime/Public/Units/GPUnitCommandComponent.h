@@ -9,6 +9,7 @@
 #include "GPUnitCommandComponent.generated.h"
 
 class AGP_UnitBase;
+class AGP_Worker;
 class AGP_ResourceNode;
 class AGP_MainBase;
 class UGP_MovementComponent;
@@ -27,12 +28,14 @@ enum class EGP_AttackExecutionState : uint8
 	Ready
 };
 
-/** Mine approach / active orchestration (GP-S27). Plain C++ — not UENUM / not Blueprint. */
+/** Mine approach / active orchestration (GP-S27/S28P2). Plain C++ — not UENUM / not Blueprint. */
 enum class EGP_MineExecutionState : uint8
 {
 	Idle,
 	Approaching,
-	Active
+	Active,
+	/** Cargo not full; no reachable compatible ResourceNode candidate. */
+	WaitingForResource
 };
 
 /** Haul / return-to-base orchestration (GP-S28). Plain C++ — not UENUM / not Blueprint. */
@@ -231,6 +234,19 @@ private:
 		EGP_MiningStopReason Reason);
 	float ResolveMineInteractionRangeCm(const UGP_MiningComponent* Mining, const AGP_ResourceNode* Node) const;
 
+	/** GP-S28P2 path-aware reassignment / WaitingForResource. */
+	bool TryRetargetMineToNode(AGP_ResourceNode* NewNode, uint32 MineSerial, bool bStartApproach);
+	AGP_ResourceNode* FindAutoResourceCandidate(
+		AGP_Worker* Worker,
+		AGP_ResourceNode* ExcludeNode,
+		bool bRequireFreeSlot) const;
+	bool TryAutoReassignMine(uint32 MineSerial, AGP_ResourceNode* PreferredOrFailedNode, bool bPreferFreeSlotFirst);
+	void EnterWaitingForResource(uint32 MineSerial);
+	void BindResourceRegistryWake();
+	void UnbindResourceRegistryWake();
+	void HandleResourceNodeRegisteredWake(AGP_ResourceNode* Node);
+	void HandleWaitingForResourceSafetyRetry();
+
 	/**
 	 * Computes approach destination so even AcceptanceRadius edge completion stays
 	 * strictly inside InteractionRange in 3D (accounts for DeltaZ + safety margin).
@@ -372,6 +388,10 @@ private:
 	float MineLastArrivalDistance = -1.0f;
 	float MineLastArrivalRangeError = -1.0f;
 	int32 MineApproachAttempt = 0;
+
+	FDelegateHandle ResourceNodeRegisteredHandle;
+	FTimerHandle WaitingForResourceRetryTimerHandle;
+	bool bResourceRegistryWakeBound = false;
 
 	/** GP-S28 Haul orchestration (Worker only; shares Mine command serial as chain id). */
 	EGP_HaulExecutionState HaulState = EGP_HaulExecutionState::Idle;

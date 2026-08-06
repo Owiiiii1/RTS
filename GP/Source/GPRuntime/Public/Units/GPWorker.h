@@ -46,6 +46,7 @@ enum class EGP_WorkerActivityState : uint8
 	DroppingOff UMETA(DisplayName = "Dropping Off"),
 	ReturningToDeposit UMETA(DisplayName = "Returning To Deposit"),
 	WaitingForStorage UMETA(DisplayName = "Waiting For Storage"),
+	WaitingForResource UMETA(DisplayName = "Waiting For Resource"),
 	CommandFailed UMETA(DisplayName = "Command Failed")
 };
 
@@ -94,6 +95,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Worker")
 	EGP_WorkerActivityState GetWorkerActivityState() const;
 
+	UFUNCTION(BlueprintPure, Category = "GP|Worker|ResourceSearch")
+	float GetResourceSearchRadiusCm() const { return ResourceSearchRadiusCm; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|Worker|ResourceSearch")
+	float GetMaxResourcePathLengthCm() const { return MaxResourcePathLengthCm; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|Worker|ResourceSearch")
+	bool GetAllowManualTargetOutsideAutoSearchRadius() const
+	{
+		return bAllowManualTargetOutsideAutoSearchRadius;
+	}
+
 	/**
 	 * Cargo presentation signal.
 	 * Operator BP usage: keep backpack/container mesh always visible; do not hide via bVisible.
@@ -134,6 +147,24 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Mining", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_MiningComponent> MiningComponent;
+
+	/**
+	 * Auto-search radius for alternative ResourceNodes (GP-S28P2).
+	 * Manual RMB Mine may still target outside this radius when allowed.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Worker|ResourceSearch",
+		meta = (AllowPrivateAccess = "true", ClampMin = "1.0"))
+	float ResourceSearchRadiusCm = 3000.0f;
+
+	/** Reject auto-search candidates whose navigable path exceeds this length. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Worker|ResourceSearch",
+		meta = (AllowPrivateAccess = "true", ClampMin = "1.0"))
+	float MaxResourcePathLengthCm = 6000.0f;
+
+	/** Manual Mine targets outside ResourceSearchRadius remain allowed when true. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Worker|ResourceSearch",
+		meta = (AllowPrivateAccess = "true"))
+	bool bAllowManualTargetOutsideAutoSearchRadius = true;
 
 private:
 	UFUNCTION()
@@ -337,6 +368,48 @@ private:
 	int32 ContractTeamId = 1;
 	bool bOperatorTeam1PresentAtStart = false;
 	TWeakObjectPtr<AGP_MainBase> OperatorTeam1MainBaseWeak;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
+};
+
+/** GP-S28P2 depletion / registry / reassignment contract (debug console). */
+UCLASS()
+class GPRUNTIME_API UGP_DepletionReassignmentContractTestRunner : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
+	void Start(UWorld* InWorld);
+
+private:
+	void ScheduleNext();
+	void AdvanceStage();
+	bool Expect(bool bOk, const TCHAR* Label);
+	void Abort(const TCHAR* Reason);
+	void Finish();
+	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void UnbindWorldCleanup();
+	void CleanupActors();
+
+	UFUNCTION()
+	void HandleDepleted(AGP_ResourceNode* ResourceNode, int32 PreviousAmount);
+
+	int32 StageIndex = 0;
+	int32 Failures = 0;
+	bool bFinished = false;
+	FDelegateHandle WorldCleanupHandle;
+	FTimerHandle StageTimerHandle;
+	TWeakObjectPtr<UWorld> WorldWeak;
+	TWeakObjectPtr<AGP_ResourceNode> NodeAWeak;
+	TWeakObjectPtr<AGP_ResourceNode> NodeBWeak;
+	TWeakObjectPtr<AGP_Worker> WorkerWeak;
+	TWeakObjectPtr<AGP_Worker> SlotHolderWeak;
+	int32 DepletionEventCount = 0;
+	int32 LastDepletionPreviousAmount = -1;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

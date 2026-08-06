@@ -5,9 +5,11 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameplayTagContainer.h"
+#include "Resources/GPResourceNodeSearch.h"
 #include "GPGameState.generated.h"
 
 class AGP_MainBase;
+class AGP_ResourceNode;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGP_MatchStateTagChanged, FGameplayTag /*OldTag*/, FGameplayTag /*NewTag*/);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGP_MatchTimeRemainingChanged, float /*OldTime*/, float /*NewTime*/);
@@ -23,6 +25,10 @@ DECLARE_MULTICAST_DELEGATE_FourParams(
 	int32 /*NewWinnerTeamId*/,
 	FGameplayTag /*OldWinReasonTag*/,
 	FGameplayTag /*NewWinReasonTag*/);
+
+/** Authority-only ResourceNode registry lifecycle (GP-S28P2). Not replicated. */
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnGP_ResourceNodeRegistered, AGP_ResourceNode* /*Node*/);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnGP_ResourceNodeUnregistered, AGP_ResourceNode* /*Node*/);
 
 /** Per-team fluctuating Planetary Ferronite threat stock (GP-S28). */
 USTRUCT(BlueprintType)
@@ -118,6 +124,41 @@ public:
 	bool IsMainBaseRegistryUniqueForTeam(int32 InTeamId) const;
 	void PruneInvalidMainBaseRegistrations();
 
+	/** Result of authority ResourceNode registry mutation (GP-S28P2). Multi-entry; not unique per team. */
+	enum class EGP_ResourceNodeRegisterResult : uint8
+	{
+		Registered,
+		AlreadyRegistered,
+		RejectedNoAuthority,
+		RejectedInvalidActor,
+		RejectedDepletedOrPendingDestroy
+	};
+
+	/**
+	 * Authority-only ResourceNode registry (no GetAllActorsOfClass).
+	 * Depleted / destroy-pending nodes are not valid search candidates.
+	 */
+	EGP_ResourceNodeRegisterResult RegisterResourceNode(AGP_ResourceNode* ResourceNode);
+	void UnregisterResourceNode(AGP_ResourceNode* ResourceNode);
+	void PruneInvalidResourceNodeRegistrations();
+	int32 GetRegisteredResourceNodeCount() const;
+
+	/**
+	 * Authority path-aware search over registry.
+	 * Sorted: free slot (optional prefer) → path length → direct distance → actor name.
+	 */
+	void FindResourceCandidates(
+		const FGP_ResourceNodeSearchQuery& Query,
+		TArray<FGP_ResourceNodeCandidate>& OutCandidates) const;
+
+	AGP_ResourceNode* FindBestResourceCandidate(const FGP_ResourceNodeSearchQuery& Query) const;
+
+	/** C++ subscription: ResourceNode registered (authority). */
+	FOnGP_ResourceNodeRegistered OnResourceNodeRegistered;
+
+	/** C++ subscription: ResourceNode unregistered (authority). */
+	FOnGP_ResourceNodeUnregistered OnResourceNodeUnregistered;
+
 	/** C++ subscription: old/new MatchStateTag. */
 	FOnGP_MatchStateTagChanged OnMatchStateTagChanged;
 
@@ -194,4 +235,13 @@ protected:
 private:
 	/** Authority-only weak registry; not replicated. */
 	TArray<TWeakObjectPtr<AGP_MainBase>> RegisteredMainBases;
+
+	/** Authority-only weak ResourceNode registry; not replicated. */
+	TArray<TWeakObjectPtr<AGP_ResourceNode>> RegisteredResourceNodes;
+
+	bool EvaluateResourceNodePath(
+		const FGP_ResourceNodeSearchQuery& Query,
+		AGP_ResourceNode* Node,
+		float& OutPathLengthCm,
+		float& OutDirectDistanceCm) const;
 };

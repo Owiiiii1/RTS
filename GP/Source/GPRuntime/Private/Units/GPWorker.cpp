@@ -270,6 +270,11 @@ EGP_WorkerActivityState AGP_Worker::GetWorkerActivityState() const
 			break;
 		}
 
+		if (Commands->GetMineExecutionState() == EGP_MineExecutionState::WaitingForResource)
+		{
+			return EGP_WorkerActivityState::WaitingForResource;
+		}
+
 		if (Commands->GetMineExecutionState() == EGP_MineExecutionState::Approaching)
 		{
 			return EGP_WorkerActivityState::MovingToMine;

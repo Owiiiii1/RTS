@@ -3,7 +3,11 @@
 #include "Game/GPGameState.h"
 
 #include "Buildings/GPMainBase.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 #include "Net/UnrealNetwork.h"
+#include "Resources/GPResourceDefinition.h"
+#include "Resources/GPResourceNode.h"
 #include "Tags/GPGameplayTags.h"
 
 AGP_GameState::AGP_GameState()
@@ -423,6 +427,227 @@ int32 AGP_GameState::CountRegisteredMainBasesForTeam(int32 InTeamId) const
 bool AGP_GameState::IsMainBaseRegistryUniqueForTeam(int32 InTeamId) const
 {
 	return CountRegisteredMainBasesForTeam(InTeamId) <= 1;
+}
+
+void AGP_GameState::PruneInvalidResourceNodeRegistrations()
+{
+	RegisteredResourceNodes.RemoveAll([](const TWeakObjectPtr<AGP_ResourceNode>& Weak)
+	{
+		const AGP_ResourceNode* Node = Weak.Get();
+		return !IsValid(Node) || Node->IsActorBeingDestroyed();
+	});
+}
+
+AGP_GameState::EGP_ResourceNodeRegisterResult AGP_GameState::RegisterResourceNode(AGP_ResourceNode* ResourceNode)
+{
+	if (!HasAuthority())
+	{
+		return EGP_ResourceNodeRegisterResult::RejectedNoAuthority;
+	}
+	if (!IsValid(ResourceNode) || ResourceNode->IsActorBeingDestroyed())
+	{
+		return EGP_ResourceNodeRegisterResult::RejectedInvalidActor;
+	}
+	if (ResourceNode->HasCompletedDepletionTransition() || ResourceNode->IsDestroyPending())
+	{
+		return EGP_ResourceNodeRegisterResult::RejectedDepletedOrPendingDestroy;
+	}
+
+	PruneInvalidResourceNodeRegistrations();
+
+	for (const TWeakObjectPtr<AGP_ResourceNode>& Weak : RegisteredResourceNodes)
+	{
+		if (Weak.Get() == ResourceNode)
+		{
+			return EGP_ResourceNodeRegisterResult::AlreadyRegistered;
+		}
+	}
+
+	RegisteredResourceNodes.Add(ResourceNode);
+	OnResourceNodeRegistered.Broadcast(ResourceNode);
+	UE_LOG(LogTemp, Log,
+		TEXT("AGP_GameState::RegisterResourceNode: Registered=%s RegistrySize=%d"),
+		*GetNameSafe(ResourceNode),
+		RegisteredResourceNodes.Num());
+	return EGP_ResourceNodeRegisterResult::Registered;
+}
+
+void AGP_GameState::UnregisterResourceNode(AGP_ResourceNode* ResourceNode)
+{
+	PruneInvalidResourceNodeRegistrations();
+	if (ResourceNode == nullptr)
+	{
+		return;
+	}
+
+	const int32 Removed = RegisteredResourceNodes.RemoveAll([ResourceNode](const TWeakObjectPtr<AGP_ResourceNode>& Weak)
+	{
+		return !Weak.IsValid() || Weak.Get() == ResourceNode;
+	});
+	if (Removed > 0)
+	{
+		OnResourceNodeUnregistered.Broadcast(ResourceNode);
+	}
+}
+
+int32 AGP_GameState::GetRegisteredResourceNodeCount() const
+{
+	int32 Count = 0;
+	for (const TWeakObjectPtr<AGP_ResourceNode>& Weak : RegisteredResourceNodes)
+	{
+		if (Weak.IsValid())
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+bool AGP_GameState::EvaluateResourceNodePath(
+	const FGP_ResourceNodeSearchQuery& Query,
+	AGP_ResourceNode* Node,
+	float& OutPathLengthCm,
+	float& OutDirectDistanceCm) const
+{
+	OutPathLengthCm = 0.0f;
+	OutDirectDistanceCm = 0.0f;
+	if (!IsValid(Node) || Query.PathfindingActor == nullptr)
+	{
+		return false;
+	}
+
+	const FVector Start = Query.Origin;
+	const FVector End = Node->GetActorLocation();
+	OutDirectDistanceCm = FVector::Dist(Start, End);
+	if (OutDirectDistanceCm > Query.SearchRadiusCm + KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* NavSys = World != nullptr ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	if (NavSys == nullptr)
+	{
+		return false;
+	}
+
+	const ANavigationData* NavData = NavSys->GetDefaultNavDataInstance(FNavigationSystem::DontCreate);
+	if (NavData == nullptr)
+	{
+		return false;
+	}
+
+	FPathFindingQuery PathQuery(
+		Query.PathfindingActor.Get(),
+		*NavData,
+		Start,
+		End);
+	PathQuery.SetAllowPartialPaths(false);
+
+	const FPathFindingResult PathResult = NavSys->FindPathSync(PathQuery);
+	if (!PathResult.IsSuccessful() || !PathResult.Path.IsValid() || PathResult.IsPartial())
+	{
+		return false;
+	}
+
+	OutPathLengthCm = PathResult.Path->GetLength();
+	if (!FMath::IsFinite(OutPathLengthCm) || OutPathLengthCm > Query.MaxPathLengthCm + KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+void AGP_GameState::FindResourceCandidates(
+	const FGP_ResourceNodeSearchQuery& Query,
+	TArray<FGP_ResourceNodeCandidate>& OutCandidates) const
+{
+	OutCandidates.Reset();
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	for (const TWeakObjectPtr<AGP_ResourceNode>& Weak : RegisteredResourceNodes)
+	{
+		AGP_ResourceNode* Node = Weak.Get();
+		if (!IsValid(Node)
+			|| Node->IsActorBeingDestroyed()
+			|| Node == Query.ExcludeNode
+			|| Node->HasCompletedDepletionTransition()
+			|| Node->IsDestroyPending()
+			|| Node->IsDepleted()
+			|| Node->IsClearingOccupancy())
+		{
+			continue;
+		}
+
+		if (!Node->CanAcceptMineCommand(true, nullptr))
+		{
+			continue;
+		}
+
+		if (Query.CompatibleDefinition != nullptr)
+		{
+			const UGP_ResourceDefinition* NodeDef = Node->ResolveResourceDefinition(true);
+			const bool bSameAsset = NodeDef == Query.CompatibleDefinition;
+			const bool bSameType =
+				NodeDef != nullptr
+				&& Query.CompatibleDefinition->ResourceType != EGP_ResourceType::None
+				&& NodeDef->ResourceType == Query.CompatibleDefinition->ResourceType;
+			if (!bSameAsset && !bSameType)
+			{
+				continue;
+			}
+		}
+
+		const bool bHasFreeSlot = Node->GetActiveMinerCount() < Node->GetMaxConcurrentMiners();
+		if (Query.bRequireFreeSlot && !bHasFreeSlot)
+		{
+			continue;
+		}
+
+		float PathLength = 0.0f;
+		float DirectDistance = 0.0f;
+		if (!EvaluateResourceNodePath(Query, Node, PathLength, DirectDistance))
+		{
+			continue;
+		}
+
+		FGP_ResourceNodeCandidate Candidate;
+		Candidate.Node = Node;
+		Candidate.PathLengthCm = PathLength;
+		Candidate.DirectDistanceCm = DirectDistance;
+		Candidate.bHasFreeSlot = bHasFreeSlot;
+		OutCandidates.Add(Candidate);
+	}
+
+	OutCandidates.Sort([PreferFree = Query.bPreferFreeSlot](const FGP_ResourceNodeCandidate& A, const FGP_ResourceNodeCandidate& B)
+	{
+		if (PreferFree && A.bHasFreeSlot != B.bHasFreeSlot)
+		{
+			return A.bHasFreeSlot && !B.bHasFreeSlot;
+		}
+		if (!FMath::IsNearlyEqual(A.PathLengthCm, B.PathLengthCm))
+		{
+			return A.PathLengthCm < B.PathLengthCm;
+		}
+		if (!FMath::IsNearlyEqual(A.DirectDistanceCm, B.DirectDistanceCm))
+		{
+			return A.DirectDistanceCm < B.DirectDistanceCm;
+		}
+		const FString NameA = GetNameSafe(A.Node);
+		const FString NameB = GetNameSafe(B.Node);
+		return NameA < NameB;
+	});
+}
+
+AGP_ResourceNode* AGP_GameState::FindBestResourceCandidate(const FGP_ResourceNodeSearchQuery& Query) const
+{
+	TArray<FGP_ResourceNodeCandidate> Candidates;
+	FindResourceCandidates(Query, Candidates);
+	return Candidates.Num() > 0 ? Candidates[0].Node.Get() : nullptr;
 }
 
 void AGP_GameState::BroadcastMatchResultChanged(

@@ -337,4 +337,12 @@ User’s P1–P4 order retained; **P3 narrowed** (no drop-off interface) to matc
 ---
 
 ## 14. Implementation status
-**Not started.** P0 = documentation only.
+
+**P0 audit:** documentation only (this file).
+
+### Addendum — post-P0 implementation (do not rewrite audit body)
+
+| Stage | Status |
+| --- | --- |
+| GP-S28P1 | **Merged** to `main` @ `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` |
+| GP-S28P2 | **CODE_READY_OPERATOR_VALIDATION_PENDING** on `feature/gp-s28p2-depletion-resource-reassignment` — depletion one-shot + deferred Destroy (vanish, not persistent shell), GameState ResourceNode registry + path-aware search, WaitingForResource / reassignment, `gp.Resource.RunDepletionReassignmentContractTest`. Details: `Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md` |

@@ -36,21 +36,21 @@
 | Engine | **Unreal Engine 5.8.1** |
 | Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S28 merged** |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S28 Storage + ThreatValue** @ `main` `035c486758059032bb2551520834dd73f8667ef5` |
+| Last closed / merged stage | **GP-S28P1** @ `main` `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` |
 | Slice 6 | **Completed** |
-| Current stage | **GP-S28P1_READY_FOR_MERGE** (`feature/gp-s28p1-blueprint-cargo-visual`) |
+| Current stage | **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING** (`feature/gp-s28p2-depletion-resource-reassignment`) |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** GP-S28P1 — Blueprint presentation + cargo visual + Niagara mining hook + generated ResourceNode visual override (`feature/gp-s28p1-blueprint-cargo-visual`). Task: [`Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`](Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md). Status: **GP-S28P1_READY_FOR_MERGE**.
+**Current:** GP-S28P2 — Resource depletion, registry, reassignment, FIFO recovery (`feature/gp-s28p2-depletion-resource-reassignment`). Task: [`Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md`](Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md). Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**.
 
-**Prior audit (kept):** GP-S28P0 on `audit/gp-s28p-resource-playable-pass` — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
+**Prior:** GP-S28P1 merged on `main`. P0 audit kept on `audit/gp-s28p-resource-playable-pass` — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
 
 **Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation`.
 
-**NEXT (after P1 merge):** GP-S28P2 depletion + reassignment — do not start until assigned.
+**NEXT (after P2 operator validation / merge):** GP-S28P3 drop-off resilience — do not start until assigned.
 
 > Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28 already merged on main.
 

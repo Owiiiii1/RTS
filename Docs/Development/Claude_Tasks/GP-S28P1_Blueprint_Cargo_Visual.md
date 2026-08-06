@@ -9,6 +9,11 @@
 - Implementation: `e196a43e124e4c9fb0b0fe7f56ae299ac61f459a`
 - Main: `035c486758059032bb2551520834dd73f8667ef5` (untouched)
 
+## Correction — UnitDefinition compile warning
+Operator blocker: BP_GP_Worker Compile logged unconditional `WarnNoUnitDefinitionAsset` (“No UGP_UnitDefinition Worker asset…”).
+
+Fix: removed that warning from `ValidateWorkerContract`. Worker UnitDefinition remains deferred — **no** placeholder asset / property. Presentation contract now asserts absence of UnitDefinition warnings. DataValidation on local BP_GP_Worker: 0 errors, 0 warnings.
+
 ## Goal
 Expose stable Blueprint presentation attach points and a cargo visual signal so operator-authored BP children can look playable — without changing Mine command semantics, Storage/Threat, or resource reassignment.
 

@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28P1 UnitDefinition Validation Warning Correction
+
+Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p1-blueprint-cargo-visual`
+
+### Blocker / fix
+Removed unconditional `WarnNoUnitDefinitionAsset` from `AGP_Worker::ValidateWorkerContract` (blocked BP_GP_Worker Compile). No UnitDefinition asset added. GPEditor Dev+UHT **PASSED**. Local BP DataValidation: 0 warnings. PIE presentation/S28 suite **operator pending**.
+
+---
+
 ## 2026-08-06 — GP-S28P1 Blueprint-Ready Actors + Cargo Visual
 
 Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**

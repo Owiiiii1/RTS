@@ -309,8 +309,8 @@ bool AGP_Worker::ValidateWorkerContract(TArray<FText>& OutErrors, TArray<FText>&
 		OutWarnings.Add(NSLOCTEXT("GPWorker", "WarnWorkerTag", "Worker missing GP.Unit.Type.Worker capability tag."));
 	}
 
-	OutWarnings.Add(NSLOCTEXT("GPWorker", "WarnNoUnitDefinitionAsset",
-		"No UGP_UnitDefinition Worker asset in project (known limitation)."));
+	// UGP_UnitDefinition Worker asset is deferred (roadmap / GP unit-definition pass).
+	// Do not emit a compile/data-validation warning for its absence in S28P1.
 
 	return OutErrors.Num() == 0;
 }
@@ -1870,6 +1870,16 @@ namespace GPWorkerDebug
 		TArray<FText> WorkerErrors;
 		TArray<FText> WorkerWarnings;
 		Expect(Worker->ValidateWorkerContract(WorkerErrors, WorkerWarnings), TEXT("WorkerContractValid"));
+		bool bHasUnitDefWarning = false;
+		for (const FText& Warning : WorkerWarnings)
+		{
+			if (Warning.ToString().Contains(TEXT("UGP_UnitDefinition"), ESearchCase::IgnoreCase))
+			{
+				bHasUnitDefWarning = true;
+				break;
+			}
+		}
+		Expect(!bHasUnitDefWarning, TEXT("NoUnitDefinitionWarning"));
 
 		TArray<FText> BaseErrors;
 		TArray<FText> BaseWarnings;

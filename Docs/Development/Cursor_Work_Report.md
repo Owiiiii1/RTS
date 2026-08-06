@@ -1,4 +1,4 @@
-# Cursor Work Report — GP-S28P1 Blueprint Cargo Visual
+# Cursor Work Report — GP-S28P1 UnitDefinition Warning Correction
 
 ## Status
 **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
@@ -6,72 +6,47 @@
 ## Branch
 `feature/gp-s28p1-blueprint-cargo-visual`
 
-## Base audit commit
-`377b9b8c28dc09929efbae061a05e351b0dbad3f` (`audit/gp-s28p-resource-playable-pass`)
+## Operator blocker
+BP_GP_Worker Compile AssetLog: `No UGP_UnitDefinition Worker asset in project (known limitation).`
 
-## Right-click Mine preserved
-No changes to `UGP_CommandComponent`, `Server_RequestCommand`, or Mine/haul semantics.
+## Root cause
+`AGP_Worker::ValidateWorkerContract` always appended that string to `OutWarnings`. `IsDataValid` surfaced it on Blueprint Compile even though Worker UnitDefinition is intentionally deferred.
 
-## Worker components added
-- `PresentationRoot` (under Capsule)
-- `CargoVisualAnchor` (under PresentationRoot)
-- Accessors + `OnCargoVisualStateChanged`
+## Correction
+Removed the unconditional `WarnNoUnitDefinitionAsset` warning. Left a short comment that UnitDefinition is deferred. No fake asset, no hard reference, no WorkerDefinition property.
 
-## MainBase components added
-- `PresentationRoot`
-- `DropOffVisualAnchor` (presentation only)
-- Planetary stored/capacity accessors
+## No UnitDefinition asset created
+Confirmed — only validation text change.
 
-## ResourceNode result
-- `GetPresentationRoot()` → CollisionBox root (no duplicate hierarchy)
-- `GetRemainingNormalized()` added
-- Depletion events deferred to P2
+## Blueprint compile verification
+- Local untracked `BP_GP_Worker` used for check (not committed).
+- `UnrealEditor-Cmd -run=DataValidation /Game/GrimProtocol/Blueprint/Units/BP_GP_Worker` → **Success — 0 error(s), 0 warning(s)**.
+- PresentationRoot / CargoVisualAnchor remain on C++ parent (unchanged).
 
-## Cargo visual event contract
-- Bound to `OnCargoAmountChanged` (authority + OnRep path)
-- BeginPlay initial sync
-- Visible iff `CurrentCargoAmount > KINDA_SMALL_NUMBER`
-- FillNormalized from `GetFillRatio()`
-- No extra replicated bool / cargo actor
-
-## Replication / late-join
-Cargo amount replicates; OnRep → cargo delegate → Worker visual sync. Late join clients get OnRep then presentation update.
-
-## Test result
-`gp.Resource.RunPresentationContractTest` added (sync; coordinator). Wired into S28 suite after Cargo. Operator PIE validation pending.
-
-## Build
-| Target | Result |
+## Build / test results
+| Check | Result |
 | --- | --- |
 | GPEditor Win64 Development + UHT | **PASSED** |
+| `gp.Resource.RunPresentationContractTest` | Code asserts `NoUnitDefinitionWarning`; **operator PIE pending** |
+| `gp.Resource.RunS28RegressionSuite` | **operator PIE pending** |
 
-## C++ files changed
-- `GPWorker.h` / `GPWorker.cpp`
-- `GPMainBase.h` / `GPMainBase.cpp`
-- `GPResourceNode.h` / `GPResourceNode.cpp`
-- `GPContractIsolationAndSuite.cpp` (suite entry)
-
-## Docs changed
-- `Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md` (created)
-- `AI_Project_Log.md`
-- `DOCUMENTATION_INDEX.md`
-- `Claude_Tasks/README.md`
-- `Cursor_Work_Report.md`
+## Files changed
+- `GP/Source/GPRuntime/Private/Units/GPWorker.cpp`
+- `Docs/Development/Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
 ## Assets / map / LFS
-**Unchanged** (no BP/map created)
+**Unchanged in git** — local `BP_GP_Worker` remains untracked / not committed.
 
-## Operator Blueprint creation steps
-1. `BP_GP_Worker : AGP_Worker` — body mesh on PresentationRoot; cargo mesh on CargoVisualAnchor; bind `OnCargoVisualStateChanged`.
-2. `BP_GP_MainBase : AGP_MainBase` — meshes on PresentationRoot.
-3. `BP_GP_ResourceNode_Ferronite : AGP_ResourceNode` — authored meshes under CollisionBox / AuthoredComponents; NoCollision visuals.
-4. PIE: presentation contract + RMB Mine smoke.
+## Mine / Cargo / Mining / Storage
+Untouched.
 
-## Commit SHA
-`e196a43e124e4c9fb0b0fe7f56ae299ac61f459a`
+## Correction commit SHA
+(see git after push)
 
 ## Git status
-(to verify: clean; synced; audit + main untouched)
+(to verify clean of intended files; local Blueprint folder may remain untracked)
 
 ## Status
 **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**

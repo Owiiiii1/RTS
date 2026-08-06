@@ -61,6 +61,8 @@ Conflict rule applied: GDD = gameplay intent; TDD/ADR = architecture; main + AI 
 5. Drop-off is single MainBase only; no WaitingForDropOff recovery when base missing (overflow currently LOST when storage full).
 6. No player HUD for Planetary stored Ferronite.
 7. Operator must hand-author a map (NavMesh, TeamIds, placements) — no content yet beyond PrototypeArena + examples.
+8. Shift+command sets `bQueue`, but Held queue execution is **QueueDeferred no-op** (document; fix out of S28P unless explicitly assigned).
+9. Cargo-full Worker rejects a **new** Mine unless already in haul chain for that deposit (expected for S28; reassignment must not fight this).
 
 ---
 
@@ -85,6 +87,7 @@ Conflict rule applied: GDD = gameplay intent; TDD/ADR = architecture; main + AI 
 | Signal | Type | Notes |
 | --- | --- | --- |
 | `UGP_CargoComponent::OnCargoAmountChanged` | `BlueprintAssignable` Dynamic | Fires on authority mutate + `OnRep_CurrentCargoAmount` |
+| `UGP_MiningComponent::OnMiningStateChanged` / `OnMiningCycleCompleted` | BlueprintAssignable (per MiningComponent) | Available for presentation polish |
 | `UGP_StorageComponent::OnStorageChanged` | `BlueprintAssignable` Dynamic | Totals after add/remove / OnRep containers |
 | `AGP_ResourceNode::OnMinerSlotStateChanged` | Native multicast only | **Not** BlueprintAssignable |
 | Resource depleted BP event | **Absent** | Only `OnRep_CurrentAmount` log |
@@ -255,15 +258,16 @@ Depleted (CurrentAmount <= 0)
 | `UGP_StorageComponent::GetTotalStored()` on local team MainBase | **Yes** — Planetary stored |
 | `FerroniteScore` / `OrbitalFerronite` | **No** |
 | Per-frame actor iteration | **No** |
-| Replicated total | Containers replicated; `GetTotalStored()` derived; `OnStorageChanged` + OnRep |
+| Replicated total | Containers replicated on MainBase Storage; `GetTotalStored()` derived; `OnStorageChanged` + OnRep |
 | Local TeamId | `AGP_PlayerState::GetTeamId()` |
+| `FindMainBaseForTeam` on clients | **Blocked today** — MainBase registry is **authority-only / not replicated**. P4 must add a client-safe resolve (replicate weak MainBase per team, or one-time team-tagged MainBase cache + `OnRep_TeamId` refresh). |
 
-### Choice: **A — temporary debug / prototype HUD**
-- Tiny PC-owned or HUD widget: text `Planetary: X / Cap` for `FindMainBaseForTeam(LocalTeamId)`.
-- Bind `OnStorageChanged` (listen server) / refresh on OnRep path.
-- Explicit `TEMP_S28P_HUD` marker; **Slice 9 MVVM replaces** it.
-- Reject B (ResourceVM subset) for now — pulls Slice 9 early.  
-- Reject full C CommonUI stack — same debt. (Optional: C-lite UUserWidget without MVVM is acceptable if operator prefers; still mark TEMP.)
+### Choice (amended): **A′ — TEMP HUD with client-safe MainBase resolve**
+- Prefer smallest debt that still respects TDD/12 (HUD must not poll random actors each frame).
+- **P4 must ship** a replicated or otherwise client-visible MainBase handle for local team before any widget.
+- UI surface: tiny TEMP text widget (PC-owned) bound to `OnStorageChanged` / container OnRep — mark `TEMP_S28P_HUD`.
+- Optional upgrade path (not required in P4): thin `UGP_PlanetaryStorageVM` (option B-lite) if operator wants Slice-9 shape early.
+- Reject: Score/Orbital display; GetAllActorsOfClass every tick; inventing LogisticsHub as storage source.
 
 ---
 
@@ -311,10 +315,10 @@ Depleted (CurrentAmount <= 0)
 **Rationale for slim P3:** TDD LogisticsHub `bProvidesDropOff=false`; multi-provider interface would be speculative debt.
 
 ### GP-S28P4 — Minimal Planetary HUD + full playable validation
-**Scope:** TEMP HUD (option A); operator map checklist; full loop validation both teams; regression suite.  
-**Not:** Slice 9 MVVM.  
+**Scope:** Client-safe MainBase resolve for local team; TEMP Planetary HUD (A′); operator map checklist; full loop validation both teams; regression suite.  
+**Not:** Full Slice 9 MVVM stack (optional B-lite only if explicitly wanted).  
 **Depends:** P1–P3.  
-**Accept:** playable prototype demo without console spawns.
+**Accept:** playable prototype demo without console spawns; client+listen see correct Planetary totals.
 
 ### Split justification
 User’s P1–P4 order retained; **P3 narrowed** (no drop-off interface) to match canonical MainBase/LogisticsHub split. If audit review demands Hub-as-drop-off later, that becomes a separate design ADR — out of S28P.
@@ -327,6 +331,8 @@ User’s P1–P4 order retained; **P3 narrowed** (no drop-off interface) to matc
 2. **Depleted shell vs Destroy:** recommend shell; confirm before P2.
 3. **Combat audit branch** remains separate pending review — S28P must not block or rewrite combat.
 4. DOCUMENTATION_INDEX on main was stale (claimed NEXT=S16); this audit re-syncs cursor to S28P0 + notes combat audit.
+5. **HUD client resolve:** MainBase registry not replicated — P4 must fix resolve before TEMP HUD (follow-up from playable-path inventory).
+6. **Shift-queue:** document as known no-op; do not expand into S28P unless assigned.
 
 ---
 

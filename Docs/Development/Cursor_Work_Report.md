@@ -43,7 +43,7 @@ Worker / MainBase / ResourceNode are `Blueprintable` concretes with Capsule/Box 
 `OnCargoAmountChanged` + OnRep sufficient for show/hide; no cargo actor needed.
 
 ## HUD source recommendation
-**A — temporary prototype HUD** reading `Storage.GetTotalStored()` for local team MainBase; not Score/Orbital; Slice 9 replaces later.
+**A′ — TEMP Planetary HUD** after client-safe MainBase resolve (registry today is authority-only). Value = `Storage.GetTotalStored()` for local team; not Score/Orbital. Optional later B-lite VM.
 
 ## Proposed architecture
 - GameState ResourceNode registry (mirror MainBase)
@@ -59,7 +59,10 @@ See `Resource_Playable_Pass_Audit.md` §12 (P3 slimmed to MainBase-only resilien
 Create BP_GP_Worker / MainBase / ResourceNode_Ferronite; place TeamId 1/2; NavMesh; one MainBase/team; LFS map — checklist in audit §11.
 
 ## Blocking questions / conflicts
-Storage-full LOST vs wait; depleted shell vs Destroy; keep combat audit separate.
+Storage-full LOST vs wait; depleted shell vs Destroy; keep combat audit separate; P4 needs client MainBase resolve; Shift-queue is QueueDeferred no-op (out of S28P unless assigned).
+
+## Follow-up inventory note
+Post-commit review from playable-path explore confirmed same core findings and added: QueueDeferred no-op, cargo-full Mine reject nuance, MiningComponent BP delegates, unreplicated MainBase registry for client HUD — folded into audit amend.
 
 ## Build result
 | Target | Result |

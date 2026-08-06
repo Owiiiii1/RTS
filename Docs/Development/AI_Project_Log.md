@@ -20,6 +20,9 @@ Player RMB → Mine already works on `AGP_ResourceNode`. Gaps for playable proto
 ### Builds
 GPEditor Win64 Development + UHT **PASSED** (docs-only).
 
+### Follow-up (same branch)
+Inventory pass confirmed RMB Mine path and added P0 amend notes: unreplicated MainBase registry blocks naive client HUD; Shift-queue is QueueDeferred no-op; MiningComponent already has BP state/cycle delegates.
+
 ### Next
 Operator review of P0 audit → assign GP-S28P1 when approved.
 

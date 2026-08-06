@@ -143,6 +143,7 @@ void UGP_S28RegressionSuiteRunner::StartNext()
 
 	static const TCHAR* Commands[] = {
 		TEXT("gp.Cargo.RunContractTest"),
+		TEXT("gp.Resource.RunPresentationContractTest"),
 		TEXT("gp.Mining.RunContractTest"),
 		TEXT("gp.Worker.RunContractTest"),
 		TEXT("gp.Worker.RunHaulingContractTest"),

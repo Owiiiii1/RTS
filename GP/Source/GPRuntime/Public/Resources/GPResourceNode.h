@@ -9,6 +9,7 @@
 #include "GPResourceNode.generated.h"
 
 class UBoxComponent;
+class USceneComponent;
 class UGP_ResourceDefinition;
 class UGP_ResourceNodeVisualComponent;
 
@@ -79,6 +80,17 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "GP|Resource")
 	bool IsDepleted() const;
+
+	/**
+	 * Attach parent for Blueprint/SCS meshes (CollisionBox root).
+	 * Does not replace UGP_ResourceNodeVisualComponent AuthoredComponents path.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GP|Resource|Presentation")
+	USceneComponent* GetPresentationRoot() const;
+
+	/** Remaining deposit fraction in [0,1]. Depleted → 0. */
+	UFUNCTION(BlueprintPure, Category = "GP|Resource|Presentation")
+	float GetRemainingNormalized() const;
 
 	UFUNCTION(BlueprintPure, Category = "GP|Resource|Definition")
 	TSoftObjectPtr<UGP_ResourceDefinition> GetResourceDefinitionSoft() const;

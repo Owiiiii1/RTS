@@ -44,11 +44,13 @@
 
 ## Current NEXT Task
 
-**Current:** GP-S28P0 — Resource Playable Pass Audit (`audit/gp-s28p-resource-playable-pass`). Spec: [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md). Status: **GP_S28P0_AUDIT_READY_FOR_REVIEW**.
+**Current:** GP-S28P1 — Blueprint-Ready Resource Actors + Cargo Visual (`feature/gp-s28p1-blueprint-cargo-visual`). Task: [`Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`](Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md). Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**.
 
-**Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation` — [`Combat_Reconciliation_Audit.md`](Combat_Reconciliation_Audit.md) (branch may exist remotely; do not modify from S28P work).
+**Prior audit (kept):** GP-S28P0 on `audit/gp-s28p-resource-playable-pass` — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
 
-**NEXT (pending P0 acceptance):** GP-S28P1 Blueprint-ready actors + cargo visual hooks — do not start until explicitly assigned.
+**Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation`.
+
+**NEXT (after P1 operator validation):** GP-S28P2 depletion + reassignment — do not start until assigned.
 
 > Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28 already merged on main.
 

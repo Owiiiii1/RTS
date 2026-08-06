@@ -231,6 +231,20 @@ bool AGP_ResourceNode::IsDepleted() const
 	return CurrentAmount <= 0;
 }
 
+USceneComponent* AGP_ResourceNode::GetPresentationRoot() const
+{
+	return CollisionBox;
+}
+
+float AGP_ResourceNode::GetRemainingNormalized() const
+{
+	if (MaxAmount <= 0)
+	{
+		return 0.0f;
+	}
+	return FMath::Clamp(static_cast<float>(CurrentAmount) / static_cast<float>(MaxAmount), 0.0f, 1.0f);
+}
+
 TSoftObjectPtr<UGP_ResourceDefinition> AGP_ResourceNode::GetResourceDefinitionSoft() const
 {
 	return ResourceDefinition;

@@ -4,6 +4,7 @@
 
 #include "Buildings/GPMainBase.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SceneComponent.h"
 #include "Command/GPUnitCommand.h"
 #include "Debug/GPContractTestCoordinator.h"
 #include "Engine/EngineBaseTypes.h"
@@ -33,6 +34,19 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPWorker, Log, All);
 
+void UGP_CargoVisualStateProbe::HandleCargoVisualStateChanged(
+	bool bVisible,
+	float FillNormalized,
+	float CurrentAmount,
+	float Capacity)
+{
+	++EventCount;
+	bLastVisible = bVisible;
+	LastFill = FillNormalized;
+	LastAmount = CurrentAmount;
+	LastCapacity = Capacity;
+}
+
 AGP_Worker::AGP_Worker()
 {
 	CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleComponent"));
@@ -45,6 +59,14 @@ AGP_Worker::AGP_Worker()
 	CapsuleComponent->SetGenerateOverlapEvents(false);
 	CapsuleComponent->SetCanEverAffectNavigation(false);
 	CapsuleComponent->SetSimulatePhysics(false);
+
+	PresentationRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PresentationRoot"));
+	PresentationRoot->SetupAttachment(CapsuleComponent);
+	PresentationRoot->SetCanEverAffectNavigation(false);
+
+	CargoVisualAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("CargoVisualAnchor"));
+	CargoVisualAnchor->SetupAttachment(PresentationRoot);
+	CargoVisualAnchor->SetCanEverAffectNavigation(false);
 
 	CargoComponent = CreateDefaultSubobject<UGP_CargoComponent>(TEXT("CargoComponent"));
 	MiningComponent = CreateDefaultSubobject<UGP_MiningComponent>(TEXT("MiningComponent"));
@@ -69,6 +91,19 @@ AGP_Worker::AGP_Worker()
 	}
 }
 
+void AGP_Worker::BeginPlay()
+{
+	Super::BeginPlay();
+	BindCargoVisualEvents();
+	SyncCargoVisualState();
+}
+
+void AGP_Worker::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	UnbindCargoVisualEvents();
+	Super::EndPlay(EndPlayReason);
+}
+
 UGP_CargoComponent* AGP_Worker::GetCargoComponent() const
 {
 	return CargoComponent;
@@ -82,6 +117,67 @@ UGP_MiningComponent* AGP_Worker::GetMiningComponent() const
 UCapsuleComponent* AGP_Worker::GetCapsuleComponent() const
 {
 	return CapsuleComponent;
+}
+
+USceneComponent* AGP_Worker::GetPresentationRoot() const
+{
+	return PresentationRoot;
+}
+
+USceneComponent* AGP_Worker::GetCargoVisualAnchor() const
+{
+	return CargoVisualAnchor;
+}
+
+float AGP_Worker::GetCargoFillNormalized() const
+{
+	return IsValid(CargoComponent) ? CargoComponent->GetFillRatio() : 0.0f;
+}
+
+bool AGP_Worker::HasCargoForVisual() const
+{
+	return IsValid(CargoComponent) && CargoComponent->GetCurrentCargoAmount() > KINDA_SMALL_NUMBER;
+}
+
+void AGP_Worker::BindCargoVisualEvents()
+{
+	if (bCargoVisualEventsBound || !IsValid(CargoComponent))
+	{
+		return;
+	}
+
+	CargoComponent->OnCargoAmountChanged.AddDynamic(this, &AGP_Worker::HandleCargoAmountChanged);
+	bCargoVisualEventsBound = true;
+}
+
+void AGP_Worker::UnbindCargoVisualEvents()
+{
+	if (!bCargoVisualEventsBound || !IsValid(CargoComponent))
+	{
+		bCargoVisualEventsBound = false;
+		return;
+	}
+
+	CargoComponent->OnCargoAmountChanged.RemoveDynamic(this, &AGP_Worker::HandleCargoAmountChanged);
+	bCargoVisualEventsBound = false;
+}
+
+void AGP_Worker::HandleCargoAmountChanged(float PreviousAmount, float NewAmount, float Capacity, float Delta)
+{
+	(void)PreviousAmount;
+	(void)NewAmount;
+	(void)Capacity;
+	(void)Delta;
+	SyncCargoVisualState();
+}
+
+void AGP_Worker::SyncCargoVisualState()
+{
+	const float CurrentAmount = IsValid(CargoComponent) ? CargoComponent->GetCurrentCargoAmount() : 0.0f;
+	const float Capacity = IsValid(CargoComponent) ? CargoComponent->GetCargoCapacity() : 0.0f;
+	const float FillNormalized = IsValid(CargoComponent) ? CargoComponent->GetFillRatio() : 0.0f;
+	const bool bVisible = CurrentAmount > KINDA_SMALL_NUMBER;
+	OnCargoVisualStateChanged.Broadcast(bVisible, FillNormalized, CurrentAmount, Capacity);
 }
 
 EGP_WorkerActivityState AGP_Worker::GetWorkerActivityState() const
@@ -143,6 +239,22 @@ bool AGP_Worker::ValidateWorkerContract(TArray<FText>& OutErrors, TArray<FText>&
 	if (!IsValid(MiningComponent))
 	{
 		OutErrors.Add(NSLOCTEXT("GPWorker", "ErrMining", "Worker requires MiningComponent."));
+	}
+	if (!IsValid(PresentationRoot))
+	{
+		OutErrors.Add(NSLOCTEXT("GPWorker", "ErrPresentationRoot", "Worker requires PresentationRoot."));
+	}
+	if (!IsValid(CargoVisualAnchor))
+	{
+		OutErrors.Add(NSLOCTEXT("GPWorker", "ErrCargoAnchor", "Worker requires CargoVisualAnchor."));
+	}
+	if (IsValid(PresentationRoot) && PresentationRoot->GetAttachParent() != CapsuleComponent)
+	{
+		OutErrors.Add(NSLOCTEXT("GPWorker", "ErrPresentationAttach", "PresentationRoot must attach to Capsule."));
+	}
+	if (IsValid(CargoVisualAnchor) && CargoVisualAnchor->GetAttachParent() != PresentationRoot)
+	{
+		OutErrors.Add(NSLOCTEXT("GPWorker", "ErrCargoAnchorAttach", "CargoVisualAnchor must attach to PresentationRoot."));
 	}
 	if (GetUnitMovementComponent() == nullptr)
 	{
@@ -1601,6 +1713,185 @@ namespace GPWorkerDebug
 		TEXT("gp.Resource.RunDiagnosticScenarioContractTest"),
 		TEXT("Deterministic DiagnosticScenarioSpawn contract test (GP-S28)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ResourceRunDiagnosticScenarioContractTest));
+
+	static void ResourceRunPresentationContractTest(const TArray<FString>& Args, UWorld* World)
+	{
+		(void)Args;
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPWorker, Warning, TEXT("GP Resource.RunPresentationContractTest: missing world"));
+			return;
+		}
+		if (World->GetNetMode() == NM_Client)
+		{
+			UE_LOG(LogGPWorker, Warning, TEXT("GP Resource.RunPresentationContractTest: rejected on client"));
+			return;
+		}
+
+		GPContractTestCoordinator::FExecutionToken Token;
+		if (!GPContractTestCoordinator::TryAcquire(
+			World, TEXT("PresentationContract"), TEXT("Presentation"), Token))
+		{
+			return;
+		}
+
+		int32 Failures = 0;
+		auto Expect = [&Failures](bool bOk, const TCHAR* Label)
+		{
+			if (!bOk)
+			{
+				++Failures;
+				UE_LOG(LogGPWorker, Error, TEXT("GP Resource.RunPresentationContractTest FAIL: %s"), Label);
+			}
+			else
+			{
+				UE_LOG(LogGPWorker, Log, TEXT("GP Resource.RunPresentationContractTest PASS: %s"), Label);
+			}
+		};
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		SpawnParams.ObjectFlags |= RF_Transient;
+
+		AGP_Worker* Worker = World->SpawnActor<AGP_Worker>(
+			AGP_Worker::StaticClass(),
+			FVector(0.0f, 0.0f, 100.0f),
+			FRotator::ZeroRotator,
+			SpawnParams);
+		AGP_MainBase* MainBase = World->SpawnActor<AGP_MainBase>(
+			AGP_MainBase::StaticClass(),
+			FVector(500.0f, 0.0f, 100.0f),
+			FRotator::ZeroRotator,
+			SpawnParams);
+		AGP_ResourceNode* Node = World->SpawnActor<AGP_ResourceNode>(
+			AGP_ResourceNode::StaticClass(),
+			FVector(1000.0f, 0.0f, 100.0f),
+			FRotator::ZeroRotator,
+			SpawnParams);
+
+		Expect(IsValid(Worker), TEXT("WorkerSpawned"));
+		Expect(IsValid(MainBase), TEXT("MainBaseSpawned"));
+		Expect(IsValid(Node), TEXT("ResourceNodeSpawned"));
+
+		if (!IsValid(Worker) || !IsValid(MainBase) || !IsValid(Node))
+		{
+			if (IsValid(Worker))
+			{
+				Worker->Destroy();
+			}
+			if (IsValid(MainBase))
+			{
+				MainBase->Destroy();
+			}
+			if (IsValid(Node))
+			{
+				Node->Destroy();
+			}
+			GPContractTestCoordinator::Release(Token.ExecutionId, Failures + 1, false, TEXT("SpawnFailed"));
+			return;
+		}
+
+		Worker->SetTeamId(1);
+		MainBase->SetTeamId(1);
+		MainBase->RefreshMainBaseRegistration();
+
+		Expect(IsValid(Worker->GetPresentationRoot()), TEXT("WorkerPresentationRoot"));
+		Expect(IsValid(Worker->GetCargoVisualAnchor()), TEXT("WorkerCargoVisualAnchor"));
+		Expect(Worker->GetCargoVisualAnchor()->GetAttachParent() == Worker->GetPresentationRoot(),
+			TEXT("WorkerCargoAnchorParent"));
+		Expect(Worker->GetPresentationRoot()->GetAttachParent() == Worker->GetCapsuleComponent(),
+			TEXT("WorkerPresentationParent"));
+		Expect(!Worker->GetPresentationRoot()->CanEverAffectNavigation(), TEXT("WorkerPresentationNoNav"));
+		Expect(!Worker->PrimaryActorTick.bCanEverTick, TEXT("WorkerNoPermanentTick"));
+
+		Expect(IsValid(MainBase->GetPresentationRoot()), TEXT("MainBasePresentationRoot"));
+		Expect(IsValid(MainBase->GetDropOffVisualAnchor()), TEXT("MainBaseDropOffAnchor"));
+		Expect(MainBase->GetDropOffVisualAnchor()->GetAttachParent() == MainBase->GetPresentationRoot(),
+			TEXT("MainBaseDropOffParent"));
+		Expect(IsValid(MainBase->GetStorageComponent()), TEXT("MainBaseStorage"));
+		Expect(FMath::IsNearlyEqual(MainBase->GetPlanetaryStored(), 0.0f), TEXT("MainBaseStoredZero"));
+		Expect(MainBase->GetPlanetaryCapacity() > 0.0f, TEXT("MainBaseCapacityPositive"));
+
+		Expect(IsValid(Node->GetPresentationRoot()), TEXT("NodePresentationRoot"));
+		Expect(Node->GetPresentationRoot() == Node->GetRootComponent(), TEXT("NodePresentationIsRoot"));
+		Expect(Node->GetMaxAmount() > 0, TEXT("NodeMaxPositive"));
+		Expect(FMath::IsNearlyEqual(Node->GetRemainingNormalized(), 1.0f), TEXT("NodeRemainingFull"));
+		Expect(!Node->IsDepleted(), TEXT("NodeNotDepleted"));
+
+		UGP_CargoVisualStateProbe* Probe = NewObject<UGP_CargoVisualStateProbe>(GetTransientPackage());
+		Probe->AddToRoot();
+		Worker->OnCargoVisualStateChanged.AddDynamic(
+			Probe, &UGP_CargoVisualStateProbe::HandleCargoVisualStateChanged);
+
+		UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+		Expect(IsValid(Cargo), TEXT("CargoPresent"));
+		Expect(!Cargo->IsComponentTickEnabled(), TEXT("CargoTickDisabled"));
+
+		// BeginPlay already synced before bind — ClearCargo is idempotent when empty.
+		Cargo->ClearCargo();
+		const int32 EventsAfterClear = Probe->EventCount;
+		Expect(!Worker->HasCargoForVisual(), TEXT("InitialEmptyInvisible"));
+		Expect(FMath::IsNearlyEqual(Worker->GetCargoFillNormalized(), 0.0f), TEXT("InitialFillZero"));
+
+		const float Cap = Cargo->GetCargoCapacity();
+		Expect(Cap > KINDA_SMALL_NUMBER, TEXT("CargoCapacityPositive"));
+
+		const float Added10 = Cargo->AddCargo(10.0f);
+		Expect(FMath::IsNearlyEqual(Added10, 10.0f), TEXT("AddCargo10"));
+		Expect(Worker->HasCargoForVisual(), TEXT("VisibleAfterAdd10"));
+		Expect(Probe->bLastVisible, TEXT("EventVisibleAfterAdd10"));
+		Expect(FMath::IsNearlyEqual(Probe->LastAmount, 10.0f), TEXT("EventAmount10"));
+		Expect(FMath::IsNearlyEqual(Worker->GetCargoFillNormalized(), 10.0f / Cap, 1.e-3f), TEXT("FillAfter10"));
+		Expect(Probe->EventCount > EventsAfterClear, TEXT("EventFiredOnAdd"));
+
+		Cargo->AddCargo(Cap);
+		Expect(Worker->HasCargoForVisual(), TEXT("VisibleWhenFull"));
+		Expect(FMath::IsNearlyEqual(Worker->GetCargoFillNormalized(), 1.0f), TEXT("FillFull"));
+		Expect(Probe->bLastVisible, TEXT("EventVisibleFull"));
+		Expect(FMath::IsNearlyEqual(Probe->LastFill, 1.0f), TEXT("EventFillFull"));
+
+		const float BeforePartial = Cargo->GetCurrentCargoAmount();
+		Cargo->RemoveCargo(5.0f);
+		Expect(Worker->HasCargoForVisual(), TEXT("VisibleAfterPartialRemove"));
+		Expect(Cargo->GetCurrentCargoAmount() < BeforePartial, TEXT("AmountDecreased"));
+		Expect(Probe->bLastVisible, TEXT("EventVisiblePartial"));
+
+		const int32 EventsBeforeRepeatClear = Probe->EventCount;
+		Cargo->ClearCargo();
+		Expect(!Worker->HasCargoForVisual(), TEXT("InvisibleAfterClear"));
+		Expect(FMath::IsNearlyEqual(Worker->GetCargoFillNormalized(), 0.0f), TEXT("FillZeroAfterClear"));
+		Expect(!Probe->bLastVisible, TEXT("EventInvisibleAfterClear"));
+		Expect(Probe->EventCount > EventsBeforeRepeatClear, TEXT("EventFiredOnClear"));
+
+		Cargo->ClearCargo();
+		Expect(!Worker->HasCargoForVisual(), TEXT("StillInvisibleAfterRepeatClear"));
+		Expect(FMath::IsNearlyEqual(Worker->GetCargoFillNormalized(), 0.0f), TEXT("FillStillZero"));
+
+		TArray<FText> WorkerErrors;
+		TArray<FText> WorkerWarnings;
+		Expect(Worker->ValidateWorkerContract(WorkerErrors, WorkerWarnings), TEXT("WorkerContractValid"));
+
+		TArray<FText> BaseErrors;
+		TArray<FText> BaseWarnings;
+		Expect(MainBase->ValidateMainBaseContract(BaseErrors, BaseWarnings), TEXT("MainBaseContractValid"));
+
+		Worker->OnCargoVisualStateChanged.RemoveDynamic(
+			Probe, &UGP_CargoVisualStateProbe::HandleCargoVisualStateChanged);
+		Probe->RemoveFromRoot();
+		Worker->Destroy();
+		MainBase->Destroy();
+		Node->Destroy();
+
+		UE_LOG(LogGPWorker, Log,
+			TEXT("GP Resource.RunPresentationContractTest: Complete Failures=%d"),
+			Failures);
+		GPContractTestCoordinator::Release(Token.ExecutionId, Failures, false, TEXT("None"));
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs GResourcePresentationContract(
+		TEXT("gp.Resource.RunPresentationContractTest"),
+		TEXT("Authority: GP-S28P1 presentation/cargo visual contract (Worker/MainBase/Node). Transient actors only."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ResourceRunPresentationContractTest));
 }
 
 void UGP_WorkerHaulingContractTestRunner::BeginDestroy()

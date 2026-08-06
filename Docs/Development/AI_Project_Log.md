@@ -1,5 +1,22 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28P1 Blueprint-Ready Actors + Cargo Visual
+
+Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28p1-blueprint-cargo-visual`
+- Base audit: `377b9b8c28dc09929efbae061a05e351b0dbad3f`
+- Task: `Docs/Development/Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`
+
+### Summary
+Added PresentationRoot/CargoVisualAnchor on Worker, PresentationRoot/DropOffVisualAnchor on MainBase, ResourceNode `GetPresentationRoot`/`GetRemainingNormalized`, and `OnCargoVisualStateChanged` driven by CargoComponent. Mine path untouched. `gp.Resource.RunPresentationContractTest` + suite entry. GPEditor Dev+UHT **PASSED**. No BP/map assets.
+
+### Operator next
+Create BP children; run presentation contract; smoke RMB Mine haul loop.
+
+---
+
 ## 2026-08-06 — GP-S28P0 Resource Playable Pass Audit
 
 Status: **GP_S28P0_AUDIT_READY_FOR_REVIEW**

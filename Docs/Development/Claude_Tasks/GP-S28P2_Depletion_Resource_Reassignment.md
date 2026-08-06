@@ -8,7 +8,7 @@
 - Base main: `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` (Merge GP-S28P1)
 - Implementation: `6c10937ffa3e1060e79ab1e8481e05c9f6aac6ed`
 - Search-anchor correction: `563a025296fd5311ce8066259f22dba891063950`
-- Approach-path / settings correction: see latest commit on this branch
+- Approach-path / settings correction: `53e5ff944730180764731c75fb495a38adeb91ab`
 
 ## Goal
 Safe one-shot ResourceNode depletion (vanish + deferred Destroy), authority ResourceNode registry, path-aware auto-reassignment / WaitingForResource, without changing mining cadence, Cargo, Storage, Threat, or combat.

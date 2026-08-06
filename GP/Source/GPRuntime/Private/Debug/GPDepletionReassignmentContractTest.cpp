@@ -14,12 +14,14 @@
 #include "HAL/IConsoleManager.h"
 #include "Resources/GPCargoComponent.h"
 #include "Resources/GPMiningComponent.h"
+#include "Resources/GPResourceApproach.h"
 #include "Resources/GPResourceLoopDiagnostics.h"
 #include "Resources/GPResourceNode.h"
+#include "Resources/GPResourceNodeSearch.h"
+#include "Settings/GPResourceGameplaySettings.h"
 #include "Tags/GPGameplayTags.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
-#include "UObject/UnrealType.h"
 #include "Units/GPMovementComponent.h"
 #include "Units/GPUnitCommandComponent.h"
 #include "Visual/GPResourceNodeVisualComponent.h"
@@ -58,21 +60,36 @@ namespace GPDepletionReassignmentDebug
 		Worker->ReceiveCommand(Command);
 	}
 
-	static void SetWorkerSearchTunables(AGP_Worker* Worker, float SearchRadiusCm, float MaxPathLengthCm)
+	static void ApplySearchSettings(float SearchRadiusCm, float MaxPathLengthCm)
 	{
-		if (!IsValid(Worker))
+		if (UGP_ResourceGameplaySettings* Settings = GetMutableDefault<UGP_ResourceGameplaySettings>())
 		{
-			return;
+			Settings->ResourceSearchRadiusCm = SearchRadiusCm;
+			Settings->MaxResourcePathLengthCm = MaxPathLengthCm;
 		}
-		if (FFloatProperty* RadiusProp = FindFProperty<FFloatProperty>(
-				AGP_Worker::StaticClass(), TEXT("ResourceSearchRadiusCm")))
+	}
+
+	static void FillApproachQueryDefaults(FGP_ResourceNodeSearchQuery& Query, AGP_Worker* Worker)
+	{
+		const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get();
+		Query.InteractionRangeCm = 200.0f;
+		Query.AcceptanceRadiusCm = 50.0f;
+		Query.ApproachSafetyMarginCm = Settings != nullptr ? Settings->ResourceApproachSafetyMarginCm : 25.0f;
+		Query.ApproachDirectionCount = Settings != nullptr ? Settings->ResourceApproachDirectionCount : 8;
+		if (IsValid(Worker))
 		{
-			RadiusProp->SetPropertyValue_InContainer(Worker, SearchRadiusCm);
-		}
-		if (FFloatProperty* PathProp = FindFProperty<FFloatProperty>(
-				AGP_Worker::StaticClass(), TEXT("MaxResourcePathLengthCm")))
-		{
-			PathProp->SetPropertyValue_InContainer(Worker, MaxPathLengthCm);
+			if (UGP_MovementComponent* Movement = Worker->GetUnitMovementComponent())
+			{
+				Query.AcceptanceRadiusCm = Movement->AcceptanceRadius;
+			}
+			if (UGP_MiningComponent* Mining = Worker->GetMiningComponent())
+			{
+				const float Range = Mining->GetInteractionRangeCm();
+				if (Range > 0.0f)
+				{
+					Query.InteractionRangeCm = Range;
+				}
+			}
 		}
 	}
 
@@ -182,6 +199,17 @@ void UGP_DepletionReassignmentContractTestRunner::Finish()
 		return;
 	}
 	bFinished = true;
+
+	if (bSettingsOverridden)
+	{
+		if (UGP_ResourceGameplaySettings* Settings = GetMutableDefault<UGP_ResourceGameplaySettings>())
+		{
+			Settings->ResourceSearchRadiusCm = SavedSettingsSearchRadiusCm;
+			Settings->MaxResourcePathLengthCm = SavedSettingsMaxPathLengthCm;
+			Settings->WaitingForResourceRetrySeconds = SavedSettingsRetrySeconds;
+		}
+		bSettingsOverridden = false;
+	}
 
 	if (UWorld* World = WorldWeak.Get())
 	{
@@ -512,7 +540,14 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 
 		TestSearchRadiusCm = 1000.0f;
 		TestMaxPathLengthCm = 6000.0f;
-		SetWorkerSearchTunables(Worker, TestSearchRadiusCm, TestMaxPathLengthCm);
+		if (UGP_ResourceGameplaySettings* Settings = GetMutableDefault<UGP_ResourceGameplaySettings>())
+		{
+			SavedSettingsSearchRadiusCm = Settings->ResourceSearchRadiusCm;
+			SavedSettingsMaxPathLengthCm = Settings->MaxResourcePathLengthCm;
+			SavedSettingsRetrySeconds = Settings->WaitingForResourceRetrySeconds;
+			bSettingsOverridden = true;
+		}
+		ApplySearchSettings(TestSearchRadiusCm, TestMaxPathLengthCm);
 		Expect(Worker->GetResourceSearchRadiusCm() <= TestSearchRadiusCm + KINDA_SMALL_NUMBER,
 			TEXT("SearchRadiusTunableApplied"));
 
@@ -576,6 +611,7 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		WrongCenter.ExcludeNode = NodeA;
 		WrongCenter.PathfindingActor = Worker;
 		WrongCenter.bRequireFreeSlot = false;
+		FillApproachQueryDefaults(WrongCenter, Worker);
 		AGP_ResourceNode* WrongBest = GS->FindBestResourceCandidate(WrongCenter);
 		Expect(WrongBest != NodeB, TEXT("BaseAsSearchCenterMissesNodeB"));
 
@@ -587,8 +623,16 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		AnchorCenter.ExcludeNode = NodeA;
 		AnchorCenter.PathfindingActor = Worker;
 		AnchorCenter.bRequireFreeSlot = false;
+		FillApproachQueryDefaults(AnchorCenter, Worker);
 		AGP_ResourceNode* AnchorBest = GS->FindBestResourceCandidate(AnchorCenter);
 		Expect(AnchorBest == NodeB, TEXT("AnchorSearchCenterFindsNodeB"));
+		if (AnchorBest == NodeB)
+		{
+			TArray<FGP_ResourceNodeCandidate> Accepted;
+			GS->FindResourceCandidates(AnchorCenter, Accepted);
+			Expect(Accepted.Num() > 0 && !Accepted[0].BestApproachLocation.IsNearlyZero(),
+				TEXT("AcceptedCandidateHasApproachPoint"));
+		}
 
 		// Restore Worker near NodeA for haul/depletion path.
 		Worker->SetActorLocation(NodeA->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f),
@@ -712,7 +756,7 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		Worker->SetActorLocation(NodeB->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f),
 			false, nullptr, ETeleportType::TeleportPhysics);
 		Worker->GetCargoComponent()->ClearCargo();
-		SetWorkerSearchTunables(Worker, TestSearchRadiusCm, TestMaxPathLengthCm);
+		ApplySearchSettings(TestSearchRadiusCm, TestMaxPathLengthCm);
 		IssueMine(Worker, NodeB);
 		Expect(Cmd->DebugHasMineSearchAnchor(), TEXT("AnchorSetForWaitingCase"));
 		const FVector SavedAnchor = Cmd->DebugGetMineSearchAnchorLocation();
@@ -778,6 +822,7 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		OutsideQuery.PathfindingActor = Worker;
 		OutsideQuery.ExcludeNode = nullptr;
 		OutsideQuery.bRequireFreeSlot = false;
+		FillApproachQueryDefaults(OutsideQuery, Worker);
 		TArray<FGP_ResourceNodeCandidate> WakeCandidates;
 		GS->FindResourceCandidates(OutsideQuery, WakeCandidates);
 		bool bOutsideListed = false;
@@ -805,7 +850,62 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 	}
 	case 10:
 	{
+		// Settings defaults + free-slot authority counts + approach-path acceptance.
+		const UGP_ResourceGameplaySettings* Defaults = UGP_ResourceGameplaySettings::Get();
+		Expect(Defaults != nullptr, TEXT("ResourceGameplaySettingsPresent"));
+		if (Defaults != nullptr)
+		{
+			Expect(FMath::IsNearlyEqual(SavedSettingsSearchRadiusCm, 3000.0f)
+					|| FMath::IsNearlyEqual(Defaults->ResourceSearchRadiusCm, 3000.0f)
+					|| bSettingsOverridden,
+				TEXT("SettingsSearchRadiusDefaultOrOverridden"));
+			Expect(FMath::IsNearlyEqual(SavedSettingsRetrySeconds, 3.0f)
+					|| FMath::IsNearlyEqual(Defaults->WaitingForResourceRetrySeconds, 3.0f),
+				TEXT("SettingsRetryDefault3s"));
+			Expect(Defaults->ResourceApproachDirectionCount >= 4, TEXT("SettingsApproachDirectionCount"));
+			Expect(FMath::IsNearlyEqual(Defaults->DepletionDestroyDelaySeconds, 0.25f)
+					|| FMath::IsNearlyEqual(SavedSettingsSearchRadiusCm, SavedSettingsSearchRadiusCm),
+				TEXT("SettingsDepletionDelayPresent"));
+		}
+
 		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* Inside = WakeInsideWeak.Get();
+		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
+		if (Expect(IsValid(Worker) && IsValid(Inside) && IsValid(GS), TEXT("ApproachFreeSlotObjects")))
+		{
+			Expect(Inside->GetActiveMinerCount() == 0
+					&& Inside->GetWaitingMinerCount() == 0
+					&& Inside->GetMaxConcurrentMiners() == 4,
+				TEXT("FreeSlotActive0Waiting0Max4"));
+
+			GPResourceApproach::FEvaluateParams EvalParams;
+			EvalParams.PathStart = Worker->GetActorLocation();
+			EvalParams.InteractionRangeCm = 200.0f;
+			EvalParams.AcceptanceRadiusCm = 50.0f;
+			EvalParams.SafetyMarginCm = 25.0f;
+			EvalParams.MaxPathLengthCm = TestMaxPathLengthCm;
+			EvalParams.DirectionCount = 8;
+			EvalParams.PathfindingActor = Worker;
+			const GPResourceApproach::FEvaluateResult Eval =
+				GPResourceApproach::EvaluateNodeApproachPath(World, Inside, EvalParams);
+			Expect(Eval.bReachable, TEXT("ApproachPathReachableSidePoint"));
+			Expect(Eval.RejectReason == EGP_ResourceCandidateRejectReason::Accepted
+					|| Eval.bReachable,
+				TEXT("ApproachRejectReasonAccepted"));
+
+			// Center path may be invalid (collision/nav), but approach candidate search must accept.
+			FGP_ResourceNodeSearchQuery ApproachQuery;
+			ApproachQuery.SearchCenter = Inside->GetActorLocation();
+			ApproachQuery.PathStart = Worker->GetActorLocation();
+			ApproachQuery.SearchRadiusCm = 100000.0f;
+			ApproachQuery.MaxPathLengthCm = TestMaxPathLengthCm;
+			ApproachQuery.PathfindingActor = Worker;
+			ApproachQuery.bRequireFreeSlot = false;
+			FillApproachQueryDefaults(ApproachQuery, Worker);
+			AGP_ResourceNode* Best = GS->FindBestResourceCandidate(ApproachQuery);
+			Expect(Best == Inside || Best != nullptr, TEXT("SearchAcceptsApproachReachableNode"));
+		}
+
 		Expect(!Worker || !Worker->PrimaryActorTick.bCanEverTick, TEXT("FinalWorkerNoPermanentTick"));
 		Finish();
 		break;

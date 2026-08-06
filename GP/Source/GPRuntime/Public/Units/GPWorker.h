@@ -96,10 +96,10 @@ public:
 	EGP_WorkerActivityState GetWorkerActivityState() const;
 
 	UFUNCTION(BlueprintPure, Category = "GP|Worker|ResourceSearch")
-	float GetResourceSearchRadiusCm() const { return ResourceSearchRadiusCm; }
+	float GetResourceSearchRadiusCm() const;
 
 	UFUNCTION(BlueprintPure, Category = "GP|Worker|ResourceSearch")
-	float GetMaxResourcePathLengthCm() const { return MaxResourcePathLengthCm; }
+	float GetMaxResourcePathLengthCm() const;
 
 	UFUNCTION(BlueprintPure, Category = "GP|Worker|ResourceSearch")
 	bool GetAllowManualTargetOutsideAutoSearchRadius() const
@@ -148,20 +148,7 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Mining", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_MiningComponent> MiningComponent;
 
-	/**
-	 * Auto-search radius for alternative ResourceNodes (GP-S28P2).
-	 * Manual RMB Mine may still target outside this radius when allowed.
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Worker|ResourceSearch",
-		meta = (AllowPrivateAccess = "true", ClampMin = "1.0"))
-	float ResourceSearchRadiusCm = 3000.0f;
-
-	/** Reject auto-search candidates whose navigable path exceeds this length. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Worker|ResourceSearch",
-		meta = (AllowPrivateAccess = "true", ClampMin = "1.0"))
-	float MaxResourcePathLengthCm = 6000.0f;
-
-	/** Manual Mine targets outside ResourceSearchRadius remain allowed when true. */
+	/** Manual Mine targets outside project ResourceSearchRadius remain allowed when true. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Worker|ResourceSearch",
 		meta = (AllowPrivateAccess = "true"))
 	bool bAllowManualTargetOutsideAutoSearchRadius = true;
@@ -415,6 +402,10 @@ private:
 	FVector MainBaseLocation = FVector::ZeroVector;
 	float TestSearchRadiusCm = 1000.0f;
 	float TestMaxPathLengthCm = 6000.0f;
+	float SavedSettingsSearchRadiusCm = 3000.0f;
+	float SavedSettingsMaxPathLengthCm = 6000.0f;
+	float SavedSettingsRetrySeconds = 3.0f;
+	bool bSettingsOverridden = false;
 	int32 MovementWaitTicks = 0;
 	double MovementWaitStartTime = 0.0;
 	float MovementWaitTimeoutSeconds = 45.0f;

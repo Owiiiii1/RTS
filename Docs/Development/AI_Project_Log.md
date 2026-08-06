@@ -1,5 +1,28 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28P2 Approach-Path + Settings Correction (Operator Failure #2)
+
+Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p2-depletion-resource-reassignment` (no new branch; no merge)
+
+### Operator failure #2
+Anchor/radius OK (`RegistryCount=1`); still `NoCandidate` + WaitingWake spam. Reject diagnostics were Verbose-only.
+
+### Root cause
+Search path destination was ResourceNode actor center (inside CollisionBox / nav obstacle), not a Mining-Range approach point.
+
+### Correction
+- `GPResourceApproach` multi-sample projected approach paths
+- Log-level `GP ResourceCandidate Accepted|Rejected` with exact reason
+- `UGP_ResourceGameplaySettings` + `DefaultGame.ini` (retry 3s, search/path/approach/depletion)
+- Single prefer-free search pass; WaitingWake duplicate summary suppression
+- Authority free-slot from live occupancy arrays
+- GPEditor Dev+UHT **PASSED**. Operator-local assets untouched.
+
+---
+
 ## 2026-08-06 — GP-S28P2 Search-Anchor Correction (Post Operator Failure)
 
 Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**

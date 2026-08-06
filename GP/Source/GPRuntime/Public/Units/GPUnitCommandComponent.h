@@ -244,7 +244,7 @@ private:
 		AGP_Worker* Worker,
 		AGP_ResourceNode* ExcludeNode,
 		bool bRequireFreeSlot,
-		FName SearchReason) const;
+		FName SearchReason);
 	bool TryAutoReassignMine(
 		uint32 MineSerial,
 		AGP_ResourceNode* PreferredOrFailedNode,
@@ -310,8 +310,7 @@ private:
 	static const TCHAR* MineStateToString(EGP_MineExecutionState State);
 	static const TCHAR* HaulStateToString(EGP_HaulExecutionState State);
 
-	/** Inward margin beyond AcceptanceRadius so worst-case arrival stays < InteractionRange. */
-	static constexpr float WorkerMineApproachSafetyMarginCm = 25.0f;
+	float ResolveApproachSafetyMarginCm() const;
 
 	void SetAttackTickEnabled(bool bEnabled);
 	bool HasExactActiveHeldAttack() const;
@@ -411,6 +410,14 @@ private:
 	 */
 	FVector MineSearchAnchorLocation = FVector::ZeroVector;
 	bool bHasMineSearchAnchor = false;
+
+#if !UE_BUILD_SHIPPING
+	/** Suppress identical WaitingForResource no-candidate summaries. */
+	int32 LastWaitingNoCandidateRegistryCount = -1;
+	FName LastWaitingNoCandidateReason = NAME_None;
+	FVector LastWaitingNoCandidateAnchor = FVector::ZeroVector;
+	bool bHasLastWaitingNoCandidate = false;
+#endif
 
 	/** GP-S28 Haul orchestration (Worker only; shares Mine command serial as chain id). */
 	EGP_HaulExecutionState HaulState = EGP_HaulExecutionState::Idle;

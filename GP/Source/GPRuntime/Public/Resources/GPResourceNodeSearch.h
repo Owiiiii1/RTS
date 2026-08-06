@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Resources/GPResourceApproach.h"
 #include "GPResourceNodeSearch.generated.h"
 
 class AGP_ResourceNode;
@@ -25,7 +26,7 @@ struct FGP_ResourceNodeSearchQuery
 
 	/**
 	 * Navigation path start (current Worker location).
-	 * Reachability / MaxPathLengthCm are evaluated from here to each candidate.
+	 * Reachability / MaxPathLengthCm are evaluated from here to each candidate approach point.
 	 */
 	UPROPERTY(BlueprintReadWrite, Category = "GP|Resource|Search")
 	FVector PathStart = FVector::ZeroVector;
@@ -35,6 +36,18 @@ struct FGP_ResourceNodeSearchQuery
 
 	UPROPERTY(BlueprintReadWrite, Category = "GP|Resource|Search")
 	float MaxPathLengthCm = 6000.0f;
+
+	UPROPERTY(BlueprintReadWrite, Category = "GP|Resource|Search")
+	float InteractionRangeCm = 200.0f;
+
+	UPROPERTY(BlueprintReadWrite, Category = "GP|Resource|Search")
+	float AcceptanceRadiusCm = 50.0f;
+
+	UPROPERTY(BlueprintReadWrite, Category = "GP|Resource|Search")
+	float ApproachSafetyMarginCm = 25.0f;
+
+	UPROPERTY(BlueprintReadWrite, Category = "GP|Resource|Search")
+	int32 ApproachDirectionCount = 8;
 
 	UPROPERTY(BlueprintReadWrite, Category = "GP|Resource|Search")
 	TObjectPtr<AGP_ResourceNode> ExcludeNode = nullptr;
@@ -54,7 +67,7 @@ struct FGP_ResourceNodeSearchQuery
 	bool bPreferFreeSlot = true;
 
 #if !UE_BUILD_SHIPPING
-	/** Optional event label for Verbose/Log diagnostics (not Tick). */
+	/** Optional event label for diagnostics (not Tick). */
 	FName SearchReason = NAME_None;
 	bool bLogDiagnostics = false;
 #endif
@@ -69,7 +82,11 @@ struct FGP_ResourceNodeCandidate
 	UPROPERTY(BlueprintReadOnly, Category = "GP|Resource|Search")
 	TObjectPtr<AGP_ResourceNode> Node = nullptr;
 
-	/** Navigable path length from PathStart to node. */
+	/** Best projected approach location used for path scoring. */
+	UPROPERTY(BlueprintReadOnly, Category = "GP|Resource|Search")
+	FVector BestApproachLocation = FVector::ZeroVector;
+
+	/** Navigable path length from PathStart to BestApproachLocation. */
 	UPROPERTY(BlueprintReadOnly, Category = "GP|Resource|Search")
 	float PathLengthCm = 0.0f;
 
@@ -79,4 +96,8 @@ struct FGP_ResourceNodeCandidate
 
 	UPROPERTY(BlueprintReadOnly, Category = "GP|Resource|Search")
 	bool bHasFreeSlot = false;
+
+#if !UE_BUILD_SHIPPING
+	EGP_ResourceCandidateRejectReason RejectReason = EGP_ResourceCandidateRejectReason::None;
+#endif
 };

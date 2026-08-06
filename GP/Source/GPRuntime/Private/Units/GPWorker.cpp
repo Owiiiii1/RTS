@@ -20,6 +20,7 @@
 #include "Resources/GPResourceLoopDiagnostics.h"
 #include "Resources/GPResourceNode.h"
 #include "Resources/GPStorageComponent.h"
+#include "Settings/GPResourceGameplaySettings.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPMovementComponent.h"
 #include "Units/GPUnitCommandComponent.h"
@@ -155,6 +156,24 @@ USceneComponent* AGP_Worker::GetCargoVisualAnchor() const
 USceneComponent* AGP_Worker::GetMiningEffectAnchor() const
 {
 	return MiningEffectAnchor;
+}
+
+float AGP_Worker::GetResourceSearchRadiusCm() const
+{
+	if (const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get())
+	{
+		return Settings->ResourceSearchRadiusCm;
+	}
+	return 3000.0f;
+}
+
+float AGP_Worker::GetMaxResourcePathLengthCm() const
+{
+	if (const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get())
+	{
+		return Settings->MaxResourcePathLengthCm;
+	}
+	return 6000.0f;
 }
 
 float AGP_Worker::GetCargoFillNormalized() const

@@ -9,6 +9,7 @@
 #include "Game/GPGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Resources/GPResourceDefinition.h"
+#include "Settings/GPResourceGameplaySettings.h"
 #include "Tags/GPGameplayTags.h"
 #include "TimerManager.h"
 #include "Visual/GPPrimitiveVisualTypes.h"
@@ -574,7 +575,16 @@ void AGP_ResourceNode::HandleDepletionTransition(int32 PreviousAmount)
 		TEXT("GP ResourceNode.DepletionTransition: Actor=%s PreviousAmount=%d DestroyDelay=%.3f"),
 		*GetName(),
 		PreviousAmount,
-		DepletionDestroyDelaySeconds);
+		GetDepletionDestroyDelaySeconds());
+}
+
+float AGP_ResourceNode::GetDepletionDestroyDelaySeconds() const
+{
+	if (const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get())
+	{
+		return Settings->DepletionDestroyDelaySeconds;
+	}
+	return 0.25f;
 }
 
 void AGP_ResourceNode::ScheduleDeferredDestroy()
@@ -593,7 +603,7 @@ void AGP_ResourceNode::ScheduleDeferredDestroy()
 	bDestroyPending = true;
 	World->GetTimerManager().ClearTimer(DepletionDestroyTimerHandle);
 
-	const float Delay = FMath::Max(0.0f, DepletionDestroyDelaySeconds);
+	const float Delay = FMath::Max(0.0f, GetDepletionDestroyDelaySeconds());
 	if (Delay <= KINDA_SMALL_NUMBER)
 	{
 		World->GetTimerManager().SetTimerForNextTick(
@@ -694,11 +704,38 @@ int32 AGP_ResourceNode::GetMaxConcurrentMiners() const
 
 int32 AGP_ResourceNode::GetActiveMinerCount() const
 {
+	// Authority queries use live occupancy arrays (not stale replicated counts).
+	if (HasAuthority())
+	{
+		int32 Count = 0;
+		for (const TWeakObjectPtr<AActor>& Ptr : ActiveMiners)
+		{
+			const AActor* Miner = Ptr.Get();
+			if (IsValid(Miner) && !Miner->IsActorBeingDestroyed())
+			{
+				++Count;
+			}
+		}
+		return Count;
+	}
 	return ActiveMinerCount;
 }
 
 int32 AGP_ResourceNode::GetWaitingMinerCount() const
 {
+	if (HasAuthority())
+	{
+		int32 Count = 0;
+		for (const TWeakObjectPtr<AActor>& Ptr : WaitingMiners)
+		{
+			const AActor* Miner = Ptr.Get();
+			if (IsValid(Miner) && !Miner->IsActorBeingDestroyed())
+			{
+				++Count;
+			}
+		}
+		return Count;
+	}
 	return WaitingMinerCount;
 }
 

@@ -78,6 +78,7 @@
 | `GRIM_PROTOCOL_START_RULES.md` | Active process SoT |
 | `Docs/Development/*` ops + Claude task specs | Active |
 | `Docs/Game_Pitch.md` | Active onboarding |
+| `UGP_ResourceGameplaySettings` + `GP/Config/DefaultGame.ini` (`[/Script/GPRuntime.GP_ResourceGameplaySettings]`) | Active — Project Settings → Game → GP Resource Gameplay (GP-S28P2) |
 
 ### Stale / needs cleanup (still in active tree)
 

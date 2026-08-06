@@ -100,7 +100,7 @@ public:
 	bool IsDestroyPending() const { return bDestroyPending; }
 
 	UFUNCTION(BlueprintPure, Category = "GP|Resource|Depletion")
-	float GetDepletionDestroyDelaySeconds() const { return DepletionDestroyDelaySeconds; }
+	float GetDepletionDestroyDelaySeconds() const;
 
 	/**
 	 * Attach parent for Blueprint/SCS meshes (CollisionBox root).
@@ -279,13 +279,6 @@ protected:
 	 */
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_bHasDepleted, Category = "GP|Resource|Depletion")
 	bool bHasDepleted = false;
-
-	/**
-	 * Delay before Destroy after depletion transition.
-	 * 0 → next-tick deferred destroy (never Destroy inside ConsumeResource stack).
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Resource|Depletion", meta = (ClampMin = "0.0"))
-	float DepletionDestroyDelaySeconds = 0.25f;
 
 	/**
 	 * Soft-cap for concurrent active miners (TDD MaxConcurrentWorkers = 4).

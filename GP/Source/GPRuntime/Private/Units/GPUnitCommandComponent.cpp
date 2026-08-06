@@ -7,15 +7,18 @@
 #include "Combat/GPCombatPresentationComponent.h"
 #include "Combat/GPDamageApplication.h"
 #include "Command/GPUnitCommand.h"
+#include "Components/BoxComponent.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
 #include "Game/GPGameState.h"
 #include "GameFramework/Actor.h"
 #include "Resources/GPCargoComponent.h"
 #include "Resources/GPMiningComponent.h"
+#include "Resources/GPResourceApproach.h"
 #include "Resources/GPResourceDefinition.h"
 #include "Resources/GPResourceNode.h"
 #include "Resources/GPStorageComponent.h"
+#include "Settings/GPResourceGameplaySettings.h"
 #include "Tags/GPGameplayTags.h"
 #include "TimerManager.h"
 #include "Units/GPMobileUnit.h"
@@ -775,9 +778,18 @@ float UGP_UnitCommandComponent::GetMineApproachDesiredNodeDistance() const
 	return MineApproachDesiredNodeDistance;
 }
 
+float UGP_UnitCommandComponent::ResolveApproachSafetyMarginCm() const
+{
+	if (const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get())
+	{
+		return Settings->ResourceApproachSafetyMarginCm;
+	}
+	return 25.0f;
+}
+
 float UGP_UnitCommandComponent::GetMineApproachSafetyMarginCm() const
 {
-	return WorkerMineApproachSafetyMarginCm;
+	return ResolveApproachSafetyMarginCm();
 }
 
 int32 UGP_UnitCommandComponent::GetMineApproachAttempt() const
@@ -942,25 +954,45 @@ bool UGP_UnitCommandComponent::TryMakeRangeApproachDestination(
 		return false;
 	}
 
-	const float MaxHorizontalBudget = FMath::Sqrt(RangeSq - DeltaZSq);
-	const float TotalInward = AcceptanceRadius + WorkerMineApproachSafetyMarginCm + FMath::Max(0.0f, ExtraInwardMarginCm);
-	if (MaxHorizontalBudget <= TotalInward + 1.0f)
+	float CollisionHalfXY = 0.0f;
+	if (const AGP_ResourceNode* Node = Cast<AGP_ResourceNode>(Target))
+	{
+		if (const UBoxComponent* Box = Node->GetCollisionBox())
+		{
+			const FVector Extent = Box->GetScaledBoxExtent();
+			CollisionHalfXY = FMath::Max(Extent.X, Extent.Y);
+		}
+	}
+
+	float DesiredHorizontal = -1.0f;
+	if (!GPResourceApproach::TryComputeDesiredHorizontalDistance(
+			OwnerLocation,
+			TargetLocation,
+			InteractionRangeCm,
+			AcceptanceRadius,
+			ResolveApproachSafetyMarginCm() + FMath::Max(0.0f, ExtraInwardMarginCm),
+			CollisionHalfXY,
+			DesiredHorizontal))
 	{
 		return false;
 	}
 
-	const float DesiredHorizontal = MaxHorizontalBudget - TotalInward;
 	FVector Away = OwnerLocation - TargetLocation;
 	Away.Z = 0.0f;
-	if (!Away.Normalize())
+	if (!GPResourceApproach::TryMakeApproachPoint(
+			OwnerLocation,
+			TargetLocation,
+			Away.IsNearlyZero() ? FVector::ForwardVector : Away,
+			DesiredHorizontal,
+			InteractionRangeCm,
+			OutDestination))
 	{
-		Away = FVector::ForwardVector;
+		return false;
 	}
 
-	const FVector DestinationXY = TargetLocation + Away * DesiredHorizontal;
-	OutDestination = FVector(DestinationXY.X, DestinationXY.Y, OwnerLocation.Z);
 	OutDesiredHorizontalDistance = DesiredHorizontal;
-	OutPredictedWorstCaseDistance = FMath::Sqrt(FMath::Square(DesiredHorizontal + AcceptanceRadius) + DeltaZSq);
+	OutPredictedWorstCaseDistance = FMath::Sqrt(
+		FMath::Square(DesiredHorizontal + AcceptanceRadius) + DeltaZSq);
 	return OutPredictedWorstCaseDistance < InteractionRangeCm;
 }
 
@@ -1025,7 +1057,7 @@ bool UGP_UnitCommandComponent::RequestMineApproachMove(
 			LogLabel,
 			InteractionRange,
 			AcceptanceRadius,
-			WorkerMineApproachSafetyMarginCm,
+			ResolveApproachSafetyMarginCm(),
 			ExtraInwardMarginCm,
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
@@ -1064,7 +1096,7 @@ bool UGP_UnitCommandComponent::RequestMineApproachMove(
 		PredictedWorst,
 		InteractionRange,
 		AcceptanceRadius,
-		WorkerMineApproachSafetyMarginCm,
+		ResolveApproachSafetyMarginCm(),
 		GPUnitCommandStatePrivate::RoleToString(Role),
 		GPUnitCommandStatePrivate::NetModeToString(NetMode));
 	return true;
@@ -1447,7 +1479,7 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 		if (MineApproachAttempt < 1)
 		{
 			++MineApproachAttempt;
-			if (RequestMineApproachMove(Owner, Node, MineSerial, WorkerMineApproachSafetyMarginCm, TEXT("Corrective")))
+			if (RequestMineApproachMove(Owner, Node, MineSerial, ResolveApproachSafetyMarginCm(), TEXT("Corrective")))
 			{
 				return;
 			}
@@ -1778,7 +1810,7 @@ bool UGP_UnitCommandComponent::RequestHaulApproachMove(
 			LogLabel,
 			DropOffRange,
 			AcceptanceRadius,
-			WorkerMineApproachSafetyMarginCm,
+			ResolveApproachSafetyMarginCm(),
 			ExtraInwardMarginCm,
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
@@ -1819,7 +1851,7 @@ bool UGP_UnitCommandComponent::RequestHaulApproachMove(
 		PredictedWorst,
 		DropOffRange,
 		AcceptanceRadius,
-		WorkerMineApproachSafetyMarginCm,
+		ResolveApproachSafetyMarginCm(),
 		GPUnitCommandStatePrivate::RoleToString(Role),
 		GPUnitCommandStatePrivate::NetModeToString(NetMode));
 	return true;
@@ -1897,7 +1929,7 @@ void UGP_UnitCommandComponent::BeginDropOffAtMainBase(uint32 HaulSerial)
 		if (HaulApproachAttempt < 1)
 		{
 			++HaulApproachAttempt;
-			if (RequestHaulApproachMove(Owner, MainBase, HaulSerial, WorkerMineApproachSafetyMarginCm, TEXT("Corrective")))
+			if (RequestHaulApproachMove(Owner, MainBase, HaulSerial, ResolveApproachSafetyMarginCm(), TEXT("Corrective")))
 			{
 				return;
 			}
@@ -2192,7 +2224,7 @@ AGP_ResourceNode* UGP_UnitCommandComponent::FindAutoResourceCandidate(
 	AGP_Worker* Worker,
 	AGP_ResourceNode* ExcludeNode,
 	bool bRequireFreeSlot,
-	FName SearchReason) const
+	FName SearchReason)
 {
 	if (!IsValid(Worker))
 	{
@@ -2209,32 +2241,68 @@ AGP_ResourceNode* UGP_UnitCommandComponent::FindAutoResourceCandidate(
 	UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
 	UGP_ResourceDefinition* CompatibleDef =
 		IsValid(Cargo) ? Cargo->ResolveResourceDefinition(true) : nullptr;
+	UGP_MiningComponent* Mining = Worker->GetMiningComponent();
+	UGP_MovementComponent* Movement = ResolveMovementComponent();
+	const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get();
 
 	FGP_ResourceNodeSearchQuery Query;
-	// SearchCenter = Mine intent cluster (anchor). PathStart = current Worker location.
 	Query.SearchCenter = bHasMineSearchAnchor ? MineSearchAnchorLocation : Worker->GetActorLocation();
 	Query.PathStart = Worker->GetActorLocation();
 	Query.SearchRadiusCm = Worker->GetResourceSearchRadiusCm();
 	Query.MaxPathLengthCm = Worker->GetMaxResourcePathLengthCm();
+	Query.InteractionRangeCm = ResolveMineInteractionRangeCm(Mining, ExcludeNode);
+	Query.AcceptanceRadiusCm = Movement != nullptr ? Movement->AcceptanceRadius : 50.0f;
+	Query.ApproachSafetyMarginCm = ResolveApproachSafetyMarginCm();
+	Query.ApproachDirectionCount = Settings != nullptr ? Settings->ResourceApproachDirectionCount : 8;
 	Query.ExcludeNode = ExcludeNode;
 	Query.CompatibleDefinition = CompatibleDef;
 	Query.bRequireFreeSlot = bRequireFreeSlot;
 	Query.PathfindingActor = Worker;
 	Query.bPreferFreeSlot = true;
+
 #if !UE_BUILD_SHIPPING
+	const int32 RegistryCount = GS->GetRegisteredResourceNodeCount();
+	const bool bWaitingWake = SearchReason == FName(TEXT("WaitingWake"));
+	bool bLog = true;
+	if (bWaitingWake && bHasLastWaitingNoCandidate
+		&& LastWaitingNoCandidateRegistryCount == RegistryCount
+		&& LastWaitingNoCandidateReason == SearchReason
+		&& LastWaitingNoCandidateAnchor.Equals(Query.SearchCenter, 1.0f))
+	{
+		bLog = false;
+	}
 	Query.SearchReason = SearchReason;
-	Query.bLogDiagnostics = true;
-	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP ResourceReassignmentSearch: Worker=%s Reason=%s HasAnchor=%s Anchor=(%.0f,%.0f,%.0f) PathStart=(%.0f,%.0f,%.0f)"),
-		*GetNameSafe(Worker),
-		*SearchReason.ToString(),
-		bHasMineSearchAnchor ? TEXT("true") : TEXT("false"),
-		Query.SearchCenter.X, Query.SearchCenter.Y, Query.SearchCenter.Z,
-		Query.PathStart.X, Query.PathStart.Y, Query.PathStart.Z);
+	Query.bLogDiagnostics = bLog;
+	if (bLog)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Verbose,
+			TEXT("GP ResourceReassignmentSearch: Worker=%s Reason=%s HasAnchor=%s Anchor=(%.0f,%.0f,%.0f) PathStart=(%.0f,%.0f,%.0f)"),
+			*GetNameSafe(Worker),
+			*SearchReason.ToString(),
+			bHasMineSearchAnchor ? TEXT("true") : TEXT("false"),
+			Query.SearchCenter.X, Query.SearchCenter.Y, Query.SearchCenter.Z,
+			Query.PathStart.X, Query.PathStart.Y, Query.PathStart.Z);
+	}
 #else
 	(void)SearchReason;
 #endif
-	return GS->FindBestResourceCandidate(Query);
+
+	AGP_ResourceNode* Best = GS->FindBestResourceCandidate(Query);
+
+#if !UE_BUILD_SHIPPING
+	if (Best == nullptr)
+	{
+		LastWaitingNoCandidateRegistryCount = RegistryCount;
+		LastWaitingNoCandidateReason = SearchReason;
+		LastWaitingNoCandidateAnchor = Query.SearchCenter;
+		bHasLastWaitingNoCandidate = true;
+	}
+	else
+	{
+		bHasLastWaitingNoCandidate = false;
+	}
+#endif
+	return Best;
 }
 
 bool UGP_UnitCommandComponent::TryRetargetMineToNode(
@@ -2338,21 +2406,19 @@ bool UGP_UnitCommandComponent::TryAutoReassignMine(
 
 		if (bPreferFreeSlotFirst)
 		{
+			// Single pass: free nodes sort first; do not run a second RequireFreeSlot=false sweep.
 			if (AGP_ResourceNode* FreeAlt = FindAutoResourceCandidate(
-					Worker, PreferredOrFailedNode, true, SearchReason))
+					Worker, PreferredOrFailedNode, false, SearchReason))
 			{
-				return TryRetargetMineToNode(FreeAlt, MineSerial, true);
+				if (FreeAlt->GetActiveMinerCount() < FreeAlt->GetMaxConcurrentMiners())
+				{
+					return TryRetargetMineToNode(FreeAlt, MineSerial, true);
+				}
 			}
 		}
 
 		// No free alternative — keep / enter FIFO on preferred if reachable.
 		return TryRetargetMineToNode(PreferredOrFailedNode, MineSerial, true);
-	}
-
-	if (AGP_ResourceNode* FreeAlt = FindAutoResourceCandidate(
-			Worker, PreferredOrFailedNode, true, SearchReason))
-	{
-		return TryRetargetMineToNode(FreeAlt, MineSerial, true);
 	}
 
 	if (AGP_ResourceNode* AnyAlt = FindAutoResourceCandidate(
@@ -2402,12 +2468,17 @@ void UGP_UnitCommandComponent::BindResourceRegistryWake()
 		this, &UGP_UnitCommandComponent::HandleResourceNodeRegisteredWake);
 	bResourceRegistryWakeBound = true;
 
+	float RetrySeconds = 3.0f;
+	if (const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get())
+	{
+		RetrySeconds = FMath::Max(0.1f, Settings->WaitingForResourceRetrySeconds);
+	}
 	World->GetTimerManager().ClearTimer(WaitingForResourceRetryTimerHandle);
 	World->GetTimerManager().SetTimer(
 		WaitingForResourceRetryTimerHandle,
 		this,
 		&UGP_UnitCommandComponent::HandleWaitingForResourceSafetyRetry,
-		1.0f,
+		RetrySeconds,
 		true);
 }
 

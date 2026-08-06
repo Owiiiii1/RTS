@@ -1,45 +1,46 @@
-# Cursor Work Report — GP-S28P2 Search-Anchor Correction
+# Cursor Work Report — GP-S28P2 Approach-Path + Settings Correction
 
 ## Status
 **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ## Branch
-`feature/gp-s28p2-depletion-resource-reassignment` (same branch; no merge; main untouched)
+`feature/gp-s28p2-depletion-resource-reassignment` (no merge; main untouched)
 
-## Prior implementation
-`6c10937ffa3e1060e79ab1e8481e05c9f6aac6ed`
+## Second operator failure
+After search-anchor fix: `HasAnchor=true`, `Radius=3000`, `RegistryCount=1`, but both `RequireFreeSlot` passes → `NoCandidate`, then WaitingWake log spam. Radius was not the cause.
 
-## Operator failure
-- 1 Worker, 1 MainBase, 2 ResourceNodes; Node A depletes; Worker hauls and unloads (`HaulDropOffComplete … Accepted=20`, `ReturnToDeposit=false`)
-- Actual: Worker entered `WaitingForResource` instead of retargeting Node B
+## Exact confirmed rejection reason
+Pathfinding to `ResourceNode::GetActorLocation()` (node center inside CollisionBox / nav-affecting obstacle) → path invalid / unprojectable. Prior reject diagnostics used `Verbose` and did not appear in the default Output Log.
 
-## Confirmed root cause
-`FindAutoResourceCandidate` set a single `Origin` = Worker location at MainBase for both radius filtering and nav path start. After unload, Node B was outside `ResourceSearchRadiusCm` from the base despite being next to the depleted mining cluster.
+## Approach-point path correction
+- `GPResourceApproach` shared geometry (InteractionRange / DeltaZ / AcceptanceRadius / safety / CollisionBox extent)
+- 8-direction projected approach samples; reject partial; pick shortest valid path
+- `FGP_ResourceNodeCandidate.BestApproachLocation` populated
+- Authority free-slot: live Active/Waiting array counts (`Active=0 Waiting=0 Max=4`)
 
-## Exact search-anchor correction
-- `MineSearchAnchorLocation` + `bHasMineSearchAnchor` on Mine executor
-- Set on Mine accept to original ResourceNode location; survives Destroy/haul; cleared via `ResetMineExecutor` (Move/Attack/Stop/replace/cancel/EndPlay)
-- Kept in `WaitingForResource`
-- `FGP_ResourceNodeSearchQuery.SearchCenter` = anchor (radius); `PathStart` = Worker current location (nav / max path)
+## Settings class
+- `UGP_ResourceGameplaySettings` (`UDeveloperSettings`, Config=Game)
+- `GP/Config/DefaultGame.ini` section `[/Script/GPRuntime.GP_ResourceGameplaySettings]`
+- Project Settings → Game → GP Resource Gameplay
+- Waiting retry default **3.0s**; search/path/approach/depletion delay centralized
 
-## New diagnostics
-Non-shipping event logs on reassignment only: reason (`PostDepletion` / `PostDropOff` / `WaitingWake` / `SlotFullAlternative`), centers, rejects, selected candidate, or `ResourceReassignmentNoCandidate`. No Tick spam.
+## Retry / log suppression
+- One search pass with free-slot prefer sort
+- WaitingWake identical no-candidate suppressed
+- Per-candidate Accepted/Rejected at Log with exact enum reason
+- Move/command replace still clears timer/subscriptions
 
-## Updated test
-`gp.Resource.RunDepletionReassignmentContractTest` — post-drop-off anchor regression (MainBase outside radius, Node B inside anchor radius, retarget after unload), Move clears anchor, Waiting wake radius, CargoFull haul first, no permanent Tick.
+## Tests
+Extended `gp.Resource.RunDepletionReassignmentContractTest` (approach acceptance, free-slot, settings, prior anchor cases).
 
 ## Builds
 | Target | Result |
 | --- | --- |
 | GPEditor Win64 Development + UHT | **PASSED** |
-| GP Dev / Shipping | Deferred to finalization |
+| GP Dev / Shipping | Deferred |
 
-## Operator-local assets — untouched / uncommitted
-- `GP/Config/DefaultEngine.ini`
-- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
-- `GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`
-- `GP/Content/GrimProtocol/Blueprint/**`
-- `GP/Content/GrimProtocol/Materials/**`
+## Operator-local assets — untouched
+DefaultEngine.ini, map, Blueprint/**, Materials/**, authored ResourceNode, Niagara.
 
 ## Commit SHA
-`563a025296fd5311ce8066259f22dba891063950`
+Filled after commit on this branch tip.

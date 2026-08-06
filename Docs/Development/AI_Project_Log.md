@@ -1,8 +1,32 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28P0 Resource Playable Pass Audit
+
+Status: **GP_S28P0_AUDIT_READY_FOR_REVIEW**
+
+### Branch / baseline
+- Branch: `audit/gp-s28p-resource-playable-pass`
+- Base: `main` @ `035c486758059032bb2551520834dd73f8667ef5` (GP-S28 merged)
+- Audit: `Docs/Development/Resource_Playable_Pass_Audit.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Parallel audits
+- `audit/gp-slice7-combat-reconciliation` — **completed**, pending review/merge (not cancelled; not modified here)
+
+### Summary
+Player RMB → Mine already works on `AGP_ResourceNode`. Gaps for playable prototype: BP presentation hooks, cargo visual bind, depletion presentation, path-aware multi-node reassignment, MainBase-only drop-off wait, TEMP Planetary HUD. Proposed P1–P4; no `IGP_FerroniteDropOff` in S28P (LogisticsHub is not drop-off). Implementation **not started**.
+
+### Builds
+GPEditor Win64 Development + UHT **PASSED** (docs-only).
+
+### Next
+Operator review of P0 audit → assign GP-S28P1 when approved.
+
+---
+
 ## 2026-08-06 — GP-S28 Storage + ThreatValue Finalization
 
-Status: **GP-S28_READY_FOR_MERGE**
+Status: **GP-S28_READY_FOR_MERGE** *(merged to main @ 035c486)*
 
 ### Branch / baseline
 - Branch: `feature/gp-s28-storage-threat`

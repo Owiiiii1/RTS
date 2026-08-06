@@ -6,37 +6,26 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-01 (після SETUP-001 + DOCS-001). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: `git log -- GP/Source/`, наявність файлів зі `Files Touched` поточної slice, заповненість секції `Output` у task-файлі, та [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md).
+> Стан станом на 2026-08-06 (після merge GP-S28). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), [`../Resource_Playable_Pass_Audit.md`](../Resource_Playable_Pass_Audit.md).
 
-**Поточна фаза:** Phase 6B — Slice 3 / Camera **closed** (GP-S12…GP-S15 **DONE**). GP-S16 not materialized. Наступний етап автоматично не починати.
+**Поточна фаза:** Slice 6 **closed** (GP-S28 merged @ `main` `035c486…`). Current implementation stage = **GP-S28P0_RESOURCE_PLAYABLE_AUDIT** (docs only).
 
-**Status of materialized slices:**
+**Status snapshot:**
 
-| Slice | Status | Доказ |
-|---|---|---|
-| GP-S01 Module Scaffolds | **DONE** | `GPRuntime` / `GPGASRuntime` / `GPUIRuntime` on disk |
-| GP-S02 Native Gameplay Tags | **DONE** | `FGPGameplayTags` registry |
-| GP-S03 Attribute Sets | **DONE** | `UGP_PlayerAttributeSet` / `UGP_UnitAttributeSet` |
-| GP-S04 AbilitySystemComponent Subclass | **DONE** | `UGP_AbilitySystemComponent` |
-| GP-S05 Damage Calculation MMC | **DONE** | `UGP_DamageCalculation` |
-| GP-S06 AGP_GameState | **DONE** | [`GP-S06_Game_State.md`](GP-S06_Game_State.md) |
-| GP-S07 AGP_GameMode | **DONE** | [`GP-S07_Game_Mode.md`](GP-S07_Game_Mode.md) |
-| GP-S08 AGP_PlayerController | **DONE** | [`GP-S08_Player_Controller.md`](GP-S08_Player_Controller.md) |
-| GP-S09 AGP_PlayerState | **DONE** | [`GP-S09_Player_State.md`](GP-S09_Player_State.md) |
-| GP-S10 UGP_MatchAssetLoader | **DONE** | [`GP-S10_Match_Asset_Loader.md`](GP-S10_Match_Asset_Loader.md) |
-| GP-S11 AGP_LobbyState | **DONE** | [`GP-S11_Lobby_State.md`](GP-S11_Lobby_State.md) |
-| GP-S12 UGP_CameraConfigDataAsset | **DONE** | [`GP-S12_Camera_Config_Data_Asset.md`](GP-S12_Camera_Config_Data_Asset.md) |
-| GP-S13 AGP_CameraPawn | **DONE** | [`GP-S13_Camera_Pawn.md`](GP-S13_Camera_Pawn.md) |
-| GP-S14 AGP_CameraBoundsVolume | **DONE** | [`GP-S14_Camera_Bounds_Volume.md`](GP-S14_Camera_Bounds_Volume.md) |
-| **GP-S15 Camera Enhanced Input** | **DONE** | [`GP-S15_Camera_Input.md`](GP-S15_Camera_Input.md) — PC Enhanced Input + five IA/IMC; tick-enabled PC; Standalone + 2P PIE PASSED |
-| GP-S16+ | not materialized | do not create / start until explicitly assigned |
-| GP-S54..S56 (Slice 10, AI Opponent) | files materialized, code not started | depends on Slice 1 → 9 sequence |
+| Area | Status |
+|---|---|
+| GP-S01 … GP-S28 | **DONE / merged** on `main` |
+| Slice 6 Worker + Resources | **Completed** |
+| GP-SLICE7-AUDIT (`audit/gp-slice7-combat-reconciliation`) | **Completed audit, pending review** — not cancelled; do not modify from S28P |
+| **GP-S28P0** Resource Playable Pass Audit | **READY_FOR_REVIEW** — [`Resource_Playable_Pass_Audit.md`](../Resource_Playable_Pass_Audit.md) |
+| GP-S28P1…P4 | Proposed only — do not start until assigned |
+| Canonical Slice 7 GP-S29…S33 | Combat gaps tracked in combat audit; not this stage |
 
-**NEXT action для агента:** STOP. GP-S15 is **DONE**. Do **not** materialize or start GP-S16 until explicitly assigned.
+**NEXT action для агента:** STOP after P0 audit. Do **not** implement P1 C++/BP until operator accepts audit and assigns GP-S28P1. Do **not** alter `audit/gp-slice7-combat-reconciliation`.
 
 ### Drift Warning
 
-Cursor above is authoritative with [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) + `AI_Project_Log.md`. One slice = one PR.
+Cursor must match [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) + `AI_Project_Log.md`. Older “NEXT = GP-S16 after GP-S15” is obsolete. One slice = one PR.
 
 ---
 

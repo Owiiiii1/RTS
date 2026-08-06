@@ -94,9 +94,9 @@ Present locally and **not** staged/deleted/reverted:
 
 ## Final commit SHA
 - Finalization: `ae1450d713c59231116600ac1548f956d9f5aed7`
-- Tip (docs SHA record): `68b52ff2147a7e5de3625986b6766b888124c26d`
+- Tip: `4b219536f2863b83163ce9e80c0861c03a430e5d`
 
 ## Git status / sync
-- Branch synced with `origin/feature/gp-s28p1-blueprint-cargo-visual` @ `68b52ff…`
+- Branch synced with `origin/feature/gp-s28p1-blueprint-cargo-visual` @ `4b21953…`
 - Tracked docs clean after push; local operator Content/Config/map edits remain uncommitted
 - `main` @ `035c486…` untouched; no PR / no merge

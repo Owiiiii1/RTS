@@ -1,8 +1,34 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-SLICE7-AUDIT Existing Combat Reconciliation
+
+Status: **GP_SLICE7_AUDIT_READY_FOR_REVIEW**
+
+### Branch / baseline
+- Branch: `audit/gp-slice7-combat-reconciliation`
+- Base: `main` @ `035c486758059032bb2551520834dd73f8667ef5` (GP-S28 merged)
+- Audit: `Docs/Development/Combat_Reconciliation_Audit.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Context
+- Slice 6 (resources through GP-S28 Storage + Threat) **completed** and merged.
+- Current stage = Slice 7 combat reconciliation **audit** (documentation only).
+- Gameplay implementation **not started**.
+
+### Summary
+Existing combat (GP-S24…S26A) already provides Attack FSM, GE damage+MMC, death, gated tick cadence, and presentation multicast under non-canonical names. Real gaps: LOS 3-trace, TargetingComponent/auto-acquire, Cooldown GE, Attack-move state. No projectile rewrite. Do not invent `UGP_CombatComponent` duplicate.
+
+### Recommended next task (pending operator review of audit)
+`feature/gp-s29r-combat-los-fire-gate` / `GP-S29R_Combat_LOS_Fire_Gate` — LOS fire-gate only on existing executor.
+
+### Builds
+GPEditor Win64 Development + UHT **PASSED** (baseline; no C++ changes).
+
+---
+
 ## 2026-08-06 — GP-S28 Storage + ThreatValue Finalization
 
-Status: **GP-S28_READY_FOR_MERGE**
+Status: **GP-S28_READY_FOR_MERGE** *(merged to main @ 035c486)*
 
 ### Branch / baseline
 - Branch: `feature/gp-s28-storage-threat`

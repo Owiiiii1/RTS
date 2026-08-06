@@ -34,18 +34,21 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S15 DONE** |
-| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`, `AGP_GameMode`, `AGP_PlayerController` + camera Enhanced Input, `AGP_PlayerState`, `UGP_MatchAssetLoader`, `AGP_LobbyState`, `UGP_CameraConfigDataAsset`, `AGP_CameraPawn` owner-only shell, `AGP_CameraBoundsVolume`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
-| Last closed stage | **GP-S15** |
-| Current stage | **none** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S28 merged** |
+| Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
+| Last closed / merged stage | **GP-S28 Storage + ThreatValue** @ `main` `035c486758059032bb2551520834dd73f8667ef5` |
+| Slice 6 | **Completed** (resource loop through Storage/Threat) |
+| Current stage | **GP-SLICE7-AUDIT** — Existing Combat Reconciliation (docs only; implementation not started) |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** none (GP-S15 closed as **DONE**).
+**Current:** GP-SLICE7-AUDIT (`audit/gp-slice7-combat-reconciliation`) — see [`Combat_Reconciliation_Audit.md`](Combat_Reconciliation_Audit.md). Status: **GP_SLICE7_AUDIT_READY_FOR_REVIEW**.
 
-**NEXT:** GP-S16 UGP_SelectionComponent (SelectedUnits, InspectedTarget, marquee, control groups) — per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order. Do **not** create GP-S16 task file or start implementation until explicitly assigned.
+**NEXT (pending audit review):** recommended `GP-S29R_Combat_LOS_Fire_Gate` on `feature/gp-s29r-combat-los-fire-gate` — add canonical 3-trace LOS into existing `UGP_UnitCommandComponent` fire gate; do **not** create duplicate `UGP_CombatComponent`. Do not materialize implementation until explicitly assigned after audit acceptance.
+
+> Stale cursor note: older index text that claimed “NEXT = GP-S16” after GP-S15 is **obsolete**. Selection/commands through GP-S28 already exist on main.
 
 ### Foundation / Match Flow sequence
 
@@ -64,7 +67,8 @@
 13. GP-S13 AGP_CameraPawn — **DONE**
 14. GP-S14 AGP_CameraBoundsVolume — **DONE**
 15. GP-S15 Camera Enhanced Input / PlayerController binding — **DONE**
-16. GP-S16 UGP_SelectionComponent (SelectedUnits, InspectedTarget, marquee, control groups) — not started / task file not materialized
+16. GP-S16…GP-S28 — **DONE / merged** (selection, commands, movement, attack damage/cadence/presentation, worker/resources/storage) — see `AI_Project_Log.md` + git history on `main`
+17. Slice 7 combat — **audit in progress** ([`Combat_Reconciliation_Audit.md`](Combat_Reconciliation_Audit.md)); canonical GP-S29…S33 partially pre-implemented; next gap task pending review
 
 ---
 

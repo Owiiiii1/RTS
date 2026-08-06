@@ -93,7 +93,10 @@ Present locally and **not** staged/deleted/reverted:
 - `audit/gp-slice7-combat-reconciliation` (unchanged; not modified)
 
 ## Final commit SHA
-+ae1450d713c59231116600ac1548f956d9f5aed7+
+- Finalization: `ae1450d713c59231116600ac1548f956d9f5aed7`
+- Tip (docs SHA record): `68b52ff2147a7e5de3625986b6766b888124c26d`
 
 ## Git status / sync
-(see after push — intended tracked docs clean; local operator content may remain; branch synced with origin; no PR / no merge)
+- Branch synced with `origin/feature/gp-s28p1-blueprint-cargo-visual` @ `68b52ff…`
+- Tracked docs clean after push; local operator Content/Config/map edits remain uncommitted
+- `main` @ `035c486…` untouched; no PR / no merge

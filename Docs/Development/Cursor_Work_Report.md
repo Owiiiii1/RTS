@@ -42,4 +42,4 @@ Non-shipping event logs on reassignment only: reason (`PostDepletion` / `PostDro
 - `GP/Content/GrimProtocol/Materials/**`
 
 ## Commit SHA
-Filled after commit on this branch tip.
+`563a025296fd5311ce8066259f22dba891063950`

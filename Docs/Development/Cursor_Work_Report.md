@@ -75,4 +75,4 @@ Extended `gp.Storage.RunContractTest` and `gp.Resource.RunPresentationContractTe
 **Unchanged in git** — local `BP_GP_MainBase` / `BP_GP_Worker` remain untracked / not committed.
 
 ## Correction commit SHA
-(see git after commit)
+`70c8578aa70595f104732548862dc2f554b627c0`

@@ -19,7 +19,7 @@ Operator blocker: BP_GP_MainBase Compile — `Containers array size must equal C
 
 Root cause: `EnsureContainerArray()` is authority-only in `BeginPlay`, but DataValidation runs on templates with empty `Containers`.
 
-Fix:
+Fix (`70c8578aa70595f104732548862dc2f554b627c0`):
 - `ValidateStorageContract` treats empty Containers on template/CDO/pre-BeginPlay (non-authority-initialized) as initialization-pending; empty after authority BeginPlay still errors; non-empty size≠Count always errors.
 - Removed unconditional BuildingDefinition warning from `ValidateMainBaseContract`.
 - Storage contract + presentation contract cover template / runtime / partial-array / no BuildingDefinition warning.

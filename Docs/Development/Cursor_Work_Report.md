@@ -80,7 +80,7 @@ Add canonical 3-trace LOS into existing UnitCommand fire gate only. Do not creat
 (to be verified after commit/push: clean; branch synced; main untouched)
 
 ## Audit commit SHA
-(see git after push)
+`2120b7d893428a4ad76cf440fa2b12a8e004afaf`
 
 ## Status
 **GP_SLICE7_AUDIT_READY_FOR_REVIEW**

@@ -6,6 +6,7 @@
 ## Baseline
 - Branch: `audit/gp-slice7-combat-reconciliation`
 - Base / main: `035c486758059032bb2551520834dd73f8667ef5` (Merge GP-S28 Storage + ThreatValue)
+- Audit commit: `2120b7d893428a4ad76cf440fa2b12a8e004afaf`
 - Stage type: **documentation / audit only** — no gameplay C++ changes
 - Slice 6: **complete** (GP-S23R…GP-S28 merged)
 - Canonical Slice 7 map (`TDD/13`): GP-S29…GP-S33

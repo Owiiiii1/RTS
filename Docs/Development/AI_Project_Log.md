@@ -7,6 +7,7 @@ Status: **GP_SLICE7_AUDIT_READY_FOR_REVIEW**
 ### Branch / baseline
 - Branch: `audit/gp-slice7-combat-reconciliation`
 - Base: `main` @ `035c486758059032bb2551520834dd73f8667ef5` (GP-S28 merged)
+- Audit commit: `2120b7d893428a4ad76cf440fa2b12a8e004afaf`
 - Audit: `Docs/Development/Combat_Reconciliation_Audit.md`
 - Report: `Docs/Development/Cursor_Work_Report.md`
 

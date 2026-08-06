@@ -93,7 +93,7 @@ Present locally and **not** staged/deleted/reverted:
 - `audit/gp-slice7-combat-reconciliation` (unchanged; not modified)
 
 ## Final commit SHA
-(see git after commit)
++ae1450d713c59231116600ac1548f956d9f5aed7+
 
 ## Git status / sync
 (see after push — intended tracked docs clean; local operator content may remain; branch synced with origin; no PR / no merge)

@@ -54,4 +54,4 @@ Mine/haul/FIFO/depletion/Storage LOST/Threat/registry/combat/HUD unchanged. No B
 Depletion lifecycle presentation, cross-node reassignment, drop-off wait, HUD, launch/Orbital/Score, combat.
 
 ## Stop / merge
-READY_FOR_MERGE on feature branch. Do **not** open PR / merge / touch main until operator/tech-lead assigns.
+READY_FOR_MERGE on feature branch (finalization `ae1450d713c59231116600ac1548f956d9f5aed7`). Do **not** open PR / merge / touch main until operator/tech-lead assigns.

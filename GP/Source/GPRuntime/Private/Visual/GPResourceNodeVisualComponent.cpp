@@ -4,6 +4,7 @@
 
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
+#include "Resources/GPResourceNode.h"
 
 #if WITH_EDITOR
 #include "Misc/App.h"
@@ -60,6 +61,22 @@ EGP_VisualSourceMode UGP_ResourceNodeVisualComponent::GetVisualSourceMode() cons
 bool UGP_ResourceNodeVisualComponent::UsesAuthoredComponents() const
 {
 	return VisualSourceMode == EGP_VisualSourceMode::AuthoredComponents;
+}
+
+bool UGP_ResourceNodeVisualComponent::ShouldUseGeneratedPrototypeVisual() const
+{
+	if (UsesAuthoredComponents())
+	{
+		return false;
+	}
+
+	if (const AGP_ResourceNode* Node = Cast<AGP_ResourceNode>(GetOwner()))
+	{
+		return Node->GetUseGeneratedPrototypeVisual();
+	}
+
+	// Non-ResourceNode owners (if any) keep NativeFallback behavior.
+	return true;
 }
 
 int32 UGP_ResourceNodeVisualComponent::GetPartCount() const
@@ -175,13 +192,14 @@ void UGP_ResourceNodeVisualComponent::RefreshVisualMode()
 {
 	bAuthoredSnapshotDirty = true;
 
-	if (UsesAuthoredComponents())
+	if (!ShouldUseGeneratedPrototypeVisual())
 	{
 		ClearVisual();
 		bDedicatedVisualSuppressed = ShouldSuppressVisualConstruction();
 		UE_LOG(LogGPResourceNodeVisual, Verbose,
-			TEXT("GP ResourceNodeVisual: Owner=%s VisualSourceMode=AuthoredComponents GeneratedPartsCleared"),
-			*GetNameSafe(GetOwner()));
+			TEXT("GP ResourceNodeVisual: Owner=%s GeneratedPrototypeVisual=false GeneratedPartsCleared Mode=%s"),
+			*GetNameSafe(GetOwner()),
+			UsesAuthoredComponents() ? TEXT("AuthoredComponents") : TEXT("NativeFallback"));
 		return;
 	}
 
@@ -193,7 +211,7 @@ void UGP_ResourceNodeVisualComponent::RebuildVisual()
 	ClearVisual();
 	bAuthoredSnapshotDirty = true;
 
-	if (UsesAuthoredComponents())
+	if (!ShouldUseGeneratedPrototypeVisual())
 	{
 		bDedicatedVisualSuppressed = ShouldSuppressVisualConstruction();
 		return;

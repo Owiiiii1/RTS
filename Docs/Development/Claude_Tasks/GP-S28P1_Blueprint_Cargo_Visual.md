@@ -9,66 +9,73 @@
 - Implementation: `e196a43e124e4c9fb0b0fe7f56ae299ac61f459a`
 - Main: `035c486758059032bb2551520834dd73f8667ef5` (untouched)
 
-## Correction — UnitDefinition compile warning
-Operator blocker: BP_GP_Worker Compile logged unconditional `WarnNoUnitDefinitionAsset` (“No UGP_UnitDefinition Worker asset…”).
+## Operator validation (haul loop)
+Confirmed: Worker select → RMB ResourceNode Mine → cargo → delivery → unload → return; BP Worker/MainBase children work.
 
-Fix: removed that warning from `ValidateWorkerContract` (`eea992a312af2a73400ad4f6d0bece2e82d73bf5`). Worker UnitDefinition remains deferred — **no** placeholder asset / property. Presentation contract now asserts absence of UnitDefinition warnings. DataValidation on local BP_GP_Worker: 0 errors, 0 warnings.
+## Correction — UnitDefinition compile warning
+Removed unconditional `WarnNoUnitDefinitionAsset` (`eea992a312af2a73400ad4f6d0bece2e82d73bf5`).
 
 ## Correction — MainBase Storage validation lifecycle
-Operator blocker: BP_GP_MainBase Compile — `Containers array size must equal ContainerCount` plus BuildingDefinition warning.
+Lifecycle-aware `ValidateStorageContract` + removed BuildingDefinition warning (`70c8578aa70595f104732548862dc2f554b627c0`).
 
-Root cause: `EnsureContainerArray()` is authority-only in `BeginPlay`, but DataValidation runs on templates with empty `Containers`.
+## Correction — Niagara Mining Effect + Generated Visual Override
+Cancels unused MiningAnimationAnchor / primitive mining animation idea.
 
-Fix (`70c8578aa70595f104732548862dc2f554b627c0`):
-- `ValidateStorageContract` treats empty Containers on template/CDO/pre-BeginPlay (non-authority-initialized) as initialization-pending; empty after authority BeginPlay still errors; non-empty size≠Count always errors.
-- Removed unconditional BuildingDefinition warning from `ValidateMainBaseContract`.
-- Storage contract + presentation contract cover template / runtime / partial-array / no BuildingDefinition warning.
-- Local BP_GP_MainBase DataValidation: **0 errors, 0 warnings** (asset not committed).
-- Storage gameplay (5×100, add/remove, LOST, replication) unchanged.
+### Cargo presentation (API stable)
+- `OnCargoVisualStateChanged` unchanged (bVisible, FillNormalized, Amount, Capacity).
+- Operator: keep container mesh always visible; color via FillNormalized (0 white → partial white-yellow → full green).
+- No gradual gameplay mining transfer; no material/BP assets in C++.
+
+### Worker
+- `MiningEffectAnchor` under PresentationRoot (with CargoVisualAnchor).
+- `OnMiningEffectStateChanged` from `OnMiningStateChanged`; active only while `EGP_MiningState::Mining`.
+- NiagaraComponent authored in BP under anchor (Auto Activate false); Activate/Deactivate from event.
+
+### ResourceNode
+- `bUseGeneratedPrototypeVisual` (default true) on `AGP_ResourceNode`.
+- false → clear generated prototype shapes; authored meshes + CollisionBox remain.
+- Operator: `BP_GP_ResourceNode_Ferronite` → Use Generated Prototype Visual = false.
+
+### Tests / build
+- Presentation contract extended (mining effect + visual toggle lifecycle).
+- GPEditor Win64 Development + UHT — **PASSED**
+- PIE suite — operator pending
 
 ## Goal
-Expose stable Blueprint presentation attach points and a cargo visual signal so operator-authored BP children can look playable — without changing Mine command semantics, Storage/Threat, or resource reassignment.
+Expose stable Blueprint presentation attach points and cargo/mining visual signals so operator-authored BP children can look playable — without changing Mine command semantics, Storage/Threat, or resource reassignment.
 
 ## Delivered
 
 ### Worker (`AGP_Worker`)
 - `PresentationRoot` → under Capsule
 - `CargoVisualAnchor` → under PresentationRoot
-- Accessors: `GetPresentationRoot`, `GetCargoVisualAnchor`, `GetCargoFillNormalized`, `HasCargoForVisual`
-- `OnCargoVisualStateChanged` (`BlueprintAssignable`) synced from `UGP_CargoComponent::OnCargoAmountChanged` + BeginPlay initial sync
-- No C++ StaticMesh; no new replicated cargo flag; no Tick
+- `MiningEffectAnchor` → under PresentationRoot
+- Accessors: `GetPresentationRoot`, `GetCargoVisualAnchor`, `GetMiningEffectAnchor`, `GetCargoFillNormalized`, `HasCargoForVisual`
+- `OnCargoVisualStateChanged` / `OnMiningEffectStateChanged`
+- No C++ StaticMesh/Niagara asset; no replicated presentation bool; no Tick
 
 ### MainBase (`AGP_MainBase`)
-- `PresentationRoot` → under Capsule
-- `DropOffVisualAnchor` → under PresentationRoot (presentation only; `DropOffRangeCm` unchanged)
-- Accessors: `GetPresentationRoot`, `GetDropOffVisualAnchor`, `GetStorageComponent`, `GetPlanetaryStored`, `GetPlanetaryCapacity`
+- `PresentationRoot` / `DropOffVisualAnchor` (unchanged this correction)
 
 ### ResourceNode (`AGP_ResourceNode`)
-- No duplicate hierarchy — `GetPresentationRoot()` returns CollisionBox (root / AuthoredComponents parent)
-- `GetRemainingNormalized()` added
-- Existing `GetCurrentAmount` / `GetMaxAmount` / `IsDepleted` unchanged
-- `OnResourceDepleted` deferred to P2
+- `GetPresentationRoot()` = CollisionBox
+- `GetRemainingNormalized()`
+- `bUseGeneratedPrototypeVisual` + setter; visual component respects flag + `VisualSourceMode`
 
 ### Tests
 - `gp.Resource.RunPresentationContractTest` (coordinator token)
 - Included in `gp.Resource.RunS28RegressionSuite` (after Cargo)
 
-### Builds
-- GPEditor Win64 Development + UHT — **PASSED**
-
 ## Preserved
 - RMB → Mine → haul → drop-off → remine path
-- CommandComponent / Server_RequestCommand / Mine semantics
-- FIFO, slots, depletion, Storage LOST, Threat, registry
-- No BP/map/content assets created
+- Mining cadence, Cargo amounts/replication, FIFO, depletion, Storage/Threat
+- No BP/Niagara/material/map assets committed
 
 ## Operator next (PIE)
-1. Create `BP_GP_Worker : AGP_Worker` — add StaticMesh under PresentationRoot; cargo mesh on CargoVisualAnchor; bind visibility to `OnCargoVisualStateChanged`.
-2. Create `BP_GP_MainBase : AGP_MainBase` — meshes under PresentationRoot; optional marker at DropOffVisualAnchor.
-3. Create `BP_GP_ResourceNode_Ferronite : AGP_ResourceNode` — AuthoredComponents / SCS under CollisionBox; visuals NoCollision / no nav.
-4. Keep CapabilityTags; do not replace Capsule/Box roots.
-5. Run `gp.Resource.RunPresentationContractTest` → Failures=0.
-6. Smoke: select Worker → RMB node → haul loop still works.
+1. `BP_GP_Worker`: cargo mesh always visible; material from FillNormalized; Niagara under MiningEffectAnchor wired to `OnMiningEffectStateChanged`.
+2. `BP_GP_ResourceNode_Ferronite`: **Use Generated Prototype Visual = false**; authored meshes only.
+3. Run `gp.Resource.RunPresentationContractTest` → Failures=0; optionally `gp.Resource.RunS28RegressionSuite`.
+4. Smoke haul loop still works; Niagara only while Mining (not WaitingForSlot / haul).
 
 ## Out of scope (P2+)
-Depletion lifecycle, cross-node reassignment, drop-off wait, HUD, launch/Orbital/Score, combat.
+Depletion lifecycle, cross-node reassignment, drop-off wait, HUD, launch/Orbital/Score, combat, MiningAnimationAnchor, cycle pulse event.

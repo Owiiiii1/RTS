@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28P1 Niagara Mining Effect + Generated Visual Override
+
+Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p1-blueprint-cargo-visual`
+
+### Summary
+Operator haul-loop validation accepted. Added Worker `MiningEffectAnchor` + `OnMiningEffectStateChanged` (Mining-only Niagara hook via MiningComponent SoT). Added `AGP_ResourceNode::bUseGeneratedPrototypeVisual` (default true) to clear generated prototype shapes for authored BP nodes. Cargo event API unchanged; document always-visible container + FillNormalized color. MiningAnimationAnchor idea cancelled. GPEditor Dev+UHT **PASSED**. PIE presentation/S28 suite **operator pending**. No BP/Niagara/material/map committed.
+
+---
+
 ## 2026-08-06 — GP-S28P1 Storage Validation Lifecycle Correction
 
 Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**

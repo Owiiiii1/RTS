@@ -44,7 +44,7 @@
 
 ## Current NEXT Task
 
-**Current:** GP-S28P1 — Blueprint-Ready Resource Actors + Cargo Visual (`feature/gp-s28p1-blueprint-cargo-visual`). Task: [`Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`](Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md). Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**.
+**Current:** GP-S28P1 — Blueprint presentation + cargo visual + Niagara mining hook + generated ResourceNode visual override (`feature/gp-s28p1-blueprint-cargo-visual`). Task: [`Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`](Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md). Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**.
 
 **Prior audit (kept):** GP-S28P0 on `audit/gp-s28p-resource-playable-pass` — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
 

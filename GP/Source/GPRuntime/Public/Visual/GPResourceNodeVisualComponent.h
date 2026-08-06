@@ -37,6 +37,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Visual")
 	bool UsesAuthoredComponents() const;
 
+	/** True when NativeFallback mode and owner wants generated prototype shapes. */
+	UFUNCTION(BlueprintPure, Category = "GP|Visual")
+	bool ShouldUseGeneratedPrototypeVisual() const;
+
 	int32 GetPartCount() const;
 	bool IsDedicatedVisualSuppressed() const;
 	bool HasBuiltVisual() const;

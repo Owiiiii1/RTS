@@ -1,5 +1,27 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28P2 Search-Anchor Correction (Post Operator Failure)
+
+Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p2-depletion-resource-reassignment` (no new branch; no merge)
+
+### Operator failure
+After depletion haul drop-off at MainBase (`ReturnToDeposit=false`), Worker entered `WaitingForResource` while Node B remained available near the depleted cluster.
+
+### Root cause
+Search used Worker location at MainBase for both `ResourceSearchRadiusCm` filtering and nav path start, so the alternate node was filtered out when the base was farther than the search radius from the resource cluster.
+
+### Correction
+- Persistent Mine search anchor (`MineSearchAnchorLocation` / `bHasMineSearchAnchor`) set on Mine accept; cleared on command replace/cancel; kept in WaitingForResource
+- `FGP_ResourceNodeSearchQuery`: `SearchCenter` (anchor/radius) + `PathStart` (Worker/nav)
+- Event-only reassignment diagnostics + `ResourceReassignmentNoCandidate`
+- Contract test: post-drop-off anchor regression + Move clear + wake radius
+- GPEditor Dev+UHT **PASSED**. Operator-local assets untouched. GP Dev/Shipping deferred.
+
+---
+
 ## 2026-08-06 — GP-S28P2 Depletion / Registry / Reassignment (Candidate)
 
 Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**

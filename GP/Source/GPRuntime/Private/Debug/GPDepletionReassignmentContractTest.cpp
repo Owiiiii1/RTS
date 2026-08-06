@@ -4,6 +4,8 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Buildings/GPMainBase.h"
+#include "Command/GPUnitCommand.h"
 #include "Components/BoxComponent.h"
 #include "Debug/GPContractTestCoordinator.h"
 #include "Engine/Engine.h"
@@ -12,9 +14,14 @@
 #include "HAL/IConsoleManager.h"
 #include "Resources/GPCargoComponent.h"
 #include "Resources/GPMiningComponent.h"
+#include "Resources/GPResourceLoopDiagnostics.h"
 #include "Resources/GPResourceNode.h"
+#include "Tags/GPGameplayTags.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
+#include "UObject/UnrealType.h"
+#include "Units/GPMovementComponent.h"
+#include "Units/GPUnitCommandComponent.h"
 #include "Visual/GPResourceNodeVisualComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPDepletionReassignment, Log, All);
@@ -22,6 +29,52 @@ DEFINE_LOG_CATEGORY_STATIC(LogGPDepletionReassignment, Log, All);
 namespace GPDepletionReassignmentDebug
 {
 	static TWeakObjectPtr<UGP_DepletionReassignmentContractTestRunner> GActiveRunner;
+
+	static void IssueMine(AGP_Worker* Worker, AGP_ResourceNode* Node)
+	{
+		if (!IsValid(Worker) || !IsValid(Node))
+		{
+			return;
+		}
+		FGP_UnitCommand Command;
+		Command.CommandTag = FGPGameplayTags::Get().Command_Mine;
+		Command.TargetActor = Node;
+		Command.TargetLocation = Node->GetActorLocation();
+		Command.bQueue = false;
+		Worker->ReceiveCommand(Command);
+	}
+
+	static void IssueMove(AGP_Worker* Worker, const FVector& Location)
+	{
+		if (!IsValid(Worker))
+		{
+			return;
+		}
+		FGP_UnitCommand Command;
+		Command.CommandTag = FGPGameplayTags::Get().Command_Move;
+		Command.TargetActor = nullptr;
+		Command.TargetLocation = Location;
+		Command.bQueue = false;
+		Worker->ReceiveCommand(Command);
+	}
+
+	static void SetWorkerSearchTunables(AGP_Worker* Worker, float SearchRadiusCm, float MaxPathLengthCm)
+	{
+		if (!IsValid(Worker))
+		{
+			return;
+		}
+		if (FFloatProperty* RadiusProp = FindFProperty<FFloatProperty>(
+				AGP_Worker::StaticClass(), TEXT("ResourceSearchRadiusCm")))
+		{
+			RadiusProp->SetPropertyValue_InContainer(Worker, SearchRadiusCm);
+		}
+		if (FFloatProperty* PathProp = FindFProperty<FFloatProperty>(
+				AGP_Worker::StaticClass(), TEXT("MaxResourcePathLengthCm")))
+		{
+			PathProp->SetPropertyValue_InContainer(Worker, MaxPathLengthCm);
+		}
+	}
 
 	static void RunDepletionReassignmentContractTest(const TArray<FString>& Args, UWorld* World)
 	{
@@ -56,7 +109,7 @@ namespace GPDepletionReassignmentDebug
 
 	static FAutoConsoleCommandWithWorldAndArgs GDepletionReassignmentContract(
 		TEXT("gp.Resource.RunDepletionReassignmentContractTest"),
-		TEXT("Authority: GP-S28P2 depletion/registry/reassignment contract. Transient actors only."),
+		TEXT("Authority: GP-S28P2 depletion/registry/reassignment/anchor contract. Transient actors only."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunDepletionReassignmentContractTest));
 }
 
@@ -113,6 +166,13 @@ void UGP_DepletionReassignmentContractTestRunner::CleanupActors()
 	DestroyWeak(SlotHolderWeak);
 	DestroyWeak(NodeAWeak);
 	DestroyWeak(NodeBWeak);
+	DestroyWeak(WakeInsideWeak);
+	DestroyWeak(WakeOutsideWeak);
+	DestroyWeak(MainBaseWeak);
+	if (UWorld* World = WorldWeak.Get())
+	{
+		GPResourceLoopDiagnostics::CleanupScenarioByOwnerTag(World, OwnerTag);
+	}
 }
 
 void UGP_DepletionReassignmentContractTestRunner::Finish()
@@ -187,6 +247,7 @@ void UGP_DepletionReassignmentContractTestRunner::Start(UWorld* InWorld)
 	StageIndex = 0;
 	Failures = 0;
 	DepletionEventCount = 0;
+	MovementWaitTicks = 0;
 	UnbindWorldCleanup();
 	WorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(
 		this, &UGP_DepletionReassignmentContractTestRunner::OnWorldCleanup);
@@ -203,9 +264,42 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		return;
 	}
 
+	using namespace GPDepletionReassignmentDebug;
+
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	Params.ObjectFlags |= RF_Transient;
+
+	auto WaitBusy = [&](AGP_Worker* Worker, const TCHAR* TimeoutLabel) -> bool
+	{
+		if (!IsValid(Worker))
+		{
+			Expect(false, TEXT("WaitBusyWorkerLost"));
+			Finish();
+			return true;
+		}
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		const bool bBusy = (Cmd != nullptr && Cmd->IsHaulActive())
+			|| (Worker->GetUnitMovementComponent() && Worker->GetUnitMovementComponent()->IsMoving())
+			|| (Cmd != nullptr && Cmd->GetMineExecutionState() == EGP_MineExecutionState::Approaching);
+		if (!bBusy)
+		{
+			return false;
+		}
+		if (MovementWaitTicks == 0)
+		{
+			MovementWaitStartTime = World->GetTimeSeconds();
+		}
+		++MovementWaitTicks;
+		if ((World->GetTimeSeconds() - MovementWaitStartTime) > MovementWaitTimeoutSeconds)
+		{
+			Expect(false, TimeoutLabel);
+			Finish();
+			return true;
+		}
+		ScheduleNext();
+		return true;
+	};
 
 	switch (StageIndex)
 	{
@@ -325,7 +419,8 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		Expect(DepletionEventCount == BeforeEvents + 1, TEXT("NoDoubleDepletionEvent"));
 
 		FGP_ResourceNodeSearchQuery Query;
-		Query.Origin = NodeA->GetActorLocation();
+		Query.SearchCenter = NodeA->GetActorLocation();
+		Query.PathStart = IsValid(Waiting) ? Waiting->GetActorLocation() : NodeA->GetActorLocation();
 		Query.SearchRadiusCm = 100000.0f;
 		Query.MaxPathLengthCm = 100000.0f;
 		Query.PathfindingActor = Waiting;
@@ -356,7 +451,6 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 	}
 	case 2:
 	{
-		// Allow deferred destroy timer (0.25s default) — wait a couple ticks via re-schedule.
 		++StageIndex;
 		if (UWorld* W = WorldWeak.Get())
 		{
@@ -386,6 +480,333 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		Expect(!Worker || !Worker->PrimaryActorTick.bCanEverTick, TEXT("WorkerNoPermanentTick"));
 		Expect(IsValid(NodeB) && !NodeB->PrimaryActorTick.bCanEverTick, TEXT("NodeNoPermanentTick"));
 
+		CleanupActors();
+		NodeAWeak.Reset();
+		NodeBWeak.Reset();
+		WorkerWeak.Reset();
+		SlotHolderWeak.Reset();
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 4:
+	{
+		// Post-drop-off anchor regression layout (navigable).
+		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
+		if (!Expect(Scenario.bOk && Scenario.bReadyForHaulingTest, TEXT("SpawnNavigableAnchorScenario")))
+		{
+			Finish();
+			return;
+		}
+
+		AGP_MainBase* Base = Scenario.MainBase;
+		AGP_Worker* Worker = Scenario.Worker;
+		AGP_ResourceNode* NodeA = Scenario.ResourceNode;
+		MainBaseWeak = Base;
+		WorkerWeak = Worker;
+		NodeAWeak = NodeA;
+		MainBaseLocation = Base->GetActorLocation();
+		AnchorClusterLocation = NodeA->GetActorLocation();
+
+		TestSearchRadiusCm = 1000.0f;
+		TestMaxPathLengthCm = 6000.0f;
+		SetWorkerSearchTunables(Worker, TestSearchRadiusCm, TestMaxPathLengthCm);
+		Expect(Worker->GetResourceSearchRadiusCm() <= TestSearchRadiusCm + KINDA_SMALL_NUMBER,
+			TEXT("SearchRadiusTunableApplied"));
+
+		const float DistBaseToA = FVector::Dist(MainBaseLocation, AnchorClusterLocation);
+		Expect(DistBaseToA > TestSearchRadiusCm, TEXT("MainBaseOutsideSearchRadiusFromCluster"));
+
+		FVector NodeBLoc = AnchorClusterLocation + FVector(400.0f, 0.0f, 0.0f);
+		FVector NodeBProjected;
+		if (!GPResourceLoopDiagnostics::IsNavPointProjected(World, NodeBLoc, &NodeBProjected, 800.0f, 800.0f))
+		{
+			NodeBProjected = AnchorClusterLocation + FVector(0.0f, 400.0f, 0.0f);
+		}
+		AGP_ResourceNode* NodeB = GPResourceLoopDiagnostics::SpawnResourceNodeTransient(
+			World, NodeBProjected, OwnerTag);
+		if (!Expect(IsValid(NodeB), TEXT("SpawnNodeBNearCluster")))
+		{
+			Finish();
+			return;
+		}
+		NodeBWeak = NodeB;
+		Expect(FVector::Dist(AnchorClusterLocation, NodeB->GetActorLocation()) <= TestSearchRadiusCm,
+			TEXT("NodeBInsideAnchorRadius"));
+		Expect(FVector::Dist(MainBaseLocation, NodeB->GetActorLocation()) > TestSearchRadiusCm,
+			TEXT("NodeBOutsideBaseRadius"));
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 5:
+	{
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* NodeA = NodeAWeak.Get();
+		AGP_ResourceNode* NodeB = NodeBWeak.Get();
+		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
+		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(NodeA) && IsValid(NodeB) && IsValid(GS) && Cmd != nullptr,
+				TEXT("AnchorSetupObjects")))
+		{
+			Finish();
+			return;
+		}
+
+		Worker->SetActorLocation(NodeA->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f),
+			false, nullptr, ETeleportType::TeleportPhysics);
+		Worker->GetCargoComponent()->ClearCargo();
+		IssueMine(Worker, NodeA);
+
+		Expect(Cmd->DebugHasMineSearchAnchor(), TEXT("MineAnchorSetOnAccept"));
+		Expect(FVector::Dist(Cmd->DebugGetMineSearchAnchorLocation(), NodeA->GetActorLocation()) < 50.0f,
+			TEXT("MineAnchorAtNodeA"));
+
+		// API split: radius from SearchCenter(anchor), path from PathStart(Worker@Base).
+		Worker->SetActorLocation(MainBaseLocation, false, nullptr, ETeleportType::TeleportPhysics);
+
+		FGP_ResourceNodeSearchQuery WrongCenter;
+		WrongCenter.SearchCenter = Worker->GetActorLocation();
+		WrongCenter.PathStart = Worker->GetActorLocation();
+		WrongCenter.SearchRadiusCm = TestSearchRadiusCm;
+		WrongCenter.MaxPathLengthCm = TestMaxPathLengthCm;
+		WrongCenter.ExcludeNode = NodeA;
+		WrongCenter.PathfindingActor = Worker;
+		WrongCenter.bRequireFreeSlot = false;
+		AGP_ResourceNode* WrongBest = GS->FindBestResourceCandidate(WrongCenter);
+		Expect(WrongBest != NodeB, TEXT("BaseAsSearchCenterMissesNodeB"));
+
+		FGP_ResourceNodeSearchQuery AnchorCenter;
+		AnchorCenter.SearchCenter = Cmd->DebugGetMineSearchAnchorLocation();
+		AnchorCenter.PathStart = Worker->GetActorLocation();
+		AnchorCenter.SearchRadiusCm = TestSearchRadiusCm;
+		AnchorCenter.MaxPathLengthCm = TestMaxPathLengthCm;
+		AnchorCenter.ExcludeNode = NodeA;
+		AnchorCenter.PathfindingActor = Worker;
+		AnchorCenter.bRequireFreeSlot = false;
+		AGP_ResourceNode* AnchorBest = GS->FindBestResourceCandidate(AnchorCenter);
+		Expect(AnchorBest == NodeB, TEXT("AnchorSearchCenterFindsNodeB"));
+
+		// Restore Worker near NodeA for haul/depletion path.
+		Worker->SetActorLocation(NodeA->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f),
+			false, nullptr, ETeleportType::TeleportPhysics);
+		IssueMine(Worker, NodeA);
+		Expect(Cmd->DebugHasMineSearchAnchor(), TEXT("MineAnchorPreservedAfterReissue"));
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 6:
+	{
+		// CargoFull haul first; deplete NodeA during haul → PostDropOff reassignment to NodeB.
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* NodeA = NodeAWeak.Get();
+		if (!Expect(IsValid(Worker) && IsValid(NodeA), TEXT("PostDropOffObjects")))
+		{
+			Finish();
+			return;
+		}
+
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		if (Cmd == nullptr || !Cmd->IsHaulActive())
+		{
+			for (int32 i = 0; i < 8; ++i)
+			{
+				if (UGP_MiningComponent* Mining = Worker->GetMiningComponent())
+				{
+					Mining->DebugForceExecuteMiningCycle();
+				}
+				if (Cmd != nullptr && Cmd->IsHaulActive())
+				{
+					break;
+				}
+			}
+		}
+
+		if (!Expect(Cmd != nullptr && Cmd->IsHaulActive(), TEXT("CargoFullHaulStartedFirst")))
+		{
+			Finish();
+			return;
+		}
+		Expect(Cmd->HasHeldCommand(), TEXT("HeldMineKeptDuringHaul"));
+		Expect(Cmd->DebugHasMineSearchAnchor(), TEXT("AnchorKeptDuringHaul"));
+
+		if (IsValid(NodeA) && !NodeA->HasCompletedDepletionTransition())
+		{
+			NodeA->ConsumeResource(100000);
+		}
+		Expect(!IsValid(NodeA) || NodeA->HasCompletedDepletionTransition() || NodeA->IsDestroyPending(),
+			TEXT("NodeADepletedDuringHaul"));
+
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 7:
+	{
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* NodeB = NodeBWeak.Get();
+		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(NodeB) && Cmd != nullptr, TEXT("PostDropOffWaitObjects")))
+		{
+			Finish();
+			return;
+		}
+
+		if (WaitBusy(Worker, TEXT("PostDropOffHaulTimeout")))
+		{
+			return;
+		}
+
+		Expect(Cmd->DebugHasMineSearchAnchor(), TEXT("AnchorSurvivesDropOff"));
+		Expect(Cmd->GetMineExecutionState() != EGP_MineExecutionState::WaitingForResource,
+			TEXT("NoWaitingForResourceAfterDropOff"));
+		Expect(Cmd->GetMineTarget() == NodeB
+				|| (Cmd->HasHeldCommand()
+					&& Cmd->GetHeldCommand()->TargetActor.Get() == NodeB)
+				|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::MovingToMine
+				|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::Mining,
+			TEXT("RetargetedNodeBAfterDropOff"));
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 8:
+	{
+		// Move clears anchor.
+		AGP_Worker* Worker = WorkerWeak.Get();
+		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && Cmd != nullptr, TEXT("MoveClearObjects")))
+		{
+			Finish();
+			return;
+		}
+		Expect(Cmd->DebugHasMineSearchAnchor(), TEXT("AnchorPresentBeforeMove"));
+		IssueMove(Worker, MainBaseLocation + FVector(200.0f, 0.0f, 0.0f));
+		Expect(!Cmd->DebugHasMineSearchAnchor(), TEXT("MoveClearsMineAnchor"));
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 9:
+	{
+		// WaitingForResource keeps anchor; wake inside radius, ignore outside.
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* NodeB = NodeBWeak.Get();
+		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
+		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(NodeB) && IsValid(GS) && Cmd != nullptr,
+				TEXT("WaitingWakeObjects")))
+		{
+			Finish();
+			return;
+		}
+
+		Worker->SetActorLocation(NodeB->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f),
+			false, nullptr, ETeleportType::TeleportPhysics);
+		Worker->GetCargoComponent()->ClearCargo();
+		SetWorkerSearchTunables(Worker, TestSearchRadiusCm, TestMaxPathLengthCm);
+		IssueMine(Worker, NodeB);
+		Expect(Cmd->DebugHasMineSearchAnchor(), TEXT("AnchorSetForWaitingCase"));
+		const FVector SavedAnchor = Cmd->DebugGetMineSearchAnchorLocation();
+
+		if (!NodeB->HasCompletedDepletionTransition())
+		{
+			NodeB->ConsumeResource(100000);
+		}
+		// Empty cargo + depleted target → WaitingForResource (or retarget if wake node exists).
+		for (int32 i = 0; i < 4; ++i)
+		{
+			if (UGP_MiningComponent* Mining = Worker->GetMiningComponent())
+			{
+				Mining->DebugForceExecuteMiningCycle();
+			}
+		}
+
+		// Ensure no alternate in registry near anchor except we'll spawn wake nodes next.
+		if (Cmd->GetMineExecutionState() != EGP_MineExecutionState::WaitingForResource)
+		{
+			// If auto-retarget found something unexpected, force wait by destroying NodeB only path.
+			Expect(Cmd->DebugHasMineSearchAnchor(), TEXT("AnchorKeptEvenIfNotWaitingYet"));
+		}
+
+		FVector OutsideLoc = SavedAnchor + FVector(TestSearchRadiusCm + 1500.0f, 0.0f, 0.0f);
+		FVector OutsideProjected = OutsideLoc;
+		GPResourceLoopDiagnostics::IsNavPointProjected(World, OutsideLoc, &OutsideProjected, 800.0f, 800.0f);
+		AGP_ResourceNode* OutsideNode = GPResourceLoopDiagnostics::SpawnResourceNodeTransient(
+			World, OutsideProjected, OwnerTag);
+		WakeOutsideWeak = OutsideNode;
+
+		FVector InsideLoc = SavedAnchor + FVector(300.0f, 300.0f, 0.0f);
+		FVector InsideProjected = InsideLoc;
+		GPResourceLoopDiagnostics::IsNavPointProjected(World, InsideLoc, &InsideProjected, 800.0f, 800.0f);
+		AGP_ResourceNode* InsideNode = GPResourceLoopDiagnostics::SpawnResourceNodeTransient(
+			World, InsideProjected, OwnerTag);
+		WakeInsideWeak = InsideNode;
+
+		if (!Expect(IsValid(OutsideNode) && IsValid(InsideNode), TEXT("WakeNodesSpawned")))
+		{
+			Finish();
+			return;
+		}
+		Expect(FVector::Dist(SavedAnchor, OutsideNode->GetActorLocation()) > TestSearchRadiusCm,
+			TEXT("WakeOutsideBeyondRadius"));
+		Expect(FVector::Dist(SavedAnchor, InsideNode->GetActorLocation()) <= TestSearchRadiusCm,
+			TEXT("WakeInsideWithinRadius"));
+
+		// If already waiting, registry wake should prefer inside node.
+		if (Cmd->GetMineExecutionState() == EGP_MineExecutionState::WaitingForResource)
+		{
+			Expect(Cmd->DebugHasMineSearchAnchor(), TEXT("WaitingForResourceKeepsAnchor"));
+			Expect(FVector::Dist(Cmd->DebugGetMineSearchAnchorLocation(), SavedAnchor) < 1.0f,
+				TEXT("WaitingAnchorUnchanged"));
+		}
+
+		// Direct candidate check: outside rejected by radius, inside accepted.
+		FGP_ResourceNodeSearchQuery OutsideQuery;
+		OutsideQuery.SearchCenter = SavedAnchor;
+		OutsideQuery.PathStart = Worker->GetActorLocation();
+		OutsideQuery.SearchRadiusCm = TestSearchRadiusCm;
+		OutsideQuery.MaxPathLengthCm = TestMaxPathLengthCm;
+		OutsideQuery.PathfindingActor = Worker;
+		OutsideQuery.ExcludeNode = nullptr;
+		OutsideQuery.bRequireFreeSlot = false;
+		TArray<FGP_ResourceNodeCandidate> WakeCandidates;
+		GS->FindResourceCandidates(OutsideQuery, WakeCandidates);
+		bool bOutsideListed = false;
+		bool bInsideListed = false;
+		for (const FGP_ResourceNodeCandidate& Candidate : WakeCandidates)
+		{
+			if (Candidate.Node == OutsideNode)
+			{
+				bOutsideListed = true;
+			}
+			if (Candidate.Node == InsideNode)
+			{
+				bInsideListed = true;
+			}
+		}
+		Expect(!bOutsideListed, TEXT("WakeOutsideNotInRadiusCandidates"));
+		Expect(bInsideListed, TEXT("WakeInsideInRadiusCandidates"));
+
+		AGP_ResourceNode* BestWake = GS->FindBestResourceCandidate(OutsideQuery);
+		Expect(BestWake == InsideNode, TEXT("WakeSelectsInsideNode"));
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 10:
+	{
+		AGP_Worker* Worker = WorkerWeak.Get();
+		Expect(!Worker || !Worker->PrimaryActorTick.bCanEverTick, TEXT("FinalWorkerNoPermanentTick"));
 		Finish();
 		break;
 	}

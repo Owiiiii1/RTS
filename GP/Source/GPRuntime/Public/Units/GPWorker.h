@@ -406,8 +406,18 @@ private:
 	TWeakObjectPtr<UWorld> WorldWeak;
 	TWeakObjectPtr<AGP_ResourceNode> NodeAWeak;
 	TWeakObjectPtr<AGP_ResourceNode> NodeBWeak;
+	TWeakObjectPtr<AGP_ResourceNode> WakeInsideWeak;
+	TWeakObjectPtr<AGP_ResourceNode> WakeOutsideWeak;
 	TWeakObjectPtr<AGP_Worker> WorkerWeak;
 	TWeakObjectPtr<AGP_Worker> SlotHolderWeak;
+	TWeakObjectPtr<AGP_MainBase> MainBaseWeak;
+	FVector AnchorClusterLocation = FVector::ZeroVector;
+	FVector MainBaseLocation = FVector::ZeroVector;
+	float TestSearchRadiusCm = 1000.0f;
+	float TestMaxPathLengthCm = 6000.0f;
+	int32 MovementWaitTicks = 0;
+	double MovementWaitStartTime = 0.0;
+	float MovementWaitTimeoutSeconds = 45.0f;
 	int32 DepletionEventCount = 0;
 	int32 LastDepletionPreviousAmount = -1;
 	uint64 ExecutionId = 0;

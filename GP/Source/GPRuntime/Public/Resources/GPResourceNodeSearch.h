@@ -15,8 +15,20 @@ struct FGP_ResourceNodeSearchQuery
 {
 	GENERATED_BODY()
 
+	/**
+	 * Spatial cluster center for ResourceSearchRadiusCm filtering.
+	 * For post-haul reassignment this is the Mine search anchor (original deposit zone),
+	 * NOT the Worker's current location at MainBase.
+	 */
 	UPROPERTY(BlueprintReadWrite, Category = "GP|Resource|Search")
-	FVector Origin = FVector::ZeroVector;
+	FVector SearchCenter = FVector::ZeroVector;
+
+	/**
+	 * Navigation path start (current Worker location).
+	 * Reachability / MaxPathLengthCm are evaluated from here to each candidate.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category = "GP|Resource|Search")
+	FVector PathStart = FVector::ZeroVector;
 
 	UPROPERTY(BlueprintReadWrite, Category = "GP|Resource|Search")
 	float SearchRadiusCm = 3000.0f;
@@ -40,6 +52,12 @@ struct FGP_ResourceNodeSearchQuery
 	/** Prefer candidates with free mining slots first (sort key). */
 	UPROPERTY(BlueprintReadWrite, Category = "GP|Resource|Search")
 	bool bPreferFreeSlot = true;
+
+#if !UE_BUILD_SHIPPING
+	/** Optional event label for Verbose/Log diagnostics (not Tick). */
+	FName SearchReason = NAME_None;
+	bool bLogDiagnostics = false;
+#endif
 };
 
 /** Deterministic scored candidate from registry search. */
@@ -51,9 +69,11 @@ struct FGP_ResourceNodeCandidate
 	UPROPERTY(BlueprintReadOnly, Category = "GP|Resource|Search")
 	TObjectPtr<AGP_ResourceNode> Node = nullptr;
 
+	/** Navigable path length from PathStart to node. */
 	UPROPERTY(BlueprintReadOnly, Category = "GP|Resource|Search")
 	float PathLengthCm = 0.0f;
 
+	/** Euclidean distance from SearchCenter to node (radius metric). */
 	UPROPERTY(BlueprintReadOnly, Category = "GP|Resource|Search")
 	float DirectDistanceCm = 0.0f;
 

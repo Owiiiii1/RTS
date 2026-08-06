@@ -1198,6 +1198,7 @@ void UGP_UnitCommandComponent::ResetMineExecutor()
 	MineLastArrivalDistance = -1.0f;
 	MineLastArrivalRangeError = -1.0f;
 	MineApproachAttempt = 0;
+	ClearMineSearchAnchor();
 #if !UE_BUILD_SHIPPING
 	bDebugForceNextMineArrivalOutOfRange = false;
 #endif
@@ -1409,7 +1410,7 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	}
 	if (!IsValid(Node) || Node->IsDepleted() || Node->HasCompletedDepletionTransition() || Node->IsDestroyPending())
 	{
-		if (TryAutoReassignMine(MineSerial, Node, true))
+		if (TryAutoReassignMine(MineSerial, Node, true, FName(TEXT("PostDepletion"))))
 		{
 			return;
 		}
@@ -1486,7 +1487,7 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	if (BeginResult == EGP_BeginMiningResult::WaitingForSlot)
 	{
 		// Prefer a reachable free-slot alternative before staying in FIFO.
-		if (TryAutoReassignMine(MineSerial, Node, true))
+		if (TryAutoReassignMine(MineSerial, Node, true, FName(TEXT("SlotFullAlternative"))))
 		{
 			return;
 		}
@@ -1496,7 +1497,7 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	if (BeginResult == EGP_BeginMiningResult::RejectedDepleted
 		|| BeginResult == EGP_BeginMiningResult::RejectedInvalidNode)
 	{
-		if (TryAutoReassignMine(MineSerial, Node, true))
+		if (TryAutoReassignMine(MineSerial, Node, true, FName(TEXT("PostDepletion"))))
 		{
 			return;
 		}
@@ -1545,6 +1546,8 @@ bool UGP_UnitCommandComponent::StartMineExecutor()
 	ActiveMineSerial = MineSerial;
 	MineTarget = Node;
 	MineApproachAttempt = 0;
+	// Persistent cluster SearchCenter for the whole Mine/haul/reassignment intent.
+	SetMineSearchAnchorFromNode(Node);
 
 	const float InteractionRange = ResolveMineInteractionRangeCm(Mining, Node);
 	const float Distance = FVector::Dist(Owner->GetActorLocation(), Node->GetActorLocation());
@@ -2046,7 +2049,7 @@ void UGP_UnitCommandComponent::ContinueMineAfterSuccessfulHaul(uint32 ChainSeria
 		bShouldReturnToDepositAfterHaul = false;
 		HaulMainBase.Reset();
 		ActiveMineSerial = ChainSerial;
-		if (TryAutoReassignMine(ChainSerial, Deposit, true))
+		if (TryAutoReassignMine(ChainSerial, Deposit, true, FName(TEXT("PostDropOff"))))
 		{
 			return;
 		}
@@ -2169,10 +2172,27 @@ bool UGP_UnitCommandComponent::TryConsumeHaulMovementResult(
 	return true;
 }
 
+void UGP_UnitCommandComponent::SetMineSearchAnchorFromNode(const AGP_ResourceNode* Node)
+{
+	if (!IsValid(Node))
+	{
+		return;
+	}
+	MineSearchAnchorLocation = Node->GetActorLocation();
+	bHasMineSearchAnchor = true;
+}
+
+void UGP_UnitCommandComponent::ClearMineSearchAnchor()
+{
+	MineSearchAnchorLocation = FVector::ZeroVector;
+	bHasMineSearchAnchor = false;
+}
+
 AGP_ResourceNode* UGP_UnitCommandComponent::FindAutoResourceCandidate(
 	AGP_Worker* Worker,
 	AGP_ResourceNode* ExcludeNode,
-	bool bRequireFreeSlot) const
+	bool bRequireFreeSlot,
+	FName SearchReason) const
 {
 	if (!IsValid(Worker))
 	{
@@ -2191,7 +2211,9 @@ AGP_ResourceNode* UGP_UnitCommandComponent::FindAutoResourceCandidate(
 		IsValid(Cargo) ? Cargo->ResolveResourceDefinition(true) : nullptr;
 
 	FGP_ResourceNodeSearchQuery Query;
-	Query.Origin = Worker->GetActorLocation();
+	// SearchCenter = Mine intent cluster (anchor). PathStart = current Worker location.
+	Query.SearchCenter = bHasMineSearchAnchor ? MineSearchAnchorLocation : Worker->GetActorLocation();
+	Query.PathStart = Worker->GetActorLocation();
 	Query.SearchRadiusCm = Worker->GetResourceSearchRadiusCm();
 	Query.MaxPathLengthCm = Worker->GetMaxResourcePathLengthCm();
 	Query.ExcludeNode = ExcludeNode;
@@ -2199,6 +2221,19 @@ AGP_ResourceNode* UGP_UnitCommandComponent::FindAutoResourceCandidate(
 	Query.bRequireFreeSlot = bRequireFreeSlot;
 	Query.PathfindingActor = Worker;
 	Query.bPreferFreeSlot = true;
+#if !UE_BUILD_SHIPPING
+	Query.SearchReason = SearchReason;
+	Query.bLogDiagnostics = true;
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP ResourceReassignmentSearch: Worker=%s Reason=%s HasAnchor=%s Anchor=(%.0f,%.0f,%.0f) PathStart=(%.0f,%.0f,%.0f)"),
+		*GetNameSafe(Worker),
+		*SearchReason.ToString(),
+		bHasMineSearchAnchor ? TEXT("true") : TEXT("false"),
+		Query.SearchCenter.X, Query.SearchCenter.Y, Query.SearchCenter.Z,
+		Query.PathStart.X, Query.PathStart.Y, Query.PathStart.Z);
+#else
+	(void)SearchReason;
+#endif
 	return GS->FindBestResourceCandidate(Query);
 }
 
@@ -2269,7 +2304,8 @@ bool UGP_UnitCommandComponent::TryRetargetMineToNode(
 bool UGP_UnitCommandComponent::TryAutoReassignMine(
 	uint32 MineSerial,
 	AGP_ResourceNode* PreferredOrFailedNode,
-	bool bPreferFreeSlotFirst)
+	bool bPreferFreeSlotFirst,
+	FName SearchReason)
 {
 	AGP_Worker* Worker = Cast<AGP_Worker>(GetOwner());
 	if (!IsValid(Worker) || MineSerial == 0)
@@ -2302,7 +2338,8 @@ bool UGP_UnitCommandComponent::TryAutoReassignMine(
 
 		if (bPreferFreeSlotFirst)
 		{
-			if (AGP_ResourceNode* FreeAlt = FindAutoResourceCandidate(Worker, PreferredOrFailedNode, true))
+			if (AGP_ResourceNode* FreeAlt = FindAutoResourceCandidate(
+					Worker, PreferredOrFailedNode, true, SearchReason))
 			{
 				return TryRetargetMineToNode(FreeAlt, MineSerial, true);
 			}
@@ -2312,12 +2349,14 @@ bool UGP_UnitCommandComponent::TryAutoReassignMine(
 		return TryRetargetMineToNode(PreferredOrFailedNode, MineSerial, true);
 	}
 
-	if (AGP_ResourceNode* FreeAlt = FindAutoResourceCandidate(Worker, PreferredOrFailedNode, true))
+	if (AGP_ResourceNode* FreeAlt = FindAutoResourceCandidate(
+			Worker, PreferredOrFailedNode, true, SearchReason))
 	{
 		return TryRetargetMineToNode(FreeAlt, MineSerial, true);
 	}
 
-	if (AGP_ResourceNode* AnyAlt = FindAutoResourceCandidate(Worker, PreferredOrFailedNode, false))
+	if (AGP_ResourceNode* AnyAlt = FindAutoResourceCandidate(
+			Worker, PreferredOrFailedNode, false, SearchReason))
 	{
 		return TryRetargetMineToNode(AnyAlt, MineSerial, true);
 	}
@@ -2404,7 +2443,7 @@ void UGP_UnitCommandComponent::HandleResourceNodeRegisteredWake(AGP_ResourceNode
 	}
 
 	const uint32 Serial = ActiveMineSerial;
-	if (TryAutoReassignMine(Serial, nullptr, true))
+	if (TryAutoReassignMine(Serial, nullptr, true, FName(TEXT("WaitingWake"))))
 	{
 		UnbindResourceRegistryWake();
 	}
@@ -2419,7 +2458,7 @@ void UGP_UnitCommandComponent::HandleWaitingForResourceSafetyRetry()
 	}
 
 	const uint32 Serial = ActiveMineSerial;
-	if (TryAutoReassignMine(Serial, nullptr, true))
+	if (TryAutoReassignMine(Serial, nullptr, true, FName(TEXT("WaitingWake"))))
 	{
 		UnbindResourceRegistryWake();
 	}
@@ -2534,7 +2573,7 @@ void UGP_UnitCommandComponent::HandleMiningStateChanged(
 	if (bReassignAfter)
 	{
 		ActiveMineSerial = Serial;
-		if (!TryAutoReassignMine(Serial, DepositBeforeReset, true))
+		if (!TryAutoReassignMine(Serial, DepositBeforeReset, true, FName(TEXT("PostDepletion"))))
 		{
 			EnterWaitingForResource(Serial);
 		}

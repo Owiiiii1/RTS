@@ -165,6 +165,10 @@ public:
 	/** Next arrival distance check treats Worker as slightly OOR once (contract test). */
 	void DebugForceNextMineArrivalOutOfRangeOnce();
 	void DebugForceNextHaulArrivalOutOfRangeOnce();
+
+	/** Mine resource-search anchor diagnostics (GP-S28P2 contract). */
+	bool DebugHasMineSearchAnchor() const { return bHasMineSearchAnchor; }
+	FVector DebugGetMineSearchAnchorLocation() const { return MineSearchAnchorLocation; }
 #endif
 
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Attack")
@@ -239,13 +243,20 @@ private:
 	AGP_ResourceNode* FindAutoResourceCandidate(
 		AGP_Worker* Worker,
 		AGP_ResourceNode* ExcludeNode,
-		bool bRequireFreeSlot) const;
-	bool TryAutoReassignMine(uint32 MineSerial, AGP_ResourceNode* PreferredOrFailedNode, bool bPreferFreeSlotFirst);
+		bool bRequireFreeSlot,
+		FName SearchReason) const;
+	bool TryAutoReassignMine(
+		uint32 MineSerial,
+		AGP_ResourceNode* PreferredOrFailedNode,
+		bool bPreferFreeSlotFirst,
+		FName SearchReason);
 	void EnterWaitingForResource(uint32 MineSerial);
 	void BindResourceRegistryWake();
 	void UnbindResourceRegistryWake();
 	void HandleResourceNodeRegisteredWake(AGP_ResourceNode* Node);
 	void HandleWaitingForResourceSafetyRetry();
+	void SetMineSearchAnchorFromNode(const AGP_ResourceNode* Node);
+	void ClearMineSearchAnchor();
 
 	/**
 	 * Computes approach destination so even AcceptanceRadius edge completion stays
@@ -392,6 +403,14 @@ private:
 	FDelegateHandle ResourceNodeRegisteredHandle;
 	FTimerHandle WaitingForResourceRetryTimerHandle;
 	bool bResourceRegistryWakeBound = false;
+
+	/**
+	 * Persistent resource-cluster anchor for Mine intent (GP-S28P2).
+	 * SearchCenter for auto-reassignment; survives target Destroy / haul to MainBase.
+	 * Cleared on command replace / Mine cancel / EndPlay via ResetMineExecutor.
+	 */
+	FVector MineSearchAnchorLocation = FVector::ZeroVector;
+	bool bHasMineSearchAnchor = false;
 
 	/** GP-S28 Haul orchestration (Worker only; shares Mine command serial as chain id). */
 	EGP_HaulExecutionState HaulState = EGP_HaulExecutionState::Idle;

@@ -1884,6 +1884,42 @@ namespace GPWorkerDebug
 		TArray<FText> BaseErrors;
 		TArray<FText> BaseWarnings;
 		Expect(MainBase->ValidateMainBaseContract(BaseErrors, BaseWarnings), TEXT("MainBaseContractValid"));
+		bool bHasBuildingDefWarning = false;
+		for (const FText& Warning : BaseWarnings)
+		{
+			if (Warning.ToString().Contains(TEXT("UGP_BuildingDefinition"), ESearchCase::IgnoreCase)
+				|| Warning.ToString().Contains(TEXT("BuildingDefinition"), ESearchCase::IgnoreCase))
+			{
+				bHasBuildingDefWarning = true;
+				break;
+			}
+		}
+		Expect(!bHasBuildingDefWarning, TEXT("NoBuildingDefinitionWarning"));
+
+		UGP_StorageComponent* Storage = MainBase->GetStorageComponent();
+		Expect(IsValid(Storage), TEXT("StorageForLifecycle"));
+		Expect(Storage->GetContainers().Num() == Storage->GetContainerCount(), TEXT("RuntimeContainersInitialized"));
+		{
+			const AGP_MainBase* BaseCDO = GetDefault<AGP_MainBase>();
+			const UGP_StorageComponent* TemplateStorage =
+				IsValid(BaseCDO) ? BaseCDO->GetStorageComponent() : nullptr;
+			Expect(IsValid(TemplateStorage), TEXT("TemplateStoragePresent"));
+			Expect(TemplateStorage->GetContainers().Num() == 0, TEXT("TemplateContainersEmpty"));
+			TArray<FText> TemplateErrors;
+			TArray<FText> TemplateWarnings;
+			Expect(TemplateStorage->ValidateStorageContract(TemplateErrors, TemplateWarnings),
+				TEXT("TemplateStorageValid"));
+			bool bHasErrArraySize = false;
+			for (const FText& Error : TemplateErrors)
+			{
+				if (Error.ToString().Contains(TEXT("array size"), ESearchCase::IgnoreCase))
+				{
+					bHasErrArraySize = true;
+					break;
+				}
+			}
+			Expect(!bHasErrArraySize, TEXT("TemplateNoErrArraySize"));
+		}
 
 		Worker->OnCargoVisualStateChanged.RemoveDynamic(
 			Probe, &UGP_CargoVisualStateProbe::HandleCargoVisualStateChanged);

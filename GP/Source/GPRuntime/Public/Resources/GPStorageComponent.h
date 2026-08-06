@@ -143,6 +143,9 @@ public:
 #if !UE_BUILD_SHIPPING
 	/** Contract/diagnostics helper — force a container into Launching scaffold state. */
 	void DebugForceContainerLaunching(int32 Index, bool bLaunching);
+
+	/** Contract-only: resize Containers without EnsureContainerArray (partial-array validation). */
+	void DebugSetContainersNumForValidationTest(int32 NewNum);
 #endif
 
 	UPROPERTY(BlueprintAssignable, Category = "GP|Storage|Events")

@@ -14,6 +14,18 @@ Operator blocker: BP_GP_Worker Compile logged unconditional `WarnNoUnitDefinitio
 
 Fix: removed that warning from `ValidateWorkerContract` (`eea992a312af2a73400ad4f6d0bece2e82d73bf5`). Worker UnitDefinition remains deferred — **no** placeholder asset / property. Presentation contract now asserts absence of UnitDefinition warnings. DataValidation on local BP_GP_Worker: 0 errors, 0 warnings.
 
+## Correction — MainBase Storage validation lifecycle
+Operator blocker: BP_GP_MainBase Compile — `Containers array size must equal ContainerCount` plus BuildingDefinition warning.
+
+Root cause: `EnsureContainerArray()` is authority-only in `BeginPlay`, but DataValidation runs on templates with empty `Containers`.
+
+Fix:
+- `ValidateStorageContract` treats empty Containers on template/CDO/pre-BeginPlay (non-authority-initialized) as initialization-pending; empty after authority BeginPlay still errors; non-empty size≠Count always errors.
+- Removed unconditional BuildingDefinition warning from `ValidateMainBaseContract`.
+- Storage contract + presentation contract cover template / runtime / partial-array / no BuildingDefinition warning.
+- Local BP_GP_MainBase DataValidation: **0 errors, 0 warnings** (asset not committed).
+- Storage gameplay (5×100, add/remove, LOST, replication) unchanged.
+
 ## Goal
 Expose stable Blueprint presentation attach points and a cargo visual signal so operator-authored BP children can look playable — without changing Mine command semantics, Storage/Threat, or resource reassignment.
 

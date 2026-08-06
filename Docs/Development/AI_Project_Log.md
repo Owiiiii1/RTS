@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28P1 Storage Validation Lifecycle Correction
+
+Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p1-blueprint-cargo-visual`
+
+### Blocker / fix
+BP_GP_MainBase Compile blocked by template `ErrArraySize` (empty Containers before authority BeginPlay `EnsureContainerArray`) and unconditional BuildingDefinition warning. Lifecycle-aware `ValidateStorageContract`; removed BuildingDefinition warning from MainBase. No BuildingDefinition asset. GPEditor Dev+UHT **PASSED**. Local BP_GP_MainBase DataValidation: 0 errors / 0 warnings. PIE presentation/storage/S28 suite **operator pending**.
+
+---
+
 ## 2026-08-06 — GP-S28P1 UnitDefinition Validation Warning Correction
 
 Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**

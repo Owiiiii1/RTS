@@ -240,8 +240,8 @@ bool AGP_MainBase::ValidateMainBaseContract(TArray<FText>& OutErrors, TArray<FTe
 		OutWarnings.Add(NSLOCTEXT("GPMainBase", "WarnTag", "MainBase missing GP.Building.Type.MainBase tag."));
 	}
 
-	OutWarnings.Add(NSLOCTEXT("GPMainBase", "WarnNoBuildingDefinition",
-		"No UGP_BuildingDefinition yet — DropOffRange/containers use GP-S28 placeholders."));
+	// UGP_BuildingDefinition is deferred (GP-S34/S39). GP-S28 DropOffRange/container
+	// placeholders must not emit Blueprint Compile / DataValidation warnings in S28P1.
 
 	if (IsValid(StorageComponent))
 	{

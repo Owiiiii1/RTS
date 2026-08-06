@@ -75,7 +75,7 @@ Storage-full LOST vs wait; depleted shell vs Destroy; keep combat audit separate
 - `Docs/Development/Cursor_Work_Report.md`
 
 ## Commit SHA
-(see git after push)
+`d7710e8d7bda59793bc1c8c93363d58640465654`
 
 ## Git status
 (to verify: clean; branch synced; main untouched)

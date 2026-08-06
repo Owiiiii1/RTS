@@ -7,6 +7,7 @@ Status: **GP_S28P0_AUDIT_READY_FOR_REVIEW**
 ### Branch / baseline
 - Branch: `audit/gp-s28p-resource-playable-pass`
 - Base: `main` @ `035c486758059032bb2551520834dd73f8667ef5` (GP-S28 merged)
+- Audit commit: `d7710e8d7bda59793bc1c8c93363d58640465654`
 - Audit: `Docs/Development/Resource_Playable_Pass_Audit.md`
 - Report: `Docs/Development/Cursor_Work_Report.md`
 

@@ -6,6 +6,7 @@
 ## Baseline
 - Branch: `audit/gp-s28p-resource-playable-pass`
 - Base / main: `035c486758059032bb2551520834dd73f8667ef5` (Merge GP-S28)
+- Audit commit: `d7710e8d7bda59793bc1c8c93363d58640465654`
 - Stage type: **audit / specification only** — no production C++, Blueprint, map, or gameplay changes
 - Parallel (do not modify): `audit/gp-slice7-combat-reconciliation` — **completed audit, pending review/merge** (not cancelled)
 

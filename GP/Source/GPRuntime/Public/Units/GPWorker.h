@@ -3,13 +3,34 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Resources/GPMiningComponent.h"
 #include "Units/GPMobileUnit.h"
 #include "GPWorker.generated.h"
 
 class UCapsuleComponent;
+class USceneComponent;
 class UGP_CargoComponent;
-class UGP_MiningComponent;
 class AGP_ResourceNode;
+
+/** Blueprint cargo presentation signal (GP-S28P1). SoT remains UGP_CargoComponent. */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(
+	FGP_OnCargoVisualStateChanged,
+	bool, bVisible,
+	float, FillNormalized,
+	float, CurrentAmount,
+	float, Capacity);
+
+/**
+ * Blueprint Niagara mining effect signal (GP-S28P1).
+ * bEffectActive is true only while MiningComponent state is Mining.
+ * SoT remains UGP_MiningComponent (no replicated presentation bool).
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(
+	FGP_OnMiningEffectStateChanged,
+	bool, bEffectActive,
+	EGP_MiningState, PreviousState,
+	EGP_MiningState, NewState,
+	EGP_MiningStopReason, Reason);
 
 /** Worker orchestration view (GP-S27/S28). MiningComponent remains SoT for mining execution. */
 UENUM(BlueprintType)
@@ -31,6 +52,7 @@ enum class EGP_WorkerActivityState : uint8
 /**
  * Production Worker: MobileUnit + Cargo + Mining (GP-S27) + haul via UnitCommand (GP-S28).
  * Mine/haul execution is orchestrated by UGP_UnitCommandComponent (serial-aware movement).
+ * GP-S28P1: PresentationRoot + CargoVisualAnchor + MiningEffectAnchor (no C++ StaticMesh/Niagara asset).
  * No auto-attack / CombatComponent.
  */
 UCLASS(Blueprintable)
@@ -41,6 +63,9 @@ class GPRUNTIME_API AGP_Worker : public AGP_MobileUnit
 public:
 	AGP_Worker();
 
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
 	UFUNCTION(BlueprintPure, Category = "GP|Worker")
 	UGP_CargoComponent* GetCargoComponent() const;
 
@@ -50,9 +75,37 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Worker")
 	UCapsuleComponent* GetCapsuleComponent() const;
 
+	UFUNCTION(BlueprintPure, Category = "GP|Worker|Presentation")
+	USceneComponent* GetPresentationRoot() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Worker|Presentation")
+	USceneComponent* GetCargoVisualAnchor() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Worker|Presentation")
+	USceneComponent* GetMiningEffectAnchor() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Worker|Presentation")
+	float GetCargoFillNormalized() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Worker|Presentation")
+	bool HasCargoForVisual() const;
+
 	/** Derived orchestration view from held Mine + movement + MiningComponent. */
 	UFUNCTION(BlueprintPure, Category = "GP|Worker")
 	EGP_WorkerActivityState GetWorkerActivityState() const;
+
+	/**
+	 * Cargo presentation signal.
+	 * Operator BP usage: keep backpack/container mesh always visible; do not hide via bVisible.
+	 * Drive material color from FillNormalized (0 white → partial white-yellow → ~1 green).
+	 * Cargo still grants atomically after each full mining cycle — no gradual gameplay transfer.
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "GP|Worker|Presentation")
+	FGP_OnCargoVisualStateChanged OnCargoVisualStateChanged;
+
+	/** Niagara activate/deactivate while MiningComponent is in Mining state. */
+	UPROPERTY(BlueprintAssignable, Category = "GP|Worker|Presentation")
+	FGP_OnMiningEffectStateChanged OnMiningEffectStateChanged;
 
 	bool ValidateWorkerContract(TArray<FText>& OutErrors, TArray<FText>& OutWarnings) const;
 
@@ -64,11 +117,82 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCapsuleComponent> CapsuleComponent;
 
+	/** BP mesh attach parent under Capsule. No StaticMesh in C++. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Presentation", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> PresentationRoot;
+
+	/** BP cargo prop attach point under PresentationRoot. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Presentation", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> CargoVisualAnchor;
+
+	/** Niagara / VFX attach point under PresentationRoot (no system asset in C++). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Presentation", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> MiningEffectAnchor;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Cargo", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_CargoComponent> CargoComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Mining", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_MiningComponent> MiningComponent;
+
+private:
+	UFUNCTION()
+	void HandleCargoAmountChanged(float PreviousAmount, float NewAmount, float Capacity, float Delta);
+
+	UFUNCTION()
+	void HandleMiningStateChanged(
+		EGP_MiningState PreviousState,
+		EGP_MiningState NewState,
+		EGP_MiningStopReason Reason);
+
+	void BindCargoVisualEvents();
+	void UnbindCargoVisualEvents();
+	void SyncCargoVisualState();
+
+	void BindMiningEffectEvents();
+	void UnbindMiningEffectEvents();
+	void SyncMiningEffectState();
+
+	bool bCargoVisualEventsBound = false;
+	bool bMiningEffectEventsBound = false;
+};
+
+/** Non-shipping presentation contract probe (binds Dynamic multicast). */
+UCLASS()
+class GPRUNTIME_API UGP_CargoVisualStateProbe : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	UFUNCTION()
+	void HandleCargoVisualStateChanged(bool bVisible, float FillNormalized, float CurrentAmount, float Capacity);
+
+	int32 EventCount = 0;
+	bool bLastVisible = true;
+	float LastFill = -1.0f;
+	float LastAmount = -1.0f;
+	float LastCapacity = -1.0f;
+};
+
+/** Non-shipping mining effect presentation probe. */
+UCLASS()
+class GPRUNTIME_API UGP_MiningEffectStateProbe : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	UFUNCTION()
+	void HandleMiningEffectStateChanged(
+		bool bEffectActive,
+		EGP_MiningState PreviousState,
+		EGP_MiningState NewState,
+		EGP_MiningStopReason Reason);
+
+	int32 EventCount = 0;
+	bool bLastEffectActive = false;
+	EGP_MiningState LastPreviousState = EGP_MiningState::Idle;
+	EGP_MiningState LastNewState = EGP_MiningState::Idle;
+	EGP_MiningStopReason LastReason = EGP_MiningStopReason::None;
 };
 
 /** Staged Worker contract test runner (debug console). */

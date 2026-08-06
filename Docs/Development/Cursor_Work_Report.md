@@ -1,107 +1,102 @@
-# Cursor Work Report — GP-S28 Storage + ThreatValue Finalization
+# Cursor Work Report — GP-S28P1 Finalization
 
 ## Status
-**GP-S28_READY_FOR_MERGE**
+**GP-S28P1_READY_FOR_MERGE**
 
 ## Branch
-`feature/gp-s28-storage-threat`
+`feature/gp-s28p1-blueprint-cargo-visual`
 
-## Base
-`main` @ `4aae0121b6cfe8709e0c4f5c75392c07a247fe9e`
+## Base audit
+`audit/gp-s28p-resource-playable-pass` @ `377b9b8c28dc09929efbae061a05e351b0dbad3f`
 
-## Final HEAD
-`c7f18d042f3e7ad2ef350be6b394fda3525596ba`
+## Implementation / fix commit inventory
+| Commit | Summary |
+| --- | --- |
+| `e196a43e124e4c9fb0b0fe7f56ae299ac61f459a` | Presentation roots + cargo visual contract |
+| `eea992a312af2a73400ad4f6d0bece2e82d73bf5` | Remove Worker UnitDefinition compile warning |
+| `70c8578aa70595f104732548862dc2f554b627c0` | Storage template validation lifecycle + MainBase BuildingDefinition warning removal |
+| `ca40d1bbc2087954dff11be9e9f3fe87eabe6aed` | MiningEffectAnchor + Niagara effect event + generated ResourceNode visual override |
+| (docs SHA commits) | `fd3e3b6`, `f8328e5`, `00379bf`, `3fa5c53`, + this finalization |
 
-## GP-S28 commits (base → tip)
-| SHA | Summary |
-|-----|---------|
-| `cd83858` | Add StorageComponent, MainBase host, Worker haul drop-off threat write |
-| `8080646` | Record candidate SHA in docs |
-| `61f69df` | Diagnostic scenario TeamId registry + coherent spawn |
-| `b884080` | Record diagnostic correction SHA |
-| `caf5bf0` | Diagnostic spawn only on reachable NavMesh |
-| `fe2048b` | Record nav-reachability SHA |
-| `c59b120` | MainBase registry uniqueness + contract team isolation |
-| `38f9890` | Record registry uniqueness SHA |
-| `7f81d19` | ResourceNode EndPlay reentrant occupancy cleanup |
-| `6a73b70` | Record EndPlay cleanup SHA |
-| `4b5331c` | Contract runner isolation / ownership / async null-safety |
-| `b367529` | Record isolation SHA |
-| `a3a9c87` | Hauling contract local navigable geometry |
-| `9daa6bf` | Record hauling geometry SHA |
-| `c7f18d0` | Finalize READY_FOR_MERGE docs + build record |
+## Operator validation — PASSED
+1. `BP_GP_Worker` compiles without UnitDefinition warning.
+2. `BP_GP_MainBase` compiles without BuildingDefinition warning and without Containers array size error.
+3. Full playable loop: select Worker → RMB ResourceNode → approach → mining → Cargo → MainBase unload → return → repeat.
+4. Cargo presentation: container always visible; 0 white; partial white→yellow; full green; after unload white.
+5. Niagara mining: off idle/move/haul; on only while Mining; off when Mining ends; resized/frequent/looping while active.
+6. `BP_GP_ResourceNode_Ferronite`: Use Generated Prototype Visual = false; generated shapes gone; authored meshes remain; CollisionBox + RMB Mine OK.
+7. Operator reports visual behavior correct.
 
-## Operator validation result
-**PASS** (operator-confirmed)
+## Automated contract tests
+| Command | Result |
+| --- | --- |
+| `gp.Resource.RunPresentationContractTest` | **Not re-run non-interactively** (prior `-game` OpenWorld automation hung; no Failures=0 log claimed here) |
+| `gp.Storage.RunContractTest` | **Not re-run non-interactively** (same) |
+| `gp.Resource.RunS28RegressionSuite` | **Not re-run non-interactively** (same) |
 
-- Navigable diagnostic scenario; unique MainBase registry; Team1 operator preserved; contract Team2 remap; duplicate rejected; cleanup safe
-- Runtime loop: Mining → CargoFull 50/50 → ReturnToBase → DropOff → ThreatDelta=25 (Accepted=50 × 0.5) → ReturnToDeposit → Mining
-- Storage: 5×100=500, Ready on full container, overflow LOST, Accepted-only threat; no launch/orbital/score
-- EndPlay occupancy: no ranged-for ensure; clean PIE teardown
-- Contract infra: mutual exclusion, ownership cleanup, null-safe stages, sequential suite
+Operator PIE validation of the playable loop and presentation is **PASSED** (above). Tests were **not weakened**.
 
-## Isolation result
-`gp.Resource.RunContractIsolationContractTest` → **Complete Failures=0**
-
-## Regression suite result
-`gp.Resource.RunS28RegressionSuite` → **GP-S28 RegressionSuite Complete Failures=0**
-
-## PIE teardown result
-**PASS** (operator) — no ensure / AV; timers and node refs cleared; CrowdFollowing Recast warning non-blocking
-
-## Builds
+## Builds (finalization)
 | Target | Result |
-|--------|--------|
+| --- | --- |
 | GPEditor Win64 Development + UHT | **PASSED** |
 | GP Win64 Development | **PASSED** |
 | GP Win64 Shipping | **PASSED** |
 
-## Final code review findings
-Reviewed full diff vs `main` @ `4aae012…`:
+## Final Worker presentation contract
+- `PresentationRoot` → Capsule
+- `CargoVisualAnchor` → PresentationRoot
+- `MiningEffectAnchor` → PresentationRoot
+- `OnCargoVisualStateChanged` (API stable; FillNormalized drives material; keep mesh always visible)
+- `OnMiningEffectStateChanged` (`bEffectActive` only when `EGP_MiningState::Mining`)
+- No permanent Tick; no replicated presentation-only bool
+- SoT: `UGP_CargoComponent` / `UGP_MiningComponent`
 
-- Authority-only Storage / Threat / registry / haul drop-off mutations
-- Replicated Storage containers + per-team threat array + legacy scalar mirror
-- MainBase via GameState registry only (no `GetActorOfClass` gameplay lookup)
-- Duplicate RegisterMainBase rejected without Add; unique per playable TeamId
-- BuildingBase/MainBase `PrimaryActorTick` off; Storage no permanent Tick
-- ResourceNode EndPlay: snapshot → clear → guard → notify
-- Contract OwnerTag cleanup; coordinator single-token; null-safe AdvanceStage
-- Hauling late stages scenario-relative NavMesh geometry (no `-53000` strip)
-- No OrbitalFerronite / FerroniteScore / launch execution; Launching scaffold only
-- No Slice 7 / combat / UI / map / Blueprint / LFS changes in this branch
+## Final MainBase validation correction
+- Lifecycle-aware Storage validation: empty Containers on template/pre-BeginPlay = initialization-pending; authority after BeginPlay requires `Containers.Num()==ContainerCount`
+- BuildingDefinition warning removed
+- Runtime `EnsureContainerArray()` on authority BeginPlay; defaults **5 × 100** unchanged
+- `PresentationRoot` + `DropOffVisualAnchor`
 
-No blocking issues. Ready for merge.
+## Final ResourceNode generated visual override
+- `bUseGeneratedPrototypeVisual` default **true** (diagnostics/plain C++ keep generated shapes)
+- false clears generated parts; authored components + CollisionBox preserved
+- No occupancy/mining behavior changes
 
-## Production files changed
-- `Buildings/GPBuildingBase.*`, `GPMainBase.*`
-- `Game/GPGameState.*` — registry + per-team threat
-- `Resources/GPStorageComponent.*`, `GPResourceNode.*` (EndPlay)
-- `Units/GPUnitCommandComponent.*`, `GPWorker.*` (haul orchestration), `GPUnitBase.*` (TeamId notify)
+## Scope preserved (unchanged)
+Mine semantics, mining cadence, Cargo amounts/replication, hauling, FIFO, depletion, reassignment, Storage LOST, Threat, MainBase registry, combat, projectiles, HUD.
 
-## Diagnostic / test infrastructure changed
-- `Resources/GPResourceLoopDiagnostics.*`
-- `Debug/GPContractTestCoordinator.*`, `GPContractIsolationAndSuite.cpp`
-- Mining/Storage/Cargo/Worker contract runners + `gp.Resource.RunS28RegressionSuite`
+## Files changed in finalization
+- `Docs/Development/Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/Development/Claude_Tasks/README.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
-## Docs changed
-- `Claude_Tasks/GP-S28_Storage_Threat.md`
-- `AI_Project_Log.md`
-- `Cursor_Work_Report.md` (this file)
+No C++ changes in this finalization commit (code already at `ca40d1b` + docs SHA tip).
 
-## Map / content / LFS
-**Unchanged**
+## Assets / LFS
+**No BP / Niagara / material / map / LFS assets committed.**
 
-## Deferred (GP-S36+)
-Container launch; OrbitalFerronite; FerroniteScore; Threat decrease on launch; VFX/UI/timers
+## Local operator assets left untouched
+Present locally and **not** staged/deleted/reverted:
+- `GP/Content/GrimProtocol/Blueprint/Units/BP_GP_Worker.uasset`
+- `GP/Content/GrimProtocol/Blueprint/Buildings/BP_GP_MainBase.uasset`
+- `GP/Content/GrimProtocol/Blueprint/Resources/BP_GP_ResourceNode_Ferronite.uasset`
+- `GP/Content/GrimProtocol/Materials/M_cargoMaterial.uasset`
+- Modified (local only): `GP/Config/DefaultEngine.ini`, `L_PrototypeArena.umap`, `BP_ResourceNode_AuthoredExample.uasset`
+- Niagara system asset (if present only in local Editor) — not committed
 
-## No Slice 7 work
-Combat reconciliation explicitly deferred until after S28 merge.
-
-## Git status
-Clean working tree; branch synced with `origin/feature/gp-s28-storage-threat`; `main` untouched; no PR
+## Branches untouched
+- `main` @ `035c486758059032bb2551520834dd73f8667ef5`
+- `audit/gp-s28p-resource-playable-pass` @ `377b9b8…`
+- `audit/gp-slice7-combat-reconciliation` (unchanged; not modified)
 
 ## Final commit SHA
-`c7f18d042f3e7ad2ef350be6b394fda3525596ba`
+- Finalization: `ae1450d713c59231116600ac1548f956d9f5aed7`
+- Tip: `4b219536f2863b83163ce9e80c0861c03a430e5d`
 
-## Status
-**GP-S28_READY_FOR_MERGE**
+## Git status / sync
+- Branch synced with `origin/feature/gp-s28p1-blueprint-cargo-visual` @ `4b21953…`
+- Tracked docs clean after push; local operator Content/Config/map edits remain uncommitted
+- `main` @ `035c486…` untouched; no PR / no merge

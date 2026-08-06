@@ -1,8 +1,102 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28P1 Finalization
+
+Status: **GP-S28P1_READY_FOR_MERGE**
+
+### Branch
+`feature/gp-s28p1-blueprint-cargo-visual` (base audit `377b9b8…`)
+
+### Summary
+Operator validation **PASSED** (BP compile, full haul loop, cargo colors, Niagara Mining-only, ResourceNode generated visual off). Final builds: GPEditor Dev+UHT, GP Dev, GP Shipping — **all PASSED**. Non-interactive console automation not claimed (unavailable/hung previously); tests not weakened. Docs finalized. Local operator BP/Niagara/materials/map left uncommitted. `main` and both audit branches untouched. No PR/merge. Finalization commit `ae1450d713c59231116600ac1548f956d9f5aed7`.
+
+---
+
+## 2026-08-06 — GP-S28P1 Niagara Mining Effect + Generated Visual Override
+
+Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING** (superseded by finalization)
+
+### Branch
+`feature/gp-s28p1-blueprint-cargo-visual`
+
+### Summary
+Operator haul-loop validation accepted. Added Worker `MiningEffectAnchor` + `OnMiningEffectStateChanged` (Mining-only Niagara hook via MiningComponent SoT). Added `AGP_ResourceNode::bUseGeneratedPrototypeVisual` (default true) to clear generated prototype shapes for authored BP nodes. Cargo event API unchanged; document always-visible container + FillNormalized color. MiningAnimationAnchor idea cancelled @ `ca40d1bbc2087954dff11be9e9f3fe87eabe6aed`. GPEditor Dev+UHT **PASSED**. PIE presentation/S28 suite **operator pending**. No BP/Niagara/material/map committed.
+
+---
+
+## 2026-08-06 — GP-S28P1 Storage Validation Lifecycle Correction
+
+Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p1-blueprint-cargo-visual`
+
+### Blocker / fix
+BP_GP_MainBase Compile blocked by template `ErrArraySize` (empty Containers before authority BeginPlay `EnsureContainerArray`) and unconditional BuildingDefinition warning. Lifecycle-aware `ValidateStorageContract`; removed BuildingDefinition warning from MainBase @ `70c8578aa70595f104732548862dc2f554b627c0`. No BuildingDefinition asset. GPEditor Dev+UHT **PASSED**. Local BP_GP_MainBase DataValidation: 0 errors / 0 warnings. PIE presentation/storage/S28 suite **operator pending**.
+
+---
+
+## 2026-08-06 — GP-S28P1 UnitDefinition Validation Warning Correction
+
+Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p1-blueprint-cargo-visual`
+
+### Blocker / fix
+Removed unconditional `WarnNoUnitDefinitionAsset` from `AGP_Worker::ValidateWorkerContract` (blocked BP_GP_Worker Compile) @ `eea992a312af2a73400ad4f6d0bece2e82d73bf5`. No UnitDefinition asset added. GPEditor Dev+UHT **PASSED**. Local BP DataValidation: 0 warnings. PIE presentation/S28 suite **operator pending**.
+
+---
+
+## 2026-08-06 — GP-S28P1 Blueprint-Ready Actors + Cargo Visual
+
+Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28p1-blueprint-cargo-visual`
+- Base audit: `377b9b8c28dc09929efbae061a05e351b0dbad3f`
+- Implementation: `e196a43e124e4c9fb0b0fe7f56ae299ac61f459a`
+- Task: `Docs/Development/Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`
+
+### Summary
+Added PresentationRoot/CargoVisualAnchor on Worker, PresentationRoot/DropOffVisualAnchor on MainBase, ResourceNode `GetPresentationRoot`/`GetRemainingNormalized`, and `OnCargoVisualStateChanged` driven by CargoComponent. Mine path untouched. `gp.Resource.RunPresentationContractTest` + suite entry. GPEditor Dev+UHT **PASSED**. No BP/map assets.
+
+### Operator next
+Create BP children; run presentation contract; smoke RMB Mine haul loop.
+
+---
+
+## 2026-08-06 — GP-S28P0 Resource Playable Pass Audit
+
+Status: **GP_S28P0_AUDIT_READY_FOR_REVIEW**
+
+### Branch / baseline
+- Branch: `audit/gp-s28p-resource-playable-pass`
+- Base: `main` @ `035c486758059032bb2551520834dd73f8667ef5` (GP-S28 merged)
+- Audit commit: `d7710e8d7bda59793bc1c8c93363d58640465654`
+- Audit: `Docs/Development/Resource_Playable_Pass_Audit.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+### Parallel audits
+- `audit/gp-slice7-combat-reconciliation` — **completed**, pending review/merge (not cancelled; not modified here)
+
+### Summary
+Player RMB → Mine already works on `AGP_ResourceNode`. Gaps for playable prototype: BP presentation hooks, cargo visual bind, depletion presentation, path-aware multi-node reassignment, MainBase-only drop-off wait, TEMP Planetary HUD. Proposed P1–P4; no `IGP_FerroniteDropOff` in S28P (LogisticsHub is not drop-off). Implementation **not started**.
+
+### Builds
+GPEditor Win64 Development + UHT **PASSED** (docs-only).
+
+### Follow-up (same branch)
+Inventory pass confirmed RMB Mine path and added P0 amend notes: unreplicated MainBase registry blocks naive client HUD; Shift-queue is QueueDeferred no-op; MiningComponent already has BP state/cycle delegates.
+
+### Next
+Operator review of P0 audit → assign GP-S28P1 when approved.
+
+---
+
 ## 2026-08-06 — GP-S28 Storage + ThreatValue Finalization
 
-Status: **GP-S28_READY_FOR_MERGE**
+Status: **GP-S28_READY_FOR_MERGE** *(merged to main @ 035c486)*
 
 ### Branch / baseline
 - Branch: `feature/gp-s28-storage-threat`

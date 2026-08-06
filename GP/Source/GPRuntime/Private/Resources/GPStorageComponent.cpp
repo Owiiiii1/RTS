@@ -125,6 +125,11 @@ void UGP_StorageComponent::DebugForceContainerLaunching(int32 Index, bool bLaunc
 		RefreshContainerState(Container);
 	}
 }
+
+void UGP_StorageComponent::DebugSetContainersNumForValidationTest(int32 NewNum)
+{
+	Containers.SetNum(FMath::Max(0, NewNum));
+}
 #endif
 
 float UGP_StorageComponent::GetTotalStored() const
@@ -386,10 +391,33 @@ bool UGP_StorageComponent::ValidateStorageContract(TArray<FText>& OutErrors, TAr
 	{
 		OutErrors.Add(NSLOCTEXT("GPStorage", "ErrCount", "ContainerCount must be > 0."));
 	}
-	if (Containers.Num() != ContainerCount)
+
+	// Containers are authority-initialized in BeginPlay via EnsureContainerArray.
+	// CDO / Blueprint component templates / pre-BeginPlay objects may legitimately have Num()==0.
+	const bool bIsTemplateOrArchetype =
+		IsTemplate()
+		|| (Owner != nullptr && Owner->IsTemplate());
+	const bool bAuthorityRuntimeInitialized =
+		!bIsTemplateOrArchetype
+		&& HasBegunPlay()
+		&& Owner != nullptr
+		&& Owner->HasAuthority();
+
+	if (Containers.Num() == 0)
 	{
-		OutErrors.Add(NSLOCTEXT("GPStorage", "ErrArraySize", "Containers array size must equal ContainerCount."));
+		if (bAuthorityRuntimeInitialized)
+		{
+			OutErrors.Add(NSLOCTEXT("GPStorage", "ErrArraySize",
+				"Containers array size must equal ContainerCount."));
+		}
+		// else: initialization-pending — not an error for DataValidation / BP compile.
 	}
+	else if (Containers.Num() != ContainerCount)
+	{
+		OutErrors.Add(NSLOCTEXT("GPStorage", "ErrArraySize",
+			"Containers array size must equal ContainerCount."));
+	}
+
 	if (PrimaryComponentTick.bCanEverTick)
 	{
 		OutErrors.Add(NSLOCTEXT("GPStorage", "ErrTick", "StorageComponent must not enable permanent Tick."));
@@ -904,6 +932,50 @@ void UGP_StorageContractTestRunner::AdvanceStage()
 	{
 	case 0:
 	{
+		// A) Template / CDO: empty Containers + ContainerCount=5 must not ErrArraySize.
+		const AGP_MainBase* BaseCDO = GetDefault<AGP_MainBase>();
+		const UGP_StorageComponent* TemplateStorage =
+			IsValid(BaseCDO) ? BaseCDO->GetStorageComponent() : nullptr;
+		if (!Expect(IsValid(TemplateStorage), TEXT("TemplateStorage")))
+		{
+			Finish();
+			return;
+		}
+		Expect(TemplateStorage->GetContainerCount() == 5, TEXT("TemplateContainerCount5"));
+		Expect(TemplateStorage->GetContainers().Num() == 0, TEXT("TemplateContainersEmpty"));
+		{
+			TArray<FText> TemplateErrors;
+			TArray<FText> TemplateWarnings;
+			Expect(TemplateStorage->ValidateStorageContract(TemplateErrors, TemplateWarnings),
+				TEXT("TemplateValidateOk"));
+			bool bHasErrArraySize = false;
+			for (const FText& Error : TemplateErrors)
+			{
+				if (Error.ToString().Contains(TEXT("array size"), ESearchCase::IgnoreCase))
+				{
+					bHasErrArraySize = true;
+					break;
+				}
+			}
+			Expect(!bHasErrArraySize, TEXT("TemplateNoErrArraySize"));
+		}
+		{
+			TArray<FText> BaseErrors;
+			TArray<FText> BaseWarnings;
+			Expect(BaseCDO->ValidateMainBaseContract(BaseErrors, BaseWarnings), TEXT("TemplateMainBaseValid"));
+			bool bHasBuildingDefWarning = false;
+			for (const FText& Warning : BaseWarnings)
+			{
+				if (Warning.ToString().Contains(TEXT("UGP_BuildingDefinition"), ESearchCase::IgnoreCase)
+					|| Warning.ToString().Contains(TEXT("BuildingDefinition"), ESearchCase::IgnoreCase))
+				{
+					bHasBuildingDefWarning = true;
+					break;
+				}
+			}
+			Expect(!bHasBuildingDefWarning, TEXT("TemplateNoBuildingDefinitionWarning"));
+		}
+
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		Params.ObjectFlags |= RF_Transient;
@@ -928,6 +1000,38 @@ void UGP_StorageContractTestRunner::AdvanceStage()
 		Expect(Storage->IsComponentTickEnabled() == false, TEXT("NoTick"));
 		Expect(Storage->PrimaryComponentTick.bCanEverTick == false, TEXT("CanEverTickFalse"));
 		Expect(FMath::IsNearlyEqual(Storage->GetThreatPerStoredUnit(), 0.5f), TEXT("ThreatPerUnit0_5"));
+
+		// B) Runtime authority after BeginPlay: Containers.Num() == ContainerCount.
+		Expect(Storage->HasBegunPlay(), TEXT("RuntimeHasBegunPlay"));
+		Expect(Storage->GetContainers().Num() == Storage->GetContainerCount(), TEXT("RuntimeArraySize"));
+		{
+			TArray<FText> RuntimeErrors;
+			TArray<FText> RuntimeWarnings;
+			Expect(Storage->ValidateStorageContract(RuntimeErrors, RuntimeWarnings), TEXT("RuntimeValidateOk"));
+		}
+
+		// C) Non-empty partial array always fails ErrArraySize.
+		Storage->DebugSetContainersNumForValidationTest(2);
+		Expect(Storage->GetContainers().Num() == 2, TEXT("PartialArraySize2"));
+		{
+			TArray<FText> PartialErrors;
+			TArray<FText> PartialWarnings;
+			Expect(!Storage->ValidateStorageContract(PartialErrors, PartialWarnings), TEXT("PartialArrayInvalid"));
+			bool bHasErrArraySize = false;
+			for (const FText& Error : PartialErrors)
+			{
+				if (Error.ToString().Contains(TEXT("array size"), ESearchCase::IgnoreCase))
+				{
+					bHasErrArraySize = true;
+					break;
+				}
+			}
+			Expect(bHasErrArraySize, TEXT("PartialErrArraySize"));
+		}
+		// Restore via EnsureContainerArray path (DebugForce → Ensure).
+		Storage->DebugForceContainerLaunching(0, false);
+		Expect(Storage->GetContainers().Num() == Storage->GetContainerCount(), TEXT("RestoredArraySize"));
+
 		++StageIndex;
 		ScheduleNext();
 		break;

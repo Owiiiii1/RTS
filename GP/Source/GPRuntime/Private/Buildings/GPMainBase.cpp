@@ -3,6 +3,7 @@
 #include "Buildings/GPMainBase.h"
 
 #include "Components/CapsuleComponent.h"
+#include "Components/SceneComponent.h"
 #include "Game/GPGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Resources/GPStorageComponent.h"
@@ -24,6 +25,14 @@ AGP_MainBase::AGP_MainBase()
 	CapsuleComponent->SetGenerateOverlapEvents(false);
 	CapsuleComponent->SetCanEverAffectNavigation(false);
 	CapsuleComponent->SetSimulatePhysics(false);
+
+	PresentationRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PresentationRoot"));
+	PresentationRoot->SetupAttachment(CapsuleComponent);
+	PresentationRoot->SetCanEverAffectNavigation(false);
+
+	DropOffVisualAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("DropOffVisualAnchor"));
+	DropOffVisualAnchor->SetupAttachment(PresentationRoot);
+	DropOffVisualAnchor->SetCanEverAffectNavigation(false);
 
 	StorageComponent = CreateDefaultSubobject<UGP_StorageComponent>(TEXT("StorageComponent"));
 	DropOffRangeCm = 400.0f;
@@ -107,6 +116,26 @@ UCapsuleComponent* AGP_MainBase::GetCapsuleComponent() const
 	return CapsuleComponent;
 }
 
+USceneComponent* AGP_MainBase::GetPresentationRoot() const
+{
+	return PresentationRoot;
+}
+
+USceneComponent* AGP_MainBase::GetDropOffVisualAnchor() const
+{
+	return DropOffVisualAnchor;
+}
+
+float AGP_MainBase::GetPlanetaryStored() const
+{
+	return IsValid(StorageComponent) ? StorageComponent->GetTotalStored() : 0.0f;
+}
+
+float AGP_MainBase::GetPlanetaryCapacity() const
+{
+	return IsValid(StorageComponent) ? StorageComponent->GetTotalCapacity() : 0.0f;
+}
+
 void AGP_MainBase::RegisterWithGameState()
 {
 	if (!HasAuthority())
@@ -179,6 +208,23 @@ bool AGP_MainBase::ValidateMainBaseContract(TArray<FText>& OutErrors, TArray<FTe
 		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrStorageOwner", "StorageComponent owner must be MainBase."));
 	}
 
+	if (!IsValid(PresentationRoot))
+	{
+		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrPresentationRoot", "MainBase requires PresentationRoot."));
+	}
+	if (!IsValid(DropOffVisualAnchor))
+	{
+		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrDropOffAnchor", "MainBase requires DropOffVisualAnchor."));
+	}
+	if (IsValid(PresentationRoot) && PresentationRoot->GetAttachParent() != CapsuleComponent)
+	{
+		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrPresentationAttach", "PresentationRoot must attach to Capsule."));
+	}
+	if (IsValid(DropOffVisualAnchor) && DropOffVisualAnchor->GetAttachParent() != PresentationRoot)
+	{
+		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrDropOffAttach", "DropOffVisualAnchor must attach to PresentationRoot."));
+	}
+
 	if (!FMath::IsFinite(DropOffRangeCm) || DropOffRangeCm <= 0.0f)
 	{
 		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrDropOff", "DropOffRangeCm must be finite and > 0."));
@@ -194,8 +240,8 @@ bool AGP_MainBase::ValidateMainBaseContract(TArray<FText>& OutErrors, TArray<FTe
 		OutWarnings.Add(NSLOCTEXT("GPMainBase", "WarnTag", "MainBase missing GP.Building.Type.MainBase tag."));
 	}
 
-	OutWarnings.Add(NSLOCTEXT("GPMainBase", "WarnNoBuildingDefinition",
-		"No UGP_BuildingDefinition yet — DropOffRange/containers use GP-S28 placeholders."));
+	// UGP_BuildingDefinition is deferred (GP-S34/S39). GP-S28 DropOffRange/container
+	// placeholders must not emit Blueprint Compile / DataValidation warnings in S28P1.
 
 	if (IsValid(StorageComponent))
 	{

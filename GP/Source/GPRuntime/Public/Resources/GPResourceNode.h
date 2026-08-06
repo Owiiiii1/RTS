@@ -9,6 +9,7 @@
 #include "GPResourceNode.generated.h"
 
 class UBoxComponent;
+class USceneComponent;
 class UGP_ResourceDefinition;
 class UGP_ResourceNodeVisualComponent;
 
@@ -68,6 +69,10 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
+
 	UFUNCTION(BlueprintPure, Category = "GP|Resource")
 	EGP_ResourceType GetResourceType() const;
 
@@ -79,6 +84,28 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "GP|Resource")
 	bool IsDepleted() const;
+
+	/**
+	 * Attach parent for Blueprint/SCS meshes (CollisionBox root).
+	 * Does not replace UGP_ResourceNodeVisualComponent AuthoredComponents path.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GP|Resource|Presentation")
+	USceneComponent* GetPresentationRoot() const;
+
+	/** Remaining deposit fraction in [0,1]. Depleted → 0. */
+	UFUNCTION(BlueprintPure, Category = "GP|Resource|Presentation")
+	float GetRemainingNormalized() const;
+
+	/**
+	 * When true (default), UGP_ResourceNodeVisualComponent builds Engine prototype primitives.
+	 * When false, generated shapes are cleared; authored Blueprint/SCS meshes remain.
+	 * CollisionBox / Mine hit stay authoritative either way.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GP|Resource|Presentation")
+	bool GetUseGeneratedPrototypeVisual() const { return bUseGeneratedPrototypeVisual; }
+
+	UFUNCTION(BlueprintCallable, Category = "GP|Resource|Presentation")
+	void SetUseGeneratedPrototypeVisual(bool bUse);
 
 	UFUNCTION(BlueprintPure, Category = "GP|Resource|Definition")
 	TSoftObjectPtr<UGP_ResourceDefinition> GetResourceDefinitionSoft() const;
@@ -181,6 +208,14 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Resource|Visual", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_ResourceNodeVisualComponent> ResourceNodeVisualComponent;
+
+	/**
+	 * GP-S28P1: toggle C++ prototype ore shapes vs authored BP meshes only.
+	 * Default true preserves diagnostic/plain C++ nodes.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Presentation",
+		meta = (AllowPrivateAccess = "true", DisplayName = "Use Generated Prototype Visual"))
+	bool bUseGeneratedPrototypeVisual = true;
 
 	/**
 	 * Soft reference to immutable resource identity / mining metadata.

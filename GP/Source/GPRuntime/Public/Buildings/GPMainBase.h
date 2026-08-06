@@ -7,10 +7,12 @@
 #include "GPMainBase.generated.h"
 
 class UCapsuleComponent;
+class USceneComponent;
 class UGP_StorageComponent;
 
 /**
  * Minimal MainBase host for StorageComponent + Worker drop-off (GP-S28).
+ * GP-S28P1: PresentationRoot + DropOffVisualAnchor for Blueprint meshes.
  * Full content/visual MainBase remains GP-S39. No production/construction/launch.
  */
 UCLASS(Blueprintable)
@@ -35,9 +37,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|MainBase")
 	UCapsuleComponent* GetCapsuleComponent() const;
 
+	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Presentation")
+	USceneComponent* GetPresentationRoot() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Presentation")
+	USceneComponent* GetDropOffVisualAnchor() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Storage")
+	float GetPlanetaryStored() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Storage")
+	float GetPlanetaryCapacity() const;
+
 	/**
 	 * Drop-off interaction range (cm). BuildingDefinition not present yet —
-	 * TDD/07 / TDD/10 placeholder 400 cm.
+	 * TDD/07 / TDD/10 placeholder 400 cm. Not driven by DropOffVisualAnchor.
 	 */
 	UFUNCTION(BlueprintPure, Category = "GP|MainBase")
 	float GetDropOffRangeCm() const { return DropOffRangeCm; }
@@ -51,6 +65,14 @@ public:
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCapsuleComponent> CapsuleComponent;
+
+	/** BP mesh attach parent under Capsule. No StaticMesh in C++. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Presentation", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> PresentationRoot;
+
+	/** Presentation-only drop-off marker. Gameplay DropOffRangeCm is independent. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Presentation", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> DropOffVisualAnchor;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Storage", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_StorageComponent> StorageComponent;

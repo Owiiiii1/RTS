@@ -34,37 +34,33 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S15 DONE** |
-| Runtime modules on disk | `GP` (primary) + `GPRuntime` (`AGP_GameState`, `AGP_GameMode`, `AGP_PlayerController` + camera Enhanced Input, `AGP_PlayerState`, `UGP_MatchAssetLoader`, `AGP_LobbyState`, `UGP_CameraConfigDataAsset`, `AGP_CameraPawn` owner-only shell, `AGP_CameraBoundsVolume`) + `GPGASRuntime` (tags + AttributeSets + ASC + Damage MMC) + `GPUIRuntime` |
-| Last closed stage | **GP-S15** |
-| Current stage | **none** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S28 merged** |
+| Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
+| Last closed / merged stage | **GP-S28 Storage + ThreatValue** @ `main` `035c486758059032bb2551520834dd73f8667ef5` |
+| Slice 6 | **Completed** |
+| Current stage | **GP-S28P1_READY_FOR_MERGE** (`feature/gp-s28p1-blueprint-cargo-visual`) |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** none (GP-S15 closed as **DONE**).
+**Current:** GP-S28P1 — Blueprint presentation + cargo visual + Niagara mining hook + generated ResourceNode visual override (`feature/gp-s28p1-blueprint-cargo-visual`). Task: [`Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`](Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md). Status: **GP-S28P1_READY_FOR_MERGE**.
 
-**NEXT:** GP-S16 UGP_SelectionComponent (SelectedUnits, InspectedTarget, marquee, control groups) — per [`TDD/13_Architecture_Proposal`](../TDD/13_Architecture_Proposal.md) §Implementation Order. Do **not** create GP-S16 task file or start implementation until explicitly assigned.
+**Prior audit (kept):** GP-S28P0 on `audit/gp-s28p-resource-playable-pass` — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
+
+**Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation`.
+
+**NEXT (after P1 merge):** GP-S28P2 depletion + reassignment — do not start until assigned.
+
+> Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28 already merged on main.
 
 ### Foundation / Match Flow sequence
 
-1. GP-S01 Module Scaffolds — **DONE**
-2. GP-S02 Native Gameplay Tags — **DONE**
-3. GP-S03 Attribute Sets — **DONE**
-4. GP-S04 AbilitySystemComponent Subclass — **DONE**
-5. GP-S05 Damage Calculation MMC — **DONE**
-6. GP-S06 AGP_GameState (Match State and Timer) — **DONE**
-7. GP-S07 AGP_GameMode (PostLogin, Match Countdown, EndMatch Hook) — **DONE**
-8. GP-S08 AGP_PlayerController scaffold — **DONE**
-9. GP-S09 AGP_PlayerState (+ASC + AttributeSet) — **DONE**
-10. GP-S10 UGP_MatchAssetLoader — **DONE**
-11. GP-S11 AGP_LobbyState — **DONE**
-12. GP-S12 UGP_CameraConfigDataAsset — **DONE**
-13. GP-S13 AGP_CameraPawn — **DONE**
-14. GP-S14 AGP_CameraBoundsVolume — **DONE**
-15. GP-S15 Camera Enhanced Input / PlayerController binding — **DONE**
-16. GP-S16 UGP_SelectionComponent (SelectedUnits, InspectedTarget, marquee, control groups) — not started / task file not materialized
+1. GP-S01 … GP-S15 — **DONE**
+2. GP-S16…GP-S28 — **DONE / merged** (selection, commands, movement, attack, worker/resources/storage)
+3. GP-SLICE7-AUDIT — combat reconciliation audit **completed on branch**, pending review
+4. **GP-S28P0** — resource playable pass audit **READY_FOR_REVIEW**
+5. GP-S28P1…P4 — proposed after P0 acceptance (see Resource_Playable_Pass_Audit)
 
 ---
 

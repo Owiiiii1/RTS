@@ -231,6 +231,49 @@ bool AGP_ResourceNode::IsDepleted() const
 	return CurrentAmount <= 0;
 }
 
+USceneComponent* AGP_ResourceNode::GetPresentationRoot() const
+{
+	return CollisionBox;
+}
+
+float AGP_ResourceNode::GetRemainingNormalized() const
+{
+	if (MaxAmount <= 0)
+	{
+		return 0.0f;
+	}
+	return FMath::Clamp(static_cast<float>(CurrentAmount) / static_cast<float>(MaxAmount), 0.0f, 1.0f);
+}
+
+void AGP_ResourceNode::SetUseGeneratedPrototypeVisual(bool bUse)
+{
+	if (bUseGeneratedPrototypeVisual == bUse)
+	{
+		return;
+	}
+
+	bUseGeneratedPrototypeVisual = bUse;
+	if (IsValid(ResourceNodeVisualComponent))
+	{
+		ResourceNodeVisualComponent->RefreshVisualMode();
+	}
+}
+
+#if WITH_EDITOR
+void AGP_ResourceNode::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	if (PropertyChangedEvent.GetPropertyName()
+		== GET_MEMBER_NAME_CHECKED(AGP_ResourceNode, bUseGeneratedPrototypeVisual))
+	{
+		if (IsValid(ResourceNodeVisualComponent))
+		{
+			ResourceNodeVisualComponent->RefreshVisualMode();
+		}
+	}
+}
+#endif
+
 TSoftObjectPtr<UGP_ResourceDefinition> AGP_ResourceNode::GetResourceDefinitionSoft() const
 {
 	return ResourceDefinition;

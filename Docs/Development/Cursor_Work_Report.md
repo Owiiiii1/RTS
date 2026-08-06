@@ -56,7 +56,7 @@ On `BP_GP_ResourceNode_Ferronite`: set **Use Generated Prototype Visual = false*
 **No BP / Niagara / material / map assets committed.**
 
 ## Correction commit SHA
-(see git after commit)
+`ca40d1bbc2087954dff11be9e9f3fe87eabe6aed`
 
 ## Git status (expected after push)
 Clean for committed paths; local untracked Blueprint / local map edits must remain uncommitted.

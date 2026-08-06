@@ -19,7 +19,7 @@ Removed unconditional `WarnNoUnitDefinitionAsset` (`eea992a312af2a73400ad4f6d0be
 Lifecycle-aware `ValidateStorageContract` + removed BuildingDefinition warning (`70c8578aa70595f104732548862dc2f554b627c0`).
 
 ## Correction — Niagara Mining Effect + Generated Visual Override
-Cancels unused MiningAnimationAnchor / primitive mining animation idea.
+Cancels unused MiningAnimationAnchor / primitive mining animation idea (`ca40d1bbc2087954dff11be9e9f3fe87eabe6aed`).
 
 ### Cargo presentation (API stable)
 - `OnCargoVisualStateChanged` unchanged (bVisible, FillNormalized, Amount, Capacity).

@@ -8,7 +8,7 @@ Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
 `feature/gp-s28p1-blueprint-cargo-visual`
 
 ### Summary
-Operator haul-loop validation accepted. Added Worker `MiningEffectAnchor` + `OnMiningEffectStateChanged` (Mining-only Niagara hook via MiningComponent SoT). Added `AGP_ResourceNode::bUseGeneratedPrototypeVisual` (default true) to clear generated prototype shapes for authored BP nodes. Cargo event API unchanged; document always-visible container + FillNormalized color. MiningAnimationAnchor idea cancelled. GPEditor Dev+UHT **PASSED**. PIE presentation/S28 suite **operator pending**. No BP/Niagara/material/map committed.
+Operator haul-loop validation accepted. Added Worker `MiningEffectAnchor` + `OnMiningEffectStateChanged` (Mining-only Niagara hook via MiningComponent SoT). Added `AGP_ResourceNode::bUseGeneratedPrototypeVisual` (default true) to clear generated prototype shapes for authored BP nodes. Cargo event API unchanged; document always-visible container + FillNormalized color. MiningAnimationAnchor idea cancelled @ `ca40d1bbc2087954dff11be9e9f3fe87eabe6aed`. GPEditor Dev+UHT **PASSED**. PIE presentation/S28 suite **operator pending**. No BP/Niagara/material/map committed.
 
 ---
 

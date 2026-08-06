@@ -9,7 +9,7 @@ Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
 - Task: `Docs/Development/Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md`
 
 ### Summary
-One-shot ResourceNode depletion + deferred Destroy; GameState ResourceNode registry + path-aware FindResourceCandidates; Worker search tunables; UnitCommand reassignment / WaitingForResource; contract test + suite entry. GPEditor Dev+UHT **PASSED**. Operator-local BP/materials/map/config left uncommitted. PIE suite **operator pending**.
+One-shot ResourceNode depletion + deferred Destroy; GameState ResourceNode registry + path-aware FindResourceCandidates; Worker search tunables; UnitCommand reassignment / WaitingForResource; contract test + suite entry @ `6c10937ffa3e1060e79ab1e8481e05c9f6aac6ed`. GPEditor Dev+UHT **PASSED**. Operator-local BP/materials/map/config left uncommitted. PIE suite **operator pending**.
 
 ---
 

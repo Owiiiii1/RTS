@@ -6,6 +6,7 @@
 ## Baseline
 - Branch: `feature/gp-s28p2-depletion-resource-reassignment`
 - Base main: `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` (Merge GP-S28P1)
+- Implementation: `6c10937ffa3e1060e79ab1e8481e05c9f6aac6ed`
 - Depends on: GP-S28P1 presentation hooks (merged)
 
 ## Goal

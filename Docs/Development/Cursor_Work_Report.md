@@ -79,7 +79,7 @@ Per-node MaxConcurrentMiners=4 preserved; depletion/EndPlay clear without promot
 `main` not modified by this branch work beyond creating feature from `86bcc974…`. Audit branches untouched.
 
 ## Commit SHA
-(see after commit)
+`6c10937ffa3e1060e79ab1e8481e05c9f6aac6ed`
 
 ## Git status / sync
-(see after push)
+Branch pushed; operator-local Content/Config/map remain uncommitted; `main` untouched.

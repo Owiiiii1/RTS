@@ -1,62 +1,99 @@
-# Cursor Work Report — GP-S28P1 Niagara Mining Effect + Generated Visual Override
+# Cursor Work Report — GP-S28P1 Finalization
 
 ## Status
-**GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S28P1_READY_FOR_MERGE**
 
 ## Branch
 `feature/gp-s28p1-blueprint-cargo-visual`
 
-## Scope
-Narrow presentation correction after operator validation of the Mine haul loop. Cancels the unused MiningAnimationAnchor / primitive mining animation idea.
+## Base audit
+`audit/gp-s28p-resource-playable-pass` @ `377b9b8c28dc09929efbae061a05e351b0dbad3f`
 
-## Cargo presentation (operator BP)
-- Gameplay Cargo / `OnCargoVisualStateChanged` API unchanged (`bVisible`, FillNormalized, Amount, Capacity).
-- Operator usage: backpack/container mesh **always visible**; do **not** hide via `bVisible`.
-- Material driven by `FillNormalized`: 0 → white; partial → white→yellow; ~1.0 → green; after drop-off → 0 white.
-- No gradual gameplay transfer — Cargo still grants atomically after each full mining cycle.
-- No material/BP assets created in repo.
+## Implementation / fix commit inventory
+| Commit | Summary |
+| --- | --- |
+| `e196a43e124e4c9fb0b0fe7f56ae299ac61f459a` | Presentation roots + cargo visual contract |
+| `eea992a312af2a73400ad4f6d0bece2e82d73bf5` | Remove Worker UnitDefinition compile warning |
+| `70c8578aa70595f104732548862dc2f554b627c0` | Storage template validation lifecycle + MainBase BuildingDefinition warning removal |
+| `ca40d1bbc2087954dff11be9e9f3fe87eabe6aed` | MiningEffectAnchor + Niagara effect event + generated ResourceNode visual override |
+| (docs SHA commits) | `fd3e3b6`, `f8328e5`, `00379bf`, `3fa5c53`, + this finalization |
 
-## MiningEffectAnchor + Niagara state
-- `AGP_Worker`: `MiningEffectAnchor` under `PresentationRoot` (sibling of `CargoVisualAnchor`).
-- `GetMiningEffectAnchor()`; no collision/nav/Tick; no SkeletalMesh/Timeline/animation system.
-- `OnMiningEffectStateChanged(bEffectActive, Previous, New, Reason)` with `bEffectActive = (NewState == Mining)`.
-- Bound to `UGP_MiningComponent::OnMiningStateChanged` in BeginPlay / unbound EndPlay; initial sync; clients via OnRep path.
-- No replicated presentation-only bool — MiningComponent remains SoT.
+## Operator validation — PASSED
+1. `BP_GP_Worker` compiles without UnitDefinition warning.
+2. `BP_GP_MainBase` compiles without BuildingDefinition warning and without Containers array size error.
+3. Full playable loop: select Worker → RMB ResourceNode → approach → mining → Cargo → MainBase unload → return → repeat.
+4. Cargo presentation: container always visible; 0 white; partial white→yellow; full green; after unload white.
+5. Niagara mining: off idle/move/haul; on only while Mining; off when Mining ends; resized/frequent/looping while active.
+6. `BP_GP_ResourceNode_Ferronite`: Use Generated Prototype Visual = false; generated shapes gone; authored meshes remain; CollisionBox + RMB Mine OK.
+7. Operator reports visual behavior correct.
 
-## ResourceNode generated visual switch
-- `AGP_ResourceNode::bUseGeneratedPrototypeVisual` (EditDefaultsOnly, default **true**).
-- `SetUseGeneratedPrototypeVisual` / editor PostEdit → `UGP_ResourceNodeVisualComponent::RefreshVisualMode`.
-- false clears generated prototype parts; authored meshes + CollisionBox + Mine hit preserved.
-- `VisualSourceMode::AuthoredComponents` still forces generated off.
-- Diagnostics / plain C++ nodes keep generated visuals by default.
+## Automated contract tests
+| Command | Result |
+| --- | --- |
+| `gp.Resource.RunPresentationContractTest` | **Not re-run non-interactively** (prior `-game` OpenWorld automation hung; no Failures=0 log claimed here) |
+| `gp.Storage.RunContractTest` | **Not re-run non-interactively** (same) |
+| `gp.Resource.RunS28RegressionSuite` | **Not re-run non-interactively** (same) |
 
-## Operator expected
-On `BP_GP_ResourceNode_Ferronite`: set **Use Generated Prototype Visual = false**, Compile/Save. Attach Niagara under Worker `MiningEffectAnchor` (Auto Activate off); Activate/Deactivate from `OnMiningEffectStateChanged`.
+Operator PIE validation of the playable loop and presentation is **PASSED** (above). Tests were **not weakened**.
 
-## Tests / build
-| Check | Result |
+## Builds (finalization)
+| Target | Result |
 | --- | --- |
 | GPEditor Win64 Development + UHT | **PASSED** |
-| `gp.Resource.RunPresentationContractTest` | Extended (mining effect + visual toggle); **operator PIE pending** |
-| `gp.Resource.RunS28RegressionSuite` | **operator PIE pending** |
+| GP Win64 Development | **PASSED** |
+| GP Win64 Shipping | **PASSED** |
 
-## Files changed
-- `GP/Source/GPRuntime/Public/Units/GPWorker.h`
-- `GP/Source/GPRuntime/Private/Units/GPWorker.cpp`
-- `GP/Source/GPRuntime/Public/Resources/GPResourceNode.h`
-- `GP/Source/GPRuntime/Private/Resources/GPResourceNode.cpp`
-- `GP/Source/GPRuntime/Public/Visual/GPResourceNodeVisualComponent.h`
-- `GP/Source/GPRuntime/Private/Visual/GPResourceNodeVisualComponent.cpp`
+## Final Worker presentation contract
+- `PresentationRoot` → Capsule
+- `CargoVisualAnchor` → PresentationRoot
+- `MiningEffectAnchor` → PresentationRoot
+- `OnCargoVisualStateChanged` (API stable; FillNormalized drives material; keep mesh always visible)
+- `OnMiningEffectStateChanged` (`bEffectActive` only when `EGP_MiningState::Mining`)
+- No permanent Tick; no replicated presentation-only bool
+- SoT: `UGP_CargoComponent` / `UGP_MiningComponent`
+
+## Final MainBase validation correction
+- Lifecycle-aware Storage validation: empty Containers on template/pre-BeginPlay = initialization-pending; authority after BeginPlay requires `Containers.Num()==ContainerCount`
+- BuildingDefinition warning removed
+- Runtime `EnsureContainerArray()` on authority BeginPlay; defaults **5 × 100** unchanged
+- `PresentationRoot` + `DropOffVisualAnchor`
+
+## Final ResourceNode generated visual override
+- `bUseGeneratedPrototypeVisual` default **true** (diagnostics/plain C++ keep generated shapes)
+- false clears generated parts; authored components + CollisionBox preserved
+- No occupancy/mining behavior changes
+
+## Scope preserved (unchanged)
+Mine semantics, mining cadence, Cargo amounts/replication, hauling, FIFO, depletion, reassignment, Storage LOST, Threat, MainBase registry, combat, projectiles, HUD.
+
+## Files changed in finalization
 - `Docs/Development/Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/Development/Claude_Tasks/README.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Assets / map / LFS
-**No BP / Niagara / material / map assets committed.**
+No C++ changes in this finalization commit (code already at `ca40d1b` + docs SHA tip).
 
-## Correction commit SHA
-`ca40d1bbc2087954dff11be9e9f3fe87eabe6aed`
+## Assets / LFS
+**No BP / Niagara / material / map / LFS assets committed.**
 
-## Git status (expected after push)
-Clean for committed paths; local untracked Blueprint / local map edits must remain uncommitted.
+## Local operator assets left untouched
+Present locally and **not** staged/deleted/reverted:
+- `GP/Content/GrimProtocol/Blueprint/Units/BP_GP_Worker.uasset`
+- `GP/Content/GrimProtocol/Blueprint/Buildings/BP_GP_MainBase.uasset`
+- `GP/Content/GrimProtocol/Blueprint/Resources/BP_GP_ResourceNode_Ferronite.uasset`
+- `GP/Content/GrimProtocol/Materials/M_cargoMaterial.uasset`
+- Modified (local only): `GP/Config/DefaultEngine.ini`, `L_PrototypeArena.umap`, `BP_ResourceNode_AuthoredExample.uasset`
+- Niagara system asset (if present only in local Editor) — not committed
+
+## Branches untouched
+- `main` @ `035c486758059032bb2551520834dd73f8667ef5`
+- `audit/gp-s28p-resource-playable-pass` @ `377b9b8…`
+- `audit/gp-slice7-combat-reconciliation` (unchanged; not modified)
+
+## Final commit SHA
+(see git after commit)
+
+## Git status / sync
+(see after push — intended tracked docs clean; local operator content may remain; branch synced with origin; no PR / no merge)

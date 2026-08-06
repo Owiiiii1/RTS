@@ -8,7 +8,7 @@
 
 > Стан станом на 2026-08-06 (після merge GP-S28). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), [`../Resource_Playable_Pass_Audit.md`](../Resource_Playable_Pass_Audit.md).
 
-**Поточна фаза:** Slice 6 **closed**. Current stage = **GP-S28P1** Blueprint cargo visual (`feature/gp-s28p1-blueprint-cargo-visual`).
+**Поточна фаза:** Slice 6 **closed**. Current stage = **GP-S28P1** Blueprint cargo visual — **READY_FOR_MERGE** (`feature/gp-s28p1-blueprint-cargo-visual`).
 
 **Status snapshot:**
 
@@ -16,11 +16,11 @@
 |---|---|
 | GP-S01 … GP-S28 | **DONE / merged** on `main` |
 | GP-S28P0 Resource Playable Audit | Completed on `audit/gp-s28p-resource-playable-pass` |
-| **GP-S28P1** Blueprint + cargo visual | **CODE_READY_OPERATOR_VALIDATION_PENDING** — [`GP-S28P1_Blueprint_Cargo_Visual.md`](GP-S28P1_Blueprint_Cargo_Visual.md) |
+| **GP-S28P1** Blueprint + cargo visual | **READY_FOR_MERGE** — [`GP-S28P1_Blueprint_Cargo_Visual.md`](GP-S28P1_Blueprint_Cargo_Visual.md) |
 | GP-S28P2…P4 | Not started |
 | GP-SLICE7-AUDIT | Pending review — do not modify from S28P |
 
-**NEXT action для агента:** STOP for operator PIE validation (`gp.Resource.RunPresentationContractTest`, BP children, RMB Mine smoke). Do **not** start P2 until assigned.
+**NEXT action для агента:** STOP — await merge of GP-S28P1. Do **not** open PR/merge/`main` or start P2 until assigned.
 
 ### Drift Warning
 

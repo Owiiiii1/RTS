@@ -38,19 +38,19 @@
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
 | Last closed / merged stage | **GP-S28 Storage + ThreatValue** @ `main` `035c486758059032bb2551520834dd73f8667ef5` |
 | Slice 6 | **Completed** |
-| Current stage | **GP-S28P0_RESOURCE_PLAYABLE_AUDIT** (docs only; implementation not started) |
+| Current stage | **GP-S28P1_READY_FOR_MERGE** (`feature/gp-s28p1-blueprint-cargo-visual`) |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** GP-S28P1 — Blueprint presentation + cargo visual + Niagara mining hook + generated ResourceNode visual override (`feature/gp-s28p1-blueprint-cargo-visual`). Task: [`Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`](Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md). Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**.
+**Current:** GP-S28P1 — Blueprint presentation + cargo visual + Niagara mining hook + generated ResourceNode visual override (`feature/gp-s28p1-blueprint-cargo-visual`). Task: [`Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`](Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md). Status: **GP-S28P1_READY_FOR_MERGE**.
 
 **Prior audit (kept):** GP-S28P0 on `audit/gp-s28p-resource-playable-pass` — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
 
 **Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation`.
 
-**NEXT (after P1 operator validation):** GP-S28P2 depletion + reassignment — do not start until assigned.
+**NEXT (after P1 merge):** GP-S28P2 depletion + reassignment — do not start until assigned.
 
 > Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28 already merged on main.
 

@@ -1,8 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-06 — GP-S28P1 Finalization
+
+Status: **GP-S28P1_READY_FOR_MERGE**
+
+### Branch
+`feature/gp-s28p1-blueprint-cargo-visual` (base audit `377b9b8…`)
+
+### Summary
+Operator validation **PASSED** (BP compile, full haul loop, cargo colors, Niagara Mining-only, ResourceNode generated visual off). Final builds: GPEditor Dev+UHT, GP Dev, GP Shipping — **all PASSED**. Non-interactive console automation not claimed (unavailable/hung previously); tests not weakened. Docs finalized. Local operator BP/Niagara/materials/map left uncommitted. `main` and both audit branches untouched. No PR/merge.
+
+---
+
 ## 2026-08-06 — GP-S28P1 Niagara Mining Effect + Generated Visual Override
 
-Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
+Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING** (superseded by finalization)
 
 ### Branch
 `feature/gp-s28p1-blueprint-cargo-visual`

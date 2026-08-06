@@ -43,7 +43,7 @@ Confirmed — only validation text change.
 Untouched.
 
 ## Correction commit SHA
-(see git after push)
+`eea992a312af2a73400ad4f6d0bece2e82d73bf5`
 
 ## Git status
 (to verify clean of intended files; local Blueprint folder may remain untracked)

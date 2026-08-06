@@ -8,7 +8,7 @@ Status: **GP-S28P1_CODE_READY_OPERATOR_VALIDATION_PENDING**
 `feature/gp-s28p1-blueprint-cargo-visual`
 
 ### Blocker / fix
-Removed unconditional `WarnNoUnitDefinitionAsset` from `AGP_Worker::ValidateWorkerContract` (blocked BP_GP_Worker Compile). No UnitDefinition asset added. GPEditor Dev+UHT **PASSED**. Local BP DataValidation: 0 warnings. PIE presentation/S28 suite **operator pending**.
+Removed unconditional `WarnNoUnitDefinitionAsset` from `AGP_Worker::ValidateWorkerContract` (blocked BP_GP_Worker Compile) @ `eea992a312af2a73400ad4f6d0bece2e82d73bf5`. No UnitDefinition asset added. GPEditor Dev+UHT **PASSED**. Local BP DataValidation: 0 warnings. PIE presentation/S28 suite **operator pending**.
 
 ---
 

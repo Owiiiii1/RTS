@@ -38,4 +38,4 @@ Normal flow: WaitingForResource ⇒ Cargo=0. Non-shipping Error + haul redirect 
 DefaultEngine.ini, map, Blueprint/**, Materials/**, authored ResourceNode, Niagara.
 
 ## Commit SHA
-*(recorded after commit)*
+`64f8c8567dc1f004abcc3b9bc5917794f2132b08`

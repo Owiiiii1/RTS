@@ -18,6 +18,7 @@ Depletion ClearOccupancy stopped mining before AddCargo; UnitCommand reassigned 
 - Haul-before-wait on depleted BeginMining paths; WaitingForResource invariant redirect (non-shipping Error)
 - Contract tests: partial haul, partial+alt Node B, zero-cargo no haul
 - GPEditor Dev+UHT **PASSED**. PIE operator pending. Operator-local assets untouched.
+- Commit: `64f8c8567dc1f004abcc3b9bc5917794f2132b08`
 
 ---
 

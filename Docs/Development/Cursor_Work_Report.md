@@ -52,4 +52,4 @@ C. Unreachable path → stable wait; restore → resume
 D. Waiting + Move → obeys; later MainBase does not resume old haul  
 
 ## Commit
-(see git HEAD after push)
+`fa98a64175b25c16244fe234aadff627896ad213`

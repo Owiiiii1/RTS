@@ -19,6 +19,9 @@ Slice 6 follow-on — Resource Playable Pass (P3)
 ## Branch
 `feature/gp-s28p3-dropoff-resilience` (no merge)
 
+## Candidate commit
+`fa98a64175b25c16244fe234aadff627896ad213`
+
 ## Goal
 MainBase missing / destroyed / unreachable → preserve Cargo + Mine intent/search anchor → `WaitingForDropOff` → wake/retry → haul → unload → existing P2 PostDropOff. No permanent Tick. MainBase remains the only MVP Ferronite drop-off.
 

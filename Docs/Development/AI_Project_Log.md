@@ -26,6 +26,9 @@ Status: **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING**
 - GPEditor Win64 Development + UHT — **PASSED**
 - GP Dev / Shipping — deferred to finalization
 
+### Commit
+`fa98a64175b25c16244fe234aadff627896ad213`
+
 ### Stop condition
 Operator PIE A–D pending. No merge. No P4.
 

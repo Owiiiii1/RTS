@@ -94,6 +94,131 @@ namespace GPDepletionReassignmentDebug
 		}
 	}
 
+	/** Navigable PathStart near MainBase drop-off — never raw MainBase actor center (obstacle / Z). */
+	static bool ResolveNavigableBasePathStart(
+		UWorld* World,
+		const FVector& BaseLoc,
+		const FVector& TowardCluster,
+		FVector& OutPathStart)
+	{
+		OutPathStart = FVector::ZeroVector;
+		if (!IsValid(World))
+		{
+			return false;
+		}
+
+		FVector Dir = (TowardCluster - BaseLoc).GetSafeNormal2D();
+		if (Dir.IsNearlyZero())
+		{
+			Dir = FVector::ForwardVector;
+		}
+
+		const FVector Candidates[] = {
+			BaseLoc + Dir * 325.0f,
+			BaseLoc + Dir * 250.0f,
+			BaseLoc + Dir * 150.0f,
+			BaseLoc,
+		};
+		for (const FVector& Raw : Candidates)
+		{
+			FVector Projected;
+			if (GPResourceLoopDiagnostics::IsNavPointProjected(World, Raw, &Projected, 800.0f, 800.0f))
+			{
+				OutPathStart = Projected;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Spawn Node B near anchor cluster: on NavMesh, inside SearchRadius from anchor,
+	 * outside SearchRadius from Base, approach-reachable from Base PathStart within MaxPath.
+	 */
+	static AGP_ResourceNode* SpawnNavigableAlternateNearAnchor(
+		UWorld* World,
+		FName OwnerTag,
+		AGP_Worker* PathActor,
+		const FVector& AnchorLoc,
+		const FVector& BasePathStart,
+		float SearchRadiusCm,
+		float MaxPathLengthCm,
+		FString& OutFailReason)
+	{
+		OutFailReason.Reset();
+		if (!IsValid(World) || !IsValid(PathActor))
+		{
+			OutFailReason = TEXT("MissingWorldOrPathActor");
+			return nullptr;
+		}
+
+		const FVector Offsets[] = {
+			FVector(400.0f, 0.0f, 0.0f),
+			FVector(-400.0f, 0.0f, 0.0f),
+			FVector(0.0f, 400.0f, 0.0f),
+			FVector(0.0f, -400.0f, 0.0f),
+			FVector(600.0f, 200.0f, 0.0f),
+			FVector(-600.0f, -200.0f, 0.0f),
+			FVector(200.0f, 600.0f, 0.0f),
+			FVector(-200.0f, -600.0f, 0.0f),
+			FVector(500.0f, 500.0f, 0.0f),
+			FVector(-500.0f, 500.0f, 0.0f),
+		};
+
+		for (const FVector& Offset : Offsets)
+		{
+			FVector Projected;
+			if (!GPResourceLoopDiagnostics::IsNavPointProjected(
+					World, AnchorLoc + Offset, &Projected, 800.0f, 800.0f))
+			{
+				continue;
+			}
+			if (FVector::Dist(Projected, AnchorLoc) > SearchRadiusCm)
+			{
+				continue;
+			}
+			if (FVector::Dist(Projected, BasePathStart) <= SearchRadiusCm)
+			{
+				continue;
+			}
+
+			AGP_ResourceNode* Node = GPResourceLoopDiagnostics::SpawnResourceNodeTransient(
+				World, Projected, OwnerTag);
+			if (!IsValid(Node))
+			{
+				OutFailReason = TEXT("SpawnFailed");
+				return nullptr;
+			}
+
+			GPResourceApproach::FEvaluateParams EvalParams;
+			EvalParams.PathStart = BasePathStart;
+			EvalParams.InteractionRangeCm = 200.0f;
+			EvalParams.AcceptanceRadiusCm = 50.0f;
+			EvalParams.SafetyMarginCm = 25.0f;
+			EvalParams.MaxPathLengthCm = MaxPathLengthCm;
+			EvalParams.DirectionCount = 8;
+			EvalParams.PathfindingActor = PathActor;
+			const GPResourceApproach::FEvaluateResult Eval =
+				GPResourceApproach::EvaluateNodeApproachPath(World, Node, EvalParams);
+			if (Eval.bReachable
+				&& Eval.RejectReason == EGP_ResourceCandidateRejectReason::Accepted
+				&& Eval.PathLengthCm <= MaxPathLengthCm + KINDA_SMALL_NUMBER)
+			{
+				return Node;
+			}
+
+			UE_LOG(LogGPDepletionReassignment, Log,
+				TEXT("GP DepletionContract NodeBCandidateRejected: Loc=%s Reason=%s PathLen=%.1f"),
+				*Node->GetActorLocation().ToCompactString(),
+				GPResourceApproach::RejectReasonToString(Eval.RejectReason),
+				Eval.PathLengthCm);
+			Node->Destroy();
+		}
+
+		OutFailReason = TEXT("NoApproachReachableAlternateNearAnchor");
+		return nullptr;
+	}
+
 	static void RunDepletionReassignmentContractTest(const TArray<FString>& Args, UWorld* World)
 	{
 		(void)Args;
@@ -561,23 +686,36 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		const float DistBaseToA = FVector::Dist(MainBaseLocation, AnchorClusterLocation);
 		Expect(DistBaseToA > TestSearchRadiusCm, TEXT("MainBaseOutsideSearchRadiusFromCluster"));
 
-		FVector NodeBLoc = AnchorClusterLocation + FVector(400.0f, 0.0f, 0.0f);
-		FVector NodeBProjected;
-		if (!GPResourceLoopDiagnostics::IsNavPointProjected(World, NodeBLoc, &NodeBProjected, 800.0f, 800.0f))
+		FVector BasePathStart = FVector::ZeroVector;
+		if (!Expect(ResolveNavigableBasePathStart(
+					World, MainBaseLocation, AnchorClusterLocation, BasePathStart),
+				TEXT("BasePathStartProjected")))
 		{
-			NodeBProjected = AnchorClusterLocation + FVector(0.0f, 400.0f, 0.0f);
+			Finish();
+			return;
 		}
-		AGP_ResourceNode* NodeB = GPResourceLoopDiagnostics::SpawnResourceNodeTransient(
-			World, NodeBProjected, OwnerTag);
+
+		FString NodeBFail;
+		AGP_ResourceNode* NodeB = SpawnNavigableAlternateNearAnchor(
+			World,
+			OwnerTag,
+			Worker,
+			AnchorClusterLocation,
+			BasePathStart,
+			TestSearchRadiusCm,
+			TestMaxPathLengthCm,
+			NodeBFail);
 		if (!Expect(IsValid(NodeB), TEXT("SpawnNodeBNearCluster")))
 		{
+			UE_LOG(LogGPDepletionReassignment, Error,
+				TEXT("GP DepletionContract SpawnNodeB FAIL Reason=%s"), *NodeBFail);
 			Finish();
 			return;
 		}
 		NodeBWeak = NodeB;
 		Expect(FVector::Dist(AnchorClusterLocation, NodeB->GetActorLocation()) <= TestSearchRadiusCm,
 			TEXT("NodeBInsideAnchorRadius"));
-		Expect(FVector::Dist(MainBaseLocation, NodeB->GetActorLocation()) > TestSearchRadiusCm,
+		Expect(FVector::Dist(BasePathStart, NodeB->GetActorLocation()) > TestSearchRadiusCm,
 			TEXT("NodeBOutsideBaseRadius"));
 
 		++StageIndex;
@@ -607,12 +745,20 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		Expect(FVector::Dist(Cmd->DebugGetMineSearchAnchorLocation(), NodeA->GetActorLocation()) < 50.0f,
 			TEXT("MineAnchorAtNodeA"));
 
-		// API split: radius from SearchCenter(anchor), path from PathStart(Worker@Base).
-		Worker->SetActorLocation(MainBaseLocation, false, nullptr, ETeleportType::TeleportPhysics);
+		// API split: radius from SearchCenter(anchor), path from PathStart (navigable near Base).
+		FVector BasePathStart = FVector::ZeroVector;
+		if (!Expect(ResolveNavigableBasePathStart(
+					World, MainBaseLocation, AnchorClusterLocation, BasePathStart),
+				TEXT("BasePathStartProjectedForSearch")))
+		{
+			Finish();
+			return;
+		}
+		Worker->SetActorLocation(BasePathStart, false, nullptr, ETeleportType::TeleportPhysics);
 
 		FGP_ResourceNodeSearchQuery WrongCenter;
-		WrongCenter.SearchCenter = Worker->GetActorLocation();
-		WrongCenter.PathStart = Worker->GetActorLocation();
+		WrongCenter.SearchCenter = BasePathStart;
+		WrongCenter.PathStart = BasePathStart;
 		WrongCenter.SearchRadiusCm = TestSearchRadiusCm;
 		WrongCenter.MaxPathLengthCm = TestMaxPathLengthCm;
 		WrongCenter.ExcludeNode = NodeA;
@@ -621,10 +767,12 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		FillApproachQueryDefaults(WrongCenter, Worker);
 		AGP_ResourceNode* WrongBest = GS->FindBestResourceCandidate(WrongCenter);
 		Expect(WrongBest != NodeB, TEXT("BaseAsSearchCenterMissesNodeB"));
+		Expect(FVector::Dist(BasePathStart, NodeB->GetActorLocation()) > TestSearchRadiusCm,
+			TEXT("NodeBOutsideBaseSearchRadius"));
 
 		FGP_ResourceNodeSearchQuery AnchorCenter;
 		AnchorCenter.SearchCenter = Cmd->DebugGetMineSearchAnchorLocation();
-		AnchorCenter.PathStart = Worker->GetActorLocation();
+		AnchorCenter.PathStart = BasePathStart;
 		AnchorCenter.SearchRadiusCm = TestSearchRadiusCm;
 		AnchorCenter.MaxPathLengthCm = TestMaxPathLengthCm;
 		AnchorCenter.ExcludeNode = NodeA;
@@ -632,6 +780,19 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		AnchorCenter.bRequireFreeSlot = false;
 		FillApproachQueryDefaults(AnchorCenter, Worker);
 		AGP_ResourceNode* AnchorBest = GS->FindBestResourceCandidate(AnchorCenter);
+		if (AnchorBest != NodeB)
+		{
+			TArray<FGP_ResourceNodeCandidate> DebugCandidates;
+			AnchorCenter.bLogDiagnostics = true;
+			GS->FindResourceCandidates(AnchorCenter, DebugCandidates);
+			UE_LOG(LogGPDepletionReassignment, Error,
+				TEXT("GP DepletionContract AnchorSearchMiss: Best=%s NodeB=%s Candidates=%d PathStart=%s Anchor=%s"),
+				*GetNameSafe(AnchorBest),
+				*GetNameSafe(NodeB),
+				DebugCandidates.Num(),
+				*BasePathStart.ToCompactString(),
+				*AnchorCenter.SearchCenter.ToCompactString());
+		}
 		Expect(AnchorBest == NodeB, TEXT("AnchorSearchCenterFindsNodeB"));
 		if (AnchorBest == NodeB)
 		{

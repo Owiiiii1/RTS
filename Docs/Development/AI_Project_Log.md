@@ -1,8 +1,32 @@
 # Grim Protocol — AI Project Log
 
-## 2026-08-07 — GP-S28P2 Finalization
+## 2026-08-07 — GP-S28P2 Finalization Test Correction
 
 Status: **GP-S28P2_READY_FOR_MERGE**
+
+### Branch
+`feature/gp-s28p2-depletion-resource-reassignment` (no merge)
+
+### Initial headless fails
+- `AnchorSearchCenterFindsNodeB` — harness PathStart at MainBase center / NodeB without approach check
+- `HeldClearedAfterDepleteHaul` — obsolete pre-P2 held-clear expectation
+
+### Correction
+Test/harness only. Production unchanged. Operator A–D remain PASS.
+
+### Rerun
+- `gp.Resource.RunDepletionReassignmentContractTest` → `Complete Failures=0 Cancelled=None`
+- `gp.Resource.RunS28RegressionSuite` → `Complete Failures=0`
+- GPEditor Dev+UHT — **PASSED**
+
+### Stop condition
+READY_FOR_MERGE. Do not start P3 / merge in this close-out.
+
+---
+
+## 2026-08-07 — GP-S28P2 Finalization
+
+Status: **GP-S28P2_READY_FOR_MERGE** *(superseded test evidence by Finalization Test Correction)*
 
 ### Branch
 `feature/gp-s28p2-depletion-resource-reassignment` (no merge; main still at P1 `86bcc974…`)
@@ -10,18 +34,13 @@ Status: **GP-S28P2_READY_FOR_MERGE**
 ### Operator validation
 A/B/C/D **PASSED** (depletion→Node B; 5th→free B; FIFO stable; partial-cargo haul-then-wait).
 
-### Tests (headless `-game -NullRHI`)
-- `gp.Resource.RunDepletionReassignmentContractTest` → `Complete Failures=1 Cancelled=None` (FAIL `AnchorSearchCenterFindsNodeB`) — not claimed PASS
-- `gp.Resource.RunS28RegressionSuite` → `Complete Failures=1` (FAIL `HeldClearedAfterDepleteHaul`) — not claimed PASS
-- No gameplay changes for harness; operator A–D authoritative
+### Tests (headless `-game -NullRHI`) — superseded
+Initial: Failures=1 each (`AnchorSearchCenterFindsNodeB`, `HeldClearedAfterDepleteHaul`). Corrected to Failures=0 in follow-up entry.
 
 ### Builds
 - GPEditor Win64 Development + UHT — **PASSED**
 - GP Win64 Development — **PASSED**
 - GP Win64 Shipping — **PASSED**
-
-### Scope
-Docs finalization only after `64f8c85…`. Operator-local assets untouched. P0 historical; P1 merged; Slice7 audit separate pending.
 
 ### Final commit
 `9057c2fa767e3d3a49be9aa62f7826f052a65678`

@@ -12,6 +12,9 @@ Status: **GP-S28P3_SPEC_READY_FOR_REVIEW**
 - Added state/event table; mid-haul destroy must not depend on wait-only binds or retry timer
 - Updated contract case 3/4/9 assertions; no production code
 
+### Commit
+`e90fc0b244af884bfeb63a7592662d25abb24ecf`
+
 ### Stop condition
 Spec remains REVIEW. Do not implement until approved.
 

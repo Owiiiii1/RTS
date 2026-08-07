@@ -19,4 +19,4 @@ While WaitingForDropOff only: bind `OnMainBaseRegistered` → wake once → unsu
 No C++ / Config / Blueprint / map / content changes.
 
 ## Commit
-*(recorded after commit)*
+`e90fc0b244af884bfeb63a7592662d25abb24ecf`

@@ -1,4 +1,4 @@
-# Cursor Work Report — GP-S28P2 FIFO Crash Correction
+# Cursor Work Report — GP-S28P2 Partial-Cargo Depletion Correction
 
 ## Status
 **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
@@ -6,40 +6,26 @@
 ## Branch
 `feature/gp-s28p2-depletion-resource-reassignment` (no merge; main untouched)
 
-## Third operator failure
-5 Workers on one ResourceNode (MaxConcurrentMiners=4): Active=4 Waiting=1 → Unreal Editor crash.
+## Fourth operator failure
+Node Amount=10, CargoCapacity=50, one Worker, MainBase present, no alternate ResourceNode:
 
-## Stale CrashContext
-Saved/Crashes dated **05.08** (`WorkerHaulingContractTestRunner`) was **not** used as root cause for this failure.
+Worker mines 10 → deposit depletes → Cargo=10 → immediate `ResourceReassignmentNoCandidate Reason=PostDepletion` / `WaitingForResource` (no haul).
 
-## Actual 07.08 log evidence
-Tight same-frame loop:
-```
-MineBegin ... Result=1 (WaitingForSlot)
-ResourceCandidate Rejected ... Reason=ExcludedNode (Active=4 Waiting=1)
-ResourceReassignmentNoCandidate ... Reason=SlotFullAlternative
-MineRetarget ... NewTarget=<same ResourceNode>
-MineBegin ... Result=1
-```
-repeated many times in frame [304].
+## Root cause
+`ExecuteMiningCycle`: `ConsumeResource` depletion clears occupancy → `StopMining(TargetEndPlay)` before `AddCargo`, so UnitCommand reassigned with Cargo=0; cargo credited afterward and stranded.
 
-## Exact synchronous state loop
-`BeginMiningAtHeldTarget` treated `WaitingForSlot` as a trigger for `TryAutoReassignMine(SlotFullAlternative)`, which fell through to `TryRetargetMineToNode(same full node)` → `StopMining` FIFO churn → `BeginMining` again.
+## Corrected terminal priority
+DepositDepleted + Cargo > 0 → haul (`ReturnToDeposit=false`) → unload → `PostDropOff` reassignment → else WaitingForResource.
 
-## Correction
-- Free-slot alternative search **before** FIFO `BeginMining` only
-- `WaitingForSlot` / `AlreadyMiningTarget` → stable wait (log `MineWaitingForSlot` once)
-- `TryAutoReassignMine` never same-target retargets a full preferred node
-- Same-target retarget guard + re-entry flag on `BeginMiningAtHeldTarget`
-- Promotion remains MiningComponent occupancy delegate (no second BeginMining)
+Zero cargo → immediate reassignment / WaitingForResource (no unnecessary haul).
 
-## FIFO stable-state contract
-WaitingForSlot = terminal-stable until Waiting→Active promotion.
+## Invariant
+Normal flow: WaitingForResource ⇒ Cargo=0. Non-shipping Error + haul redirect if MainBase exists (no recursive transition). MainBase failure: existing behavior only.
 
 ## Test results
 | Command | Result |
 | --- | --- |
-| `gp.Resource.RunDepletionReassignmentContractTest` | Extended with FIFO regression; **PIE not run non-interactively — operator pending** |
+| `gp.Resource.RunDepletionReassignmentContractTest` | Extended (partial / alt / zero-cargo); **PIE not run non-interactively — operator pending** |
 | `gp.Resource.RunS28RegressionSuite` | **Not run non-interactively — operator pending** |
 
 ## Builds
@@ -52,4 +38,4 @@ WaitingForSlot = terminal-stable until Waiting→Active promotion.
 DefaultEngine.ini, map, Blueprint/**, Materials/**, authored ResourceNode, Niagara.
 
 ## Commit SHA
-`42c99f61e4a278cb024664c83dd1dcb504e2f7a6`
+*(recorded after commit)*

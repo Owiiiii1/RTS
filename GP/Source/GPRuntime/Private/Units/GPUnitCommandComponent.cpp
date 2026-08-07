@@ -1460,6 +1460,13 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	}
 	if (!IsValid(Node) || Node->IsDepleted() || Node->HasCompletedDepletionTransition() || Node->IsDestroyPending())
 	{
+		// Partial cargo must haul before PostDepletion reassignment / WaitingForResource.
+		if (Cargo->GetCurrentCargoAmount() > KINDA_SMALL_NUMBER)
+		{
+			ActiveMineSerial = MineSerial;
+			StartHaulReturnToBase(MineSerial, Node, false);
+			return;
+		}
 #if !UE_BUILD_SHIPPING
 		++DebugReassignmentAttemptsThisTransition;
 #endif
@@ -1599,6 +1606,11 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	if (BeginResult == EGP_BeginMiningResult::RejectedDepleted
 		|| BeginResult == EGP_BeginMiningResult::RejectedInvalidNode)
 	{
+		if (Cargo->GetCurrentCargoAmount() > KINDA_SMALL_NUMBER)
+		{
+			StartHaulReturnToBase(MineSerial, Node, false);
+			return;
+		}
 #if !UE_BUILD_SHIPPING
 		++DebugReassignmentAttemptsThisTransition;
 #endif
@@ -2570,10 +2582,63 @@ bool UGP_UnitCommandComponent::TryAutoReassignMine(
 	return false;
 }
 
+bool UGP_UnitCommandComponent::TryHaulPartialCargoBeforeWaiting(
+	uint32 MineSerial,
+	AGP_ResourceNode* DepositHint)
+{
+	if (bRedirectingStrandedCargoHaul || MineSerial == 0)
+	{
+		return false;
+	}
+
+	AActor* Owner = GetOwner();
+	AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+	UGP_CargoComponent* Cargo = Worker != nullptr ? Worker->GetCargoComponent() : nullptr;
+	if (!IsValid(Cargo) || Cargo->GetCurrentCargoAmount() <= KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+
+#if !UE_BUILD_SHIPPING
+	UE_LOG(LogGPUnitCommandExecution, Error,
+		TEXT("GP UnitCommandExecution WaitingForResourceInvariant: Unit=%s MineSerial=%u Cargo=%.1f — redirecting to haul"),
+		*GetNameSafe(Owner),
+		MineSerial,
+		Cargo->GetCurrentCargoAmount());
+#endif
+
+	UWorld* World = Owner != nullptr ? Owner->GetWorld() : nullptr;
+	AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	AGP_MainBase* MainBase = (GS != nullptr && Worker != nullptr)
+		? GS->FindMainBaseForTeam(Worker->GetTeamId())
+		: nullptr;
+	if (!IsValid(MainBase))
+	{
+		// Documented unrecoverable MainBase failure — do not invent P3 recovery here.
+		return false;
+	}
+
+	TGuardValue<bool> RedirectGuard(bRedirectingStrandedCargoHaul, true);
+	AGP_ResourceNode* Deposit = IsValid(DepositHint) ? DepositHint : LastHaulDeposit.Get();
+	if (!IsValid(Deposit) && HeldCommand.IsSet())
+	{
+		Deposit = Cast<AGP_ResourceNode>(HeldCommand.GetValue().TargetActor.Get());
+	}
+	ActiveMineSerial = MineSerial;
+	StartHaulReturnToBase(MineSerial, Deposit, false);
+	return true;
+}
+
 void UGP_UnitCommandComponent::EnterWaitingForResource(uint32 MineSerial)
 {
 	AActor* Owner = GetOwner();
 	if (Owner == nullptr || !Owner->HasAuthority() || MineSerial == 0)
+	{
+		return;
+	}
+
+	AGP_ResourceNode* DepositHint = MineTarget.Get();
+	if (TryHaulPartialCargoBeforeWaiting(MineSerial, DepositHint))
 	{
 		return;
 	}

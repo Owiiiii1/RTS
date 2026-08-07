@@ -481,6 +481,11 @@ void UGP_MiningComponent::HandleMinerSlotStateChanged(
 	else if (NewState == EGP_MinerOccupancyState::None
 		&& (CurrentMiningState == EGP_MiningState::Mining || CurrentMiningState == EGP_MiningState::WaitingForSlot))
 	{
+		// Consume→depletion ClearOccupancy can broadcast None mid-cycle; defer until AddCargo finishes.
+		if (bExecutingMiningCycle)
+		{
+			return;
+		}
 		// External removal only (node EndPlay / cleanup). Own StopMining unbinds before Release.
 		StopMining(EGP_MiningStopReason::TargetEndPlay);
 	}
@@ -727,6 +732,10 @@ void UGP_MiningComponent::ExecuteMiningCycle()
 		return;
 	}
 
+	// Atomic consume→credit: depletion ClearOccupancy must not terminal-stop before AddCargo.
+	TGuardValue<bool> CycleGuard(bExecutingMiningCycle, true);
+	UnbindOccupancyEvents();
+
 	const int32 Consumed = Node->ConsumeResource(RequestedTransfer);
 	if (Consumed <= 0)
 	{
@@ -771,10 +780,16 @@ void UGP_MiningComponent::ExecuteMiningCycle()
 		return;
 	}
 
-	if (Node->IsDepleted())
+	if (Node->IsDepleted()
+		|| Node->HasCompletedDepletionTransition()
+		|| Node->IsDestroyPending()
+		|| !Node->HasActiveMiningSlot(Owner))
 	{
 		StopMining(EGP_MiningStopReason::DepositDepleted);
+		return;
 	}
+
+	BindOccupancyEvents(Node);
 }
 
 #if !UE_BUILD_SHIPPING

@@ -12,36 +12,40 @@
 ## Goal
 Safe one-shot ResourceNode depletion, registry, path-aware reassignment / WaitingForResource, and stable FIFO WaitingForSlot — without changing mining cadence, Cargo, Storage, Threat, or combat.
 
-## Operator failure #3 — FIFO crash (07.08 GP.log)
-5 Workers → one node (Max=4): Active=4 Waiting=1, then Editor crash.
+## Operator failure #4 — partial cargo stranded on depletion
+Scenario: Node Amount=10, CargoCapacity=50, one Worker, MainBase present, no alternate node.
 
-**Stale CrashContext (05.08 WorkerHaulingContractTestRunner) is NOT the root cause.**
+Observed: Worker mines 10 → node depletes → Cargo=10 → immediate `PostDepletion` / `WaitingForResource` (no haul).
 
-**Actual cause (07.08 log):** synchronous same-frame loop:
-`MineBegin(WaitingForSlot)` → `SlotFullAlternative` → `MineRetarget(same node)` → `MineBegin` …
+### Root cause
+`ConsumeResource` depletion → `ClearOccupancyWithoutPromotion` → `StopMining(TargetEndPlay)` **before** `AddCargo`, so UnitCommand saw Cargo=0 and reassigned; cargo was credited afterward and stranded.
 
-## FIFO stable-state contract
-After `BeginMining` → `WaitingForSlot`:
-- Worker stays in node WaitingMiners FIFO
-- No BeginMining / SlotFullAlternative / same-target MineRetarget
-- Promotion only via `OnMinerSlotStateChanged` Waiting→Active → Mining + timer (no second BeginMining)
+### Corrected terminal priority
+`DepositDepleted` + Cargo > 0 → haul (`ReturnToDeposit=false`) → drop-off → `TryAutoReassignMine(PostDropOff)` → else `WaitingForResource`.
 
-Alternative free-slot search runs **once before** FIFO entry. If none → FIFO wait.
+Zero cargo → immediate PostDepletion reassignment / WaitingForResource (no unnecessary haul).
 
-## Guards
-- Same-target retarget no-op + `MineRetargetSkippedSameTarget` (once per transition)
-- WaitingForSlot on current target → executor idle for search/retarget
-- `bBeginMiningAtHeldTargetInProgress` blocks recursive Begin↔Retarget stacks
+### Invariant
+Normal playable flow: `WaitingForResource` ⇒ Cargo=0 for current resource type.
+Non-shipping: Error log + haul redirect if MainBase exists (no recursive transition).
+MainBase missing/unreachable: existing failure behavior only (no GP-S28P3 recovery).
 
 ## Preserved PASSED operator cases
-- A: deplete Node A → haul → retarget Node B
-- B: 5 Workers, Node A full + Node B free → 5th goes to Node B
-
-## Settings
-`UGP_ResourceGameplaySettings` / `DefaultGame.ini` unchanged by this correction.
+1. depletion → full/normal haul → Node B reassignment
+2. 4 Workers on Node A + 5th → free Node B
+3. single-node FIFO (4 Mining / 5th WaitingForSlot / promote / no crash)
+4. approach-point navigation fix
+5. WaitingForResource retry/log suppression
+6. settings class
 
 ## Tests
-`gp.Resource.RunDepletionReassignmentContractTest` includes FIFO subcase (5+1 Workers, promote order, watchdog ≤1 BeginMining, no same-target retarget). PIE result **operator pending** (not claimed non-interactively).
+`gp.Resource.RunDepletionReassignmentContractTest` extended:
+- partial cargo depletion → haul → unload → Threat += accepted × ThreatPerStoredUnit → WaitingForResource (cargo 0)
+- partial cargo + alternate Node B → haul → retarget B
+- zero cargo depletion → no unnecessary haul
+- prior FIFO / anchor / approach cases retained
+
+PIE result **not claimed** (not run non-interactively).
 
 ## Builds
 - GPEditor Win64 Development + UHT — **PASSED**

@@ -413,6 +413,7 @@ private:
 	float MovementWaitTimeoutSeconds = 45.0f;
 	int32 DepletionEventCount = 0;
 	int32 LastDepletionPreviousAmount = -1;
+	float PartialThreatBefore = 0.0f;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

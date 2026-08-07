@@ -257,6 +257,12 @@ private:
 		bool bPreferFreeSlotFirst,
 		FName SearchReason);
 	void EnterWaitingForResource(uint32 MineSerial);
+	/**
+	 * If Worker still carries cargo, haul to MainBase instead of WaitingForResource.
+	 * Returns true when haul was started (or redirect attempted with valid MainBase).
+	 * Non-shipping: Error log on stranded-cargo invariant. No recursive re-enter.
+	 */
+	bool TryHaulPartialCargoBeforeWaiting(uint32 MineSerial, AGP_ResourceNode* DepositHint);
 	void BindResourceRegistryWake();
 	void UnbindResourceRegistryWake();
 	void HandleResourceNodeRegisteredWake(AGP_ResourceNode* Node);
@@ -419,6 +425,9 @@ private:
 
 	/** Prevents recursive BeginMiningAtHeldTarget ↔ Retarget chains in one stack. */
 	bool bBeginMiningAtHeldTargetInProgress = false;
+
+	/** Prevents EnterWaitingForResource ↔ stranded-cargo haul redirect recursion. */
+	bool bRedirectingStrandedCargoHaul = false;
 
 #if !UE_BUILD_SHIPPING
 	/** Suppress identical WaitingForResource no-candidate summaries. */

@@ -1,5 +1,26 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-07 — GP-S28P2 Partial-Cargo Depletion Correction (Operator Failure #4)
+
+Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p2-depletion-resource-reassignment` (no new branch; no merge)
+
+### Failure
+Node Amount=10 / CargoCapacity=50 / MainBase present / no alternate → Worker mines 10, node depletes, Cargo=10, immediate PostDepletion WaitingForResource (no haul).
+
+### Root cause
+Depletion ClearOccupancy stopped mining before AddCargo; UnitCommand reassigned with Cargo=0; cargo stranded.
+
+### Correction
+- ExecuteMiningCycle: unbind + `bExecutingMiningCycle` around Consume→AddCargo; terminal `DepositDepleted` after credit
+- Haul-before-wait on depleted BeginMining paths; WaitingForResource invariant redirect (non-shipping Error)
+- Contract tests: partial haul, partial+alt Node B, zero-cargo no haul
+- GPEditor Dev+UHT **PASSED**. PIE operator pending. Operator-local assets untouched.
+
+---
+
 ## 2026-08-07 — GP-S28P2 FIFO Crash Correction (Operator Failure #3)
 
 Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**

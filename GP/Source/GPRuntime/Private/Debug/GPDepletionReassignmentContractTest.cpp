@@ -18,6 +18,7 @@
 #include "Resources/GPResourceLoopDiagnostics.h"
 #include "Resources/GPResourceNode.h"
 #include "Resources/GPResourceNodeSearch.h"
+#include "Resources/GPStorageComponent.h"
 #include "Settings/GPResourceGameplaySettings.h"
 #include "Tags/GPGameplayTags.h"
 #include "TimerManager.h"
@@ -929,6 +930,264 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 	}
 	case 11:
 	{
+		// Partial cargo depletion → haul first (no immediate WaitingForResource / PostDepletion).
+		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
+		if (!Expect(Scenario.bOk && Scenario.bReadyForHaulingTest, TEXT("PartialCargoSpawnScenario")))
+		{
+			Finish();
+			return;
+		}
+
+		AGP_MainBase* Base = Scenario.MainBase;
+		AGP_Worker* Worker = Scenario.Worker;
+		AGP_ResourceNode* NodeA = Scenario.ResourceNode;
+		MainBaseWeak = Base;
+		WorkerWeak = Worker;
+		NodeAWeak = NodeA;
+		NodeBWeak.Reset();
+		MainBaseLocation = Base->GetActorLocation();
+
+		UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
+		if (!Expect(IsValid(Cargo) && Cmd != nullptr && IsValid(GS), TEXT("PartialCargoObjects")))
+		{
+			Finish();
+			return;
+		}
+
+		Expect(FMath::IsNearlyEqual(Cargo->GetCargoCapacity(), 50.0f), TEXT("PartialCargoCapacity50"));
+		NodeA->DebugSetCurrentAmountForTest(10, false);
+		Expect(NodeA->GetCurrentAmount() == 10, TEXT("PartialCargoNodeAmount10"));
+		Cargo->ClearCargo();
+		Worker->SetActorLocation(NodeA->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f),
+			false, nullptr, ETeleportType::TeleportPhysics);
+		IssueMine(Worker, NodeA);
+
+		for (int32 i = 0; i < 16; ++i)
+		{
+			if (UGP_MiningComponent* Mining = Worker->GetMiningComponent())
+			{
+				Mining->DebugForceExecuteMiningCycle();
+			}
+			if (Cmd->IsHaulActive() || Cmd->GetMineExecutionState() == EGP_MineExecutionState::WaitingForResource)
+			{
+				break;
+			}
+		}
+
+		Expect(!IsValid(NodeA) || NodeA->HasCompletedDepletionTransition() || NodeA->IsDestroyPending(),
+			TEXT("PartialCargoNodeDepleted"));
+		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 10.0f), TEXT("PartialCargoHas10"));
+		Expect(Cmd->IsHaulActive(), TEXT("PartialCargoHaulStarted"));
+		Expect(Cmd->GetMineExecutionState() != EGP_MineExecutionState::WaitingForResource,
+			TEXT("PartialCargoNoImmediateWaiting"));
+		Expect(Cmd->DebugHasMineSearchAnchor(), TEXT("PartialCargoAnchorKeptForHaul"));
+		Expect(!Cmd->ShouldReturnToDepositAfterHaul(), TEXT("PartialCargoReturnToDepositFalse"));
+
+		PartialThreatBefore = GS->GetFerroniteThreatValueForTeam(Worker->GetTeamId());
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 12:
+	{
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
+		if (!Expect(IsValid(Worker) && IsValid(Base) && Cmd != nullptr && IsValid(GS),
+				TEXT("PartialCargoDropOffObjects")))
+		{
+			Finish();
+			return;
+		}
+
+		if (WaitBusy(Worker, TEXT("PartialCargoHaulTimeout")))
+		{
+			return;
+		}
+
+		UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+		Expect(Cargo != nullptr && Cargo->GetCurrentCargoAmount() <= KINDA_SMALL_NUMBER,
+			TEXT("PartialCargoUnloadedToZero"));
+		const float ThreatAfter = GS->GetFerroniteThreatValueForTeam(Worker->GetTeamId());
+		const float ThreatPerUnit = Base->GetStorageComponent() != nullptr
+			? Base->GetStorageComponent()->GetThreatPerStoredUnit()
+			: 0.5f;
+		Expect(FMath::IsNearlyEqual(ThreatAfter - PartialThreatBefore, 10.0f * ThreatPerUnit, 0.01f),
+			TEXT("PartialCargoThreatIncreasedByAccepted"));
+		Expect(Cmd->GetMineExecutionState() == EGP_MineExecutionState::WaitingForResource,
+			TEXT("PartialCargoWaitingAfterDropOff"));
+		Expect(Cargo->GetCurrentCargoAmount() <= KINDA_SMALL_NUMBER,
+			TEXT("WaitingForResourceCargoZero"));
+
+		CleanupActors();
+		WorkerWeak.Reset();
+		NodeAWeak.Reset();
+		MainBaseWeak.Reset();
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 13:
+	{
+		// Partial cargo depletion + alternate Node B → haul then retarget B (no stranded cargo).
+		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
+		if (!Expect(Scenario.bOk && Scenario.bReadyForHaulingTest, TEXT("PartialAltSpawnScenario")))
+		{
+			Finish();
+			return;
+		}
+
+		AGP_Worker* Worker = Scenario.Worker;
+		AGP_ResourceNode* NodeA = Scenario.ResourceNode;
+		AGP_MainBase* Base = Scenario.MainBase;
+		WorkerWeak = Worker;
+		NodeAWeak = NodeA;
+		MainBaseWeak = Base;
+		AnchorClusterLocation = NodeA->GetActorLocation();
+		MainBaseLocation = Base->GetActorLocation();
+
+		FVector NodeBLoc = AnchorClusterLocation + FVector(400.0f, 0.0f, 0.0f);
+		FVector NodeBProjected;
+		if (!GPResourceLoopDiagnostics::IsNavPointProjected(World, NodeBLoc, &NodeBProjected, 800.0f, 800.0f))
+		{
+			NodeBProjected = AnchorClusterLocation + FVector(0.0f, 400.0f, 0.0f);
+		}
+		AGP_ResourceNode* NodeB = GPResourceLoopDiagnostics::SpawnResourceNodeTransient(
+			World, NodeBProjected, OwnerTag);
+		if (!Expect(IsValid(NodeB), TEXT("PartialAltNodeBSpawned")))
+		{
+			Finish();
+			return;
+		}
+		NodeBWeak = NodeB;
+
+		UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		Cargo->ClearCargo();
+		NodeA->DebugSetCurrentAmountForTest(10, false);
+		Worker->SetActorLocation(NodeA->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f),
+			false, nullptr, ETeleportType::TeleportPhysics);
+		IssueMine(Worker, NodeA);
+
+		for (int32 i = 0; i < 16; ++i)
+		{
+			if (UGP_MiningComponent* Mining = Worker->GetMiningComponent())
+			{
+				Mining->DebugForceExecuteMiningCycle();
+			}
+			if (Cmd->IsHaulActive())
+			{
+				break;
+			}
+		}
+
+		Expect(Cmd->IsHaulActive(), TEXT("PartialAltHaulStarted"));
+		Expect(FMath::IsNearlyEqual(Cargo->GetCurrentCargoAmount(), 10.0f), TEXT("PartialAltCargo10"));
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 14:
+	{
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* NodeB = NodeBWeak.Get();
+		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(NodeB) && Cmd != nullptr, TEXT("PartialAltWaitObjects")))
+		{
+			Finish();
+			return;
+		}
+
+		if (WaitBusy(Worker, TEXT("PartialAltHaulTimeout")))
+		{
+			return;
+		}
+
+		UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+		Expect(Cargo != nullptr && Cargo->GetCurrentCargoAmount() <= KINDA_SMALL_NUMBER,
+			TEXT("PartialAltCargoCleared"));
+		Expect(Cmd->GetMineExecutionState() != EGP_MineExecutionState::WaitingForResource,
+			TEXT("PartialAltNoWaitingWhenBExists"));
+		Expect(Cmd->GetMineTarget() == NodeB
+				|| (Cmd->HasHeldCommand() && Cmd->GetHeldCommand()->TargetActor.Get() == NodeB)
+				|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::MovingToMine
+				|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::Mining
+				|| Worker->GetMiningComponent()->GetCurrentResourceNode() == NodeB,
+			TEXT("PartialAltRetargetedNodeB"));
+
+		CleanupActors();
+		WorkerWeak.Reset();
+		NodeAWeak.Reset();
+		NodeBWeak.Reset();
+		MainBaseWeak.Reset();
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 15:
+	{
+		// Zero cargo depletion → immediate reassignment / WaitingForResource, no haul.
+		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
+		if (!Expect(Scenario.bOk && Scenario.bReadyForHaulingTest, TEXT("ZeroCargoSpawnScenario")))
+		{
+			Finish();
+			return;
+		}
+
+		AGP_Worker* Worker = Scenario.Worker;
+		AGP_ResourceNode* NodeA = Scenario.ResourceNode;
+		WorkerWeak = Worker;
+		NodeAWeak = NodeA;
+		MainBaseWeak = Scenario.MainBase;
+
+		UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		Cargo->ClearCargo();
+		NodeA->DebugSetCurrentAmountForTest(10, false);
+		Worker->SetActorLocation(NodeA->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f),
+			false, nullptr, ETeleportType::TeleportPhysics);
+		IssueMine(Worker, NodeA);
+
+		// External deplete with empty cargo — no mine cycle credit.
+		if (!NodeA->HasCompletedDepletionTransition())
+		{
+			NodeA->ConsumeResource(100000);
+		}
+		for (int32 i = 0; i < 4; ++i)
+		{
+			if (UGP_MiningComponent* Mining = Worker->GetMiningComponent())
+			{
+				Mining->DebugForceExecuteMiningCycle();
+			}
+		}
+
+		Expect(Cargo->GetCurrentCargoAmount() <= KINDA_SMALL_NUMBER, TEXT("ZeroCargoStillEmpty"));
+		Expect(!Cmd->IsHaulActive(), TEXT("ZeroCargoNoUnnecessaryHaul"));
+		Expect(Cmd->GetMineExecutionState() == EGP_MineExecutionState::WaitingForResource
+				|| !Cmd->HasHeldCommand(),
+			TEXT("ZeroCargoWaitingOrCleared"));
+
+		CleanupActors();
+		WorkerWeak.Reset();
+		NodeAWeak.Reset();
+		MainBaseWeak.Reset();
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 16:
+	{
 		// FIFO crash regression: 5 Workers, Max=4, no alternative node → 5th WaitingForSlot stable.
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -1075,7 +1334,7 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 		ScheduleNext();
 		break;
 	}
-	case 12:
+	case 17:
 	{
 		AGP_Worker* Worker = FifoWorkers.Num() > 0 ? FifoWorkers[0].Get() : nullptr;
 		Expect(!Worker || !Worker->PrimaryActorTick.bCanEverTick, TEXT("FinalWorkerNoPermanentTick"));

@@ -349,6 +349,7 @@ AGP_GameState::EGP_MainBaseRegisterResult AGP_GameState::RegisterMainBase(AGP_Ma
 	}
 
 	RegisteredMainBases.Add(MainBase);
+	OnMainBaseRegistered.Broadcast(MainBase);
 	UE_LOG(LogTemp, Log,
 		TEXT("AGP_GameState::RegisterMainBase: Registered=true MainBase=%s TeamId=%d CountForTeam=%d RegistrySize=%d"),
 		*GetNameSafe(MainBase),
@@ -367,10 +368,14 @@ void AGP_GameState::UnregisterMainBase(AGP_MainBase* MainBase)
 		return;
 	}
 
-	RegisteredMainBases.RemoveAll([MainBase](const TWeakObjectPtr<AGP_MainBase>& Weak)
+	const int32 Removed = RegisteredMainBases.RemoveAll([MainBase](const TWeakObjectPtr<AGP_MainBase>& Weak)
 	{
 		return !Weak.IsValid() || Weak.Get() == MainBase;
 	});
+	if (Removed > 0)
+	{
+		OnMainBaseUnregistered.Broadcast(MainBase);
+	}
 }
 
 AGP_MainBase* AGP_GameState::FindMainBaseForTeam(int32 InTeamId) const

@@ -6,9 +6,9 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-07 (після merge GP-S28P2). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), [`../Resource_Playable_Pass_Audit.md`](../Resource_Playable_Pass_Audit.md).
+> Стан станом на 2026-08-08 (GP-S28P3 candidate). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), [`../Resource_Playable_Pass_Audit.md`](../Resource_Playable_Pass_Audit.md).
 
-**Поточна фаза:** Slice 6 **closed**. Current stage = **GP-S28P3** drop-off resilience — **SPEC_READY_FOR_REVIEW**.
+**Поточна фаза:** Slice 6 **closed**. Current stage = **GP-S28P3** drop-off resilience — **CODE_READY_OPERATOR_VALIDATION_PENDING**.
 
 **Status snapshot:**
 
@@ -18,11 +18,11 @@
 | GP-S28P0 Resource Playable Audit | Historical completed audit / implementation plan (`audit/gp-s28p-resource-playable-pass`) — not current status |
 | GP-S28P1 Blueprint + cargo visual | **DONE / MERGED** on `main` @ `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` |
 | GP-S28P2 Depletion + reassignment | **DONE / MERGED** on `main` @ `e90b7bd48fb9080a881e6dda7be889eaa99a3161` — [`GP-S28P2_Depletion_Resource_Reassignment.md`](GP-S28P2_Depletion_Resource_Reassignment.md) |
-| **GP-S28P3** Drop-off resilience | **SPEC_READY_FOR_REVIEW** — [`GP-S28P3_DropOff_Resilience.md`](GP-S28P3_DropOff_Resilience.md) (`Code Allowed: NO`) |
+| **GP-S28P3** Drop-off resilience | **CODE_READY_OPERATOR_VALIDATION_PENDING** — [`GP-S28P3_DropOff_Resilience.md`](GP-S28P3_DropOff_Resilience.md) (`feature/gp-s28p3-dropoff-resilience`, Code Allowed: YES) |
 | GP-S28P4 | **NOT STARTED** |
 | GP-SLICE7-AUDIT | Separate pending review — not part of P3; do not rewrite audit conclusions |
 
-**NEXT action для агента:** operator / tech-lead review of GP-S28P3 spec. Do **not** implement P3 until explicit approval.
+**NEXT action для агента:** operator PIE validation A–D for GP-S28P3. Do **not** merge. Do **not** start P4.
 
 ### Drift Warning
 

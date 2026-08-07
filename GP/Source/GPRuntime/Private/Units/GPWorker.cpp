@@ -281,8 +281,8 @@ EGP_WorkerActivityState AGP_Worker::GetWorkerActivityState() const
 			return EGP_WorkerActivityState::DroppingOff;
 		case EGP_HaulExecutionState::ReturningToDeposit:
 			return EGP_WorkerActivityState::ReturningToDeposit;
-		case EGP_HaulExecutionState::WaitingForStorage:
-			return EGP_WorkerActivityState::WaitingForStorage;
+		case EGP_HaulExecutionState::WaitingForDropOff:
+			return EGP_WorkerActivityState::WaitingForDropOff;
 		case EGP_HaulExecutionState::Failed:
 			return EGP_WorkerActivityState::CommandFailed;
 		default:
@@ -454,7 +454,7 @@ namespace GPWorkerDebug
 		case EGP_WorkerActivityState::ReturningToBase: return TEXT("ReturningToBase");
 		case EGP_WorkerActivityState::DroppingOff: return TEXT("DroppingOff");
 		case EGP_WorkerActivityState::ReturningToDeposit: return TEXT("ReturningToDeposit");
-		case EGP_WorkerActivityState::WaitingForStorage: return TEXT("WaitingForStorage");
+		case EGP_WorkerActivityState::WaitingForDropOff: return TEXT("WaitingForDropOff");
 		case EGP_WorkerActivityState::CommandFailed: return TEXT("CommandFailed");
 		default: return TEXT("Unknown");
 		}
@@ -468,7 +468,7 @@ namespace GPWorkerDebug
 		case EGP_HaulExecutionState::ReturningToBase: return TEXT("ReturningToBase");
 		case EGP_HaulExecutionState::DroppingOff: return TEXT("DroppingOff");
 		case EGP_HaulExecutionState::ReturningToDeposit: return TEXT("ReturningToDeposit");
-		case EGP_HaulExecutionState::WaitingForStorage: return TEXT("WaitingForStorage");
+		case EGP_HaulExecutionState::WaitingForDropOff: return TEXT("WaitingForDropOff");
 		case EGP_HaulExecutionState::Failed: return TEXT("Failed");
 		default: return TEXT("Unknown");
 		}
@@ -2874,7 +2874,7 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 	}
 	case 9:
 	{
-		// Ownership: only enemy-team MainBase registered → haul must fail
+		// Ownership: only enemy-team MainBase → GP-S28P3 WaitingForDropOff (cargo + held Mine kept).
 		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
 		AGP_MainBase* Friendly = MainBaseWeak.Get();
 		AGP_ResourceNode* Node = TestNodeWeak.Get();
@@ -2909,8 +2909,11 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		{
 			Worker->GetMiningComponent()->DebugForceExecuteMiningCycle();
 		}
-		Expect(!Worker->GetUnitCommandComponent()->IsHaulActive(), TEXT("OwnershipHaulFailedImmediately"));
-		Expect(!Worker->GetUnitCommandComponent()->HasHeldCommand(), TEXT("OwnershipClearedHeld"));
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		Expect(!Cmd->IsHaulActive(), TEXT("OwnershipNoTravelWithoutFriendlyBase"));
+		Expect(Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::WaitingForDropOff, TEXT("OwnershipWaitingForDropOff"));
+		Expect(Cmd->HasHeldCommand(), TEXT("OwnershipHeldMineRetained"));
+		Expect(Worker->GetCargoComponent()->GetCurrentCargoAmount() > KINDA_SMALL_NUMBER, TEXT("OwnershipCargoPreserved"));
 		MovementWaitTicks = 0;
 		++StageIndex;
 		ScheduleNext();
@@ -2918,12 +2921,21 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 	}
 	case 10:
 	{
-		// Restore friendly base for lifecycle stage at original scenario base location.
+		// Restore friendly base for lifecycle stage; cancel wait so restore wake cannot steal the stage.
 		DestroyWeakMainBase(EnemyBaseWeak);
+		AGP_Worker* Worker = PrimaryWorkerWeak.Get();
+		if (IsValid(Worker))
+		{
+			IssueMove(Worker, Worker->GetActorLocation() + FVector(150.0f, 0.0f, 0.0f));
+		}
 		FVector RestoreLoc = ScenarioBaseLocation;
 		GPResourceLoopDiagnostics::IsNavPointProjected(World, ScenarioBaseLocation, &RestoreLoc, 800.0f, 800.0f);
 		MainBaseWeak = SpawnMainBase(RestoreLoc, ContractTeamId);
 		Expect(IsValid(MainBaseWeak.Get()), TEXT("RestoreFriendlyBase"));
+		if (IsValid(Worker) && IsValid(Worker->GetUnitCommandComponent()))
+		{
+			Expect(Worker->GetUnitCommandComponent()->GetHaulExecutionState() == EGP_HaulExecutionState::Idle, TEXT("OwnershipWaitCancelledBeforeLifecycle"));
+		}
 		++StageIndex;
 		ScheduleNext();
 		break;

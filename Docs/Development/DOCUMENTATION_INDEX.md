@@ -38,19 +38,19 @@
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
 | Last closed / merged stage | **GP-S28P2** @ `main` `e90b7bd48fb9080a881e6dda7be889eaa99a3161` |
 | Slice 6 | **Completed** |
-| Current stage | **GP-S28P3_SPEC_READY_FOR_REVIEW** (`docs/gp-s28p3-dropoff-resilience-spec`) |
+| Current stage | **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING** (`feature/gp-s28p3-dropoff-resilience`) |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** GP-S28P3 — Drop-off resilience (MainBase haul recovery). Task: [`Claude_Tasks/GP-S28P3_DropOff_Resilience.md`](Claude_Tasks/GP-S28P3_DropOff_Resilience.md). Status: **GP-S28P3_SPEC_READY_FOR_REVIEW**. Code Allowed: **NO**.
+**Current:** GP-S28P3 — Drop-off resilience (MainBase haul recovery). Task: [`Claude_Tasks/GP-S28P3_DropOff_Resilience.md`](Claude_Tasks/GP-S28P3_DropOff_Resilience.md). Status: **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING**. Code Allowed: **YES**. Branch: `feature/gp-s28p3-dropoff-resilience` from `main` @ `3b1ae705…`.
 
 **Prior:** GP-S28P2 merged on `main` @ `e90b7bd…`. GP-S28P1 @ `86bcc974…`. P0 is a historical completed audit / plan — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
 
 **Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation` — separate from P3.
 
-**NEXT:** operator / tech-lead review of GP-S28P3 spec. Do **not** implement until explicit approval.
+**NEXT:** operator PIE validation A–D. Do **not** merge. Do **not** start P4.
 
 > Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28 already merged on main.
 
@@ -60,7 +60,7 @@
 2. GP-S16…GP-S28 — **DONE / merged** (selection, commands, movement, attack, worker/resources/storage)
 3. GP-SLICE7-AUDIT — combat reconciliation audit **completed on branch**, pending review (separate from S28P)
 4. **GP-S28P0** — historical resource playable pass audit / implementation plan (completed)
-5. GP-S28P1 — **DONE / MERGED** @ `86bcc974…`; GP-S28P2 — **DONE / MERGED** @ `e90b7bd…`; GP-S28P3 — **SPEC_READY_FOR_REVIEW**; P4 — not started
+5. GP-S28P1 — **DONE / MERGED** @ `86bcc974…`; GP-S28P2 — **DONE / MERGED** @ `e90b7bd…`; GP-S28P3 — **CODE_READY_OPERATOR_VALIDATION_PENDING**; P4 — not started
 
 ---
 
@@ -78,7 +78,7 @@
 | `GRIM_PROTOCOL_START_RULES.md` | Active process SoT |
 | `Docs/Development/*` ops + Claude task specs | Active |
 | `Docs/Game_Pitch.md` | Active onboarding |
-| `UGP_ResourceGameplaySettings` + `GP/Config/DefaultGame.ini` (`[/Script/GPRuntime.GP_ResourceGameplaySettings]`) | Active — Project Settings → Game → GP Resource Gameplay (GP-S28P2) |
+| `UGP_ResourceGameplaySettings` + `GP/Config/DefaultGame.ini` (`[/Script/GPRuntime.GP_ResourceGameplaySettings]`) | Active — Project Settings → Game → GP Resource Gameplay (P2 + P3 `DropOffRetrySeconds`) |
 
 ### Stale / needs cleanup (still in active tree)
 

@@ -45,7 +45,8 @@ enum class EGP_HaulExecutionState : uint8
 	ReturningToBase,
 	DroppingOff,
 	ReturningToDeposit,
-	WaitingForStorage,
+	/** Cargo held; MainBase missing / destroyed / unreachable (GP-S28P3). Not storage-full. */
+	WaitingForDropOff,
 	Failed
 };
 
@@ -165,10 +166,18 @@ public:
 	/** Next arrival distance check treats Worker as slightly OOR once (contract test). */
 	void DebugForceNextMineArrivalOutOfRangeOnce();
 	void DebugForceNextHaulArrivalOutOfRangeOnce();
+	/** Next haul approach request fails once (unreachable / PathRejected harness). */
+	void DebugForceNextHaulApproachRejectOnce();
 
 	/** Mine resource-search anchor diagnostics (GP-S28P2 contract). */
 	bool DebugHasMineSearchAnchor() const { return bHasMineSearchAnchor; }
 	FVector DebugGetMineSearchAnchorLocation() const { return MineSearchAnchorLocation; }
+
+	/** Drop-off wait subscription / wake diagnostics (GP-S28P3). */
+	int32 DebugGetDropOffWakeCount() const { return DebugDropOffWakeCount; }
+	bool DebugIsWaitingRegisterBound() const { return bMainBaseRegisteredDropOffBound; }
+	bool DebugIsActiveHaulUnregisterBound() const { return bMainBaseUnregisteredHaulBound; }
+	bool DebugIsDropOffRetryArmed() const { return DropOffRetryTimerHandle.IsValid(); }
 
 	/** FIFO / re-entry watchdog counters for contract tests (not Tick). */
 	void DebugResetFifoWatchdogCounters();
@@ -319,6 +328,22 @@ private:
 	void FinishHaulChain(bool bClearHeld);
 	void ContinueMineAfterSuccessfulHaul(uint32 ChainSerial);
 
+	/** GP-S28P3 WaitingForDropOff — MainBase missing/destroyed/unreachable recovery. */
+	void EnterWaitingForDropOff(FName Reason);
+	void ClearDropOffSubscriptionsAndTimer();
+	void BindActiveHaulMainBaseUnregister();
+	void UnbindActiveHaulMainBaseUnregister();
+	void BindDropOffWaitingRegisterWake();
+	void UnbindDropOffWaitingRegisterWake();
+	void ArmDropOffRetryTimer();
+	void ClearDropOffRetryTimer();
+	void HandleMainBaseUnregisteredActiveHaul(AGP_MainBase* MainBase);
+	void HandleMainBaseRegisteredDropOffWake(AGP_MainBase* MainBase);
+	void HandleDropOffSafetyRetry();
+	void TryResumeHaulFromDropOffWait(FName WakeReason);
+	void ExecuteScheduledDropOffHaulResume();
+	bool WorkerHasHaulCargo() const;
+
 	static const TCHAR* MineStateToString(EGP_MineExecutionState State);
 	static const TCHAR* HaulStateToString(EGP_HaulExecutionState State);
 
@@ -461,8 +486,27 @@ private:
 	float HaulLastArrivalRangeError = -1.0f;
 	int32 HaulApproachAttempt = 0;
 
+	/** Active-haul current-target invalidation (ReturningToBase / DroppingOff). */
+	FDelegateHandle MainBaseUnregisteredHaulHandle;
+	bool bMainBaseUnregisteredHaulBound = false;
+
+	/** WaitingForDropOff register wake. */
+	FDelegateHandle MainBaseRegisteredDropOffHandle;
+	bool bMainBaseRegisteredDropOffBound = false;
+	FTimerHandle DropOffRetryTimerHandle;
+	bool bEnteringDropOffWait = false;
+	bool bDropOffWakeInProgress = false;
+	bool bDropOffResumeScheduled = false;
+	uint32 PendingDropOffResumeSerial = 0;
+	TWeakObjectPtr<AGP_ResourceNode> PendingDropOffResumeDeposit;
+	bool bPendingDropOffResumeReturnToDeposit = false;
+	FName LastDropOffWaitReason = NAME_None;
+	FName LastDropOffRetryLogReason = NAME_None;
+
 #if !UE_BUILD_SHIPPING
 	bool bDebugForceNextMineArrivalOutOfRange = false;
 	bool bDebugForceNextHaulArrivalOutOfRange = false;
+	bool bDebugForceNextHaulApproachReject = false;
+	int32 DebugDropOffWakeCount = 0;
 #endif
 };

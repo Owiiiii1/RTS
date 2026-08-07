@@ -30,6 +30,10 @@ DECLARE_MULTICAST_DELEGATE_FourParams(
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnGP_ResourceNodeRegistered, AGP_ResourceNode* /*Node*/);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnGP_ResourceNodeUnregistered, AGP_ResourceNode* /*Node*/);
 
+/** Authority-only MainBase registry lifecycle (GP-S28P3). Not replicated. */
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnGP_MainBaseRegistered, AGP_MainBase* /*MainBase*/);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnGP_MainBaseUnregistered, AGP_MainBase* /*MainBase*/);
+
 /** Per-team fluctuating Planetary Ferronite threat stock (GP-S28). */
 USTRUCT(BlueprintType)
 struct FGP_TeamFerroniteThreat
@@ -158,6 +162,12 @@ public:
 
 	/** C++ subscription: ResourceNode unregistered (authority). */
 	FOnGP_ResourceNodeUnregistered OnResourceNodeUnregistered;
+
+	/** C++ subscription: MainBase registered (authority). */
+	FOnGP_MainBaseRegistered OnMainBaseRegistered;
+
+	/** C++ subscription: MainBase unregistered (authority). */
+	FOnGP_MainBaseUnregistered OnMainBaseUnregistered;
 
 	/** C++ subscription: old/new MatchStateTag. */
 	FOnGP_MatchStateTagChanged OnMatchStateTagChanged;

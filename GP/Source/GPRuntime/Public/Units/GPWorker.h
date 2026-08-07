@@ -45,7 +45,7 @@ enum class EGP_WorkerActivityState : uint8
 	ReturningToBase UMETA(DisplayName = "Returning To Base"),
 	DroppingOff UMETA(DisplayName = "Dropping Off"),
 	ReturningToDeposit UMETA(DisplayName = "Returning To Deposit"),
-	WaitingForStorage UMETA(DisplayName = "Waiting For Storage"),
+	WaitingForDropOff UMETA(DisplayName = "Waiting For Drop Off"),
 	WaitingForResource UMETA(DisplayName = "Waiting For Resource"),
 	CommandFailed UMETA(DisplayName = "Command Failed")
 };
@@ -355,6 +355,53 @@ private:
 	int32 ContractTeamId = 1;
 	bool bOperatorTeam1PresentAtStart = false;
 	TWeakObjectPtr<AGP_MainBase> OperatorTeam1MainBaseWeak;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
+};
+
+/** GP-S28P3 drop-off resilience / WaitingForDropOff contract (debug console). */
+UCLASS()
+class GPRUNTIME_API UGP_DropOffResilienceContractTestRunner : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
+	void Start(UWorld* InWorld);
+
+private:
+	void ScheduleNext();
+	void AdvanceStage();
+	bool Expect(bool bOk, const TCHAR* Label);
+	void Abort(const TCHAR* Reason);
+	void Finish();
+	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void UnbindWorldCleanup();
+	void CleanupActors();
+
+	int32 StageIndex = 0;
+	int32 Failures = 0;
+	bool bFinished = false;
+	FDelegateHandle WorldCleanupHandle;
+	FTimerHandle StageTimerHandle;
+	TWeakObjectPtr<UWorld> WorldWeak;
+	TWeakObjectPtr<AGP_ResourceNode> NodeWeak;
+	TWeakObjectPtr<AGP_Worker> WorkerWeak;
+	TWeakObjectPtr<AGP_MainBase> MainBaseWeak;
+	FVector ScenarioBaseLocation = FVector::ZeroVector;
+	FVector ScenarioNodeLocation = FVector::ZeroVector;
+	int32 ContractTeamId = 1;
+	float ThreatBefore = 0.0f;
+	float CargoAtWait = 0.0f;
+	int32 StableWaitTicks = 0;
+	int32 MovementWaitTicks = 0;
+	double MovementWaitStartTime = 0.0;
+	float MovementWaitTimeoutSeconds = 45.0f;
+	float SavedDropOffRetrySeconds = 3.0f;
+	bool bSettingsOverridden = false;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

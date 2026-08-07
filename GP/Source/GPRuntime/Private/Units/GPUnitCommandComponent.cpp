@@ -262,6 +262,8 @@ void UGP_UnitCommandComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 	ResetAttackExecutor();
 	ResetMineExecutor();
+	// ResetMineExecutor → ResetHaulExecutor clears drop-off subscriptions/timers.
+	// Explicit haul cleanup remains safe if mine reset short-circuits in future.
 
 	if (BoundMovementComponent.IsValid() && MovementResultHandle.IsValid())
 	{
@@ -823,6 +825,11 @@ void UGP_UnitCommandComponent::DebugForceNextHaulArrivalOutOfRangeOnce()
 	bDebugForceNextHaulArrivalOutOfRange = true;
 }
 
+void UGP_UnitCommandComponent::DebugForceNextHaulApproachRejectOnce()
+{
+	bDebugForceNextHaulApproachReject = true;
+}
+
 void UGP_UnitCommandComponent::DebugResetFifoWatchdogCounters()
 {
 	DebugMineBeginCallsThisTransition = 0;
@@ -840,7 +847,7 @@ const TCHAR* UGP_UnitCommandComponent::HaulStateToString(EGP_HaulExecutionState 
 	case EGP_HaulExecutionState::ReturningToBase: return TEXT("ReturningToBase");
 	case EGP_HaulExecutionState::DroppingOff: return TEXT("DroppingOff");
 	case EGP_HaulExecutionState::ReturningToDeposit: return TEXT("ReturningToDeposit");
-	case EGP_HaulExecutionState::WaitingForStorage: return TEXT("WaitingForStorage");
+	case EGP_HaulExecutionState::WaitingForDropOff: return TEXT("WaitingForDropOff");
 	case EGP_HaulExecutionState::Failed: return TEXT("Failed");
 	default: return TEXT("Unknown");
 	}
@@ -868,9 +875,11 @@ AGP_MainBase* UGP_UnitCommandComponent::GetHaulMainBase() const
 
 bool UGP_UnitCommandComponent::IsHaulActive() const
 {
-	return HaulState != EGP_HaulExecutionState::Idle
-		&& HaulState != EGP_HaulExecutionState::Failed
-		&& ActiveHaulSerial != 0;
+	// WaitingForDropOff keeps chain identity but is not an active travel/drop-off leg.
+	return ActiveHaulSerial != 0
+		&& (HaulState == EGP_HaulExecutionState::ReturningToBase
+			|| HaulState == EGP_HaulExecutionState::DroppingOff
+			|| HaulState == EGP_HaulExecutionState::ReturningToDeposit);
 }
 
 bool UGP_UnitCommandComponent::ShouldReturnToDepositAfterHaul() const
@@ -1164,6 +1173,11 @@ void UGP_UnitCommandComponent::ResetHaulExecutor()
 	}
 
 	TGuardValue<bool> Guard(bFinishingHaul, true);
+	ClearDropOffSubscriptionsAndTimer();
+	bDropOffResumeScheduled = false;
+	PendingDropOffResumeSerial = 0;
+	PendingDropOffResumeDeposit.Reset();
+	bPendingDropOffResumeReturnToDeposit = false;
 	HaulState = EGP_HaulExecutionState::Idle;
 	ActiveHaulSerial = 0;
 	LastHaulDeposit.Reset();
@@ -1176,8 +1190,12 @@ void UGP_UnitCommandComponent::ResetHaulExecutor()
 	HaulLastArrivalRangeError = -1.0f;
 	HaulApproachAttempt = 0;
 	HaulDropOffRangeCm = 400.0f;
+	LastDropOffWaitReason = NAME_None;
+	LastDropOffRetryLogReason = NAME_None;
 #if !UE_BUILD_SHIPPING
 	bDebugForceNextHaulArrivalOutOfRange = false;
+	bDebugForceNextHaulApproachReject = false;
+	DebugDropOffWakeCount = 0;
 #endif
 }
 
@@ -1790,6 +1808,15 @@ void UGP_UnitCommandComponent::StartHaulReturnToBase(
 		return;
 	}
 
+	ActiveMineSerial = ChainSerial;
+	ActiveHaulSerial = ChainSerial;
+	LastHaulDeposit = Deposit;
+	bShouldReturnToDepositAfterHaul = bReturnToDeposit;
+	HaulApproachAttempt = 0;
+	LastHaulAcceptedAmount = 0.0f;
+	LastHaulRejectedAmount = 0.0f;
+	LastHaulThreatDelta = 0.0f;
+
 	UWorld* World = Owner->GetWorld();
 	AGP_GameState* GameState = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
 	AGP_MainBase* MainBase = GameState != nullptr
@@ -1798,6 +1825,12 @@ void UGP_UnitCommandComponent::StartHaulReturnToBase(
 	UGP_StorageComponent* Storage = IsValid(MainBase) ? MainBase->GetStorageComponent() : nullptr;
 	if (!IsValid(MainBase) || !IsValid(Storage))
 	{
+		if (WorkerHasHaulCargo())
+		{
+			EnterWaitingForDropOff(FName(TEXT("MissingMainBase")));
+			return;
+		}
+
 		UE_LOG(LogGPUnitCommandExecution, Warning,
 			TEXT("GP UnitCommandExecution HaulFailed: Unit=%s HaulSerial=%u Reason=MissingMainBaseOrStorage TeamId=%d Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
@@ -1806,22 +1839,12 @@ void UGP_UnitCommandComponent::StartHaulReturnToBase(
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
 		HaulState = EGP_HaulExecutionState::Failed;
-		ActiveHaulSerial = ChainSerial;
-		ActiveMineSerial = ChainSerial;
 		FinishHaulChain(true);
 		return;
 	}
 
-	ActiveMineSerial = ChainSerial;
-	ActiveHaulSerial = ChainSerial;
-	LastHaulDeposit = Deposit;
 	HaulMainBase = MainBase;
-	bShouldReturnToDepositAfterHaul = bReturnToDeposit;
 	HaulDropOffRangeCm = MainBase->GetDropOffRangeCm();
-	HaulApproachAttempt = 0;
-	LastHaulAcceptedAmount = 0.0f;
-	LastHaulRejectedAmount = 0.0f;
-	LastHaulThreatDelta = 0.0f;
 
 	const float Distance = FVector::Dist(Owner->GetActorLocation(), MainBase->GetActorLocation());
 	UE_LOG(LogGPUnitCommandExecution, Log,
@@ -1845,12 +1868,22 @@ void UGP_UnitCommandComponent::StartHaulReturnToBase(
 				Movement->StopMove(EGP_MovementStopReason::CommandReplaced);
 			}
 		}
+		UnbindDropOffWaitingRegisterWake();
+		ClearDropOffRetryTimer();
+		HaulState = EGP_HaulExecutionState::DroppingOff;
+		HaulMainBase = MainBase;
+		BindActiveHaulMainBaseUnregister();
 		BeginDropOffAtMainBase(ChainSerial);
 		return;
 	}
 
 	if (!RequestHaulApproachMove(Owner, MainBase, ChainSerial, 0.0f, TEXT("Primary")))
 	{
+		if (WorkerHasHaulCargo())
+		{
+			EnterWaitingForDropOff(FName(TEXT("PathRejected")));
+			return;
+		}
 		HaulState = EGP_HaulExecutionState::Failed;
 		FinishHaulChain(true);
 	}
@@ -1865,6 +1898,20 @@ bool UGP_UnitCommandComponent::RequestHaulApproachMove(
 {
 	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
 	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+#if !UE_BUILD_SHIPPING
+	if (bDebugForceNextHaulApproachReject)
+	{
+		bDebugForceNextHaulApproachReject = false;
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution HaulApproachForcedReject: Unit=%s HaulSerial=%u Label=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			HaulSerial,
+			LogLabel,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return false;
+	}
+#endif
 	UGP_MovementComponent* Movement = ResolveMovementComponent();
 	if (Movement == nullptr || !IsValid(MainBase))
 	{
@@ -1922,6 +1969,9 @@ bool UGP_UnitCommandComponent::RequestHaulApproachMove(
 	ActiveHaulSerial = HaulSerial;
 	ActiveMineSerial = HaulSerial;
 	HaulMainBase = MainBase;
+	UnbindDropOffWaitingRegisterWake();
+	ClearDropOffRetryTimer();
+	BindActiveHaulMainBaseUnregister();
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
 		TEXT("GP UnitCommandExecution HaulApproachRequested: Unit=%s HaulSerial=%u MainBase=%s Label=%s Attempt=%d Destination=%s DesiredHoriz=%.1f PredictedWorst=%.1f Range=%.1f Acc=%.1f Safety=%.1f Role=%s NetMode=%s"),
@@ -1953,6 +2003,7 @@ void UGP_UnitCommandComponent::BeginDropOffAtMainBase(uint32 HaulSerial)
 	}
 
 	HaulState = EGP_HaulExecutionState::DroppingOff;
+	BindActiveHaulMainBaseUnregister();
 
 	AGP_MainBase* MainBase = HaulMainBase.Get();
 	UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
@@ -1965,6 +2016,11 @@ void UGP_UnitCommandComponent::BeginDropOffAtMainBase(uint32 HaulSerial)
 			HaulSerial,
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		if (WorkerHasHaulCargo())
+		{
+			EnterWaitingForDropOff(FName(TEXT("InvalidBeforeDropOff")));
+			return;
+		}
 		HaulState = EGP_HaulExecutionState::Failed;
 		FinishHaulChain(true);
 		return;
@@ -2019,6 +2075,11 @@ void UGP_UnitCommandComponent::BeginDropOffAtMainBase(uint32 HaulSerial)
 			}
 		}
 
+		if (WorkerHasHaulCargo())
+		{
+			EnterWaitingForDropOff(FName(TEXT("PathRejected")));
+			return;
+		}
 		HaulState = EGP_HaulExecutionState::Failed;
 		FinishHaulChain(true);
 		return;
@@ -2033,6 +2094,7 @@ void UGP_UnitCommandComponent::BeginDropOffAtMainBase(uint32 HaulSerial)
 			HaulSerial,
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		ClearDropOffSubscriptionsAndTimer();
 		FinishHaulChain(true);
 		return;
 	}
@@ -2096,6 +2158,7 @@ void UGP_UnitCommandComponent::BeginDropOffAtMainBase(uint32 HaulSerial)
 		GPUnitCommandStatePrivate::RoleToString(Role),
 		GPUnitCommandStatePrivate::NetModeToString(NetMode));
 
+	ClearDropOffSubscriptionsAndTimer();
 	ContinueMineAfterSuccessfulHaul(HaulSerial);
 }
 
@@ -2198,6 +2261,7 @@ void UGP_UnitCommandComponent::FinishHaulChain(bool bClearHeld)
 		LastHaulRejectedAmount,
 		LastHaulThreatDelta);
 
+	ClearDropOffSubscriptionsAndTimer();
 	HaulState = EGP_HaulExecutionState::Idle;
 	ActiveHaulSerial = 0;
 	LastHaulDeposit.Reset();
@@ -2238,7 +2302,7 @@ bool UGP_UnitCommandComponent::TryConsumeHaulMovementResult(
 	}
 
 	if (HaulState != EGP_HaulExecutionState::ReturningToBase
-		&& HaulState != EGP_HaulExecutionState::WaitingForStorage)
+		&& HaulState != EGP_HaulExecutionState::WaitingForDropOff)
 	{
 		return false;
 	}
@@ -2257,17 +2321,21 @@ bool UGP_UnitCommandComponent::TryConsumeHaulMovementResult(
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
 
-		if (Reason == EGP_MovementResultReason::CommandReplaced
-			|| Reason == EGP_MovementResultReason::Manual
-			|| Reason == EGP_MovementResultReason::Superseded)
+		if (Reason == EGP_MovementResultReason::CommandReplaced)
 		{
 			// Command replacement already resets via ResetMineExecutorForReplacement.
-			// Manual/Superseded during haul without Held replacement → fail chain.
-			if (Reason != EGP_MovementResultReason::CommandReplaced)
-			{
-				HaulState = EGP_HaulExecutionState::Failed;
-				FinishHaulChain(true);
-			}
+			return true;
+		}
+
+		// Manual/Superseded with cargo → wait (destroyed target / path loss). Without cargo → clear.
+		if (WorkerHasHaulCargo())
+		{
+			EnterWaitingForDropOff(FName(TEXT("MoveFailed")));
+		}
+		else
+		{
+			HaulState = EGP_HaulExecutionState::Failed;
+			FinishHaulChain(true);
 		}
 		return true;
 	}
@@ -2286,6 +2354,333 @@ bool UGP_UnitCommandComponent::TryConsumeHaulMovementResult(
 
 	BeginDropOffAtMainBase(Serial);
 	return true;
+}
+
+bool UGP_UnitCommandComponent::WorkerHasHaulCargo() const
+{
+	const AGP_Worker* Worker = Cast<AGP_Worker>(GetOwner());
+	const UGP_CargoComponent* Cargo = Worker != nullptr ? Worker->GetCargoComponent() : nullptr;
+	return IsValid(Cargo) && Cargo->GetCurrentCargoAmount() > KINDA_SMALL_NUMBER;
+}
+
+void UGP_UnitCommandComponent::ClearDropOffSubscriptionsAndTimer()
+{
+	UnbindActiveHaulMainBaseUnregister();
+	UnbindDropOffWaitingRegisterWake();
+	ClearDropOffRetryTimer();
+	bDropOffResumeScheduled = false;
+	PendingDropOffResumeSerial = 0;
+	PendingDropOffResumeDeposit.Reset();
+	bPendingDropOffResumeReturnToDeposit = false;
+}
+
+void UGP_UnitCommandComponent::BindActiveHaulMainBaseUnregister()
+{
+	if (bMainBaseUnregisteredHaulBound)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	if (GS == nullptr)
+	{
+		return;
+	}
+
+	MainBaseUnregisteredHaulHandle = GS->OnMainBaseUnregistered.AddUObject(
+		this, &UGP_UnitCommandComponent::HandleMainBaseUnregisteredActiveHaul);
+	bMainBaseUnregisteredHaulBound = true;
+}
+
+void UGP_UnitCommandComponent::UnbindActiveHaulMainBaseUnregister()
+{
+	if (!bMainBaseUnregisteredHaulBound)
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
+		{
+			GS->OnMainBaseUnregistered.Remove(MainBaseUnregisteredHaulHandle);
+		}
+	}
+	MainBaseUnregisteredHaulHandle.Reset();
+	bMainBaseUnregisteredHaulBound = false;
+}
+
+void UGP_UnitCommandComponent::BindDropOffWaitingRegisterWake()
+{
+	if (bMainBaseRegisteredDropOffBound)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	if (GS == nullptr)
+	{
+		return;
+	}
+
+	MainBaseRegisteredDropOffHandle = GS->OnMainBaseRegistered.AddUObject(
+		this, &UGP_UnitCommandComponent::HandleMainBaseRegisteredDropOffWake);
+	bMainBaseRegisteredDropOffBound = true;
+}
+
+void UGP_UnitCommandComponent::UnbindDropOffWaitingRegisterWake()
+{
+	if (!bMainBaseRegisteredDropOffBound)
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
+		{
+			GS->OnMainBaseRegistered.Remove(MainBaseRegisteredDropOffHandle);
+		}
+	}
+	MainBaseRegisteredDropOffHandle.Reset();
+	bMainBaseRegisteredDropOffBound = false;
+}
+
+void UGP_UnitCommandComponent::ClearDropOffRetryTimer()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(DropOffRetryTimerHandle);
+	}
+}
+
+void UGP_UnitCommandComponent::ArmDropOffRetryTimer()
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	float RetrySeconds = 3.0f;
+	if (const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get())
+	{
+		RetrySeconds = FMath::Max(0.1f, Settings->DropOffRetrySeconds);
+	}
+
+	World->GetTimerManager().ClearTimer(DropOffRetryTimerHandle);
+	World->GetTimerManager().SetTimer(
+		DropOffRetryTimerHandle,
+		this,
+		&UGP_UnitCommandComponent::HandleDropOffSafetyRetry,
+		RetrySeconds,
+		false);
+}
+
+void UGP_UnitCommandComponent::EnterWaitingForDropOff(FName Reason)
+{
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority() || ActiveHaulSerial == 0)
+	{
+		return;
+	}
+
+	if (!WorkerHasHaulCargo())
+	{
+		HaulState = EGP_HaulExecutionState::Failed;
+		FinishHaulChain(true);
+		return;
+	}
+
+	if (bEnteringDropOffWait)
+	{
+		return;
+	}
+
+	TGuardValue<bool> EnterGuard(bEnteringDropOffWait, true);
+
+	if (UGP_MovementComponent* Movement = ResolveMovementComponent())
+	{
+		if (Movement->IsMoving())
+		{
+			Movement->StopMove(EGP_MovementStopReason::CommandReplaced);
+		}
+	}
+
+	UnbindActiveHaulMainBaseUnregister();
+	HaulMainBase.Reset();
+	HaulState = EGP_HaulExecutionState::WaitingForDropOff;
+	ActiveMineSerial = ActiveHaulSerial;
+
+	const AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+	const float CargoAmount = (Worker != nullptr && IsValid(Worker->GetCargoComponent()))
+		? Worker->GetCargoComponent()->GetCurrentCargoAmount()
+		: 0.0f;
+	const int32 TeamId = Worker != nullptr ? Worker->GetTeamId() : 0;
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP DropOffWait Enter: Unit=%s HaulSerial=%u Reason=%s Cargo=%.1f Team=%d"),
+		*GetNameSafe(Owner),
+		ActiveHaulSerial,
+		*Reason.ToString(),
+		CargoAmount,
+		TeamId);
+
+	LastDropOffWaitReason = Reason;
+	if (LastDropOffRetryLogReason != Reason)
+	{
+		LastDropOffRetryLogReason = NAME_None;
+	}
+
+	BindDropOffWaitingRegisterWake();
+	ArmDropOffRetryTimer();
+}
+
+void UGP_UnitCommandComponent::HandleMainBaseUnregisteredActiveHaul(AGP_MainBase* MainBase)
+{
+	if (HaulState != EGP_HaulExecutionState::ReturningToBase
+		&& HaulState != EGP_HaulExecutionState::DroppingOff)
+	{
+		return;
+	}
+
+	if (MainBase == nullptr || HaulMainBase.Get() != MainBase)
+	{
+		return;
+	}
+
+	EnterWaitingForDropOff(FName(TEXT("MainBaseDestroyed")));
+}
+
+void UGP_UnitCommandComponent::HandleMainBaseRegisteredDropOffWake(AGP_MainBase* MainBase)
+{
+	if (HaulState != EGP_HaulExecutionState::WaitingForDropOff || ActiveHaulSerial == 0)
+	{
+		return;
+	}
+
+	AGP_Worker* Worker = Cast<AGP_Worker>(GetOwner());
+	if (!IsValid(Worker) || !IsValid(MainBase)
+		|| MainBase->GetTeamId() != Worker->GetTeamId()
+		|| MainBase->GetTeamId() < 1
+		|| !IsValid(MainBase->GetStorageComponent())
+		|| !WorkerHasHaulCargo())
+	{
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	++DebugDropOffWakeCount;
+#endif
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP DropOffWait Wake: Unit=%s HaulSerial=%u Reason=MainBaseRegistered Base=%s"),
+		*GetNameSafe(GetOwner()),
+		ActiveHaulSerial,
+		*GetNameSafe(MainBase));
+
+	TryResumeHaulFromDropOffWait(FName(TEXT("MainBaseRegistered")));
+}
+
+void UGP_UnitCommandComponent::HandleDropOffSafetyRetry()
+{
+	if (HaulState != EGP_HaulExecutionState::WaitingForDropOff || ActiveHaulSerial == 0)
+	{
+		ClearDropOffRetryTimer();
+		return;
+	}
+
+	AGP_Worker* Worker = Cast<AGP_Worker>(GetOwner());
+	UWorld* World = GetWorld();
+	AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	AGP_MainBase* Base = (GS != nullptr && Worker != nullptr)
+		? GS->FindMainBaseForTeam(Worker->GetTeamId())
+		: nullptr;
+
+	if (!IsValid(Base) || !IsValid(Base->GetStorageComponent()) || !WorkerHasHaulCargo())
+	{
+		if (LastDropOffRetryLogReason != FName(TEXT("StillMissing")))
+		{
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP DropOffWait Retry: Unit=%s Result=StillMissing"),
+				*GetNameSafe(GetOwner()));
+			LastDropOffRetryLogReason = FName(TEXT("StillMissing"));
+		}
+		ArmDropOffRetryTimer();
+		return;
+	}
+
+	const FName RetryResult =
+		(LastDropOffWaitReason == FName(TEXT("PathRejected"))
+			|| LastDropOffWaitReason == FName(TEXT("MoveFailed"))
+			|| LastDropOffRetryLogReason == FName(TEXT("AttemptResume")))
+		? FName(TEXT("StillUnreachable"))
+		: FName(TEXT("AttemptResume"));
+	if (LastDropOffRetryLogReason != RetryResult)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP DropOffWait Retry: Unit=%s Result=%s Base=%s"),
+			*GetNameSafe(GetOwner()),
+			*RetryResult.ToString(),
+			*GetNameSafe(Base));
+		LastDropOffRetryLogReason = RetryResult;
+	}
+	TryResumeHaulFromDropOffWait(FName(TEXT("SafetyRetry")));
+}
+
+void UGP_UnitCommandComponent::TryResumeHaulFromDropOffWait(FName WakeReason)
+{
+	(void)WakeReason;
+	if (bDropOffWakeInProgress || bDropOffResumeScheduled || ActiveHaulSerial == 0)
+	{
+		return;
+	}
+
+	if (HaulState != EGP_HaulExecutionState::WaitingForDropOff)
+	{
+		return;
+	}
+
+	TGuardValue<bool> WakeGuard(bDropOffWakeInProgress, true);
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	UnbindDropOffWaitingRegisterWake();
+	ClearDropOffRetryTimer();
+
+	PendingDropOffResumeSerial = ActiveHaulSerial;
+	PendingDropOffResumeDeposit = LastHaulDeposit;
+	bPendingDropOffResumeReturnToDeposit = bShouldReturnToDepositAfterHaul;
+	bDropOffResumeScheduled = true;
+	World->GetTimerManager().SetTimerForNextTick(
+		this,
+		&UGP_UnitCommandComponent::ExecuteScheduledDropOffHaulResume);
+}
+
+void UGP_UnitCommandComponent::ExecuteScheduledDropOffHaulResume()
+{
+	bDropOffResumeScheduled = false;
+	const uint32 Serial = PendingDropOffResumeSerial;
+	AGP_ResourceNode* Deposit = PendingDropOffResumeDeposit.Get();
+	const bool bReturn = bPendingDropOffResumeReturnToDeposit;
+	PendingDropOffResumeSerial = 0;
+	PendingDropOffResumeDeposit.Reset();
+	bPendingDropOffResumeReturnToDeposit = false;
+
+	if (Serial == 0 || ActiveHaulSerial != Serial)
+	{
+		return;
+	}
+
+	if (HaulState != EGP_HaulExecutionState::WaitingForDropOff)
+	{
+		return;
+	}
+
+	StartHaulReturnToBase(Serial, Deposit, bReturn);
 }
 
 void UGP_UnitCommandComponent::SetMineSearchAnchorFromNode(const AGP_ResourceNode* Node)

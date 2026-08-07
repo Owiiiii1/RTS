@@ -1,5 +1,36 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S28P3 Drop-Off Resilience Implementation
+
+Status: **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28p3-dropoff-resilience`
+- Base: `main` @ `3b1ae705d8b15fd54daf06553337885d0420dc57`
+- Task: `Docs/Development/Claude_Tasks/GP-S28P3_DropOff_Resilience.md`
+
+### What was done
+- Rename unused `WaitingForStorage` → `WaitingForDropOff` (haul + Worker activity)
+- `AGP_GameState` authority multicasts `OnMainBaseRegistered` / `OnMainBaseUnregistered`
+- UnitCommand: `EnterWaitingForDropOff`, active-haul unregister bind, waiting register wake, `DropOffRetrySeconds` safety retry, deferred resume
+- Missing/destroyed/unreachable MainBase + Cargo > 0 preserves Cargo + held Mine (no `FinishHaulChain(true)` abandon)
+- Contract `gp.Resource.RunDropOffResilienceContractTest` + S28 suite entry; hauling ownership case updated for P3 wait
+- Operator-local Blueprint/Materials/map/DefaultEngine.ini left uncommitted
+
+### Tests (headless `-game -NullRHI`)
+- `gp.Resource.RunDropOffResilienceContractTest` → `Complete Failures=0 Cancelled=None`
+- `gp.Resource.RunDepletionReassignmentContractTest` → `Complete Failures=0 Cancelled=None`
+- `gp.Resource.RunS28RegressionSuite` → `Complete Failures=0`
+
+### Builds
+- GPEditor Win64 Development + UHT — **PASSED**
+- GP Dev / Shipping — deferred to finalization
+
+### Stop condition
+Operator PIE A–D pending. No merge. No P4.
+
+---
+
 ## 2026-08-08 — GP-S28P3 Spec Correction (Active-Haul vs Waiting Subscriptions)
 
 Status: **GP-S28P3_SPEC_READY_FOR_REVIEW**

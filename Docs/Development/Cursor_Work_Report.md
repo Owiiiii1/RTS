@@ -1,45 +1,38 @@
-# Cursor Work Report — GP-S28P2 Finalization Test Correction
+# Cursor Work Report — GP-S28P3 Specification
 
 ## Status
-**GP-S28P2_READY_FOR_MERGE**
+**GP-S28P3_SPEC_READY_FOR_REVIEW**
 
-## Branch
-`feature/gp-s28p2-depletion-resource-reassignment`
+## Baseline
+`main` @ `e90b7bd48fb9080a881e6dda7be889eaa99a3161` (GP-S28P2 merged)
 
-## Base Main
-`86bcc9740fde0f19ac40c70f2f49298680f5f7d6`
+## P2 Post-Merge Sync
+**DONE** — docs updated: P2 = DONE/MERGED; last merged stage = P2; NEXT = P3 spec review (not merge P2).
 
-## Initial finalization test failures
-| Command | Result | Fail |
-| --- | --- | --- |
-| `gp.Resource.RunDepletionReassignmentContractTest` | `Complete Failures=1 Cancelled=None` | `AnchorSearchCenterFindsNodeB` |
-| `gp.Resource.RunS28RegressionSuite` | `Complete Failures=1` | `HeldClearedAfterDepleteHaul` |
+## Actual Code Audit
+- Missing MainBase today → `Failed` + `FinishHaulChain(true)` clears held Mine (cargo not cleared).
+- `WaitingForStorage` enum exists, never entered; overflow remains LOST via `ClearCargo`.
+- MainBase registry: register/unregister/Find — **no** register multicast wake yet.
+- Haul approach: actor location + `DropOffRangeCm`; `DropOffVisualAnchor` presentation-only.
+- P2 Mine intent / search anchor already persist across successful haul.
 
-## Root causes
-### HeldClearedAfterDepleteHaul
-Obsolete pre-P2 hauling assertion expected held Mine cleared after depleted haul. Canonical P2 keeps Mine intent / search anchor through haul → PostDropOff (reassignment or WaitingForResource).
+## Proposed P3 State Machine
+Rename unused `WaitingForStorage` → `WaitingForDropOff` on haul + Worker activity.
+Transitions: Haul → WaitingForDropOff (missing/dead/unreachable) → Haul → DropOff → P2 PostDropOff.
+Command replace cancels wait subscriptions; Cargo preserved; no Threat during wait.
 
-**Change:** test expectation only (`HeldMinePersistsAfterDepleteHaul`). Production unchanged.
+## Wake Strategy
+GameState MainBase register (and optional unregister) events + `DropOffRetrySeconds` (default 3s) on existing `UGP_ResourceGameplaySettings`. Bind only while waiting.
 
-### AnchorSearchCenterFindsNodeB
-Harness used raw MainBase actor center as PathStart (Z/obstacle) and could spawn Node B without approach-reachability from that PathStart. Production PostDropOff already found Node B from navigable drop-off PathStart (operator A PASS).
+## Test Plan
+Contract: `gp.Resource.RunDropOffResilienceContractTest` (10 cases incl. P2 regression).
+Operator PIE: A–D wait/destroy/block/Move-replace scenarios.
 
-**Change:** test harness — projected Base PathStart + spawn Node B only if approach-reachable within MaxPath. Production unchanged.
+## Out of Scope
+Storage-full redesign; overflow LOST change; multi-drop-off; Hub drop-off; drop-off interface; HUD; launch/orbital; combat; construction; queue; save/load.
 
-## Rerun results (headless `-game -NullRHI` / `L_PrototypeArena`)
-| Command | Exact result |
-| --- | --- |
-| `gp.Resource.RunDepletionReassignmentContractTest` | `Complete Failures=0 Cancelled=None` |
-| `gp.Resource.RunS28RegressionSuite` | `Complete Failures=0` |
+## Files Changed
+Docs only (no C++ / Config / uasset / umap).
 
-## Builds
-| Target | Result |
-| --- | --- |
-| GPEditor Win64 Development + UHT | **PASS** (re-run after test-only C++) |
-| GP Win64 Development / Shipping | Prior finalization **PASS**; production C++ / Build.cs unchanged — not re-run |
-
-## Operator validation
-A/B/C/D remain **PASS**. Production gameplay not changed — no operator re-run required.
-
-## Final Commit
-`aa405546f0267eb5f77c7bd9c282219426bdacb5`
+## Commit
+*(recorded after commit)*

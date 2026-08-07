@@ -1,11 +1,12 @@
 # GP-S28P2 — Resource Depletion, Registry, Reassignment and FIFO Recovery
 
 ## Status
-**GP-S28P2_READY_FOR_MERGE**
+**GP-S28P2_DONE_MERGED**
 
 ## Baseline
-- Branch: `feature/gp-s28p2-depletion-resource-reassignment`
-- Base main: `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` (GP-S28P1; main does not yet contain P2)
+- Merged to `main` @ `e90b7bd48fb9080a881e6dda7be889eaa99a3161`
+- Feature branch was `feature/gp-s28p2-depletion-resource-reassignment`
+- Base main before merge: `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` (GP-S28P1)
 - Implementation tip (operator-validated): `64f8c8567dc1f004abcc3b9bc5917794f2132b08`
 - Test correction commit: `aa405546f0267eb5f77c7bd9c282219426bdacb5`
 
@@ -44,4 +45,4 @@ Production gameplay unchanged.
 Untouched / uncommitted: Blueprint/**, Materials/**, map, DefaultEngine.ini, Niagara, authored ResourceNode.
 
 ## Stop condition
-READY_FOR_MERGE pending tech-lead / operator merge approval. Do **not** start GP-S28P3 or merge in this close-out.
+**MERGED.** Follow-on: GP-S28P3 drop-off resilience spec — do not implement P3 until approved.

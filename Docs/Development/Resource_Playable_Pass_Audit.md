@@ -344,5 +344,6 @@ User’s P1–P4 order retained; **P3 narrowed** (no drop-off interface) to matc
 
 | Stage | Status |
 | --- | --- |
-| GP-S28P1 | **Merged** to `main` @ `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` |
-| GP-S28P2 | **READY_FOR_MERGE** on `feature/gp-s28p2-depletion-resource-reassignment` — operator scenarios A–D PASSED; depletion / registry / approach / reassignment / FIFO / partial-cargo. Details: `Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md` |
+| GP-S28P1 | **DONE / MERGED** to `main` @ `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` |
+| GP-S28P2 | **DONE / MERGED** to `main` @ `e90b7bd48fb9080a881e6dda7be889eaa99a3161` — depletion / registry / approach / reassignment / FIFO / partial-cargo. Details: `Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md` |
+| GP-S28P3 | **SPEC_READY_FOR_REVIEW** on `docs/gp-s28p3-dropoff-resilience-spec` — WaitingForDropOff / MainBase missing-unreachable recovery (no Hub drop-off). Details: `Claude_Tasks/GP-S28P3_DropOff_Resilience.md` |

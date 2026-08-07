@@ -36,21 +36,21 @@
 | Engine | **Unreal Engine 5.8.1** |
 | Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S28 merged** |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S28P1** @ `main` `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` |
+| Last closed / merged stage | **GP-S28P2** @ `main` `e90b7bd48fb9080a881e6dda7be889eaa99a3161` |
 | Slice 6 | **Completed** |
-| Current stage | **GP-S28P2_READY_FOR_MERGE** (`feature/gp-s28p2-depletion-resource-reassignment`) |
+| Current stage | **GP-S28P3_SPEC_READY_FOR_REVIEW** (`docs/gp-s28p3-dropoff-resilience-spec`) |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** GP-S28P2 — Resource depletion, registry, reassignment, FIFO recovery (`feature/gp-s28p2-depletion-resource-reassignment`). Task: [`Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md`](Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md). Status: **GP-S28P2_READY_FOR_MERGE**. Main does not yet contain P2.
+**Current:** GP-S28P3 — Drop-off resilience (MainBase haul recovery). Task: [`Claude_Tasks/GP-S28P3_DropOff_Resilience.md`](Claude_Tasks/GP-S28P3_DropOff_Resilience.md). Status: **GP-S28P3_SPEC_READY_FOR_REVIEW**. Code Allowed: **NO**.
 
-**Prior:** GP-S28P1 merged on `main` @ `86bcc974…`. P0 is a historical completed audit / plan — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
+**Prior:** GP-S28P2 merged on `main` @ `e90b7bd…`. GP-S28P1 @ `86bcc974…`. P0 is a historical completed audit / plan — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
 
-**Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation` — separate from P2.
+**Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation` — separate from P3.
 
-**NEXT (after P2 merge approval):** GP-S28P3 drop-off resilience — do not start until assigned.
+**NEXT:** operator / tech-lead review of GP-S28P3 spec. Do **not** implement until explicit approval.
 
 > Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28 already merged on main.
 
@@ -60,7 +60,7 @@
 2. GP-S16…GP-S28 — **DONE / merged** (selection, commands, movement, attack, worker/resources/storage)
 3. GP-SLICE7-AUDIT — combat reconciliation audit **completed on branch**, pending review (separate from S28P)
 4. **GP-S28P0** — historical resource playable pass audit / implementation plan (completed)
-5. GP-S28P1 — **DONE / MERGED** @ `86bcc974…`; GP-S28P2 — **READY_FOR_MERGE**; P3/P4 — not started
+5. GP-S28P1 — **DONE / MERGED** @ `86bcc974…`; GP-S28P2 — **DONE / MERGED** @ `e90b7bd…`; GP-S28P3 — **SPEC_READY_FOR_REVIEW**; P4 — not started
 
 ---
 

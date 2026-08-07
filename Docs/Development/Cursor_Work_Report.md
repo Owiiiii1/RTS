@@ -1,45 +1,22 @@
-# Cursor Work Report — GP-S28P2 Finalization Test Correction
+# Cursor Work Report — GP-S28P3 Spec Correction (Subscriptions)
 
 ## Status
-**GP-S28P2_READY_FOR_MERGE**
+**GP-S28P3_SPEC_READY_FOR_REVIEW**
 
-## Branch
-`feature/gp-s28p2-depletion-resource-reassignment`
+## Baseline
+`docs/gp-s28p3-dropoff-resilience-spec` (docs-only; main @ `e90b7bd…` includes P2)
 
-## Base Main
-`86bcc9740fde0f19ac40c70f2f49298680f5f7d6`
+## Review correction
+Fixed contradiction: mid-haul MainBase destruction cannot rely on bindings that exist only while WaitingForDropOff.
 
-## Initial finalization test failures
-| Command | Result | Fail |
-| --- | --- | --- |
-| `gp.Resource.RunDepletionReassignmentContractTest` | `Complete Failures=1 Cancelled=None` | `AnchorSearchCenterFindsNodeB` |
-| `gp.Resource.RunS28RegressionSuite` | `Complete Failures=1` | `HeldClearedAfterDepleteHaul` |
+## Active-haul interruption subscription
+While `ReturningToBase` / `DroppingOff`: bind GameState `OnMainBaseUnregistered` (preferred; matches ResourceNode registry pattern) filtered to **current haul target** → cancel move → WaitingForDropOff; preserve Cargo / Mine intent / search anchor. Clear binding on drop-off success, enter wait, command replace, haul leave, EndPlay.
 
-## Root causes
-### HeldClearedAfterDepleteHaul
-Obsolete pre-P2 hauling assertion expected held Mine cleared after depleted haul. Canonical P2 keeps Mine intent / search anchor through haul → PostDropOff (reassignment or WaitingForResource).
+## Waiting registration wake subscription
+While WaitingForDropOff only: bind `OnMainBaseRegistered` → wake once → unsubscribe → clear retry → attempt haul. Unrelated register/unregister = no-op. Unregister while waiting = no-op.
 
-**Change:** test expectation only (`HeldMinePersistsAfterDepleteHaul`). Production unchanged.
+## Docs-only
+No C++ / Config / Blueprint / map / content changes.
 
-### AnchorSearchCenterFindsNodeB
-Harness used raw MainBase actor center as PathStart (Z/obstacle) and could spawn Node B without approach-reachability from that PathStart. Production PostDropOff already found Node B from navigable drop-off PathStart (operator A PASS).
-
-**Change:** test harness — projected Base PathStart + spawn Node B only if approach-reachable within MaxPath. Production unchanged.
-
-## Rerun results (headless `-game -NullRHI` / `L_PrototypeArena`)
-| Command | Exact result |
-| --- | --- |
-| `gp.Resource.RunDepletionReassignmentContractTest` | `Complete Failures=0 Cancelled=None` |
-| `gp.Resource.RunS28RegressionSuite` | `Complete Failures=0` |
-
-## Builds
-| Target | Result |
-| --- | --- |
-| GPEditor Win64 Development + UHT | **PASS** (re-run after test-only C++) |
-| GP Win64 Development / Shipping | Prior finalization **PASS**; production C++ / Build.cs unchanged — not re-run |
-
-## Operator validation
-A/B/C/D remain **PASS**. Production gameplay not changed — no operator re-run required.
-
-## Final Commit
-`aa405546f0267eb5f77c7bd9c282219426bdacb5`
+## Commit
+`e90fc0b244af884bfeb63a7592662d25abb24ecf`

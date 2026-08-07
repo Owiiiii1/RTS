@@ -1,5 +1,58 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S28P3 Spec Correction (Active-Haul vs Waiting Subscriptions)
+
+Status: **GP-S28P3_SPEC_READY_FOR_REVIEW**
+
+### Branch
+`docs/gp-s28p3-dropoff-resilience-spec` (docs-only)
+
+### What was done
+- Split subscriptions: active-haul `OnMainBaseUnregistered` (current target) vs waiting `OnMainBaseRegistered` wake
+- Added state/event table; mid-haul destroy must not depend on wait-only binds or retry timer
+- Updated contract case 3/4/9 assertions; no production code
+
+### Commit
+`e90fc0b244af884bfeb63a7592662d25abb24ecf`
+
+### Stop condition
+Spec remains REVIEW. Do not implement until approved.
+
+---
+
+## 2026-08-07 — GP-S28P3 Drop-Off Resilience Specification
+
+Status: **GP-S28P3_SPEC_READY_FOR_REVIEW**
+
+### Branch
+`docs/gp-s28p3-dropoff-resilience-spec` from `main` @ `e90b7bd48fb9080a881e6dda7be889eaa99a3161`
+
+### What was done
+- Post-merge docs sync: GP-S28P2 = **DONE / MERGED** @ `e90b7bd…`
+- Created `Claude_Tasks/GP-S28P3_DropOff_Resilience.md` (Code Allowed: NO)
+- Audited main haul/MainBase/Storage: MissingMainBase clears held Mine today; WaitingForStorage unused; overflow LOST unchanged; no MainBase registry wake yet
+- Spec: WaitingForDropOff, registry wake + DropOffRetrySeconds, contract + operator plans; Hub drop-off / storage-full / HUD out of scope
+
+### Production code
+None (docs only).
+
+### Commit
+`b784cfe1a1b33a81075367e2a85f34a12b955c97`
+
+### Stop condition
+Spec review. Do **not** implement P3 until explicit approval. No merge in this close-out.
+
+---
+
+## 2026-08-07 — GP-S28P2 Merged to main
+
+Status: **GP-S28P2_DONE_MERGED**
+
+### Merge
+`e90b7bd48fb9080a881e6dda7be889eaa99a3161` on `main` (P1 remains `86bcc974…`).
+
+---
+
 ## 2026-08-07 — GP-S28P2 Finalization Test Correction
 
 Status: **GP-S28P2_READY_FOR_MERGE**
@@ -23,13 +76,13 @@ Test/harness only. Production unchanged. Operator A–D remain PASS.
 `aa405546f0267eb5f77c7bd9c282219426bdacb5`
 
 ### Stop condition
-READY_FOR_MERGE. Do not start P3 / merge in this close-out.
+Superseded by merge to `main` @ `e90b7bd…`.
 
 ---
 
 ## 2026-08-07 — GP-S28P2 Finalization
 
-Status: **GP-S28P2_READY_FOR_MERGE** *(superseded test evidence by Finalization Test Correction)*
+Status: **GP-S28P2_READY_FOR_MERGE** *(superseded by merge @ `e90b7bd…`)*
 
 ### Branch
 `feature/gp-s28p2-depletion-resource-reassignment` (no merge; main still at P1 `86bcc974…`)
@@ -49,7 +102,7 @@ Initial: Failures=1 each (`AnchorSearchCenterFindsNodeB`, `HeldClearedAfterDeple
 `9057c2fa767e3d3a49be9aa62f7826f052a65678`
 
 ### Stop condition
-READY_FOR_MERGE — merge only after tech-lead / operator approval. Do not start P3 in this close-out.
+Superseded by merge to `main` @ `e90b7bd…`.
 
 ---
 

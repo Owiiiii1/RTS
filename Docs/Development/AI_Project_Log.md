@@ -16,6 +16,9 @@ Status: **GP-S28P3_SPEC_READY_FOR_REVIEW**
 ### Production code
 None (docs only).
 
+### Commit
+`b784cfe1a1b33a81075367e2a85f34a12b955c97`
+
 ### Stop condition
 Spec review. Do **not** implement P3 until explicit approval. No merge in this close-out.
 

@@ -9,6 +9,7 @@
 #include "GPUnitCommandComponent.generated.h"
 
 class AGP_UnitBase;
+class AGP_Worker;
 class AGP_ResourceNode;
 class AGP_MainBase;
 class UGP_MovementComponent;
@@ -27,12 +28,14 @@ enum class EGP_AttackExecutionState : uint8
 	Ready
 };
 
-/** Mine approach / active orchestration (GP-S27). Plain C++ — not UENUM / not Blueprint. */
+/** Mine approach / active orchestration (GP-S27/S28P2). Plain C++ — not UENUM / not Blueprint. */
 enum class EGP_MineExecutionState : uint8
 {
 	Idle,
 	Approaching,
-	Active
+	Active,
+	/** Cargo not full; no reachable compatible ResourceNode candidate. */
+	WaitingForResource
 };
 
 /** Haul / return-to-base orchestration (GP-S28). Plain C++ — not UENUM / not Blueprint. */
@@ -162,6 +165,16 @@ public:
 	/** Next arrival distance check treats Worker as slightly OOR once (contract test). */
 	void DebugForceNextMineArrivalOutOfRangeOnce();
 	void DebugForceNextHaulArrivalOutOfRangeOnce();
+
+	/** Mine resource-search anchor diagnostics (GP-S28P2 contract). */
+	bool DebugHasMineSearchAnchor() const { return bHasMineSearchAnchor; }
+	FVector DebugGetMineSearchAnchorLocation() const { return MineSearchAnchorLocation; }
+
+	/** FIFO / re-entry watchdog counters for contract tests (not Tick). */
+	void DebugResetFifoWatchdogCounters();
+	int32 DebugGetMineBeginCallsThisTransition() const { return DebugMineBeginCallsThisTransition; }
+	int32 DebugGetReassignmentAttemptsThisTransition() const { return DebugReassignmentAttemptsThisTransition; }
+	int32 DebugGetSameTargetRetargetAttempts() const { return DebugSameTargetRetargetAttempts; }
 #endif
 
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Attack")
@@ -231,6 +244,32 @@ private:
 		EGP_MiningStopReason Reason);
 	float ResolveMineInteractionRangeCm(const UGP_MiningComponent* Mining, const AGP_ResourceNode* Node) const;
 
+	/** GP-S28P2 path-aware reassignment / WaitingForResource. */
+	bool TryRetargetMineToNode(AGP_ResourceNode* NewNode, uint32 MineSerial, bool bStartApproach);
+	AGP_ResourceNode* FindAutoResourceCandidate(
+		AGP_Worker* Worker,
+		AGP_ResourceNode* ExcludeNode,
+		bool bRequireFreeSlot,
+		FName SearchReason);
+	bool TryAutoReassignMine(
+		uint32 MineSerial,
+		AGP_ResourceNode* PreferredOrFailedNode,
+		bool bPreferFreeSlotFirst,
+		FName SearchReason);
+	void EnterWaitingForResource(uint32 MineSerial);
+	/**
+	 * If Worker still carries cargo, haul to MainBase instead of WaitingForResource.
+	 * Returns true when haul was started (or redirect attempted with valid MainBase).
+	 * Non-shipping: Error log on stranded-cargo invariant. No recursive re-enter.
+	 */
+	bool TryHaulPartialCargoBeforeWaiting(uint32 MineSerial, AGP_ResourceNode* DepositHint);
+	void BindResourceRegistryWake();
+	void UnbindResourceRegistryWake();
+	void HandleResourceNodeRegisteredWake(AGP_ResourceNode* Node);
+	void HandleWaitingForResourceSafetyRetry();
+	void SetMineSearchAnchorFromNode(const AGP_ResourceNode* Node);
+	void ClearMineSearchAnchor();
+
 	/**
 	 * Computes approach destination so even AcceptanceRadius edge completion stays
 	 * strictly inside InteractionRange in 3D (accounts for DeltaZ + safety margin).
@@ -283,8 +322,7 @@ private:
 	static const TCHAR* MineStateToString(EGP_MineExecutionState State);
 	static const TCHAR* HaulStateToString(EGP_HaulExecutionState State);
 
-	/** Inward margin beyond AcceptanceRadius so worst-case arrival stays < InteractionRange. */
-	static constexpr float WorkerMineApproachSafetyMarginCm = 25.0f;
+	float ResolveApproachSafetyMarginCm() const;
 
 	void SetAttackTickEnabled(bool bEnabled);
 	bool HasExactActiveHeldAttack() const;
@@ -372,6 +410,37 @@ private:
 	float MineLastArrivalDistance = -1.0f;
 	float MineLastArrivalRangeError = -1.0f;
 	int32 MineApproachAttempt = 0;
+
+	FDelegateHandle ResourceNodeRegisteredHandle;
+	FTimerHandle WaitingForResourceRetryTimerHandle;
+	bool bResourceRegistryWakeBound = false;
+
+	/**
+	 * Persistent resource-cluster anchor for Mine intent (GP-S28P2).
+	 * SearchCenter for auto-reassignment; survives target Destroy / haul to MainBase.
+	 * Cleared on command replace / Mine cancel / EndPlay via ResetMineExecutor.
+	 */
+	FVector MineSearchAnchorLocation = FVector::ZeroVector;
+	bool bHasMineSearchAnchor = false;
+
+	/** Prevents recursive BeginMiningAtHeldTarget ↔ Retarget chains in one stack. */
+	bool bBeginMiningAtHeldTargetInProgress = false;
+
+	/** Prevents EnterWaitingForResource ↔ stranded-cargo haul redirect recursion. */
+	bool bRedirectingStrandedCargoHaul = false;
+
+#if !UE_BUILD_SHIPPING
+	/** Suppress identical WaitingForResource no-candidate summaries. */
+	int32 LastWaitingNoCandidateRegistryCount = -1;
+	FName LastWaitingNoCandidateReason = NAME_None;
+	FVector LastWaitingNoCandidateAnchor = FVector::ZeroVector;
+	bool bHasLastWaitingNoCandidate = false;
+
+	bool bLoggedSameTargetRetargetSkip = false;
+	int32 DebugMineBeginCallsThisTransition = 0;
+	int32 DebugReassignmentAttemptsThisTransition = 0;
+	int32 DebugSameTargetRetargetAttempts = 0;
+#endif
 
 	/** GP-S28 Haul orchestration (Worker only; shares Mine command serial as chain id). */
 	EGP_HaulExecutionState HaulState = EGP_HaulExecutionState::Idle;

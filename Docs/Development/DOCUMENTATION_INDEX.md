@@ -36,21 +36,21 @@
 | Engine | **Unreal Engine 5.8.1** |
 | Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S28 merged** |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S28 Storage + ThreatValue** @ `main` `035c486758059032bb2551520834dd73f8667ef5` |
+| Last closed / merged stage | **GP-S28P1** @ `main` `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` |
 | Slice 6 | **Completed** |
-| Current stage | **GP-S28P1_READY_FOR_MERGE** (`feature/gp-s28p1-blueprint-cargo-visual`) |
+| Current stage | **GP-S28P2_READY_FOR_MERGE** (`feature/gp-s28p2-depletion-resource-reassignment`) |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** GP-S28P1 — Blueprint presentation + cargo visual + Niagara mining hook + generated ResourceNode visual override (`feature/gp-s28p1-blueprint-cargo-visual`). Task: [`Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md`](Claude_Tasks/GP-S28P1_Blueprint_Cargo_Visual.md). Status: **GP-S28P1_READY_FOR_MERGE**.
+**Current:** GP-S28P2 — Resource depletion, registry, reassignment, FIFO recovery (`feature/gp-s28p2-depletion-resource-reassignment`). Task: [`Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md`](Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md). Status: **GP-S28P2_READY_FOR_MERGE**. Main does not yet contain P2.
 
-**Prior audit (kept):** GP-S28P0 on `audit/gp-s28p-resource-playable-pass` — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
+**Prior:** GP-S28P1 merged on `main` @ `86bcc974…`. P0 is a historical completed audit / plan — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
 
-**Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation`.
+**Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation` — separate from P2.
 
-**NEXT (after P1 merge):** GP-S28P2 depletion + reassignment — do not start until assigned.
+**NEXT (after P2 merge approval):** GP-S28P3 drop-off resilience — do not start until assigned.
 
 > Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28 already merged on main.
 
@@ -58,9 +58,9 @@
 
 1. GP-S01 … GP-S15 — **DONE**
 2. GP-S16…GP-S28 — **DONE / merged** (selection, commands, movement, attack, worker/resources/storage)
-3. GP-SLICE7-AUDIT — combat reconciliation audit **completed on branch**, pending review
-4. **GP-S28P0** — resource playable pass audit **READY_FOR_REVIEW**
-5. GP-S28P1…P4 — proposed after P0 acceptance (see Resource_Playable_Pass_Audit)
+3. GP-SLICE7-AUDIT — combat reconciliation audit **completed on branch**, pending review (separate from S28P)
+4. **GP-S28P0** — historical resource playable pass audit / implementation plan (completed)
+5. GP-S28P1 — **DONE / MERGED** @ `86bcc974…`; GP-S28P2 — **READY_FOR_MERGE**; P3/P4 — not started
 
 ---
 
@@ -78,6 +78,7 @@
 | `GRIM_PROTOCOL_START_RULES.md` | Active process SoT |
 | `Docs/Development/*` ops + Claude task specs | Active |
 | `Docs/Game_Pitch.md` | Active onboarding |
+| `UGP_ResourceGameplaySettings` + `GP/Config/DefaultGame.ini` (`[/Script/GPRuntime.GP_ResourceGameplaySettings]`) | Active — Project Settings → Game → GP Resource Gameplay (GP-S28P2) |
 
 ### Stale / needs cleanup (still in active tree)
 

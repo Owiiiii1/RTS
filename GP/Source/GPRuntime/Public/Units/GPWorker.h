@@ -46,6 +46,7 @@ enum class EGP_WorkerActivityState : uint8
 	DroppingOff UMETA(DisplayName = "Dropping Off"),
 	ReturningToDeposit UMETA(DisplayName = "Returning To Deposit"),
 	WaitingForStorage UMETA(DisplayName = "Waiting For Storage"),
+	WaitingForResource UMETA(DisplayName = "Waiting For Resource"),
 	CommandFailed UMETA(DisplayName = "Command Failed")
 };
 
@@ -94,6 +95,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Worker")
 	EGP_WorkerActivityState GetWorkerActivityState() const;
 
+	UFUNCTION(BlueprintPure, Category = "GP|Worker|ResourceSearch")
+	float GetResourceSearchRadiusCm() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Worker|ResourceSearch")
+	float GetMaxResourcePathLengthCm() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Worker|ResourceSearch")
+	bool GetAllowManualTargetOutsideAutoSearchRadius() const
+	{
+		return bAllowManualTargetOutsideAutoSearchRadius;
+	}
+
 	/**
 	 * Cargo presentation signal.
 	 * Operator BP usage: keep backpack/container mesh always visible; do not hide via bVisible.
@@ -134,6 +147,11 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Mining", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_MiningComponent> MiningComponent;
+
+	/** Manual Mine targets outside project ResourceSearchRadius remain allowed when true. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Worker|ResourceSearch",
+		meta = (AllowPrivateAccess = "true"))
+	bool bAllowManualTargetOutsideAutoSearchRadius = true;
 
 private:
 	UFUNCTION()
@@ -337,6 +355,65 @@ private:
 	int32 ContractTeamId = 1;
 	bool bOperatorTeam1PresentAtStart = false;
 	TWeakObjectPtr<AGP_MainBase> OperatorTeam1MainBaseWeak;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
+};
+
+/** GP-S28P2 depletion / registry / reassignment contract (debug console). */
+UCLASS()
+class GPRUNTIME_API UGP_DepletionReassignmentContractTestRunner : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
+	void Start(UWorld* InWorld);
+
+private:
+	void ScheduleNext();
+	void AdvanceStage();
+	bool Expect(bool bOk, const TCHAR* Label);
+	void Abort(const TCHAR* Reason);
+	void Finish();
+	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void UnbindWorldCleanup();
+	void CleanupActors();
+
+	UFUNCTION()
+	void HandleDepleted(AGP_ResourceNode* ResourceNode, int32 PreviousAmount);
+
+	int32 StageIndex = 0;
+	int32 Failures = 0;
+	bool bFinished = false;
+	FDelegateHandle WorldCleanupHandle;
+	FTimerHandle StageTimerHandle;
+	TWeakObjectPtr<UWorld> WorldWeak;
+	TWeakObjectPtr<AGP_ResourceNode> NodeAWeak;
+	TWeakObjectPtr<AGP_ResourceNode> NodeBWeak;
+	TWeakObjectPtr<AGP_ResourceNode> WakeInsideWeak;
+	TWeakObjectPtr<AGP_ResourceNode> WakeOutsideWeak;
+	TWeakObjectPtr<AGP_Worker> WorkerWeak;
+	TWeakObjectPtr<AGP_Worker> SlotHolderWeak;
+	TWeakObjectPtr<AGP_MainBase> MainBaseWeak;
+	TWeakObjectPtr<AGP_ResourceNode> FifoNodeWeak;
+	TArray<TWeakObjectPtr<AGP_Worker>> FifoWorkers;
+	FVector AnchorClusterLocation = FVector::ZeroVector;
+	FVector MainBaseLocation = FVector::ZeroVector;
+	float TestSearchRadiusCm = 1000.0f;
+	float TestMaxPathLengthCm = 6000.0f;
+	float SavedSettingsSearchRadiusCm = 3000.0f;
+	float SavedSettingsMaxPathLengthCm = 6000.0f;
+	float SavedSettingsRetrySeconds = 3.0f;
+	bool bSettingsOverridden = false;
+	int32 MovementWaitTicks = 0;
+	double MovementWaitStartTime = 0.0;
+	float MovementWaitTimeoutSeconds = 45.0f;
+	int32 DepletionEventCount = 0;
+	int32 LastDepletionPreviousAmount = -1;
+	float PartialThreatBefore = 0.0f;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

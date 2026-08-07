@@ -13,6 +13,7 @@ public class GPRuntime : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"DeveloperSettings",
 			"InputCore",
 			"EnhancedInput",
 			"GameplayAbilities",

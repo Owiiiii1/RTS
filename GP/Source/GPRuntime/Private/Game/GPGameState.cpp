@@ -3,7 +3,13 @@
 #include "Game/GPGameState.h"
 
 #include "Buildings/GPMainBase.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 #include "Net/UnrealNetwork.h"
+#include "Resources/GPResourceApproach.h"
+#include "Resources/GPResourceDefinition.h"
+#include "Resources/GPResourceNode.h"
+#include "Resources/GPResourceNodeSearch.h"
 #include "Tags/GPGameplayTags.h"
 
 AGP_GameState::AGP_GameState()
@@ -423,6 +429,381 @@ int32 AGP_GameState::CountRegisteredMainBasesForTeam(int32 InTeamId) const
 bool AGP_GameState::IsMainBaseRegistryUniqueForTeam(int32 InTeamId) const
 {
 	return CountRegisteredMainBasesForTeam(InTeamId) <= 1;
+}
+
+void AGP_GameState::PruneInvalidResourceNodeRegistrations()
+{
+	RegisteredResourceNodes.RemoveAll([](const TWeakObjectPtr<AGP_ResourceNode>& Weak)
+	{
+		const AGP_ResourceNode* Node = Weak.Get();
+		return !IsValid(Node) || Node->IsActorBeingDestroyed();
+	});
+}
+
+AGP_GameState::EGP_ResourceNodeRegisterResult AGP_GameState::RegisterResourceNode(AGP_ResourceNode* ResourceNode)
+{
+	if (!HasAuthority())
+	{
+		return EGP_ResourceNodeRegisterResult::RejectedNoAuthority;
+	}
+	if (!IsValid(ResourceNode) || ResourceNode->IsActorBeingDestroyed())
+	{
+		return EGP_ResourceNodeRegisterResult::RejectedInvalidActor;
+	}
+	if (ResourceNode->HasCompletedDepletionTransition() || ResourceNode->IsDestroyPending())
+	{
+		return EGP_ResourceNodeRegisterResult::RejectedDepletedOrPendingDestroy;
+	}
+
+	PruneInvalidResourceNodeRegistrations();
+
+	for (const TWeakObjectPtr<AGP_ResourceNode>& Weak : RegisteredResourceNodes)
+	{
+		if (Weak.Get() == ResourceNode)
+		{
+			return EGP_ResourceNodeRegisterResult::AlreadyRegistered;
+		}
+	}
+
+	RegisteredResourceNodes.Add(ResourceNode);
+	OnResourceNodeRegistered.Broadcast(ResourceNode);
+	UE_LOG(LogTemp, Log,
+		TEXT("AGP_GameState::RegisterResourceNode: Registered=%s RegistrySize=%d"),
+		*GetNameSafe(ResourceNode),
+		RegisteredResourceNodes.Num());
+	return EGP_ResourceNodeRegisterResult::Registered;
+}
+
+void AGP_GameState::UnregisterResourceNode(AGP_ResourceNode* ResourceNode)
+{
+	PruneInvalidResourceNodeRegistrations();
+	if (ResourceNode == nullptr)
+	{
+		return;
+	}
+
+	const int32 Removed = RegisteredResourceNodes.RemoveAll([ResourceNode](const TWeakObjectPtr<AGP_ResourceNode>& Weak)
+	{
+		return !Weak.IsValid() || Weak.Get() == ResourceNode;
+	});
+	if (Removed > 0)
+	{
+		OnResourceNodeUnregistered.Broadcast(ResourceNode);
+	}
+}
+
+int32 AGP_GameState::GetRegisteredResourceNodeCount() const
+{
+	int32 Count = 0;
+	for (const TWeakObjectPtr<AGP_ResourceNode>& Weak : RegisteredResourceNodes)
+	{
+		if (Weak.IsValid())
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+bool AGP_GameState::EvaluateResourceNodePath(
+	const FGP_ResourceNodeSearchQuery& Query,
+	AGP_ResourceNode* Node,
+	float& OutPathLengthCm,
+	float& OutDirectDistanceCm) const
+{
+	OutPathLengthCm = 0.0f;
+	OutDirectDistanceCm = 0.0f;
+	if (!IsValid(Node) || Query.PathfindingActor == nullptr)
+	{
+		return false;
+	}
+
+	OutDirectDistanceCm = FVector::Dist(Query.SearchCenter, Node->GetActorLocation());
+	if (OutDirectDistanceCm > Query.SearchRadiusCm + KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+
+	GPResourceApproach::FEvaluateParams Params;
+	Params.PathStart = Query.PathStart;
+	Params.InteractionRangeCm = Query.InteractionRangeCm;
+	Params.AcceptanceRadiusCm = Query.AcceptanceRadiusCm;
+	Params.SafetyMarginCm = Query.ApproachSafetyMarginCm;
+	Params.MaxPathLengthCm = Query.MaxPathLengthCm;
+	Params.DirectionCount = Query.ApproachDirectionCount;
+	Params.PathfindingActor = Query.PathfindingActor;
+
+	const GPResourceApproach::FEvaluateResult Eval =
+		GPResourceApproach::EvaluateNodeApproachPath(GetWorld(), Node, Params);
+	if (!Eval.bReachable)
+	{
+		return false;
+	}
+
+	OutPathLengthCm = Eval.PathLengthCm;
+	return true;
+}
+
+void AGP_GameState::FindResourceCandidates(
+	const FGP_ResourceNodeSearchQuery& Query,
+	TArray<FGP_ResourceNodeCandidate>& OutCandidates) const
+{
+	OutCandidates.Reset();
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	int32 RegistryCount = 0;
+	for (const TWeakObjectPtr<AGP_ResourceNode>& Weak : RegisteredResourceNodes)
+	{
+		if (Weak.IsValid())
+		{
+			++RegistryCount;
+		}
+	}
+
+#if !UE_BUILD_SHIPPING
+	const bool bLog = Query.bLogDiagnostics;
+	if (bLog)
+	{
+		UE_LOG(LogTemp, Verbose,
+			TEXT("GP ResourceReassignmentSearch: Reason=%s SearchCenter=(%.0f,%.0f,%.0f) PathStart=(%.0f,%.0f,%.0f) Radius=%.0f MaxPath=%.0f RegistryCount=%d RequireFreeSlot=%s Exclude=%s"),
+			*Query.SearchReason.ToString(),
+			Query.SearchCenter.X, Query.SearchCenter.Y, Query.SearchCenter.Z,
+			Query.PathStart.X, Query.PathStart.Y, Query.PathStart.Z,
+			Query.SearchRadiusCm,
+			Query.MaxPathLengthCm,
+			RegistryCount,
+			Query.bRequireFreeSlot ? TEXT("true") : TEXT("false"),
+			*GetNameSafe(Query.ExcludeNode));
+	}
+
+	auto ResourceTypeLabel = [](const UGP_ResourceDefinition* Def) -> FString
+	{
+		if (Def == nullptr)
+		{
+			return FString(TEXT("None"));
+		}
+		switch (Def->ResourceType)
+		{
+		case EGP_ResourceType::None: return FString(TEXT("None"));
+		case EGP_ResourceType::Ore: return FString(TEXT("Ore"));
+		default: return FString(TEXT("Other"));
+		}
+	};
+#else
+	(void)RegistryCount;
+#endif
+
+	for (const TWeakObjectPtr<AGP_ResourceNode>& Weak : RegisteredResourceNodes)
+	{
+		AGP_ResourceNode* Node = Weak.Get();
+		if (!IsValid(Node) || Node->IsActorBeingDestroyed())
+		{
+			continue;
+		}
+
+		const FVector NodeLoc = Node->GetActorLocation();
+		const UGP_ResourceDefinition* NodeDef = Node->ResolveResourceDefinition(true);
+		const int32 ActiveCount = Node->GetActiveMinerCount();
+		const int32 WaitingCount = Node->GetWaitingMinerCount();
+		const int32 MaxMiners = Node->GetMaxConcurrentMiners();
+		const bool bHasFreeSlot = ActiveCount < MaxMiners;
+		const float DistFromCenter = FVector::Dist(Query.SearchCenter, NodeLoc);
+
+		FVector Approach = FVector::ZeroVector;
+		float PathLength = -1.0f;
+
+		auto FinalizeReject = [&](EGP_ResourceCandidateRejectReason Reason)
+		{
+#if !UE_BUILD_SHIPPING
+			if (bLog)
+			{
+				UE_LOG(LogTemp, Log,
+					TEXT("GP ResourceCandidate Rejected: Candidate=%s Loc=%s Type=%s Depleted=%s DestroyPending=%s Amount=%d Active=%d Waiting=%d Max=%d HasFreeSlot=%s DistFromCenter=%.1f PathStart=(%.0f,%.0f,%.0f) Approach=%s PathLength=%.1f Reason=%s"),
+					*GetNameSafe(Node),
+					*NodeLoc.ToCompactString(),
+					*ResourceTypeLabel(NodeDef),
+					Node->IsDepleted() || Node->HasCompletedDepletionTransition() ? TEXT("true") : TEXT("false"),
+					Node->IsDestroyPending() ? TEXT("true") : TEXT("false"),
+					Node->GetCurrentAmount(),
+					ActiveCount,
+					WaitingCount,
+					MaxMiners,
+					bHasFreeSlot ? TEXT("true") : TEXT("false"),
+					DistFromCenter,
+					Query.PathStart.X, Query.PathStart.Y, Query.PathStart.Z,
+					*Approach.ToCompactString(),
+					PathLength,
+					GPResourceApproach::RejectReasonToString(Reason));
+			}
+#else
+			(void)Reason;
+#endif
+		};
+
+		if (Node == Query.ExcludeNode)
+		{
+			FinalizeReject(EGP_ResourceCandidateRejectReason::ExcludedNode);
+			continue;
+		}
+		if (Node->IsDestroyPending())
+		{
+			FinalizeReject(EGP_ResourceCandidateRejectReason::DestroyPending);
+			continue;
+		}
+		if (Node->HasCompletedDepletionTransition() || Node->IsDepleted())
+		{
+			FinalizeReject(EGP_ResourceCandidateRejectReason::Depleted);
+			continue;
+		}
+		if (Node->IsClearingOccupancy())
+		{
+			FinalizeReject(EGP_ResourceCandidateRejectReason::ClearingOccupancy);
+			continue;
+		}
+		if (!Node->CanAcceptMineCommand(true, nullptr))
+		{
+			FinalizeReject(EGP_ResourceCandidateRejectReason::MineRejected);
+			continue;
+		}
+		if (NodeDef == nullptr && Query.CompatibleDefinition != nullptr)
+		{
+			FinalizeReject(EGP_ResourceCandidateRejectReason::UnresolvedDefinition);
+			continue;
+		}
+		if (Query.CompatibleDefinition != nullptr)
+		{
+			const bool bSameAsset = NodeDef == Query.CompatibleDefinition;
+			const bool bSameType =
+				NodeDef != nullptr
+				&& Query.CompatibleDefinition->ResourceType != EGP_ResourceType::None
+				&& NodeDef->ResourceType == Query.CompatibleDefinition->ResourceType;
+			if (!bSameAsset && !bSameType)
+			{
+				FinalizeReject(EGP_ResourceCandidateRejectReason::IncompatibleResourceType);
+				continue;
+			}
+		}
+		if (Query.bRequireFreeSlot && !bHasFreeSlot)
+		{
+			FinalizeReject(EGP_ResourceCandidateRejectReason::NoFreeSlot);
+			continue;
+		}
+		if (DistFromCenter > Query.SearchRadiusCm + KINDA_SMALL_NUMBER)
+		{
+			FinalizeReject(EGP_ResourceCandidateRejectReason::OutsideSearchRadius);
+			continue;
+		}
+
+		GPResourceApproach::FEvaluateParams Params;
+		Params.PathStart = Query.PathStart;
+		Params.InteractionRangeCm = Query.InteractionRangeCm;
+		Params.AcceptanceRadiusCm = Query.AcceptanceRadiusCm;
+		Params.SafetyMarginCm = Query.ApproachSafetyMarginCm;
+		Params.MaxPathLengthCm = Query.MaxPathLengthCm;
+		Params.DirectionCount = Query.ApproachDirectionCount;
+		Params.PathfindingActor = Query.PathfindingActor;
+
+		const GPResourceApproach::FEvaluateResult Eval =
+			GPResourceApproach::EvaluateNodeApproachPath(GetWorld(), Node, Params);
+		Approach = Eval.BestApproachLocation;
+		PathLength = Eval.PathLengthCm;
+		if (!Eval.bReachable)
+		{
+			FinalizeReject(Eval.RejectReason != EGP_ResourceCandidateRejectReason::None
+				? Eval.RejectReason
+				: EGP_ResourceCandidateRejectReason::CandidateProjectionFailed);
+			continue;
+		}
+
+		FGP_ResourceNodeCandidate Candidate;
+		Candidate.Node = Node;
+		Candidate.BestApproachLocation = Eval.BestApproachLocation;
+		Candidate.PathLengthCm = Eval.PathLengthCm;
+		Candidate.DirectDistanceCm = DistFromCenter;
+		Candidate.bHasFreeSlot = bHasFreeSlot;
+#if !UE_BUILD_SHIPPING
+		Candidate.RejectReason = EGP_ResourceCandidateRejectReason::Accepted;
+		if (bLog)
+		{
+			UE_LOG(LogTemp, Log,
+				TEXT("GP ResourceCandidate Accepted: Candidate=%s Loc=%s Type=%s Depleted=false DestroyPending=false Amount=%d Active=%d Waiting=%d Max=%d HasFreeSlot=%s DistFromCenter=%.1f PathStart=(%.0f,%.0f,%.0f) Approach=%s PathLength=%.1f Reason=Accepted"),
+				*GetNameSafe(Node),
+				*NodeLoc.ToCompactString(),
+				*ResourceTypeLabel(NodeDef),
+				Node->GetCurrentAmount(),
+				ActiveCount,
+				WaitingCount,
+				MaxMiners,
+				bHasFreeSlot ? TEXT("true") : TEXT("false"),
+				DistFromCenter,
+				Query.PathStart.X, Query.PathStart.Y, Query.PathStart.Z,
+				*Eval.BestApproachLocation.ToCompactString(),
+				Eval.PathLengthCm);
+		}
+#endif
+		OutCandidates.Add(Candidate);
+	}
+
+	OutCandidates.Sort([PreferFree = Query.bPreferFreeSlot](const FGP_ResourceNodeCandidate& A, const FGP_ResourceNodeCandidate& B)
+	{
+		if (PreferFree && A.bHasFreeSlot != B.bHasFreeSlot)
+		{
+			return A.bHasFreeSlot && !B.bHasFreeSlot;
+		}
+		if (!FMath::IsNearlyEqual(A.PathLengthCm, B.PathLengthCm))
+		{
+			return A.PathLengthCm < B.PathLengthCm;
+		}
+		if (!FMath::IsNearlyEqual(A.DirectDistanceCm, B.DirectDistanceCm))
+		{
+			return A.DirectDistanceCm < B.DirectDistanceCm;
+		}
+		const FString NameA = GetNameSafe(A.Node);
+		const FString NameB = GetNameSafe(B.Node);
+		return NameA < NameB;
+	});
+
+#if !UE_BUILD_SHIPPING
+	if (bLog)
+	{
+		if (OutCandidates.Num() == 0)
+		{
+			UE_LOG(LogTemp, Log,
+				TEXT("GP ResourceReassignmentNoCandidate: Reason=%s SearchCenter=(%.0f,%.0f,%.0f) PathStart=(%.0f,%.0f,%.0f) Radius=%.0f MaxPath=%.0f RegistryCount=%d"),
+				*Query.SearchReason.ToString(),
+				Query.SearchCenter.X, Query.SearchCenter.Y, Query.SearchCenter.Z,
+				Query.PathStart.X, Query.PathStart.Y, Query.PathStart.Z,
+				Query.SearchRadiusCm,
+				Query.MaxPathLengthCm,
+				RegistryCount);
+		}
+		else
+		{
+			const FGP_ResourceNodeCandidate& Best = OutCandidates[0];
+			UE_LOG(LogTemp, Log,
+				TEXT("GP ResourceReassignmentSelected: Reason=%s Node=%s Approach=%s DistFromCenter=%.1f PathLen=%.1f FreeSlot=%s Candidates=%d"),
+				*Query.SearchReason.ToString(),
+				*GetNameSafe(Best.Node),
+				*Best.BestApproachLocation.ToCompactString(),
+				Best.DirectDistanceCm,
+				Best.PathLengthCm,
+				Best.bHasFreeSlot ? TEXT("true") : TEXT("false"),
+				OutCandidates.Num());
+		}
+	}
+#else
+	(void)RegistryCount;
+#endif
+}
+
+AGP_ResourceNode* AGP_GameState::FindBestResourceCandidate(const FGP_ResourceNodeSearchQuery& Query) const
+{
+	TArray<FGP_ResourceNodeCandidate> Candidates;
+	FindResourceCandidates(Query, Candidates);
+	return Candidates.Num() > 0 ? Candidates[0].Node.Get() : nullptr;
 }
 
 void AGP_GameState::BroadcastMatchResultChanged(

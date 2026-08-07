@@ -187,6 +187,12 @@ private:
 	/** Guards StopMining against occupancy-delegate reentrancy (Release→Broadcast→Stop). */
 	bool bIsStoppingMining = false;
 
+	/**
+	 * True while ExecuteMiningCycle is inside ConsumeResource→AddCargo.
+	 * Depletion ClearOccupancy must not StopMining before cargo is credited.
+	 */
+	bool bExecutingMiningCycle = false;
+
 	float CachedAmountPerMiningCycle = 0.0f;
 	float CachedMiningCycleDurationSeconds = 0.0f;
 	float CachedInteractionRangeCm = 0.0f;

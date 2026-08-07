@@ -1,5 +1,153 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-07 — GP-S28P2 Finalization Test Correction
+
+Status: **GP-S28P2_READY_FOR_MERGE**
+
+### Branch
+`feature/gp-s28p2-depletion-resource-reassignment` (no merge)
+
+### Initial headless fails
+- `AnchorSearchCenterFindsNodeB` — harness PathStart at MainBase center / NodeB without approach check
+- `HeldClearedAfterDepleteHaul` — obsolete pre-P2 held-clear expectation
+
+### Correction
+Test/harness only. Production unchanged. Operator A–D remain PASS.
+
+### Rerun
+- `gp.Resource.RunDepletionReassignmentContractTest` → `Complete Failures=0 Cancelled=None`
+- `gp.Resource.RunS28RegressionSuite` → `Complete Failures=0`
+- GPEditor Dev+UHT — **PASSED**
+
+### Commit
+`aa405546f0267eb5f77c7bd9c282219426bdacb5`
+
+### Stop condition
+READY_FOR_MERGE. Do not start P3 / merge in this close-out.
+
+---
+
+## 2026-08-07 — GP-S28P2 Finalization
+
+Status: **GP-S28P2_READY_FOR_MERGE** *(superseded test evidence by Finalization Test Correction)*
+
+### Branch
+`feature/gp-s28p2-depletion-resource-reassignment` (no merge; main still at P1 `86bcc974…`)
+
+### Operator validation
+A/B/C/D **PASSED** (depletion→Node B; 5th→free B; FIFO stable; partial-cargo haul-then-wait).
+
+### Tests (headless `-game -NullRHI`) — superseded
+Initial: Failures=1 each (`AnchorSearchCenterFindsNodeB`, `HeldClearedAfterDepleteHaul`). Corrected to Failures=0 in follow-up entry.
+
+### Builds
+- GPEditor Win64 Development + UHT — **PASSED**
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED**
+
+### Final commit
+`9057c2fa767e3d3a49be9aa62f7826f052a65678`
+
+### Stop condition
+READY_FOR_MERGE — merge only after tech-lead / operator approval. Do not start P3 in this close-out.
+
+---
+
+## 2026-08-07 — GP-S28P2 Partial-Cargo Depletion Correction (Operator Failure #4)
+
+Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p2-depletion-resource-reassignment` (no new branch; no merge)
+
+### Failure
+Node Amount=10 / CargoCapacity=50 / MainBase present / no alternate → Worker mines 10, node depletes, Cargo=10, immediate PostDepletion WaitingForResource (no haul).
+
+### Root cause
+Depletion ClearOccupancy stopped mining before AddCargo; UnitCommand reassigned with Cargo=0; cargo stranded.
+
+### Correction
+- ExecuteMiningCycle: unbind + `bExecutingMiningCycle` around Consume→AddCargo; terminal `DepositDepleted` after credit
+- Haul-before-wait on depleted BeginMining paths; WaitingForResource invariant redirect (non-shipping Error)
+- Contract tests: partial haul, partial+alt Node B, zero-cargo no haul
+- GPEditor Dev+UHT **PASSED**. PIE operator pending. Operator-local assets untouched.
+- Commit: `64f8c8567dc1f004abcc3b9bc5917794f2132b08`
+
+---
+
+## 2026-08-07 — GP-S28P2 FIFO Crash Correction (Operator Failure #3)
+
+Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p2-depletion-resource-reassignment` (no new branch; no merge)
+
+### Failure
+5 Workers / Max=4 → Active=4 Waiting=1 → Editor crash. Stale 05.08 CrashContext ignored; 07.08 GP.log shows WaitingForSlot ↔ SlotFullAlternative ↔ same-target MineRetarget loop.
+
+### Correction
+Alternative search before FIFO only; WaitingForSlot stable; same-target + re-entry guards; FIFO contract test + watchdog counters. GPEditor Dev+UHT **PASSED**. PIE suite operator pending. Operator-local assets untouched.
+
+---
+
+## 2026-08-06 — GP-S28P2 Approach-Path + Settings Correction (Operator Failure #2)
+
+Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p2-depletion-resource-reassignment` (no new branch; no merge)
+
+### Operator failure #2
+Anchor/radius OK (`RegistryCount=1`); still `NoCandidate` + WaitingWake spam. Reject diagnostics were Verbose-only.
+
+### Root cause
+Search path destination was ResourceNode actor center (inside CollisionBox / nav obstacle), not a Mining-Range approach point.
+
+### Correction
+- `GPResourceApproach` multi-sample projected approach paths
+- Log-level `GP ResourceCandidate Accepted|Rejected` with exact reason
+- `UGP_ResourceGameplaySettings` + `DefaultGame.ini` (retry 3s, search/path/approach/depletion)
+- Single prefer-free search pass; WaitingWake duplicate summary suppression
+- Authority free-slot from live occupancy arrays
+- GPEditor Dev+UHT **PASSED**. Operator-local assets untouched.
+
+---
+
+## 2026-08-06 — GP-S28P2 Search-Anchor Correction (Post Operator Failure)
+
+Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p2-depletion-resource-reassignment` (no new branch; no merge)
+
+### Operator failure
+After depletion haul drop-off at MainBase (`ReturnToDeposit=false`), Worker entered `WaitingForResource` while Node B remained available near the depleted cluster.
+
+### Root cause
+Search used Worker location at MainBase for both `ResourceSearchRadiusCm` filtering and nav path start, so the alternate node was filtered out when the base was farther than the search radius from the resource cluster.
+
+### Correction
+- Persistent Mine search anchor (`MineSearchAnchorLocation` / `bHasMineSearchAnchor`) set on Mine accept; cleared on command replace/cancel; kept in WaitingForResource
+- `FGP_ResourceNodeSearchQuery`: `SearchCenter` (anchor/radius) + `PathStart` (Worker/nav)
+- Event-only reassignment diagnostics + `ResourceReassignmentNoCandidate`
+- Contract test: post-drop-off anchor regression + Move clear + wake radius
+- GPEditor Dev+UHT **PASSED**. Operator-local assets untouched. GP Dev/Shipping deferred.
+
+---
+
+## 2026-08-06 — GP-S28P2 Depletion / Registry / Reassignment (Candidate)
+
+Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- `feature/gp-s28p2-depletion-resource-reassignment` from `main` @ `86bcc9740fde0f19ac40c70f2f49298680f5f7d6`
+- Task: `Docs/Development/Claude_Tasks/GP-S28P2_Depletion_Resource_Reassignment.md`
+
+### Summary
+One-shot ResourceNode depletion + deferred Destroy; GameState ResourceNode registry + path-aware FindResourceCandidates; Worker search tunables; UnitCommand reassignment / WaitingForResource; contract test + suite entry @ `6c10937ffa3e1060e79ab1e8481e05c9f6aac6ed`. GPEditor Dev+UHT **PASSED**. Operator-local BP/materials/map/config left uncommitted. PIE suite **operator pending**.
+
+---
+
 ## 2026-08-06 — GP-S28P1 Finalization
 
 Status: **GP-S28P1_READY_FOR_MERGE**

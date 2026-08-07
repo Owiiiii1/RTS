@@ -6,9 +6,12 @@
 #include "Engine/AssetManager.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
+#include "Game/GPGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Resources/GPResourceDefinition.h"
+#include "Settings/GPResourceGameplaySettings.h"
 #include "Tags/GPGameplayTags.h"
+#include "TimerManager.h"
 #include "Visual/GPPrimitiveVisualTypes.h"
 #include "Visual/GPResourceNodeVisualComponent.h"
 
@@ -127,38 +130,26 @@ void AGP_ResourceNode::BeginPlay()
 		{
 			ApplyIdentityFromDefinition(Definition);
 		}
+		if (!bHasDepleted && !IsDepleted())
+		{
+			RegisterWithGameState();
+		}
 	}
 }
 
 void AGP_ResourceNode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(DepletionDestroyTimerHandle);
+	}
+	bDestroyPending = false;
+
+	UnregisterFromGameState();
+
 	if (HasAuthority() && !bIsClearingOccupancy)
 	{
-		// Snapshot → clear production arrays → guard → notify. Listeners must not mutate live queues.
-		const TArray<TWeakObjectPtr<AActor>> ActiveSnapshot = ActiveMiners;
-		const TArray<TWeakObjectPtr<AActor>> WaitingSnapshot = WaitingMiners;
-
-		bIsClearingOccupancy = true;
-		ActiveMiners.Reset();
-		WaitingMiners.Reset();
-		ActiveMinerCount = 0;
-		WaitingMinerCount = 0;
-
-		for (const TWeakObjectPtr<AActor>& Ptr : ActiveSnapshot)
-		{
-			if (AActor* Miner = Ptr.Get())
-			{
-				BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Active, EGP_MinerOccupancyState::None);
-			}
-		}
-		for (const TWeakObjectPtr<AActor>& Ptr : WaitingSnapshot)
-		{
-			if (AActor* Miner = Ptr.Get())
-			{
-				BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Waiting, EGP_MinerOccupancyState::None);
-			}
-		}
-
+		ClearOccupancyWithoutPromotion();
 		OnMinerSlotStateChanged.Clear();
 	}
 
@@ -173,6 +164,7 @@ void AGP_ResourceNode::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(AGP_ResourceNode, ResourceType);
 	DOREPLIFETIME(AGP_ResourceNode, MaxAmount);
 	DOREPLIFETIME(AGP_ResourceNode, CurrentAmount);
+	DOREPLIFETIME(AGP_ResourceNode, bHasDepleted);
 	DOREPLIFETIME(AGP_ResourceNode, ActiveMinerCount);
 	DOREPLIFETIME(AGP_ResourceNode, WaitingMinerCount);
 }
@@ -228,7 +220,7 @@ int32 AGP_ResourceNode::GetCurrentAmount() const
 
 bool AGP_ResourceNode::IsDepleted() const
 {
-	return CurrentAmount <= 0;
+	return bHasDepleted || CurrentAmount <= 0;
 }
 
 USceneComponent* AGP_ResourceNode::GetPresentationRoot() const
@@ -374,7 +366,7 @@ bool AGP_ResourceNode::HasResourceCapabilityTag(FGameplayTag CapabilityTag) cons
 
 bool AGP_ResourceNode::IsDepositStateValidForMining() const
 {
-	if (!IsValid(this) || IsActorBeingDestroyed() || bIsClearingOccupancy)
+	if (!IsValid(this) || IsActorBeingDestroyed() || bIsClearingOccupancy || bHasDepleted || bDestroyPending)
 	{
 		return false;
 	}
@@ -412,6 +404,11 @@ bool AGP_ResourceNode::CanAcceptMineCommand(bool bAllowSynchronousDefinitionLoad
 	if (World == nullptr || World->bIsTearingDown)
 	{
 		return Fail(TEXT("InvalidWorld"));
+	}
+
+	if (bHasDepleted || bDestroyPending)
+	{
+		return Fail(TEXT("Depleted"));
 	}
 
 	if (MaxAmount <= 0)
@@ -475,12 +472,13 @@ int32 AGP_ResourceNode::ConsumeResource(int32 RequestedAmount)
 		return 0;
 	}
 
-	if (RequestedAmount <= 0)
+	if (RequestedAmount <= 0 || bHasDepleted || bDestroyPending)
 	{
 		return 0;
 	}
 
 	NormalizeAmountsOnConstruction();
+	const int32 PreviousAmount = CurrentAmount;
 	const int32 Consumed = FMath::Min(RequestedAmount, CurrentAmount);
 	if (Consumed <= 0)
 	{
@@ -489,8 +487,215 @@ int32 AGP_ResourceNode::ConsumeResource(int32 RequestedAmount)
 
 	CurrentAmount -= Consumed;
 	ClampCurrentAmountToMax();
+
+	if (PreviousAmount > 0 && CurrentAmount <= 0 && !bHasDepleted)
+	{
+		HandleDepletionTransition(PreviousAmount);
+	}
+
 	return Consumed;
 }
+
+void AGP_ResourceNode::ClearOccupancyWithoutPromotion()
+{
+	if (bIsClearingOccupancy)
+	{
+		return;
+	}
+
+	const TArray<TWeakObjectPtr<AActor>> ActiveSnapshot = ActiveMiners;
+	const TArray<TWeakObjectPtr<AActor>> WaitingSnapshot = WaitingMiners;
+
+	bIsClearingOccupancy = true;
+	ActiveMiners.Reset();
+	WaitingMiners.Reset();
+	ActiveMinerCount = 0;
+	WaitingMinerCount = 0;
+
+	for (const TWeakObjectPtr<AActor>& Ptr : ActiveSnapshot)
+	{
+		if (AActor* Miner = Ptr.Get())
+		{
+			BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Active, EGP_MinerOccupancyState::None);
+		}
+	}
+	for (const TWeakObjectPtr<AActor>& Ptr : WaitingSnapshot)
+	{
+		if (AActor* Miner = Ptr.Get())
+		{
+			BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Waiting, EGP_MinerOccupancyState::None);
+		}
+	}
+}
+
+void AGP_ResourceNode::DisableGameplayInteraction()
+{
+	if (IsValid(CollisionBox))
+	{
+		CollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		CollisionBox->SetCanEverAffectNavigation(false);
+		CollisionBox->SetGenerateOverlapEvents(false);
+	}
+
+	if (IsValid(ResourceNodeVisualComponent))
+	{
+		// Clear generated parts only — authored BP meshes remain until actor Destroy.
+		ResourceNodeVisualComponent->ClearVisual();
+	}
+}
+
+void AGP_ResourceNode::BroadcastDepletionPresentation(int32 PreviousAmount)
+{
+	if (bDepletionPresentationBroadcast)
+	{
+		return;
+	}
+	bDepletionPresentationBroadcast = true;
+	DepletionPreviousAmountCached = PreviousAmount;
+	OnResourceDepleted.Broadcast(this, PreviousAmount);
+}
+
+void AGP_ResourceNode::HandleDepletionTransition(int32 PreviousAmount)
+{
+	if (!HasAuthority() || bHasDepleted)
+	{
+		return;
+	}
+
+	bHasDepleted = true;
+	DepletionPreviousAmountCached = PreviousAmount;
+
+	UnregisterFromGameState();
+	ClearOccupancyWithoutPromotion();
+	DisableGameplayInteraction();
+	BroadcastDepletionPresentation(PreviousAmount);
+	ScheduleDeferredDestroy();
+
+	UE_LOG(LogGPResourceNode, Log,
+		TEXT("GP ResourceNode.DepletionTransition: Actor=%s PreviousAmount=%d DestroyDelay=%.3f"),
+		*GetName(),
+		PreviousAmount,
+		GetDepletionDestroyDelaySeconds());
+}
+
+float AGP_ResourceNode::GetDepletionDestroyDelaySeconds() const
+{
+	if (const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get())
+	{
+		return Settings->DepletionDestroyDelaySeconds;
+	}
+	return 0.25f;
+}
+
+void AGP_ResourceNode::ScheduleDeferredDestroy()
+{
+	if (!HasAuthority() || bDestroyPending)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	bDestroyPending = true;
+	World->GetTimerManager().ClearTimer(DepletionDestroyTimerHandle);
+
+	const float Delay = FMath::Max(0.0f, GetDepletionDestroyDelaySeconds());
+	if (Delay <= KINDA_SMALL_NUMBER)
+	{
+		World->GetTimerManager().SetTimerForNextTick(
+			FTimerDelegate::CreateUObject(this, &AGP_ResourceNode::ExecuteDeferredDestroy));
+	}
+	else
+	{
+		World->GetTimerManager().SetTimer(
+			DepletionDestroyTimerHandle,
+			this,
+			&AGP_ResourceNode::ExecuteDeferredDestroy,
+			Delay,
+			false);
+	}
+}
+
+void AGP_ResourceNode::ExecuteDeferredDestroy()
+{
+	if (!HasAuthority() || !IsValid(this) || IsActorBeingDestroyed())
+	{
+		return;
+	}
+
+	Destroy();
+}
+
+void AGP_ResourceNode::RegisterWithGameState()
+{
+	if (!HasAuthority() || bRegisteredWithGameState || bHasDepleted || bDestroyPending)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	if (GS == nullptr)
+	{
+		return;
+	}
+
+	const AGP_GameState::EGP_ResourceNodeRegisterResult Result = GS->RegisterResourceNode(this);
+	bRegisteredWithGameState =
+		Result == AGP_GameState::EGP_ResourceNodeRegisterResult::Registered
+		|| Result == AGP_GameState::EGP_ResourceNodeRegisterResult::AlreadyRegistered;
+}
+
+void AGP_ResourceNode::UnregisterFromGameState()
+{
+	if (!bRegisteredWithGameState && !HasAuthority())
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	if (GS != nullptr)
+	{
+		GS->UnregisterResourceNode(this);
+	}
+	bRegisteredWithGameState = false;
+}
+
+void AGP_ResourceNode::OnRep_bHasDepleted()
+{
+	if (!bHasDepleted)
+	{
+		return;
+	}
+
+	DisableGameplayInteraction();
+	const int32 PreviousAmount =
+		DepletionPreviousAmountCached > 0 ? DepletionPreviousAmountCached : FMath::Max(1, MaxAmount);
+	BroadcastDepletionPresentation(PreviousAmount);
+}
+
+#if !UE_BUILD_SHIPPING
+void AGP_ResourceNode::DebugSetCurrentAmountForTest(int32 NewAmount, bool bAllowDepletionTransition)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	const int32 PreviousAmount = CurrentAmount;
+	CurrentAmount = FMath::Max(0, NewAmount);
+	ClampCurrentAmountToMax();
+	if (bAllowDepletionTransition && PreviousAmount > 0 && CurrentAmount <= 0 && !bHasDepleted)
+	{
+		HandleDepletionTransition(PreviousAmount);
+	}
+}
+#endif
 
 int32 AGP_ResourceNode::GetMaxConcurrentMiners() const
 {
@@ -499,12 +704,55 @@ int32 AGP_ResourceNode::GetMaxConcurrentMiners() const
 
 int32 AGP_ResourceNode::GetActiveMinerCount() const
 {
+	// Authority queries use live occupancy arrays (not stale replicated counts).
+	if (HasAuthority())
+	{
+		int32 Count = 0;
+		for (const TWeakObjectPtr<AActor>& Ptr : ActiveMiners)
+		{
+			const AActor* Miner = Ptr.Get();
+			if (IsValid(Miner) && !Miner->IsActorBeingDestroyed())
+			{
+				++Count;
+			}
+		}
+		return Count;
+	}
 	return ActiveMinerCount;
 }
 
 int32 AGP_ResourceNode::GetWaitingMinerCount() const
 {
+	if (HasAuthority())
+	{
+		int32 Count = 0;
+		for (const TWeakObjectPtr<AActor>& Ptr : WaitingMiners)
+		{
+			const AActor* Miner = Ptr.Get();
+			if (IsValid(Miner) && !Miner->IsActorBeingDestroyed())
+			{
+				++Count;
+			}
+		}
+		return Count;
+	}
 	return WaitingMinerCount;
+}
+
+int32 AGP_ResourceNode::FindWaitingMinerIndex(const AActor* Miner) const
+{
+	if (!IsValid(Miner))
+	{
+		return INDEX_NONE;
+	}
+	for (int32 Index = 0; Index < WaitingMiners.Num(); ++Index)
+	{
+		if (WaitingMiners[Index].Get() == Miner)
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
 }
 
 bool AGP_ResourceNode::IsValidMinerActor(const AActor* Miner) const
@@ -689,8 +937,12 @@ void AGP_ResourceNode::ReleaseMiningSlot(AActor* Miner)
 	if (bWasActive)
 	{
 		BroadcastMinerSlotStateChanged(Miner, EGP_MinerOccupancyState::Active, EGP_MinerOccupancyState::None);
-		TArray<AActor*> Promoted;
-		PromoteWaitingMiners(Promoted);
+		// Depletion / destroy-pending must never promote FIFO heads.
+		if (!bHasDepleted && !bDestroyPending)
+		{
+			TArray<AActor*> Promoted;
+			PromoteWaitingMiners(Promoted);
+		}
 	}
 	else if (bWasWaiting)
 	{

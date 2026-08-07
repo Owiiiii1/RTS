@@ -1,0 +1,91 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GPResourceApproach.generated.h"
+
+class AGP_ResourceNode;
+class AActor;
+class UWorld;
+
+/** Exact rejection / acceptance reason for ResourceNode candidate evaluation (GP-S28P2). */
+UENUM(BlueprintType)
+enum class EGP_ResourceCandidateRejectReason : uint8
+{
+	None UMETA(DisplayName = "None"),
+	InvalidNode UMETA(DisplayName = "Invalid Node"),
+	ExcludedNode UMETA(DisplayName = "Excluded Node"),
+	Depleted UMETA(DisplayName = "Depleted"),
+	DestroyPending UMETA(DisplayName = "Destroy Pending"),
+	ClearingOccupancy UMETA(DisplayName = "Clearing Occupancy"),
+	MineRejected UMETA(DisplayName = "Mine Rejected"),
+	IncompatibleResourceType UMETA(DisplayName = "Incompatible Resource Type"),
+	UnresolvedDefinition UMETA(DisplayName = "Unresolved Definition"),
+	NoFreeSlot UMETA(DisplayName = "No Free Slot"),
+	OutsideSearchRadius UMETA(DisplayName = "Outside Search Radius"),
+	NoNavSystem UMETA(DisplayName = "No Nav System"),
+	PathStartProjectionFailed UMETA(DisplayName = "Path Start Projection Failed"),
+	CandidateProjectionFailed UMETA(DisplayName = "Candidate Projection Failed"),
+	ApproachGeometryFailed UMETA(DisplayName = "Approach Geometry Failed"),
+	PathInvalid UMETA(DisplayName = "Path Invalid"),
+	PathPartial UMETA(DisplayName = "Path Partial"),
+	PathTooLong UMETA(DisplayName = "Path Too Long"),
+	Accepted UMETA(DisplayName = "Accepted")
+};
+
+/** Shared Mine / search approach geometry (same 3D range budget as UnitCommand). */
+namespace GPResourceApproach
+{
+	GPRUNTIME_API const TCHAR* RejectReasonToString(EGP_ResourceCandidateRejectReason Reason);
+
+	/**
+	 * Horizontal distance from node center so worst-case arrival stays inside InteractionRange.
+	 * Accounts for DeltaZ, AcceptanceRadius, safety margin, and CollisionBox XY extent.
+	 */
+	GPRUNTIME_API bool TryComputeDesiredHorizontalDistance(
+		const FVector& PathStart,
+		const FVector& NodeLocation,
+		float InteractionRangeCm,
+		float AcceptanceRadiusCm,
+		float SafetyMarginCm,
+		float CollisionHalfExtentXY,
+		float& OutDesiredHorizontal);
+
+	/** Single approach sample in DirectionFromNode (normalized XY); Z from PathStart. */
+	GPRUNTIME_API bool TryMakeApproachPoint(
+		const FVector& PathStart,
+		const FVector& NodeLocation,
+		const FVector& DirectionFromNodeXY,
+		float DesiredHorizontal,
+		float InteractionRangeCm,
+		FVector& OutApproachPoint);
+
+	struct FEvaluateParams
+	{
+		FVector PathStart = FVector::ZeroVector;
+		float InteractionRangeCm = 200.0f;
+		float AcceptanceRadiusCm = 50.0f;
+		float SafetyMarginCm = 25.0f;
+		float MaxPathLengthCm = 6000.0f;
+		int32 DirectionCount = 8;
+		TWeakObjectPtr<AActor> PathfindingActor;
+	};
+
+	struct FEvaluateResult
+	{
+		bool bReachable = false;
+		FVector BestApproachLocation = FVector::ZeroVector;
+		float PathLengthCm = 0.0f;
+		EGP_ResourceCandidateRejectReason RejectReason = EGP_ResourceCandidateRejectReason::None;
+	};
+
+	/**
+	 * Find shortest non-partial nav path from PathStart to a projected approach point
+	 * around Node (never requires path to actor center).
+	 */
+	GPRUNTIME_API FEvaluateResult EvaluateNodeApproachPath(
+		UWorld* World,
+		const AGP_ResourceNode* Node,
+		const FEvaluateParams& Params);
+}

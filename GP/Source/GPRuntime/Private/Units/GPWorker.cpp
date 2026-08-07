@@ -20,6 +20,7 @@
 #include "Resources/GPResourceLoopDiagnostics.h"
 #include "Resources/GPResourceNode.h"
 #include "Resources/GPStorageComponent.h"
+#include "Settings/GPResourceGameplaySettings.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPMovementComponent.h"
 #include "Units/GPUnitCommandComponent.h"
@@ -157,6 +158,24 @@ USceneComponent* AGP_Worker::GetMiningEffectAnchor() const
 	return MiningEffectAnchor;
 }
 
+float AGP_Worker::GetResourceSearchRadiusCm() const
+{
+	if (const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get())
+	{
+		return Settings->ResourceSearchRadiusCm;
+	}
+	return 3000.0f;
+}
+
+float AGP_Worker::GetMaxResourcePathLengthCm() const
+{
+	if (const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get())
+	{
+		return Settings->MaxResourcePathLengthCm;
+	}
+	return 6000.0f;
+}
+
 float AGP_Worker::GetCargoFillNormalized() const
 {
 	return IsValid(CargoComponent) ? CargoComponent->GetFillRatio() : 0.0f;
@@ -268,6 +287,11 @@ EGP_WorkerActivityState AGP_Worker::GetWorkerActivityState() const
 			return EGP_WorkerActivityState::CommandFailed;
 		default:
 			break;
+		}
+
+		if (Commands->GetMineExecutionState() == EGP_MineExecutionState::WaitingForResource)
+		{
+			return EGP_WorkerActivityState::WaitingForResource;
 		}
 
 		if (Commands->GetMineExecutionState() == EGP_MineExecutionState::Approaching)
@@ -2614,8 +2638,18 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 			return;
 		}
 		Expect(FMath::IsNearlyEqual(Worker->GetCargoComponent()->GetCurrentCargoAmount(), 0.0f), TEXT("DepleteDropped"));
-		Expect(!Worker->GetUnitCommandComponent()->HasHeldCommand(), TEXT("HeldClearedAfterDepleteHaul"));
-		Expect(Worker->GetUnitCommandComponent()->GetHaulExecutionState() == EGP_HaulExecutionState::Idle, TEXT("HaulIdleAfterDeplete"));
+		// GP-S28P2: Mine intent / search anchor persist through depleted haul → PostDropOff
+		// (reassignment or WaitingForResource). Obsolete pre-P2 expectation cleared held on deplete.
+		UGP_UnitCommandComponent* CmdAfterDeplete = Worker->GetUnitCommandComponent();
+		Expect(CmdAfterDeplete->HasHeldCommand(), TEXT("HeldMinePersistsAfterDepleteHaul"));
+		Expect(CmdAfterDeplete->DebugHasMineSearchAnchor()
+				|| CmdAfterDeplete->GetMineExecutionState() == EGP_MineExecutionState::WaitingForResource
+				|| CmdAfterDeplete->GetMineTarget() != nullptr
+				|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::MovingToMine
+				|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::Mining
+				|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::WaitingForResource,
+			TEXT("MineIntentContinuesAfterDepleteDropOff"));
+		Expect(CmdAfterDeplete->GetHaulExecutionState() == EGP_HaulExecutionState::Idle, TEXT("HaulIdleAfterDeplete"));
 		++StageIndex;
 		ScheduleNext();
 		break;

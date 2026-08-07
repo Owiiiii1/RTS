@@ -163,19 +163,71 @@ DepositDepleted + Cargo>0
 | Mine intent / search anchor | UnitCommand held Mine + MineSearchAnchor (P2) |
 | Movement | `UGP_MovementComponent` results consumed by UnitCommand |
 
-### Wake SoT (to add in implementation)
-Add GameState multicast (authority broadcast to listeners), mirroring ResourceNode pattern:
-- `OnMainBaseRegistered(AGP_MainBase*)`
-- `OnMainBaseUnregistered(AGP_MainBase*)` (optional but useful for mid-haul destroy)
+### Subscription SoT (to add in implementation) — two distinct purposes
 
-UnitCommand binds **only while** `HaulState == WaitingForDropOff`.
-On exit (resume haul, command replace, EndPlay): unsubscribe + clear retry timer.
+Do **not** bind all MainBase registry events only while WaitingForDropOff. That would miss destruction during active haul (`ReturningToBase` / `DroppingOff`).
+
+Add GameState multicasts (authority), mirroring ResourceNode registry pattern:
+- `OnMainBaseRegistered(AGP_MainBase*)`
+- `OnMainBaseUnregistered(AGP_MainBase*)`
+
+#### 1. Active-haul interruption (current target lifecycle)
+
+While `HaulState == ReturningToBase` **or** `DroppingOff` and a concrete haul target MainBase is set:
+
+| Preferred option | Rationale |
+| --- | --- |
+| **A. Bind `AGP_GameState::OnMainBaseUnregistered`** during active haul | Matches existing UnitCommand ↔ GameState ResourceNode registry wake pattern; no per-actor EndPlay plumbing today |
+| B. Bind EndPlay/lifecycle on the target MainBase | Acceptable if implementation audit finds it safer; not the default preferred pattern |
+
+On unregistered/destroyed event:
+- Filter: event MainBase **must be** the current haul target (same object). Ignore other TeamId / other MainBase / stale previous targets.
+- Cancel current haul movement
+- Clear stale MainBase weak ptr
+- Preserve Cargo, held Mine intent, MineSearchAnchor
+- Enter WaitingForDropOff
+- Arm waiting wake (`OnMainBaseRegistered`) + drop-off retry timer
+
+Clear active-haul lifecycle subscription on:
+- successful drop-off
+- entering WaitingForDropOff (swap to waiting-registration bind)
+- command replacement
+- haul cancel / failure replacement paths that leave haul
+- UnitCommand EndPlay
+
+No duplicate bindings (at most one active-haul unregister handle per UnitCommand).
+
+#### 2. Waiting wake (registration only)
+
+While `HaulState == WaitingForDropOff` **only**:
+- Bind `OnMainBaseRegistered`
+- On valid same-team MainBase: wake **exactly once** → unsubscribe registration delegate → clear retry timer → attempt haul
+- If attempt still unrecoverable/unreachable: return to stable WaitingForDropOff (no recursive immediate retry)
+
+#### 3. Unregister while already waiting
+
+`OnMainBaseUnregistered` while WaitingForDropOff is **not** required for wake.
+After team/target filtering: **no-op** (no new transition / no retry storm).
+
+### State / event table
+
+| State | Event | Result |
+| --- | --- | --- |
+| ReturningToBase | current MainBase unregistered/destroyed | cancel move → WaitingForDropOff |
+| DroppingOff | current MainBase invalidated before transaction | WaitingForDropOff; Cargo intact |
+| WaitingForDropOff | valid same-team MainBase registered | retry haul once |
+| WaitingForDropOff | unrelated MainBase register/unregister | no-op |
+| any haul/wait | explicit command replacement | cleanup all haul/wait subscriptions + timer; preserve Cargo |
+
+### Movement failure remains fallback
+`MoveFailed` / path rejection for an existing but unreachable MainBase → WaitingForDropOff.
+Destruction detection must **not** depend only on eventual movement failure when registry/lifecycle notification is available.
 
 ---
 
 ## Retry policy
 - No permanent Actor/Component Tick for wait.
-- Primary: registry register wake.
+- Primary while waiting: registry **register** wake.
 - Secondary: low-frequency safety retry for unreachable→reachable without registry churn.
 
 **Settings:** extend existing `UGP_ResourceGameplaySettings` (no new settings class):
@@ -199,10 +251,11 @@ Suppress duplicate no-candidate / unreachable log spam (same pattern as WaitingF
 
 ---
 
-## Command replacement while WaitingForDropOff
+## Command replacement (active haul or WaitingForDropOff)
 On Move / Attack / Stop / replacing command:
-- Cancel pending haul
-- Unsubscribe MainBase registry wake
+- Cancel pending haul / wait
+- Unsubscribe active-haul unregister binding (if any)
+- Unsubscribe waiting-registration wake (if any)
 - Clear drop-off retry timer
 - **Preserve Cargo**
 - Clear/replace held Mine intent per existing UnitCommand accept semantics
@@ -240,13 +293,13 @@ On Move / Attack / Stop / replacing command:
 | --- | --- | --- |
 | 1 | MainBase missing, Cargo > 0 | WaitingForDropOff; Cargo unchanged; held Mine kept |
 | 2 | MainBase registers | Wake once; haul; unload succeeds |
-| 3 | Base destroyed mid-haul | Movement stops; Cargo unchanged; WaitingForDropOff |
-| 4 | Replacement MainBase | Wake; deliver |
+| 3 | Base destroyed mid-haul | Observed while `ReturningToBase`; movement cancelled; WaitingForDropOff **exactly once**; Cargo unchanged; **not** dependent on waiting retry timer to notice destruction |
+| 4 | Replacement MainBase | Registration wake **exactly once**; deliver |
 | 5 | Unreachable Base | Stable wait; no rapid retry/log spam |
 | 6 | Move while waiting | Obeys Move; old wake cannot resume haul |
 | 7 | Partial cargo depletion + base missing | P2 haul-first; cargo not stranded; wait then deliver |
 | 8 | Threat | Increases only by Accepted; never during wait/retry |
-| 9 | Subscriptions | No duplicate listeners/timers |
+| 9 | Subscriptions | One Worker / one haul transition: no duplicate lifecycle or registry bindings; no duplicate timers |
 | 10 | Regression | `gp.Resource.RunS28RegressionSuite` Failures=0; P2 suite Failures=0 |
 
 Also extend suite entry after P3 lands.

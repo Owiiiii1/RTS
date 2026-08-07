@@ -1,5 +1,22 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S28P3 Spec Correction (Active-Haul vs Waiting Subscriptions)
+
+Status: **GP-S28P3_SPEC_READY_FOR_REVIEW**
+
+### Branch
+`docs/gp-s28p3-dropoff-resilience-spec` (docs-only)
+
+### What was done
+- Split subscriptions: active-haul `OnMainBaseUnregistered` (current target) vs waiting `OnMainBaseRegistered` wake
+- Added state/event table; mid-haul destroy must not depend on wait-only binds or retry timer
+- Updated contract case 3/4/9 assertions; no production code
+
+### Stop condition
+Spec remains REVIEW. Do not implement until approved.
+
+---
+
 ## 2026-08-07 — GP-S28P3 Drop-Off Resilience Specification
 
 Status: **GP-S28P3_SPEC_READY_FOR_REVIEW**

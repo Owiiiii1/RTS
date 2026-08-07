@@ -1,5 +1,34 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S28P3 Operator Validation Note (docs-only)
+
+Status: **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p3-dropoff-resilience` (no merge; docs only)
+
+### Operator results
+| Scenario | Result |
+| --- | --- |
+| A Missing MainBase + register wake | **PASS** |
+| B Destroy MainBase mid-haul + replacement | **PASS** |
+| C Unreachable → restore → retry | **DEFERRED** (current movement architecture; not a P3 failure) |
+| D Move replaces WaitingForDropOff | **PASS** |
+
+### Deferred marker
+[`DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md`](DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md) — re-run after **future canonical navigation/path-following movement stage**.
+
+### Not implemented
+`gp.Resource.MakeTestMainBaseUnreachable` / `MakeTestMainBaseReachable` — proposal abandoned. `SpawnTestMainBase` / `DestroyTestMainBase` kept.
+
+### Production code
+None (docs only). Automated unreachable contract coverage unchanged / still PASS.
+
+### Stop condition
+Finalization still pending. Manual C is accepted deferred validation dependency, not a P3 semantic blocker. No merge. No P4.
+
+---
+
 ## 2026-08-08 — GP-S28P3 Operator Test Helper Correction
 
 Status: **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING**

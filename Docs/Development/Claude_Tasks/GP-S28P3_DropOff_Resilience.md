@@ -99,16 +99,27 @@ Suite includes P3 contract after P2. Hauling ownership case updated for WaitingF
 | GP Win64 Development | deferred (finalization) |
 | GP Win64 Shipping | deferred (finalization) |
 
-## Operator validation (PIE — operator runs)
-| | Steps | Expected |
+## Operator validation (PIE)
+
+| Scenario | Result | Notes |
 | --- | --- | --- |
-| A | Full cargo, no MainBase → place same-team MainBase | WaitingForDropOff + intact cargo → auto haul/unload |
-| B | Destroy MainBase mid-haul → spawn replacement | Stop + wait + cargo intact → auto-delivery |
-| C | Make MainBase path-unreachable → restore | Stable wait, no spam → resume on retry |
-| D | WaitingForDropOff → Issue Move → later spawn MainBase | Move obeyed; old haul does **not** resume |
+| **A** — Missing MainBase + registration wake | **PASS** | WaitingForDropOff; Cargo preserved; runtime MainBase register wakes haul; deliver; Accepted/Threat OK; P2 PostDropOff continues |
+| **B** — MainBase destroyed mid-haul | **PASS** | Movement cancelled; `Reason=MainBaseDestroyed`; Cargo preserved; WaitingForDropOff; replacement wake → deliver; `ReturnToDeposit=true`; remine after drop-off |
+| **C** — Existing MainBase unreachable → path restored → retry | **DEFERRED** | Not a P3 failure — see below / [`../DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md`](../DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md) |
+| **D** — Explicit Move replaces WaitingForDropOff | **PASS** | Haul cancelled `CommandReplaced`; Held Mine → Move; Cargo preserved; later MainBase register does **not** stale-wake; Move completes; no haul resurrect |
+
+### Scenario C — deferred (architecture), not failed
+Current `UGP_MovementComponent` is **not** full runtime NavMesh/path-following movement:
+- UnitCommand runs pre-accept nav/path/approach query;
+- after accept, MovementComponent tick moves the actor toward the destination;
+- a runtime wall / BlockingVolume / NavModifier between Worker and destination is **not** a valid way to force MoveFailed — the Worker can still physically cross after destination accept.
+
+Manual C via wall/BlockingVolume/NavModifier is therefore **invalid** for P3 recovery validation. Automated contract unreachable coverage (forced approach reject / wait / resume) remains **PASS** and is retained.
+
+**Abandoned (not implemented):** proposed `gp.Resource.MakeTestMainBaseUnreachable` / `MakeTestMainBaseReachable`. Kept helpers: `gp.Resource.SpawnTestMainBase`, `gp.Resource.DestroyTestMainBase`.
 
 ## Out of scope (unchanged)
 P4 HUD, client MainBase registry, LogisticsHub drop-off, storage-full redesign, orbital/Score/combat/construction, queued commands, save/load, Blueprint gameplay authority, map/content authoring.
 
 ## Stop condition
-Code ready. Operator A–D validation pending. Do **not** merge. Do **not** start P4.
+Status remains **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING** pending finalization workflow. Manual C is an accepted deferred dependency on future canonical navigation/path-following movement — **not** a P3 gameplay blocker (deterministic contract unreachable coverage already exists). Do **not** merge in this note. Do **not** start P4.

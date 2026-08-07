@@ -1,34 +1,42 @@
-# Cursor Work Report — GP-S28P3 Operator Test Helper Correction
+# Cursor Work Report — GP-S28P3 Operator Validation Note
 
 ## Status
-GP-S28P3_CODE_READY_OPERATOR_VALIDATION_`422bc70454bf51a9cdd31dc2ab4f490f20f018a0`
+GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING
 
 ## Branch
 feature/gp-s28p3-dropoff-resilience
 
-## Base implementation
-`fa98a64175b25c16244fe234aadff627896ad213`
+## Tip referenced
+`422bc70454bf51a9cdd31dc2ab4f490f20f018a0` (operator helper)
 
-## Operator Test Helper
-- Commands (non-shipping only, `#if !UE_BUILD_SHIPPING`):
-  - `gp.Resource.SpawnTestMainBase [TeamId]` — default TeamId=1
-  - `gp.Resource.DestroyTestMainBase [TeamId]` — default TeamId=1
-- Semantics:
-  - Authority world only; reject null world / NM_Client / TeamId < 1
-  - Spawn native transient `AGP_MainBase::StaticClass()` (no Blueprint subclass)
-  - Location: offset from first same-team Worker (else any Worker / PC pawn), nav-projected when possible
-  - TeamId applied via `SetTeamId` only (not direct property write) so `NotifyTeamIdChanged` → `RegisterMainBase` → `OnMainBaseRegistered`
-  - Log: `GP Debug SpawnTestMainBase: Base=… Team=… Location=… Registered=true|false` via `FindMainBaseForTeam`
-  - Destroy helper finds `FindMainBaseForTeam` then `Destroy()`
-- Production MainBase / haul / Threat / Storage semantics unchanged
-- Audit: runtime `SetTeamId` already registers correctly — no production lifecycle fix required
+## Scope
+Docs-only. No C++, Config, Blueprint/map/content, no new debug helpers.
 
-## Tests
-- DropOffResilience contract extended with HelperRegistry* asserts (register/unregister exactly once)
-- `gp.Resource.RunDropOffResilienceContractTest` → `Complete Failures=0 Cancelled=None`
+## Operator Validation
+| Scenario | Result |
+| --- | --- |
+| A — Missing MainBase + registration wake | **PASS** |
+| B — MainBase destroyed during active haul | **PASS** |
+| C — existing MainBase unreachable → path restored → retry | **DEFERRED** |
+| D — explicit Move replaces WaitingForDropOff | **PASS** |
 
-## Build
-GPEditor Win64 Development + UHT — **PASSED**
+### A PASS (observed)
+WaitingForDropOff; Cargo preserved; runtime MainBase registration wakes; auto-deliver; Accepted/Threat OK; P2 PostDropOff continues.
+
+### B PASS (observed)
+Movement cancelled; `Reason=MainBaseDestroyed`; Cargo preserved; WaitingForDropOff; replacement register wakes; deliver; `ReturnToDeposit=true`; return to deposit + continue mining.
+
+### D PASS (observed)
+Mine/Haul cancelled `CommandReplaced`; Held → Move; Cargo preserved; later MainBase register does not stale DropOffWait Wake; Move completes; no haul resurrect.
+
+### C DEFERRED (not failed)
+Current MovementComponent is not full NavMesh/path-following; wall/BlockingVolume/NavModifier after destination accept is not a valid MoveFailed operator test. See [`DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md`](DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md). Re-run after **future canonical navigation/path-following movement stage**.
+
+Remaining manual C is an **accepted deferred validation dependency** on future navigation implementation — **not** a blocker for current P3 finalization, because deterministic contract unreachable coverage already exists and remains PASS.
+
+## Helpers
+- Kept: `gp.Resource.SpawnTestMainBase`, `gp.Resource.DestroyTestMainBase`
+- Abandoned / not implemented: `MakeTestMainBaseUnreachable`, `MakeTestMainBaseReachable`
 
 ## Commit
-`422bc70454bf51a9cdd31dc2ab4f490f20f018a0`
+(see git HEAD after push)

@@ -42,4 +42,4 @@ Harness used raw MainBase actor center as PathStart (Z/obstacle) and could spawn
 A/B/C/D remain **PASS**. Production gameplay not changed — no operator re-run required.
 
 ## Final Commit
-*(recorded after commit)*
+`aa405546f0267eb5f77c7bd9c282219426bdacb5`

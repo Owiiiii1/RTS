@@ -19,6 +19,9 @@ Test/harness only. Production unchanged. Operator A–D remain PASS.
 - `gp.Resource.RunS28RegressionSuite` → `Complete Failures=0`
 - GPEditor Dev+UHT — **PASSED**
 
+### Commit
+`aa405546f0267eb5f77c7bd9c282219426bdacb5`
+
 ### Stop condition
 READY_FOR_MERGE. Do not start P3 / merge in this close-out.
 

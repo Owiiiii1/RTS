@@ -7,6 +7,7 @@
 - Branch: `feature/gp-s28p2-depletion-resource-reassignment`
 - Base main: `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` (GP-S28P1; main does not yet contain P2)
 - Implementation tip (operator-validated): `64f8c8567dc1f004abcc3b9bc5917794f2132b08`
+- Test correction commit: `aa405546f0267eb5f77c7bd9c282219426bdacb5`
 
 ## Operator validation — PASSED
 | Scenario | Result |

@@ -7,7 +7,7 @@
 - Branch: `feature/gp-s28p2-depletion-resource-reassignment`
 - Base main: `86bcc9740fde0f19ac40c70f2f49298680f5f7d6`
 - Approach-path / settings: `53e5ff944730180764731c75fb495a38adeb91ab`
-- FIFO crash correction: see latest commit on this branch
+- FIFO crash correction: `42c99f61e4a278cb024664c83dd1dcb504e2f7a6`
 
 ## Goal
 Safe one-shot ResourceNode depletion, registry, path-aware reassignment / WaitingForResource, and stable FIFO WaitingForSlot — without changing mining cadence, Cargo, Storage, Threat, or combat.

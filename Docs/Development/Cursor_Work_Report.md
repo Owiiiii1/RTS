@@ -52,4 +52,4 @@ WaitingForSlot = terminal-stable until Waiting→Active promotion.
 DefaultEngine.ini, map, Blueprint/**, Materials/**, authored ResourceNode, Niagara.
 
 ## Commit SHA
-Filled after commit on this branch tip.
+`42c99f61e4a278cb024664c83dd1dcb504e2f7a6`

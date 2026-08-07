@@ -174,6 +174,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Resource|Occupancy")
 	int32 GetWaitingMinerCount() const;
 
+	/** 0-based waiting FIFO index, or INDEX_NONE. Authority occupancy arrays. */
+	UFUNCTION(BlueprintPure, Category = "GP|Resource|Occupancy")
+	int32 FindWaitingMinerIndex(const AActor* Miner) const;
+
 	/** Authority-only register/queue. Generic miner actor (Worker arrives in GP-S27). */
 	UFUNCTION(BlueprintCallable, Category = "GP|Resource|Occupancy")
 	EGP_MiningSlotRequestResult RequestMiningSlot(AActor* Miner);

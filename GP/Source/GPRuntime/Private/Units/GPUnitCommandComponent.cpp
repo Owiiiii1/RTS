@@ -822,6 +822,14 @@ void UGP_UnitCommandComponent::DebugForceNextHaulArrivalOutOfRangeOnce()
 {
 	bDebugForceNextHaulArrivalOutOfRange = true;
 }
+
+void UGP_UnitCommandComponent::DebugResetFifoWatchdogCounters()
+{
+	DebugMineBeginCallsThisTransition = 0;
+	DebugReassignmentAttemptsThisTransition = 0;
+	DebugSameTargetRetargetAttempts = 0;
+	bLoggedSameTargetRetargetSkip = false;
+}
 #endif
 
 const TCHAR* UGP_UnitCommandComponent::HaulStateToString(EGP_HaulExecutionState State)
@@ -1409,6 +1417,16 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 		return;
 	}
 
+	// Iterative/return-based control — nested re-entry must not restart the chain.
+	if (bBeginMiningAtHeldTargetInProgress)
+	{
+		return;
+	}
+	TGuardValue<bool> ReentryGuard(bBeginMiningAtHeldTargetInProgress, true);
+#if !UE_BUILD_SHIPPING
+	DebugResetFifoWatchdogCounters();
+#endif
+
 	// Post-haul return-to-deposit ends when mining execution begins.
 	if (HaulState == EGP_HaulExecutionState::ReturningToDeposit)
 	{
@@ -1442,11 +1460,27 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	}
 	if (!IsValid(Node) || Node->IsDepleted() || Node->HasCompletedDepletionTransition() || Node->IsDestroyPending())
 	{
+#if !UE_BUILD_SHIPPING
+		++DebugReassignmentAttemptsThisTransition;
+#endif
 		if (TryAutoReassignMine(MineSerial, Node, true, FName(TEXT("PostDepletion"))))
 		{
 			return;
 		}
 		EnterWaitingForResource(MineSerial);
+		return;
+	}
+
+	// Already registered on this node — stable Mining / WaitingForSlot; wait for occupancy events.
+	if (Mining->GetCurrentResourceNode() == Node
+		&& (Mining->IsWaitingForSlot() || Mining->IsMining()
+			|| Mining->GetMiningState() == EGP_MiningState::WaitingForSlot
+			|| Mining->GetMiningState() == EGP_MiningState::Mining))
+	{
+		MineTarget = Node;
+		MineState = EGP_MineExecutionState::Active;
+		ActiveMineSerial = MineSerial;
+		BindMiningStateEvents(Mining);
 		return;
 	}
 
@@ -1504,7 +1538,32 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	}
 	BindMiningStateEvents(Mining);
 
+	// Alternative free-slot search BEFORE entering FIFO on a full target (preserves 5th→NodeB).
+	const bool bTargetFull = Node->GetActiveMinerCount() >= Node->GetMaxConcurrentMiners();
+	if (bTargetFull)
+	{
+#if !UE_BUILD_SHIPPING
+		++DebugReassignmentAttemptsThisTransition;
+#endif
+		if (AGP_ResourceNode* FreeAlt = FindAutoResourceCandidate(
+				Worker, Node, false, FName(TEXT("SlotFullAlternative"))))
+		{
+			if (FreeAlt != Node
+				&& FreeAlt->GetActiveMinerCount() < FreeAlt->GetMaxConcurrentMiners())
+			{
+				if (TryRetargetMineToNode(FreeAlt, MineSerial, true))
+				{
+					return;
+				}
+			}
+		}
+		// No free alternative — fall through to BeginMining → WaitingForSlot (stable FIFO).
+	}
+
 	const EGP_BeginMiningResult BeginResult = Mining->BeginMining(Node);
+#if !UE_BUILD_SHIPPING
+	++DebugMineBeginCallsThisTransition;
+#endif
 	UE_LOG(LogGPUnitCommandExecution, Log,
 		TEXT("GP UnitCommandExecution MineBegin: Unit=%s MineSerial=%u Target=%s Result=%d Distance=%.1f Range=%.1f Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
@@ -1518,17 +1577,31 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 
 	if (BeginResult == EGP_BeginMiningResult::WaitingForSlot)
 	{
-		// Prefer a reachable free-slot alternative before staying in FIFO.
-		if (TryAutoReassignMine(MineSerial, Node, true, FName(TEXT("SlotFullAlternative"))))
-		{
-			return;
-		}
+		// Stable FIFO — no SlotFullAlternative search, no same-target retarget.
+		const int32 WaitIndex = Node->FindWaitingMinerIndex(Owner);
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution MineWaitingForSlot: Unit=%s MineSerial=%u Node=%s Position=%d Active=%d Waiting=%d Max=%d"),
+			*GetNameSafe(Owner),
+			MineSerial,
+			*GetNameSafe(Node),
+			WaitIndex >= 0 ? WaitIndex + 1 : -1,
+			Node->GetActiveMinerCount(),
+			Node->GetWaitingMinerCount(),
+			Node->GetMaxConcurrentMiners());
+		return;
+	}
+
+	if (BeginResult == EGP_BeginMiningResult::AlreadyMiningTarget)
+	{
 		return;
 	}
 
 	if (BeginResult == EGP_BeginMiningResult::RejectedDepleted
 		|| BeginResult == EGP_BeginMiningResult::RejectedInvalidNode)
 	{
+#if !UE_BUILD_SHIPPING
+		++DebugReassignmentAttemptsThisTransition;
+#endif
 		if (TryAutoReassignMine(MineSerial, Node, true, FName(TEXT("PostDepletion"))))
 		{
 			return;
@@ -1537,8 +1610,7 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 		return;
 	}
 
-	if (BeginResult != EGP_BeginMiningResult::Started
-		&& BeginResult != EGP_BeginMiningResult::AlreadyMiningTarget)
+	if (BeginResult != EGP_BeginMiningResult::Started)
 	{
 		ClearHeldCommand();
 		ResetMineExecutor();
@@ -2324,15 +2396,43 @@ bool UGP_UnitCommandComponent::TryRetargetMineToNode(
 		return false;
 	}
 
+	UGP_MiningComponent* Mining = Worker->GetMiningComponent();
+	const AGP_ResourceNode* HeldTarget = Cast<AGP_ResourceNode>(HeldCommand.GetValue().TargetActor.Get());
+	const AGP_ResourceNode* CurrentMine = MineTarget.Get();
+	const AGP_ResourceNode* MiningNode = IsValid(Mining) ? Mining->GetCurrentResourceNode() : nullptr;
+	const bool bSameTarget =
+		NewNode == HeldTarget || NewNode == CurrentMine || NewNode == MiningNode;
+	const bool bBusyOnTarget =
+		IsValid(Mining)
+		&& (Mining->IsMining() || Mining->IsWaitingForSlot()
+			|| Mining->GetMiningState() == EGP_MiningState::WaitingForSlot
+			|| Mining->GetMiningState() == EGP_MiningState::Mining)
+		&& (MiningNode == NewNode || (MiningNode == nullptr && (HeldTarget == NewNode || CurrentMine == NewNode)));
+
+	if (bSameTarget && bBusyOnTarget)
+	{
+#if !UE_BUILD_SHIPPING
+		++DebugSameTargetRetargetAttempts;
+		if (!bLoggedSameTargetRetargetSkip)
+		{
+			bLoggedSameTargetRetargetSkip = true;
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP UnitCommandExecution MineRetargetSkippedSameTarget: Unit=%s MineSerial=%u Target=%s MiningState=%d"),
+				*GetNameSafe(Owner),
+				MineSerial,
+				*GetNameSafe(NewNode),
+				IsValid(Mining) ? static_cast<int32>(Mining->GetMiningState()) : -1);
+		}
+#endif
+		return false;
+	}
+
 	UnbindResourceRegistryWake();
 	UnbindMiningStateEvents();
 
-	if (UGP_MiningComponent* Mining = Worker->GetMiningComponent())
+	if (IsValid(Mining) && (Mining->IsMining() || Mining->IsWaitingForSlot()))
 	{
-		if (Mining->IsMining() || Mining->IsWaitingForSlot())
-		{
-			Mining->StopMining(EGP_MiningStopReason::ManualStop);
-		}
+		Mining->StopMining(EGP_MiningStopReason::ManualStop);
 	}
 
 	FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
@@ -2340,6 +2440,9 @@ bool UGP_UnitCommandComponent::TryRetargetMineToNode(
 	MineTarget = NewNode;
 	ActiveMineSerial = MineSerial;
 	MineApproachAttempt = 0;
+#if !UE_BUILD_SHIPPING
+	bLoggedSameTargetRetargetSkip = false;
+#endif
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
 		TEXT("GP UnitCommandExecution MineRetarget: Unit=%s MineSerial=%u NewTarget=%s"),
@@ -2354,12 +2457,48 @@ bool UGP_UnitCommandComponent::TryRetargetMineToNode(
 	}
 
 	const float Distance = FVector::Dist(Owner->GetActorLocation(), NewNode->GetActorLocation());
-	UGP_MiningComponent* Mining = Worker->GetMiningComponent();
 	const float InteractionRange = ResolveMineInteractionRangeCm(Mining, NewNode);
 	if (Distance <= InteractionRange)
 	{
+		// Nested BeginMiningAtHeldTarget is blocked by re-entry guard — call BeginMining directly.
+		if (bBeginMiningAtHeldTargetInProgress && IsValid(Mining))
+		{
+			MineState = EGP_MineExecutionState::Active;
+			BindMiningStateEvents(Mining);
+			const EGP_BeginMiningResult NestedResult = Mining->BeginMining(NewNode);
+#if !UE_BUILD_SHIPPING
+			++DebugMineBeginCallsThisTransition;
+#endif
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP UnitCommandExecution MineBegin: Unit=%s MineSerial=%u Target=%s Result=%d Label=RetargetNested"),
+				*GetNameSafe(Owner),
+				MineSerial,
+				*GetNameSafe(NewNode),
+				static_cast<int32>(NestedResult));
+			if (NestedResult == EGP_BeginMiningResult::WaitingForSlot
+				|| NestedResult == EGP_BeginMiningResult::AlreadyMiningTarget
+				|| NestedResult == EGP_BeginMiningResult::Started)
+			{
+				if (NestedResult == EGP_BeginMiningResult::WaitingForSlot
+					|| NestedResult == EGP_BeginMiningResult::AlreadyMiningTarget)
+				{
+					const int32 WaitIndex = NewNode->FindWaitingMinerIndex(Owner);
+					UE_LOG(LogGPUnitCommandExecution, Log,
+						TEXT("GP UnitCommandExecution MineWaitingForSlot: Unit=%s MineSerial=%u Node=%s Position=%d Active=%d Waiting=%d Max=%d"),
+						*GetNameSafe(Owner),
+						MineSerial,
+						*GetNameSafe(NewNode),
+						WaitIndex >= 0 ? WaitIndex + 1 : -1,
+						NewNode->GetActiveMinerCount(),
+						NewNode->GetWaitingMinerCount(),
+						NewNode->GetMaxConcurrentMiners());
+				}
+				return true;
+			}
+			return false;
+		}
 		BeginMiningAtHeldTarget(MineSerial);
-		return true;
+		return HeldCommand.IsSet() && MineTarget.Get() == NewNode;
 	}
 
 	if (!RequestMineApproachMove(Owner, NewNode, MineSerial, 0.0f, TEXT("Reassign")))
@@ -2406,19 +2545,20 @@ bool UGP_UnitCommandComponent::TryAutoReassignMine(
 
 		if (bPreferFreeSlotFirst)
 		{
-			// Single pass: free nodes sort first; do not run a second RequireFreeSlot=false sweep.
+			// Single pass: free nodes sort first. Never same-target retarget into FIFO churn.
 			if (AGP_ResourceNode* FreeAlt = FindAutoResourceCandidate(
 					Worker, PreferredOrFailedNode, false, SearchReason))
 			{
-				if (FreeAlt->GetActiveMinerCount() < FreeAlt->GetMaxConcurrentMiners())
+				if (FreeAlt != PreferredOrFailedNode
+					&& FreeAlt->GetActiveMinerCount() < FreeAlt->GetMaxConcurrentMiners())
 				{
 					return TryRetargetMineToNode(FreeAlt, MineSerial, true);
 				}
 			}
 		}
 
-		// No free alternative — keep / enter FIFO on preferred if reachable.
-		return TryRetargetMineToNode(PreferredOrFailedNode, MineSerial, true);
+		// No free alternative — caller enters/keeps FIFO via BeginMining; do not retarget same node.
+		return false;
 	}
 
 	if (AGP_ResourceNode* AnyAlt = FindAutoResourceCandidate(

@@ -739,6 +739,22 @@ int32 AGP_ResourceNode::GetWaitingMinerCount() const
 	return WaitingMinerCount;
 }
 
+int32 AGP_ResourceNode::FindWaitingMinerIndex(const AActor* Miner) const
+{
+	if (!IsValid(Miner))
+	{
+		return INDEX_NONE;
+	}
+	for (int32 Index = 0; Index < WaitingMiners.Num(); ++Index)
+	{
+		if (WaitingMiners[Index].Get() == Miner)
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
 bool AGP_ResourceNode::IsValidMinerActor(const AActor* Miner) const
 {
 	return IsValid(Miner) && !Miner->IsActorBeingDestroyed() && Miner->GetWorld() == GetWorld();

@@ -169,6 +169,12 @@ public:
 	/** Mine resource-search anchor diagnostics (GP-S28P2 contract). */
 	bool DebugHasMineSearchAnchor() const { return bHasMineSearchAnchor; }
 	FVector DebugGetMineSearchAnchorLocation() const { return MineSearchAnchorLocation; }
+
+	/** FIFO / re-entry watchdog counters for contract tests (not Tick). */
+	void DebugResetFifoWatchdogCounters();
+	int32 DebugGetMineBeginCallsThisTransition() const { return DebugMineBeginCallsThisTransition; }
+	int32 DebugGetReassignmentAttemptsThisTransition() const { return DebugReassignmentAttemptsThisTransition; }
+	int32 DebugGetSameTargetRetargetAttempts() const { return DebugSameTargetRetargetAttempts; }
 #endif
 
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Attack")
@@ -411,12 +417,20 @@ private:
 	FVector MineSearchAnchorLocation = FVector::ZeroVector;
 	bool bHasMineSearchAnchor = false;
 
+	/** Prevents recursive BeginMiningAtHeldTarget ↔ Retarget chains in one stack. */
+	bool bBeginMiningAtHeldTargetInProgress = false;
+
 #if !UE_BUILD_SHIPPING
 	/** Suppress identical WaitingForResource no-candidate summaries. */
 	int32 LastWaitingNoCandidateRegistryCount = -1;
 	FName LastWaitingNoCandidateReason = NAME_None;
 	FVector LastWaitingNoCandidateAnchor = FVector::ZeroVector;
 	bool bHasLastWaitingNoCandidate = false;
+
+	bool bLoggedSameTargetRetargetSkip = false;
+	int32 DebugMineBeginCallsThisTransition = 0;
+	int32 DebugReassignmentAttemptsThisTransition = 0;
+	int32 DebugSameTargetRetargetAttempts = 0;
 #endif
 
 	/** GP-S28 Haul orchestration (Worker only; shares Mine command serial as chain id). */

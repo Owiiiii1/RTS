@@ -1,5 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-07 — GP-S28P2 FIFO Crash Correction (Operator Failure #3)
+
+Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p2-depletion-resource-reassignment` (no new branch; no merge)
+
+### Failure
+5 Workers / Max=4 → Active=4 Waiting=1 → Editor crash. Stale 05.08 CrashContext ignored; 07.08 GP.log shows WaitingForSlot ↔ SlotFullAlternative ↔ same-target MineRetarget loop.
+
+### Correction
+Alternative search before FIFO only; WaitingForSlot stable; same-target + re-entry guards; FIFO contract test + watchdog counters. GPEditor Dev+UHT **PASSED**. PIE suite operator pending. Operator-local assets untouched.
+
+---
+
 ## 2026-08-06 — GP-S28P2 Approach-Path + Settings Correction (Operator Failure #2)
 
 Status: **GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**

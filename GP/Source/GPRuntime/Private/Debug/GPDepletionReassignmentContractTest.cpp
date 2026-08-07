@@ -186,6 +186,12 @@ void UGP_DepletionReassignmentContractTestRunner::CleanupActors()
 	DestroyWeak(WakeInsideWeak);
 	DestroyWeak(WakeOutsideWeak);
 	DestroyWeak(MainBaseWeak);
+	DestroyWeak(FifoNodeWeak);
+	for (TWeakObjectPtr<AGP_Worker>& Weak : FifoWorkers)
+	{
+		DestroyWeak(Weak);
+	}
+	FifoWorkers.Reset();
 	if (UWorld* World = WorldWeak.Get())
 	{
 		GPResourceLoopDiagnostics::CleanupScenarioByOwnerTag(World, OwnerTag);
@@ -906,6 +912,172 @@ void UGP_DepletionReassignmentContractTestRunner::AdvanceStage()
 			Expect(Best == Inside || Best != nullptr, TEXT("SearchAcceptsApproachReachableNode"));
 		}
 
+		Expect(!Worker || !Worker->PrimaryActorTick.bCanEverTick, TEXT("NoPermanentTickBeforeFifo"));
+
+		// Tear down prior scenario actors before isolated FIFO occupancy case.
+		CleanupActors();
+		WorkerWeak.Reset();
+		NodeAWeak.Reset();
+		NodeBWeak.Reset();
+		WakeInsideWeak.Reset();
+		WakeOutsideWeak.Reset();
+		MainBaseWeak.Reset();
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 11:
+	{
+		// FIFO crash regression: 5 Workers, Max=4, no alternative node → 5th WaitingForSlot stable.
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		SpawnParams.ObjectFlags |= RF_Transient;
+
+		const FVector FifoLoc(-35000.0f, -500.0f, 100.0f);
+		AGP_ResourceNode* FifoNode = GPResourceLoopDiagnostics::SpawnResourceNodeTransient(
+			World, FifoLoc, OwnerTag);
+		if (!Expect(IsValid(FifoNode), TEXT("FifoNodeSpawned")))
+		{
+			Finish();
+			return;
+		}
+		FifoNodeWeak = FifoNode;
+		FifoNode->SetUseGeneratedPrototypeVisual(false);
+		Expect(FifoNode->CanAcceptMineCommand(true, nullptr), TEXT("FifoNodeMineable"));
+		Expect(FifoNode->GetMaxConcurrentMiners() == 4, TEXT("FifoMaxConcurrent4"));
+
+		FifoWorkers.Reset();
+		for (int32 Index = 0; Index < 6; ++Index)
+		{
+			AGP_Worker* W = World->SpawnActor<AGP_Worker>(
+				AGP_Worker::StaticClass(),
+				FifoLoc + FVector(30.0f * Index, 10.0f, 0.0f),
+				FRotator::ZeroRotator,
+				SpawnParams);
+			if (!Expect(IsValid(W), TEXT("FifoWorkerSpawned")))
+			{
+				Finish();
+				return;
+			}
+			W->GetCargoComponent()->ClearCargo();
+			FifoWorkers.Add(W);
+		}
+
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			AGP_Worker* W = FifoWorkers[Index].Get();
+			UGP_UnitCommandComponent* Cmd = W->GetUnitCommandComponent();
+			if (Cmd != nullptr)
+			{
+				Cmd->DebugResetFifoWatchdogCounters();
+			}
+			IssueMine(W, FifoNode);
+		}
+
+		int32 MiningCount = 0;
+		int32 WaitingCount = 0;
+		AGP_Worker* Fifth = FifoWorkers[4].Get();
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			AGP_Worker* W = FifoWorkers[Index].Get();
+			UGP_MiningComponent* Mining = W->GetMiningComponent();
+			if (Mining->GetMiningState() == EGP_MiningState::Mining)
+			{
+				++MiningCount;
+			}
+			if (Mining->GetMiningState() == EGP_MiningState::WaitingForSlot)
+			{
+				++WaitingCount;
+			}
+		}
+
+		Expect(FifoNode->GetActiveMinerCount() == 4, TEXT("FifoActive4"));
+		Expect(FifoNode->GetWaitingMinerCount() == 1, TEXT("FifoWaiting1"));
+		Expect(MiningCount == 4, TEXT("FifoFourMiningStates"));
+		Expect(WaitingCount == 1, TEXT("FifoOneWaitingState"));
+		Expect(IsValid(Fifth)
+				&& Fifth->GetMiningComponent()->GetMiningState() == EGP_MiningState::WaitingForSlot,
+			TEXT("FifthWaitingForSlot"));
+		Expect(Fifth->GetMiningComponent()->GetCurrentResourceNode() == FifoNode,
+			TEXT("FifthMineTargetIsFifoNode"));
+		Expect(FifoNode->FindWaitingMinerIndex(Fifth) == 0, TEXT("FifthExactlyOnceAtWaitingHead"));
+		Expect(FifoNode->IsWaitingForMiningSlot(Fifth)
+				&& !FifoNode->HasActiveMiningSlot(Fifth),
+			TEXT("FifthWaitingNotActive"));
+
+		UGP_UnitCommandComponent* FifthCmd = Fifth->GetUnitCommandComponent();
+		if (Expect(FifthCmd != nullptr, TEXT("FifthCommandPresent")))
+		{
+			Expect(FifthCmd->DebugGetMineBeginCallsThisTransition() <= 1,
+				TEXT("FifthNoRecursiveMineBegin"));
+			Expect(FifthCmd->DebugGetSameTargetRetargetAttempts() == 0,
+				TEXT("FifthNoSameTargetRetarget"));
+			Expect(FifthCmd->GetMineTarget() == FifoNode, TEXT("FifthHeldMineTargetNode"));
+		}
+
+		// Promote FIFO head by releasing one active miner.
+		AGP_Worker* ActiveToRelease = nullptr;
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			AGP_Worker* W = FifoWorkers[Index].Get();
+			if (W->GetMiningComponent()->GetMiningState() == EGP_MiningState::Mining)
+			{
+				ActiveToRelease = W;
+				break;
+			}
+		}
+		if (Expect(IsValid(ActiveToRelease), TEXT("FoundActiveToRelease")))
+		{
+			ActiveToRelease->GetMiningComponent()->StopMining(EGP_MiningStopReason::ManualStop);
+		}
+
+		Expect(FifoNode->GetActiveMinerCount() == 4, TEXT("FifoActiveStill4AfterPromote"));
+		Expect(FifoNode->GetWaitingMinerCount() == 0, TEXT("FifoWaiting0AfterPromote"));
+		Expect(Fifth->GetMiningComponent()->GetMiningState() == EGP_MiningState::Mining,
+			TEXT("FifthPromotedToMining"));
+		Expect(Fifth->GetMiningComponent()->IsMiningTimerActive()
+				|| Fifth->GetMiningComponent()->GetMiningState() == EGP_MiningState::Mining,
+			TEXT("FifthMiningTimerOrMiningState"));
+		Expect(!FifoNode->IsWaitingForMiningSlot(Fifth)
+				&& FifoNode->HasActiveMiningSlot(Fifth),
+			TEXT("FifthActiveExactlyOnce"));
+
+		// 6th Worker joins waiting; strict FIFO with remaining release.
+		AGP_Worker* Sixth = FifoWorkers[5].Get();
+		IssueMine(Sixth, FifoNode);
+		Expect(Sixth->GetMiningComponent()->GetMiningState() == EGP_MiningState::WaitingForSlot,
+			TEXT("SixthWaitingForSlot"));
+		Expect(FifoNode->FindWaitingMinerIndex(Sixth) == 0, TEXT("SixthWaitingHead"));
+		Expect(FifoNode->GetWaitingMinerCount() == 1, TEXT("FifoWaiting1WithSixth"));
+
+		AGP_Worker* AnotherActive = nullptr;
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			AGP_Worker* W = FifoWorkers[Index].Get();
+			if (W != Sixth
+				&& W->GetMiningComponent()->GetMiningState() == EGP_MiningState::Mining
+				&& FifoNode->HasActiveMiningSlot(W))
+			{
+				AnotherActive = W;
+				break;
+			}
+		}
+		if (Expect(IsValid(AnotherActive), TEXT("FoundSecondActiveToRelease")))
+		{
+			AnotherActive->GetMiningComponent()->StopMining(EGP_MiningStopReason::ManualStop);
+		}
+		Expect(Sixth->GetMiningComponent()->GetMiningState() == EGP_MiningState::Mining,
+			TEXT("SixthPromotedFifoOrder"));
+		Expect(FifoNode->GetWaitingMinerCount() == 0, TEXT("FifoEmptyAfterSixthPromote"));
+
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 12:
+	{
+		AGP_Worker* Worker = FifoWorkers.Num() > 0 ? FifoWorkers[0].Get() : nullptr;
 		Expect(!Worker || !Worker->PrimaryActorTick.bCanEverTick, TEXT("FinalWorkerNoPermanentTick"));
 		Finish();
 		break;

@@ -398,6 +398,8 @@ private:
 	TWeakObjectPtr<AGP_Worker> WorkerWeak;
 	TWeakObjectPtr<AGP_Worker> SlotHolderWeak;
 	TWeakObjectPtr<AGP_MainBase> MainBaseWeak;
+	TWeakObjectPtr<AGP_ResourceNode> FifoNodeWeak;
+	TArray<TWeakObjectPtr<AGP_Worker>> FifoWorkers;
 	FVector AnchorClusterLocation = FVector::ZeroVector;
 	FVector MainBaseLocation = FVector::ZeroVector;
 	float TestSearchRadiusCm = 1000.0f;

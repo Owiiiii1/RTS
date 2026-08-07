@@ -4,7 +4,7 @@
 **DEFERRED** — not failed; not a P3 production blocker.
 
 ## Depends on
-**future canonical navigation/path-following movement stage**  
+**future canonical navigation/path-following movement stage**
 (no specific roadmap stage number assigned yet)
 
 ## Why deferred

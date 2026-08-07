@@ -1812,6 +1812,155 @@ namespace GPWorkerDebug
 		TEXT("Alias of gp.Resource.SpawnDiagnosticScenario."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ResourceSpawnDiagnosticScenario));
 
+	/** Operator PIE helper: spawn native MainBase then SetTeamId (EditInstanceOnly TeamId cannot be class-defaulted). */
+	static FVector ResolveSpawnTestMainBaseLocation(UWorld* World, int32 TeamId)
+	{
+		FVector Loc(200.0f, 200.0f, 100.0f);
+		AGP_Worker* SameTeamWorker = nullptr;
+		AGP_Worker* AnyWorker = nullptr;
+		for (TActorIterator<AGP_Worker> It(World); It; ++It)
+		{
+			AGP_Worker* Worker = *It;
+			if (!IsValid(Worker))
+			{
+				continue;
+			}
+			if (AnyWorker == nullptr)
+			{
+				AnyWorker = Worker;
+			}
+			if (Worker->GetTeamId() == TeamId)
+			{
+				SameTeamWorker = Worker;
+				break;
+			}
+		}
+
+		const AGP_Worker* Anchor = SameTeamWorker != nullptr ? SameTeamWorker : AnyWorker;
+		if (IsValid(Anchor))
+		{
+			Loc = Anchor->GetActorLocation() + FVector(450.0f, 0.0f, 0.0f);
+		}
+		else if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (const APawn* Pawn = PC->GetPawn())
+			{
+				Loc = Pawn->GetActorLocation() + FVector(450.0f, 0.0f, 0.0f);
+			}
+		}
+
+		FVector Projected = Loc;
+		if (GPResourceLoopDiagnostics::IsNavPointProjected(World, Loc, &Projected, 800.0f, 800.0f))
+		{
+			return Projected;
+		}
+		return Loc;
+	}
+
+	static void ResourceSpawnTestMainBase(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr || World->GetNetMode() == NM_Client)
+		{
+			UE_LOG(LogGPWorker, Warning, TEXT("GP Debug SpawnTestMainBase: rejected — missing world or client"));
+			return;
+		}
+
+		int32 TeamId = 1;
+		if (Args.Num() > 0)
+		{
+			if (!LexTryParseString(TeamId, *Args[0]) || TeamId < 1)
+			{
+				UE_LOG(LogGPWorker, Warning, TEXT("GP Debug SpawnTestMainBase: rejected — TeamId < 1 (usage: gp.Resource.SpawnTestMainBase [TeamId])"));
+				return;
+			}
+		}
+
+		const FVector Location = ResolveSpawnTestMainBaseLocation(World, TeamId);
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.ObjectFlags |= RF_Transient;
+
+		// Spawn first (BeginPlay may run with TeamId=-1), then SetTeamId — mirrors operator PIE Details path.
+		AGP_MainBase* Base = World->SpawnActor<AGP_MainBase>(
+			AGP_MainBase::StaticClass(),
+			Location,
+			FRotator::ZeroRotator,
+			Params);
+		if (!IsValid(Base))
+		{
+			UE_LOG(LogGPWorker, Error, TEXT("GP Debug SpawnTestMainBase: spawn failed Team=%d"), TeamId);
+			return;
+		}
+
+		Base->SetTeamId(TeamId);
+
+		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
+		const bool bRegistered = IsValid(GS) && GS->FindMainBaseForTeam(TeamId) == Base;
+		if (bRegistered)
+		{
+			UE_LOG(LogGPWorker, Log,
+				TEXT("GP Debug SpawnTestMainBase: Base=%s Team=%d Location=%s Registered=true"),
+				*GetNameSafe(Base),
+				TeamId,
+				*Base->GetActorLocation().ToCompactString());
+		}
+		else
+		{
+			UE_LOG(LogGPWorker, Error,
+				TEXT("GP Debug SpawnTestMainBase: Base=%s Team=%d Location=%s Registered=false (FindMainBaseForTeam mismatch or duplicate team base)"),
+				*GetNameSafe(Base),
+				TeamId,
+				*Base->GetActorLocation().ToCompactString());
+		}
+	}
+
+	static void ResourceDestroyTestMainBase(const TArray<FString>& Args, UWorld* World)
+	{
+		if (World == nullptr || World->GetNetMode() == NM_Client)
+		{
+			UE_LOG(LogGPWorker, Warning, TEXT("GP Debug DestroyTestMainBase: rejected — missing world or client"));
+			return;
+		}
+
+		int32 TeamId = 1;
+		if (Args.Num() > 0)
+		{
+			if (!LexTryParseString(TeamId, *Args[0]) || TeamId < 1)
+			{
+				UE_LOG(LogGPWorker, Warning, TEXT("GP Debug DestroyTestMainBase: rejected — TeamId < 1 (usage: gp.Resource.DestroyTestMainBase [TeamId])"));
+				return;
+			}
+		}
+
+		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
+		AGP_MainBase* Base = GS != nullptr ? GS->FindMainBaseForTeam(TeamId) : nullptr;
+		if (!IsValid(Base))
+		{
+			UE_LOG(LogGPWorker, Warning,
+				TEXT("GP Debug DestroyTestMainBase: no registered MainBase for Team=%d"), TeamId);
+			return;
+		}
+
+		const FString BaseName = GetNameSafe(Base);
+		Base->Destroy();
+		const bool bStillRegistered = IsValid(GS) && GS->FindMainBaseForTeam(TeamId) == Base;
+		UE_LOG(LogGPWorker, Log,
+			TEXT("GP Debug DestroyTestMainBase: Base=%s Team=%d Destroyed=true StillRegistered=%s"),
+			*BaseName,
+			TeamId,
+			bStillRegistered ? TEXT("true") : TEXT("false"));
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs GResourceSpawnTestMainBase(
+		TEXT("gp.Resource.SpawnTestMainBase"),
+		TEXT("Authority non-shipping: spawn native AGP_MainBase and SetTeamId. Usage: gp.Resource.SpawnTestMainBase [TeamId=1]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ResourceSpawnTestMainBase));
+
+	static FAutoConsoleCommandWithWorldAndArgs GResourceDestroyTestMainBase(
+		TEXT("gp.Resource.DestroyTestMainBase"),
+		TEXT("Authority non-shipping: Destroy registered MainBase for TeamId. Usage: gp.Resource.DestroyTestMainBase [TeamId=1]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ResourceDestroyTestMainBase));
+
 	static FAutoConsoleCommandWithWorldAndArgs GResourceDiagContract(
 		TEXT("gp.Resource.RunDiagnosticScenarioContractTest"),
 		TEXT("Deterministic DiagnosticScenarioSpawn contract test (GP-S28)."),

@@ -1,5 +1,30 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S28P3 Operator Test Helper Correction
+
+Status: **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p3-dropoff-resilience` (no merge)
+
+### Cause
+`AGP_UnitBase::TeamId` is `EditInstanceOnly` — Blueprint class defaults / drag-drop PIE leave MainBase at TeamId=-1; Details edits may not call `SetTeamId` → registry miss.
+
+### What was done
+- Non-shipping `gp.Resource.SpawnTestMainBase [TeamId]` — native `AGP_MainBase`, `SetTeamId`, registry verify log
+- Non-shipping `gp.Resource.DestroyTestMainBase [TeamId]` — destroy registered team MainBase
+- Contract asserts Spawn→BeginPlay(unassigned)→SetTeamId→register once→destroy→unregister once
+- Production MainBase lifecycle unchanged (`NotifyTeamIdChanged` already registers after runtime SetTeamId)
+
+### Tests / build
+- `gp.Resource.RunDropOffResilienceContractTest` → Failures=0
+- GPEditor Win64 Development + UHT — **PASSED**
+
+### Stop condition
+Still operator validation pending. No merge. No P4.
+
+---
+
 ## 2026-08-08 — GP-S28P3 Drop-Off Resilience Implementation
 
 Status: **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING**

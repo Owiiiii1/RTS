@@ -321,6 +321,73 @@ void UGP_DropOffResilienceContractTestRunner::AdvanceStage()
 	{
 	case 0:
 	{
+		// Operator helper path: Spawn (BeginPlay TeamId=-1) → SetTeamId → register once → destroy → unregister once.
+		{
+			AGP_GameState* GS = World->GetGameState<AGP_GameState>();
+			const int32 FreeTeam = GPResourceLoopDiagnostics::FindFreePlayableTeamId(World);
+			if (!Expect(IsValid(GS) && FreeTeam >= 1, TEXT("HelperRegistryFreeTeam")))
+			{
+				Finish();
+				return;
+			}
+
+			int32 RegisterCount = 0;
+			int32 UnregisterCount = 0;
+			AGP_MainBase* ObservedRegister = nullptr;
+			FString ObservedUnregisterName;
+			const FDelegateHandle RegHandle = GS->OnMainBaseRegistered.AddLambda(
+				[&RegisterCount, &ObservedRegister](AGP_MainBase* MainBase)
+				{
+					if (IsValid(MainBase))
+					{
+						++RegisterCount;
+						ObservedRegister = MainBase;
+					}
+				});
+			const FDelegateHandle UnregHandle = GS->OnMainBaseUnregistered.AddLambda(
+				[&UnregisterCount, &ObservedUnregisterName](AGP_MainBase* MainBase)
+				{
+					if (MainBase != nullptr)
+					{
+						++UnregisterCount;
+						ObservedUnregisterName = GetNameSafe(MainBase);
+					}
+				});
+
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			Params.ObjectFlags |= RF_Transient;
+			AGP_MainBase* HelperBase = World->SpawnActor<AGP_MainBase>(
+				AGP_MainBase::StaticClass(),
+				FVector(120.0f, 120.0f, 100.0f),
+				FRotator::ZeroRotator,
+				Params);
+			if (!Expect(IsValid(HelperBase), TEXT("HelperRegistrySpawn")))
+			{
+				GS->OnMainBaseRegistered.Remove(RegHandle);
+				GS->OnMainBaseUnregistered.Remove(UnregHandle);
+				Finish();
+				return;
+			}
+			Expect(HelperBase->GetTeamId() < 1, TEXT("HelperRegistryBeginPlayUnassigned"));
+			Expect(GS->FindMainBaseForTeam(FreeTeam) != HelperBase, TEXT("HelperRegistryNotRegisteredBeforeSetTeamId"));
+
+			HelperBase->SetTeamId(FreeTeam);
+			Expect(HelperBase->GetTeamId() == FreeTeam, TEXT("HelperRegistryTeamIdApplied"));
+			Expect(GS->FindMainBaseForTeam(FreeTeam) == HelperBase, TEXT("HelperRegistryFindAfterSetTeamId"));
+			Expect(RegisterCount == 1, TEXT("HelperRegistryRegisteredOnce"));
+			Expect(ObservedRegister == HelperBase, TEXT("HelperRegistryRegisterEventActor"));
+
+			const FString HelperName = GetNameSafe(HelperBase);
+			HelperBase->Destroy();
+			Expect(GS->FindMainBaseForTeam(FreeTeam) == nullptr, TEXT("HelperRegistryClearedAfterDestroy"));
+			Expect(UnregisterCount == 1, TEXT("HelperRegistryUnregisteredOnce"));
+			Expect(ObservedUnregisterName == HelperName, TEXT("HelperRegistryUnregisterEventActor"));
+
+			GS->OnMainBaseRegistered.Remove(RegHandle);
+			GS->OnMainBaseUnregistered.Remove(UnregHandle);
+		}
+
 		// Case 1 setup: navigable scenario then remove MainBase before cargo-full haul.
 		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
 			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);

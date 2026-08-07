@@ -23,6 +23,9 @@ A/B/C/D **PASSED** (depletion→Node B; 5th→free B; FIFO stable; partial-cargo
 ### Scope
 Docs finalization only after `64f8c85…`. Operator-local assets untouched. P0 historical; P1 merged; Slice7 audit separate pending.
 
+### Final commit
+`9057c2fa767e3d3a49be9aa62f7826f052a65678`
+
 ### Stop condition
 READY_FOR_MERGE — merge only after tech-lead / operator approval. Do not start P3 in this close-out.
 

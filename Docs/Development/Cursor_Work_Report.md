@@ -48,4 +48,4 @@ Operator A–D remain authoritative. No gameplay changes for harness.
 - Slice7 audit: pending separately (not part of P2)
 
 ## Final Commit
-*(recorded after finalization commit)*
+`9057c2fa767e3d3a49be9aa62f7826f052a65678`

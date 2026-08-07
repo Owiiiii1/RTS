@@ -7,6 +7,7 @@
 - Branch: `feature/gp-s28p2-depletion-resource-reassignment`
 - Base main: `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` (GP-S28P1 merged; main does not yet contain P2)
 - Implementation tip (operator-validated): `64f8c8567dc1f004abcc3b9bc5917794f2132b08`
+- Finalization commit: `9057c2fa767e3d3a49be9aa62f7826f052a65678`
 
 ## Goal
 Safe one-shot ResourceNode depletion, GameState registry, path-aware reassignment / WaitingForResource, FIFO stable wait, and partial-cargo depletion haul priority — without changing mining cadence, Cargo/Storage/Threat semantics, or combat.

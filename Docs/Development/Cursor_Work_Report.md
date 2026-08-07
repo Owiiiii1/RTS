@@ -1,41 +1,51 @@
-# Cursor Work Report — GP-S28P2 Partial-Cargo Depletion Correction
+# Cursor Work Report — GP-S28P2 Finalization
 
 ## Status
-**GP-S28P2_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S28P2_READY_FOR_MERGE**
 
 ## Branch
-`feature/gp-s28p2-depletion-resource-reassignment` (no merge; main untouched)
+`feature/gp-s28p2-depletion-resource-reassignment`
 
-## Fourth operator failure
-Node Amount=10, CargoCapacity=50, one Worker, MainBase present, no alternate ResourceNode:
+## Base Main
+`86bcc9740fde0f19ac40c70f2f49298680f5f7d6` (GP-S28P1 merged; main does not yet contain P2)
 
-Worker mines 10 → deposit depletes → Cargo=10 → immediate `ResourceReassignmentNoCandidate Reason=PostDepletion` / `WaitingForResource` (no haul).
-
-## Root cause
-`ExecuteMiningCycle`: `ConsumeResource` depletion clears occupancy → `StopMining(TargetEndPlay)` before `AddCargo`, so UnitCommand reassigned with Cargo=0; cargo credited afterward and stranded.
-
-## Corrected terminal priority
-DepositDepleted + Cargo > 0 → haul (`ReturnToDeposit=false`) → unload → `PostDropOff` reassignment → else WaitingForResource.
-
-Zero cargo → immediate reassignment / WaitingForResource (no unnecessary haul).
-
-## Invariant
-Normal flow: WaitingForResource ⇒ Cargo=0. Non-shipping Error + haul redirect if MainBase exists (no recursive transition). MainBase failure: existing behavior only.
-
-## Test results
-| Command | Result |
+## Operator Validation
+| Scenario | Result |
 | --- | --- |
-| `gp.Resource.RunDepletionReassignmentContractTest` | Extended (partial / alt / zero-cargo); **PIE not run non-interactively — operator pending** |
-| `gp.Resource.RunS28RegressionSuite` | **Not run non-interactively — operator pending** |
+| A. Depletion → haul → unload → Node B mining | **PASS** |
+| B. 5 Workers, Node A full, 5th → free Node B | **PASS** |
+| C. FIFO stable wait / promote / no crash | **PASS** |
+| D. Partial cargo depletion → haul → unload → WaitingForResource | **PASS** |
+
+## Tests
+Headless `UnrealEditor-Cmd` `-game -NullRHI` on `/Game/GrimProtocol/Maps/L_PrototypeArena`:
+
+| Command | Exact result |
+| --- | --- |
+| `gp.Resource.RunDepletionReassignmentContractTest` | `Complete Failures=1 Cancelled=None` — FAIL `AnchorSearchCenterFindsNodeB` (not claimed PASS) |
+| `gp.Resource.RunS28RegressionSuite` | `Complete Failures=1` — FAIL `HeldClearedAfterDepleteHaul` in hauling child; suite stopped (not claimed PASS) |
+
+Operator A–D remain authoritative. No gameplay changes for harness.
 
 ## Builds
 | Target | Result |
 | --- | --- |
-| GPEditor Win64 Development + UHT | **PASSED** |
-| GP Dev / Shipping | Deferred |
+| GPEditor Win64 Development + UHT | **PASS** (finalization re-run; up to date / C++ unchanged since `64f8c85…`) |
+| GP Win64 Development | **PASS** |
+| GP Win64 Shipping | **PASS** |
 
-## Operator-local assets — untouched
-DefaultEngine.ini, map, Blueprint/**, Materials/**, authored ResourceNode, Niagara.
+## Scope Audit
+- Diff vs main: depletion, registry, approach/search, reassignment, FIFO, WaitingForResource, settings, tests/docs only
+- No combat/projectile changes
+- No BP/map/content commits
+- Operator-local assets untouched (DefaultEngine.ini, map, Blueprint/**, Materials/**, authored ResourceNode, Niagara)
+- No permanent Tick on ResourceNode / Worker diagnostic paths
 
-## Commit SHA
-`64f8c8567dc1f004abcc3b9bc5917794f2132b08`
+## Documentation
+- P0: historical completed audit / implementation plan
+- P1: DONE / MERGED on main @ `86bcc9740fde0f19ac40c70f2f49298680f5f7d6`
+- P2: **READY_FOR_MERGE**
+- Slice7 audit: pending separately (not part of P2)
+
+## Final Commit
+*(recorded after finalization commit)*

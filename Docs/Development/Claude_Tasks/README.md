@@ -6,22 +6,22 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-06 (після merge GP-S28). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), [`../Resource_Playable_Pass_Audit.md`](../Resource_Playable_Pass_Audit.md).
+> Стан станом на 2026-08-07 (GP-S28P2 finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), [`../Resource_Playable_Pass_Audit.md`](../Resource_Playable_Pass_Audit.md).
 
-**Поточна фаза:** Slice 6 **closed**. Current stage = **GP-S28P2** depletion/reassignment (`feature/gp-s28p2-depletion-resource-reassignment`).
+**Поточна фаза:** Slice 6 **closed**. Current stage = **GP-S28P2** depletion/reassignment — **READY_FOR_MERGE**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
 | GP-S01 … GP-S28 | **DONE / merged** on `main` |
-| GP-S28P0 Resource Playable Audit | Completed on `audit/gp-s28p-resource-playable-pass` |
-| GP-S28P1 Blueprint + cargo visual | **DONE / merged** on `main` @ `86bcc974…` |
-| **GP-S28P2** Depletion + reassignment | **CODE_READY_OPERATOR_VALIDATION_PENDING** — [`GP-S28P2_Depletion_Resource_Reassignment.md`](GP-S28P2_Depletion_Resource_Reassignment.md) |
-| GP-S28P3…P4 | Not started |
-| GP-SLICE7-AUDIT | Pending review — do not modify from S28P |
+| GP-S28P0 Resource Playable Audit | Historical completed audit / implementation plan (`audit/gp-s28p-resource-playable-pass`) — not current status |
+| GP-S28P1 Blueprint + cargo visual | **DONE / MERGED** on `main` @ `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` |
+| **GP-S28P2** Depletion + reassignment | **READY_FOR_MERGE** — [`GP-S28P2_Depletion_Resource_Reassignment.md`](GP-S28P2_Depletion_Resource_Reassignment.md) |
+| GP-S28P3…P4 | **NOT STARTED** |
+| GP-SLICE7-AUDIT | Separate pending review — not part of P2; do not rewrite audit conclusions |
 
-**NEXT action для агента:** STOP for operator PIE validation of P2. Do **not** start P3 or merge until assigned.
+**NEXT action для агента:** merge GP-S28P2 only after tech-lead review / operator approval. Do **not** start P3 automatically.
 
 ### Drift Warning
 

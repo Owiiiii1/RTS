@@ -25,6 +25,10 @@
 #include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
 #include "UI/GPMarqueeSelectionWidget.h"
+#include "UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h"
+#include "Buildings/GPMainBase.h"
+#include "Game/GPGameState.h"
+#include "Resources/GPStorageComponent.h"
 #include "Units/GPUnitBase.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPCommandInput, Log, All);
@@ -158,6 +162,7 @@ void AGP_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
 	DestroyMarqueeWidget();
+	DestroyPlanetaryFerroniteHUD();
 
 	bCameraRotateHeld = false;
 
@@ -290,6 +295,9 @@ void AGP_PlayerController::BeginPlayingState()
 	InitializeCameraInput();
 	InitializeSelectionInput();
 	InitializeCommandInput();
+
+	EnsurePlanetaryFerroniteHUD();
+	RefreshPlanetaryFerroniteHUDBinding();
 }
 
 void AGP_PlayerController::SetupInputComponent()
@@ -395,6 +403,12 @@ void AGP_PlayerController::OnPlayerStateReady(APlayerState* InPlayerState)
 	UE_LOG(LogTemp, Log,
 		TEXT("AGP_PlayerController::OnPlayerStateReady: PlayerState ready (%s)."),
 		*GetNameSafe(InPlayerState));
+
+	if (IsLocalController())
+	{
+		EnsurePlanetaryFerroniteHUD();
+		RefreshPlanetaryFerroniteHUDBinding();
+	}
 }
 
 void AGP_PlayerController::OnAbilitySystemLinkReady(UGP_AbilitySystemComponent* InAbilitySystemComponent)
@@ -1324,6 +1338,207 @@ void AGP_PlayerController::EnsureMarqueeWidget()
 
 	MarqueeWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 	MarqueeWidget->AddToViewport(MarqueeWidgetZOrder);
+}
+
+void AGP_PlayerController::EnsurePlanetaryFerroniteHUD()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	if (PlanetaryFerroniteHUD != nullptr)
+	{
+		if (!PlanetaryFerroniteHUD->IsInViewport())
+		{
+			PlanetaryFerroniteHUD->AddToViewport(PlanetaryFerroniteHUDZOrder);
+		}
+		PlanetaryFerroniteHUD->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return;
+	}
+
+	PlanetaryFerroniteHUD = CreateWidget<UGP_TEMP_S28P_PlanetaryFerroniteHUD>(
+		this,
+		UGP_TEMP_S28P_PlanetaryFerroniteHUD::StaticClass());
+	if (PlanetaryFerroniteHUD == nullptr)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("AGP_PlayerController::EnsurePlanetaryFerroniteHUD: CreateWidget failed."));
+		return;
+	}
+
+	PlanetaryFerroniteHUD->SetVisibility(ESlateVisibility::HitTestInvisible);
+	PlanetaryFerroniteHUD->AddToViewport(PlanetaryFerroniteHUDZOrder);
+	PlanetaryFerroniteHUD->SetPlanetaryFerroniteDisplay(0.0f, false);
+}
+
+void AGP_PlayerController::DestroyPlanetaryFerroniteHUD()
+{
+	ClearPlanetaryFerroniteHUDBindings();
+	if (PlanetaryFerroniteHUD == nullptr)
+	{
+		return;
+	}
+	PlanetaryFerroniteHUD->RemoveFromParent();
+	PlanetaryFerroniteHUD = nullptr;
+}
+
+void AGP_PlayerController::ClearPlanetaryFerroniteHUDBindings()
+{
+	UnbindPlanetaryFerroniteStorage();
+
+	if (AGP_GameState* GS = BoundPlanetaryGameState.Get())
+	{
+		if (ResolvedMainBaseChangedHandle.IsValid())
+		{
+			GS->OnResolvedMainBaseChanged.Remove(ResolvedMainBaseChangedHandle);
+		}
+	}
+	ResolvedMainBaseChangedHandle.Reset();
+	BoundPlanetaryGameState.Reset();
+
+	if (AGP_PlayerState* PS = BoundPlanetaryPlayerState.Get())
+	{
+		if (PlayerTeamIdChangedHandle.IsValid())
+		{
+			PS->OnTeamIdChanged.Remove(PlayerTeamIdChangedHandle);
+		}
+	}
+	PlayerTeamIdChangedHandle.Reset();
+	BoundPlanetaryPlayerState.Reset();
+	BoundPlanetaryTeamId = -1;
+}
+
+void AGP_PlayerController::UnbindPlanetaryFerroniteStorage()
+{
+	if (UGP_StorageComponent* Storage = BoundPlanetaryStorage.Get())
+	{
+		Storage->OnStorageChanged.RemoveDynamic(this, &AGP_PlayerController::HandleStorageChangedForHUD);
+	}
+	BoundPlanetaryStorage.Reset();
+}
+
+void AGP_PlayerController::BindPlanetaryFerroniteStorage(AGP_MainBase* MainBase)
+{
+	UnbindPlanetaryFerroniteStorage();
+	UGP_StorageComponent* Storage = IsValid(MainBase) ? MainBase->GetStorageComponent() : nullptr;
+	if (!IsValid(Storage))
+	{
+		SyncPlanetaryFerroniteHUDFromStorage();
+		return;
+	}
+
+	BoundPlanetaryStorage = Storage;
+	Storage->OnStorageChanged.AddDynamic(this, &AGP_PlayerController::HandleStorageChangedForHUD);
+	SyncPlanetaryFerroniteHUDFromStorage();
+}
+
+void AGP_PlayerController::SyncPlanetaryFerroniteHUDFromStorage()
+{
+	EnsurePlanetaryFerroniteHUD();
+	if (PlanetaryFerroniteHUD == nullptr)
+	{
+		return;
+	}
+
+	if (UGP_StorageComponent* Storage = BoundPlanetaryStorage.Get())
+	{
+		PlanetaryFerroniteHUD->SetPlanetaryFerroniteDisplay(Storage->GetTotalStored(), true);
+	}
+	else
+	{
+		PlanetaryFerroniteHUD->SetPlanetaryFerroniteDisplay(0.0f, false);
+	}
+}
+
+void AGP_PlayerController::HandleStorageChangedForHUD(
+	float PreviousTotalStored,
+	float NewTotalStored,
+	float TotalCapacity)
+{
+	(void)PreviousTotalStored;
+	(void)TotalCapacity;
+	EnsurePlanetaryFerroniteHUD();
+	if (PlanetaryFerroniteHUD != nullptr)
+	{
+		PlanetaryFerroniteHUD->SetPlanetaryFerroniteDisplay(NewTotalStored, BoundPlanetaryStorage.IsValid());
+	}
+}
+
+void AGP_PlayerController::HandleResolvedMainBaseChanged(
+	int32 TeamId,
+	AGP_MainBase* PreviousMainBase,
+	AGP_MainBase* NewMainBase)
+{
+	(void)PreviousMainBase;
+	if (TeamId != BoundPlanetaryTeamId || BoundPlanetaryTeamId < 1)
+	{
+		return;
+	}
+	BindPlanetaryFerroniteStorage(NewMainBase);
+}
+
+void AGP_PlayerController::HandlePlayerTeamIdChanged(int32 OldTeamId, int32 NewTeamId)
+{
+	(void)OldTeamId;
+	(void)NewTeamId;
+	RefreshPlanetaryFerroniteHUDBinding();
+}
+
+void AGP_PlayerController::RefreshPlanetaryFerroniteHUDBinding()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	EnsurePlanetaryFerroniteHUD();
+
+	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	UWorld* World = GetWorld();
+	AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+
+	if (BoundPlanetaryPlayerState.Get() != PS)
+	{
+		if (AGP_PlayerState* OldPS = BoundPlanetaryPlayerState.Get())
+		{
+			if (PlayerTeamIdChangedHandle.IsValid())
+			{
+				OldPS->OnTeamIdChanged.Remove(PlayerTeamIdChangedHandle);
+			}
+		}
+		PlayerTeamIdChangedHandle.Reset();
+		BoundPlanetaryPlayerState = PS;
+		if (IsValid(PS))
+		{
+			PlayerTeamIdChangedHandle = PS->OnTeamIdChanged.AddUObject(
+				this, &AGP_PlayerController::HandlePlayerTeamIdChanged);
+		}
+	}
+
+	if (BoundPlanetaryGameState.Get() != GS)
+	{
+		if (AGP_GameState* OldGS = BoundPlanetaryGameState.Get())
+		{
+			if (ResolvedMainBaseChangedHandle.IsValid())
+			{
+				OldGS->OnResolvedMainBaseChanged.Remove(ResolvedMainBaseChangedHandle);
+			}
+		}
+		ResolvedMainBaseChangedHandle.Reset();
+		BoundPlanetaryGameState = GS;
+		if (IsValid(GS))
+		{
+			ResolvedMainBaseChangedHandle = GS->OnResolvedMainBaseChanged.AddUObject(
+				this, &AGP_PlayerController::HandleResolvedMainBaseChanged);
+		}
+	}
+
+	BoundPlanetaryTeamId = IsValid(PS) ? PS->GetTeamId() : -1;
+	AGP_MainBase* Base = (IsValid(GS) && BoundPlanetaryTeamId >= 1)
+		? GS->FindMainBaseForTeamClientSafe(BoundPlanetaryTeamId)
+		: nullptr;
+	BindPlanetaryFerroniteStorage(Base);
 }
 
 void AGP_PlayerController::HideMarqueeWidget()

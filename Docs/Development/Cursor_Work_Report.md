@@ -1,47 +1,57 @@
-# Cursor Work Report — GP-S28P3 Finalization
+# Cursor Work Report — GP-S28P4 Planetary Ferronite HUD
 
 ## Status
-GP-S28P3_READY_FOR_MERGE
+GP-S28P4_CODE_READY_OPERATOR_VALIDATION_PENDING
 
 ## Branch
-feature/gp-s28p3-dropoff-resilience
+feature/gp-s28p4-planetary-ferronite-hud
 
 ## Base
-3b1ae705d8b15fd54daf06553337885d0420dc57
+fb699db32d1bc79a62809274e39b8a588633cf3c
 
 ## Final Tip
-`008c2a38bfd28fe1cf3dbffb9a6ad20c2a92ad12`
+(pending commit SHA — updated after push)
 
-## Operator Validation
-- A PASS
-- B PASS
-- C DEFERRED
-- D PASS
+## Client-safe MainBase resolve
+- Authority `RegisterMainBase` / `UnregisterMainBase` remain mutation SoT (existing per-team registry).
+- Replicated `TArray<FGP_ReplicatedMainBaseEntry> ReplicatedMainBases` on `AGP_GameState`.
+- API: `FindMainBaseForTeamClientSafe(int32 TeamId)`.
+- Event: `OnResolvedMainBaseChanged(TeamId, PreviousMainBase, NewMainBase)` — authority mutation + `OnRep_ReplicatedMainBases`.
+- Survives register / replace / unregister / late join / TeamId replication without world Tick or `GetAllActorsOfClass` polling.
 
-## Automated Tests
+## HUD
+- Class: `UGP_TEMP_S28P_PlanetaryFerroniteHUD` (`TEMP_S28P_HUD`)
+- Ownership: local `AGP_PlayerController` (CreateWidget + AddToViewport ZOrder 900)
+- Display: `Ferronite: <int>` or `Ferronite: --` (NativePaint; no ViewModel required for one number)
+- SoT: bound MainBase `UGP_StorageComponent::GetTotalStored()`
+
+## Event binding flow
+1. Local PlayerState TeamId valid → resolve via `FindMainBaseForTeamClientSafe`
+2. Bind `Storage.OnStorageChanged` + initial sync
+3. Storage OnRep/event → update text
+4. `OnResolvedMainBaseChanged` for local team → unbind old, bind new
+5. `OnTeamIdChanged` → re-resolve / rebind
+6. EndPlay / destroy base → safe `--` / 0 until replacement
+
+## Automated tests
 | Command | Result |
 | --- | --- |
-| `gp.Resource.RunDropOffResilienceContractTest` | Complete Failures=0 Cancelled=None |
-| `gp.Resource.RunDepletionReassignmentContractTest` | Complete Failures=0 Cancelled=None |
+| `gp.Resource.RunPlanetaryFerroniteHUDContractTest` | Complete Failures=0 Cancelled=None |
 | `gp.Resource.RunS28RegressionSuite` | Complete Failures=0 |
+
+Contract covers: Team1 register resolve, Team2 isolation, unregister clear, replacement, Storage initial sync + change notification, no Tick required.
 
 ## Builds
 | Target | Result |
 | --- | --- |
 | GPEditor Win64 Development + UHT | PASSED |
-| GP Win64 Development | PASSED |
-| GP Win64 Shipping | PASSED |
+| GP Win64 Development / Shipping | Not required (candidate stage) |
 
-## Scope Audit
-Branch diff vs `3b1ae705…` is GP-S28P3 only: WaitingForDropOff rename, MainBase registry delegates, haul wait/wake/retry, DropOffRetrySeconds, P3 contract + suite, non-shipping Spawn/DestroyTestMainBase helpers, docs. No P4 HUD, Hub drop-off, storage-full redesign, orbital/Score, combat, construction, path-following redesign, Blueprint/map/content commits.
+## Scope audit
+Branch vs `fb699db…` is GP-S28P4 only: GameState replicated MainBase handles + resolve API/delegate; PlayerState TeamId changed delegate; TEMP HUD widget; PC bind/sync; P4 contract + S28 suite entry; docs. No combat, P3 haul semantics, orbital/Score/Hub, storage overflow, construction, nav, projectiles, Blueprint/map/content.
 
-Invariants confirmed: Cargo + Mine intent preserved in wait; command replacement blocks resurrect; current-target unregister; same-team register wake; timer/events not permanent Tick; one bind/timer each; Threat after Accepted only; overflow LOST unchanged; MainBase-only drop-off.
+## No Tick / no actor-per-frame polling
+Confirmed: HUD updates via Storage + MainBase resolve + TeamId delegates only. No Tick on HUD/PC for this readout. No `GetAllActorsOfClass` per frame.
 
-## Deferred Validation
-Scenario C remains DEFERRED pending future canonical navigation/path-following movement stage (`DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md`). Not a P3 merge blocker; contract unreachable coverage PASS retained.
-
-## Operator Local Assets
-untouched (DefaultEngine.ini, map, Blueprint/, Materials/ not committed)
-
-## Commit
-`500143cc6457896104b5e6a6b77062c42135a068` (READY_FOR_MERGE finalization)
+## Operator-local assets
+untouched (DefaultEngine.ini, map, Blueprint/, Materials/, authored ResourceNode, Tools/ logs not committed)

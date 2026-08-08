@@ -11,7 +11,12 @@ class UGP_AbilitySystemComponent;
 class AGP_CameraPawn;
 class UGP_CommandComponent;
 class UGP_MarqueeSelectionWidget;
+class UGP_TEMP_S28P_PlanetaryFerroniteHUD;
 class UGP_SelectionComponent;
+class AGP_MainBase;
+class AGP_GameState;
+class AGP_PlayerState;
+class UGP_StorageComponent;
 class UInputAction;
 class UInputMappingContext;
 class UEnhancedInputComponent;
@@ -92,6 +97,19 @@ private:
 	void EnsureMarqueeWidget();
 	void HideMarqueeWidget();
 	void DestroyMarqueeWidget();
+
+	/** TEMP_S28P_HUD — Planetary Ferronite readout (GP-S28P4). Local-only, event-driven. */
+	void EnsurePlanetaryFerroniteHUD();
+	void DestroyPlanetaryFerroniteHUD();
+	void RefreshPlanetaryFerroniteHUDBinding();
+	void ClearPlanetaryFerroniteHUDBindings();
+	void BindPlanetaryFerroniteStorage(AGP_MainBase* MainBase);
+	void UnbindPlanetaryFerroniteStorage();
+	void SyncPlanetaryFerroniteHUDFromStorage();
+	void HandleResolvedMainBaseChanged(int32 TeamId, AGP_MainBase* PreviousMainBase, AGP_MainBase* NewMainBase);
+	void HandlePlayerTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
+	UFUNCTION()
+	void HandleStorageChangedForHUD(float PreviousTotalStored, float NewTotalStored, float TotalCapacity);
 
 	void UpdatePendingSelectionDrag();
 	void BeginActiveMarquee(const FVector2D& CurrentScreenPosition);
@@ -190,6 +208,16 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UGP_MarqueeSelectionWidget> MarqueeWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UGP_TEMP_S28P_PlanetaryFerroniteHUD> PlanetaryFerroniteHUD;
+
+	TWeakObjectPtr<AGP_GameState> BoundPlanetaryGameState;
+	TWeakObjectPtr<AGP_PlayerState> BoundPlanetaryPlayerState;
+	TWeakObjectPtr<UGP_StorageComponent> BoundPlanetaryStorage;
+	FDelegateHandle ResolvedMainBaseChangedHandle;
+	FDelegateHandle PlayerTeamIdChangedHandle;
+	int32 BoundPlanetaryTeamId = -1;
+
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */
 	TWeakObjectPtr<APawn> LastInitializedLocalPawn;
 	TWeakObjectPtr<APlayerState> LastInitializedPlayerState;
@@ -201,6 +229,7 @@ private:
 	static constexpr float SelectionDragThresholdPixels = 8.0f;
 	static constexpr float SelectionTraceDistance = 1000000.0f;
 	static constexpr int32 MarqueeWidgetZOrder = 1000;
+	static constexpr int32 PlanetaryFerroniteHUDZOrder = 900;
 
 	bool bCameraMappingContextAdded = false;
 	bool bCameraInputBindingsInstalled = false;

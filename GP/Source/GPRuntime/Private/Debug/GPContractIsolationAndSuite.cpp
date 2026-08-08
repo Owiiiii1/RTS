@@ -152,6 +152,7 @@ void UGP_S28RegressionSuiteRunner::StartNext()
 		TEXT("gp.Resource.RunEndPlayContractTest"),
 		TEXT("gp.Resource.RunDepletionReassignmentContractTest"),
 		TEXT("gp.Resource.RunDropOffResilienceContractTest"),
+		TEXT("gp.Resource.RunPlanetaryFerroniteHUDContractTest"),
 	};
 	constexpr int32 NumCommands = UE_ARRAY_COUNT(Commands);
 

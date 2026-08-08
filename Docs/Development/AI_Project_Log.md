@@ -1,5 +1,21 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S28P4 Planetary Ferronite HUD Implementation
+
+Status: **GP-S28P4_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+- Branch: `feature/gp-s28p4-planetary-ferronite-hud`
+- Base: `fb699db32d1bc79a62809274e39b8a588633cf3c` (Merge GP-S28P3 drop-off resilience)
+- Task: `Docs/Development/Claude_Tasks/GP-S28P4_Planetary_Ferronite_HUD.md`
+- Client-safe MainBase resolve: replicated `ReplicatedMainBases` on `AGP_GameState`; `FindMainBaseForTeamClientSafe`; `OnResolvedMainBaseChanged`
+- TEMP HUD: `UGP_TEMP_S28P_PlanetaryFerroniteHUD` (PC-owned); SoT = Storage `GetTotalStored()`
+- Event-driven bind via PC (TeamId + resolve + Storage); no Tick / no actor-per-frame polling
+- Contract: `gp.Resource.RunPlanetaryFerroniteHUDContractTest` Failures=0; `gp.Resource.RunS28RegressionSuite` Failures=0
+- GPEditor Win64 Development + UHT: PASSED
+- Operator-local assets untouched
+- Report: `Docs/Development/Cursor_Work_Report.md`
+- Stop: operator validation pending; no merge; no next stage
+
 ## 2026-08-08 — GP-S28P3 Finalization
 
 Status: **GP-S28P3_READY_FOR_MERGE**

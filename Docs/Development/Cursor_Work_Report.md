@@ -10,7 +10,7 @@ feature/gp-s28p4-planetary-ferronite-hud
 fb699db32d1bc79a62809274e39b8a588633cf3c
 
 ## Final Tip
-`b1a7676cf86a54aaf741b4a169f70333c1b30a1f`
+`612464cc9a9c8f5370b1b204fe5d92700ff1a7f2`
 
 ## Operator Validation
 - A Initial HUD PASS

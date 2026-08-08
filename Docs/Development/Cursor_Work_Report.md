@@ -1,101 +1,145 @@
-# Cursor Work Report — GP-S30 TEMP HUD RebuildWidget lifecycle fix
+# Cursor Work Report — GP-S30 Container Launch / Orbital Conversion Finalization
 
 ## Status
-**GP-S30_HUD_LIFECYCLE_FIX_READY_FOR_OPERATOR_RETEST**
-
-Branch: `feature/gp-s30-container-launch-orbital-conversion`  
-Merge: **NOT merged**
+**GP-S30_FINALIZATION_READY_FOR_MERGE_REVIEW**
 
 ---
 
-## 1. Operator FAIL symptom
+## 1. Branch + base main SHA
 
-PIE: entire TEMP HUD missing — no Ferronite, no Orbital, no Launch Container button.
-
----
-
-## 2. Confirmed root cause
-
-`EnsureWidgetTreeBuilt()` ran from `NativeConstruct()` (and Set* helpers), **after** `RebuildWidget()` already built Slate from an empty `WidgetTree->RootWidget`. UObject children existed for contract member checks, but the viewport Slate tree was empty.
+- Branch: `feature/gp-s30-container-launch-orbital-conversion`
+- Base: `main` @ `89ce3c50ebd05a4bf1e58a5b4e117544dc68cb8f`
+- Merge: **NOT merged**
 
 ---
 
-## 3. Exact lifecycle fix
+## 2. GP-S30 feature summary
 
-`UGP_TEMP_S28P_PlanetaryFerroniteHUD::RebuildWidget()`:
-
-1. `EnsureWidgetTreeBuilt()` — assign `RootCanvas` as `WidgetTree->RootWidget` + counters/button
-2. `return Super::RebuildWidget()`
-
-`NativeConstruct` only: anchors, `SelfHitTestInvisible`, refresh, idempotent `OnClicked` bind.  
-`OnClicked`: `RemoveDynamic` then `AddDynamic`.  
-`bTreeBuilt` skips duplicate child creation when root already valid.
+Authority MainBase container launch converts Ready Planetary Ferronite into OrbitalFerronite + FerroniteScore (Instant GAS GEs) and lowers FerroniteThreatValue. TEMP HUD shows Ferronite + Orbital and a Launch Container button that uses a PlayerController Server RPC (no console required).
 
 ---
 
-## 4. Why old automated test was false-positive
+## 3. Operator validation PASS
 
-Contract inspected UObject members after CreateWidget/Set*/AddToViewport without proving Slate was built from a non-null RootWidget during `RebuildWidget`. Tree built only in NativeConstruct still left members non-null after the fact.
+Operator PIE confirmed:
 
----
+- HUD visible (post lifecycle fix)
+- Ferronite + Orbital counters visible
+- Launch Container button visible
+- Worker mine/haul loop works
+- Launch enabled when Ready
+- Button launch works without console
+- After telegraph: Planetary decreases; resources go to Orbital; HUD updates
 
-## 5. New regression coverage
-
-`gp.Resource.RunContainerLaunchHUDContractTest` now:
-
-- `CreateWidget` → `TakeWidget()` **before** display Set*
-- Assert `Slate != SNullWidget`
-- Assert RootWidget / CountersText / LaunchButton present in constructed tree
-
-NativeConstruct-only tree build must FAIL these asserts.
+HUD Ferronite = **total stored** (not single-container capacity).
 
 ---
 
-## 6. Tests
+## 4. HUD lifecycle failure + fix
+
+Operator FAIL: empty TEMP HUD. Cause: WidgetTree built in NativeConstruct after empty RebuildWidget. Fix: `EnsureWidgetTreeBuilt()` in `RebuildWidget()` before Super; contract `TakeWidget()` Slate assertions. Retest PASS.
+
+---
+
+## 5. Final production flow
+
+Worker → mine → haul → Storage → Ready → Launch Container → Launching → completion → Empty; OrbitalFerronite↑; FerroniteScore↑; FerroniteThreatValue↓.
+
+---
+
+## 6. Container configuration
+
+| Item | Value |
+| --- | --- |
+| Capacity each | **100** |
+| Count default | **5** |
+| Total default | **500** |
+
+---
+
+## 7. GAS conversion path
+
+Instant native GEs `UGP_GE_AddOrbital` / `UGP_GE_AddScore` (SetByCaller). Rates from ResourceDefinition (MVP **1:1**). No direct attribute Set/Add.
+
+---
+
+## 8. Threat behavior
+
+On launch completion: `AddFerroniteThreatValueForTeam(TeamId, -(amount * ThreatPerStoredUnit))`, clamp ≥ 0.
+
+---
+
+## 9. UI path
+
+TEMP HUD button → `RequestLaunchReadyContainer` → `Server_RequestLaunchReadyContainer` → own-team MainBase `TryLaunchReadyContainer`. Diagnostic console remains fallback only.
+
+---
+
+## 10. Automated contract results
 
 | Command | Result |
 | --- | --- |
 | `gp.Resource.RunContainerLaunchHUDContractTest` | **PASS** Failures=0 |
 | `gp.Resource.RunContainerLaunchContractTest` | **PASS** Failures=0 |
 | `gp.Resource.RunS28RegressionSuite` | **PASS** Failures=0 |
+| `gp.Combat.RunLOSFireGateContractTest` | **PASS** Failures=0 |
+| `gp.Combat.RunSalvageWalkerContractTest` | **PASS** Failures=0 |
+| `gp.Combat.RunHealthBarContractTest` | **PASS** Failures=0 |
+| `gp.Combat.RunTeamColorContractTest` | **PASS** Failures=0 |
 
 ---
 
-## 7. GPEditor + UHT
+## 11. GPEditor + UHT
 
 **PASS**
 
 ---
 
-## 8. GP Development / Shipping
+## 12. GP Development
 
-**NOT RUN**
+**PASS**
 
 ---
 
-## 9. Exact files changed
+## 13. GP Shipping
 
-- `GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h`
-- `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPContainerLaunchHUDContractTest.cpp`
-- `Docs/Development/Cursor_Work_Report.md`
+**PASS**
+
+---
+
+## 14. Exact files changed across full GP-S30 branch
+
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md` (status cursor)
+- `Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md`
+- `Docs/Development/Claude_Tasks/README.md`
+- `Docs/Development/Cursor_Work_Report.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `GP/Config/DefaultGame.ini`
+- `GP/Source/GPEditor/Private/Resources/GPResourceDefinitionSeedCommandlet.cpp`
+- `GP/Source/GPGASRuntime/Public|Private/Effects/GPGE_AddOrbital.*`
+- `GP/Source/GPGASRuntime/Public|Private/Effects/GPGE_AddScore.*`
+- `GP/Source/GPRuntime/Private/Debug/GPContainerLaunchContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPContainerLaunchHUDContractTest.cpp`
+- `GP/Source/GPRuntime/Public|Private/Player/GPPlayerController.*`
+- `GP/Source/GPRuntime/Public|Private/Resources/GPResourceDefinition.*`
+- `GP/Source/GPRuntime/Public|Private/Resources/GPStorageComponent.*`
+- `GP/Source/GPRuntime/Public|Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.*`
+- `GP/Source/GPRuntime/Public/Settings/GPResourceGameplaySettings.h`
 
 ---
 
-## 10. Gameplay logic unchanged
+## 15. Operator assets untouched
 
-No Storage / GAS / Threat / rates / duration / Server RPC / combat/resource changes.
-
----
-
-## 11. Operator assets untouched
-
-DefaultEngine.ini, map, Blueprint/, Materials/, authored ResourceNode, Tools/ left dirty/uncommitted.
+Not committed: DefaultEngine.ini, L_PrototypeArena.umap, Blueprint/, Materials/, authored ResourceNode, Niagara, BP_SalvageWalker, Tools/, other operator `.uasset`/`.umap`.
 
 ---
 
-## 12. Commit SHA
+## 16. git status summary
 
-cbfc2169be0c2bfba6926476d0529ef69da09c37
+Feature branch clean of intentional work after finalization commit; operator-local dirty files remain unstaged.
+
+---
+
+## 17. Finalization commit SHA
+
+_(filled after commit)_

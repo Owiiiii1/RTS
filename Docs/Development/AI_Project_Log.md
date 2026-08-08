@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S30 TEMP HUD RebuildWidget lifecycle fix
+
+Status: **GP-S30_HUD_LIFECYCLE_FIX_READY_FOR_OPERATOR_RETEST**
+
+- Same branch `feature/gp-s30-container-launch-orbital-conversion`
+- Operator FAIL: TEMP HUD invisible in PIE (Ferronite/Orbital/Launch missing)
+- Root cause: WidgetTree built in NativeConstruct after empty RebuildWidget Slate
+- Fix: EnsureWidgetTreeBuilt in RebuildWidget before Super; contract TakeWidget Slate assertions
+- Contracts: ContainerLaunchHUD / ContainerLaunch / S28RegressionSuite — Failures=0
+- GPEditor PASS; GP Dev/Shipping NOT RUN
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-08 — GP-S30 TEMP HUD Launch + Orbital counter
 
 Status: **GP-S30_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

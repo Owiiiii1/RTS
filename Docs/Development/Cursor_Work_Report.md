@@ -1,131 +1,101 @@
-# Cursor Work Report — GP-S30 TEMP HUD Launch Button + Orbital Counter
+# Cursor Work Report — GP-S30 TEMP HUD RebuildWidget lifecycle fix
 
 ## Status
-**GP-S30_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
-
----
-
-## 1. Previous implementation commit
-
-`b865b080be6628d710485d965d28e6c6fa4e205d` (production launch + Instant GEs + console diagnostic)
+**GP-S30_HUD_LIFECYCLE_FIX_READY_FOR_OPERATOR_RETEST**
 
 Branch: `feature/gp-s30-container-launch-orbital-conversion`  
-Base main: `89ce3c50ebd05a4bf1e58a5b4e117544dc68cb8f`  
 Merge: **NOT merged**
 
 ---
 
-## 2. UI requirement change
+## 1. Operator FAIL symptom
 
-Operator acceptance no longer uses debug console. Required:
-
-- Top TEMP HUD: `Ferronite` + `Orbital` side by side
-- Bottom clickable `Launch Container` button invoking production server launch
+PIE: entire TEMP HUD missing — no Ferronite, no Orbital, no Launch Container button.
 
 ---
 
-## 3. Exact HUD implementation
+## 2. Confirmed root cause
 
-Extended existing `UGP_TEMP_S28P_PlanetaryFerroniteHUD` (no second HUD):
-
-- Programmatic UMG: `UCanvasPanel` root + `UTextBlock` counters + `UButton` “Launch Container”
-- Root / canvas: `SelfHitTestInvisible` (empty area passes RTS input)
-- Counters text: `HitTestInvisible`
-- Launch button: `Visible` + real `OnClicked` (not painted rect / mouse polling)
-- Layout: top-left counters; bottom-center button
-- Still TEMP / playable-pass debt — no GPUIRuntime / CommonUI / WBP assets
+`EnsureWidgetTreeBuilt()` ran from `NativeConstruct()` (and Set* helpers), **after** `RebuildWidget()` already built Slate from an empty `WidgetTree->RootWidget`. UObject children existed for contract member checks, but the viewport Slate tree was empty.
 
 ---
 
-## 4. Orbital GAS delegate binding
+## 3. Exact lifecycle fix
 
-`AGP_PlayerController`:
+`UGP_TEMP_S28P_PlanetaryFerroniteHUD::RebuildWidget()`:
 
-- `BindOrbitalFerroniteAttribute` → `ASC->GetGameplayAttributeValueChangeDelegate(OrbitalFerronite)`
-- Initial sync from `UGP_PlayerAttributeSet::GetOrbitalFerronite()`
-- Rebind on PlayerState / ASC ready + `RefreshPlanetaryFerroniteHUDBinding`
-- No Tick / no polling / no copied gameplay state on PC/HUD
+1. `EnsureWidgetTreeBuilt()` — assign `RootCanvas` as `WidgetTree->RootWidget` + counters/button
+2. `return Super::RebuildWidget()`
 
----
-
-## 5. Launch button enable/disable policy
-
-Enabled iff local MainBase Storage resolved AND `GetReadyCount() > 0` AND `!IsLaunchInFlight()`.  
-Updated on Storage `OnStorageChanged` (event-driven). UI affordance only.
+`NativeConstruct` only: anchors, `SelfHitTestInvisible`, refresh, idempotent `OnClicked` bind.  
+`OnClicked`: `RemoveDynamic` then `AddDynamic`.  
+`bTreeBuilt` skips duplicate child creation when root already valid.
 
 ---
 
-## 6. Exact client → server → Storage path
+## 4. Why old automated test was false-positive
 
-```
-UButton OnClicked
-→ UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked
-→ AGP_PlayerController::RequestLaunchReadyContainer (local)
-→ Server_RequestLaunchReadyContainer (Reliable, WithValidation)
-→ AuthorityTryLaunchReadyContainerForOwningTeam
-   → PlayerState TeamId
-   → GameState::FindMainBaseForTeam(TeamId)
-   → UGP_StorageComponent::TryLaunchReadyContainer()
-```
-
-No MainBase pointer / amount from client. Own-team resolve only.
+Contract inspected UObject members after CreateWidget/Set*/AddToViewport without proving Slate was built from a non-null RootWidget during `RebuildWidget`. Tree built only in NativeConstruct still left members non-null after the fact.
 
 ---
 
-## 7. Button does NOT call debug command
+## 5. New regression coverage
 
-Confirmed: HUD → PC RPC only. `gp.Resource.LaunchReadyContainer` remains non-shipping diagnostic fallback only.
+`gp.Resource.RunContainerLaunchHUDContractTest` now:
+
+- `CreateWidget` → `TakeWidget()` **before** display Set*
+- Assert `Slate != SNullWidget`
+- Assert RootWidget / CountersText / LaunchButton present in constructed tree
+
+NativeConstruct-only tree build must FAIL these asserts.
 
 ---
 
-## 8. Tests / results
+## 6. Tests
 
 | Command | Result |
 | --- | --- |
-| `gp.Resource.RunContainerLaunchContractTest` | **PASS** Failures=0 |
 | `gp.Resource.RunContainerLaunchHUDContractTest` | **PASS** Failures=0 |
+| `gp.Resource.RunContainerLaunchContractTest` | **PASS** Failures=0 |
 | `gp.Resource.RunS28RegressionSuite` | **PASS** Failures=0 |
 
 ---
 
-## 9. GPEditor + UHT
+## 7. GPEditor + UHT
 
 **PASS**
 
 ---
 
-## 10. GP Development / Shipping
+## 8. GP Development / Shipping
 
 **NOT RUN**
 
 ---
 
-## 11. Files changed in this follow-up
+## 9. Exact files changed
 
 - `GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h`
 - `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
-- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-- `GP/Source/GPRuntime/Public/Resources/GPStorageComponent.h` (HUD contract runner decl)
-- `GP/Source/GPRuntime/Private/Debug/GPContainerLaunchHUDContractTest.cpp` (new)
-- `Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md`
-- `Docs/Development/AI_Project_Log.md`
+- `GP/Source/GPRuntime/Private/Debug/GPContainerLaunchHUDContractTest.cpp`
 - `Docs/Development/Cursor_Work_Report.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md` (status cursor)
 
 ---
 
-## 12. Full branch status vs main
+## 10. Gameplay logic unchanged
 
-Feature branch ahead of `main` @ `89ce3c50…` with GP-S30 launch + this HUD interaction follow-up. Not merge-ready until operator PASS + finalization.
-
----
-
-## 13. Operator assets untouched
-
-Left dirty / uncommitted: `DefaultEngine.ini`, map, Blueprint/, Materials/, authored ResourceNode, Tools/.
+No Storage / GAS / Threat / rates / duration / Server RPC / combat/resource changes.
 
 ---
 
-## 14. Final commit SHA
+## 11. Operator assets untouched
 
-5c9d9edf6027a57b07ca12a334b0b94dee0a4a7f
+DefaultEngine.ini, map, Blueprint/, Materials/, authored ResourceNode, Tools/ left dirty/uncommitted.
+
+---
+
+## 12. Commit SHA
+
+_(filled after commit)_

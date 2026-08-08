@@ -1,7 +1,7 @@
 # GP-S30 — Container Launch / Orbital Conversion
 
 ## Status
-**GP-S30_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+**GP-S30_HUD_LIFECYCLE_FIX_READY_FOR_OPERATOR_RETEST**
 
 ## Slice Group
 Slice 8 — Buildings + Orbital Drops (economy unlock vertical; first coding slice after GP-S29R)

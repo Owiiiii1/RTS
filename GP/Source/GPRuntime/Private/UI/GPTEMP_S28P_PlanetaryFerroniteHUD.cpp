@@ -10,16 +10,23 @@
 #include "Player/GPPlayerController.h"
 #include "Styling/CoreStyle.h"
 
+TSharedRef<SWidget> UGP_TEMP_S28P_PlanetaryFerroniteHUD::RebuildWidget()
+{
+	// Must populate WidgetTree->RootWidget before Super builds Slate from it.
+	EnsureWidgetTreeBuilt();
+	return Super::RebuildWidget();
+}
+
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeConstruct()
 {
 	Super::NativeConstruct();
-	EnsureWidgetTreeBuilt();
 	SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
 	SetAlignmentInViewport(FVector2D::ZeroVector);
 	// SelfHitTestInvisible: empty fullscreen area does not block RTS selection; children can still hit-test.
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	RefreshCountersText();
-	SetLaunchButtonEnabled(false);
+	SetLaunchButtonEnabled(bLaunchEnabled);
+	BindLaunchClickedIdempotent();
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeDestruct()
@@ -31,10 +38,30 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeDestruct()
 	Super::NativeDestruct();
 }
 
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::BindLaunchClickedIdempotent()
+{
+	if (LaunchButton == nullptr)
+	{
+		return;
+	}
+	LaunchButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked);
+	LaunchButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked);
+}
+
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 {
-	if (bTreeBuilt || WidgetTree == nullptr)
+	if (WidgetTree == nullptr)
 	{
+		return;
+	}
+
+	if (bTreeBuilt
+		&& RootCanvas != nullptr
+		&& WidgetTree->RootWidget == RootCanvas
+		&& CountersText != nullptr
+		&& LaunchButton != nullptr)
+	{
+		BindLaunchClickedIdempotent();
 		return;
 	}
 
@@ -65,7 +92,7 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 	LaunchButtonLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
 	LaunchButtonLabel->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 16));
 	LaunchButton->SetContent(LaunchButtonLabel);
-	LaunchButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked);
+	BindLaunchClickedIdempotent();
 
 	if (UCanvasPanelSlot* ButtonSlot = RootCanvas->AddChildToCanvas(LaunchButton))
 	{
@@ -95,7 +122,6 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshCountersText()
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetPlanetaryFerroniteDisplay(float StoredAmount, bool bHasBase)
 {
-	EnsureWidgetTreeBuilt();
 	bHasResolvedBase = bHasBase;
 	DisplayStored = StoredAmount;
 	RefreshCountersText();
@@ -103,14 +129,12 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetPlanetaryFerroniteDisplay(float Sto
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetOrbitalFerroniteDisplay(float OrbitalAmount)
 {
-	EnsureWidgetTreeBuilt();
 	DisplayOrbital = FMath::IsFinite(OrbitalAmount) ? FMath::Max(0.0f, OrbitalAmount) : 0.0f;
 	RefreshCountersText();
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetLaunchButtonEnabled(bool bEnabled)
 {
-	EnsureWidgetTreeBuilt();
 	bLaunchEnabled = bEnabled;
 	if (LaunchButton != nullptr)
 	{
@@ -138,5 +162,20 @@ bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasInteractiveLaunchButtonForContract(
 {
 	return LaunchButton != nullptr
 		&& LaunchButton->GetVisibility() == ESlateVisibility::Visible;
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasWidgetTreeRootForContract() const
+{
+	return GetRootWidget() != nullptr && RootCanvas != nullptr && GetRootWidget() == RootCanvas;
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasCountersWidgetForContract() const
+{
+	return CountersText != nullptr && GetWidgetFromName(TEXT("CountersText")) == CountersText;
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasLaunchButtonWidgetForContract() const
+{
+	return LaunchButton != nullptr && GetWidgetFromName(TEXT("LaunchButton")) == LaunchButton;
 }
 #endif

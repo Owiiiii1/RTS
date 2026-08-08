@@ -14,6 +14,8 @@ class UCanvasPanel;
  * TEMP_S28P_HUD — Planetary + Orbital Ferronite readout + Launch Container button (GP-S28P4 / GP-S30).
  * Local PC-owned. Not production RTS HUD. Root is SelfHitTestInvisible so empty space passes RTS input;
  * only the Launch button consumes mouse hits.
+ *
+ * Programmatic WidgetTree must be built in RebuildWidget (before Super), not only in NativeConstruct.
  */
 UCLASS()
 class GPRUNTIME_API UGP_TEMP_S28P_PlanetaryFerroniteHUD : public UUserWidget
@@ -37,17 +39,22 @@ public:
 	FString GetCountersDisplayTextForContract() const { return CountersDisplayText; }
 	bool IsLaunchButtonEnabledForContract() const;
 	bool HasInteractiveLaunchButtonForContract() const;
+	bool HasWidgetTreeRootForContract() const;
+	bool HasCountersWidgetForContract() const;
+	bool HasLaunchButtonWidgetForContract() const;
 	float GetDisplayedOrbitalForContract() const { return DisplayOrbital; }
 	float GetDisplayedPlanetaryForContract() const { return DisplayStored; }
 	bool HasResolvedBaseForContract() const { return bHasResolvedBase; }
 #endif
 
 protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
 private:
 	void EnsureWidgetTreeBuilt();
+	void BindLaunchClickedIdempotent();
 	void RefreshCountersText();
 
 	UPROPERTY(Transient)

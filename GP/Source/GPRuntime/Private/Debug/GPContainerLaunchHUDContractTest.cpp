@@ -21,6 +21,7 @@
 #include "TimerManager.h"
 #include "UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h"
 #include "UObject/Package.h"
+#include "Widgets/SNullWidget.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPContainerLaunchHUD, Log, All);
 
@@ -308,13 +309,22 @@ void UGP_ContainerLaunchHUDContractTestRunner::AdvanceStage()
 			return;
 		}
 		HUD->SetOwningPlayer(OwnPC);
+
+		// Force real Slate construction via public UUserWidget API (RebuildWidget path).
+		// Must run BEFORE display Set* so a NativeConstruct-only tree build cannot false-pass.
+		const TSharedRef<SWidget> SlateWidget = HUD->TakeWidget();
+		Expect(SlateWidget != SNullWidget::NullWidget, TEXT("A_SlateNotNullWidget"));
+		Expect(HUD->HasWidgetTreeRootForContract(), TEXT("A_RootWidgetAfterTakeWidget"));
+		Expect(HUD->HasCountersWidgetForContract(), TEXT("A_CountersInTreeAfterTakeWidget"));
+		Expect(HUD->HasLaunchButtonWidgetForContract(), TEXT("A_LaunchButtonInTreeAfterTakeWidget"));
+		Expect(HUD->HasInteractiveLaunchButtonForContract(), TEXT("A_LaunchButtonVisible"));
+
 		HUD->AddToViewport(1);
 		HUD->SetPlanetaryFerroniteDisplay(0.0f, false);
 		HUD->SetOrbitalFerroniteDisplay(0.0f);
 		HUD->SetLaunchButtonEnabled(false);
 
 		Expect(HUD->GetVisibility() == ESlateVisibility::SelfHitTestInvisible, TEXT("A_RootSelfHitTestInvisible"));
-		Expect(HUD->HasInteractiveLaunchButtonForContract(), TEXT("A_LaunchButtonVisible"));
 		Expect(HUD->GetCountersDisplayTextForContract().Contains(TEXT("Ferronite:")), TEXT("A_PlanetaryLabel"));
 		Expect(HUD->GetCountersDisplayTextForContract().Contains(TEXT("Orbital:")), TEXT("A_OrbitalLabel"));
 		Expect(HUD->GetCountersDisplayTextForContract().Contains(TEXT("Orbital: 0")), TEXT("B_OrbitalInitialZero"));

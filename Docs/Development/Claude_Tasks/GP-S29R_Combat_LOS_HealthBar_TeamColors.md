@@ -1,7 +1,7 @@
 # GP-S29R — Combat LOS Fire Gate + Minimal Health Bar + Team Color Presentation
 
 ## Status
-**GP-S29R_HEALTHBAR_FIX_READY_FOR_OPERATOR_VALIDATION**
+**GP-S29R_SALVAGE_WALKER_READY_FOR_OPERATOR_VALIDATION**
 
 ## Slice Group
 Slice 7 — Combat (reconciliation path; preserves Attack FSM, not CombatComponent)
@@ -36,12 +36,18 @@ Slice 7 — Combat (reconciliation path; preserves Attack FSM, not CombatCompone
 - `UGP_TeamPresentationComponent` on `AGP_UnitBase`; refresh on BeginPlay, `NotifyTeamIdChanged`, `OnRep_TeamId`.
 - Native prototype tint via MID vector params (`TeamColor` preferred) + `UGP_UnitVisualComponent::RefreshTeamColorFromPresentation`.
 
+### Salvage Walker (post health-bar / Details cleanup)
+- Native `AGP_SalvageWalker : AGP_Unit` for player-facing combat validation.
+- Operator creates `BP_SalvageWalker` manually (not in this stage).
+- Defaults: Health/MaxHealth 200, Damage 20, AttackCooldown 1.0, AttackRange 600, MoveSpeed 250, VisualSourceMode=AuthoredComponents.
+
 ## Automated contracts
 | Command | Coverage |
 | --- | --- |
 | `gp.Combat.RunLOSFireGateContractTest` | A–H LOS / resume / cooldown / approach / FF / death |
 | `gp.Combat.RunHealthBarContractTest` | ratio / frame / zero / initial / no Tick |
 | `gp.Combat.RunTeamColorContractTest` | settings resolve / apply / change / OnRep / no mutate TeamId |
+| `gp.Combat.RunSalvageWalkerContractTest` | native class hierarchy / composition / GDD defaults |
 
 Expected: Failures=0 (operator runs in PIE / existing prototype map).
 

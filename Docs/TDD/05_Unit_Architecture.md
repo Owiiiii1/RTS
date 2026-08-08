@@ -8,6 +8,7 @@ AActor
     AGP_UnitBase                    // abstract common ancestor
       AGP_MobileUnit                // owns UGP_MovementComponent
         AGP_Unit                    // concrete generic unit (Capsule + UnitVisual)
+          AGP_SalvageWalker         // canonical MVP combat unit (GDD/04)
         AGP_Worker                  // MobileUnit child; own presentation/resource composition
       AGP_BuildingBase              // static buildings (e.g. MainBase)
 ```
@@ -16,7 +17,7 @@ AActor
 
 **Not BuildingBase:** `AGP_ResourceNode` is a separate `AActor` (resource deposit), not under `AGP_BuildingBase`.
 
-**Pending GDD combat unit:** Salvage Walker (canonical MVP combat unit per GDD/04) — implementation not present yet; do not treat `AGP_Unit` InfantryMelee cosmetic archetype as Salvage Walker.
+**Salvage Walker:** `AGP_SalvageWalker : AGP_Unit` is the native playable combat class. Operator creates `BP_SalvageWalker` manually. Do not treat `AGP_Unit` InfantryMelee cosmetic archetype as Salvage Walker.
 
 ## AGP_UnitBase
 
@@ -145,8 +146,17 @@ Concrete Blueprintable generic mobile unit layer:
 - `UCapsuleComponent` root (`GP|Components`).
 - `UGP_UnitVisualComponent` (`GP|Components|Visual` pointer; component settings `GP|Visual`).
 - Inherits the single `UGP_MovementComponent` from `AGP_MobileUnit`.
+- Default visual mode remains `NativeFallback` for generic diagnostics/tests.
 
-Suitable base for future combat BP (e.g. Salvage Walker) without adding a second movement/visual owner.
+## AGP_SalvageWalker
+
+`AGP_SalvageWalker : AGP_Unit` — canonical MVP combat unit (GDD/04).
+
+- Reuses UnitBase Attack FSM / LOS / GAS damage / HealthBar / TeamPresentation / CombatPresentation.
+- Native interim combat defaults: MaxHealth/Health 200, Damage 20, AttackCooldown 1.0, AttackRange 600.
+- `UGP_MovementComponent::MoveSpeed = 250` (same component instance; no second MoveSpeed).
+- `UnitVisualComponent.VisualSourceMode = AuthoredComponents` so operator BP visuals are not stacked with NativeFallback InfantryMelee.
+- No Cargo/Mining; no CombatComponent / TargetingComponent.
 
 ## AGP_Worker
 

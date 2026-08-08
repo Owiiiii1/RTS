@@ -1,5 +1,15 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S29R Salvage Walker native class
+
+Status: **GP-S29R_SALVAGE_WALKER_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s29r-combat-los-healthbar-teamcolors`
+- `AGP_SalvageWalker : AGP_Unit` with GDD/04 interim defaults (HP 200, dmg 20, CD 1.0, range 600, MoveSpeed 250)
+- VisualSourceMode=AuthoredComponents; no BP asset created by agent
+- Contract: `gp.Combat.RunSalvageWalkerContractTest`
+- Not GP-S29R finalization; operator creates `BP_SalvageWalker` manually
+
 ## 2026-08-08 — GP-S29R Combat LOS + Health Bar + Team Colors
 
 Status: **GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING**

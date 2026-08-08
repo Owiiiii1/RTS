@@ -1,107 +1,112 @@
-# Cursor Work Report — GP-S29R Unit Details UX Cleanup
+# Cursor Work Report — GP-S29R Salvage Walker
 
 ## Status
-**GP-S29R_UNIT_DETAILS_CLEANUP_READY_FOR_OPERATOR_VALIDATION**
+**GP-S29R_SALVAGE_WALKER_READY_FOR_OPERATOR_VALIDATION**
 
 ## Branch
 `feature/gp-s29r-combat-los-healthbar-teamcolors`
 
 ## Scope
-Architecture/UX cleanup after composition audit. **Not** GP-S29R finalization. No Salvage Walker. No behavioral changes.
+Native playable combat class for operator combat/LOS validation. **Not** GP-S29R finalization. No Blueprint asset created.
 
 ---
 
-## UPROPERTY categories changed
-
-| Owner | Property | Before | After |
-| --- | --- | --- | --- |
-| `AGP_MobileUnit` | `MovementComponent` | `GP\|Movement` | `GP\|Components\|Movement` |
-| `AGP_Unit` | `UnitVisualComponent` | `GP\|Visual` | `GP\|Components\|Visual` |
-| `AGP_Unit` | `CapsuleComponent` | `GP\|Components` | unchanged (`GP\|Components`) |
-
-Unchanged (as required):
-- `UGP_MovementComponent` tunables remain `GP|Movement`
-- `UGP_UnitVisualComponent` settings (`VisualSourceMode` / `VisualArchetype` / …) remain `GP|Visual`
-- TeamPresentation / CombatPresentation / HealthBar categories untouched
-- No UObject/class renames, no CreateDefaultSubobject name changes, no serialization property renames
-
-Expected Class Defaults tree:
+## Exact class hierarchy
 
 ```
-GP
- ├─ Components
- │   ├─ Movement   (actor pointer to MovementComponent)
- │   └─ Visual     (actor pointer to UnitVisualComponent)
- ├─ Movement       (component tunables)
- └─ Visual         (component settings)
+AGP_UnitBase
+  -> AGP_MobileUnit
+      -> AGP_Unit
+          -> AGP_SalvageWalker
 ```
 
 ---
 
-## Composition confirmations (unchanged from audit)
+## Files created / changed
 
-- **Component count:** unchanged (production code = category metadata only; no CreateDefaultSubobject adds/removes).
-- **One** `UGP_MovementComponent` on `AGP_MobileUnit` / `AGP_Unit`.
-- **One** `UGP_UnitVisualComponent` on `AGP_Unit`.
+### Created
+- `GP/Source/GPRuntime/Public/Units/GPSalvageWalker.h`
+- `GP/Source/GPRuntime/Private/Units/GPSalvageWalker.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPSalvageWalkerContractTest.cpp`
 
----
-
-## TDD/05 stale corrections
-
-Minimal sync in `Docs/TDD/05_Unit_Architecture.md`:
-
-1. Hierarchy: `UnitBase → MobileUnit → {Unit, Worker}`; `BuildingBase` sibling; **ResourceNode is separate AActor** (not BuildingBase).
-2. UnitBase composition: command / combat presentation / team presentation / health bar / ASC / AttributeSet / TeamId / CapabilityTags / interim combat defaults — **no** Sphere root / direct StaticMesh ownership claims.
-3. Movement: one `UGP_MovementComponent`; not CharacterMovement; not NavMesh pathfinding SoT.
-4. Commands/combat: `ReceiveCommand` → `UnitCommandComponent`; Attack FSM there; CombatComponent / TargetingComponent deferred.
-5. `AGP_Unit`: Capsule + UnitVisual + inherited Movement.
-6. `AGP_Worker`: MobileUnit child, **not** Unit child.
-7. UnitVisual: NativeFallback vs AuthoredComponents; InfantryMelee cosmetic-only.
-8. Salvage Walker: GDD MVP combat unit noted as **pending** — **not implemented**.
+### Docs (minimal)
+- `Docs/TDD/05_Unit_Architecture.md` — SalvageWalker as implemented child
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
 ---
 
-## Salvage Walker
+## Implemented native defaults
 
-**Not created.** No class, no Blueprint, no visual archetype change.
+| Field | Value |
+| --- | --- |
+| `DefaultMaxHealth` | 200 |
+| `DefaultHealth` | 200 |
+| `DefaultDamage` | 20 |
+| `DefaultAttackCooldown` | 1.0 |
+| `DefaultAttackRange` | 600 |
+| CapabilityTags | inherited Selectable / Inspectable / Selection.Type.Unit + `GP.Unit.Type.SalvageWalker` |
 
 ---
 
-## Validation
+## Movement default path
 
-### GPEditor Win64 Development + UHT
-**PASS** (`Result: Succeeded`)
+`AGP_SalvageWalker` constructor → `GetUnitMovementComponent()->MoveSpeed = 250.0f`
 
-### Contract tests (headless `-game -NullRHI` on `L_PrototypeArena`)
+Same sole `UGP_MovementComponent` owned by `AGP_MobileUnit`. No second MoveSpeed / no new movement system.
+
+---
+
+## VisualSourceMode behavior
+
+Constructor calls existing `UGP_UnitVisualComponent::SetVisualSourceMode(AuthoredComponents)`.
+
+- `AGP_Unit` CDO remains `NativeFallback` for generic diagnostics/tests.
+- Salvage Walker CDO / instances default to AuthoredComponents so operator `BP_SalvageWalker` does not stack generated InfantryMelee.
+- No new visual ownership enum / second visual component / `bUseGeneratedPrototypeVisual`.
+
+---
+
+## Composition confirmations
+
+- **One** `UGP_MovementComponent`
+- **One** `UGP_UnitVisualComponent`
+- **No** `UGP_CargoComponent`
+- **No** `UGP_MiningComponent`
+- Reuses: UnitCommand / Attack FSM / LOS / GAS / HealthBar / TeamPresentation / CombatPresentation
+
+---
+
+## Contract assertions (`gp.Combat.RunSalvageWalkerContractTest`)
+
+Spawn native class; hierarchy; one Movement; one UnitVisual; command/health/team/combat presentation present; no cargo/mining; selectable/inspectable/selection-type-unit; MoveSpeed 250; VisualSourceMode AuthoredComponents; post-BeginPlay GAS attrs MaxHealth/Health 200, Damage 20, AttackRange 600, AttackCooldown 1.0.
+
+Result: **Complete Failures=0**
+
+---
+
+## Regression
 
 | Command | Result |
 | --- | --- |
-| `gp.Combat.RunHealthBarContractTest` | Complete Failures=0 |
-| `gp.Combat.RunTeamColorContractTest` | Complete Failures=0 |
-| `gp.Combat.RunLOSFireGateContractTest` | Complete Failures=0 |
-| `gp.Resource.RunS28RegressionSuite` | Complete Failures=0 |
+| `gp.Combat.RunSalvageWalkerContractTest` | Failures=0 |
+| `gp.Combat.RunHealthBarContractTest` | Failures=0 |
+| `gp.Combat.RunTeamColorContractTest` | Failures=0 |
+| `gp.Combat.RunLOSFireGateContractTest` | Failures=0 |
+| `gp.Resource.RunS28RegressionSuite` | Failures=0 |
 
-GP Win64 Development / Shipping: **not run** (not finalization).
+GPEditor Win64 Development + UHT: **PASS**  
+GP Win64 Development / Shipping: **not run**
 
 ---
 
-## Files changed (committed)
+## Operator assets untouched
 
-- `GP/Source/GPRuntime/Public/Units/GPMobileUnit.h`
-- `GP/Source/GPRuntime/Public/Units/GPUnit.h`
-- `Docs/TDD/05_Unit_Architecture.md`
-- `Docs/Development/Cursor_Work_Report.md`
-
-## Operator assets untouched (not committed)
-
-- `GP/Config/DefaultEngine.ini`
-- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
-- `GP/Content/GrimProtocol/Blueprint/`
-- `GP/Content/GrimProtocol/Materials/`
-- authored ResourceNode / Niagara / other operator `.uasset` / `.umap`
+Not modified / not committed: DefaultEngine.ini, L_PrototypeArena.umap, Blueprint/, Materials/, authored ResourceNode, Niagara, other operator `.uasset`/`.umap`. No BP_SalvageWalker created.
 
 ---
 
 ## Commit SHA
 
-_653e40dd882061c0f11d367a5652a462da3b7de2_
+_(filled after commit)_

@@ -43,4 +43,4 @@ Exclusions confirmed: no duplicate CombatComponent, Targeting, AttackMove, coold
 untouched (not committed): DefaultEngine.ini, L_PrototypeArena.umap, Blueprint/, Materials/, authored ResourceNode, Niagara, Tools/
 
 ## Commit
-PENDING_COMMIT_SHA
+f59ed39a14d6e363300900026a2d23b44b2f15ea

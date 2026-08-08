@@ -78,7 +78,14 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "50.0"))
 	float UnitDropSpawnSpacingCm = 180.0f;
 
-	/** Delay after landing before DropPod destroy (seconds). */
+	/**
+	 * After Impact: wait before authority payload spawn (TEMP ~1.0–1.5s for units).
+	 * Zero = Impact → immediate payload. Separate from descent / cleanup.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "0.0"))
+	float UnitDropPayloadDeployDelaySeconds = 1.25f;
+
+	/** Delay after payload deploy before DropPod destroy (seconds). */
 	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "0.0"))
 	float UnitDropCleanupDelaySeconds = 0.35f;
 

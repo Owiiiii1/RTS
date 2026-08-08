@@ -1,5 +1,14 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S31R Landing Z + Deployment presentation
+
+Status: **GP-S31R_LANDING_AND_DEPLOYMENT_PRESENTATION_READY_FOR_OPERATOR_RETEST**
+
+- Same branch `feature/gp-s31r-minimal-orbital-unit-drop`
+- Capsule ground offset helper; DropPod Deploying phase + PayloadDeployDelay; multicast presentation
+- GPEditor+UHT PASS; NOT MERGE
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-08 — GP-S31R Authored Payload / DropPod class seams
 
 Status: **GP-S31R_AUTHORED_PAYLOAD_INTEGRATION_READY_FOR_OPERATOR_RETEST**

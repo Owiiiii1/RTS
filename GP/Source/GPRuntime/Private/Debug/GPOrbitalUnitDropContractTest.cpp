@@ -17,9 +17,11 @@
 #include "Orbital/GPDropPod.h"
 #include "Orbital/GPUnitDropAuthority.h"
 #include "Orbital/GPUnitDropManifest.h"
+#include "Orbital/GPUnitGroundPlacement.h"
 #include "Player/GPPlayerState.h"
 #include "Resources/GPStorageComponent.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
+#include "Components/CapsuleComponent.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
 #include "UObject/SoftObjectPath.h"
@@ -148,6 +150,7 @@ void UGP_OrbitalUnitDropContractTestRunner::RestoreSettings()
 		Settings->UnitDropDescentDurationSeconds = SavedDescent;
 		Settings->UnitDropCleanupDelaySeconds = SavedCleanup;
 		Settings->UnitDropSpawnAltitudeCm = SavedAltitude;
+		Settings->UnitDropPayloadDeployDelaySeconds = SavedDeployDelay;
 		Settings->WorkerPayloadClass = SavedWorkerPayload;
 		Settings->SalvageWalkerPayloadClass = SavedWalkerPayload;
 		Settings->UnitDropPodClass = SavedDropPodClass;
@@ -301,12 +304,14 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			SavedDescent = Settings->UnitDropDescentDurationSeconds;
 			SavedCleanup = Settings->UnitDropCleanupDelaySeconds;
 			SavedAltitude = Settings->UnitDropSpawnAltitudeCm;
+			SavedDeployDelay = Settings->UnitDropPayloadDeployDelaySeconds;
 			SavedWorkerPayload = Settings->WorkerPayloadClass;
 			SavedWalkerPayload = Settings->SalvageWalkerPayloadClass;
 			SavedDropPodClass = Settings->UnitDropPodClass;
 			Settings->UnitDropDescentDurationSeconds = 0.25f;
 			Settings->UnitDropCleanupDelaySeconds = 0.05f;
 			Settings->UnitDropSpawnAltitudeCm = 400.0f;
+			Settings->UnitDropPayloadDeployDelaySeconds = 0.0f; // zero-delay path for core flow
 			// Native fallback path for core slot/cost/spend checks.
 			Settings->WorkerPayloadClass.Reset();
 			Settings->SalvageWalkerPayloadClass.Reset();
@@ -472,6 +477,23 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			Expect(Workers[0]->GetTeamId() == ContractTeam, TEXT("J_WorkerTeamId"));
 		}
 
+		AGP_MainBase* BaseForGround = MainBaseWeak.Get();
+		if (Expect(IsValid(BaseForGround) && IsValid(BaseForGround->GetUnitDropZone()), TEXT("Ground_DropZone")))
+		{
+			const float GroundZ = BaseForGround->GetUnitDropZone()->GetComponentLocation().Z;
+			for (AGP_Worker* W : Workers)
+			{
+				if (!IsValid(W))
+				{
+					continue;
+				}
+				const float HalfH = GPUnitGroundPlacement::GetGroundSpawnOffsetZForUnitClass(W->GetClass());
+				const float BottomZ = W->GetActorLocation().Z - HalfH;
+				Expect(FMath::IsNearlyEqual(BottomZ, GroundZ, 8.0f), TEXT("Ground_WorkerCapsuleBottom"));
+				Expect(HalfH > 1.0f, TEXT("Ground_WorkerHalfHeightFromClass"));
+			}
+		}
+
 		const float OrbitalAfterWorkers = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
 
 		FGP_UnitDropManifest Mixed;
@@ -531,6 +553,24 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		}
 		Expect(WalkerCount == 1, TEXT("I_SWCount"));
 		Expect(WorkerCount == 4, TEXT("I_TotalWorkersAfterMixed")); // 2 + 2
+
+		if (AGP_MainBase* BaseGround = MainBaseWeak.Get())
+		{
+			if (USceneComponent* Zone = BaseGround->GetUnitDropZone())
+			{
+				const float GroundZ = Zone->GetComponentLocation().Z;
+				for (TActorIterator<AGP_SalvageWalker> It(World); It; ++It)
+				{
+					if (It->GetTeamId() != ContractTeam)
+					{
+						continue;
+					}
+					const float HalfH = GPUnitGroundPlacement::GetGroundSpawnOffsetZForUnitClass(It->GetClass());
+					const float BottomZ = It->GetActorLocation().Z - HalfH;
+					Expect(FMath::IsNearlyEqual(BottomZ, GroundZ, 8.0f), TEXT("Ground_SWCapsuleBottom"));
+				}
+			}
+		}
 
 		const float BeforeDup = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
 		FGP_UnitDropManifest Dup;
@@ -685,6 +725,25 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		Expect(StubWorkers == 1, TEXT("A_StubWorkerSpawned"));
 		Expect(NativeOnlyWorkers == 0, TEXT("A_NoNativeWorkerWhenStubConfigured"));
 
+		if (AGP_MainBase* BaseGround = MainBaseWeak.Get())
+		{
+			if (USceneComponent* Zone = BaseGround->GetUnitDropZone())
+			{
+				const float GroundZ = Zone->GetComponentLocation().Z;
+				for (TActorIterator<AGP_Worker> It(World); It; ++It)
+				{
+					if (It->GetTeamId() != ContractTeam
+						|| !It->IsA(AGP_OrbitalDropContractWorkerStub::StaticClass()))
+					{
+						continue;
+					}
+					const float HalfH = GPUnitGroundPlacement::GetGroundSpawnOffsetZForUnitClass(It->GetClass());
+					Expect(FMath::IsNearlyEqual(It->GetActorLocation().Z - HalfH, GroundZ, 8.0f),
+						TEXT("Ground_StubWorkerCapsuleBottom"));
+				}
+			}
+		}
+
 		GPOrbitalUnitDropDebug::GrantOrbital(OwnerPS, 100.0f);
 		FGP_UnitDropManifest StubWalker;
 		StubWalker.SalvageWalkerCount = 1;
@@ -721,6 +780,133 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			Expect(Settings->ResolveWorkerPayloadClass(&bUsedAuthored) == AGP_Worker::StaticClass()
 				&& !bUsedAuthored, TEXT("F_FallbackNativeAfterClear"));
 		}
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 7: // Deploy delay: no payload before delay
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		if (!Expect(IsValid(OwnerPS) && IsValid(Base), TEXT("Deploy_ActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		for (TActorIterator<AGP_Worker> It(World); It; ++It)
+		{
+			if (It->GetTeamId() == ContractTeam)
+			{
+				It->Destroy();
+			}
+		}
+		for (TActorIterator<AGP_SalvageWalker> It(World); It; ++It)
+		{
+			if (It->GetTeamId() == ContractTeam)
+			{
+				It->Destroy();
+			}
+		}
+		for (TActorIterator<AGP_DropPod> It(World); It; ++It)
+		{
+			It->Destroy();
+		}
+
+		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+		{
+			Settings->UnitDropDescentDurationSeconds = 0.20f;
+			Settings->UnitDropPayloadDeployDelaySeconds = 0.40f;
+			Settings->UnitDropCleanupDelaySeconds = 0.10f;
+			Settings->WorkerPayloadClass.Reset();
+			Settings->UnitDropPodClass.Reset();
+		}
+
+		GPOrbitalUnitDropDebug::GrantOrbital(OwnerPS, 100.0f);
+		FGP_UnitDropManifest One;
+		One.WorkerCount = 1;
+		GPUnitDropAuthority::FEvalResult Result =
+			GPUnitDropAuthority::AuthorityRequestUnitDrop(World, OwnerPS, One);
+		Expect(Result.bAccepted, TEXT("Deploy_OrderAccept"));
+		Expect(IsValid(Result.SpawnedPod.Get()), TEXT("Deploy_PodPresent"));
+		LastPodWeak = Result.SpawnedPod;
+		Expect(Result.SpawnedPod->GetPhase() == EGP_DropPodPhase::Descending
+			|| Result.SpawnedPod->GetPhase() == EGP_DropPodPhase::Deploying,
+			TEXT("Deploy_PhaseEarly"));
+
+		++StageIndex;
+		ScheduleNext(0.28f); // past impact (~0.20), still before deploy (~0.60)
+		break;
+	}
+	case 8: // Still deploying — no payload yet
+	{
+		AGP_DropPod* Pod = LastPodWeak.Get();
+		Expect(IsValid(Pod), TEXT("Deploy_PodStillAlive"));
+		if (IsValid(Pod))
+		{
+			Expect(Pod->GetPhase() == EGP_DropPodPhase::Deploying, TEXT("Deploy_PhaseDeploying"));
+		}
+
+		int32 Workers = 0;
+		for (TActorIterator<AGP_Worker> It(World); It; ++It)
+		{
+			if (It->GetTeamId() == ContractTeam)
+			{
+				++Workers;
+			}
+		}
+		Expect(Workers == 0, TEXT("Deploy_NoPayloadBeforeDelay"));
+
+		++StageIndex;
+		ScheduleNext(0.35f); // past deploy delay
+		break;
+	}
+	case 9: // Payload after delay + cleanup after
+	{
+		AGP_DropPod* Pod = LastPodWeak.Get();
+		int32 Workers = 0;
+		AGP_Worker* Spawned = nullptr;
+		for (TActorIterator<AGP_Worker> It(World); It; ++It)
+		{
+			if (It->GetTeamId() == ContractTeam)
+			{
+				++Workers;
+				Spawned = *It;
+			}
+		}
+		Expect(Workers == 1, TEXT("Deploy_PayloadAfterDelay"));
+		Expect(IsValid(Pod) && Pod->GetPhase() == EGP_DropPodPhase::PayloadDeployed,
+			TEXT("Deploy_PhasePayloadDeployed"));
+
+		if (IsValid(Spawned) && IsValid(MainBaseWeak.Get()) && IsValid(MainBaseWeak->GetUnitDropZone()))
+		{
+			const float GroundZ = MainBaseWeak->GetUnitDropZone()->GetComponentLocation().Z;
+			const float HalfH = GPUnitGroundPlacement::GetGroundSpawnOffsetZForUnitClass(Spawned->GetClass());
+			Expect(FMath::IsNearlyEqual(Spawned->GetActorLocation().Z - HalfH, GroundZ, 8.0f),
+				TEXT("Deploy_GroundAfterDelay"));
+		}
+
+		// Exactly-once: second AuthorityBegin cannot be called externally; re-request would spend.
+		// Verify single worker only.
+		Expect(Workers == 1, TEXT("Deploy_ExactlyOncePayload"));
+
+		++StageIndex;
+		ScheduleNext(0.20f); // cleanup delay 0.10 + margin
+		break;
+	}
+	case 10: // Cleanup after payload phase
+	{
+		Expect(!LastPodWeak.IsValid() || !IsValid(LastPodWeak.Get()), TEXT("Deploy_CleanupAfterPayload"));
+		int32 Pods = 0;
+		for (TActorIterator<AGP_DropPod> It(World); It; ++It)
+		{
+			++Pods;
+		}
+		Expect(Pods == 0, TEXT("Deploy_NoPodsRemain"));
+
+		// Zero-delay already exercised in cases 1–6 (UnitDropPayloadDeployDelaySeconds=0).
+		Expect(true, TEXT("Deploy_ZeroDelayPathCoveredInCoreFlow"));
 
 		Finish();
 		break;

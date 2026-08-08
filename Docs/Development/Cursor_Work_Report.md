@@ -1,72 +1,75 @@
-# Cursor Work Report — GP-S31R Authored Payload Integration
+# Cursor Work Report — GP-S31R Landing Z + Deployment Phase
 
 ## Status
-**GP-S31R_AUTHORED_PAYLOAD_INTEGRATION_READY_FOR_OPERATOR_RETEST**
+**GP-S31R_LANDING_AND_DEPLOYMENT_PRESENTATION_READY_FOR_OPERATOR_RETEST**
 
 NOT MERGED. NOT FINALIZED.
 
 ---
 
-## Operator gameplay validation
+## Operator context
 
-**PASS** (prior candidate), except authored Blueprint visuals missing on spawned units / DropPod.
+Authored BP payload/DropPod **PASS**. Gameplay mechanics **PASS**. Remaining: half-buried spawn + missing deploy presentation window.
 
-## Bug / root cause
+## Issue A — ground placement root cause
 
-`AGP_DropPod::AuthoritySpawnUnitPayload` spawned `AGP_Worker::StaticClass()` / `AGP_SalvageWalker::StaticClass()`.  
-`GPUnitDropAuthority` spawned `AGP_DropPod::StaticClass()`. Authored BP subclasses were bypassed.
+Capsule root → actor origin = capsule center. Spawn at ground Z buried the lower half.
 
-## Fix architecture
+## Capsule solution
 
-Kept capacity/costs/descent in `UGP_OrbitalDeliverySettings` (smallest SoT; no new DropPodDefinition DA).
+`GPUnitGroundPlacement::GetGroundSpawnOffsetZForUnitClass(UClass*)` reads CDO gameplay capsule (`GetScaledCapsuleHalfHeight`). Spawn:
 
-Added soft/authorable class refs (no hardcoded `/Game` paths):
+`Z = GroundZ + OffsetZ`
 
-| Field | Purpose |
+Uses collision capsule, not mesh bounds. Works for native + authored Worker/SW subclasses.
+
+## Issue B — lifecycle before/after
+
+**Before:** Impact → immediate payload → cleanup  
+
+**After:** Descending → Impact/Deploying → (PayloadDeployDelay) → PayloadDeployed → Cleanup
+
+## Deploy delay setting
+
+`UnitDropPayloadDeployDelaySeconds` (TEMP default **1.25s**) on `UGP_OrbitalDeliverySettings`. Zero delay still valid (immediate payload after Impact). Separate from descent/cleanup.
+
+## Presentation / replication
+
+- Replicated `EGP_DropPodPhase` + `OnRep_Phase`
+- NetMulticast Reliable: DescentStarted / Impact / PayloadDeployed → BlueprintImplementableEvents on all clients
+- Native placeholder shown only while Descending; hidden on Impact
+- Payload spawn authority-only, exactly once (`bPayloadSpawned`); timers cleared on EndPlay
+
+## Owner Niagara workflow
+
+| Event | Intended BP behavior |
 |---|---|
-| `WorkerPayloadClass` | `TSoftClassPtr<AGP_Worker>` |
-| `SalvageWalkerPayloadClass` | `TSoftClassPtr<AGP_SalvageWalker>` |
-| `UnitDropPodClass` | `TSoftClassPtr<AGP_DropPod>` |
+| OnDescentStarted | show rocket, exhaust on, deploy FX off |
+| OnImpact | hide rocket, exhaust off, deploy/construction FX on |
+| OnPayloadDeployed | units exist; FX may fade |
+| Cleanup | actor destroy removes attached FX |
 
-Resolve helpers: load soft → require subclass of required base → else native fallback + warn if invalid soft set.
+No Niagara paths in C++.
 
-Manifest remains counts-only; client never submits class.
+## Tests / build
 
-## DropPod presentation
-
-`bUseNativePlaceholder` (default true). Authored `BP_DropPod_MVP` sets false on CDO; uses BP events `OnDescentStarted` / `OnImpact` / `OnPayloadDeployed`.
-
-## Owner Blueprint workflow
-
-1. Create `BP_Worker` : `AGP_Worker`, `BP_SalvageWalker` : `AGP_SalvageWalker`, `BP_DropPod_MVP` : `AGP_DropPod` (owner assets — not created by Cursor).
-2. On DropPod BP: set `bUseNativePlaceholder=false`; add mesh/Niagara; implement presentation events.
-3. Project Settings → Game → GP Orbital Delivery: assign the three soft classes.
-4. Retest Confirm Drop — units/pod should use authored visuals.
-
-## Capacity / cost location
-
-Still `UGP_OrbitalDeliverySettings` (PodTransportSlotCapacity, slot costs, Orbital costs, descent tuning). Future `UGP_DropPodDefinition` documented as optional extension — not added now.
-
-## Contracts / build
-
-- Extended `gp.Resource.RunOrbitalUnitDropContractTest` (stub subclasses A–F + prior semantics)
-- Operator PIE: rerun S28 / ContainerLaunch(+HUD) / DropOff / SalvageWalker / LOS — Failures=0
+- Extended `gp.Resource.RunOrbitalUnitDropContractTest` (ground Z, deploy delay, zero-delay core path, cleanup)
+- Operator PIE: S28 / ContainerLaunch(+HUD) / DropOff / SalvageWalker / LOS — Failures=0
 - GPEditor Win64 Development + UHT — **PASS**
 - GP Dev/Shipping — **NOT RUN**
 
 ## Files changed
 
-- `GPOrbitalDeliverySettings.*` — soft classes + resolve
-- `GPDropPod.*` — settings-resolved payload spawn + `bUseNativePlaceholder`
-- `GPUnitDropAuthority.cpp` — resolve DropPod class
-- `GPOrbitalUnitDropContractTest.*` — stub classes + seam checks
-- `DefaultGame.ini` — comment on soft class assignment
-- Docs: task, AI log, this report
+- `GPUnitGroundPlacement.*`
+- `GPDropPod.*` — phase, deploy timer, multicast, ground Z spawn
+- `GPUnitDropAuthority.cpp` — pass deploy delay
+- `GPOrbitalDeliverySettings.*` + `DefaultGame.ini`
+- Contract test + docs
 
 ## Operator assets untouched
 
-No BP_Worker / BP_SalvageWalker / BP_DropPod_MVP / Niagara / map / Blueprint/ / Materials / DefaultEngine.ini committed.
+No BP/Niagara/map/DefaultEngine.ini committed.
 
 ## Commit SHA
 
-731a704ee0f41260f65ae412ac8a3190e2e866f6
+*(filled after commit)*

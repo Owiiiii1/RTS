@@ -11,9 +11,19 @@ class USceneComponent;
 class UStaticMeshComponent;
 class AGP_PlayerState;
 
+UENUM(BlueprintType)
+enum class EGP_DropPodPhase : uint8
+{
+	Idle = 0,
+	Descending,
+	Deploying,
+	PayloadDeployed
+};
+
 /**
  * Shared orbital DropPod (GP-S31R unit manifests; later building payloads).
- * Native lifecycle + placeholder mesh. Authored BP may replace mesh/Niagara without C++ rewrite.
+ * Lifecycle: Descending → Impact/Deploying → PayloadDeployed → Cleanup.
+ * Presentation via replicated phase + NetMulticast → BlueprintImplementableEvents.
  */
 UCLASS(Blueprintable)
 class GPRUNTIME_API AGP_DropPod : public AActor
@@ -28,7 +38,7 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaSeconds) override;
 
-	/** Authority-only. Schedules descent then payload spawn. */
+	/** Authority-only. Schedules descent → deploy delay → payload → cleanup. */
 	void AuthorityInitUnitDrop(
 		AGP_PlayerState* RequestingPlayerState,
 		int32 TeamId,
@@ -38,13 +48,17 @@ public:
 		float DescentDurationSeconds,
 		float SpawnAltitudeCm,
 		float SpawnSpacingCm,
+		float PayloadDeployDelaySeconds,
 		float CleanupDelaySeconds);
 
 	UFUNCTION(BlueprintPure, Category = "GP|DropPod")
 	float GetDescentProgress01() const { return DescentProgress01; }
 
 	UFUNCTION(BlueprintPure, Category = "GP|DropPod")
-	bool IsDescending() const { return bDescending; }
+	bool IsDescending() const { return Phase == EGP_DropPodPhase::Descending; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|DropPod")
+	EGP_DropPodPhase GetPhase() const { return Phase; }
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "GP|DropPod|Presentation")
 	void OnDescentStarted();
@@ -56,8 +70,8 @@ public:
 	void OnPayloadDeployed();
 
 	/**
-	 * When true, native Engine cylinder PlaceholderMesh is shown (diagnostics / no BP mesh yet).
-	 * Authored BP_DropPod_MVP should set false on the Blueprint CDO and supply own mesh/Niagara.
+	 * When true, native Engine cylinder PlaceholderMesh is shown during descent.
+	 * Hidden on Impact. Authored BP_DropPod_MVP should set false and supply own mesh/Niagara.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GP|DropPod|Presentation")
 	bool bUseNativePlaceholder = true;
@@ -85,22 +99,41 @@ protected:
 	UPROPERTY(Replicated)
 	float DescentProgress01 = 0.0f;
 
-	UPROPERTY(Replicated)
-	bool bDescending = false;
+	UPROPERTY(ReplicatedUsing = OnRep_Phase)
+	EGP_DropPodPhase Phase = EGP_DropPodPhase::Idle;
+
+	UFUNCTION()
+	void OnRep_Phase(EGP_DropPodPhase PreviousPhase);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PresentationDescentStarted();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PresentationImpact();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PresentationPayloadDeployed();
 
 private:
 	void AuthorityCompleteLanding();
+	void AuthorityBeginPayloadDeploy();
 	void AuthoritySpawnUnitPayload();
 	void AuthorityScheduleCleanup();
 	void HandleCleanup();
+	void ClearLifecycleTimers();
 	void ApplyNativePlaceholderVisibility();
+	void HideNativePlaceholder();
+	void AuthoritySetPhase(EGP_DropPodPhase NewPhase);
 
 	FGP_UnitDropManifest PendingManifest;
 	TWeakObjectPtr<AGP_PlayerState> RequestingPlayerStateWeak;
 	float DescentDurationSeconds = 2.5f;
 	float SpawnSpacingCm = 180.0f;
+	float PayloadDeployDelaySeconds = 1.25f;
 	float CleanupDelaySeconds = 0.35f;
 	float DescentElapsed = 0.0f;
 	bool bLandingCompleted = false;
+	bool bPayloadSpawned = false;
+	FTimerHandle DeployTimerHandle;
 	FTimerHandle CleanupTimerHandle;
 };

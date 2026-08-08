@@ -214,6 +214,7 @@ namespace GPUnitDropAuthority
 			Settings->UnitDropDescentDurationSeconds,
 			Settings->UnitDropSpawnAltitudeCm,
 			Settings->UnitDropSpawnSpacingCm,
+			Settings->UnitDropPayloadDeployDelaySeconds,
 			Settings->UnitDropCleanupDelaySeconds);
 
 		Result.bAccepted = true;

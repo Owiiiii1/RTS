@@ -1,18 +1,31 @@
 # GP-S31R — Minimal Orbital Unit Drop
 
 ## Status
-**GP-S31R_AUTHORED_PAYLOAD_INTEGRATION_READY_FOR_OPERATOR_RETEST**
+**GP-S31R_LANDING_AND_DEPLOYMENT_PRESENTATION_READY_FOR_OPERATOR_RETEST**
 
 ## Slice Group
 Slice 8 — Buildings + Orbital Drops
 
 ## Branch
 `feature/gp-s31r-minimal-orbital-unit-drop`  
-Base: `main` @ `118660bb24bda51c7d5e5c1b97cbc1b9d5cb0d4c`  
-Prior candidate: `dd1a62ae…` (gameplay PASS; authored visuals FAIL)
+Prior: authored payload seams `731a704…` (operator PASS for BP classes)
 
 ## Operator validation
-Gameplay flow **PASS**. Visual bug: native `StaticClass()` spawn bypassed authored BP.
+Authored BP classes + gameplay **PASS**. Remaining: half-buried capsule spawn + deploy presentation window.
+
+## Landing Z
+`GPUnitGroundPlacement::GetGroundSpawnOffsetZForUnitClass` — CDO capsule half-height; spawn Z = ground + offset.
+
+## Deployment phase
+Descending → Impact/Deploying → `UnitDropPayloadDeployDelaySeconds` (TEMP 1.25s) → PayloadDeployed → Cleanup.  
+Multicast presentation events for all clients. Authority payload exactly once.
+
+## Builds
+- GPEditor Win64 Development + UHT — **PASS**
+- GP Dev/Shipping — **NOT RUN**
+
+## Stop Condition
+Operator retest. Do **not** merge / finalize.
 
 ## Authored integration fix
 - Soft class seams on `UGP_OrbitalDeliverySettings` (Worker / SalvageWalker / UnitDropPod)

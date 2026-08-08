@@ -8,6 +8,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "Orbital/GPUnitGroundPlacement.h"
 #include "Player/GPPlayerState.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "TimerManager.h"
@@ -19,6 +20,7 @@
 AGP_DropPod::AGP_DropPod()
 {
 	bReplicates = true;
+	bAlwaysRelevant = true;
 	SetReplicatingMovement(false);
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = false;
@@ -47,9 +49,43 @@ void AGP_DropPod::ApplyNativePlaceholderVisibility()
 	{
 		return;
 	}
-	const bool bShow = bUseNativePlaceholder;
+	const bool bShow = bUseNativePlaceholder && Phase == EGP_DropPodPhase::Descending;
 	PlaceholderMesh->SetHiddenInGame(!bShow);
 	PlaceholderMesh->SetVisibility(bShow);
+}
+
+void AGP_DropPod::HideNativePlaceholder()
+{
+	if (PlaceholderMesh == nullptr)
+	{
+		return;
+	}
+	PlaceholderMesh->SetHiddenInGame(true);
+	PlaceholderMesh->SetVisibility(false);
+}
+
+void AGP_DropPod::AuthoritySetPhase(EGP_DropPodPhase NewPhase)
+{
+	if (!HasAuthority() || Phase == NewPhase)
+	{
+		return;
+	}
+	const EGP_DropPodPhase Previous = Phase;
+	Phase = NewPhase;
+	OnRep_Phase(Previous);
+}
+
+void AGP_DropPod::OnRep_Phase(EGP_DropPodPhase PreviousPhase)
+{
+	(void)PreviousPhase;
+	if (Phase == EGP_DropPodPhase::Descending)
+	{
+		ApplyNativePlaceholderVisibility();
+	}
+	else if (Phase == EGP_DropPodPhase::Deploying || Phase == EGP_DropPodPhase::PayloadDeployed)
+	{
+		HideNativePlaceholder();
+	}
 }
 
 void AGP_DropPod::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -60,7 +96,7 @@ void AGP_DropPod::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME(AGP_DropPod, StartLocation);
 	DOREPLIFETIME(AGP_DropPod, OwnerTeamId);
 	DOREPLIFETIME(AGP_DropPod, DescentProgress01);
-	DOREPLIFETIME(AGP_DropPod, bDescending);
+	DOREPLIFETIME(AGP_DropPod, Phase);
 }
 
 void AGP_DropPod::BeginPlay()
@@ -69,12 +105,18 @@ void AGP_DropPod::BeginPlay()
 	ApplyNativePlaceholderVisibility();
 }
 
-void AGP_DropPod::EndPlay(const EEndPlayReason::Type EndPlayReason)
+void AGP_DropPod::ClearLifecycleTimers()
 {
 	if (UWorld* World = GetWorld())
 	{
+		World->GetTimerManager().ClearTimer(DeployTimerHandle);
 		World->GetTimerManager().ClearTimer(CleanupTimerHandle);
 	}
+}
+
+void AGP_DropPod::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	ClearLifecycleTimers();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -87,6 +129,7 @@ void AGP_DropPod::AuthorityInitUnitDrop(
 	float InDescentDurationSeconds,
 	float SpawnAltitudeCm,
 	float InSpawnSpacingCm,
+	float InPayloadDeployDelaySeconds,
 	float InCleanupDelaySeconds)
 {
 	if (!HasAuthority())
@@ -101,23 +144,43 @@ void AGP_DropPod::AuthorityInitUnitDrop(
 	LandingRotation = LandingWorldRotation;
 	DescentDurationSeconds = FMath::Max(0.05f, InDescentDurationSeconds);
 	SpawnSpacingCm = FMath::Max(50.0f, InSpawnSpacingCm);
+	PayloadDeployDelaySeconds = FMath::Max(0.0f, InPayloadDeployDelaySeconds);
 	CleanupDelaySeconds = FMath::Max(0.0f, InCleanupDelaySeconds);
 	StartLocation = LandingLocation + FVector(0.0f, 0.0f, FMath::Max(100.0f, SpawnAltitudeCm));
 	DescentElapsed = 0.0f;
 	DescentProgress01 = 0.0f;
 	bLandingCompleted = false;
-	bDescending = true;
+	bPayloadSpawned = false;
+	ClearLifecycleTimers();
 
+	AuthoritySetPhase(EGP_DropPodPhase::Descending);
 	ApplyNativePlaceholderVisibility();
 	SetActorLocationAndRotation(StartLocation, LandingRotation);
 	SetActorTickEnabled(true);
+	Multicast_PresentationDescentStarted();
+}
+
+void AGP_DropPod::Multicast_PresentationDescentStarted_Implementation()
+{
+	ApplyNativePlaceholderVisibility();
 	OnDescentStarted();
+}
+
+void AGP_DropPod::Multicast_PresentationImpact_Implementation()
+{
+	HideNativePlaceholder();
+	OnImpact();
+}
+
+void AGP_DropPod::Multicast_PresentationPayloadDeployed_Implementation()
+{
+	OnPayloadDeployed();
 }
 
 void AGP_DropPod::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (!bDescending || bLandingCompleted)
+	if (Phase != EGP_DropPodPhase::Descending || bLandingCompleted)
 	{
 		return;
 	}
@@ -142,24 +205,53 @@ void AGP_DropPod::AuthorityCompleteLanding()
 	}
 
 	bLandingCompleted = true;
-	bDescending = false;
 	DescentProgress01 = 1.0f;
 	SetActorLocationAndRotation(LandingLocation, LandingRotation);
 	SetActorTickEnabled(false);
 
-	OnImpact();
+	AuthoritySetPhase(EGP_DropPodPhase::Deploying);
+	Multicast_PresentationImpact();
+
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	if (PayloadDeployDelaySeconds <= KINDA_SMALL_NUMBER)
+	{
+		AuthorityBeginPayloadDeploy();
+		return;
+	}
+
+	World->GetTimerManager().SetTimer(
+		DeployTimerHandle,
+		FTimerDelegate::CreateUObject(this, &AGP_DropPod::AuthorityBeginPayloadDeploy),
+		PayloadDeployDelaySeconds,
+		false);
+}
+
+void AGP_DropPod::AuthorityBeginPayloadDeploy()
+{
+	if (!HasAuthority() || bPayloadSpawned)
+	{
+		return;
+	}
+
 	AuthoritySpawnUnitPayload();
-	OnPayloadDeployed();
+	AuthoritySetPhase(EGP_DropPodPhase::PayloadDeployed);
+	Multicast_PresentationPayloadDeployed();
 	AuthorityScheduleCleanup();
 }
 
 void AGP_DropPod::AuthoritySpawnUnitPayload()
 {
 	UWorld* World = GetWorld();
-	if (!HasAuthority() || World == nullptr)
+	if (!HasAuthority() || World == nullptr || bPayloadSpawned)
 	{
 		return;
 	}
+	bPayloadSpawned = true;
 
 	const int32 WorkerCount = FMath::Max(0, PendingManifest.WorkerCount);
 	const int32 WalkerCount = FMath::Max(0, PendingManifest.SalvageWalkerCount);
@@ -182,15 +274,18 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 	const FVector BasisF = Forward.IsNearlyZero() ? FVector::ForwardVector : Forward;
 	const FVector BasisR = Right.IsNearlyZero() ? FVector::RightVector : Right;
 
-	auto SpawnOffset = [&](int32 Index) -> FVector
+	auto SpawnXY = [&](int32 Index) -> FVector
 	{
 		if (Total == 1)
 		{
-			return LandingLocation;
+			return FVector(LandingLocation.X, LandingLocation.Y, LandingLocation.Z);
 		}
 		const float Angle = (2.0f * PI * static_cast<float>(Index)) / static_cast<float>(Total);
 		const FVector Offset = (BasisF * FMath::Cos(Angle) + BasisR * FMath::Sin(Angle)) * SpawnSpacingCm;
-		return LandingLocation + Offset;
+		return FVector(
+			LandingLocation.X + Offset.X,
+			LandingLocation.Y + Offset.Y,
+			LandingLocation.Z);
 	};
 
 	int32 SpawnIndex = 0;
@@ -200,7 +295,10 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 		{
 			return;
 		}
-		const FVector Loc = SpawnOffset(SpawnIndex++);
+		const FVector Ground = SpawnXY(SpawnIndex++);
+		const float OffsetZ = GPUnitGroundPlacement::GetGroundSpawnOffsetZForUnitClass(Class);
+		const FVector Loc(Ground.X, Ground.Y, Ground.Z + OffsetZ);
+
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride =
 			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -269,5 +367,6 @@ void AGP_DropPod::HandleCleanup()
 	{
 		return;
 	}
+	ClearLifecycleTimers();
 	Destroy();
 }

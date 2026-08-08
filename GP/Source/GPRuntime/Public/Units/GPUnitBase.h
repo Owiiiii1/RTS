@@ -38,6 +38,7 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;
+	virtual void PostInitializeComponents() override;
 
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
@@ -127,6 +128,7 @@ protected:
 	void InitializeCombatAttributesIfNeeded();
 	void HandleDeathInternal();
 	void ApplyClientDeadPresentation();
+	void AttachHealthBarToOwnerRoot();
 
 	/** -1 unassigned, 0 neutral, 1+ playable teams. */
 	UPROPERTY(EditInstanceOnly, ReplicatedUsing = OnRep_TeamId, Category = "GP|Team")

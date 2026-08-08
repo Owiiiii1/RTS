@@ -203,16 +203,27 @@ void AGP_UnitBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_UnitBase, bIsDead, COND_None, REPNOTIFY_OnChanged);
 }
 
+void AGP_UnitBase::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	// Derived classes (Worker/Unit/MainBase) set Capsule root in their ctors after UnitBase
+	// creates HealthBarComponent without SetupAttachment. Attach here before BeginPlay.
+	AttachHealthBarToOwnerRoot();
+}
+
+void AGP_UnitBase::AttachHealthBarToOwnerRoot()
+{
+	if (HealthBarComponent != nullptr)
+	{
+		HealthBarComponent->EnsureAttachedToOwnerRoot();
+	}
+}
+
 void AGP_UnitBase::BeginPlay()
 {
+	AttachHealthBarToOwnerRoot();
 	Super::BeginPlay();
-	if (HealthBarComponent != nullptr && GetRootComponent() != nullptr
-		&& HealthBarComponent->GetAttachParent() == nullptr)
-	{
-		HealthBarComponent->AttachToComponent(
-			GetRootComponent(),
-			FAttachmentTransformRules::KeepRelativeTransform);
-	}
+	AttachHealthBarToOwnerRoot();
 	InitializeAbilitySystemActorInfo();
 	InitializeCombatAttributesIfNeeded();
 }

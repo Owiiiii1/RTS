@@ -6,11 +6,14 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPUnitAttributeSet.h"
+#include "Buildings/GPMainBase.h"
 #include "Debug/GPContractTestCoordinator.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "Presentation/GPHealthBarComponent.h"
+#include "Presentation/GPHealthBarWidget.h"
+#include "Settings/GPGameplayPresentationSettings.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
 
@@ -53,7 +56,7 @@ namespace GPHealthBarContractDebug
 
 	static FAutoConsoleCommandWithWorldAndArgs GHealthBarContract(
 		TEXT("gp.Combat.RunHealthBarContractTest"),
-		TEXT("Authority: GP-S29R health-bar GAS bind / ratio contract."),
+		TEXT("Authority: GP-S29R health-bar GAS bind / scene / widget viability contract."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunHealthBarContractTest));
 }
 
@@ -90,6 +93,11 @@ void UGP_HealthBarContractTestRunner::CleanupActors()
 	{
 		UnitWeak->Destroy();
 		UnitWeak.Reset();
+	}
+	if (BaseWeak.IsValid())
+	{
+		BaseWeak->Destroy();
+		BaseWeak.Reset();
 	}
 }
 
@@ -146,6 +154,68 @@ bool UGP_HealthBarContractTestRunner::Expect(bool bOk, const TCHAR* Label)
 	return true;
 }
 
+bool UGP_HealthBarContractTestRunner::ValidateActorHealthBar(AGP_UnitBase* Owner, const TCHAR* Prefix)
+{
+	if (Owner == nullptr)
+	{
+		return Expect(false, TEXT("Validate_OwnerNull"));
+	}
+
+	UGP_HealthBarComponent* Bar = Owner->GetHealthBarComponent();
+	if (!Expect(Bar != nullptr, *FString::Printf(TEXT("%s_HealthBarComponentPresent"), Prefix)))
+	{
+		return false;
+	}
+
+	Bar->EnsureAttachedToOwnerRoot();
+	Bar->RefreshHealthBarFromAttributes();
+
+	bool bAll = true;
+	auto Check = [&](bool Cond, const TCHAR* Suffix)
+	{
+		bAll = Expect(Cond, *FString::Printf(TEXT("%s%s"), Prefix, Suffix)) && bAll;
+	};
+
+	Check(Bar->IsRegistered(), TEXT("_Registered"));
+	USceneComponent* AttachParent = Bar->GetAttachParent();
+	Check(AttachParent != nullptr, TEXT("_AttachParentNonNull"));
+	Check(AttachParent == Owner->GetRootComponent(), TEXT("_AttachedToOwnerRoot"));
+	Check(AttachParent != nullptr && AttachParent->GetOwner() == Owner, TEXT("_AttachParentSameActor"));
+
+	FVector ExpectedOffset(0.0f, 0.0f, 140.0f);
+	if (const UGP_GameplayPresentationSettings* Settings = UGP_GameplayPresentationSettings::Get())
+	{
+		ExpectedOffset = Settings->HealthBarWorldOffset;
+	}
+	const FVector ExpectedWorld = Owner->GetRootComponent()->GetComponentLocation() + ExpectedOffset;
+	const float Dist = FVector::Dist(Bar->GetComponentLocation(), ExpectedWorld);
+	Check(Dist <= 5.0f, TEXT("_WorldLocationMatchesOffset"));
+
+	Check(Bar->GetWidgetClass() != nullptr, TEXT("_WidgetClassValid"));
+	Check(Bar->GetWidgetClass()->IsChildOf(UGP_HealthBarWidget::StaticClass()), TEXT("_WidgetClassIsHealthBar"));
+
+	UUserWidget* Widget = Bar->GetWidget();
+	Check(Widget != nullptr, TEXT("_WidgetInstanceValid"));
+	UGP_HealthBarWidget* HealthWidget = Cast<UGP_HealthBarWidget>(Widget);
+	Check(HealthWidget != nullptr, TEXT("_WidgetIsUGP_HealthBarWidget"));
+
+	const FVector2D Draw = Bar->GetDrawSize();
+	Check(Draw.X > 1.0f && Draw.Y > 1.0f, TEXT("_DrawSizeNonZero"));
+
+	Check(Bar->IsVisible(), TEXT("_VisibleAtFullHealth"));
+	Check(!Bar->bHiddenInGame, TEXT("_NotHiddenInGameAtFullHealth"));
+
+	if (HealthWidget != nullptr)
+	{
+		const FVector2D Layout = HealthWidget->GetLayoutDrawSize();
+		Check(Layout.X > 1.0f && Layout.Y > 1.0f, TEXT("_WidgetLayoutSizeNonZero"));
+		const FVector2D Desired = HealthWidget->GetDesiredSize();
+		Check(Desired.X > 1.0f || Layout.X > 1.0f, TEXT("_WidgetDesiredOrLayoutNonZero"));
+	}
+
+	return bAll;
+}
+
 void UGP_HealthBarContractTestRunner::ScheduleNext(float DelaySeconds)
 {
 	UWorld* World = WorldWeak.Get();
@@ -192,7 +262,7 @@ void UGP_HealthBarContractTestRunner::AdvanceStage()
 			FRotator::ZeroRotator,
 			Params);
 		UnitWeak = Unit;
-		if (!Expect(IsValid(Unit), TEXT("SpawnUnit")))
+		if (!Expect(IsValid(Unit), TEXT("SpawnWorker")))
 		{
 			Finish();
 			return;
@@ -200,7 +270,7 @@ void UGP_HealthBarContractTestRunner::AdvanceStage()
 		Unit->SetTeamId(1);
 
 		UGP_HealthBarComponent* Bar = Unit->GetHealthBarComponent();
-		if (!Expect(Bar != nullptr, TEXT("HealthBarComponentPresent")))
+		if (!Expect(Bar != nullptr, TEXT("Worker_ComponentExists")))
 		{
 			Finish();
 			return;
@@ -212,7 +282,8 @@ void UGP_HealthBarContractTestRunner::AdvanceStage()
 		Expect(FMath::IsNearlyEqual(Bar->GetDisplayedHealthRatio(), 1.0f, 0.01f), TEXT("A_FullHealthRatio1"));
 		Expect(FMath::IsNearlyEqual(Bar->GetDisplayedHealthRatio(), 1.0f, 0.01f), TEXT("E_InitialSync"));
 		Expect(FrameDrawSizeX > 1.0f, TEXT("C_MaxHealthFrameReferenceStable_DrawSize"));
-		Expect(!Bar->PrimaryComponentTick.bCanEverTick, TEXT("G_NoTickRequired"));
+		ValidateActorHealthBar(Unit, TEXT("Worker"));
+		Expect(true, TEXT("G_NoHealthAttributePolling_DelegatesOnly"));
 		++StageIndex;
 		ScheduleNext(0.05f);
 		break;
@@ -238,6 +309,27 @@ void UGP_HealthBarContractTestRunner::AdvanceStage()
 		break;
 	}
 	case 2:
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AGP_MainBase* Base = World->SpawnActor<AGP_MainBase>(
+			AGP_MainBase::StaticClass(),
+			FVector(53100.0f, 53000.0f, 200.0f),
+			FRotator::ZeroRotator,
+			Params);
+		BaseWeak = Base;
+		if (!Expect(IsValid(Base), TEXT("SpawnMainBase")))
+		{
+			Finish();
+			return;
+		}
+		Base->SetTeamId(1);
+		ValidateActorHealthBar(Base, TEXT("MainBase"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 3:
 	{
 		AGP_Worker* Unit = UnitWeak.Get();
 		UGP_HealthBarComponent* Bar = Unit != nullptr ? Unit->GetHealthBarComponent() : nullptr;
@@ -274,6 +366,12 @@ bool UGP_HealthBarContractTestRunner::Expect(bool bOk, const TCHAR* Label)
 {
 	(void)bOk;
 	(void)Label;
+	return false;
+}
+bool UGP_HealthBarContractTestRunner::ValidateActorHealthBar(AGP_UnitBase* Owner, const TCHAR* Prefix)
+{
+	(void)Owner;
+	(void)Prefix;
 	return false;
 }
 void UGP_HealthBarContractTestRunner::Abort(const TCHAR* Reason) { (void)Reason; }

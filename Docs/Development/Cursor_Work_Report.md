@@ -1,7 +1,7 @@
-# Cursor Work Report — GP-S29R Combat LOS + Health Bar + Team Colors
+# Cursor Work Report — GP-S29R Health Bar Presentation Fix
 
 ## Status
-GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING
+GP-S29R_HEALTHBAR_FIX_READY_FOR_OPERATOR_VALIDATION
 
 ## Branch
 feature/gp-s29r-combat-los-healthbar-teamcolors
@@ -9,47 +9,66 @@ feature/gp-s29r-combat-los-healthbar-teamcolors
 ## Base
 d75fb426b043c80005c8363bef0f61ac37408fc5
 
-## LOS Design
-TDD/04 canonical 3-point Visibility: AttackOrigin Eye/Chest/Feet → Hit Head/Chest/Feet; ECC_Visibility; ANY clear pair (!bBlockingHit OR HitActor==Target); ignore Source; fail-closed. Implemented in `GPCombatLOS::{ResolveAttackOriginPoints,ResolveHitPoints,HasLineOfSight}`.
+## Root Cause
+1. **Attachment lifecycle:** `UGP_HealthBarComponent` is created in `AGP_UnitBase` ctor before derived classes (`AGP_Worker` / `AGP_Unit` / `AGP_MainBase`) create `CapsuleComponent` and `SetRootComponent`. HealthBar had no ctor `SetupAttachment`. Prior attach ran only *after* `Super::BeginPlay()`, so WidgetComponent BeginPlay initialized while unattached / without a reliable scene transform.
+2. **Native widget geometry:** C++-only `UGP_HealthBarWidget` relied solely on `NativePaint` without `RebuildWidget` Slate root, so WidgetComponent layout geometry could be zero.
+3. **Screen-space draw tick:** WidgetComponent had `PrimaryComponentTick.bCanEverTick = false`, which prevents Screen-space projection/draw. Health attributes remain event-driven (no polling); Automatic tick is presentation-only.
 
-## Attack FSM Integration
-`AttemptAttackHit` order: validate target → range/hysteresis → **LOS gate** → apply GAS damage → presentation → schedule successful-hit cooldown. LOS blocked returns early while remaining Ready; existing `ProcessReadyCadence` retries without terminal fail or new permanent Tick.
+## Fix
+- `AGP_UnitBase::PostInitializeComponents` + `BeginPlay` (before/after Super) call `AttachHealthBarToOwnerRoot()` → `UGP_HealthBarComponent::EnsureAttachedToOwnerRoot()` snaps to **owner root** and applies `HealthBarWorldOffset`.
+- `UGP_HealthBarWidget::RebuildWidget` returns fixed-size `SBox` Slate root; `SetLayoutDrawSize` syncs with DrawSize; paint uses non-deprecated `ToPaintGeometry`.
+- WidgetComponent: `ETickMode::Automatic` + `RequestRedraw` on attribute refresh (still no Health polling).
 
-## Health Bar Architecture
-`UGP_HealthBarComponent` (UWidgetComponent, Screen space) + `UGP_HealthBarWidget` (NativePaint). Owned once on `AGP_UnitBase`. Green fill over dark frame/background; no HP text.
+## Attachment parents
+| Actor | Health bar attach parent |
+| --- | --- |
+| Worker (`AGP_Worker`) | Worker `CapsuleComponent` (root) |
+| MainBase (`AGP_MainBase`) | MainBase `CapsuleComponent` (root) |
 
-## Health Data Binding
-ASC `GetGameplayAttributeValueChangeDelegate` for Health and MaxHealth → `RefreshHealthBarFromAttributes`; initial bind in BeginPlay; clamp 0..1; hide at zero/death.
+Same path for all `AGP_UnitBase` descendants with a root set in derived ctors.
 
-## Team Presentation Settings
-`UGP_GameplayPresentationSettings` (`Config=Game`, DisplayName GP Gameplay Presentation). Defaults in CDO + `GP/Config/DefaultGame.ini` section `[/Script/GPRuntime.GP_GameplayPresentationSettings]`. Team1 blue, Team2 red, NeutralTeamColor white. API: `GetTeamColor(int32)`.
+## Widget instance
+Contract confirms `GetWidget()` is valid `UGP_HealthBarWidget` after spawn/Init for Worker and MainBase.
 
-## Team Color Application
-`UGP_TeamPresentationComponent` on UnitBase → MID vector params (`TeamColor` preferred) on mesh components; `NotifyTeamIdChanged` / `OnRep_TeamId` / BeginPlay refresh; UnitVisual fallback uses same settings. Presentation-only; does not mutate TeamId.
+## HealthBar contract additions
+After real spawn, for Worker and MainBase:
+- IsRegistered
+- AttachParent non-null and == owner root / same actor
+- World location ≈ root + configured offset (5cm)
+- WidgetClass valid / is `UGP_HealthBarWidget`
+- GetWidget instance valid
+- DrawSize X/Y > 1
+- Visible / not HiddenInGame at full health
+- Widget layout/desired size non-zero
 
 ## Tests
 
-Headless `UnrealEditor-Cmd` on `/Game/GrimProtocol/Maps/L_PrototypeArena` (`-game -nullrhi`).
+Headless `UnrealEditor-Cmd` `/Game/GrimProtocol/Maps/L_PrototypeArena` (`-game -nullrhi`).
 
 | Command | Result |
 | --- | --- |
-| gp.Combat.RunLOSFireGateContractTest | Complete Failures=0 Cancelled=false |
 | gp.Combat.RunHealthBarContractTest | Complete Failures=0 Cancelled=false |
 | gp.Combat.RunTeamColorContractTest | Complete Failures=0 Cancelled=false |
+| gp.Combat.RunLOSFireGateContractTest | Complete Failures=0 Cancelled=false |
 | gp.Resource.RunS28RegressionSuite | Complete Failures=0 |
 
-Notes:
-- First LOS run failed once on `H_AttackStarted` (synchronous one-shot kill cleared Attack before the assert). Contract-only fix: multi-hit death setup. Rerun: Failures=0.
-- No separate combat regression suite exists; S28 suite used for Worker/resource regression safety.
-
 ## Build
-GPEditor Development + UHT — PASS (rerun after LOS contract fix)
+GPEditor Win64 Development + UHT — PASS
 
-## Scope Audit
-Exclusions confirmed: no duplicate CombatComponent, Targeting, AttackMove, cooldown GE, projectiles, damage numbers, shields, team-colored health fill, selection/minimap/FoW/nav redesign, resource/construction.
+## Changed files
+- `GP/Source/GPRuntime/Public/Presentation/GPHealthBarComponent.h`
+- `GP/Source/GPRuntime/Private/Presentation/GPHealthBarComponent.cpp`
+- `GP/Source/GPRuntime/Public/Presentation/GPHealthBarWidget.h`
+- `GP/Source/GPRuntime/Private/Presentation/GPHealthBarWidget.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPHealthBarContractTest.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPWorker.h`
+- `Docs/Development/Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
 ## Operator Local Assets
-untouched (not committed): DefaultEngine.ini, L_PrototypeArena.umap, Blueprint/, Materials/, authored ResourceNode, Niagara, Tools/
+untouched: DefaultEngine.ini, L_PrototypeArena.umap, Blueprint/, Materials/, authored ResourceNode, Niagara, Tools/
 
 ## Commit
-1a3697b85c09efacd059e4e38c2dd915e3385929
+PENDING_SHA

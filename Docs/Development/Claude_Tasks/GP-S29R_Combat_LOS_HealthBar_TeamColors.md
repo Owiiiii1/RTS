@@ -1,7 +1,7 @@
 # GP-S29R — Combat LOS Fire Gate + Minimal Health Bar + Team Color Presentation
 
 ## Status
-**GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING**
+**GP-S29R_HEALTHBAR_FIX_READY_FOR_OPERATOR_VALIDATION**
 
 ## Slice Group
 Slice 7 — Combat (reconciliation path; preserves Attack FSM, not CombatComponent)

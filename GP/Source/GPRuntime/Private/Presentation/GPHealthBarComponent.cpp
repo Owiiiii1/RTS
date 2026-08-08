@@ -11,13 +11,17 @@
 
 UGP_HealthBarComponent::UGP_HealthBarComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	// Screen-space WidgetComponent requires engine presentation tick to project/draw.
+	// Health/MaxHealth values are NOT polled — ASC attribute delegates drive updates.
+	PrimaryComponentTick.bCanEverTick = true;
+	SetTickMode(ETickMode::Automatic);
 	SetIsReplicatedByDefault(false);
 	SetWidgetSpace(EWidgetSpace::Screen);
 	SetDrawAtDesiredSize(false);
 	SetPivot(FVector2D(0.5f, 1.0f));
 	SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SetGenerateOverlapEvents(false);
+	SetTwoSided(true);
 	Space = EWidgetSpace::Screen;
 
 	const UGP_GameplayPresentationSettings* Settings = UGP_GameplayPresentationSettings::Get();
@@ -27,14 +31,38 @@ UGP_HealthBarComponent::UGP_HealthBarComponent()
 	SetWidgetClass(UGP_HealthBarWidget::StaticClass());
 }
 
-void UGP_HealthBarComponent::BeginPlay()
+void UGP_HealthBarComponent::EnsureAttachedToOwnerRoot()
 {
-	Super::BeginPlay();
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr)
+	{
+		return;
+	}
 
+	USceneComponent* Root = Owner->GetRootComponent();
+	if (Root == nullptr)
+	{
+		return;
+	}
+
+	if (GetAttachParent() != Root)
+	{
+		AttachToComponent(Root, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	}
+
+	FVector Offset(0.0f, 0.0f, 140.0f);
 	if (const UGP_GameplayPresentationSettings* Settings = UGP_GameplayPresentationSettings::Get())
 	{
-		SetRelativeLocation(Settings->HealthBarWorldOffset);
-		SetDrawSize(FVector2D(Settings->HealthBarDrawSizeX, Settings->HealthBarDrawSizeY));
+		Offset = Settings->HealthBarWorldOffset;
+	}
+	SetRelativeLocation(Offset);
+}
+
+void UGP_HealthBarComponent::EnsureWidgetInstance()
+{
+	if (GetWidgetClass() == nullptr)
+	{
+		SetWidgetClass(UGP_HealthBarWidget::StaticClass());
 	}
 
 	if (UUserWidget* UserWidget = GetWidget())
@@ -47,9 +75,31 @@ void UGP_HealthBarComponent::BeginPlay()
 		HealthBarWidget = Cast<UGP_HealthBarWidget>(GetWidget());
 	}
 
+	if (UGP_HealthBarWidget* Bar = HealthBarWidget.Get())
+	{
+		const FVector2D Draw = GetDrawSize();
+		Bar->SetLayoutDrawSize(Draw.X, Draw.Y);
+	}
+}
+
+void UGP_HealthBarComponent::BeginPlay()
+{
+	// Attach before Super so WidgetComponent BeginPlay sees a valid scene transform.
+	EnsureAttachedToOwnerRoot();
+
+	if (const UGP_GameplayPresentationSettings* Settings = UGP_GameplayPresentationSettings::Get())
+	{
+		SetDrawSize(FVector2D(Settings->HealthBarDrawSizeX, Settings->HealthBarDrawSizeY));
+	}
+
+	Super::BeginPlay();
+
+	EnsureAttachedToOwnerRoot();
+	EnsureWidgetInstance();
 	ApplyWidgetColors();
 	BindAttributeDelegates();
 	RefreshHealthBarFromAttributes();
+	RequestRedraw();
 
 	if (const AGP_UnitBase* Unit = Cast<AGP_UnitBase>(GetOwner()))
 	{
@@ -158,12 +208,9 @@ void UGP_HealthBarComponent::RefreshHealthBarFromAttributes()
 	}
 	DisplayedHealthRatio = FMath::Clamp(Ratio, 0.0f, 1.0f);
 
+	EnsureWidgetInstance();
+
 	UGP_HealthBarWidget* Bar = HealthBarWidget.Get();
-	if (Bar == nullptr)
-	{
-		Bar = Cast<UGP_HealthBarWidget>(GetWidget());
-		HealthBarWidget = Bar;
-	}
 	if (Bar != nullptr)
 	{
 		Bar->SetHealthRatio(DisplayedHealthRatio);
@@ -181,10 +228,16 @@ void UGP_HealthBarComponent::RefreshHealthBarFromAttributes()
 	{
 		SetHealthBarVisible(true);
 	}
+
+	RequestRedraw();
 }
 
 void UGP_HealthBarComponent::SetHealthBarVisible(bool bShowHealthBar)
 {
 	SetVisibility(bShowHealthBar, true);
 	SetHiddenInGame(!bShowHealthBar, true);
+	if (bShowHealthBar)
+	{
+		RequestRedraw();
+	}
 }

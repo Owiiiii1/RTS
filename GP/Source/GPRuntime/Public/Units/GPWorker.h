@@ -630,6 +630,7 @@ private:
 	void ScheduleNext(float DelaySeconds = 0.05f);
 	void AdvanceStage();
 	bool Expect(bool bOk, const TCHAR* Label);
+	bool ValidateActorHealthBar(class AGP_UnitBase* Owner, const TCHAR* Prefix);
 	void Abort(const TCHAR* Reason);
 	void Finish();
 	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
@@ -643,6 +644,7 @@ private:
 	FTimerHandle StageTimerHandle;
 	TWeakObjectPtr<UWorld> WorldWeak;
 	TWeakObjectPtr<AGP_Worker> UnitWeak;
+	TWeakObjectPtr<AGP_MainBase> BaseWeak;
 	float FrameDrawSizeX = 0.0f;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;

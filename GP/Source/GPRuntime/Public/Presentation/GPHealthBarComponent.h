@@ -11,8 +11,9 @@ class UGP_AbilitySystemComponent;
 class UGP_HealthBarWidget;
 
 /**
- * World-space health bar bound to GAS Health/MaxHealth (GP-S29R).
- * Event-driven; no Tick / no polling.
+ * Screen-space health bar bound to GAS Health/MaxHealth (GP-S29R).
+ * Attribute updates are event-driven (no health polling).
+ * WidgetComponent Automatic tick is presentation-only (Screen-space draw).
  */
 UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))
 class GPRUNTIME_API UGP_HealthBarComponent : public UWidgetComponent
@@ -24,6 +25,10 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	/** Attach to owner root and apply configured world offset. Safe to call repeatedly. */
+	UFUNCTION(BlueprintCallable, Category = "GP|Presentation|Health")
+	void EnsureAttachedToOwnerRoot();
 
 	UFUNCTION(BlueprintCallable, Category = "GP|Presentation|Health")
 	void RefreshHealthBarFromAttributes();
@@ -41,6 +46,7 @@ private:
 	void HandleHealthChanged(const FOnAttributeChangeData& Data);
 	void HandleMaxHealthChanged(const FOnAttributeChangeData& Data);
 	void ApplyWidgetColors();
+	void EnsureWidgetInstance();
 
 	float DisplayedHealthRatio = 1.0f;
 	FDelegateHandle HealthChangedHandle;

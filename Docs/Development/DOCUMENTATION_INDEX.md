@@ -34,31 +34,35 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S28 merged** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S29R merged** |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S28P4** @ `main` `d75fb426b043c80005c8363bef0f61ac37408fc5` |
+| Last closed / merged stage | **GP-S29R** @ `main` `3673a6891b3638592da115887d95e373d2475b1e` |
 | Slice 6 | **Completed** |
-| Current stage | **GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING** (`feature/gp-s29r-combat-los-healthbar-teamcolors`) |
+| Slice 7 combat reconciliation (S29R) | **DONE / MERGED** (operator validation PASS; final builds PASS) |
+| Current stage | **Post-S29R next-slice audit** — recommended **GP-S30 Container Launch / Orbital Conversion** = **SPEC_READY_FOR_APPROVAL** (no implementation started) |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** GP-S29R — Combat LOS Fire Gate + Minimal Health Bar + Team Color Presentation. Task: [`Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md`](Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md). Status: **GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING**. Branch: `feature/gp-s29r-combat-los-healthbar-teamcolors` from `main` @ `d75fb426…`.
+**Closed:** GP-S29R — Combat LOS + Health Bar + Team Colors + Salvage Walker. Task: [`Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md`](Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md). Status: **DONE / MERGED**. `main` @ `3673a689…`. Operator validation **PASS**. Builds: GPEditor Dev+UHT, GP Win64 Development, GP Win64 Shipping — **PASS**.
 
-**Prior:** GP-S28P4 merged on `main` @ `d75fb426…`. GP-S28P3 @ `fb699db…`. Resource Playable Pass P1–P4 **DONE / MERGED**. Slice 7 audit refresh on `audit/gp-slice7-combat-reconciliation-refresh` (reference only; not merged into feature).
+**Audit:** [`Next_Slice_Audit_Post_S29R.md`](Next_Slice_Audit_Post_S29R.md) — recommends economy unlock (container launch), not pathfinding/AttackMove as immediate next.
 
-**NEXT:** Operator validation for GP-S29R. Do **not** start GP-S30. Do **not** merge without approval.
+**NEXT (spec only):** GP-S30 — Container Launch / Orbital Conversion. Task: [`Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md`](Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md). Status: **SPEC_READY_FOR_APPROVAL**. Code Allowed: **NO** until explicit approval. Do **not** start implementation. Do **not** treat historical TDD/13 “GP-S30 = TargetingComponent” as this stage.
 
-> Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28P4 already merged on main.
+**Prior:** GP-S28P4 merged @ `d75fb426…`. Resource Playable Pass P1–P4 **DONE / MERGED**.
+
+> Obsolete: older index text claiming GP-S29R pending / “NEXT = GP-S16 after GP-S15”. Selection through GP-S29R already merged on main.
 
 ### Foundation / Match Flow sequence
 
 1. GP-S01 … GP-S15 — **DONE**
 2. GP-S16…GP-S28 — **DONE / merged** (selection, commands, movement, attack, worker/resources/storage)
 3. GP-S28P1…P4 — **DONE / MERGED**
-4. GP-SLICE7-AUDIT refresh — reference docs on `audit/gp-slice7-combat-reconciliation-refresh` (not merged into S29R)
-5. **GP-S29R** — LOS fire gate + health bar + team colors — **CODE_READY_OPERATOR_VALIDATION_PENDING**
+4. GP-SLICE7-AUDIT refresh — reference docs (historical)
+5. **GP-S29R** — LOS + health bar + team colors + Salvage Walker — **DONE / MERGED**
+6. **GP-S30** — Container Launch / Orbital Conversion — **SPEC_READY_FOR_APPROVAL** (no code yet)
 
 ---
 
@@ -142,4 +146,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S14 are closed. Current stage: **GP-S15 specification ready**. NEXT = GP-S15 implementation after explicit approval. GP-S16 **not** started; task file **not** materialized.
+SETUP-001, DOCS-001, GP-S01…GP-S29R are closed / merged. Current stage: **GP-S30 Container Launch / Orbital Conversion** = **SPEC_READY_FOR_APPROVAL**. Code Allowed: **NO** until explicit approval. Pathfinding / Targeting / DropPod **not** started. See [`Next_Slice_Audit_Post_S29R.md`](Next_Slice_Audit_Post_S29R.md).

@@ -1,7 +1,11 @@
 # GP-S29R — Combat LOS Fire Gate + Minimal Health Bar + Team Color Presentation
 
 ## Status
-**GP-S29R_FINALIZATION_READY_FOR_MERGE_REVIEW**
+**GP-S29R_DONE_MERGED**
+
+Operator validation **PASS**. Final builds **PASS**. Merged on `main` @ `3673a6891b3638592da115887d95e373d2475b1e`.
+
+See post-merge next-slice audit: [`../Next_Slice_Audit_Post_S29R.md`](../Next_Slice_Audit_Post_S29R.md). NEXT coding stage is **not** automatically started.
 
 ## Slice Group
 Slice 7 — Combat (reconciliation path; preserves Attack FSM, not CombatComponent)
@@ -80,4 +84,4 @@ Expected: Failures=0.
 No TargetingComponent, AttackMove, cooldown GE, projectiles, damage numbers, shields/armor bars, team-colored health fill, selection/minimap/FoW redesign, resource/construction changes, duplicate CombatComponent, pathfinding/repositioning, AI/SWARM, new combat unit types.
 
 ## Stop Condition
-Finalization complete; **do not merge** without tech-lead approval; do **not** start GP-S30.
+GP-S29R **DONE / MERGED** on `main` @ `3673a689…`. Do **not** reopen S29R scope. Next stage requires approval of GP-S30 spec (container launch) — see post-S29R audit.

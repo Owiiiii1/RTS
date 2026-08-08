@@ -1,8 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — Post-S29R Next Slice Audit
+
+Status: **POST_S29R_NEXT_SLICE_AUDIT_READY_FOR_REVIEW**
+
+- `main` @ `3673a6891b3638592da115887d95e373d2475b1e` — **GP-S29R DONE / MERGED**
+- Docs cursor synced (DOCUMENTATION_INDEX + Claude_Tasks README): S29R no longer pending
+- Audit: `Docs/Development/Next_Slice_Audit_Post_S29R.md`
+- Recommended NEXT: **GP-S30 Container Launch / Orbital Conversion** — `SPEC_READY_FOR_APPROVAL` (Code Allowed: NO)
+- Not next: pathfinding / AttackMove / Targeting as immediate stage (deferred combat QoL)
+- No ADR prerequisite (ADR-0009 Accepted); no production code in audit branch
+- Branch: `audit/post-s29r-next-slice` — do not merge without review
+
 ## 2026-08-08 — GP-S29R Finalization
 
-Status: **GP-S29R_FINALIZATION_READY_FOR_MERGE_REVIEW**
+Status: **GP-S29R_FINALIZATION_READY_FOR_MERGE_REVIEW** (merged on main @ `3673a689…`)
 
 - Branch: `feature/gp-s29r-combat-los-healthbar-teamcolors`
 - Base: `main` @ `d75fb426b043c80005c8363bef0f61ac37408fc5`

@@ -1,173 +1,113 @@
-# Cursor Work Report — GP-S29R Finalization
+# Cursor Work Report — Post-S29R Next Slice Audit
 
 ## Status
-**GP-S29R_FINALIZATION_READY_FOR_MERGE_REVIEW**
+**POST_S29R_NEXT_SLICE_AUDIT_READY_FOR_REVIEW**
 
 ## Branch
-`feature/gp-s29r-combat-los-healthbar-teamcolors`
-
-## Base
-`main` @ `d75fb426b043c80005c8363bef0f61ac37408fc5`
+`audit/post-s29r-next-slice`
 
 ## Merge
-**NOT merged.** Push only; await tech-lead approval.
+**NOT merged.** Docs/planning only.
 
 ---
 
-## 1. Final scope summary
+## 1. Main baseline
 
-GP-S29R delivers Slice 7 combat presentation + LOS fire gate on the existing Attack FSM:
+`main` @ `3673a6891b3638592da115887d95e373d2475b1e` — **GP-S29R DONE / MERGED / CLOSED**
 
-- Canonical 3-point `ECC_Visibility` LOS gate in `AttemptAttackHit`
-- Minimal health bar (`UGP_HealthBarComponent` + `UGP_HealthBarWidget`) on `AGP_UnitBase`
-- Config-driven team colors (`UGP_GameplayPresentationSettings` + `UGP_TeamPresentationComponent`)
-- Native MVP combat class `AGP_SalvageWalker : AGP_Unit` (operator BP authored separately)
-- Details category cleanup for Movement/Visual component pointers
-- Transition-based LOS diagnostic logs (no blocked spam)
-
-No pathfinding / TargetingComponent / CombatComponent / AttackMove / AI / new unit archetypes.
+Operator validation PASS. Final builds PASS (GPEditor Dev+UHT, GP Win64 Development, GP Win64 Shipping).
 
 ---
 
-## 2. Operator validation
+## 2. Stale docs found
 
-| Area | Result |
+| Location | Stale claim |
 | --- | --- |
-| Team Colors (TeamId 1/2) | **PASS** |
-| Health Bar (display / Health react / Salvage Walker) | **PASS** |
-| Salvage Walker (BP AuthoredComponents, visuals, team, health, move) | **PASS** |
-| Combat (hostile Attack, range/cadence, Damage 20, death) | **PASS** |
-| LOS clear / blocked / restore without new Attack | **PASS** |
-| LOS log spam fix (one Blocked / one Restored) | **PASS** |
+| `DOCUMENTATION_INDEX.md` baseline / NEXT | GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING; last closed = S28P4 |
+| `DOCUMENTATION_INDEX.md` Stop block | Still said GP-S15 / do not start GP-S16 |
+| `Claude_Tasks/README.md` cursor | GP-S29R pending; do not start GP-S30 |
+| No materialized GP-S30 task | Missing after S29R close |
 
 ---
 
-## 3. Accepted temporary LOS behavior
+## 3. Exact files changed
 
-Target in range + LOS blocked:
-
-- do not shoot / do not damage
-- do not spend successful attack cooldown
-- do not cancel Attack
-- stay in place
-- periodically re-check LOS
-- auto-resume fire when LOS restores (no new Attack command)
-
-**Deferred (not S29R):** navigation, NavMesh pathfinding, obstacle avoidance, firing-position search, repositioning around blockers, auto-acquire, TargetingComponent, AttackMove.
-
-Friendly-fire policy unchanged (disabled / current semantics).
+- `Docs/Development/DOCUMENTATION_INDEX.md` — status/cursor + Stop sync
+- `Docs/Development/Claude_Tasks/README.md` — cursor sync
+- `Docs/Development/AI_Project_Log.md` — audit entry
+- `Docs/Development/Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md` — DONE/MERGED status
+- `Docs/Development/Next_Slice_Audit_Post_S29R.md` — **created**
+- `Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md` — **created** (SPEC only)
+- `Docs/Development/Cursor_Work_Report.md` — this report
 
 ---
 
-## 4. Automated tests
+## 4. Implemented MVP surface summary
 
-| Command | Result |
-| --- | --- |
-| `gp.Combat.RunLOSFireGateContractTest` | **PASS** Failures=0 |
-| `gp.Combat.RunSalvageWalkerContractTest` | **PASS** Failures=0 |
-| `gp.Combat.RunHealthBarContractTest` | **PASS** Failures=0 |
-| `gp.Combat.RunTeamColorContractTest` | **PASS** Failures=0 |
-| `gp.Resource.RunS28RegressionSuite` | **PASS** Failures=0 |
-
-Related Attack/Movement/GAS surfaces: no separate `Run*ContractTest` beyond the S29R combat contracts above; existing `gp.Attack.*` / `gp.Movement.*` / `gp.Combat.ApplyDamage` are interactive diagnostics, not staged contract suites. S28 suite covers resource/Worker regression.
-
-No new large test suite added for finalization. No production code changes in this finalization commit.
+Control + straight-line move; mine/haul/store (Ready); Attack FSM + LOS + Salvage Walker; health bars; team colors; attrs for Orbital/Score exist but **launch conversion not playable**.
 
 ---
 
-## 5. Builds
+## 5. Missing systems summary
 
-| Target | Result |
-| --- | --- |
-| GPEditor Win64 Development + UHT | **PASS** |
-| GP Win64 Development | **PASS** |
-| GP Win64 Shipping | **PASS** |
+Critical gap: container launch → OrbitalFerronite + FerroniteScore + Threat down.  
+Also missing: DropPod/Order Menu, win wiring, pathfollowing, AttackMove/Targeting, SWARM, AI, FoW, Steam.  
+CombatComponent as TDD S29 requirement: **superseded**.
 
 ---
 
-## 6. Final relevant architecture
+## 6. Candidate next slices
 
-```
-AGP_UnitBase
-  UnitCommandComponent (Attack FSM + LOS gate + cadence)
-  CombatPresentationComponent
-  TeamPresentationComponent
-  HealthBarComponent
-  AbilitySystemComponent + UnitAttributeSet
-  -> AGP_MobileUnit
-       MovementComponent (UGP_MovementComponent) ×1
-       -> AGP_Unit
-            Capsule + UnitVisualComponent ×1
-            -> AGP_SalvageWalker
-       -> AGP_Worker (Cargo/Mining; not Unit child)
-```
-
-LOS: `GPCombatLOS` Eye→Head / Chest→Chest / Feet→Feet; ANY clear pair allows fire.
+1. Container launch / orbital conversion  
+2. General navigation/pathfinding  
+3. Targeting / AttackMove  
+4. Full OrbitalDelivery + DropPod (too wide)
 
 ---
 
-## 7. Final Salvage Walker defaults
+## 7. Recommended next slice
 
-| Field | Value |
-| --- | --- |
-| MaxHealth / Health | 200 |
-| Damage | 20 |
-| AttackRange | 600 |
-| AttackCooldown | 1.0 |
-| MoveSpeed | 250 (`UGP_MovementComponent::MoveSpeed`) |
-| VisualSourceMode | AuthoredComponents |
-| Cargo / Mining | none |
-| Duplicate Movement / UnitVisual | none |
-
-Operator `BP_SalvageWalker` is local — not committed by agent.
+**GP-S30 — Container Launch / Orbital Conversion**
 
 ---
 
-## 8. Explicit out-of-scope / deferred
+## 8. Reasoning
 
-pathfinding, NavMesh integration, obstacle avoidance, firing-position search, LOS repositioning, auto-acquire, TargetingComponent, AttackMove, CombatComponent, cooldown GE, weapon system, AI, SWARM, Soldier/Trooper/etc., new visual archetypes.
-
----
-
-## 9. Files changed during finalization
-
-Docs only:
-
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md`
-- `Docs/Development/Cursor_Work_Report.md`
-
-No C++ / content changes in finalization.
+GDD First_Playable / ADR-0009 loop is blocked at shipping. S28 Storage Ready exists; launch unlocks score/currency for drops/win/SWARM fantasy. Pathfinding and AttackMove improve combat QoL but do not open the economy gate; S29R already deferred LOS repositioning. Chronological ID after S29R is GP-S30 (not historical TDD “Targeting” label).
 
 ---
 
-## 10. Operator assets untouched
+## 9. Pillar 8 verdict
 
-Not modified/committed by finalization:
-
-- `GP/Config/DefaultEngine.ini`
-- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
-- `GP/Content/GrimProtocol/Blueprint/` (incl. BP_SalvageWalker)
-- `GP/Content/GrimProtocol/Materials/`
-- authored ResourceNode / Niagara / other operator `.uasset`/`.umap`
+**PASS** (fun now, clear, new decision, cheap, DA-scalable).
 
 ---
 
-## 11. Git status summary (post-commit expectation)
+## 10. Design / ADR prerequisite
 
-Committed: finalization docs only.
-
-Operator-local uncommitted (left alone):
-
-- `M GP/Config/DefaultEngine.ini`
-- `M GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
-- `M GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`
-- `?? GP/Content/GrimProtocol/Blueprint/`
-- `?? GP/Content/GrimProtocol/Materials/`
-- `?? Tools/`
+**No new ADR.** ADR-0009 Accepted. Spec is sufficient for approval; Code Allowed remains NO until explicit kickoff.
 
 ---
 
-## 12. Final commit SHA
+## 11. Proposed task identity / path
 
-_8059c7f23fcf0635cf0fb65b55eda06bd7ab4010_
+`Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md`  
+Status: **SPEC_READY_FOR_APPROVAL**
+
+---
+
+## 12. Production code untouched
+
+No C++ / Build.cs / Default*.ini / content changes in this audit.
+
+---
+
+## 13. Operator assets untouched
+
+Left alone (uncommitted local): DefaultEngine.ini, L_PrototypeArena.umap, Blueprint/, Materials/, ResourceNode authored, Niagara, Tools/, other `.uasset`/`.umap`.
+
+---
+
+## 14. Commit SHA
+
+_(filled after commit)_

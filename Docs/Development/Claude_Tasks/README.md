@@ -6,24 +6,25 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-08 (GP-S29R). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-08 (post GP-S29R merge). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Slice 7 combat path. Current stage = **GP-S29R** LOS + health bar + team colors — **GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING**.
+**Поточна фаза:** Post–Slice 7. **GP-S29R DONE / MERGED** on `main` @ `3673a689…`. Recommended next = **GP-S30 Container Launch / Orbital Conversion** — **SPEC_READY_FOR_APPROVAL** (implementation **not** started).
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
 | GP-S01 … GP-S28 | **DONE / merged** on `main` |
-| GP-S28P1…P4 | **DONE / MERGED** on `main` (P4 @ `d75fb426…`) |
-| GP-SLICE7-AUDIT refresh | Reference only on `audit/gp-slice7-combat-reconciliation-refresh` — **not** merged into feature |
-| **GP-S29R** LOS + HealthBar + TeamColors | **CODE_READY_OPERATOR_VALIDATION_PENDING** — [`GP-S29R_Combat_LOS_HealthBar_TeamColors.md`](GP-S29R_Combat_LOS_HealthBar_TeamColors.md) |
+| GP-S28P1…P4 | **DONE / MERGED** on `main` |
+| **GP-S29R** LOS + HealthBar + TeamColors + Salvage Walker | **DONE / MERGED** @ `3673a689…` — operator PASS; final builds PASS |
+| Post-S29R next-slice audit | [`../Next_Slice_Audit_Post_S29R.md`](../Next_Slice_Audit_Post_S29R.md) |
+| **GP-S30** Container Launch / Orbital Conversion | **SPEC_READY_FOR_APPROVAL** — [`GP-S30_Container_Launch_Orbital_Conversion.md`](GP-S30_Container_Launch_Orbital_Conversion.md) — Code Allowed: **NO** |
 
-**NEXT action для агента:** operator validation for GP-S29R. Do **not** start GP-S30. Do **not** merge without approval.
+**NEXT action для агента:** await approval of GP-S30 spec. Do **not** implement C++/content. Do **not** start pathfinding / AttackMove / DropPod without a separate approved task. Historical TDD/13 “GP-S30 = TargetingComponent” is **not** this stage.
 
 ### Drift Warning
 
-Cursor must match [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) + `AI_Project_Log.md`. Older “NEXT = GP-S16 after GP-S15” is obsolete. One slice = one PR.
+Cursor must match [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) + `AI_Project_Log.md`. Older “GP-S29R pending” / “NEXT = GP-S16 after GP-S15” is obsolete. One slice = one PR.
 
 ---
 

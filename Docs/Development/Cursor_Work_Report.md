@@ -1,4 +1,4 @@
-# Cursor Work Report вЂ” GP Slice 7 Combat Reconciliation Refresh
+# Cursor Work Report - GP Slice 7 Combat Reconciliation Refresh
 
 ## Status
 GP_SLICE7_AUDIT_REFRESH_READY_FOR_REVIEW
@@ -17,13 +17,13 @@ d75fb426b043c80005c8363bef0f61ac37408fc5
 
 ## Current Main Verification
 Inspected: `GPUnitCommandComponent`, `GPCommandComponent`, `GPUnitBase`, `GPMobileUnit`, `GPWorker`, `GPCombatPresentationComponent`, `GPDamageApplication`, `GPGE_DamageBasic`, `GPDamageCalculation`, `GPUnitAttributeSet`, `GPGameplayTags`.
-P1вЂ“P4 resource pass did not change Attack fire/damage/presentation/LOS/FF semantics (UnitCommand gained haul paths only).
+P1-P4 resource pass did not change Attack fire/damage/presentation/LOS/FF semantics (UnitCommand gained haul paths only).
 
 ## Matrix Summary
 COMPLETE 19 / PARTIAL 9 / MISSING 12 / CONFLICTING 1 / OUTDATED 2
 
 ## Confirmed Preserved Systems
-- Attack Idleв†’Approachingв†’Ready + hysteresis + TargetDied
+- Attack Idle->Approaching->Ready + hysteresis + TargetDied
 - Authority Instant GE damage + MMC
 - Death sink / OnUnitDied
 - Unreliable multicast combat presentation
@@ -31,10 +31,10 @@ COMPLETE 19 / PARTIAL 9 / MISSING 12 / CONFLICTING 1 / OUTDATED 2
 - No projectile actors
 
 ## Confirmed Gaps
-- Canonical 3-trace LOS fire gate в†’ **GP-S29R**
-- TargetingComponent / auto-acquire в†’ GP-S30
-- Cooldown GE + AttackCooldown tag gate в†’ GP-S31R
-- AttackMove executor/state в†’ GP-S32
+- Canonical 3-trace LOS fire gate -> **GP-S29R**
+- TargetingComponent / auto-acquire -> GP-S30
+- Cooldown GE + AttackCooldown tag gate -> GP-S31R
+- AttackMove executor/state -> GP-S32
 - Production combat art / Niagara (non-blocking)
 
 ## Policy Decisions

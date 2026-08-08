@@ -10,7 +10,7 @@ feature/gp-s28p3-dropoff-resilience
 3b1ae705d8b15fd54daf06553337885d0420dc57
 
 ## Final Tip
-`f102b91` (branch tip; finalization content `500143c`)
+`008c2a38bfd28fe1cf3dbffb9a6ad20c2a92ad12`
 
 ## Operator Validation
 - A PASS

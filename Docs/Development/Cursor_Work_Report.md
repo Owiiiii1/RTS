@@ -1,50 +1,46 @@
-# Cursor Work Report — GP-S28P4 Finalization
+# Cursor Work Report — GP-S29R Combat LOS + Health Bar + Team Colors
 
 ## Status
-GP-S28P4_READY_FOR_MERGE
+GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING
 
 ## Branch
-feature/gp-s28p4-planetary-ferronite-hud
+feature/gp-s29r-combat-los-healthbar-teamcolors
 
 ## Base
-fb699db32d1bc79a62809274e39b8a588633cf3c
+d75fb426b043c80005c8363bef0f61ac37408fc5
 
-## Final Tip
-`612464cc9a9c8f5370b1b204fe5d92700ff1a7f2`
+## LOS Design
+TDD/04 canonical 3-point Visibility: AttackOrigin Eye/Chest/Feet → Hit Head/Chest/Feet; ECC_Visibility; ANY clear pair (!bBlockingHit OR HitActor==Target); ignore Source; fail-closed. Implemented in `GPCombatLOS::{ResolveAttackOriginPoints,ResolveHitPoints,HasLineOfSight}`.
 
-## Operator Validation
-- A Initial HUD PASS
-- B Storage live update PASS
-- C MainBase destroy/unresolve PASS
-- D MainBase replacement/rebind PASS
+## Attack FSM Integration
+`AttemptAttackHit` order: validate target → range/hysteresis → **LOS gate** → apply GAS damage → presentation → schedule successful-hit cooldown. LOS blocked returns early while remaining Ready; existing `ProcessReadyCadence` retries without terminal fail or new permanent Tick.
 
-## Automated Tests
-| Command | Result |
-| --- | --- |
-| `gp.Resource.RunPlanetaryFerroniteHUDContractTest` | Complete Failures=0 Cancelled=None |
-| `gp.Resource.RunS28RegressionSuite` | Complete Failures=0 |
+## Health Bar Architecture
+`UGP_HealthBarComponent` (UWidgetComponent, Screen space) + `UGP_HealthBarWidget` (NativePaint). Owned once on `AGP_UnitBase`. Green fill over dark frame/background; no HP text.
 
-## Builds
-| Target | Result |
-| --- | --- |
-| GPEditor Win64 Development + UHT | PASSED |
-| GP Win64 Development | PASSED |
-| GP Win64 Shipping | PASSED |
+## Health Data Binding
+ASC `GetGameplayAttributeValueChangeDelegate` for Health and MaxHealth → `RefreshHealthBarFromAttributes`; initial bind in BeginPlay; clamp 0..1; hide at zero/death.
 
-## Client-safe MainBase Contract
-Authority Register/Unregister remains mutation SoT. Replicated `ReplicatedMainBases` (`FGP_ReplicatedMainBaseEntry`) on `AGP_GameState`. Clients use `FindMainBaseForTeamClientSafe(TeamId)`. `OnResolvedMainBaseChanged(TeamId, Previous, New)` fires on authority mutation and OnRep. Survives register/replace/unregister/late join/TeamId replication without Tick or actor polling.
+## Team Presentation Settings
+`UGP_GameplayPresentationSettings` (`Config=Game`, DisplayName GP Gameplay Presentation). Defaults in CDO + `GP/Config/DefaultGame.ini` section `[/Script/GPRuntime.GP_GameplayPresentationSettings]`. Team1 blue, Team2 red, NeutralTeamColor white. API: `GetTeamColor(int32)`.
 
-## HUD Contract
-`UGP_TEMP_S28P_PlanetaryFerroniteHUD` (`TEMP_S28P_HUD`) — local PC-owned NativePaint readout `Ferronite: <int>` / `Ferronite: --`. SoT = bound MainBase Storage `GetTotalStored()`. PC binds TeamId + resolve + `OnStorageChanged` with immediate initial sync; rebinds on MainBase/Team change. TEMP playable-pass debt — not final production HUD.
+## Team Color Application
+`UGP_TeamPresentationComponent` on UnitBase → MID vector params (`TeamColor` preferred) on mesh components; `NotifyTeamIdChanged` / `OnRep_TeamId` / BeginPlay refresh; UnitVisual fallback uses same settings. Presentation-only; does not mutate TeamId.
+
+## Tests
+- `gp.Combat.RunLOSFireGateContractTest` (A–H)
+- `gp.Combat.RunHealthBarContractTest` (A–G contract-level)
+- `gp.Combat.RunTeamColorContractTest` (A–H)
+Operator must run in non-shipping world; expected Failures=0.
+
+## Build
+GPEditor Development + UHT — PASS
 
 ## Scope Audit
-Branch vs `fb699db…` is GP-S28P4 only. `GPWorker.h` change is solely `UGP_PlanetaryFerroniteHUDContractTestRunner` UCLASS declaration for debug contract (Shipping stubs in cpp) — no Worker gameplay API/semantics. No mining/haul/drop-off/Threat/Storage redesign/orbital/Score/Hub/combat/construction/nav/content commits.
-
-## Invariants
-Storage sole Planetary Ferronite SoT; no duplicate counter; replicated MainBase not second authority SoT; local-team isolation; unregister/rebind correct; initial sync; no Tick / no PC resource polling / no GetAllActorsOfClass per frame; no enemy/Threat/Orbital/Score in HUD.
+Exclusions confirmed: no duplicate CombatComponent, Targeting, AttackMove, cooldown GE, projectiles, damage numbers, shields, team-colored health fill, selection/minimap/FoW/nav redesign, resource/construction.
 
 ## Operator Local Assets
-untouched (DefaultEngine.ini, map, Blueprint/, Materials/, authored ResourceNode, Tools/ logs not committed)
+untouched (not committed): DefaultEngine.ini, L_PrototypeArena.umap, Blueprint/, Materials/, authored ResourceNode, Niagara, Tools/
 
 ## Commit
-`b1a7676cf86a54aaf741b4a169f70333c1b30a1f`
+PENDING_COMMIT_SHA

@@ -6,23 +6,20 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-08 (GP-S28P4 finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), [`../Resource_Playable_Pass_Audit.md`](../Resource_Playable_Pass_Audit.md).
+> Стан станом на 2026-08-08 (GP-S29R). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Slice 6 **closed**. Current stage = **GP-S28P4** minimal Planetary Ferronite HUD — **READY_FOR_MERGE**.
+**Поточна фаза:** Slice 7 combat path. Current stage = **GP-S29R** LOS + health bar + team colors — **GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
 | GP-S01 … GP-S28 | **DONE / merged** on `main` |
-| GP-S28P0 Resource Playable Audit | Historical completed audit / implementation plan (`audit/gp-s28p-resource-playable-pass`) — not current status |
-| GP-S28P1 Blueprint + cargo visual | **DONE / MERGED** on `main` @ `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` |
-| GP-S28P2 Depletion + reassignment | **DONE / MERGED** on `main` @ `e90b7bd48fb9080a881e6dda7be889eaa99a3161` — [`GP-S28P2_Depletion_Resource_Reassignment.md`](GP-S28P2_Depletion_Resource_Reassignment.md) |
-| GP-S28P3 Drop-off resilience | **DONE / MERGED** on `main` @ `fb699db32d1bc79a62809274e39b8a588633cf3c` — [`GP-S28P3_DropOff_Resilience.md`](GP-S28P3_DropOff_Resilience.md) (operator A/B/D PASS, C DEFERRED) |
-| **GP-S28P4** Planetary Ferronite HUD | **READY_FOR_MERGE** — [`GP-S28P4_Planetary_Ferronite_HUD.md`](GP-S28P4_Planetary_Ferronite_HUD.md) (`feature/gp-s28p4-planetary-ferronite-hud`; operator A–D PASS) |
-| GP-SLICE7-AUDIT | Separate pending review — not part of P4; do not rewrite audit conclusions |
+| GP-S28P1…P4 | **DONE / MERGED** on `main` (P4 @ `d75fb426…`) |
+| GP-SLICE7-AUDIT refresh | Reference only on `audit/gp-slice7-combat-reconciliation-refresh` — **not** merged into feature |
+| **GP-S29R** LOS + HealthBar + TeamColors | **CODE_READY_OPERATOR_VALIDATION_PENDING** — [`GP-S29R_Combat_LOS_HealthBar_TeamColors.md`](GP-S29R_Combat_LOS_HealthBar_TeamColors.md) |
 
-**NEXT action для агента:** merge GP-S28P4 only after tech-lead approval. Do **not** start next Resource Playable Pass stage until explicitly assigned.
+**NEXT action для агента:** operator validation for GP-S29R. Do **not** start GP-S30. Do **not** merge without approval.
 
 ### Drift Warning
 

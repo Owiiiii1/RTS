@@ -6,6 +6,7 @@
 #include "Engine/World.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Units/GPUnitBase.h"
+#include "Settings/GPGameplayPresentationSettings.h"
 
 #if WITH_EDITOR
 #include "Misc/App.h"
@@ -245,6 +246,11 @@ void UGP_UnitVisualComponent::ClearVisual()
 	bAuthoredSnapshotDirty = true;
 }
 
+void UGP_UnitVisualComponent::RefreshTeamColorFromPresentation()
+{
+	ApplyTeamColorFallback();
+}
+
 void UGP_UnitVisualComponent::ApplyTeamColorFallback()
 {
 	if (UsesAuthoredComponents())
@@ -259,18 +265,12 @@ void UGP_UnitVisualComponent::ApplyTeamColorFallback()
 	}
 
 	const int32 TeamId = Unit->GetTeamId();
-	FLinearColor Tint = FLinearColor(0.75f, 0.75f, 0.78f, 1.0f);
-	if (TeamId == 1)
+	FLinearColor Tint = FLinearColor::White;
+	FName PreferredParam = TEXT("TeamColor");
+	if (const UGP_GameplayPresentationSettings* Settings = UGP_GameplayPresentationSettings::Get())
 	{
-		Tint = FLinearColor(0.20f, 0.45f, 0.85f, 1.0f);
-	}
-	else if (TeamId == 2)
-	{
-		Tint = FLinearColor(0.85f, 0.30f, 0.20f, 1.0f);
-	}
-	else if (TeamId >= 3)
-	{
-		Tint = FLinearColor(0.25f, 0.75f, 0.35f, 1.0f);
+		Tint = Settings->GetTeamColor(TeamId);
+		PreferredParam = Settings->TeamColorParameterName;
 	}
 
 	bool bAnyParameterApplied = false;
@@ -288,12 +288,17 @@ void UGP_UnitVisualComponent::ApplyTeamColorFallback()
 		}
 
 		static const FName ParamNames[] = {
+			TEXT("TeamColor"),
 			TEXT("BaseColor"),
 			TEXT("Color"),
 			TEXT("Tint"),
 			TEXT("BaseColorTint")
 		};
 
+		if (!PreferredParam.IsNone())
+		{
+			MID->SetVectorParameterValue(PreferredParam, Tint);
+		}
 		for (const FName& ParamName : ParamNames)
 		{
 			MID->SetVectorParameterValue(ParamName, Tint);
@@ -302,7 +307,7 @@ void UGP_UnitVisualComponent::ApplyTeamColorFallback()
 	}
 
 	UE_LOG(LogGPUnitVisual, Verbose,
-		TEXT("GP UnitVisualTeamTintAttempt: Owner=%s TeamId=%d DMICreated=%s Note=EngineBasicMaterialParamsUnverified"),
+		TEXT("GP UnitVisualTeamTintAttempt: Owner=%s TeamId=%d DMICreated=%s Note=PresentationSettings"),
 		*GetNameSafe(GetOwner()),
 		TeamId,
 		bAnyParameterApplied ? TEXT("true") : TEXT("false"));

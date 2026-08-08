@@ -1,5 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S29R Combat LOS + Health Bar + Team Colors
+
+Status: **GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+- Branch: `feature/gp-s29r-combat-los-healthbar-teamcolors`
+- Base: `main` @ `d75fb426b043c80005c8363bef0f61ac37408fc5`
+- Task: `Docs/Development/Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md`
+- LOS: TDD/04 3-point ECC_Visibility gate in `AttemptAttackHit` (no damage / no success VFX / no success cooldown on block; Attack retained)
+- Health bar: `UGP_HealthBarComponent` + widget on `AGP_UnitBase`; GAS Health/MaxHealth event bind
+- Team colors: `UGP_GameplayPresentationSettings` + `UGP_TeamPresentationComponent`; Team1 blue / Team2 red / neutral white
+- Contracts: `gp.Combat.RunLOSFireGateContractTest`, `RunHealthBarContractTest`, `RunTeamColorContractTest`
+- Build: GPEditor Win64 Development + UHT PASS
+- Reference audit branch not merged into feature
+- Do not start GP-S30; operator validation pending
+
 ## 2026-08-08 — GP-S28P4 Finalization
 
 Status: **GP-S28P4_READY_FOR_MERGE**

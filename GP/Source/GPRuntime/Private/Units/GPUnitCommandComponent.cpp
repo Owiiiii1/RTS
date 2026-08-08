@@ -5,6 +5,7 @@
 #include "AttributeSets/GPUnitAttributeSet.h"
 #include "Buildings/GPMainBase.h"
 #include "Combat/GPCombatPresentationComponent.h"
+#include "Combat/GPCombatLOS.h"
 #include "Combat/GPDamageApplication.h"
 #include "Command/GPUnitCommand.h"
 #include "Components/BoxComponent.h"
@@ -3773,7 +3774,20 @@ void UGP_UnitCommandComponent::AttemptAttackHit()
 		return;
 	}
 
-	const UWorld* World = Owner->GetWorld();
+	UWorld* World = Owner->GetWorld();
+	if (!GPCombatLOS::HasLineOfSight(World, OwnerUnit, Target))
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP AttackHitRejected: Unit=%s Target=%s Serial=%u Reason=LOSBlocked Distance=%.1f AttackRange=%.1f"),
+			*GetNameSafe(Owner),
+			*GetNameSafe(Target),
+			HitSerial,
+			Distance,
+			EffectiveRange);
+		// Stay Ready; do not apply damage, presentation, or successful-hit cooldown.
+		return;
+	}
+
 	const double Now = World != nullptr ? World->GetTimeSeconds() : 0.0;
 	const float PendingCooldown = ResolveSanitizedAttackCooldown(false);
 

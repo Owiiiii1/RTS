@@ -36,31 +36,29 @@
 | Engine | **Unreal Engine 5.8.1** |
 | Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S28 merged** |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S28P3** @ `main` `fb699db32d1bc79a62809274e39b8a588633cf3c` |
+| Last closed / merged stage | **GP-S28P4** @ `main` `d75fb426b043c80005c8363bef0f61ac37408fc5` |
 | Slice 6 | **Completed** |
-| Current stage | **GP-S28P4_READY_FOR_MERGE** (`feature/gp-s28p4-planetary-ferronite-hud`) |
+| Current stage | **GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING** (`feature/gp-s29r-combat-los-healthbar-teamcolors`) |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** GP-S28P4 — Minimal Planetary Ferronite HUD. Task: [`Claude_Tasks/GP-S28P4_Planetary_Ferronite_HUD.md`](Claude_Tasks/GP-S28P4_Planetary_Ferronite_HUD.md). Status: **GP-S28P4_READY_FOR_MERGE**. Branch: `feature/gp-s28p4-planetary-ferronite-hud` from `main` @ `fb699db…`. Operator A–D **PASS**.
+**Current:** GP-S29R — Combat LOS Fire Gate + Minimal Health Bar + Team Color Presentation. Task: [`Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md`](Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md). Status: **GP-S29R_CODE_READY_OPERATOR_VALIDATION_PENDING**. Branch: `feature/gp-s29r-combat-los-healthbar-teamcolors` from `main` @ `d75fb426…`.
 
-**Prior:** GP-S28P3 merged on `main` @ `fb699db…` (operator A/B/D PASS; C DEFERRED). GP-S28P2 @ `e90b7bd…`. GP-S28P1 @ `86bcc974…`. P0 historical audit — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
+**Prior:** GP-S28P4 merged on `main` @ `d75fb426…`. GP-S28P3 @ `fb699db…`. Resource Playable Pass P1–P4 **DONE / MERGED**. Slice 7 audit refresh on `audit/gp-slice7-combat-reconciliation-refresh` (reference only; not merged into feature).
 
-**Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation` — separate from S28P.
+**NEXT:** Operator validation for GP-S29R. Do **not** start GP-S30. Do **not** merge without approval.
 
-**NEXT:** Merge GP-S28P4 only after tech-lead approval. Do **not** start next Resource Playable Pass stage until explicitly assigned.
-
-> Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28 already merged on main.
+> Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28P4 already merged on main.
 
 ### Foundation / Match Flow sequence
 
 1. GP-S01 … GP-S15 — **DONE**
 2. GP-S16…GP-S28 — **DONE / merged** (selection, commands, movement, attack, worker/resources/storage)
-3. GP-SLICE7-AUDIT — combat reconciliation audit **completed on branch**, pending review (separate from S28P)
-4. **GP-S28P0** — historical resource playable pass audit / implementation plan (completed)
-5. GP-S28P1 — **DONE / MERGED** @ `86bcc974…`; GP-S28P2 — **DONE / MERGED** @ `e90b7bd…`; GP-S28P3 — **DONE / MERGED** @ `fb699db…`; GP-S28P4 — **READY_FOR_MERGE**
+3. GP-S28P1…P4 — **DONE / MERGED**
+4. GP-SLICE7-AUDIT refresh — reference docs on `audit/gp-slice7-combat-reconciliation-refresh` (not merged into S29R)
+5. **GP-S29R** — LOS fire gate + health bar + team colors — **CODE_READY_OPERATOR_VALIDATION_PENDING**
 
 ---
 
@@ -79,6 +77,7 @@
 | `Docs/Development/*` ops + Claude task specs | Active |
 | `Docs/Game_Pitch.md` | Active onboarding |
 | `UGP_ResourceGameplaySettings` + `GP/Config/DefaultGame.ini` (`[/Script/GPRuntime.GP_ResourceGameplaySettings]`) | Active — Project Settings → Game → GP Resource Gameplay (P2 + P3 `DropOffRetrySeconds`) |
+| `UGP_GameplayPresentationSettings` + `DefaultGame.ini` (`[/Script/GPRuntime.GP_GameplayPresentationSettings]`) | Active — Project Settings → Game → GP Gameplay Presentation (S29R team colors + health bar tunables) |
 
 ### Stale / needs cleanup (still in active tree)
 

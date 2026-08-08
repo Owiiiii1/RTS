@@ -5,6 +5,8 @@
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPUnitAttributeSet.h"
 #include "Combat/GPCombatPresentationComponent.h"
+#include "Presentation/GPHealthBarComponent.h"
+#include "Presentation/GPTeamPresentationComponent.h"
 #include "Combat/GPDamageApplication.h"
 #include "Command/GPUnitCommand.h"
 #include "Effects/GPGE_DamageBasic.h"
@@ -137,6 +139,10 @@ AGP_UnitBase::AGP_UnitBase()
 
 	CombatPresentationComponent = CreateDefaultSubobject<UGP_CombatPresentationComponent>(TEXT("CombatPresentationComponent"));
 
+	TeamPresentationComponent = CreateDefaultSubobject<UGP_TeamPresentationComponent>(TEXT("TeamPresentationComponent"));
+
+	HealthBarComponent = CreateDefaultSubobject<UGP_HealthBarComponent>(TEXT("HealthBarComponent"));
+
 	AbilitySystemComponent = CreateDefaultSubobject<UGP_AbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 	AbilitySystemComponent->SetIsReplicated(true);
 	AbilitySystemComponent->SetProjectReplicationMode(EGameplayEffectReplicationMode::Mixed);
@@ -152,6 +158,16 @@ UGP_UnitCommandComponent* AGP_UnitBase::GetUnitCommandComponent() const
 UGP_CombatPresentationComponent* AGP_UnitBase::GetCombatPresentationComponent() const
 {
 	return CombatPresentationComponent;
+}
+
+UGP_TeamPresentationComponent* AGP_UnitBase::GetTeamPresentationComponent() const
+{
+	return TeamPresentationComponent;
+}
+
+UGP_HealthBarComponent* AGP_UnitBase::GetHealthBarComponent() const
+{
+	return HealthBarComponent;
 }
 
 UAbilitySystemComponent* AGP_UnitBase::GetAbilitySystemComponent() const
@@ -190,6 +206,13 @@ void AGP_UnitBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 void AGP_UnitBase::BeginPlay()
 {
 	Super::BeginPlay();
+	if (HealthBarComponent != nullptr && GetRootComponent() != nullptr
+		&& HealthBarComponent->GetAttachParent() == nullptr)
+	{
+		HealthBarComponent->AttachToComponent(
+			GetRootComponent(),
+			FAttachmentTransformRules::KeepRelativeTransform);
+	}
 	InitializeAbilitySystemActorInfo();
 	InitializeCombatAttributesIfNeeded();
 }
@@ -284,6 +307,15 @@ int32 AGP_UnitBase::GetTeamId() const
 	return TeamId;
 }
 
+FLinearColor AGP_UnitBase::GetTeamPresentationColor() const
+{
+	if (TeamPresentationComponent != nullptr)
+	{
+		return TeamPresentationComponent->GetTeamPresentationColor();
+	}
+	return FLinearColor::White;
+}
+
 void AGP_UnitBase::SetTeamId(int32 NewTeamId)
 {
 	if (!HasAuthority())
@@ -305,6 +337,10 @@ void AGP_UnitBase::NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId)
 {
 	(void)OldTeamId;
 	(void)NewTeamId;
+	if (TeamPresentationComponent != nullptr)
+	{
+		TeamPresentationComponent->RefreshTeamPresentation();
+	}
 }
 
 bool AGP_UnitBase::IsNeutral() const
@@ -545,6 +581,10 @@ void AGP_UnitBase::HandleDeathInternal()
 
 	bDeathHandled = true;
 	bIsDead = true;
+	if (HealthBarComponent != nullptr)
+	{
+		HealthBarComponent->SetHealthBarVisible(false);
+	}
 
 	const UWorld* World = GetWorld();
 	const ENetMode NetMode = World != nullptr ? World->GetNetMode() : NM_MAX;
@@ -594,6 +634,10 @@ void AGP_UnitBase::HandleDeathInternal()
 
 void AGP_UnitBase::ApplyClientDeadPresentation()
 {
+	if (HealthBarComponent != nullptr)
+	{
+		HealthBarComponent->SetHealthBarVisible(false);
+	}
 	SetActorEnableCollision(false);
 }
 
@@ -607,6 +651,10 @@ void AGP_UnitBase::OnRep_IsDead()
 
 void AGP_UnitBase::OnRep_TeamId()
 {
+	if (TeamPresentationComponent != nullptr)
+	{
+		TeamPresentationComponent->RefreshTeamPresentation();
+	}
 }
 
 #if !UE_BUILD_SHIPPING

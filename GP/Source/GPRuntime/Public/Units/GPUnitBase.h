@@ -11,6 +11,8 @@
 
 class UGP_AbilitySystemComponent;
 class UGP_CombatPresentationComponent;
+class UGP_HealthBarComponent;
+class UGP_TeamPresentationComponent;
 class UGP_UnitAttributeSet;
 class UGP_UnitCommandComponent;
 struct FGP_DamageApplicationResult;
@@ -66,8 +68,15 @@ public:
 
 	UGP_CombatPresentationComponent* GetCombatPresentationComponent() const;
 
+	UGP_TeamPresentationComponent* GetTeamPresentationComponent() const;
+
+	UGP_HealthBarComponent* GetHealthBarComponent() const;
+
 	UFUNCTION(BlueprintPure, Category = "GP|Team")
 	int32 GetTeamId() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Presentation|Team")
+	FLinearColor GetTeamPresentationColor() const;
 
 	/** Authority-only. Silent no-op without authority. */
 	void SetTeamId(int32 NewTeamId);
@@ -164,6 +173,12 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Combat|Presentation", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_CombatPresentationComponent> CombatPresentationComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Presentation|Team", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UGP_TeamPresentationComponent> TeamPresentationComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Presentation|Health", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UGP_HealthBarComponent> HealthBarComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|GAS", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_AbilitySystemComponent> AbilitySystemComponent;

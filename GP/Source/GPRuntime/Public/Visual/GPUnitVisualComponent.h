@@ -74,6 +74,9 @@ public:
 	/** Destroys only BuiltVisual generated parts — never Blueprint/SCS/gameplay components. */
 	void ClearVisual();
 
+	/** Re-apply TeamColor from UGP_GameplayPresentationSettings (GP-S29R). */
+	void RefreshTeamColorFromPresentation();
+
 protected:
 	/**
 	 * Class-defaults presentation ownership.

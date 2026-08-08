@@ -1,5 +1,21 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-SLICE7 Combat Reconciliation Audit Refresh
+
+Status: **GP_SLICE7_AUDIT_REFRESH_READY_FOR_REVIEW**
+
+- Branch: `audit/gp-slice7-combat-reconciliation-refresh`
+- Base: `d75fb426b043c80005c8363bef0f61ac37408fc5` (Merge GP-S28P4)
+- Source: prior audit `audit/gp-slice7-combat-reconciliation` @ `2120b7d893428a4ad76cf440fa2b12a8e004afaf` (not merged)
+- Doc: `Docs/Development/Combat_Reconciliation_Audit.md`
+- Re-verified current main combat paths; P1–P4 did not change Attack/damage/presentation semantics
+- Matrix: COMPLETE 19 / PARTIAL 9 / MISSING 12 / CONFLICTING 1 / OUTDATED 2
+- Policy: friendly fire remains disabled; cooldown GE deferred GP-S31R
+- Recommended NEXT: **GP-S29R Combat LOS Fire Gate** (spec in audit; not implemented)
+- Docs-only; no production C++ / content
+- Report: `Docs/Development/Cursor_Work_Report.md`
+- Stop: review only; do not implement S29R until assigned
+
 ## 2026-08-08 — GP-S28P4 Finalization
 
 Status: **GP-S28P4_READY_FOR_MERGE**

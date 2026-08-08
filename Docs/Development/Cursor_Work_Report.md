@@ -1,50 +1,57 @@
-# Cursor Work Report — GP-S28P4 Finalization
+# Cursor Work Report — GP Slice 7 Combat Reconciliation Refresh
 
 ## Status
-GP-S28P4_READY_FOR_MERGE
+GP_SLICE7_AUDIT_REFRESH_READY_FOR_REVIEW
 
 ## Branch
-feature/gp-s28p4-planetary-ferronite-hud
+audit/gp-slice7-combat-reconciliation-refresh
 
 ## Base
-fb699db32d1bc79a62809274e39b8a588633cf3c
+d75fb426b043c80005c8363bef0f61ac37408fc5
 
-## Final Tip
-`612464cc9a9c8f5370b1b204fe5d92700ff1a7f2`
+## Audit Source
+- Prior branch: `audit/gp-slice7-combat-reconciliation`
+- Prior commit: `2120b7d893428a4ad76cf440fa2b12a8e004afaf`
+- Prior base: `035c486758059032bb2551520834dd73f8667ef5`
+- Old branch not merged; content re-verified on current main
 
-## Operator Validation
-- A Initial HUD PASS
-- B Storage live update PASS
-- C MainBase destroy/unresolve PASS
-- D MainBase replacement/rebind PASS
+## Current Main Verification
+Inspected: `GPUnitCommandComponent`, `GPCommandComponent`, `GPUnitBase`, `GPMobileUnit`, `GPWorker`, `GPCombatPresentationComponent`, `GPDamageApplication`, `GPGE_DamageBasic`, `GPDamageCalculation`, `GPUnitAttributeSet`, `GPGameplayTags`.
+P1–P4 resource pass did not change Attack fire/damage/presentation/LOS/FF semantics (UnitCommand gained haul paths only).
 
-## Automated Tests
-| Command | Result |
-| --- | --- |
-| `gp.Resource.RunPlanetaryFerroniteHUDContractTest` | Complete Failures=0 Cancelled=None |
-| `gp.Resource.RunS28RegressionSuite` | Complete Failures=0 |
+## Matrix Summary
+COMPLETE 19 / PARTIAL 9 / MISSING 12 / CONFLICTING 1 / OUTDATED 2
 
-## Builds
-| Target | Result |
-| --- | --- |
-| GPEditor Win64 Development + UHT | PASSED |
-| GP Win64 Development | PASSED |
-| GP Win64 Shipping | PASSED |
+## Confirmed Preserved Systems
+- Attack Idle→Approaching→Ready + hysteresis + TargetDied
+- Authority Instant GE damage + MMC
+- Death sink / OnUnitDied
+- Unreliable multicast combat presentation
+- Hostile-only Attack validation
+- No projectile actors
 
-## Client-safe MainBase Contract
-Authority Register/Unregister remains mutation SoT. Replicated `ReplicatedMainBases` (`FGP_ReplicatedMainBaseEntry`) on `AGP_GameState`. Clients use `FindMainBaseForTeamClientSafe(TeamId)`. `OnResolvedMainBaseChanged(TeamId, Previous, New)` fires on authority mutation and OnRep. Survives register/replace/unregister/late join/TeamId replication without Tick or actor polling.
+## Confirmed Gaps
+- Canonical 3-trace LOS fire gate → **GP-S29R**
+- TargetingComponent / auto-acquire → GP-S30
+- Cooldown GE + AttackCooldown tag gate → GP-S31R
+- AttackMove executor/state → GP-S32
+- Production combat art / Niagara (non-blocking)
 
-## HUD Contract
-`UGP_TEMP_S28P_PlanetaryFerroniteHUD` (`TEMP_S28P_HUD`) — local PC-owned NativePaint readout `Ferronite: <int>` / `Ferronite: --`. SoT = bound MainBase Storage `GetTotalStored()`. PC binds TeamId + resolve + `OnStorageChanged` with immediate initial sync; rebinds on MainBase/Team change. TEMP playable-pass debt — not final production HUD.
+## Policy Decisions
+- Friendly fire remains **disabled** (intended MVP); TDD ally-Attack wording = future docs correction
+- Cooldown GE deferred to **GP-S31R**; keep `NextAttackHitTime` + `AttackCooldown` attribute
+
+## Recommended NEXT
+GP-S29R Combat LOS Fire Gate
+
+## GP-S29R Proposed Scope
+Preserve Attack FSM; add TDD/04 ECC_Visibility Eye/Chest/Feet 3-pair LOS before applied hit; fail-closed (no damage/no cooldown spend) while blocked; resume on LOS restore; no CombatComponent/Targeting/AttackMove/cooldown GE/projectile/art; contract + operator PIE.
 
 ## Scope Audit
-Branch vs `fb699db…` is GP-S28P4 only. `GPWorker.h` change is solely `UGP_PlanetaryFerroniteHUDContractTestRunner` UCLASS declaration for debug contract (Shipping stubs in cpp) — no Worker gameplay API/semantics. No mining/haul/drop-off/Threat/Storage redesign/orbital/Score/Hub/combat/construction/nav/content commits.
-
-## Invariants
-Storage sole Planetary Ferronite SoT; no duplicate counter; replicated MainBase not second authority SoT; local-team isolation; unregister/rebind correct; initial sync; no Tick / no PC resource polling / no GetAllActorsOfClass per frame; no enemy/Threat/Orbital/Score in HUD.
+docs-only (Combat_Reconciliation_Audit + index/README/log/report). No production C++ / content / config.
 
 ## Operator Local Assets
-untouched (DefaultEngine.ini, map, Blueprint/, Materials/, authored ResourceNode, Tools/ logs not committed)
+untouched
 
 ## Commit
-`b1a7676cf86a54aaf741b4a169f70333c1b30a1f`
+(pending)

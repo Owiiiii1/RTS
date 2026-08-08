@@ -6,23 +6,21 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-08 (GP-S28P4 finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), [`../Resource_Playable_Pass_Audit.md`](../Resource_Playable_Pass_Audit.md).
+> Стан станом на 2026-08-08 (GP-SLICE7-AUDIT refresh). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), [`../Combat_Reconciliation_Audit.md`](../Combat_Reconciliation_Audit.md).
 
-**Поточна фаза:** Slice 6 **closed**. Current stage = **GP-S28P4** minimal Planetary Ferronite HUD — **READY_FOR_MERGE**.
+**Поточна фаза:** Slice 6 **closed**. Resource Playable Pass P1–P4 **DONE / MERGED**. Current stage = **GP-SLICE7-AUDIT refresh** — **READY_FOR_REVIEW**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
 | GP-S01 … GP-S28 | **DONE / merged** on `main` |
-| GP-S28P0 Resource Playable Audit | Historical completed audit / implementation plan (`audit/gp-s28p-resource-playable-pass`) — not current status |
-| GP-S28P1 Blueprint + cargo visual | **DONE / MERGED** on `main` @ `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` |
-| GP-S28P2 Depletion + reassignment | **DONE / MERGED** on `main` @ `e90b7bd48fb9080a881e6dda7be889eaa99a3161` — [`GP-S28P2_Depletion_Resource_Reassignment.md`](GP-S28P2_Depletion_Resource_Reassignment.md) |
-| GP-S28P3 Drop-off resilience | **DONE / MERGED** on `main` @ `fb699db32d1bc79a62809274e39b8a588633cf3c` — [`GP-S28P3_DropOff_Resilience.md`](GP-S28P3_DropOff_Resilience.md) (operator A/B/D PASS, C DEFERRED) |
-| **GP-S28P4** Planetary Ferronite HUD | **READY_FOR_MERGE** — [`GP-S28P4_Planetary_Ferronite_HUD.md`](GP-S28P4_Planetary_Ferronite_HUD.md) (`feature/gp-s28p4-planetary-ferronite-hud`; operator A–D PASS) |
-| GP-SLICE7-AUDIT | Separate pending review — not part of P4; do not rewrite audit conclusions |
+| GP-S28P0…P4 Resource Playable Pass | **DONE / MERGED** (P4 @ `d75fb426b043c80005c8363bef0f61ac37408fc5`) |
+| **GP-SLICE7-AUDIT refresh** | **READY_FOR_REVIEW** — [`../Combat_Reconciliation_Audit.md`](../Combat_Reconciliation_Audit.md) (`audit/gp-slice7-combat-reconciliation-refresh`) |
+| Prior Slice 7 audit branch | Superseded (`audit/gp-slice7-combat-reconciliation` @ `2120b7d…`) — not merged |
+| GP-S29R | **NOT STARTED** — recommended NEXT after audit approval |
 
-**NEXT action для агента:** merge GP-S28P4 only after tech-lead approval. Do **not** start next Resource Playable Pass stage until explicitly assigned.
+**NEXT action для агента:** tech-lead reviews audit refresh. After approval, materialize/implement **GP-S29R Combat LOS Fire Gate** only when explicitly assigned. Do **not** implement S29R on the audit branch.
 
 ### Drift Warning
 

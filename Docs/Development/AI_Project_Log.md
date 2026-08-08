@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S30 Full-Storage Worker Fix
+
+Status: **GP-S30_FULL_STORAGE_WORKER_FIX_READY_FOR_OPERATOR_RETEST**
+
+- Operator FAIL: Workers keep mining/hauling when Storage is full
+- Root: `BeginDropOffAtMainBase` cleared overflow cargo and called `ContinueMineAfterSuccessfulHaul`
+- Fix: retain cargo → `WaitingForDropOff(StorageFull)`; resume via `OnStorageChanged` (no Tick); capacity gate only for StorageFull reason
+- Contracts: DropOff (11A–D) / S28 / ContainerLaunch / ContainerLaunchHUD — Failures=0
+- GPEditor PASS; GP Dev/Shipping NOT RUN
+- Not merge-ready; report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-08 — GP-S30 TEMP HUD container breakdown UX
 
 Status: **GP-S30_HUD_CONTAINER_BREAKDOWN_READY_FOR_OPERATOR_VALIDATION**

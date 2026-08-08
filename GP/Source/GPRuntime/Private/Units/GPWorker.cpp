@@ -2921,7 +2921,8 @@ void UGP_WorkerHaulingContractTestRunner::AdvanceStage()
 		}
 		Expect(Cmd->GetLastHaulAcceptedAmount() <= 20.0f + 0.1f, TEXT("PartialAcceptedAtMost20"));
 		Expect(Cmd->GetLastHaulRejectedAmount() >= 29.0f, TEXT("PartialRejectedOverflow"));
-		Expect(FMath::IsNearlyEqual(Worker->GetCargoComponent()->GetCurrentCargoAmount(), 0.0f), TEXT("OverflowLostClearedCargo"));
+		Expect(Worker->GetCargoComponent()->GetCurrentCargoAmount() >= 29.0f, TEXT("PartialCargoRetained"));
+		Expect(Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::WaitingForDropOff, TEXT("PartialWaitingForDropOff"));
 		Expect(Storage->IsStorageFull(), TEXT("StorageFullAfterPartial"));
 		++StageIndex;
 		ScheduleNext();

@@ -2133,19 +2133,21 @@ void UGP_UnitCommandComponent::BeginDropOffAtMainBase(uint32 HaulSerial)
 		}
 	}
 
-	if (AddResult.Rejected > KINDA_SMALL_NUMBER)
+	const float RemainingCargo = Cargo->GetCurrentCargoAmount();
+	if (RemainingCargo > KINDA_SMALL_NUMBER)
 	{
-		const float Lost = Cargo->ClearCargo();
-		UE_LOG(LogGPUnitCommandExecution, Warning,
-			TEXT("GP UnitCommandExecution HaulLostOverflow: Unit=%s HaulSerial=%u Accepted=%.3f Rejected=%.3f LostCargo=%.3f StorageFull=%s Role=%s NetMode=%s"),
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution HaulDropOffWaitingForSpace: Unit=%s HaulSerial=%u Accepted=%.3f Rejected=%.3f RemainingCargo=%.3f StorageFull=%s Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			HaulSerial,
-			AddResult.Accepted,
-			AddResult.Rejected,
-			Lost,
+			LastHaulAcceptedAmount,
+			LastHaulRejectedAmount,
+			RemainingCargo,
 			AddResult.bStorageFullAfter ? TEXT("true") : TEXT("false"),
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		EnterWaitingForDropOff(FName(TEXT("StorageFull")));
+		return;
 	}
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
@@ -2169,6 +2171,19 @@ void UGP_UnitCommandComponent::ContinueMineAfterSuccessfulHaul(uint32 ChainSeria
 	AActor* Owner = GetOwner();
 	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
 	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+
+	// Cargo-first invariant: never resume mining while haul cargo remains.
+	if (WorkerHasHaulCargo())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution HaulContinueMineBlockedByCargo: Unit=%s HaulSerial=%u Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			ChainSerial,
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		EnterWaitingForDropOff(FName(TEXT("StorageFull")));
+		return;
+	}
 
 	const bool bHeldMineSameSerial =
 		HeldCommand.IsSet()
@@ -2365,10 +2380,26 @@ bool UGP_UnitCommandComponent::WorkerHasHaulCargo() const
 	return IsValid(Cargo) && Cargo->GetCurrentCargoAmount() > KINDA_SMALL_NUMBER;
 }
 
+bool UGP_UnitCommandComponent::TeamMainBaseHasStorageRoom() const
+{
+	const AGP_Worker* Worker = Cast<AGP_Worker>(GetOwner());
+	if (!IsValid(Worker))
+	{
+		return false;
+	}
+
+	const UWorld* World = GetWorld();
+	const AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	const AGP_MainBase* Base = GS != nullptr ? GS->FindMainBaseForTeam(Worker->GetTeamId()) : nullptr;
+	const UGP_StorageComponent* Storage = IsValid(Base) ? Base->GetStorageComponent() : nullptr;
+	return IsValid(Storage) && Storage->GetTotalRemaining() > KINDA_SMALL_NUMBER;
+}
+
 void UGP_UnitCommandComponent::ClearDropOffSubscriptionsAndTimer()
 {
 	UnbindActiveHaulMainBaseUnregister();
 	UnbindDropOffWaitingRegisterWake();
+	UnbindDropOffWaitingStorageWake();
 	ClearDropOffRetryTimer();
 	bDropOffResumeScheduled = false;
 	PendingDropOffResumeSerial = 0;
@@ -2448,6 +2479,51 @@ void UGP_UnitCommandComponent::UnbindDropOffWaitingRegisterWake()
 	}
 	MainBaseRegisteredDropOffHandle.Reset();
 	bMainBaseRegisteredDropOffBound = false;
+}
+
+void UGP_UnitCommandComponent::BindDropOffWaitingStorageWake()
+{
+	const AGP_Worker* Worker = Cast<AGP_Worker>(GetOwner());
+	if (!IsValid(Worker))
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	AGP_MainBase* Base = GS != nullptr ? GS->FindMainBaseForTeam(Worker->GetTeamId()) : nullptr;
+	UGP_StorageComponent* Storage = IsValid(Base) ? Base->GetStorageComponent() : nullptr;
+	if (!IsValid(Storage))
+	{
+		return;
+	}
+
+	if (bDropOffStorageWakeBound && BoundDropOffWaitStorage.Get() == Storage)
+	{
+		return;
+	}
+
+	UnbindDropOffWaitingStorageWake();
+	Storage->OnStorageChanged.AddDynamic(this, &UGP_UnitCommandComponent::HandleDropOffWaitingStorageChanged);
+	BoundDropOffWaitStorage = Storage;
+	bDropOffStorageWakeBound = true;
+}
+
+void UGP_UnitCommandComponent::UnbindDropOffWaitingStorageWake()
+{
+	if (!bDropOffStorageWakeBound)
+	{
+		BoundDropOffWaitStorage.Reset();
+		return;
+	}
+
+	if (UGP_StorageComponent* Storage = BoundDropOffWaitStorage.Get())
+	{
+		Storage->OnStorageChanged.RemoveDynamic(
+			this, &UGP_UnitCommandComponent::HandleDropOffWaitingStorageChanged);
+	}
+	BoundDropOffWaitStorage.Reset();
+	bDropOffStorageWakeBound = false;
 }
 
 void UGP_UnitCommandComponent::ClearDropOffRetryTimer()
@@ -2536,6 +2612,7 @@ void UGP_UnitCommandComponent::EnterWaitingForDropOff(FName Reason)
 	}
 
 	BindDropOffWaitingRegisterWake();
+	BindDropOffWaitingStorageWake();
 	ArmDropOffRetryTimer();
 }
 
@@ -2584,6 +2661,40 @@ void UGP_UnitCommandComponent::HandleMainBaseRegisteredDropOffWake(AGP_MainBase*
 	TryResumeHaulFromDropOffWait(FName(TEXT("MainBaseRegistered")));
 }
 
+void UGP_UnitCommandComponent::HandleDropOffWaitingStorageChanged(
+	float PreviousTotalStored,
+	float NewTotalStored,
+	float TotalCapacity)
+{
+	(void)PreviousTotalStored;
+	if (HaulState != EGP_HaulExecutionState::WaitingForDropOff || ActiveHaulSerial == 0)
+	{
+		return;
+	}
+
+	if (!WorkerHasHaulCargo())
+	{
+		return;
+	}
+
+	const float Remaining = TotalCapacity - NewTotalStored;
+	if (!(Remaining > KINDA_SMALL_NUMBER))
+	{
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	++DebugDropOffWakeCount;
+#endif
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP DropOffWait Wake: Unit=%s HaulSerial=%u Reason=StorageSpaceAvailable Remaining=%.1f"),
+		*GetNameSafe(GetOwner()),
+		ActiveHaulSerial,
+		Remaining);
+
+	TryResumeHaulFromDropOffWait(FName(TEXT("StorageSpaceAvailable")));
+}
+
 void UGP_UnitCommandComponent::HandleDropOffSafetyRetry()
 {
 	if (HaulState != EGP_HaulExecutionState::WaitingForDropOff || ActiveHaulSerial == 0)
@@ -2608,6 +2719,22 @@ void UGP_UnitCommandComponent::HandleDropOffSafetyRetry()
 				*GetNameSafe(GetOwner()));
 			LastDropOffRetryLogReason = FName(TEXT("StillMissing"));
 		}
+		ArmDropOffRetryTimer();
+		return;
+	}
+
+	if (LastDropOffWaitReason == FName(TEXT("StorageFull"))
+		&& !(Base->GetStorageComponent()->GetTotalRemaining() > KINDA_SMALL_NUMBER))
+	{
+		if (LastDropOffRetryLogReason != FName(TEXT("StillFull")))
+		{
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP DropOffWait Retry: Unit=%s Result=StillFull Base=%s"),
+				*GetNameSafe(GetOwner()),
+				*GetNameSafe(Base));
+			LastDropOffRetryLogReason = FName(TEXT("StillFull"));
+		}
+		BindDropOffWaitingStorageWake();
 		ArmDropOffRetryTimer();
 		return;
 	}
@@ -2643,6 +2770,15 @@ void UGP_UnitCommandComponent::TryResumeHaulFromDropOffWait(FName WakeReason)
 		return;
 	}
 
+	// Capacity gate only for storage-full waits — do not block MainBase missing/unreachable recovery.
+	if (LastDropOffWaitReason == FName(TEXT("StorageFull")) && !TeamMainBaseHasStorageRoom())
+	{
+		BindDropOffWaitingRegisterWake();
+		BindDropOffWaitingStorageWake();
+		ArmDropOffRetryTimer();
+		return;
+	}
+
 	TGuardValue<bool> WakeGuard(bDropOffWakeInProgress, true);
 	UWorld* World = GetWorld();
 	if (World == nullptr)
@@ -2651,6 +2787,7 @@ void UGP_UnitCommandComponent::TryResumeHaulFromDropOffWait(FName WakeReason)
 	}
 
 	UnbindDropOffWaitingRegisterWake();
+	UnbindDropOffWaitingStorageWake();
 	ClearDropOffRetryTimer();
 
 	PendingDropOffResumeSerial = ActiveHaulSerial;

@@ -1,111 +1,119 @@
-# Cursor Work Report — GP-S30 TEMP HUD container breakdown UX
+# Cursor Work Report — GP-S30 Full-Storage Worker Fix
 
 ## Status
-**GP-S30_HUD_CONTAINER_BREAKDOWN_READY_FOR_OPERATOR_VALIDATION**
-
----
-
-## 1. Previous finalization commit
-
-`030efc55469153a8d1465ac81ae3996c1bd391cb`
+**GP-S30_FULL_STORAGE_WORKER_FIX_READY_FOR_OPERATOR_RETEST**
 
 Branch: `feature/gp-s30-container-launch-orbital-conversion`  
-Merge: **NOT merged**
+Merge: **NOT merged** / not finalization
 
 ---
 
-## 2. Operator UX request
+## 1. Operator bug
 
-Replace single `Ferronite: X` with per-base total + stable per-container amount lines before merge.
-
----
-
-## 3. Exact HUD structure
-
-Top-left VerticalBox (`StatusPanel`):
-
-```
-База: <total> / <capacity>
-Контейнер 1 — <amount>
-…
-Контейнер N — <amount>
-Orbital: <orbital>
-```
-
-Bottom-center: `Launch Container` button (unchanged).
+When MainBase Storage is full, Workers keep mining and looping base↔ResourceNode even though Storage no longer increases.
 
 ---
 
-## 4. Data source for total/capacity
+## 2. Factual root cause
 
-`UGP_StorageComponent::GetTotalStored()` / `GetTotalCapacity()` — no hardcoded 500.
+`UGP_UnitCommandComponent::BeginDropOffAtMainBase` on `Rejected > 0`:
 
----
+- called `Cargo->ClearCargo()` (overflow LOST);
+- then `ContinueMineAfterSuccessfulHaul` — resumed mining regardless of remaining cargo.
 
-## 5. Dynamic container list behavior
-
-`GetContainers()` drives line count 1..N. Indices stable (launch zeros slot, does not shift). Amounts rounded to int. No Ready/Launching labels.
-
----
-
-## 6. Confirmation no hardcoded 5/500 in HUD
-
-Capacity and line count come from Storage at sync time. Capacity changes with ContainerCount/Capacity.
+`WaitingForDropOff` existed for missing/destroyed/unreachable MainBase only — not for storage-full.
 
 ---
 
-## 7. Orbital unchanged
+## 3. Exact Worker FSM transition fix
 
-Still GAS `OrbitalFerronite` attribute change delegate on PC. Layout only moved under Base block.
+After `AddPlanetaryFerronite`:
+
+- accepted amount removed from cargo (unchanged);
+- if remaining cargo > 0 → `EnterWaitingForDropOff(StorageFull)` and **return**;
+- only when cargo empty → `ContinueMineAfterSuccessfulHaul`.
+
+Safety belt: `ContinueMineAfterSuccessfulHaul` refuses resume while cargo remains.
 
 ---
 
-## 8. Launch button / RPC / gameplay unchanged
+## 4. Full / partial unload semantics
 
-Enable policy, Server RPC, Storage launch transaction, rates, Threat, duration untouched.
+| Case | Storage | Cargo after | Next state |
+| --- | --- | --- | --- |
+| A full accept | accepts all | 0 | normal mining loop |
+| B partial | accepts some | remainder kept | `WaitingForDropOff` |
+| C full / reject all | accepts 0 | unchanged | `WaitingForDropOff` |
+
+No overflow past `GetTotalCapacity()`. No `ClearCargo` on reject.
 
 ---
 
-## 9. Tests
+## 5. WaitingForDropOff behavior
+
+Cargo retained. No mining / ResourceNode drain / base↔node haul spin. Explicit player commands still replace via existing cancel path.
+
+---
+
+## 6. Automatic resume after space freed
+
+Event-driven: bind team MainBase `UGP_StorageComponent::OnStorageChanged` while waiting.
+
+- Remaining capacity > 0 → `TryResumeHaulFromDropOffWait(StorageSpaceAvailable)`.
+- Capacity gate applies **only** when `LastDropOffWaitReason == StorageFull` (does not block MainBase replacement / unreachable recovery).
+- Safety retry still used; **no permanent Tick / polling loop**.
+
+---
+
+## 7. Multiple Worker behavior
+
+Sequential authority drop-offs via Storage Accept/Reject. No client capacity reservation. Worker that cannot unload remains `WaitingForDropOff` with remainder cargo. No storage overflow.
+
+---
+
+## 8. Tests
 
 | Command | Result |
 | --- | --- |
-| `gp.Resource.RunContainerLaunchHUDContractTest` | **PASS** Failures=0 |
-| `gp.Resource.RunContainerLaunchContractTest` | **PASS** Failures=0 |
 | `gp.Resource.RunS28RegressionSuite` | **PASS** Failures=0 |
+| `gp.Resource.RunDropOffResilienceContractTest` | **PASS** Failures=0 (Cases 11A–D storage-full) |
+| `gp.Worker.RunHaulingContractTest` (via suite) | **PASS** PartialCargoRetained / WaitingForDropOff |
+| `gp.Resource.RunContainerLaunchContractTest` | **PASS** Failures=0 |
+| `gp.Resource.RunContainerLaunchHUDContractTest` | **PASS** Failures=0 |
 
 ---
 
-## 10. GPEditor + UHT
+## 9. GPEditor + UHT
 
-**PASS**
-
----
-
-## 11. GP Dev / Shipping after this follow-up
-
-**NOT RUN** (repeat after next operator PASS)
+`GPEditor Win64 Development` — **PASS**
 
 ---
 
-## 12. Exact files changed
+## 10. GP Dev / Shipping
 
-- `GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h`
-- `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPContainerLaunchHUDContractTest.cpp`
-- `Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md`
-- `Docs/Development/AI_Project_Log.md`
+**NOT RUN** (deferred until operator retest PASS)
+
+---
+
+## 11. Files changed
+
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPWorker.h`
+- `GP/Source/GPRuntime/Private/Units/GPWorker.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPDropOffResilienceContractTest.cpp`
 - `Docs/Development/Cursor_Work_Report.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md`
 
 ---
 
-## 13. Operator assets untouched
+## 12. Operator assets untouched
 
-DefaultEngine.ini, map, Blueprint/, Materials/, authored ResourceNode, Tools/ left dirty/uncommitted.
+Not committed: `DefaultEngine.ini`, map, Blueprint/, Materials/, authored ResourceNode, Tools/, other `.uasset`/`.umap`.
 
 ---
 
-## 14. Commit SHA
+## 13. Commit SHA
 
-89b1e68cdfd6b8561a64a04136b5e5f0b57f6f41
+*(filled after commit)*

@@ -106,7 +106,7 @@ namespace GPDropOffResilienceDebug
 
 	static FAutoConsoleCommandWithWorldAndArgs GDropOffResilienceContract(
 		TEXT("gp.Resource.RunDropOffResilienceContractTest"),
-		TEXT("Authority: GP-S28P3 WaitingForDropOff / MainBase wake / destroy / unreachable contract. Transient only."),
+		TEXT("Authority: GP-S28P3 WaitingForDropOff / MainBase wake / storage-full retain / unreachable contract. Transient only."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunDropOffResilienceContractTest));
 }
 
@@ -151,6 +151,7 @@ void UGP_DropOffResilienceContractTestRunner::CleanupActors()
 		}
 	};
 	DestroyWeak(WorkerWeak);
+	DestroyWeak(SecondaryWorkerWeak);
 	DestroyWeak(NodeWeak);
 	DestroyWeak(MainBaseWeak);
 	if (UWorld* World = WorldWeak.Get())
@@ -1010,6 +1011,309 @@ void UGP_DropOffResilienceContractTestRunner::AdvanceStage()
 				|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::MovingToMine,
 			TEXT("Case10PostDropOffP2Path"));
 		Expect(Cmd->DebugGetDropOffWakeCount() <= 1, TEXT("Case10NoDuplicateWake"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 16:
+	{
+		// Case 11A — full storage: retain cargo, WaitingForDropOff, no further mining.
+		CleanupActors();
+		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
+		if (!Expect(Scenario.bOk && Scenario.bReadyForHaulingTest, TEXT("Case11ASpawnScenario")))
+		{
+			Finish();
+			return;
+		}
+		WorkerWeak = Scenario.Worker;
+		NodeWeak = Scenario.ResourceNode;
+		MainBaseWeak = Scenario.MainBase;
+		ContractTeamId = Scenario.TeamId;
+		ScenarioBaseLocation = Scenario.MainBaseLocation;
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* Node = NodeWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		UGP_StorageComponent* Storage = IsValid(Base) ? Base->GetStorageComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(Node) && IsValid(Storage), TEXT("Case11AObjects")))
+		{
+			Finish();
+			return;
+		}
+		Storage->RemovePlanetaryFerronite(Storage->GetTotalStored());
+		Storage->AddPlanetaryFerronite(Storage->GetTotalCapacity());
+		Expect(Storage->IsStorageFull(), TEXT("Case11AStorageFull"));
+		Worker->GetCargoComponent()->ClearCargo();
+		Worker->SetActorLocation(Node->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f), false, nullptr, ETeleportType::TeleportPhysics);
+		IssueMine(Worker, Node);
+		FillCargoFull(Worker);
+		NodeAmountAtStorageWait = static_cast<float>(Node->GetCurrentAmount());
+		CargoAtWait = Worker->GetCargoComponent()->GetCurrentCargoAmount();
+		Expect(CargoAtWait > KINDA_SMALL_NUMBER, TEXT("Case11ACargoFilled"));
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 17:
+	{
+		AGP_Worker* Worker = WorkerWeak.Get();
+		if (WaitUntilHaulState(Worker, EGP_HaulExecutionState::WaitingForDropOff, TEXT("Case11AWaitTimeout")))
+		{
+			return;
+		}
+		AGP_ResourceNode* Node = NodeWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		if (!Expect(IsValid(Worker) && IsValid(Node) && IsValid(Base), TEXT("Case11AWaitObjects")))
+		{
+			Finish();
+			return;
+		}
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		Expect(FMath::IsNearlyEqual(Worker->GetCargoComponent()->GetCurrentCargoAmount(), CargoAtWait, 0.05f),
+			TEXT("Case11ACargoUnchanged"));
+		Expect(Cmd->GetLastHaulAcceptedAmount() <= KINDA_SMALL_NUMBER, TEXT("Case11AAcceptedZero"));
+		Expect(Cmd->GetLastHaulRejectedAmount() >= CargoAtWait - 0.5f, TEXT("Case11ARejectedAll"));
+		Expect(Storage->IsStorageFull(), TEXT("Case11AStillFull"));
+		Expect(Cmd->DebugIsDropOffStorageWakeBound(), TEXT("Case11AStorageWakeBound"));
+		Expect(FMath::IsNearlyEqual(static_cast<float>(Node->GetCurrentAmount()), NodeAmountAtStorageWait, 0.05f),
+			TEXT("Case11ANodeAmountStable"));
+		Expect(Cmd->GetMineExecutionState() != EGP_MineExecutionState::Active, TEXT("Case11ANotMining"));
+		Expect(Worker->GetWorkerActivityState() != EGP_WorkerActivityState::Mining, TEXT("Case11AActivityNotMining"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 18:
+	{
+		// Case 11B — partial room: accept some, retain remainder, wait.
+		CleanupActors();
+		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
+		if (!Expect(Scenario.bOk && Scenario.bReadyForHaulingTest, TEXT("Case11BSpawnScenario")))
+		{
+			Finish();
+			return;
+		}
+		WorkerWeak = Scenario.Worker;
+		NodeWeak = Scenario.ResourceNode;
+		MainBaseWeak = Scenario.MainBase;
+		ContractTeamId = Scenario.TeamId;
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* Node = NodeWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		UGP_StorageComponent* Storage = IsValid(Base) ? Base->GetStorageComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(Node) && IsValid(Storage), TEXT("Case11BObjects")))
+		{
+			Finish();
+			return;
+		}
+		Storage->RemovePlanetaryFerronite(Storage->GetTotalStored());
+		Storage->AddPlanetaryFerronite(Storage->GetTotalCapacity() - 3.0f);
+		Expect(FMath::IsNearlyEqual(Storage->GetTotalRemaining(), 3.0f, 0.1f), TEXT("Case11BRemaining3"));
+		Worker->GetCargoComponent()->ClearCargo();
+		Worker->SetActorLocation(Node->GetActorLocation() + FVector(80.0f, 0.0f, 0.0f), false, nullptr, ETeleportType::TeleportPhysics);
+		IssueMine(Worker, Node);
+		FillCargoFull(Worker);
+		Expect(Worker->GetCargoComponent()->GetCurrentCargoAmount() >= 10.0f, TEXT("Case11BCargoReady"));
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 19:
+	{
+		AGP_Worker* Worker = WorkerWeak.Get();
+		if (WaitUntilHaulState(Worker, EGP_HaulExecutionState::WaitingForDropOff, TEXT("Case11BWaitTimeout")))
+		{
+			return;
+		}
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		if (!Expect(IsValid(Worker) && IsValid(Base), TEXT("Case11BWaitObjects")))
+		{
+			Finish();
+			return;
+		}
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		const float RemainingCargo = Worker->GetCargoComponent()->GetCurrentCargoAmount();
+		Expect(Cmd->GetLastHaulAcceptedAmount() > KINDA_SMALL_NUMBER, TEXT("Case11BAcceptedPartial"));
+		Expect(RemainingCargo > KINDA_SMALL_NUMBER, TEXT("Case11BCargoRemainder"));
+		Expect(Storage->IsStorageFull(), TEXT("Case11BStorageFull"));
+		Expect(Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::WaitingForDropOff, TEXT("Case11BWaiting"));
+		CargoAtWait = RemainingCargo;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 20:
+	{
+		// Case 11C — free space via storage remove; auto-resume drop-off; cargo empties; mine loop resumes.
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		if (!Expect(IsValid(Worker) && IsValid(Base) && IsValid(Base->GetStorageComponent()), TEXT("Case11CObjects")))
+		{
+			Finish();
+			return;
+		}
+		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		const float RoomNeeded = FMath::Max(CargoAtWait + 1.0f, 50.0f);
+		Storage->RemovePlanetaryFerronite(RoomNeeded);
+		Expect(Storage->GetTotalRemaining() > KINDA_SMALL_NUMBER, TEXT("Case11CSpaceFreed"));
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 21:
+	{
+		AGP_Worker* Worker = WorkerWeak.Get();
+		if (WaitHaulOrMove(Worker, TEXT("Case11CHaulTimeout")))
+		{
+			return;
+		}
+		// Also wait out WaitingForDropOff until cargo is empty or mining resumes.
+		if (IsValid(Worker)
+			&& IsValid(Worker->GetUnitCommandComponent())
+			&& Worker->GetUnitCommandComponent()->GetHaulExecutionState() == EGP_HaulExecutionState::WaitingForDropOff
+			&& Worker->GetCargoComponent()->GetCurrentCargoAmount() > KINDA_SMALL_NUMBER)
+		{
+			if (MovementWaitTicks == 0)
+			{
+				MovementWaitStartTime = World->GetTimeSeconds();
+			}
+			++MovementWaitTicks;
+			if ((World->GetTimeSeconds() - MovementWaitStartTime) > MovementWaitTimeoutSeconds)
+			{
+				Expect(false, TEXT("Case11CResumeTimeout"));
+				Finish();
+				return;
+			}
+			ScheduleNext();
+			return;
+		}
+		if (!Expect(IsValid(Worker), TEXT("Case11CWorker")))
+		{
+			Finish();
+			return;
+		}
+		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		Expect(FMath::IsNearlyEqual(Worker->GetCargoComponent()->GetCurrentCargoAmount(), 0.0f, 0.05f),
+			TEXT("Case11CCargoEmpty"));
+		Expect(Cmd->HasHeldCommand()
+				|| Cmd->GetMineExecutionState() != EGP_MineExecutionState::Idle
+				|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::WaitingForResource
+				|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::MovingToMine
+				|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::Mining
+				|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::ReturningToDeposit
+				|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::Idle,
+			TEXT("Case11CMineLoopResumes"));
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 22:
+	{
+		// Case 11D — two workers; no storage overflow; rejected worker retains cargo / waits.
+		CleanupActors();
+		const GPResourceLoopDiagnostics::FGP_DiagnosticScenarioActors Scenario =
+			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
+		if (!Expect(Scenario.bOk && Scenario.bReadyForHaulingTest, TEXT("Case11DSpawnScenario")))
+		{
+			Finish();
+			return;
+		}
+		WorkerWeak = Scenario.Worker;
+		NodeWeak = Scenario.ResourceNode;
+		MainBaseWeak = Scenario.MainBase;
+		ContractTeamId = Scenario.TeamId;
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		AGP_Worker* WorkerA = WorkerWeak.Get();
+		AGP_ResourceNode* Node = NodeWeak.Get();
+		if (!Expect(IsValid(Base) && IsValid(WorkerA) && IsValid(Node), TEXT("Case11DBaseObjects")))
+		{
+			Finish();
+			return;
+		}
+		AGP_Worker* WorkerB = GPResourceLoopDiagnostics::SpawnWorkerDeferred(
+			World,
+			WorkerA->GetActorLocation() + FVector(0.0f, 200.0f, 0.0f),
+			ContractTeamId,
+			OwnerTag);
+		SecondaryWorkerWeak = WorkerB;
+		if (!Expect(IsValid(WorkerB), TEXT("Case11DSpawnWorkerB")))
+		{
+			Finish();
+			return;
+		}
+		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		Storage->RemovePlanetaryFerronite(Storage->GetTotalStored());
+		Storage->AddPlanetaryFerronite(Storage->GetTotalCapacity() - 5.0f);
+		Expect(FMath::IsNearlyEqual(Storage->GetTotalRemaining(), 5.0f, 0.1f), TEXT("Case11DRoom5"));
+
+		auto PrepWorkerCargo = [&](AGP_Worker* W, float YOffset)
+		{
+			W->GetCargoComponent()->ClearCargo();
+			W->SetActorLocation(
+				Node->GetActorLocation() + FVector(80.0f, YOffset, 0.0f),
+				false,
+				nullptr,
+				ETeleportType::TeleportPhysics);
+			IssueMine(W, Node);
+			FillCargoFull(W);
+		};
+		PrepWorkerCargo(WorkerA, 0.0f);
+		PrepWorkerCargo(WorkerB, 200.0f);
+		MovementWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext();
+		break;
+	}
+	case 23:
+	{
+		AGP_Worker* WorkerA = WorkerWeak.Get();
+		AGP_Worker* WorkerB = SecondaryWorkerWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		const bool bAWaiting = IsValid(WorkerA) && IsValid(WorkerA->GetUnitCommandComponent())
+			&& WorkerA->GetUnitCommandComponent()->GetHaulExecutionState() == EGP_HaulExecutionState::WaitingForDropOff;
+		const bool bBWaiting = IsValid(WorkerB) && IsValid(WorkerB->GetUnitCommandComponent())
+			&& WorkerB->GetUnitCommandComponent()->GetHaulExecutionState() == EGP_HaulExecutionState::WaitingForDropOff;
+		const bool bEitherWaiting = bAWaiting || bBWaiting;
+		const bool bBothSettled =
+			IsValid(WorkerA) && IsValid(WorkerB)
+			&& !WorkerA->GetUnitCommandComponent()->IsHaulActive()
+			&& !WorkerB->GetUnitCommandComponent()->IsHaulActive()
+			&& !(WorkerA->GetUnitMovementComponent() && WorkerA->GetUnitMovementComponent()->IsMoving())
+			&& !(WorkerB->GetUnitMovementComponent() && WorkerB->GetUnitMovementComponent()->IsMoving());
+		if (!bEitherWaiting || !bBothSettled)
+		{
+			if (MovementWaitTicks == 0)
+			{
+				MovementWaitStartTime = World->GetTimeSeconds();
+			}
+			++MovementWaitTicks;
+			if ((World->GetTimeSeconds() - MovementWaitStartTime) > MovementWaitTimeoutSeconds)
+			{
+				Expect(false, TEXT("Case11DWaitTimeout"));
+				Finish();
+				return;
+			}
+			ScheduleNext();
+			return;
+		}
+		if (!Expect(IsValid(Base) && IsValid(WorkerA) && IsValid(WorkerB), TEXT("Case11DObjects")))
+		{
+			Finish();
+			return;
+		}
+		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		Expect(Storage->GetTotalStored() <= Storage->GetTotalCapacity() + 0.05f, TEXT("Case11DNoOverflow"));
+		Expect(Storage->IsStorageFull(), TEXT("Case11DFullAfterSerialDrop"));
+		const float CargoA = WorkerA->GetCargoComponent()->GetCurrentCargoAmount();
+		const float CargoB = WorkerB->GetCargoComponent()->GetCurrentCargoAmount();
+		Expect(CargoA + CargoB >= 5.0f - 0.5f, TEXT("Case11DRejectedRetainsCargo"));
+		Expect(bAWaiting || bBWaiting, TEXT("Case11DAtLeastOneWaiting"));
 		Finish();
 		break;
 	}

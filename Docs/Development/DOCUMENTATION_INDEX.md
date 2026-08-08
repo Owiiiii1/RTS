@@ -39,7 +39,7 @@
 | Last closed / merged stage | **GP-S29R** @ `main` `3673a689…` (post-audit polish `89ce3c50…`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** (operator validation PASS; final builds PASS) |
-| Current stage | **GP-S30 Container Launch / Orbital Conversion** — **FINALIZATION_READY_FOR_MERGE_REVIEW** |
+| Current stage | **GP-S30 Container Launch / Orbital Conversion** — **GP-S30_FULL_STORAGE_WORKER_FIX_READY_FOR_OPERATOR_RETEST** |
 
 ---
 
@@ -49,7 +49,7 @@
 
 **Audit:** [`Next_Slice_Audit_Post_S29R.md`](Next_Slice_Audit_Post_S29R.md) — recommends economy unlock (container launch), not pathfinding/AttackMove as immediate next.
 
-**NEXT (finalization ready):** GP-S30 — Container Launch / Orbital Conversion. Task: [`Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md`](Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md). Status: **GP-S30_FINALIZATION_READY_FOR_MERGE_REVIEW**. Branch: `feature/gp-s30-container-launch-orbital-conversion` from `main` @ `89ce3c50…`. Operator validation **PASS**. Final builds PASS. **Not merged.** Do **not** auto-start GP-S31. Historical TDD/13 “GP-S30 = TargetingComponent” is **not** this stage.
+**NEXT (operator retest):** GP-S30 — Container Launch / Orbital Conversion. Task: [`Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md`](Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md). Status: **GP-S30_FULL_STORAGE_WORKER_FIX_READY_FOR_OPERATOR_RETEST**. Branch: `feature/gp-s30-container-launch-orbital-conversion` from `main` @ `89ce3c50…`. Full-storage Worker FSM fix candidate; **not merge-ready**. Do **not** auto-start GP-S31. Historical TDD/13 “GP-S30 = TargetingComponent” is **not** this stage.
 
 **Prior:** GP-S28P4 merged @ `d75fb426…`. Resource Playable Pass P1–P4 **DONE / MERGED**.
 
@@ -62,7 +62,7 @@
 3. GP-S28P1…P4 — **DONE / MERGED**
 4. GP-SLICE7-AUDIT refresh — reference docs (historical)
 5. **GP-S29R** — LOS + health bar + team colors + Salvage Walker — **DONE / MERGED**
-6. **GP-S30** — Container Launch / Orbital Conversion — **FINALIZATION_READY_FOR_MERGE_REVIEW**
+6. **GP-S30** — Container Launch / Orbital Conversion — **GP-S30_FULL_STORAGE_WORKER_FIX_READY_FOR_OPERATOR_RETEST**
 
 ---
 
@@ -146,4 +146,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S29R are closed / merged. Current stage: **GP-S30 Container Launch / Orbital Conversion** = **FINALIZATION_READY_FOR_MERGE_REVIEW** on `feature/gp-s30-container-launch-orbital-conversion` (operator PASS; final builds PASS; **not merged**). Do not auto-start GP-S31. See [`Next_Slice_Audit_Post_S29R.md`](Next_Slice_Audit_Post_S29R.md).
+SETUP-001, DOCS-001, GP-S01…GP-S29R are closed / merged. Current stage: **GP-S30 Container Launch / Orbital Conversion** = **GP-S30_FULL_STORAGE_WORKER_FIX_READY_FOR_OPERATOR_RETEST** on `feature/gp-s30-container-launch-orbital-conversion` (full-storage Worker fix; **not merge-ready**). Do not auto-start GP-S31. See [`Next_Slice_Audit_Post_S29R.md`](Next_Slice_Audit_Post_S29R.md).

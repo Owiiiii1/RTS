@@ -8,7 +8,7 @@
 
 > Стан станом на 2026-08-08 (post GP-S29R merge). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Slice 8 economy unlock. **GP-S29R DONE / MERGED**. **GP-S30** on `feature/gp-s30-container-launch-orbital-conversion` — **GP-S30_FINALIZATION_READY_FOR_MERGE_REVIEW**.
+**Поточна фаза:** Slice 8 economy unlock. **GP-S29R DONE / MERGED**. **GP-S30** on `feature/gp-s30-container-launch-orbital-conversion` — **GP-S30_FULL_STORAGE_WORKER_FIX_READY_FOR_OPERATOR_RETEST**.
 
 **Status snapshot:**
 
@@ -18,9 +18,9 @@
 | GP-S28P1…P4 | **DONE / MERGED** on `main` |
 | **GP-S29R** LOS + HealthBar + TeamColors + Salvage Walker | **DONE / MERGED** @ `3673a689…` — operator PASS; final builds PASS |
 | Post-S29R next-slice audit | [`../Next_Slice_Audit_Post_S29R.md`](../Next_Slice_Audit_Post_S29R.md) |
-| **GP-S30** Container Launch / Orbital Conversion | **FINALIZATION_READY_FOR_MERGE_REVIEW** — [`GP-S30_Container_Launch_Orbital_Conversion.md`](GP-S30_Container_Launch_Orbital_Conversion.md) — operator PASS; final builds PASS; **not merged** |
+| **GP-S30** Container Launch / Orbital Conversion | **GP-S30_FULL_STORAGE_WORKER_FIX_READY_FOR_OPERATOR_RETEST** — [`GP-S30_Container_Launch_Orbital_Conversion.md`](GP-S30_Container_Launch_Orbital_Conversion.md) — full-storage Worker FSM fix; operator retest; **not merge-ready** |
 
-**NEXT action для агента:** await operator merge/close of GP-S30. Do **not** auto-start GP-S31 / pathfinding / AttackMove / DropPod. Historical TDD/13 “GP-S30 = TargetingComponent” is **not** this stage.
+**NEXT action для агента:** await operator retest of full-storage Worker fix for GP-S30. Do **not** merge. Do **not** auto-start GP-S31 / pathfinding / AttackMove / DropPod. Historical TDD/13 “GP-S30 = TargetingComponent” is **not** this stage.
 
 ### Drift Warning
 

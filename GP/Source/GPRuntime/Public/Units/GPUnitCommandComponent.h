@@ -14,6 +14,7 @@ class AGP_ResourceNode;
 class AGP_MainBase;
 class UGP_MovementComponent;
 class UGP_MiningComponent;
+class UGP_StorageComponent;
 enum class EGP_MovementResult : uint8;
 enum class EGP_MovementResultReason : uint8;
 enum class EGP_MiningState : uint8;
@@ -45,7 +46,7 @@ enum class EGP_HaulExecutionState : uint8
 	ReturningToBase,
 	DroppingOff,
 	ReturningToDeposit,
-	/** Cargo held; MainBase missing / destroyed / unreachable (GP-S28P3). Not storage-full. */
+	/** Cargo held; MainBase missing / destroyed / unreachable / storage full (GP-S28P3 + GP-S30). */
 	WaitingForDropOff,
 	Failed
 };
@@ -182,6 +183,7 @@ public:
 	/** Drop-off wait subscription / wake diagnostics (GP-S28P3). */
 	int32 DebugGetDropOffWakeCount() const { return DebugDropOffWakeCount; }
 	bool DebugIsWaitingRegisterBound() const { return bMainBaseRegisteredDropOffBound; }
+	bool DebugIsDropOffStorageWakeBound() const { return bDropOffStorageWakeBound; }
 	bool DebugIsActiveHaulUnregisterBound() const { return bMainBaseUnregisteredHaulBound; }
 	bool DebugIsDropOffRetryArmed() const { return DropOffRetryTimerHandle.IsValid(); }
 
@@ -334,21 +336,29 @@ private:
 	void FinishHaulChain(bool bClearHeld);
 	void ContinueMineAfterSuccessfulHaul(uint32 ChainSerial);
 
-	/** GP-S28P3 WaitingForDropOff — MainBase missing/destroyed/unreachable recovery. */
+	/** GP-S28P3 WaitingForDropOff — MainBase missing/destroyed/unreachable + storage-full recovery. */
 	void EnterWaitingForDropOff(FName Reason);
 	void ClearDropOffSubscriptionsAndTimer();
 	void BindActiveHaulMainBaseUnregister();
 	void UnbindActiveHaulMainBaseUnregister();
 	void BindDropOffWaitingRegisterWake();
 	void UnbindDropOffWaitingRegisterWake();
+	void BindDropOffWaitingStorageWake();
+	void UnbindDropOffWaitingStorageWake();
 	void ArmDropOffRetryTimer();
 	void ClearDropOffRetryTimer();
 	void HandleMainBaseUnregisteredActiveHaul(AGP_MainBase* MainBase);
 	void HandleMainBaseRegisteredDropOffWake(AGP_MainBase* MainBase);
+	UFUNCTION()
+	void HandleDropOffWaitingStorageChanged(
+		float PreviousTotalStored,
+		float NewTotalStored,
+		float TotalCapacity);
 	void HandleDropOffSafetyRetry();
 	void TryResumeHaulFromDropOffWait(FName WakeReason);
 	void ExecuteScheduledDropOffHaulResume();
 	bool WorkerHasHaulCargo() const;
+	bool TeamMainBaseHasStorageRoom() const;
 
 	static const TCHAR* MineStateToString(EGP_MineExecutionState State);
 	static const TCHAR* HaulStateToString(EGP_HaulExecutionState State);
@@ -502,6 +512,9 @@ private:
 	/** WaitingForDropOff register wake. */
 	FDelegateHandle MainBaseRegisteredDropOffHandle;
 	bool bMainBaseRegisteredDropOffBound = false;
+	/** WaitingForDropOff storage-capacity wake (OnStorageChanged; no Tick). */
+	TWeakObjectPtr<UGP_StorageComponent> BoundDropOffWaitStorage;
+	bool bDropOffStorageWakeBound = false;
 	FTimerHandle DropOffRetryTimerHandle;
 	bool bEnteringDropOffWait = false;
 	bool bDropOffWakeInProgress = false;

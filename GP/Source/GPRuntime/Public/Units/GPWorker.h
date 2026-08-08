@@ -436,12 +436,14 @@ private:
 	TWeakObjectPtr<UWorld> WorldWeak;
 	TWeakObjectPtr<AGP_ResourceNode> NodeWeak;
 	TWeakObjectPtr<AGP_Worker> WorkerWeak;
+	TWeakObjectPtr<AGP_Worker> SecondaryWorkerWeak;
 	TWeakObjectPtr<AGP_MainBase> MainBaseWeak;
 	FVector ScenarioBaseLocation = FVector::ZeroVector;
 	FVector ScenarioNodeLocation = FVector::ZeroVector;
 	int32 ContractTeamId = 1;
 	float ThreatBefore = 0.0f;
 	float CargoAtWait = 0.0f;
+	float NodeAmountAtStorageWait = 0.0f;
 	int32 StableWaitTicks = 0;
 	int32 MovementWaitTicks = 0;
 	double MovementWaitStartTime = 0.0;

@@ -55,6 +55,13 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "GP|DropPod|Presentation")
 	void OnPayloadDeployed();
 
+	/**
+	 * When true, native Engine cylinder PlaceholderMesh is shown (diagnostics / no BP mesh yet).
+	 * Authored BP_DropPod_MVP should set false on the Blueprint CDO and supply own mesh/Niagara.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GP|DropPod|Presentation")
+	bool bUseNativePlaceholder = true;
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|DropPod")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -86,6 +93,7 @@ private:
 	void AuthoritySpawnUnitPayload();
 	void AuthorityScheduleCleanup();
 	void HandleCleanup();
+	void ApplyNativePlaceholderVisibility();
 
 	FGP_UnitDropManifest PendingManifest;
 	TWeakObjectPtr<AGP_PlayerState> RequestingPlayerStateWeak;

@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S31R Authored Payload / DropPod class seams
+
+Status: **GP-S31R_AUTHORED_PAYLOAD_INTEGRATION_READY_FOR_OPERATOR_RETEST**
+
+- Same branch `feature/gp-s31r-minimal-orbital-unit-drop`
+- Operator gameplay PASS; bug: native StaticClass bypassed authored BP visuals
+- Soft refs: WorkerPayloadClass / SalvageWalkerPayloadClass / UnitDropPodClass on `UGP_OrbitalDeliverySettings`
+- `bUseNativePlaceholder` for BP_DropPod_MVP; no Content assets created
+- GPEditor+UHT PASS; GP Dev/Shipping NOT RUN; NOT MERGE
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-08 — GP-S31R Minimal Orbital Unit Drop (implementation candidate)
 
 Status: **GP-S31R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

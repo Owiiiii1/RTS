@@ -19,9 +19,9 @@
 | **GP-S29R** LOS + HealthBar + TeamColors + Salvage Walker | **DONE / MERGED** @ `3673a689…` |
 | **GP-S30** Container Launch / Orbital Conversion | **DONE / MERGED** @ `main` `118660bb…` (prior tip `0c2bfd2…`) |
 | Post-GP-S30 next-slice audit | Done — recommended GP-S31R |
-| **GP-S31R** Minimal Orbital Unit Drop | **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** — [`GP-S31R_Minimal_Orbital_Unit_Drop.md`](GP-S31R_Minimal_Orbital_Unit_Drop.md) |
+| **GP-S31R** Minimal Orbital Unit Drop | **AUTHORED_PAYLOAD_INTEGRATION_READY_FOR_OPERATOR_RETEST** — [`GP-S31R_Minimal_Orbital_Unit_Drop.md`](GP-S31R_Minimal_Orbital_Unit_Drop.md) |
 
-**NEXT action для агента:** await operator validation of GP-S31R. Do **not** merge. Do **not** auto-start buildings READY/ghost / FoW / BuildGrid / full Order Menu.
+**NEXT action для агента:** await operator retest of authored BP payload/DropPod assignment. Do **not** merge. Do **not** create owner Content assets.
 
 ### Drift Warning
 

@@ -3,8 +3,32 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Orbital/GPDropPod.h"
 #include "UObject/Object.h"
+#include "Units/GPSalvageWalker.h"
+#include "Units/GPWorker.h"
 #include "GPOrbitalUnitDropContractTest.generated.h"
+
+/** Contract-only Worker subclass (authored BP stand-in). */
+UCLASS()
+class GPRUNTIME_API AGP_OrbitalDropContractWorkerStub : public AGP_Worker
+{
+	GENERATED_BODY()
+};
+
+/** Contract-only Salvage Walker subclass (authored BP stand-in). */
+UCLASS()
+class GPRUNTIME_API AGP_OrbitalDropContractWalkerStub : public AGP_SalvageWalker
+{
+	GENERATED_BODY()
+};
+
+/** Contract-only DropPod subclass (authored BP stand-in). */
+UCLASS()
+class GPRUNTIME_API AGP_OrbitalDropContractPodStub : public AGP_DropPod
+{
+	GENERATED_BODY()
+};
 
 /** GP-S31R orbital unit drop contract runner. */
 UCLASS()
@@ -41,6 +65,9 @@ private:
 	float SavedDescent = 2.5f;
 	float SavedCleanup = 0.35f;
 	float SavedAltitude = 2500.0f;
+	TSoftClassPtr<AGP_Worker> SavedWorkerPayload;
+	TSoftClassPtr<AGP_SalvageWalker> SavedWalkerPayload;
+	TSoftClassPtr<AGP_DropPod> SavedDropPodClass;
 	bool bSettingsMutated = false;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;

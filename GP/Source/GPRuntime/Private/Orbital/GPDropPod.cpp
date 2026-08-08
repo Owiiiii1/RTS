@@ -9,6 +9,7 @@
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 #include "Player/GPPlayerState.h"
+#include "Settings/GPOrbitalDeliverySettings.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Units/GPSalvageWalker.h"
@@ -21,6 +22,7 @@ AGP_DropPod::AGP_DropPod()
 	SetReplicatingMovement(false);
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = false;
+	bUseNativePlaceholder = true;
 
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);
@@ -39,6 +41,17 @@ AGP_DropPod::AGP_DropPod()
 	}
 }
 
+void AGP_DropPod::ApplyNativePlaceholderVisibility()
+{
+	if (PlaceholderMesh == nullptr)
+	{
+		return;
+	}
+	const bool bShow = bUseNativePlaceholder;
+	PlaceholderMesh->SetHiddenInGame(!bShow);
+	PlaceholderMesh->SetVisibility(bShow);
+}
+
 void AGP_DropPod::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -53,6 +66,7 @@ void AGP_DropPod::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 void AGP_DropPod::BeginPlay()
 {
 	Super::BeginPlay();
+	ApplyNativePlaceholderVisibility();
 }
 
 void AGP_DropPod::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -94,6 +108,7 @@ void AGP_DropPod::AuthorityInitUnitDrop(
 	bLandingCompleted = false;
 	bDescending = true;
 
+	ApplyNativePlaceholderVisibility();
 	SetActorLocationAndRotation(StartLocation, LandingRotation);
 	SetActorTickEnabled(true);
 	OnDescentStarted();
@@ -154,6 +169,14 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 		return;
 	}
 
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	const TSubclassOf<AGP_Worker> WorkerClass =
+		Settings != nullptr ? Settings->ResolveWorkerPayloadClass() : TSubclassOf<AGP_Worker>(AGP_Worker::StaticClass());
+	const TSubclassOf<AGP_SalvageWalker> WalkerClass =
+		Settings != nullptr
+			? Settings->ResolveSalvageWalkerPayloadClass()
+			: TSubclassOf<AGP_SalvageWalker>(AGP_SalvageWalker::StaticClass());
+
 	const FVector Forward = LandingRotation.RotateVector(FVector::ForwardVector).GetSafeNormal2D();
 	const FVector Right = LandingRotation.RotateVector(FVector::RightVector).GetSafeNormal2D();
 	const FVector BasisF = Forward.IsNearlyZero() ? FVector::ForwardVector : Forward;
@@ -171,9 +194,9 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 	};
 
 	int32 SpawnIndex = 0;
-	auto SpawnTyped = [&](TSubclassOf<AGP_UnitBase> Class)
+	auto SpawnTyped = [&](UClass* Class)
 	{
-		if (*Class == nullptr)
+		if (Class == nullptr)
 		{
 			return;
 		}
@@ -193,11 +216,11 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 
 	for (int32 i = 0; i < WorkerCount; ++i)
 	{
-		SpawnTyped(AGP_Worker::StaticClass());
+		SpawnTyped(*WorkerClass);
 	}
 	for (int32 i = 0; i < WalkerCount; ++i)
 	{
-		SpawnTyped(AGP_SalvageWalker::StaticClass());
+		SpawnTyped(*WalkerClass);
 	}
 
 	// Soft-open: only mutate CurrentUnits when MaxUnits is an active ceiling.

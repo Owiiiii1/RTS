@@ -195,7 +195,7 @@ namespace GPUnitDropAuthority
 		const FVector StartLoc = LandingLoc + FVector(0.0f, 0.0f, Altitude);
 
 		AGP_DropPod* Pod = World->SpawnActor<AGP_DropPod>(
-			AGP_DropPod::StaticClass(),
+			Settings->ResolveUnitDropPodClass(),
 			StartLoc,
 			LandingRot,
 			SpawnParams);

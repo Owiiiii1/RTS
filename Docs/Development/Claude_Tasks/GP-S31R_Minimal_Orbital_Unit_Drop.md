@@ -1,21 +1,35 @@
 # GP-S31R — Minimal Orbital Unit Drop
 
 ## Status
-**GP-S31R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+**GP-S31R_AUTHORED_PAYLOAD_INTEGRATION_READY_FOR_OPERATOR_RETEST**
 
 ## Slice Group
 Slice 8 — Buildings + Orbital Drops
 
 ## Branch
 `feature/gp-s31r-minimal-orbital-unit-drop`  
-Base: `main` @ `118660bb24bda51c7d5e5c1b97cbc1b9d5cb0d4c`
+Base: `main` @ `118660bb24bda51c7d5e5c1b97cbc1b9d5cb0d4c`  
+Prior candidate: `dd1a62ae…` (gameplay PASS; authored visuals FAIL)
 
-## Code Allowed
-Yes — IMPLEMENTATION candidate. **NOT MERGE.** Stop after operator validation.
+## Operator validation
+Gameplay flow **PASS**. Visual bug: native `StaticClass()` spawn bypassed authored BP.
 
-## Depends On
-- GP-S30 DONE / MERGED (Orbital grant via container launch + TEMP HUD)
-- Post-GP-S30 audit + orbital procurement design refinement (canonical GDD/TDD)
+## Authored integration fix
+- Soft class seams on `UGP_OrbitalDeliverySettings` (Worker / SalvageWalker / UnitDropPod)
+- Resolve with base-class enforcement + native fallback
+- Capacity/costs/descent remain in settings (no DropPodDefinition DA yet)
+- `bUseNativePlaceholder` on `AGP_DropPod`
+- Cursor does **not** create owner BP/Niagara assets
+
+## Owner workflow
+Project Settings → GP Orbital Delivery → assign BP_Worker, BP_SalvageWalker, BP_DropPod_MVP. On DropPod BP: `bUseNativePlaceholder=false` + mesh/Niagara.
+
+## Builds
+- GPEditor Win64 Development + UHT — **PASS**
+- GP Dev/Shipping — **NOT RUN**
+
+## Stop Condition
+Operator retest authored BP integration. Do **not** merge / finalize.
 
 ---
 

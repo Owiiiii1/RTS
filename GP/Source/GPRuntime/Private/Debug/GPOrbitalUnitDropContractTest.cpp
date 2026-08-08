@@ -21,6 +21,8 @@
 #include "Resources/GPStorageComponent.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "TimerManager.h"
+#include "UObject/Package.h"
+#include "UObject/SoftObjectPath.h"
 #include "Units/GPSalvageWalker.h"
 #include "Units/GPWorker.h"
 #include "UObject/Package.h"
@@ -146,6 +148,9 @@ void UGP_OrbitalUnitDropContractTestRunner::RestoreSettings()
 		Settings->UnitDropDescentDurationSeconds = SavedDescent;
 		Settings->UnitDropCleanupDelaySeconds = SavedCleanup;
 		Settings->UnitDropSpawnAltitudeCm = SavedAltitude;
+		Settings->WorkerPayloadClass = SavedWorkerPayload;
+		Settings->SalvageWalkerPayloadClass = SavedWalkerPayload;
+		Settings->UnitDropPodClass = SavedDropPodClass;
 	}
 	bSettingsMutated = false;
 }
@@ -296,10 +301,25 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			SavedDescent = Settings->UnitDropDescentDurationSeconds;
 			SavedCleanup = Settings->UnitDropCleanupDelaySeconds;
 			SavedAltitude = Settings->UnitDropSpawnAltitudeCm;
+			SavedWorkerPayload = Settings->WorkerPayloadClass;
+			SavedWalkerPayload = Settings->SalvageWalkerPayloadClass;
+			SavedDropPodClass = Settings->UnitDropPodClass;
 			Settings->UnitDropDescentDurationSeconds = 0.25f;
 			Settings->UnitDropCleanupDelaySeconds = 0.05f;
 			Settings->UnitDropSpawnAltitudeCm = 400.0f;
+			// Native fallback path for core slot/cost/spend checks.
+			Settings->WorkerPayloadClass.Reset();
+			Settings->SalvageWalkerPayloadClass.Reset();
+			Settings->UnitDropPodClass.Reset();
 			bSettingsMutated = true;
+
+			bool bUsedAuthored = true;
+			Expect(Settings->ResolveWorkerPayloadClass(&bUsedAuthored) == AGP_Worker::StaticClass()
+				&& !bUsedAuthored, TEXT("F_FallbackNativeWorker"));
+			Expect(Settings->ResolveSalvageWalkerPayloadClass(&bUsedAuthored) == AGP_SalvageWalker::StaticClass()
+				&& !bUsedAuthored, TEXT("F_FallbackNativeWalker"));
+			Expect(Settings->ResolveUnitDropPodClass(&bUsedAuthored) == AGP_DropPod::StaticClass()
+				&& !bUsedAuthored, TEXT("F_FallbackNativePod"));
 		}
 
 		FActorSpawnParameters Params;
@@ -408,6 +428,8 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		Expect(WorkerResult.SlotCost == 2, TEXT("E_WorkerSlots"));
 		Expect(FMath::IsNearlyEqual(WorkerResult.OrbitalCost, 50.0f, 0.05f), TEXT("E_WorkerCost"));
 		Expect(IsValid(WorkerResult.SpawnedPod.Get()), TEXT("E_PodSpawned"));
+		Expect(WorkerResult.SpawnedPod->IsA(AGP_DropPod::StaticClass()), TEXT("E_PodIsDropPod"));
+		Expect(WorkerResult.SpawnedPod->GetClass() == AGP_DropPod::StaticClass(), TEXT("F_NativePodWhenSoftEmpty"));
 		Expect(FMath::IsNearlyEqual(
 			OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
 			OrbitalBeforeSpend - 50.0f,
@@ -552,6 +574,153 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		Expect(Launch.bAccepted, TEXT("N_LaunchAccepted"));
 		Expect(OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite() > OrbitalBeforeLaunch + KINDA_SMALL_NUMBER,
 			TEXT("N_LaunchGrantedOrbital"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 4: // Authored payload/pod soft-class seams
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		if (!Expect(IsValid(OwnerPS) && IsValid(Base), TEXT("Authored_ActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>();
+		if (!Expect(Settings != nullptr, TEXT("Authored_Settings")))
+		{
+			Finish();
+			return;
+		}
+
+		// C: incompatible soft Worker class rejected → native fallback
+		Settings->WorkerPayloadClass = TSoftClassPtr<AGP_Worker>(
+			FSoftObjectPath(AGP_SalvageWalker::StaticClass()->GetPathName()));
+		Expect(Settings->IsWorkerPayloadClassConfigInvalid(), TEXT("C_IncompatibleWorkerSoftInvalid"));
+		bool bUsedAuthored = true;
+		Expect(Settings->ResolveWorkerPayloadClass(&bUsedAuthored) == AGP_Worker::StaticClass()
+			&& !bUsedAuthored, TEXT("C_IncompatibleWorkerFallsBackNative"));
+
+		// D: manifest is counts-only (no class field for client to choose)
+		FGP_UnitDropManifest CountsOnly;
+		CountsOnly.WorkerCount = 1;
+		CountsOnly.SalvageWalkerCount = 0;
+		Expect(CountsOnly.GetTotalUnitCount() == 1, TEXT("D_ManifestCountsOnly"));
+
+		// Configure approved stubs (A/B/E)
+		Settings->WorkerPayloadClass = AGP_OrbitalDropContractWorkerStub::StaticClass();
+		Settings->SalvageWalkerPayloadClass = AGP_OrbitalDropContractWalkerStub::StaticClass();
+		Settings->UnitDropPodClass = AGP_OrbitalDropContractPodStub::StaticClass();
+		Expect(Settings->ResolveWorkerPayloadClass(&bUsedAuthored) == AGP_OrbitalDropContractWorkerStub::StaticClass()
+			&& bUsedAuthored, TEXT("A_ResolveWorkerStub"));
+		Expect(Settings->ResolveSalvageWalkerPayloadClass(&bUsedAuthored) == AGP_OrbitalDropContractWalkerStub::StaticClass()
+			&& bUsedAuthored, TEXT("B_ResolveWalkerStub"));
+		Expect(Settings->ResolveUnitDropPodClass(&bUsedAuthored) == AGP_OrbitalDropContractPodStub::StaticClass()
+			&& bUsedAuthored, TEXT("E_ResolvePodStub"));
+
+		// Destroy prior team units so class checks are unambiguous
+		for (TActorIterator<AGP_Worker> It(World); It; ++It)
+		{
+			if (It->GetTeamId() == ContractTeam)
+			{
+				It->Destroy();
+			}
+		}
+		for (TActorIterator<AGP_SalvageWalker> It(World); It; ++It)
+		{
+			if (It->GetTeamId() == ContractTeam)
+			{
+				It->Destroy();
+			}
+		}
+		for (TActorIterator<AGP_DropPod> It(World); It; ++It)
+		{
+			It->Destroy();
+		}
+
+		GPOrbitalUnitDropDebug::GrantOrbital(OwnerPS, 100.0f);
+		FGP_UnitDropManifest StubWorkers;
+		StubWorkers.WorkerCount = 1;
+		GPUnitDropAuthority::FEvalResult StubWorkerResult =
+			GPUnitDropAuthority::AuthorityRequestUnitDrop(World, OwnerPS, StubWorkers);
+		Expect(StubWorkerResult.bAccepted, TEXT("A_StubWorkerOrderAccept"));
+		Expect(IsValid(StubWorkerResult.SpawnedPod.Get())
+			&& StubWorkerResult.SpawnedPod->IsA(AGP_OrbitalDropContractPodStub::StaticClass()),
+			TEXT("E_StubPodSpawned"));
+		LastPodWeak = StubWorkerResult.SpawnedPod;
+
+		++StageIndex;
+		ScheduleNext(0.35f);
+		break;
+	}
+	case 5: // Verify stub Worker spawn + stub Walker order
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		if (!Expect(IsValid(OwnerPS), TEXT("AuthoredLand_OwnerAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		int32 StubWorkers = 0;
+		int32 NativeOnlyWorkers = 0;
+		for (TActorIterator<AGP_Worker> It(World); It; ++It)
+		{
+			if (It->GetTeamId() != ContractTeam)
+			{
+				continue;
+			}
+			if (It->IsA(AGP_OrbitalDropContractWorkerStub::StaticClass()))
+			{
+				++StubWorkers;
+			}
+			else if (It->GetClass() == AGP_Worker::StaticClass())
+			{
+				++NativeOnlyWorkers;
+			}
+		}
+		Expect(StubWorkers == 1, TEXT("A_StubWorkerSpawned"));
+		Expect(NativeOnlyWorkers == 0, TEXT("A_NoNativeWorkerWhenStubConfigured"));
+
+		GPOrbitalUnitDropDebug::GrantOrbital(OwnerPS, 100.0f);
+		FGP_UnitDropManifest StubWalker;
+		StubWalker.SalvageWalkerCount = 1;
+		GPUnitDropAuthority::FEvalResult StubWalkerResult =
+			GPUnitDropAuthority::AuthorityRequestUnitDrop(World, OwnerPS, StubWalker);
+		Expect(StubWalkerResult.bAccepted, TEXT("B_StubWalkerOrderAccept"));
+		Expect(IsValid(StubWalkerResult.SpawnedPod.Get())
+			&& StubWalkerResult.SpawnedPod->IsA(AGP_OrbitalDropContractPodStub::StaticClass()),
+			TEXT("E_StubPodForWalker"));
+
+		++StageIndex;
+		ScheduleNext(0.35f);
+		break;
+	}
+	case 6: // Verify stub Walker + restore soft empty fallback semantics still hold
+	{
+		int32 StubWalkers = 0;
+		for (TActorIterator<AGP_SalvageWalker> It(World); It; ++It)
+		{
+			if (It->GetTeamId() == ContractTeam
+				&& It->IsA(AGP_OrbitalDropContractWalkerStub::StaticClass()))
+			{
+				++StubWalkers;
+			}
+		}
+		Expect(StubWalkers == 1, TEXT("B_StubWalkerSpawned"));
+
+		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+		{
+			Settings->WorkerPayloadClass.Reset();
+			Settings->SalvageWalkerPayloadClass.Reset();
+			Settings->UnitDropPodClass.Reset();
+			bool bUsedAuthored = true;
+			Expect(Settings->ResolveWorkerPayloadClass(&bUsedAuthored) == AGP_Worker::StaticClass()
+				&& !bUsedAuthored, TEXT("F_FallbackNativeAfterClear"));
+		}
 
 		Finish();
 		break;

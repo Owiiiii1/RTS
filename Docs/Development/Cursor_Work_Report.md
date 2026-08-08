@@ -1,104 +1,72 @@
-# Cursor Work Report — GP-S31R Minimal Orbital Unit Drop
+# Cursor Work Report — GP-S31R Authored Payload Integration
 
 ## Status
-**GP-S31R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+**GP-S31R_AUTHORED_PAYLOAD_INTEGRATION_READY_FOR_OPERATOR_RETEST**
 
-NOT MERGED. Stop for operator validation.
+NOT MERGED. NOT FINALIZED.
 
 ---
 
-## 1. Branch / base SHA
+## Operator gameplay validation
 
-- Branch: `feature/gp-s31r-minimal-orbital-unit-drop`
-- Base: `main` @ `118660bb24bda51c7d5e5c1b97cbc1b9d5cb0d4c`
-- Repo: `Owiiiii1/RTS`
+**PASS** (prior candidate), except authored Blueprint visuals missing on spawned units / DropPod.
 
-## 2. Factual source inventory
+## Bug / root cause
 
-- No `UGP_UnitDefinition` on main — catalog via `UGP_OrbitalDeliverySettings`
-- No Spend GE → created `UGP_GE_SpendOrbital`
-- No DropPod → `AGP_DropPod`
-- Launch mirror: PC → MainBase → Storage / GAS
-- CurrentUnits/MaxUnits attributes present, production tracking unwired (MaxUnits=0 soft-open)
-- TEMP HUD `UGP_TEMP_S28P_PlanetaryFerroniteHUD` extended
+`AGP_DropPod::AuthoritySpawnUnitPayload` spawned `AGP_Worker::StaticClass()` / `AGP_SalvageWalker::StaticClass()`.  
+`GPUnitDropAuthority` spawned `AGP_DropPod::StaticClass()`. Authored BP subclasses were bypassed.
 
-## 3. Architecture chosen
+## Fix architecture
 
-Settings-driven slots/costs → manifest counts → `GPUnitDropAuthority` validate/spend/spawn one `AGP_DropPod` → landing → spawn Worker/SW via existing classes + `SetTeamId`. No subsystem. No building payload.
+Kept capacity/costs/descent in `UGP_OrbitalDeliverySettings` (smallest SoT; no new DropPodDefinition DA).
 
-## 4. Spend GE path
+Added soft/authorable class refs (no hardcoded `/Game` paths):
 
-`UGP_GE_SpendOrbital`: Instant Additive OrbitalFerronite, SetByCaller key `GP.Drop.OrbitalSpendMagnitude`, apply **negative** magnitude after funds check. Rejects never spend.
+| Field | Purpose |
+|---|---|
+| `WorkerPayloadClass` | `TSoftClassPtr<AGP_Worker>` |
+| `SalvageWalkerPayloadClass` | `TSoftClassPtr<AGP_SalvageWalker>` |
+| `UnitDropPodClass` | `TSoftClassPtr<AGP_DropPod>` |
 
-## 5. Unit catalog / data fields
+Resolve helpers: load soft → require subclass of required base → else native fallback + warn if invalid soft set.
 
-`UGP_OrbitalDeliverySettings`: PodTransportSlotCapacity, Worker/SW TransportSlotCost, Worker/SW OrbitalDropCost, descent/altitude/spacing/cleanup. Server resolves `AGP_Worker` / `AGP_SalvageWalker` classes — client cannot pick class.
+Manifest remains counts-only; client never submits class.
 
-## 6. TEMP costs / slot tuning
+## DropPod presentation
 
-Capacity 4; Worker 1 slot / 25 Orbital; SW 2 slots / 50 Orbital. Marked TEMP in settings + DefaultGame.ini. Not final balance.
+`bUseNativePlaceholder` (default true). Authored `BP_DropPod_MVP` sets false on CDO; uses BP events `OnDescentStarted` / `OnImpact` / `OnPayloadDeployed`.
 
-## 7. MainBase Unit Drop Zone
+## Owner Blueprint workflow
 
-`UnitDropZone` SceneComponent under PresentationRoot; default relative `(350,0,0)`; getter `GetUnitDropZone()`; missing/invalid → reject, no spend. Building pods will not use this anchor.
+1. Create `BP_Worker` : `AGP_Worker`, `BP_SalvageWalker` : `AGP_SalvageWalker`, `BP_DropPod_MVP` : `AGP_DropPod` (owner assets — not created by Cursor).
+2. On DropPod BP: set `bUseNativePlaceholder=false`; add mesh/Niagara; implement presentation events.
+3. Project Settings → Game → GP Orbital Delivery: assign the three soft classes.
+4. Retest Confirm Drop — units/pod should use authored visuals.
 
-## 8. Manifest representation
+## Capacity / cost location
 
-`FGP_UnitDropManifest { WorkerCount, SalvageWalkerCount }` + `EGP_UnitDropRejectReason`.
+Still `UGP_OrbitalDeliverySettings` (PodTransportSlotCapacity, slot costs, Orbital costs, descent tuning). Future `UGP_DropPodDefinition` documented as optional extension — not added now.
 
-## 9. MaxUnits / CurrentUnits
+## Contracts / build
 
-Soft-open when MaxUnits≤0. Cap reject when MaxUnits>0 and overflow. Increment CurrentUnits on spawn only when MaxUnits active. Death decrement not wired (production cap inactive).
+- Extended `gp.Resource.RunOrbitalUnitDropContractTest` (stub subclasses A–F + prior semantics)
+- Operator PIE: rerun S28 / ContainerLaunch(+HUD) / DropOff / SalvageWalker / LOS — Failures=0
+- GPEditor Win64 Development + UHT — **PASS**
+- GP Dev/Shipping — **NOT RUN**
 
-## 10. DropPod lifecycle
+## Files changed
 
-AuthorityInit → tick lerp descent → OnImpact → spawn payload once → cleanup timer → Destroy. `bReplicates=true`.
+- `GPOrbitalDeliverySettings.*` — soft classes + resolve
+- `GPDropPod.*` — settings-resolved payload spawn + `bUseNativePlaceholder`
+- `GPUnitDropAuthority.cpp` — resolve DropPod class
+- `GPOrbitalUnitDropContractTest.*` — stub classes + seam checks
+- `DefaultGame.ini` — comment on soft class assignment
+- Docs: task, AI log, this report
 
-## 11–12. Presentation / placeholder
+## Operator assets untouched
 
-BP events OnDescentStarted/OnImpact/OnPayloadDeployed. Native Engine `/Engine/BasicShapes/Cylinder` placeholder (no committed Content asset).
+No BP_Worker / BP_SalvageWalker / BP_DropPod_MVP / Niagara / map / Blueprint/ / Materials / DefaultEngine.ini committed.
 
-## 13. Spawn offsets
+## Commit SHA
 
-Deterministic ring around Drop Zone using local Forward/Right × spacing. No RNG.
-
-## 14. Worker/SW init
-
-`SpawnActor` + `SetTeamId` (same pattern as diagnostics/contracts).
-
-## 15. TEMP UI
-
-Unit Drop panel (top-right): steppers, Slots X/Cap, Cost, Confirm Drop. Keeps Base/containers/Orbital/Launch.
-
-## 16. RPC
-
-`Server_RequestUnitDrop(FGP_UnitDropManifest)` + `AuthorityTryRequestUnitDrop`. TeamId from owning PlayerState.
-
-## 17. Contracts
-
-Implemented `gp.Resource.RunOrbitalUnitDropContractTest` (A–N). Operator PIE: also rerun S28 / ContainerLaunch(+HUD) / DropOff / SalvageWalker / LOSFireGate — Failures=0 required.
-
-## 18. GPEditor + UHT
-
-**PASS**
-
-## 19. GP Dev / Shipping
-
-**NOT RUN** (await operator PASS)
-
-## 20. Files changed (intended commit)
-
-- `GP/Source/GPGASRuntime/.../GPGE_SpendOrbital.*`
-- `GP/Source/GPRuntime/.../Orbital/*` (DropPod, Authority, Manifest, Contract)
-- `GP/Source/GPRuntime/.../Settings/GPOrbitalDeliverySettings.*`
-- MainBase, PlayerController, TEMP HUD
-- `GP/Config/DefaultGame.ini` (Orbital Delivery section only)
-- Docs: task, AI log, DOCUMENTATION_INDEX, Claude_Tasks README, this report
-
-## 21. Operator assets untouched
-
-Not committed: DefaultEngine.ini, L_PrototypeArena.umap, Blueprint/, Materials/, authored ResourceNode, Niagara, BP_SalvageWalker, Tools/, other local .uasset/.umap
-
-## 22. Commit SHA
-
-`dd1a62ae40b4db6b4ae40ff37f134c42a1c143d0`
+*(filled after commit)*

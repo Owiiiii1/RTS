@@ -6,9 +6,9 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-08 (GP-S31R candidate). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-08 (GP-S31R finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Slice 8 economy unlock. **GP-S30 DONE / MERGED**. Current: **GP-S31R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (NOT MERGE).
+**Поточна фаза:** Slice 8 economy unlock. **GP-S30 DONE / MERGED**. Current: **GP-S31R FINALIZATION_READY_FOR_MERGE** (NOT MERGED).
 
 **Status snapshot:**
 
@@ -17,11 +17,15 @@
 | GP-S01 … GP-S28 | **DONE / merged** on `main` |
 | GP-S28P1…P4 | **DONE / MERGED** on `main` |
 | **GP-S29R** LOS + HealthBar + TeamColors + Salvage Walker | **DONE / MERGED** @ `3673a689…` |
-| **GP-S30** Container Launch / Orbital Conversion | **DONE / MERGED** @ `main` `118660bb…` (prior tip `0c2bfd2…`) |
-| Post-GP-S30 next-slice audit | Done — recommended GP-S31R |
-| **GP-S31R** Minimal Orbital Unit Drop | **LANDING_AND_DEPLOYMENT_PRESENTATION_READY_FOR_OPERATOR_RETEST** — [`GP-S31R_Minimal_Orbital_Unit_Drop.md`](GP-S31R_Minimal_Orbital_Unit_Drop.md) |
+| **GP-S30** Container Launch / Orbital Conversion | **DONE / MERGED** @ `main` `118660bb…` |
+| **GP-S31R** Minimal Orbital Unit Drop | **FINALIZATION_READY_FOR_MERGE** — [`GP-S31R_Minimal_Orbital_Unit_Drop.md`](GP-S31R_Minimal_Orbital_Unit_Drop.md) |
+| Next (not started) | **NEXT_BUILDING_DROP_SLICE_PENDING_ID** — building procurement / READY / placement / drop |
 
-**NEXT action для агента:** await operator retest of ground placement + DropPod deploy FX timing. Do **not** merge.
+**NEXT action для агента:** await human merge of GP-S31R. Do **not** auto-merge. Do **not** start building drop slice.
+
+### Drift Warning
+
+Cursor must match [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) + `AI_Project_Log.md`. One slice = one PR.
 
 ### Drift Warning
 

@@ -1,75 +1,85 @@
-# Cursor Work Report — GP-S31R Landing Z + Deployment Phase
+# Cursor Work Report — GP-S31R Finalization
 
 ## Status
-**GP-S31R_LANDING_AND_DEPLOYMENT_PRESENTATION_READY_FOR_OPERATOR_RETEST**
+**GP-S31R_FINALIZATION_READY_FOR_MERGE**
 
-NOT MERGED. NOT FINALIZED.
+NOT MERGED.
 
 ---
 
-## Operator context
+## 1. Branch
+`feature/gp-s31r-minimal-orbital-unit-drop`
 
-Authored BP payload/DropPod **PASS**. Gameplay mechanics **PASS**. Remaining: half-buried spawn + missing deploy presentation window.
+## 2. Base main SHA
+`118660bb24bda51c7d5e5c1b97cbc1b9d5cb0d4c`
 
-## Issue A — ground placement root cause
+## 3. Validated feature tip (operator FULL PASS)
+`8c661ba7fc496ac62e406c01accc38b9648d987b` (landing Z + deploy phase)
 
-Capsule root → actor origin = capsule center. Spawn at ground Z buried the lower half.
+## 4. Operator validation
+**FULL PASS** — manifest/slots/cost/spend; authored Worker/SW/DropPod BPs; descent; capsule ground placement; OnImpact Niagara + independent PayloadDeployDelay; units before cleanup; CleanupDelay keeps FX; Worker Mine; SW Move/Attack.
 
-## Capsule solution
+## 5. Final architecture summary
+Counts-only manifest → settings-resolved payload/pod classes → GAS SpendOrbital once → one DropPod descends to MainBase UnitDropZone → Deploying delay → authority payload spawn with capsule ground offset → cleanup. TEMP HUD Unit Drop panel. No buildings.
 
-`GPUnitGroundPlacement::GetGroundSpawnOffsetZForUnitClass(UClass*)` reads CDO gameplay capsule (`GetScaledCapsuleHalfHeight`). Spawn:
+## 6. Orbital spend path
+`UGP_GE_SpendOrbital` Instant Additive SetByCaller negative magnitude after funds validation. No direct OrbitalFerronite Set/Add for purchase.
 
-`Z = GroundZ + OffsetZ`
+## 7. Settings / payload class seam
+`UGP_OrbitalDeliverySettings`: WorkerPayloadClass / SalvageWalkerPayloadClass soft refs; resolve with base-class check; native fallback.
 
-Uses collision capsule, not mesh bounds. Works for native + authored Worker/SW subclasses.
+## 8. DropPod class seam
+`UnitDropPodClass` soft → `ResolveUnitDropPodClass()`; native `AGP_DropPod` fallback.
 
-## Issue B — lifecycle before/after
+## 9. Unit Drop Zone
+`AGP_MainBase::UnitDropZone` SceneComponent under PresentationRoot (authored-relative). No hardcoded world offset target.
 
-**Before:** Impact → immediate payload → cleanup  
+## 10. Transport slots
+PodTransportSlotCapacity + per-unit TransportSlotCost in settings. Separate from MaxUnits (soft-open when MaxUnits≤0).
 
-**After:** Descending → Impact/Deploying → (PayloadDeployDelay) → PayloadDeployed → Cleanup
+## 11. Ground placement
+`GPUnitGroundPlacement::GetGroundSpawnOffsetZForUnitClass` — CDO capsule half-height; spawn Z = ground + offset.
 
-## Deploy delay setting
+## 12. DropPod lifecycle / timing
+Descending → Deploying (Impact) → PayloadDeployDelay → PayloadDeployed → CleanupDelay → destroy.  
+Defaults: Descent 2.5s, DeployDelay 1.25s, Cleanup 0.35s (independent).
 
-`UnitDropPayloadDeployDelaySeconds` (TEMP default **1.25s**) on `UGP_OrbitalDeliverySettings`. Zero delay still valid (immediate payload after Impact). Separate from descent/cleanup.
+## 13. Authored Niagara workflow
+Multicast → OnDescentStarted / OnImpact / OnPayloadDeployed. No Niagara/mesh paths in C++. `bUseNativePlaceholder` for fallback.
 
-## Presentation / replication
-
-- Replicated `EGP_DropPodPhase` + `OnRep_Phase`
-- NetMulticast Reliable: DescentStarted / Impact / PayloadDeployed → BlueprintImplementableEvents on all clients
-- Native placeholder shown only while Descending; hidden on Impact
-- Payload spawn authority-only, exactly once (`bPayloadSpawned`); timers cleared on EndPlay
-
-## Owner Niagara workflow
-
-| Event | Intended BP behavior |
+## 14. Test matrix (Failures=0)
+| Command | Result |
 |---|---|
-| OnDescentStarted | show rocket, exhaust on, deploy FX off |
-| OnImpact | hide rocket, exhaust off, deploy/construction FX on |
-| OnPayloadDeployed | units exist; FX may fade |
-| Cleanup | actor destroy removes attached FX |
+| gp.Resource.RunOrbitalUnitDropContractTest | Failures=0 |
+| gp.Resource.RunS28RegressionSuite | Failures=0 |
+| gp.Resource.RunDropOffResilienceContractTest | Failures=0 |
+| gp.Resource.RunContainerLaunchContractTest | Failures=0 |
+| gp.Resource.RunContainerLaunchHUDContractTest | Failures=0 |
+| gp.Worker.RunHaulingContractTest | Failures=0 |
+| gp.Combat.RunSalvageWalkerContractTest | Failures=0 |
+| gp.Combat.RunLOSFireGateContractTest | Failures=0 |
+| gp.Combat.RunHealthBarContractTest | Failures=0 |
+| gp.Combat.RunTeamColorContractTest | Failures=0 |
 
-No Niagara paths in C++.
+Finalization-only fix: N_LaunchGrantedOrbital waited for launch completion (rewards are not instant on accept).
 
-## Tests / build
+## 15. GPEditor Win64 Development + UHT
+**PASS**
 
-- Extended `gp.Resource.RunOrbitalUnitDropContractTest` (ground Z, deploy delay, zero-delay core path, cleanup)
-- Operator PIE: S28 / ContainerLaunch(+HUD) / DropOff / SalvageWalker / LOS — Failures=0
-- GPEditor Win64 Development + UHT — **PASS**
-- GP Dev/Shipping — **NOT RUN**
+## 16. GP Win64 Development
+**PASS**
 
-## Files changed
+## 17. GP Win64 Shipping
+**PASS**
 
-- `GPUnitGroundPlacement.*`
-- `GPDropPod.*` — phase, deploy timer, multicast, ground Z spawn
-- `GPUnitDropAuthority.cpp` — pass deploy delay
-- `GPOrbitalDeliverySettings.*` + `DefaultGame.ini`
-- Contract test + docs
+## 18. Files changed vs main
+See git diff `origin/main...HEAD` (~25 files): SpendOrbital GE, OrbitalDeliverySettings, DropPod/Authority/GroundPlacement/Manifest, MainBase UnitDropZone, PC RPC, TEMP HUD Unit Drop, contracts, DefaultGame.ini, docs.
 
-## Operator assets untouched
+## 19. Operator assets untouched
+DefaultEngine.ini, map, Blueprint/, Materials/, Niagara, BP_Worker/SW/DropPod_MVP, authored ResourceNode, Tools/, other local .uasset/.umap not committed.
 
-No BP/Niagara/map/DefaultEngine.ini committed.
+## 20. Next slice note
+**NEXT_BUILDING_DROP_SLICE_PENDING_ID** — Orbital Building Procurement + READY Inventory + Placement + Drop. Reuse AGP_DropPod, BP presentation, spend GE, delivery lifecycle, separate building deploy timing. Do not implement now.
 
-## Commit SHA
-
-8c661ba7fc496ac62e406c01accc38b9648d987b
+## 21. Final commit SHA
+*(filled after commit)*

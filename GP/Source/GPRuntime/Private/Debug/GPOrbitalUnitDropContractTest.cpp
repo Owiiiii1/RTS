@@ -21,6 +21,7 @@
 #include "Player/GPPlayerState.h"
 #include "Resources/GPStorageComponent.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
+#include "Settings/GPResourceGameplaySettings.h"
 #include "Components/CapsuleComponent.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
@@ -600,7 +601,7 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			Attr->SetCurrentUnits(0.0f);
 		}
 
-		// N: GP-S30 launch path still works
+		// N: GP-S30 launch path still works (rewards apply on launch completion, not accept).
 		UGP_StorageComponent* Storage = Base->GetStorageComponent();
 		if (!Expect(IsValid(Storage), TEXT("N_StoragePresent")))
 		{
@@ -609,17 +610,21 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		}
 		Storage->AddPlanetaryFerronite(100.0f);
 		Expect(Storage->GetReadyCount() >= 1, TEXT("N_ReadyPresent"));
-		const float OrbitalBeforeLaunch = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+		OrbitalBeforeSpend = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
 		FGP_ContainerLaunchResult Launch = Storage->TryLaunchReadyContainer();
 		Expect(Launch.bAccepted, TEXT("N_LaunchAccepted"));
-		Expect(OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite() > OrbitalBeforeLaunch + KINDA_SMALL_NUMBER,
-			TEXT("N_LaunchGrantedOrbital"));
+		Expect(Storage->IsLaunchInFlight(), TEXT("N_LaunchInFlight"));
 
+		float Duration = Launch.LaunchDurationSeconds;
+		if (const UGP_ResourceGameplaySettings* ResSettings = UGP_ResourceGameplaySettings::Get())
+		{
+			Duration = ResSettings->ContainerLaunchDurationSeconds;
+		}
 		++StageIndex;
-		ScheduleNext(0.05f);
+		ScheduleNext(Duration + 0.15f);
 		break;
 	}
-	case 4: // Authored payload/pod soft-class seams
+	case 4: // N completion + authored payload/pod soft-class seams
 	{
 		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
 		AGP_MainBase* Base = MainBaseWeak.Get();
@@ -628,6 +633,14 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			Finish();
 			return;
 		}
+
+		UGP_StorageComponent* Storage = Base->GetStorageComponent();
+		if (Expect(IsValid(Storage), TEXT("N_StorageAlive")))
+		{
+			Expect(!Storage->IsLaunchInFlight(), TEXT("N_LaunchFinished"));
+		}
+		Expect(OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite() > OrbitalBeforeSpend + KINDA_SMALL_NUMBER,
+			TEXT("N_LaunchGrantedOrbital"));
 
 		UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>();
 		if (!Expect(Settings != nullptr, TEXT("Authored_Settings")))

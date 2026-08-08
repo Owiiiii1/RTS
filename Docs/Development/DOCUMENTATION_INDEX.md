@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S30 merged**; **GP-S31R candidate** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S30 merged**; **GP-S31R FINALIZATION_READY_FOR_MERGE** |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
 | Last closed / merged stage | **GP-S30** on `main` (tip `118660bb24bda51c7d5e5c1b97cbc1b9d5cb0d4c`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **POST_GP_S30_NEXT_SLICE_AUDIT** |
+| Current stage | **GP-S31R FINALIZATION_READY_FOR_MERGE** (not merged) |
 
 ---
 
@@ -49,15 +49,15 @@
 
 **Prior closed:** GP-S29R — Combat LOS + Health Bar + Team Colors + Salvage Walker — **DONE / MERGED** @ `3673a689…`.
 
-**Current:** [`Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md`](Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md) — **GP-S31R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s31r-minimal-orbital-unit-drop` (base `118660bb…`). NOT MERGE. GPEditor+UHT PASS; GP Dev/Shipping NOT RUN.
+**Current:** [`Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md`](Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md) — **FINALIZATION_READY_FOR_MERGE** on `feature/gp-s31r-minimal-orbital-unit-drop` (base `118660bb…`). Operator FULL PASS. Contracts Failures=0. GPEditor + GP Dev + GP Shipping **PASS**. NOT MERGED.
 
-**Audit (prior):** [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md) — recommended GP-S31R (now in candidate).
+**Next (not started):** **NEXT_BUILDING_DROP_SLICE_PENDING_ID** — Orbital Building Procurement + READY Inventory + Placement + Drop.
 
-**Do not** merge GP-S31R or auto-start building READY/ghost / FoW / BuildGrid / full Order Menu without operator PASS + explicit assignment.
+**Do not** auto-merge GP-S31R or start building drop / FoW / BuildGrid / full Order Menu without explicit assignment.
 
-**Prior audits:** [`Next_Slice_Audit_Post_S29R.md`](Next_Slice_Audit_Post_S29R.md) (led to GP-S30).
+**Prior audits:** [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md), [`Next_Slice_Audit_Post_S29R.md`](Next_Slice_Audit_Post_S29R.md).
 
-> Obsolete: older index text claiming GP-S31R not started / still audit-only.
+> Obsolete: older index text claiming GP-S31R still candidate-only / Dev-Shipping not run.
 
 ### Foundation / Match Flow sequence
 
@@ -67,7 +67,8 @@
 4. GP-SLICE7-AUDIT refresh — reference docs (historical)
 5. **GP-S29R** — LOS + health bar + team colors + Salvage Walker — **DONE / MERGED**
 6. **GP-S30** — Container Launch / Orbital Conversion — **DONE / MERGED**
-7. **GP-S31R** — Minimal Orbital Unit Drop — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (not merged)
+7. **GP-S31R** — Minimal Orbital Unit Drop — **FINALIZATION_READY_FOR_MERGE** (not merged)
+8. **NEXT_BUILDING_DROP_SLICE_PENDING_ID** — building procurement / READY / placement / drop (not started)
 
 ---
 
@@ -151,4 +152,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S30 are closed / merged. Current stage: **GP-S31R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s31r-minimal-orbital-unit-drop`. Base `main` @ `118660bb…`. See [`Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md`](Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md).
+SETUP-001, DOCS-001, GP-S01…GP-S30 are closed / merged. Current stage: **GP-S31R FINALIZATION_READY_FOR_MERGE** on `feature/gp-s31r-minimal-orbital-unit-drop`. Base `main` @ `118660bb…`. Next (not started): **NEXT_BUILDING_DROP_SLICE_PENDING_ID**. See [`Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md`](Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md).

@@ -101,4 +101,4 @@ DefaultEngine.ini, maps, Blueprint/, Materials/, Niagara, authored ResourceNode,
 
 ## Commit SHA
 
-_(filled after commit)_
+_01db51baa78bb879f522c0eefecabd13c76359ec_

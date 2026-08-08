@@ -26,7 +26,8 @@ After GP-S29R on `main`:
 - **Combat:** UnitCommand Attack FSM (approach/Ready/cadence/damage) + 3-point LOS gate + combat presentation; Salvage Walker playable class; health bars; team colors.
 - **Match scaffold:** GameState match timer / threat / win-reason fields exist; timer expiry → score evaluation still an integration gap.
 - **UI:** TEMP planetary Ferronite HUD only; no Order Menu / MVVM resource VMs.
-- **Absent:** OrbitalDeliverySubsystem, DropPod, launch→GE_AddOrbital/AddScore, Logistics Hub actor, TargetingComponent, AttackMove executor, FoW, SWARM, AI opponent, Steam lobby, Repair GA.
+- **Absent:** OrbitalDeliverySubsystem, DropPod, production launch→Orbital/Score conversion path, Logistics Hub actor, TargetingComponent, AttackMove executor, FoW, SWARM, AI opponent, Steam lobby, Repair GA.
+  - Note: `OrbitalFerronite` / `FerroniteScore` **attributes** exist on `UGP_PlayerAttributeSet`. Documented names `GE_GP_AddOrbital` / `GE_GP_AddScore` appear in TDD/ADR but are **not** confirmed as existing production GE classes/assets — **implementation-time verification required** (reuse if present; otherwise create minimal Instant GEs in GP-S30).
 
 Canonical GDD loop still blocked at **container launch** (no spendable OrbitalFerronite / FerroniteScore from play).
 
@@ -56,7 +57,7 @@ Canonical GDD loop still blocked at **container launch** (no spendable OrbitalFe
 
 ### C1 — Container launch / orbital conversion (economy unlock)
 
-- **Scope:** Ready container → launch telegraph → apply `GE_GP_AddOrbital` + `GE_GP_AddScore`, lower `FerroniteThreatValue`, presentation stub.
+- **Scope:** Ready container → launch telegraph → mutate OrbitalFerronite + FerroniteScore via canonical Instant GAS GEs (verify/reuse or create AddOrbital/AddScore path), lower `FerroniteThreatValue`, presentation stub.
 - **Pros:** Closes GDD First_Playable gap; builds on S28 Storage; ADR-0009 already Accepted; no Attack FSM duplication; minimal temporary code.
 - **Cons:** Does not yet enable Order Menu / drops (follow-on slice).
 
@@ -87,7 +88,7 @@ Canonical GDD loop still blocked at **container launch** (no spendable OrbitalFe
 ### Exact scope (proposal)
 
 - Production path: MainBase containers in `Ready` can launch to orbit (authority).
-- On successful launch: Planetary volume leaves storage; apply Instant GEs `GE_GP_AddOrbital` + `GE_GP_AddScore` on owning PlayerState ASC; lower team `FerroniteThreatValue`.
+- On successful launch: Planetary volume leaves storage; apply Instant GAS GEs on owning PlayerState ASC to increase `OrbitalFerronite` + `FerroniteScore` (confirm whether production AddOrbital/AddScore GEs already exist — reuse or create minimal canonical GEs; no direct attribute Set/Add bypass); lower team `FerroniteThreatValue`.
 - Minimal launch telegraph / state (`Launching` → complete) using existing Storage model; DA-driven rates/duration (no hardcoded balance).
 - Diagnostics + non-shipping contract covering Ready→launch→attrs/threat.
 - Operator-visible: fill container via existing Worker loop → launch → OrbitalFerronite and FerroniteScore increase; Threat decreases.
@@ -143,7 +144,7 @@ Worker fills MainBase container → container reaches Ready → player/authority
 | Attack in UnitCommand FSM (S24/S25/S29R) | ✓ | TDD/13 `UGP_CombatComponent` as required S29 | |
 | 3-point LOS fire gate | ✓ (S29R) | | LOS reposition / pathfinding around blockers |
 | `UGP_TargetingComponent` / AttackMove | | as **immediate** next after S29R | later combat QoL slices |
-| Storage launch → AddOrbital/AddScore (TDD historical S36 label) | ✓ as **next playable vertical** | chronological ID is **GP-S30** now | full DropPod catalog |
+| Storage launch → Orbital/Score Instant GE path (TDD historical S36 label) | ✓ as **next playable vertical**; attrs exist; specific AddOrbital/AddScore GE assets need factual verify-at-impl | chronological ID is **GP-S30** now | full DropPod catalog |
 | Straight-line movement | ✓ interim | | general NavMesh pathfollowing |
 | Local production / Barracks build | | ADR-0009 | — |
 | Soldier/Trooper unit types | | GDD/04 Salvage Walker | — |

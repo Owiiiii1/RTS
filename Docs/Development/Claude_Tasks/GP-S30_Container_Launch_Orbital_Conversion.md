@@ -23,9 +23,12 @@ Planetary mine→store is playable. Without launch, First_Playable cannot produc
 
 ## In Scope
 - Production launch path for `UGP_StorageComponent` containers in `Ready` (not debug-only scaffold).
-- Instant GAS applications on owning `AGP_PlayerState` ASC:
-  - `GE_GP_AddOrbital` → `OrbitalFerronite`
-  - `GE_GP_AddScore` → `FerroniteScore`
+- Mutate `OrbitalFerronite` and `FerroniteScore` on the owning `AGP_PlayerState` ASC via the **canonical GAS Instant GameplayEffect path** (same discipline as existing Instant GE apply patterns).
+  - Before implementation, Cursor **must** verify whether production GameplayEffect classes/assets for AddOrbital / AddScore already exist in source/content.
+  - If they exist — **reuse** them.
+  - If they are absent — **create** the minimal canonical GAS Instant GE implementation inside GP-S30 scope (no second resource-state path).
+  - Do **not** treat documented names `GE_GP_AddOrbital` / `GE_GP_AddScore` as guaranteed existing asset/class names until verified.
+  - Do **not** mutate attributes via direct Set/Add outside GAS only for convenience.
 - Lower team `FerroniteThreatValue` on successful launch (per ADR-0009).
 - Clear Ready → Launching → complete/empty lifecycle using existing Storage model.
 - DA-driven conversion rates / telegraph duration (ResourceGameplaySettings and/or ResourceDefinition — no hardcoded balance in C++).
@@ -46,15 +49,16 @@ Planetary mine→store is playable. Without launch, First_Playable cannot produc
 
 ## Existing Systems To Reuse
 - `UGP_StorageComponent` (Ready / Launching scaffold)
-- `UGP_PlayerAttributeSet` (`OrbitalFerronite`, `FerroniteScore`)
+- `UGP_PlayerAttributeSet` (`OrbitalFerronite`, `FerroniteScore` attributes — confirmed present)
 - `AGP_GameState` FerroniteThreatValue APIs
-- PlayerState ASC / Instant GE patterns (mirror `UGP_GE_Damage_Basic` discipline)
+- PlayerState ASC / Instant GE apply discipline (e.g. mirror `UGP_GE_Damage_Basic` patterns; **verify** AddOrbital/AddScore GE existence at implementation time — create if missing)
 - Worker → MainBase haul (unchanged)
 - Existing resource settings / Ferronite definition soft refs
 
 ## Explicit Anti-Duplication Constraints
 - Do **not** invent a second storage SoT or client-writable OrbitalFerronite.
 - Do **not** grant Orbital/Score from mining or drop-off (only launch).
+- Do **not** bypass GAS with direct attribute Set/Add for launch conversion.
 - Do **not** create CombatComponent / TargetingComponent / AttackMove in this slice.
 - Do **not** create OrbitalDeliverySubsystem “while we are here”.
 - Do **not** treat historical TDD/13 “GP-S30 = TargetingComponent” as this task’s meaning.
@@ -84,10 +88,18 @@ Planetary mine→store is playable. Without launch, First_Playable cannot produc
 - Confirm OrbitalFerronite + FerroniteScore rise; Threat falls; storage updates
 - Confirm no combat/movement regressions in smoke PIE
 
-## Build Policy (when Code Allowed = Yes)
-1. GPEditor Win64 Development + UHT — PASS required  
-2. GP Win64 Development — PASS required  
-3. GP Win64 Shipping — PASS required  
+## Build Policy
+
+### Implementation / candidate (Code Allowed = Yes, before operator validation)
+- GPEditor Win64 Development + UHT — **PASS** required
+- Automated contracts / regression — **PASS** required
+- GP Win64 Development — **do not run** yet
+- GP Win64 Shipping — **do not run** yet
+
+### Finalization (only after operator validation PASS)
+- GPEditor Win64 Development + UHT — **PASS** required if C++ changed in the finalization pass
+- GP Win64 Development — **PASS** required
+- GP Win64 Shipping — **PASS** required
 
 ## Pillar 8 — MVP Gate (pre-approval)
 1. Fun now? **Yes** — first ship-to-orbit payoff  

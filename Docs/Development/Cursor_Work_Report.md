@@ -28,13 +28,22 @@ ASC `GetGameplayAttributeValueChangeDelegate` for Health and MaxHealth → `Refr
 `UGP_TeamPresentationComponent` on UnitBase → MID vector params (`TeamColor` preferred) on mesh components; `NotifyTeamIdChanged` / `OnRep_TeamId` / BeginPlay refresh; UnitVisual fallback uses same settings. Presentation-only; does not mutate TeamId.
 
 ## Tests
-- `gp.Combat.RunLOSFireGateContractTest` (A–H)
-- `gp.Combat.RunHealthBarContractTest` (A–G contract-level)
-- `gp.Combat.RunTeamColorContractTest` (A–H)
-Operator must run in non-shipping world; expected Failures=0.
+
+Headless `UnrealEditor-Cmd` on `/Game/GrimProtocol/Maps/L_PrototypeArena` (`-game -nullrhi`).
+
+| Command | Result |
+| --- | --- |
+| gp.Combat.RunLOSFireGateContractTest | Complete Failures=0 Cancelled=false |
+| gp.Combat.RunHealthBarContractTest | Complete Failures=0 Cancelled=false |
+| gp.Combat.RunTeamColorContractTest | Complete Failures=0 Cancelled=false |
+| gp.Resource.RunS28RegressionSuite | Complete Failures=0 |
+
+Notes:
+- First LOS run failed once on `H_AttackStarted` (synchronous one-shot kill cleared Attack before the assert). Contract-only fix: multi-hit death setup. Rerun: Failures=0.
+- No separate combat regression suite exists; S28 suite used for Worker/resource regression safety.
 
 ## Build
-GPEditor Development + UHT — PASS
+GPEditor Development + UHT — PASS (rerun after LOS contract fix)
 
 ## Scope Audit
 Exclusions confirmed: no duplicate CombatComponent, Targeting, AttackMove, cooldown GE, projectiles, damage numbers, shields, team-colored health fill, selection/minimap/FoW/nav redesign, resource/construction.
@@ -43,4 +52,4 @@ Exclusions confirmed: no duplicate CombatComponent, Targeting, AttackMove, coold
 untouched (not committed): DefaultEngine.ini, L_PrototypeArena.umap, Blueprint/, Materials/, authored ResourceNode, Niagara, Tools/
 
 ## Commit
-f59ed39a14d6e363300900026a2d23b44b2f15ea
+PENDING_AFTER_PUSH

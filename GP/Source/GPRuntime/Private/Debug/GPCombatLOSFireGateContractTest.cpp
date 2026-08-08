@@ -559,8 +559,8 @@ void UGP_LOSFireGateContractTestRunner::AdvanceStage()
 			return;
 		}
 
-		GPLOSFireGateDebug::ApplyCombatStats(Attacker, 100.0f, 100.0f, 80.0f, 0.0f, 0.0f, 0.2f, 400.0f);
-		GPLOSFireGateDebug::ApplyCombatStats(Victim, 50.0f, 50.0f, 1.0f, 0.0f, 0.0f, 5.0f, 100.0f);
+		GPLOSFireGateDebug::ApplyCombatStats(Attacker, 100.0f, 100.0f, 25.0f, 0.0f, 0.0f, 0.2f, 400.0f);
+		GPLOSFireGateDebug::ApplyCombatStats(Victim, 100.0f, 100.0f, 1.0f, 0.0f, 0.0f, 5.0f, 100.0f);
 		GPLOSFireGateDebug::IssueAttack(Attacker, Victim);
 		Expect(Attacker->GetUnitCommandComponent()->IsAttackActive(), TEXT("H_AttackStarted"));
 		PollTicks = 0;

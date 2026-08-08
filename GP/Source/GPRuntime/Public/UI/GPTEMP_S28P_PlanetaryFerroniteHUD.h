@@ -62,6 +62,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GP|TEMP HUD")
 	void HandleWalkerPlusClicked();
 
+	UFUNCTION(BlueprintCallable, Category = "GP|TEMP HUD")
+	void HandlePurchaseLogisticsHubClicked();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|TEMP HUD")
+	void HandleDeployLogisticsHubClicked();
+
+	void SetBuildingReadyDisplay(int32 ReadyLogisticsHubCount);
+
 #if !UE_BUILD_SHIPPING
 	FString GetBaseLineTextForContract() const;
 	FString GetOrbitalLineTextForContract() const;
@@ -79,6 +87,7 @@ public:
 	int32 GetWorkerCountForContract() const { return WorkerCount; }
 	int32 GetSalvageWalkerCountForContract() const { return SalvageWalkerCount; }
 	bool IsConfirmDropEnabledForContract() const;
+	int32 GetBuildingReadyForContract() const { return ReadyLogisticsHubCount; }
 #endif
 
 protected:
@@ -90,15 +99,18 @@ private:
 	void EnsureWidgetTreeBuilt();
 	void BindLaunchClickedIdempotent();
 	void BindUnitDropClickedIdempotent();
+	void BindBuildingPanelClickedIdempotent();
 	void EnsureContainerLineCount(int32 DesiredCount);
 	void RefreshStatusText();
 	void RefreshOrbitalText();
 	void RefreshUnitDropPanel();
+	void RefreshBuildingPanel();
 	void AdjustWorkerCount(int32 Delta);
 	void AdjustWalkerCount(int32 Delta);
 	int32 ComputeSlotCost() const;
 	float ComputeOrbitalCost() const;
 	int32 GetPodCapacity() const;
+	float GetBuildingPurchaseCost() const;
 	bool CanConfirmLocally() const;
 
 	UPROPERTY(Transient)
@@ -158,6 +170,27 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> ConfirmDropLabel;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UVerticalBox> BuildingPanel;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> BuildingTitleText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> BuildingLogisticsHubLineText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UButton> PurchaseLogisticsHubButton;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UButton> DeployLogisticsHubButton;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> PurchaseLogisticsHubLabel;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> DeployLogisticsHubLabel;
+
 	bool bHasResolvedBase = false;
 	float DisplayStored = 0.0f;
 	float DisplayCapacity = 0.0f;
@@ -167,4 +200,5 @@ private:
 	bool bTreeBuilt = false;
 	int32 WorkerCount = 0;
 	int32 SalvageWalkerCount = 0;
+	int32 ReadyLogisticsHubCount = 0;
 };

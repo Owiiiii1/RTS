@@ -1,85 +1,53 @@
-# Cursor Work Report — GP-S31R Finalization
+# Cursor Work Report — GP-S32R Orbital Building Drop
 
 ## Status
-**GP-S31R_FINALIZATION_READY_FOR_MERGE**
+**GP-S32R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
 NOT MERGED.
 
 ---
 
 ## 1. Branch
-`feature/gp-s31r-minimal-orbital-unit-drop`
+`feature/gp-s32r-orbital-building-drop`
 
-## 2. Base main SHA
-`118660bb24bda51c7d5e5c1b97cbc1b9d5cb0d4c`
+## 2. Base SHA
+`427a2aa` (GP-S31R finalization report commit)
 
-## 3. Validated feature tip (operator FULL PASS)
-`8c661ba7fc496ac62e406c01accc38b9648d987b` (landing Z + deploy phase)
+## 3. Architecture summary
+Building Purchase spends Orbital once into OwnerOnly READY inventory on PlayerState. Deploy validates interim placement (radius + overlap), spawns shared `AGP_DropPod` with `EGP_DropPodPayloadKind::Building`, consumes READY after successful pod spawn (no second Orbital spend). Native `AGP_LogisticsHub` + optional soft `BuildingPayloadClass`. Local ghost placement mode on PlayerController. TEMP HUD BUILDINGS panel.
 
-## 4. Operator validation
-**FULL PASS** — manifest/slots/cost/spend; authored Worker/SW/DropPod BPs; descent; capsule ground placement; OnImpact Niagara + independent PayloadDeployDelay; units before cleanup; CleanupDelay keeps FX; Worker Mine; SW Move/Attack.
+## 4. Key files
+| Area | Files |
+|---|---|
+| Settings | `GPOrbitalDeliverySettings.h/.cpp`, `DefaultGame.ini` (Building* keys appended only) |
+| Building identity | `GPLogisticsHub.h/.cpp` |
+| Inventory | `GPOrbitalBuildingInventoryComponent.h/.cpp`, `GPPlayerState.h/.cpp` |
+| Authority | `GPBuildingDropAuthority.h/.cpp`, `GPOrbitalBuildingType.h` |
+| DropPod | `GPDropPod.h/.cpp` (PayloadKind + building init/spawn) |
+| Placement | `GPBuildingGroundPlacement.h/.cpp`, `GPBuildingPlacementGhost.h/.cpp` |
+| PC / HUD | `GPPlayerController.h/.cpp`, `GPTEMP_S28P_PlanetaryFerroniteHUD.h/.cpp` |
+| Contract | `GPOrbitalBuildingDropContractTest.h/.cpp` |
+| Docs | `GP-S32R_Orbital_Building_Drop.md`, `AI_Project_Log.md`, `DOCUMENTATION_INDEX.md`, `Claude_Tasks/README.md` |
 
-## 5. Final architecture summary
-Counts-only manifest → settings-resolved payload/pod classes → GAS SpendOrbital once → one DropPod descends to MainBase UnitDropZone → Deploying delay → authority payload spawn with capsule ground offset → cleanup. TEMP HUD Unit Drop panel. No buildings.
+## 5. Contract
+`gp.Building.RunOrbitalBuildingDropContractTest` — cases A–O (invalid type, insufficient orbital, purchase, no-ready deploy, radius, overlap, valid deploy, spawn/team/ground, no deploy spend, duplicate reject, missing MainBase, native fallback, authored stub, unit drop regression).
 
-## 6. Orbital spend path
-`UGP_GE_SpendOrbital` Instant Additive SetByCaller negative magnitude after funds validation. No direct OrbitalFerronite Set/Add for purchase.
+## 6. Build
+GPEditor Win64 Development + UHT: **PASS** (UE 5.8, 33.5s)
 
-## 7. Settings / payload class seam
-`UGP_OrbitalDeliverySettings`: WorkerPayloadClass / SalvageWalkerPayloadClass soft refs; resolve with base-class check; native fallback.
-
-## 8. DropPod class seam
-`UnitDropPodClass` soft → `ResolveUnitDropPodClass()`; native `AGP_DropPod` fallback.
-
-## 9. Unit Drop Zone
-`AGP_MainBase::UnitDropZone` SceneComponent under PresentationRoot (authored-relative). No hardcoded world offset target.
-
-## 10. Transport slots
-PodTransportSlotCapacity + per-unit TransportSlotCost in settings. Separate from MaxUnits (soft-open when MaxUnits≤0).
-
-## 11. Ground placement
-`GPUnitGroundPlacement::GetGroundSpawnOffsetZForUnitClass` — CDO capsule half-height; spawn Z = ground + offset.
-
-## 12. DropPod lifecycle / timing
-Descending → Deploying (Impact) → PayloadDeployDelay → PayloadDeployed → CleanupDelay → destroy.  
-Defaults: Descent 2.5s, DeployDelay 1.25s, Cleanup 0.35s (independent).
-
-## 13. Authored Niagara workflow
-Multicast → OnDescentStarted / OnImpact / OnPayloadDeployed. No Niagara/mesh paths in C++. `bUseNativePlaceholder` for fallback.
-
-## 14. Test matrix (Failures=0)
+## 7. Contract tests (NullRHI headless)
 | Command | Result |
 |---|---|
-| gp.Resource.RunOrbitalUnitDropContractTest | Failures=0 |
-| gp.Resource.RunS28RegressionSuite | Failures=0 |
-| gp.Resource.RunDropOffResilienceContractTest | Failures=0 |
-| gp.Resource.RunContainerLaunchContractTest | Failures=0 |
-| gp.Resource.RunContainerLaunchHUDContractTest | Failures=0 |
-| gp.Worker.RunHaulingContractTest | Failures=0 |
-| gp.Combat.RunSalvageWalkerContractTest | Failures=0 |
-| gp.Combat.RunLOSFireGateContractTest | Failures=0 |
-| gp.Combat.RunHealthBarContractTest | Failures=0 |
-| gp.Combat.RunTeamColorContractTest | Failures=0 |
+| `gp.Building.RunOrbitalBuildingDropContractTest` | **NOT VERIFIED** — editor exited during L_PrototypeArena load before async runner completed (~6.7s); run in PIE or extend headless session |
+| Regression suite | **NOT RUN** (same headless limitation) |
 
-Finalization-only fix: N_LaunchGrantedOrbital waited for launch completion (rewards are not instant on accept).
+Operator PIE validation required to confirm Failures=0.
 
-## 15. GPEditor Win64 Development + UHT
-**PASS**
+## 8. Operator assets untouched
+DefaultEngine.ini, existing operator BP soft paths, map, Blueprint/, Materials/, Niagara, Tools/, .uasset/.umap.
 
-## 16. GP Win64 Development
-**PASS**
+## 8. Next
+Operator PIE validation: Purchase Logistics Hub → READY++ → Deploy ghost → confirm → pod → hub spawn.
 
-## 17. GP Win64 Shipping
-**PASS**
-
-## 18. Files changed vs main
-See git diff `origin/main...HEAD` (~25 files): SpendOrbital GE, OrbitalDeliverySettings, DropPod/Authority/GroundPlacement/Manifest, MainBase UnitDropZone, PC RPC, TEMP HUD Unit Drop, contracts, DefaultGame.ini, docs.
-
-## 19. Operator assets untouched
-DefaultEngine.ini, map, Blueprint/, Materials/, Niagara, BP_Worker/SW/DropPod_MVP, authored ResourceNode, Tools/, other local .uasset/.umap not committed.
-
-## 20. Next slice note
-**NEXT_BUILDING_DROP_SLICE_PENDING_ID** — Orbital Building Procurement + READY Inventory + Placement + Drop. Reuse AGP_DropPod, BP presentation, spend GE, delivery lifecycle, separate building deploy timing. Do not implement now.
-
-## 21. Final commit SHA
-0c2954fb52cd8711ec28c61a59891d5b608b8829
+## 9. Final commit SHA
+(pending commit)

@@ -31,6 +31,9 @@
 #include "Buildings/GPMainBase.h"
 #include "Game/GPGameState.h"
 #include "Orbital/GPUnitDropAuthority.h"
+#include "Orbital/GPBuildingDropAuthority.h"
+#include "Orbital/GPBuildingPlacementGhost.h"
+#include "Orbital/GPOrbitalBuildingInventoryComponent.h"
 #include "Orbital/GPDropPod.h"
 #include "Resources/GPStorageComponent.h"
 #include "Units/GPUnitBase.h"
@@ -165,6 +168,7 @@ void AGP_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	CancelActiveMarquee(/*bLogCanceled=*/false);
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
+	CancelBuildingPlacement();
 	DestroyMarqueeWidget();
 	DestroyPlanetaryFerroniteHUD();
 
@@ -202,6 +206,22 @@ void AGP_PlayerController::Tick(float DeltaSeconds)
 	if (!IsLocalController())
 	{
 		return;
+	}
+
+	if (bBuildingPlacementActive)
+	{
+		UpdateBuildingPlacementGhost();
+
+		const bool bRMBDown = IsInputKeyDown(EKeys::RightMouseButton);
+		if (bRMBDown && !bBuildingPlacementRMBWasDown)
+		{
+			CancelBuildingPlacement();
+		}
+		bBuildingPlacementRMBWasDown = bRMBDown;
+	}
+	else
+	{
+		bBuildingPlacementRMBWasDown = false;
 	}
 
 	// Temporary validation-only boxes; not marquee work and not a world scan.
@@ -1040,6 +1060,326 @@ bool AGP_PlayerController::AuthorityTryRequestUnitDrop(const FGP_UnitDropManifes
 	return Result.bAccepted;
 }
 
+void AGP_PlayerController::RequestBuildingPurchase(EGP_OrbitalBuildingType BuildingType)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+	Server_RequestBuildingPurchase(BuildingType);
+}
+
+bool AGP_PlayerController::Server_RequestBuildingPurchase_Validate(EGP_OrbitalBuildingType BuildingType)
+{
+	(void)BuildingType;
+	return true;
+}
+
+void AGP_PlayerController::Server_RequestBuildingPurchase_Implementation(EGP_OrbitalBuildingType BuildingType)
+{
+	AuthorityTryPurchaseBuilding(BuildingType);
+}
+
+bool AGP_PlayerController::AuthorityTryPurchaseBuilding(EGP_OrbitalBuildingType BuildingType)
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+
+	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	if (PS == nullptr)
+	{
+		return false;
+	}
+
+	const GPBuildingDropAuthority::FPurchaseResult Result =
+		GPBuildingDropAuthority::AuthorityPurchaseBuilding(GetWorld(), PS, BuildingType);
+	UE_LOG(LogTemp, Log,
+		TEXT("GP BuildingPurchase Result: PC=%s Team=%d Accepted=%s Reason=%d Cost=%.3f Ready=%d"),
+		*GetName(),
+		PS->GetTeamId(),
+		Result.bAccepted ? TEXT("true") : TEXT("false"),
+		static_cast<int32>(Result.RejectReason),
+		Result.OrbitalCost,
+		Result.ReadyAfter);
+	return Result.bAccepted;
+}
+
+void AGP_PlayerController::RequestBuildingDeploy(EGP_OrbitalBuildingType BuildingType, const FTransform& WorldTransform)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+	Server_RequestBuildingDeploy(BuildingType, WorldTransform);
+}
+
+bool AGP_PlayerController::Server_RequestBuildingDeploy_Validate(
+	EGP_OrbitalBuildingType BuildingType,
+	const FTransform& WorldTransform)
+{
+	(void)BuildingType;
+	const FVector Loc = WorldTransform.GetLocation();
+	return !Loc.ContainsNaN()
+		&& FMath::IsFinite(Loc.X) && FMath::IsFinite(Loc.Y) && FMath::IsFinite(Loc.Z);
+}
+
+void AGP_PlayerController::Server_RequestBuildingDeploy_Implementation(
+	EGP_OrbitalBuildingType BuildingType,
+	const FTransform& WorldTransform)
+{
+	AuthorityTryDeployBuilding(BuildingType, WorldTransform);
+}
+
+bool AGP_PlayerController::AuthorityTryDeployBuilding(
+	EGP_OrbitalBuildingType BuildingType,
+	const FTransform& WorldTransform)
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+
+	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	if (PS == nullptr)
+	{
+		return false;
+	}
+
+	const float OrbitalBefore = PS->GetPlayerAttributeSet() != nullptr
+		? PS->GetPlayerAttributeSet()->GetOrbitalFerronite()
+		: 0.0f;
+
+	const GPBuildingDropAuthority::FDeployResult Result =
+		GPBuildingDropAuthority::AuthorityDeployBuilding(GetWorld(), PS, BuildingType, WorldTransform);
+
+	const float OrbitalAfter = PS->GetPlayerAttributeSet() != nullptr
+		? PS->GetPlayerAttributeSet()->GetOrbitalFerronite()
+		: 0.0f;
+
+	UE_LOG(LogTemp, Log,
+		TEXT("GP BuildingDeploy Result: PC=%s Team=%d Accepted=%s Reason=%d Ready=%d Pod=%s OrbitalUnchanged=%s"),
+		*GetName(),
+		PS->GetTeamId(),
+		Result.bAccepted ? TEXT("true") : TEXT("false"),
+		static_cast<int32>(Result.RejectReason),
+		Result.ReadyAfter,
+		*GetNameSafe(Result.SpawnedPod.Get()),
+		FMath::IsNearlyEqual(OrbitalBefore, OrbitalAfter, 0.05f) ? TEXT("true") : TEXT("false"));
+	return Result.bAccepted;
+}
+
+void AGP_PlayerController::EnterBuildingPlacementMode(EGP_OrbitalBuildingType BuildingType)
+{
+	if (!IsLocalController() || BuildingType == EGP_OrbitalBuildingType::None)
+	{
+		return;
+	}
+
+	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	UGP_OrbitalBuildingInventoryComponent* Inventory =
+		PS != nullptr ? PS->GetOrbitalBuildingInventoryComponent() : nullptr;
+	if (Inventory == nullptr || Inventory->GetReadyCount(BuildingType) <= 0)
+	{
+		return;
+	}
+
+	ActiveBuildingPlacementType = BuildingType;
+	bBuildingPlacementActive = true;
+	bBuildingPlacementRMBWasDown = IsInputKeyDown(EKeys::RightMouseButton);
+
+	if (BuildingPlacementGhost == nullptr)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.Owner = this;
+		BuildingPlacementGhost = GetWorld()->SpawnActor<AGP_BuildingPlacementGhost>(
+			AGP_BuildingPlacementGhost::StaticClass(),
+			FVector::ZeroVector,
+			FRotator::ZeroRotator,
+			Params);
+	}
+
+	if (BuildingPlacementGhost != nullptr)
+	{
+		BuildingPlacementGhost->SetGhostVisible(true);
+		UpdateBuildingPlacementGhost();
+	}
+}
+
+void AGP_PlayerController::CancelBuildingPlacement()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	bBuildingPlacementActive = false;
+	ActiveBuildingPlacementType = EGP_OrbitalBuildingType::None;
+	DestroyBuildingPlacementGhost();
+}
+
+void AGP_PlayerController::ConfirmBuildingPlacement()
+{
+	if (!IsLocalController() || !bBuildingPlacementActive)
+	{
+		return;
+	}
+
+	FVector GroundLoc = FVector::ZeroVector;
+	FRotator GroundRot = FRotator::ZeroRotator;
+	if (!TraceGroundUnderCursor(GroundLoc, GroundRot))
+	{
+		return;
+	}
+
+	const EGP_OrbitalBuildingType Type = ActiveBuildingPlacementType;
+	const FTransform DeployTransform(GroundRot, GroundLoc);
+	CancelBuildingPlacement();
+	RequestBuildingDeploy(Type, DeployTransform);
+}
+
+bool AGP_PlayerController::TraceGroundUnderCursor(FVector& OutGroundLocation, FRotator& OutGroundRotation) const
+{
+	float MouseX = 0.0f;
+	float MouseY = 0.0f;
+	if (!GetMousePosition(MouseX, MouseY))
+	{
+		return false;
+	}
+
+	FVector WorldOrigin = FVector::ZeroVector;
+	FVector WorldDirection = FVector::ZeroVector;
+	if (!DeprojectScreenPositionToWorld(MouseX, MouseY, WorldOrigin, WorldDirection))
+	{
+		return false;
+	}
+
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return false;
+	}
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(GPBuildingPlacementTrace), false);
+	QueryParams.bReturnPhysicalMaterial = false;
+	if (APawn* ControlledPawn = GetPawn())
+	{
+		QueryParams.AddIgnoredActor(ControlledPawn);
+	}
+	if (BuildingPlacementGhost != nullptr)
+	{
+		QueryParams.AddIgnoredActor(BuildingPlacementGhost);
+	}
+
+	const FVector TraceEnd = WorldOrigin + (WorldDirection * SelectionTraceDistance);
+	FHitResult Hit;
+	if (!World->LineTraceSingleByChannel(
+			Hit,
+			WorldOrigin,
+			TraceEnd,
+			ECC_Visibility,
+			QueryParams))
+	{
+		return false;
+	}
+
+	OutGroundLocation = Hit.ImpactPoint;
+	OutGroundRotation = FRotator(0.0f, GetControlRotation().Yaw, 0.0f);
+	return true;
+}
+
+void AGP_PlayerController::UpdateBuildingPlacementGhost()
+{
+	if (!bBuildingPlacementActive || BuildingPlacementGhost == nullptr)
+	{
+		return;
+	}
+
+	FVector GroundLoc = FVector::ZeroVector;
+	FRotator GroundRot = FRotator::ZeroRotator;
+	if (TraceGroundUnderCursor(GroundLoc, GroundRot))
+	{
+		BuildingPlacementGhost->UpdateGhostTransform(FTransform(GroundRot, GroundLoc));
+	}
+}
+
+void AGP_PlayerController::DestroyBuildingPlacementGhost()
+{
+	if (BuildingPlacementGhost != nullptr)
+	{
+		BuildingPlacementGhost->Destroy();
+		BuildingPlacementGhost = nullptr;
+	}
+}
+
+void AGP_PlayerController::BindBuildingInventoryEvents()
+{
+	UnbindBuildingInventoryEvents();
+
+	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	if (PS == nullptr)
+	{
+		SyncBuildingReadyHUDFromInventory();
+		return;
+	}
+
+	if (UGP_OrbitalBuildingInventoryComponent* Inventory = PS->GetOrbitalBuildingInventoryComponent())
+	{
+		BuildingReadyChangedHandle = Inventory->OnReadyChanged.AddUObject(
+			this,
+			&AGP_PlayerController::HandleBuildingReadyChanged);
+	}
+	SyncBuildingReadyHUDFromInventory();
+}
+
+void AGP_PlayerController::UnbindBuildingInventoryEvents()
+{
+	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	if (PS != nullptr)
+	{
+		if (UGP_OrbitalBuildingInventoryComponent* Inventory = PS->GetOrbitalBuildingInventoryComponent())
+		{
+			if (BuildingReadyChangedHandle.IsValid())
+			{
+				Inventory->OnReadyChanged.Remove(BuildingReadyChangedHandle);
+			}
+		}
+	}
+	BuildingReadyChangedHandle.Reset();
+}
+
+void AGP_PlayerController::SyncBuildingReadyHUDFromInventory()
+{
+	EnsurePlanetaryFerroniteHUD();
+	if (PlanetaryFerroniteHUD == nullptr)
+	{
+		return;
+	}
+
+	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	int32 ReadyLogisticsHub = 0;
+	if (PS != nullptr)
+	{
+		if (UGP_OrbitalBuildingInventoryComponent* Inventory = PS->GetOrbitalBuildingInventoryComponent())
+		{
+			ReadyLogisticsHub = Inventory->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub);
+		}
+	}
+	PlanetaryFerroniteHUD->SetBuildingReadyDisplay(ReadyLogisticsHub);
+}
+
+void AGP_PlayerController::HandleBuildingReadyChanged(EGP_OrbitalBuildingType BuildingType, int32 NewReadyCount)
+{
+	(void)BuildingType;
+	EnsurePlanetaryFerroniteHUD();
+	if (PlanetaryFerroniteHUD != nullptr)
+	{
+		PlanetaryFerroniteHUD->SetBuildingReadyDisplay(NewReadyCount);
+	}
+}
+
 bool AGP_PlayerController::Server_RequestLaunchReadyContainer_Validate()
 {
 	// Intent-only RPC (no client payload). Authority revalidates ownership/Ready/ASC.
@@ -1130,6 +1470,11 @@ void AGP_PlayerController::OnSelectionStarted(const FInputActionValue& Value)
 		return;
 	}
 
+	if (bBuildingPlacementActive)
+	{
+		return;
+	}
+
 	if (bMarqueeActive
 		|| (SelectionComponent != nullptr && SelectionComponent->IsMarqueeActive())
 		|| (MarqueeWidget != nullptr && MarqueeWidget->HasActiveMarqueeRect()))
@@ -1174,6 +1519,19 @@ void AGP_PlayerController::OnSelectionCompleted(const FInputActionValue& Value)
 
 	const FVector2D ReleasePosition(MouseX, MouseY);
 
+	if (bBuildingPlacementActive)
+	{
+		const float PixelDistance =
+			FVector2D::Distance(SelectionPressScreenPosition, ReleasePosition);
+		if (PixelDistance <= SelectionDragThresholdPixels)
+		{
+			ConfirmBuildingPlacement();
+		}
+		bSelectionPressActive = false;
+		SelectionPressScreenPosition = FVector2D::ZeroVector;
+		return;
+	}
+
 	if (bMarqueeActive)
 	{
 		CompleteActiveMarquee(ReleasePosition);
@@ -1198,6 +1556,11 @@ void AGP_PlayerController::OnSelectionCompleted(const FInputActionValue& Value)
 void AGP_PlayerController::OnSelectionCanceled(const FInputActionValue& Value)
 {
 	(void)Value;
+
+	if (bBuildingPlacementActive)
+	{
+		CancelBuildingPlacement();
+	}
 
 	CancelActiveMarquee(/*bLogCanceled=*/true);
 	bSelectionPressActive = false;
@@ -1542,6 +1905,7 @@ void AGP_PlayerController::ClearPlanetaryFerroniteHUDBindings()
 {
 	UnbindPlanetaryFerroniteStorage();
 	UnbindOrbitalFerroniteAttribute();
+	UnbindBuildingInventoryEvents();
 
 	if (AGP_GameState* GS = BoundPlanetaryGameState.Get())
 	{
@@ -1784,6 +2148,7 @@ void AGP_PlayerController::RefreshPlanetaryFerroniteHUDBinding()
 		: nullptr;
 	BindPlanetaryFerroniteStorage(Base);
 	BindOrbitalFerroniteAttribute();
+	BindBuildingInventoryEvents();
 	SyncOrbitalFerroniteHUDFromAttributes();
 }
 

@@ -8,6 +8,7 @@
 #include "GPPlayerState.generated.h"
 
 class UGP_AbilitySystemComponent;
+class UGP_OrbitalBuildingInventoryComponent;
 class UGP_PlayerAttributeSet;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGP_PlayerTeamIdChanged, int32 /*OldTeamId*/, int32 /*NewTeamId*/);
@@ -37,6 +38,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Team")
 	int32 GetTeamId() const;
 
+	UFUNCTION(BlueprintPure, Category = "GP|Orbital|Building")
+	UGP_OrbitalBuildingInventoryComponent* GetOrbitalBuildingInventoryComponent() const;
+
 	/** Authority-only. Silent no-op without authority. */
 	void SetTeamId(int32 NewTeamId);
 
@@ -59,6 +63,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Attributes", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_PlayerAttributeSet> PlayerAttributeSet;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Orbital|Building", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UGP_OrbitalBuildingInventoryComponent> OrbitalBuildingInventoryComponent;
 
 	/** -1 unassigned, 0 neutral, 1+ playable teams. */
 	UPROPERTY(ReplicatedUsing = OnRep_TeamId, VisibleInstanceOnly, Category = "GP|Team")

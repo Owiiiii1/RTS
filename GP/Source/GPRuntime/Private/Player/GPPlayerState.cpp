@@ -3,6 +3,7 @@
 #include "Player/GPPlayerState.h"
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPPlayerAttributeSet.h"
+#include "Orbital/GPOrbitalBuildingInventoryComponent.h"
 #include "GameFramework/Controller.h"
 #include "Net/UnrealNetwork.h"
 
@@ -15,6 +16,8 @@ AGP_PlayerState::AGP_PlayerState()
 	AbilitySystemComponent->SetProjectReplicationMode(EGameplayEffectReplicationMode::Mixed);
 
 	PlayerAttributeSet = CreateDefaultSubobject<UGP_PlayerAttributeSet>(TEXT("PlayerAttributeSet"));
+	OrbitalBuildingInventoryComponent =
+		CreateDefaultSubobject<UGP_OrbitalBuildingInventoryComponent>(TEXT("OrbitalBuildingInventoryComponent"));
 }
 
 void AGP_PlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -37,6 +40,11 @@ UGP_AbilitySystemComponent* AGP_PlayerState::GetGPAbilitySystemComponent() const
 const UGP_PlayerAttributeSet* AGP_PlayerState::GetPlayerAttributeSet() const
 {
 	return PlayerAttributeSet;
+}
+
+UGP_OrbitalBuildingInventoryComponent* AGP_PlayerState::GetOrbitalBuildingInventoryComponent() const
+{
+	return OrbitalBuildingInventoryComponent;
 }
 
 int32 AGP_PlayerState::GetTeamId() const

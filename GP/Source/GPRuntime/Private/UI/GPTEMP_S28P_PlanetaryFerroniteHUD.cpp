@@ -12,6 +12,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Orbital/GPUnitDropManifest.h"
+#include "Orbital/GPOrbitalBuildingType.h"
 #include "Player/GPPlayerController.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "Styling/CoreStyle.h"
@@ -106,9 +107,11 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeConstruct()
 	RefreshStatusText();
 	RefreshOrbitalText();
 	RefreshUnitDropPanel();
+	RefreshBuildingPanel();
 	SetLaunchButtonEnabled(bLaunchEnabled);
 	BindLaunchClickedIdempotent();
 	BindUnitDropClickedIdempotent();
+	BindBuildingPanelClickedIdempotent();
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeDestruct()
@@ -136,6 +139,14 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeDestruct()
 	if (WalkerPlusButton != nullptr)
 	{
 		WalkerPlusButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWalkerPlusClicked);
+	}
+	if (PurchaseLogisticsHubButton != nullptr)
+	{
+		PurchaseLogisticsHubButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandlePurchaseLogisticsHubClicked);
+	}
+	if (DeployLogisticsHubButton != nullptr)
+	{
+		DeployLogisticsHubButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleDeployLogisticsHubClicked);
 	}
 	Super::NativeDestruct();
 }
@@ -179,6 +190,20 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::BindUnitDropClickedIdempotent()
 	}
 }
 
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::BindBuildingPanelClickedIdempotent()
+{
+	if (PurchaseLogisticsHubButton != nullptr)
+	{
+		PurchaseLogisticsHubButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandlePurchaseLogisticsHubClicked);
+		PurchaseLogisticsHubButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandlePurchaseLogisticsHubClicked);
+	}
+	if (DeployLogisticsHubButton != nullptr)
+	{
+		DeployLogisticsHubButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleDeployLogisticsHubClicked);
+		DeployLogisticsHubButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleDeployLogisticsHubClicked);
+	}
+}
+
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 {
 	if (WidgetTree == nullptr)
@@ -195,10 +220,14 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 		&& OrbitalLineText != nullptr
 		&& LaunchButton != nullptr
 		&& UnitDropPanel != nullptr
-		&& ConfirmDropButton != nullptr)
+		&& ConfirmDropButton != nullptr
+		&& BuildingPanel != nullptr
+		&& PurchaseLogisticsHubButton != nullptr
+		&& DeployLogisticsHubButton != nullptr)
 	{
 		BindLaunchClickedIdempotent();
 		BindUnitDropClickedIdempotent();
+		BindBuildingPanelClickedIdempotent();
 		return;
 	}
 
@@ -334,10 +363,59 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 
 	BindUnitDropClickedIdempotent();
 
+	BuildingPanel = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BuildingPanel"));
+	BuildingPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (UCanvasPanelSlot* BuildingSlot = RootCanvas->AddChildToCanvas(BuildingPanel))
+	{
+		BuildingSlot->SetAnchors(FAnchors(1.0f, 0.0f, 1.0f, 0.0f));
+		BuildingSlot->SetAlignment(FVector2D(1.0f, 0.0f));
+		BuildingSlot->SetAutoSize(true);
+		BuildingSlot->SetOffsets(FMargin(0.0f, 280.0f, 24.0f, 0.0f));
+	}
+
+	BuildingTitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildingTitle"));
+	GPTempS28PHUDPrivate::StyleStatusText(BuildingTitleText);
+	BuildingTitleText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(18));
+	BuildingTitleText->SetText(FText::FromString(TEXT("BUILDINGS")));
+	BuildingPanel->AddChildToVerticalBox(BuildingTitleText);
+
+	BuildingLogisticsHubLineText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildingLogisticsHubLine"));
+	GPTempS28PHUDPrivate::StyleStatusText(BuildingLogisticsHubLineText);
+	if (UVerticalBoxSlot* HubLineSlot = BuildingPanel->AddChildToVerticalBox(BuildingLogisticsHubLineText))
+	{
+		HubLineSlot->SetPadding(FMargin(0.0f, 6.0f, 0.0f, 4.0f));
+	}
+
+	PurchaseLogisticsHubButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("PurchaseLogisticsHubButton"));
+	PurchaseLogisticsHubButton->SetVisibility(ESlateVisibility::Visible);
+	PurchaseLogisticsHubLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("PurchaseLogisticsHubLabel"));
+	PurchaseLogisticsHubLabel->SetText(FText::FromString(TEXT("Purchase Logistics Hub")));
+	PurchaseLogisticsHubLabel->SetJustification(ETextJustify::Center);
+	PurchaseLogisticsHubLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	PurchaseLogisticsHubLabel->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(14));
+	PurchaseLogisticsHubButton->SetContent(PurchaseLogisticsHubLabel);
+	if (UVerticalBoxSlot* PurchaseSlot = BuildingPanel->AddChildToVerticalBox(PurchaseLogisticsHubButton))
+	{
+		PurchaseSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 4.0f));
+	}
+
+	DeployLogisticsHubButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("DeployLogisticsHubButton"));
+	DeployLogisticsHubButton->SetVisibility(ESlateVisibility::Visible);
+	DeployLogisticsHubLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("DeployLogisticsHubLabel"));
+	DeployLogisticsHubLabel->SetText(FText::FromString(TEXT("Deploy READY")));
+	DeployLogisticsHubLabel->SetJustification(ETextJustify::Center);
+	DeployLogisticsHubLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	DeployLogisticsHubLabel->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(14));
+	DeployLogisticsHubButton->SetContent(DeployLogisticsHubLabel);
+	BuildingPanel->AddChildToVerticalBox(DeployLogisticsHubButton);
+
+	BindBuildingPanelClickedIdempotent();
+
 	bTreeBuilt = true;
 	RefreshStatusText();
 	RefreshOrbitalText();
 	RefreshUnitDropPanel();
+	RefreshBuildingPanel();
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureContainerLineCount(int32 DesiredCount)
@@ -485,6 +563,33 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshUnitDropPanel()
 	}
 }
 
+float UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetBuildingPurchaseCost() const
+{
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	return Settings != nullptr ? FMath::Max(0.0f, Settings->BuildingOrbitalPurchaseCost) : 100.0f;
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshBuildingPanel()
+{
+	if (BuildingLogisticsHubLineText != nullptr)
+	{
+		BuildingLogisticsHubLineText->SetText(FText::FromString(FString::Printf(
+			TEXT("Logistics Hub — Cost: %d — READY: %d"),
+			FMath::RoundToInt(GetBuildingPurchaseCost()),
+			ReadyLogisticsHubCount)));
+	}
+	if (DeployLogisticsHubButton != nullptr)
+	{
+		DeployLogisticsHubButton->SetIsEnabled(ReadyLogisticsHubCount > 0);
+	}
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetBuildingReadyDisplay(int32 InReadyLogisticsHubCount)
+{
+	ReadyLogisticsHubCount = FMath::Max(0, InReadyLogisticsHubCount);
+	RefreshBuildingPanel();
+}
+
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::AdjustWorkerCount(int32 Delta)
 {
 	const int32 Next = FMath::Max(0, WorkerCount + Delta);
@@ -594,6 +699,26 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWalkerMinusClicked()
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWalkerPlusClicked()
 {
 	AdjustWalkerCount(1);
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandlePurchaseLogisticsHubClicked()
+{
+	AGP_PlayerController* PC = Cast<AGP_PlayerController>(GetOwningPlayer());
+	if (PC == nullptr)
+	{
+		return;
+	}
+	PC->RequestBuildingPurchase(EGP_OrbitalBuildingType::LogisticsHub);
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleDeployLogisticsHubClicked()
+{
+	AGP_PlayerController* PC = Cast<AGP_PlayerController>(GetOwningPlayer());
+	if (PC == nullptr)
+	{
+		return;
+	}
+	PC->EnterBuildingPlacementMode(EGP_OrbitalBuildingType::LogisticsHub);
 }
 
 #if !UE_BUILD_SHIPPING

@@ -6,6 +6,7 @@
 #include "Engine/DeveloperSettings.h"
 #include "GPOrbitalDeliverySettings.generated.h"
 
+class AGP_BuildingBase;
 class AGP_DropPod;
 class AGP_Worker;
 class AGP_SalvageWalker;
@@ -89,6 +90,41 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "0.0"))
 	float UnitDropCleanupDelaySeconds = 0.35f;
 
+	/** TEMP Orbital purchase cost for Logistics Hub (deploy consumes READY — no second spend). */
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Cost", meta = (ClampMin = "0.0"))
+	float BuildingOrbitalPurchaseCost = 100.0f;
+
+	/**
+	 * Authored building payload BP (must derive from AGP_BuildingBase). Empty → native AGP_LogisticsHub.
+	 * Owner assigns e.g. BP_LogisticsHub in Project Settings — no C++ /Game path.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Payload", meta = (AllowAbstract = "false"))
+	TSoftClassPtr<AGP_BuildingBase> BuildingPayloadClass;
+
+	/** Building DropPod descent telegraph (GDD 2–3 s). */
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|DropPod", meta = (ClampMin = "0.05"))
+	float BuildingDropDescentDurationSeconds = 2.5f;
+
+	/** Spawn altitude above building landing point (cm). */
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|DropPod", meta = (ClampMin = "100.0"))
+	float BuildingDropSpawnAltitudeCm = 2500.0f;
+
+	/** After Impact: wait before authority building spawn (TEMP ~2.0 s — longer than units). */
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|DropPod", meta = (ClampMin = "0.0"))
+	float BuildingDropPayloadDeployDelaySeconds = 2.0f;
+
+	/** Delay after building deploy before DropPod destroy (seconds). */
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|DropPod", meta = (ClampMin = "0.0"))
+	float BuildingDropCleanupDelaySeconds = 0.5f;
+
+	/** Max horizontal deploy distance from owning MainBase (cm). */
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Placement", meta = (ClampMin = "100.0"))
+	float BuildingMaxDeployRadiusFromMainBaseCm = 5000.0f;
+
+	/** Extra overlap margin when validating building placement (cm). */
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Placement", meta = (ClampMin = "0.0"))
+	float BuildingPlacementOverlapMarginCm = 25.0f;
+
 	/** Resolve Worker payload: soft class if valid subclass, else native. */
 	TSubclassOf<AGP_Worker> ResolveWorkerPayloadClass(bool* bOutUsedAuthored = nullptr) const;
 
@@ -98,8 +134,18 @@ public:
 	/** Resolve DropPod class: soft class if valid subclass, else native. */
 	TSubclassOf<AGP_DropPod> ResolveUnitDropPodClass(bool* bOutUsedAuthored = nullptr) const;
 
+	/** Resolve building payload: soft class if valid subclass, else native AGP_LogisticsHub. */
+	TSubclassOf<AGP_BuildingBase> ResolveBuildingPayloadClass(bool* bOutUsedAuthored = nullptr) const;
+
+	/** Building pods reuse UnitDropPodClass / native AGP_DropPod fallback (GP-S32R). */
+	TSubclassOf<AGP_DropPod> ResolveBuildingDropPodClass(bool* bOutUsedAuthored = nullptr) const
+	{
+		return ResolveUnitDropPodClass(bOutUsedAuthored);
+	}
+
 	/** True if soft ref is set but fails base-class / load checks (does not use invalid class). */
 	bool IsWorkerPayloadClassConfigInvalid() const;
 	bool IsSalvageWalkerPayloadClassConfigInvalid() const;
 	bool IsUnitDropPodClassConfigInvalid() const;
+	bool IsBuildingPayloadClassConfigInvalid() const;
 };

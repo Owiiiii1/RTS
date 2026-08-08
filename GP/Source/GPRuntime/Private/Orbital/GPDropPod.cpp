@@ -8,6 +8,9 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "Buildings/GPBuildingBase.h"
+#include "Buildings/GPLogisticsHub.h"
+#include "Orbital/GPBuildingGroundPlacement.h"
 #include "Orbital/GPUnitGroundPlacement.h"
 #include "Player/GPPlayerState.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
@@ -97,6 +100,7 @@ void AGP_DropPod::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME(AGP_DropPod, OwnerTeamId);
 	DOREPLIFETIME(AGP_DropPod, DescentProgress01);
 	DOREPLIFETIME(AGP_DropPod, Phase);
+	DOREPLIFETIME(AGP_DropPod, PayloadKind);
 }
 
 void AGP_DropPod::BeginPlay()
@@ -139,11 +143,53 @@ void AGP_DropPod::AuthorityInitUnitDrop(
 
 	RequestingPlayerStateWeak = RequestingPlayerState;
 	OwnerTeamId = TeamId;
+	PayloadKind = EGP_DropPodPayloadKind::Unit;
+	PendingBuildingType = EGP_OrbitalBuildingType::None;
 	PendingManifest = Manifest;
 	LandingLocation = LandingWorldLocation;
 	LandingRotation = LandingWorldRotation;
 	DescentDurationSeconds = FMath::Max(0.05f, InDescentDurationSeconds);
 	SpawnSpacingCm = FMath::Max(50.0f, InSpawnSpacingCm);
+	PayloadDeployDelaySeconds = FMath::Max(0.0f, InPayloadDeployDelaySeconds);
+	CleanupDelaySeconds = FMath::Max(0.0f, InCleanupDelaySeconds);
+	StartLocation = LandingLocation + FVector(0.0f, 0.0f, FMath::Max(100.0f, SpawnAltitudeCm));
+	DescentElapsed = 0.0f;
+	DescentProgress01 = 0.0f;
+	bLandingCompleted = false;
+	bPayloadSpawned = false;
+	ClearLifecycleTimers();
+
+	AuthoritySetPhase(EGP_DropPodPhase::Descending);
+	ApplyNativePlaceholderVisibility();
+	SetActorLocationAndRotation(StartLocation, LandingRotation);
+	SetActorTickEnabled(true);
+	Multicast_PresentationDescentStarted();
+}
+
+void AGP_DropPod::AuthorityInitBuildingDrop(
+	AGP_PlayerState* RequestingPlayerState,
+	int32 TeamId,
+	EGP_OrbitalBuildingType BuildingType,
+	const FVector& LandingWorldLocation,
+	const FRotator& LandingWorldRotation,
+	float InDescentDurationSeconds,
+	float SpawnAltitudeCm,
+	float InPayloadDeployDelaySeconds,
+	float InCleanupDelaySeconds)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	RequestingPlayerStateWeak = RequestingPlayerState;
+	OwnerTeamId = TeamId;
+	PayloadKind = EGP_DropPodPayloadKind::Building;
+	PendingBuildingType = BuildingType;
+	PendingManifest = FGP_UnitDropManifest();
+	LandingLocation = LandingWorldLocation;
+	LandingRotation = LandingWorldRotation;
+	DescentDurationSeconds = FMath::Max(0.05f, InDescentDurationSeconds);
 	PayloadDeployDelaySeconds = FMath::Max(0.0f, InPayloadDeployDelaySeconds);
 	CleanupDelaySeconds = FMath::Max(0.0f, InCleanupDelaySeconds);
 	StartLocation = LandingLocation + FVector(0.0f, 0.0f, FMath::Max(100.0f, SpawnAltitudeCm));
@@ -238,7 +284,14 @@ void AGP_DropPod::AuthorityBeginPayloadDeploy()
 		return;
 	}
 
-	AuthoritySpawnUnitPayload();
+	if (PayloadKind == EGP_DropPodPayloadKind::Building)
+	{
+		AuthoritySpawnBuildingPayload();
+	}
+	else
+	{
+		AuthoritySpawnUnitPayload();
+	}
 	AuthoritySetPhase(EGP_DropPodPhase::PayloadDeployed);
 	Multicast_PresentationPayloadDeployed();
 	AuthorityScheduleCleanup();
@@ -333,6 +386,50 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 			}
 		}
 	}
+}
+
+void AGP_DropPod::AuthoritySpawnBuildingPayload()
+{
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || World == nullptr || bPayloadSpawned)
+	{
+		return;
+	}
+	bPayloadSpawned = true;
+
+	if (PendingBuildingType == EGP_OrbitalBuildingType::None)
+	{
+		return;
+	}
+
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	TSubclassOf<AGP_BuildingBase> BuildingClass = AGP_LogisticsHub::StaticClass();
+	if (PendingBuildingType == EGP_OrbitalBuildingType::LogisticsHub)
+	{
+		BuildingClass = Settings != nullptr
+			? Settings->ResolveBuildingPayloadClass()
+			: TSubclassOf<AGP_BuildingBase>(AGP_LogisticsHub::StaticClass());
+	}
+
+	if (BuildingClass == nullptr)
+	{
+		return;
+	}
+
+	const float OffsetZ = GPBuildingGroundPlacement::GetGroundSpawnOffsetZForBuildingClass(*BuildingClass);
+	const FVector Loc(LandingLocation.X, LandingLocation.Y, LandingLocation.Z + OffsetZ);
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride =
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	Params.Owner = RequestingPlayerStateWeak.Get();
+
+	AGP_BuildingBase* Building = World->SpawnActor<AGP_BuildingBase>(BuildingClass, Loc, LandingRotation, Params);
+	if (!IsValid(Building))
+	{
+		return;
+	}
+	Building->SetTeamId(OwnerTeamId);
 }
 
 void AGP_DropPod::AuthorityScheduleCleanup()

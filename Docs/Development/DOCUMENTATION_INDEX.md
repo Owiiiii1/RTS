@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S30 merged**; **GP-S31R FINALIZATION_READY_FOR_MERGE** |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S30 merged**; **GP-S31R FINALIZATION_READY_FOR_MERGE**; **GP-S32R candidate on branch** |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
 | Last closed / merged stage | **GP-S30** on `main` (tip `118660bb24bda51c7d5e5c1b97cbc1b9d5cb0d4c`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S31R FINALIZATION_READY_FOR_MERGE** (not merged) |
+| Current stage | **GP-S32R IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s32r-orbital-building-drop` |
 
 ---
 
@@ -49,11 +49,11 @@
 
 **Prior closed:** GP-S29R — Combat LOS + Health Bar + Team Colors + Salvage Walker — **DONE / MERGED** @ `3673a689…`.
 
-**Current:** [`Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md`](Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md) — **FINALIZATION_READY_FOR_MERGE** on `feature/gp-s31r-minimal-orbital-unit-drop` (base `118660bb…`). Operator FULL PASS. Contracts Failures=0. GPEditor + GP Dev + GP Shipping **PASS**. NOT MERGED.
+**Current:** [`Claude_Tasks/GP-S32R_Orbital_Building_Drop.md`](Claude_Tasks/GP-S32R_Orbital_Building_Drop.md) — **GP-S32R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s32r-orbital-building-drop` (base `427a2aa`). GPEditor+UHT candidate build. NOT MERGED.
 
-**Next (not started):** **NEXT_BUILDING_DROP_SLICE_PENDING_ID** — Orbital Building Procurement + READY Inventory + Placement + Drop.
+**Prior (awaiting merge):** [`Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md`](Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md) — FINALIZATION_READY_FOR_MERGE.
 
-**Do not** auto-merge GP-S31R or start building drop / FoW / BuildGrid / full Order Menu without explicit assignment.
+**Do not** auto-merge GP-S31R/GP-S32R or start FoW / BuildGrid / full Order Menu without explicit assignment.
 
 **Prior audits:** [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md), [`Next_Slice_Audit_Post_S29R.md`](Next_Slice_Audit_Post_S29R.md).
 
@@ -68,7 +68,8 @@
 5. **GP-S29R** — LOS + health bar + team colors + Salvage Walker — **DONE / MERGED**
 6. **GP-S30** — Container Launch / Orbital Conversion — **DONE / MERGED**
 7. **GP-S31R** — Minimal Orbital Unit Drop — **FINALIZATION_READY_FOR_MERGE** (not merged)
-8. **NEXT_BUILDING_DROP_SLICE_PENDING_ID** — building procurement / READY / placement / drop (not started)
+8. **GP-S32R** — Orbital Building Drop — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (not merged)
+9. FoW / BuildGrid / full Order Menu — not started
 
 ---
 

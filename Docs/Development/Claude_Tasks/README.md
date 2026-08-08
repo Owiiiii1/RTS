@@ -6,9 +6,9 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-08 (GP-S31R finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-09 (GP-S32R implementation). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Slice 8 economy unlock. **GP-S30 DONE / MERGED**. Current: **GP-S31R FINALIZATION_READY_FOR_MERGE** (NOT MERGED).
+**Поточна фаза:** Slice 8 economy unlock. **GP-S30 DONE / MERGED**. **GP-S31R FINALIZATION_READY_FOR_MERGE** (NOT MERGED). **Current: GP-S32R IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**.
 
 **Status snapshot:**
 
@@ -19,9 +19,10 @@
 | **GP-S29R** LOS + HealthBar + TeamColors + Salvage Walker | **DONE / MERGED** @ `3673a689…` |
 | **GP-S30** Container Launch / Orbital Conversion | **DONE / MERGED** @ `main` `118660bb…` |
 | **GP-S31R** Minimal Orbital Unit Drop | **FINALIZATION_READY_FOR_MERGE** — [`GP-S31R_Minimal_Orbital_Unit_Drop.md`](GP-S31R_Minimal_Orbital_Unit_Drop.md) |
-| Next (not started) | **NEXT_BUILDING_DROP_SLICE_PENDING_ID** — building procurement / READY / placement / drop |
+| **GP-S32R** Orbital Building Drop | **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** — [`GP-S32R_Orbital_Building_Drop.md`](GP-S32R_Orbital_Building_Drop.md) |
+| Next (not started) | FoW / BuildGrid / full Order Menu |
 
-**NEXT action для агента:** await human merge of GP-S31R. Do **not** auto-merge. Do **not** start building drop slice.
+**NEXT action для агента:** await human merge of GP-S31R + operator validation of GP-S32R. Do **not** auto-merge.
 
 ### Drift Warning
 

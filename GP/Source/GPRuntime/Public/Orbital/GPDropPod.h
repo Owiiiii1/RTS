@@ -4,12 +4,20 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Orbital/GPOrbitalBuildingType.h"
 #include "Orbital/GPUnitDropManifest.h"
 #include "GPDropPod.generated.h"
 
 class USceneComponent;
 class UStaticMeshComponent;
 class AGP_PlayerState;
+
+UENUM(BlueprintType)
+enum class EGP_DropPodPayloadKind : uint8
+{
+	Unit = 0,
+	Building
+};
 
 UENUM(BlueprintType)
 enum class EGP_DropPodPhase : uint8
@@ -50,6 +58,21 @@ public:
 		float SpawnSpacingCm,
 		float PayloadDeployDelaySeconds,
 		float CleanupDelaySeconds);
+
+	/** Authority-only. Schedules descent → deploy delay → building payload → cleanup. */
+	void AuthorityInitBuildingDrop(
+		AGP_PlayerState* RequestingPlayerState,
+		int32 TeamId,
+		EGP_OrbitalBuildingType BuildingType,
+		const FVector& LandingWorldLocation,
+		const FRotator& LandingWorldRotation,
+		float DescentDurationSeconds,
+		float SpawnAltitudeCm,
+		float PayloadDeployDelaySeconds,
+		float CleanupDelaySeconds);
+
+	UFUNCTION(BlueprintPure, Category = "GP|DropPod")
+	EGP_DropPodPayloadKind GetPayloadKind() const { return PayloadKind; }
 
 	UFUNCTION(BlueprintPure, Category = "GP|DropPod")
 	float GetDescentProgress01() const { return DescentProgress01; }
@@ -102,6 +125,9 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_Phase)
 	EGP_DropPodPhase Phase = EGP_DropPodPhase::Idle;
 
+	UPROPERTY(Replicated)
+	EGP_DropPodPayloadKind PayloadKind = EGP_DropPodPayloadKind::Unit;
+
 	UFUNCTION()
 	void OnRep_Phase(EGP_DropPodPhase PreviousPhase);
 
@@ -118,6 +144,7 @@ private:
 	void AuthorityCompleteLanding();
 	void AuthorityBeginPayloadDeploy();
 	void AuthoritySpawnUnitPayload();
+	void AuthoritySpawnBuildingPayload();
 	void AuthorityScheduleCleanup();
 	void HandleCleanup();
 	void ClearLifecycleTimers();
@@ -126,6 +153,7 @@ private:
 	void AuthoritySetPhase(EGP_DropPodPhase NewPhase);
 
 	FGP_UnitDropManifest PendingManifest;
+	EGP_OrbitalBuildingType PendingBuildingType = EGP_OrbitalBuildingType::None;
 	TWeakObjectPtr<AGP_PlayerState> RequestingPlayerStateWeak;
 	float DescentDurationSeconds = 2.5f;
 	float SpawnSpacingCm = 180.0f;

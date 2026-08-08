@@ -6,9 +6,11 @@
 #include "Command/GPCommandRequest.h"
 #include "GameFramework/PlayerController.h"
 #include "Orbital/GPUnitDropManifest.h"
+#include "Orbital/GPOrbitalBuildingType.h"
 #include "GPPlayerController.generated.h"
 
 class UGP_AbilitySystemComponent;
+class AGP_BuildingPlacementGhost;
 class AGP_CameraPawn;
 class UGP_CommandComponent;
 class UGP_MarqueeSelectionWidget;
@@ -63,6 +65,34 @@ public:
 
 	/** Authority helper used by Server RPC and non-shipping contracts. */
 	bool AuthorityTryRequestUnitDrop(const FGP_UnitDropManifest& Manifest);
+
+	/** Local TEMP HUD Building Purchase intent (GP-S32R). */
+	void RequestBuildingPurchase(EGP_OrbitalBuildingType BuildingType);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestBuildingPurchase(EGP_OrbitalBuildingType BuildingType);
+
+	bool AuthorityTryPurchaseBuilding(EGP_OrbitalBuildingType BuildingType);
+
+	/** Local deploy intent — placement transform from ghost confirm. */
+	void RequestBuildingDeploy(EGP_OrbitalBuildingType BuildingType, const FTransform& WorldTransform);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestBuildingDeploy(EGP_OrbitalBuildingType BuildingType, const FTransform& WorldTransform);
+
+	bool AuthorityTryDeployBuilding(EGP_OrbitalBuildingType BuildingType, const FTransform& WorldTransform);
+
+	UFUNCTION(BlueprintCallable, Category = "GP|Orbital|Building")
+	void EnterBuildingPlacementMode(EGP_OrbitalBuildingType BuildingType);
+
+	UFUNCTION(BlueprintCallable, Category = "GP|Orbital|Building")
+	void CancelBuildingPlacement();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|Orbital|Building")
+	void ConfirmBuildingPlacement();
+
+	UFUNCTION(BlueprintPure, Category = "GP|Orbital|Building")
+	bool IsBuildingPlacementActive() const { return bBuildingPlacementActive; }
 
 	/** Authority launch intent: resolve own-team MainBase → TryLaunchReadyContainer. */
 	UFUNCTION(Server, Reliable, WithValidation)
@@ -136,7 +166,9 @@ private:
 	void BindOrbitalFerroniteAttribute();
 	void UnbindOrbitalFerroniteAttribute();
 	void SyncOrbitalFerroniteHUDFromAttributes();
+	void SyncBuildingReadyHUDFromInventory();
 	void HandleOrbitalFerroniteAttributeChanged(const struct FOnAttributeChangeData& Data);
+	void HandleBuildingReadyChanged(EGP_OrbitalBuildingType BuildingType, int32 NewReadyCount);
 	void HandleResolvedMainBaseChanged(int32 TeamId, AGP_MainBase* PreviousMainBase, AGP_MainBase* NewMainBase);
 	void HandlePlayerTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
 	UFUNCTION()
@@ -158,6 +190,12 @@ private:
 	 * Local-only; reads SelectionComponent only; no world scan / RPC / unit mutation.
 	 */
 	void DrawLocalSelectionDebugVisualization() const;
+
+	bool TraceGroundUnderCursor(FVector& OutGroundLocation, FRotator& OutGroundRotation) const;
+	void UpdateBuildingPlacementGhost();
+	void DestroyBuildingPlacementGhost();
+	void BindBuildingInventoryEvents();
+	void UnbindBuildingInventoryEvents();
 
 	bool IsControlModifierDown() const;
 	bool IsShiftModifierDown() const;
@@ -249,7 +287,16 @@ private:
 	FDelegateHandle ResolvedMainBaseChangedHandle;
 	FDelegateHandle PlayerTeamIdChangedHandle;
 	FDelegateHandle OrbitalFerroniteChangedHandle;
+	FDelegateHandle BuildingReadyChangedHandle;
 	int32 BoundPlanetaryTeamId = -1;
+
+	/** Local-only building deploy ghost + mode (GP-S32R). */
+	UPROPERTY(Transient)
+	TObjectPtr<AGP_BuildingPlacementGhost> BuildingPlacementGhost;
+
+	EGP_OrbitalBuildingType ActiveBuildingPlacementType = EGP_OrbitalBuildingType::None;
+	bool bBuildingPlacementActive = false;
+	bool bBuildingPlacementRMBWasDown = false;
 
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */
 	TWeakObjectPtr<APawn> LastInitializedLocalPawn;

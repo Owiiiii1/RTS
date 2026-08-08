@@ -1,28 +1,27 @@
-# Cursor Work Report — GP-S28P3 Finalization
+# Cursor Work Report — GP-S28P4 Finalization
 
 ## Status
-GP-S28P3_READY_FOR_MERGE
+GP-S28P4_READY_FOR_MERGE
 
 ## Branch
-feature/gp-s28p3-dropoff-resilience
+feature/gp-s28p4-planetary-ferronite-hud
 
 ## Base
-3b1ae705d8b15fd54daf06553337885d0420dc57
+fb699db32d1bc79a62809274e39b8a588633cf3c
 
 ## Final Tip
-`008c2a38bfd28fe1cf3dbffb9a6ad20c2a92ad12`
+`612464cc9a9c8f5370b1b204fe5d92700ff1a7f2`
 
 ## Operator Validation
-- A PASS
-- B PASS
-- C DEFERRED
-- D PASS
+- A Initial HUD PASS
+- B Storage live update PASS
+- C MainBase destroy/unresolve PASS
+- D MainBase replacement/rebind PASS
 
 ## Automated Tests
 | Command | Result |
 | --- | --- |
-| `gp.Resource.RunDropOffResilienceContractTest` | Complete Failures=0 Cancelled=None |
-| `gp.Resource.RunDepletionReassignmentContractTest` | Complete Failures=0 Cancelled=None |
+| `gp.Resource.RunPlanetaryFerroniteHUDContractTest` | Complete Failures=0 Cancelled=None |
 | `gp.Resource.RunS28RegressionSuite` | Complete Failures=0 |
 
 ## Builds
@@ -32,16 +31,20 @@ feature/gp-s28p3-dropoff-resilience
 | GP Win64 Development | PASSED |
 | GP Win64 Shipping | PASSED |
 
+## Client-safe MainBase Contract
+Authority Register/Unregister remains mutation SoT. Replicated `ReplicatedMainBases` (`FGP_ReplicatedMainBaseEntry`) on `AGP_GameState`. Clients use `FindMainBaseForTeamClientSafe(TeamId)`. `OnResolvedMainBaseChanged(TeamId, Previous, New)` fires on authority mutation and OnRep. Survives register/replace/unregister/late join/TeamId replication without Tick or actor polling.
+
+## HUD Contract
+`UGP_TEMP_S28P_PlanetaryFerroniteHUD` (`TEMP_S28P_HUD`) — local PC-owned NativePaint readout `Ferronite: <int>` / `Ferronite: --`. SoT = bound MainBase Storage `GetTotalStored()`. PC binds TeamId + resolve + `OnStorageChanged` with immediate initial sync; rebinds on MainBase/Team change. TEMP playable-pass debt — not final production HUD.
+
 ## Scope Audit
-Branch diff vs `3b1ae705…` is GP-S28P3 only: WaitingForDropOff rename, MainBase registry delegates, haul wait/wake/retry, DropOffRetrySeconds, P3 contract + suite, non-shipping Spawn/DestroyTestMainBase helpers, docs. No P4 HUD, Hub drop-off, storage-full redesign, orbital/Score, combat, construction, path-following redesign, Blueprint/map/content commits.
+Branch vs `fb699db…` is GP-S28P4 only. `GPWorker.h` change is solely `UGP_PlanetaryFerroniteHUDContractTestRunner` UCLASS declaration for debug contract (Shipping stubs in cpp) — no Worker gameplay API/semantics. No mining/haul/drop-off/Threat/Storage redesign/orbital/Score/Hub/combat/construction/nav/content commits.
 
-Invariants confirmed: Cargo + Mine intent preserved in wait; command replacement blocks resurrect; current-target unregister; same-team register wake; timer/events not permanent Tick; one bind/timer each; Threat after Accepted only; overflow LOST unchanged; MainBase-only drop-off.
-
-## Deferred Validation
-Scenario C remains DEFERRED pending future canonical navigation/path-following movement stage (`DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md`). Not a P3 merge blocker; contract unreachable coverage PASS retained.
+## Invariants
+Storage sole Planetary Ferronite SoT; no duplicate counter; replicated MainBase not second authority SoT; local-team isolation; unregister/rebind correct; initial sync; no Tick / no PC resource polling / no GetAllActorsOfClass per frame; no enemy/Threat/Orbital/Score in HUD.
 
 ## Operator Local Assets
-untouched (DefaultEngine.ini, map, Blueprint/, Materials/ not committed)
+untouched (DefaultEngine.ini, map, Blueprint/, Materials/, authored ResourceNode, Tools/ logs not committed)
 
 ## Commit
-`500143cc6457896104b5e6a6b77062c42135a068` (READY_FOR_MERGE finalization)
+`b1a7676cf86a54aaf741b4a169f70333c1b30a1f`

@@ -36,21 +36,21 @@
 | Engine | **Unreal Engine 5.8.1** |
 | Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S28 merged** |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S28P2** @ `main` `e90b7bd48fb9080a881e6dda7be889eaa99a3161` |
+| Last closed / merged stage | **GP-S28P3** @ `main` `fb699db32d1bc79a62809274e39b8a588633cf3c` |
 | Slice 6 | **Completed** |
-| Current stage | **GP-S28P3_READY_FOR_MERGE** (`feature/gp-s28p3-dropoff-resilience`) |
+| Current stage | **GP-S28P4_READY_FOR_MERGE** (`feature/gp-s28p4-planetary-ferronite-hud`) |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** GP-S28P3 — Drop-off resilience (MainBase haul recovery). Task: [`Claude_Tasks/GP-S28P3_DropOff_Resilience.md`](Claude_Tasks/GP-S28P3_DropOff_Resilience.md). Status: **GP-S28P3_READY_FOR_MERGE**. Branch: `feature/gp-s28p3-dropoff-resilience` from `main` @ `3b1ae705…`. Operator A/B/D **PASS**; C **DEFERRED**.
+**Current:** GP-S28P4 — Minimal Planetary Ferronite HUD. Task: [`Claude_Tasks/GP-S28P4_Planetary_Ferronite_HUD.md`](Claude_Tasks/GP-S28P4_Planetary_Ferronite_HUD.md). Status: **GP-S28P4_READY_FOR_MERGE**. Branch: `feature/gp-s28p4-planetary-ferronite-hud` from `main` @ `fb699db…`. Operator A–D **PASS**.
 
-**Prior:** GP-S28P2 merged on `main` @ `e90b7bd…`. GP-S28P1 @ `86bcc974…`. P0 is a historical completed audit / plan — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
+**Prior:** GP-S28P3 merged on `main` @ `fb699db…` (operator A/B/D PASS; C DEFERRED). GP-S28P2 @ `e90b7bd…`. GP-S28P1 @ `86bcc974…`. P0 historical audit — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
 
-**Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation` — separate from P3.
+**Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation` — separate from S28P.
 
-**NEXT:** Merge GP-S28P3 only after tech-lead approval. Do **not** start P4 until explicitly assigned.
+**NEXT:** Merge GP-S28P4 only after tech-lead approval. Do **not** start next Resource Playable Pass stage until explicitly assigned.
 
 > Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28 already merged on main.
 
@@ -60,7 +60,7 @@
 2. GP-S16…GP-S28 — **DONE / merged** (selection, commands, movement, attack, worker/resources/storage)
 3. GP-SLICE7-AUDIT — combat reconciliation audit **completed on branch**, pending review (separate from S28P)
 4. **GP-S28P0** — historical resource playable pass audit / implementation plan (completed)
-5. GP-S28P1 — **DONE / MERGED** @ `86bcc974…`; GP-S28P2 — **DONE / MERGED** @ `e90b7bd…`; GP-S28P3 — **READY_FOR_MERGE**; P4 — not started
+5. GP-S28P1 — **DONE / MERGED** @ `86bcc974…`; GP-S28P2 — **DONE / MERGED** @ `e90b7bd…`; GP-S28P3 — **DONE / MERGED** @ `fb699db…`; GP-S28P4 — **READY_FOR_MERGE**
 
 ---
 

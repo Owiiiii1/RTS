@@ -10,6 +10,8 @@
 class UGP_AbilitySystemComponent;
 class UGP_PlayerAttributeSet;
 
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGP_PlayerTeamIdChanged, int32 /*OldTeamId*/, int32 /*NewTeamId*/);
+
 /**
  * Authoritative replicated player state.
  * Owns player-level ASC + PlayerAttributeSet. Owner/Avatar for ASC = this PlayerState (permanent).
@@ -38,15 +40,19 @@ public:
 	/** Authority-only. Silent no-op without authority. */
 	void SetTeamId(int32 NewTeamId);
 
+	/** Local/UI: TeamId changed (authority SetTeamId or client OnRep). */
+	FOnGP_PlayerTeamIdChanged OnTeamIdChanged;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void ClientInitialize(AController* C) override;
 
 	UFUNCTION()
-	void OnRep_TeamId();
+	void OnRep_TeamId(int32 OldTeamId);
 
 private:
 	void InitializeAbilitySystemActorInfo();
+	void BroadcastTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|AbilitySystem", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_AbilitySystemComponent> AbilitySystemComponent;

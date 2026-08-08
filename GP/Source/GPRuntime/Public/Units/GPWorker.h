@@ -361,6 +361,52 @@ private:
 	FName CancelReason;
 };
 
+/** GP-S28P4 client-safe MainBase resolve + Planetary Ferronite HUD data-source contract. */
+UCLASS()
+class GPRUNTIME_API UGP_PlanetaryFerroniteHUDContractTestRunner : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
+	void Start(UWorld* InWorld);
+
+private:
+	void ScheduleNext();
+	void AdvanceStage();
+	bool Expect(bool bOk, const TCHAR* Label);
+	void Abort(const TCHAR* Reason);
+	void Finish();
+	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void UnbindWorldCleanup();
+	void CleanupActors();
+
+	UFUNCTION()
+	void HandleStorageChanged(float PreviousTotalStored, float NewTotalStored, float TotalCapacity);
+
+	void HandleResolvedMainBaseChanged(int32 TeamId, AGP_MainBase* PreviousMainBase, AGP_MainBase* NewMainBase);
+
+	int32 StageIndex = 0;
+	int32 Failures = 0;
+	bool bFinished = false;
+	FDelegateHandle WorldCleanupHandle;
+	FTimerHandle StageTimerHandle;
+	TWeakObjectPtr<UWorld> WorldWeak;
+	TWeakObjectPtr<AGP_MainBase> Team1BaseWeak;
+	TWeakObjectPtr<AGP_MainBase> Team2BaseWeak;
+	TWeakObjectPtr<AGP_MainBase> ReplacementWeak;
+	int32 ResolvedChangeCount = 0;
+	int32 LastResolvedTeamId = -1;
+	TWeakObjectPtr<AGP_MainBase> LastResolvedNew;
+	int32 StorageEventCount = 0;
+	float LastStorageNewTotal = -1.0f;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
+};
+
 /** GP-S28P3 drop-off resilience / WaitingForDropOff contract (debug console). */
 UCLASS()
 class GPRUNTIME_API UGP_DropOffResilienceContractTestRunner : public UObject

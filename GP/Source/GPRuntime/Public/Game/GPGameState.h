@@ -34,6 +34,29 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnGP_ResourceNodeUnregistered, AGP_Resource
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnGP_MainBaseRegistered, AGP_MainBase* /*MainBase*/);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnGP_MainBaseUnregistered, AGP_MainBase* /*MainBase*/);
 
+/**
+ * Client-safe / authority-visible resolved MainBase change (GP-S28P4).
+ * Fired when the replicated per-team MainBase handle changes (register, replace, unregister, OnRep).
+ */
+DECLARE_MULTICAST_DELEGATE_ThreeParams(
+	FOnGP_ResolvedMainBaseChanged,
+	int32 /*TeamId*/,
+	AGP_MainBase* /*PreviousMainBase*/,
+	AGP_MainBase* /*NewMainBase*/);
+
+/** Replicated per-team MainBase handle for client-safe resolve (GP-S28P4). */
+USTRUCT(BlueprintType)
+struct FGP_ReplicatedMainBaseEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|MainBase")
+	int32 TeamId = -1;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|MainBase")
+	TObjectPtr<AGP_MainBase> MainBase = nullptr;
+};
+
 /** Per-team fluctuating Planetary Ferronite threat stock (GP-S28). */
 USTRUCT(BlueprintType)
 struct FGP_TeamFerroniteThreat
@@ -128,6 +151,17 @@ public:
 	bool IsMainBaseRegistryUniqueForTeam(int32 InTeamId) const;
 	void PruneInvalidMainBaseRegistrations();
 
+	/**
+	 * Client-safe MainBase resolve (GP-S28P4).
+	 * Reads replicated per-team handles — valid on clients, listen-server, and authority after registry sync.
+	 * Does not use GetAllActorsOfClass. Authority mutation remains Register/Unregister only.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GP|MainBase")
+	AGP_MainBase* FindMainBaseForTeamClientSafe(int32 InTeamId) const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|MainBase")
+	const TArray<FGP_ReplicatedMainBaseEntry>& GetReplicatedMainBases() const { return ReplicatedMainBases; }
+
 	/** Result of authority ResourceNode registry mutation (GP-S28P2). Multi-entry; not unique per team. */
 	enum class EGP_ResourceNodeRegisterResult : uint8
 	{
@@ -168,6 +202,9 @@ public:
 
 	/** C++ subscription: MainBase unregistered (authority). */
 	FOnGP_MainBaseUnregistered OnMainBaseUnregistered;
+
+	/** C++ subscription: replicated/client-safe resolved MainBase changed (GP-S28P4). */
+	FOnGP_ResolvedMainBaseChanged OnResolvedMainBaseChanged;
 
 	/** C++ subscription: old/new MatchStateTag. */
 	FOnGP_MatchStateTagChanged OnMatchStateTagChanged;
@@ -212,6 +249,13 @@ protected:
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_WinReasonTag, Category = "GP|Match")
 	FGameplayTag WinReasonTag;
 
+	/**
+	 * Replicated mirror of authority MainBase registry (one entry per playable team with a base).
+	 * Clients use FindMainBaseForTeamClientSafe — do not mutate directly.
+	 */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_ReplicatedMainBases, Category = "GP|MainBase")
+	TArray<FGP_ReplicatedMainBaseEntry> ReplicatedMainBases;
+
 	UFUNCTION()
 	void OnRep_MatchStateTag(FGameplayTag OldMatchStateTag);
 
@@ -230,6 +274,9 @@ protected:
 	UFUNCTION()
 	void OnRep_WinReasonTag(FGameplayTag OldWinReasonTag);
 
+	UFUNCTION()
+	void OnRep_ReplicatedMainBases();
+
 	void BroadcastMatchResultChanged(
 		int32 OldWinnerTeamId,
 		int32 NewWinnerTeamId,
@@ -238,6 +285,13 @@ protected:
 
 	void SyncLegacyFerroniteThreatScalar();
 	int32 FindTeamThreatIndex(int32 InTeamId) const;
+
+	/** Authority: keep ReplicatedMainBases in sync with registry and notify resolve listeners. */
+	void SetReplicatedMainBaseForTeam(int32 TeamId, AGP_MainBase* NewMainBase);
+	int32 FindReplicatedMainBaseIndex(int32 TeamId) const;
+	void NotifyResolvedMainBaseChanges(
+		const TArray<FGP_ReplicatedMainBaseEntry>& PreviousEntries,
+		const TArray<FGP_ReplicatedMainBaseEntry>& NewEntries);
 
 	static bool IsMatchStateBranchTag(const FGameplayTag& Tag);
 	static bool IsWinReasonBranchTag(const FGameplayTag& Tag);
@@ -248,6 +302,9 @@ private:
 
 	/** Authority-only weak ResourceNode registry; not replicated. */
 	TArray<TWeakObjectPtr<AGP_ResourceNode>> RegisteredResourceNodes;
+
+	/** Client/local snapshot used by OnRep_ReplicatedMainBases to emit Previous/New. */
+	TArray<FGP_ReplicatedMainBaseEntry> PreviousReplicatedMainBases;
 
 	bool EvaluateResourceNodePath(
 		const FGP_ResourceNodeSearchQuery& Query,

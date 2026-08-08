@@ -46,6 +46,7 @@ void AGP_GameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, TeamFerroniteThreatValues, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, WinnerTeamId, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, WinReasonTag, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, ReplicatedMainBases, COND_None, REPNOTIFY_Always);
 }
 
 bool AGP_GameState::IsMatchStateBranchTag(const FGameplayTag& Tag)
@@ -350,6 +351,7 @@ AGP_GameState::EGP_MainBaseRegisterResult AGP_GameState::RegisterMainBase(AGP_Ma
 
 	RegisteredMainBases.Add(MainBase);
 	OnMainBaseRegistered.Broadcast(MainBase);
+	SetReplicatedMainBaseForTeam(TeamId, MainBase);
 	UE_LOG(LogTemp, Log,
 		TEXT("AGP_GameState::RegisterMainBase: Registered=true MainBase=%s TeamId=%d CountForTeam=%d RegistrySize=%d"),
 		*GetNameSafe(MainBase),
@@ -368,6 +370,17 @@ void AGP_GameState::UnregisterMainBase(AGP_MainBase* MainBase)
 		return;
 	}
 
+	// Resolve team from replicated handle by actor pointer (TeamId on the actor may already have changed).
+	int32 ResolvedTeamId = INDEX_NONE;
+	for (const FGP_ReplicatedMainBaseEntry& Entry : ReplicatedMainBases)
+	{
+		if (Entry.MainBase == MainBase)
+		{
+			ResolvedTeamId = Entry.TeamId;
+			break;
+		}
+	}
+
 	const int32 Removed = RegisteredMainBases.RemoveAll([MainBase](const TWeakObjectPtr<AGP_MainBase>& Weak)
 	{
 		return !Weak.IsValid() || Weak.Get() == MainBase;
@@ -375,6 +388,10 @@ void AGP_GameState::UnregisterMainBase(AGP_MainBase* MainBase)
 	if (Removed > 0)
 	{
 		OnMainBaseUnregistered.Broadcast(MainBase);
+		if (ResolvedTeamId >= 1)
+		{
+			SetReplicatedMainBaseForTeam(ResolvedTeamId, nullptr);
+		}
 	}
 }
 
@@ -434,6 +451,117 @@ int32 AGP_GameState::CountRegisteredMainBasesForTeam(int32 InTeamId) const
 bool AGP_GameState::IsMainBaseRegistryUniqueForTeam(int32 InTeamId) const
 {
 	return CountRegisteredMainBasesForTeam(InTeamId) <= 1;
+}
+
+AGP_MainBase* AGP_GameState::FindMainBaseForTeamClientSafe(int32 InTeamId) const
+{
+	if (InTeamId < 1)
+	{
+		return nullptr;
+	}
+
+	for (const FGP_ReplicatedMainBaseEntry& Entry : ReplicatedMainBases)
+	{
+		if (Entry.TeamId != InTeamId)
+		{
+			continue;
+		}
+		return IsValid(Entry.MainBase) ? Entry.MainBase.Get() : nullptr;
+	}
+	return nullptr;
+}
+
+int32 AGP_GameState::FindReplicatedMainBaseIndex(int32 TeamId) const
+{
+	for (int32 Index = 0; Index < ReplicatedMainBases.Num(); ++Index)
+	{
+		if (ReplicatedMainBases[Index].TeamId == TeamId)
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
+void AGP_GameState::NotifyResolvedMainBaseChanges(
+	const TArray<FGP_ReplicatedMainBaseEntry>& PreviousEntries,
+	const TArray<FGP_ReplicatedMainBaseEntry>& NewEntries)
+{
+	TSet<int32> TeamIds;
+	for (const FGP_ReplicatedMainBaseEntry& Entry : PreviousEntries)
+	{
+		if (Entry.TeamId >= 1)
+		{
+			TeamIds.Add(Entry.TeamId);
+		}
+	}
+	for (const FGP_ReplicatedMainBaseEntry& Entry : NewEntries)
+	{
+		if (Entry.TeamId >= 1)
+		{
+			TeamIds.Add(Entry.TeamId);
+		}
+	}
+
+	auto Resolve = [](const TArray<FGP_ReplicatedMainBaseEntry>& Entries, int32 TeamId) -> AGP_MainBase*
+	{
+		for (const FGP_ReplicatedMainBaseEntry& Entry : Entries)
+		{
+			if (Entry.TeamId == TeamId)
+			{
+				return IsValid(Entry.MainBase) ? Entry.MainBase.Get() : nullptr;
+			}
+		}
+		return nullptr;
+	};
+
+	for (const int32 TeamId : TeamIds)
+	{
+		AGP_MainBase* Previous = Resolve(PreviousEntries, TeamId);
+		AGP_MainBase* NewBase = Resolve(NewEntries, TeamId);
+		if (Previous != NewBase)
+		{
+			OnResolvedMainBaseChanged.Broadcast(TeamId, Previous, NewBase);
+		}
+	}
+}
+
+void AGP_GameState::SetReplicatedMainBaseForTeam(int32 TeamId, AGP_MainBase* NewMainBase)
+{
+	if (TeamId < 1)
+	{
+		return;
+	}
+
+	const TArray<FGP_ReplicatedMainBaseEntry> Previous = ReplicatedMainBases;
+	const int32 Index = FindReplicatedMainBaseIndex(TeamId);
+	if (IsValid(NewMainBase))
+	{
+		if (Index == INDEX_NONE)
+		{
+			FGP_ReplicatedMainBaseEntry Entry;
+			Entry.TeamId = TeamId;
+			Entry.MainBase = NewMainBase;
+			ReplicatedMainBases.Add(Entry);
+		}
+		else
+		{
+			ReplicatedMainBases[Index].MainBase = NewMainBase;
+		}
+	}
+	else if (Index != INDEX_NONE)
+	{
+		ReplicatedMainBases.RemoveAt(Index);
+	}
+
+	PreviousReplicatedMainBases = ReplicatedMainBases;
+	NotifyResolvedMainBaseChanges(Previous, ReplicatedMainBases);
+}
+
+void AGP_GameState::OnRep_ReplicatedMainBases()
+{
+	NotifyResolvedMainBaseChanges(PreviousReplicatedMainBases, ReplicatedMainBases);
+	PreviousReplicatedMainBases = ReplicatedMainBases;
 }
 
 void AGP_GameState::PruneInvalidResourceNodeRegistrations()

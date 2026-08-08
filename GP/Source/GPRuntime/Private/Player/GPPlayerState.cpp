@@ -56,11 +56,19 @@ void AGP_PlayerState::SetTeamId(int32 NewTeamId)
 		return;
 	}
 
+	const int32 OldTeamId = TeamId;
 	TeamId = NewTeamId;
+	BroadcastTeamIdChanged(OldTeamId, TeamId);
 }
 
-void AGP_PlayerState::OnRep_TeamId()
+void AGP_PlayerState::OnRep_TeamId(int32 OldTeamId)
 {
+	BroadcastTeamIdChanged(OldTeamId, TeamId);
+}
+
+void AGP_PlayerState::BroadcastTeamIdChanged(int32 OldTeamId, int32 NewTeamId)
+{
+	OnTeamIdChanged.Broadcast(OldTeamId, NewTeamId);
 }
 
 void AGP_PlayerState::BeginPlay()

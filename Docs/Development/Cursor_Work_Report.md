@@ -13,10 +13,10 @@ feature/gp-s28p3-dropoff-resilience
 `500143cc6457896104b5e6a6b77062c42135a068`
 
 ## Operator Validation
-A PASS  
-B PASS  
-C DEFERRED  
-D PASS  
+- A PASS
+- B PASS
+- C DEFERRED
+- D PASS
 
 ## Automated Tests
 | Command | Result |

@@ -55,7 +55,7 @@ Scenario C deferred to **future canonical navigation/path-following movement sta
 | GP Win64 Shipping | **PASSED** |
 
 ## Scope audit (vs `3b1ae705…`)
-Allowed only: WaitingForDropOff rename; MainBase registry delegates; haul wait/wake/retry; `DropOffRetrySeconds`; P3 contracts/suite; non-shipping helpers; docs.  
+Allowed only: WaitingForDropOff rename; MainBase registry delegates; haul wait/wake/retry; `DropOffRetrySeconds`; P3 contracts/suite; non-shipping helpers; docs.
 Absent: P4 HUD, LogisticsHub drop-off, storage-full redesign, orbital/Score, combat, construction, path-following redesign, Blueprint/map/content commits.
 
 ## Invariants confirmed

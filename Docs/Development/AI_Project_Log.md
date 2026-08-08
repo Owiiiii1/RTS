@@ -1,5 +1,42 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S28P3 Finalization
+
+Status: **GP-S28P3_READY_FOR_MERGE**
+
+### Branch / baseline
+- Branch: `feature/gp-s28p3-dropoff-resilience`
+- Base: `main` @ `3b1ae705d8b15fd54daf06553337885d0420dc57`
+- Task: `Docs/Development/Claude_Tasks/GP-S28P3_DropOff_Resilience.md`
+
+### Operator validation (final)
+| Scenario | Result |
+| --- | --- |
+| A Missing MainBase + register wake | **PASS** |
+| B Destroy MainBase mid-haul | **PASS** |
+| C Unreachable → restore → retry | **DEFERRED** (not failed; future canonical navigation/path-following) |
+| D Move replaces WaitingForDropOff | **PASS** |
+
+Deferred marker retained: [`DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md`](DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md).
+
+### Automated tests (re-run)
+- `gp.Resource.RunDropOffResilienceContractTest` → `Complete Failures=0 Cancelled=None`
+- `gp.Resource.RunDepletionReassignmentContractTest` → `Complete Failures=0 Cancelled=None`
+- `gp.Resource.RunS28RegressionSuite` → `Complete Failures=0`
+
+### Builds
+- GPEditor Win64 Development + UHT — **PASSED**
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED** (non-shipping helpers / contract runner Shipping stubs)
+
+### Scope
+P3 only vs base. No P4/combat/nav redesign/content. Operator-local assets untouched.
+
+### Stop condition
+READY_FOR_MERGE. Merge after tech-lead approval. Do not start P4.
+
+---
+
 ## 2026-08-08 — GP-S28P3 Operator Validation Note (docs-only)
 
 Status: **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING**

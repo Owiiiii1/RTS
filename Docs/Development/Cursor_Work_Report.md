@@ -1,42 +1,47 @@
-# Cursor Work Report — GP-S28P3 Operator Validation Note
+# Cursor Work Report — GP-S28P3 Finalization
 
 ## Status
-GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING
+GP-S28P3_READY_FOR_MERGE
 
 ## Branch
 feature/gp-s28p3-dropoff-resilience
 
-## Tip referenced
-`422bc70454bf51a9cdd31dc2ab4f490f20f018a0` (operator helper)
+## Base
+3b1ae705d8b15fd54daf06553337885d0420dc57
 
-## Scope
-Docs-only. No C++, Config, Blueprint/map/content, no new debug helpers.
+## Final Tip
+PENDING
 
 ## Operator Validation
-| Scenario | Result |
+A PASS  
+B PASS  
+C DEFERRED  
+D PASS  
+
+## Automated Tests
+| Command | Result |
 | --- | --- |
-| A — Missing MainBase + registration wake | **PASS** |
-| B — MainBase destroyed during active haul | **PASS** |
-| C — existing MainBase unreachable → path restored → retry | **DEFERRED** |
-| D — explicit Move replaces WaitingForDropOff | **PASS** |
+| `gp.Resource.RunDropOffResilienceContractTest` | Complete Failures=0 Cancelled=None |
+| `gp.Resource.RunDepletionReassignmentContractTest` | Complete Failures=0 Cancelled=None |
+| `gp.Resource.RunS28RegressionSuite` | Complete Failures=0 |
 
-### A PASS (observed)
-WaitingForDropOff; Cargo preserved; runtime MainBase registration wakes; auto-deliver; Accepted/Threat OK; P2 PostDropOff continues.
+## Builds
+| Target | Result |
+| --- | --- |
+| GPEditor Win64 Development + UHT | PASSED |
+| GP Win64 Development | PASSED |
+| GP Win64 Shipping | PASSED |
 
-### B PASS (observed)
-Movement cancelled; `Reason=MainBaseDestroyed`; Cargo preserved; WaitingForDropOff; replacement register wakes; deliver; `ReturnToDeposit=true`; return to deposit + continue mining.
+## Scope Audit
+Branch diff vs `3b1ae705…` is GP-S28P3 only: WaitingForDropOff rename, MainBase registry delegates, haul wait/wake/retry, DropOffRetrySeconds, P3 contract + suite, non-shipping Spawn/DestroyTestMainBase helpers, docs. No P4 HUD, Hub drop-off, storage-full redesign, orbital/Score, combat, construction, path-following redesign, Blueprint/map/content commits.
 
-### D PASS (observed)
-Mine/Haul cancelled `CommandReplaced`; Held → Move; Cargo preserved; later MainBase register does not stale DropOffWait Wake; Move completes; no haul resurrect.
+Invariants confirmed: Cargo + Mine intent preserved in wait; command replacement blocks resurrect; current-target unregister; same-team register wake; timer/events not permanent Tick; one bind/timer each; Threat after Accepted only; overflow LOST unchanged; MainBase-only drop-off.
 
-### C DEFERRED (not failed)
-Current MovementComponent is not full NavMesh/path-following; wall/BlockingVolume/NavModifier after destination accept is not a valid MoveFailed operator test. See [`DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md`](DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md). Re-run after **future canonical navigation/path-following movement stage**.
+## Deferred Validation
+Scenario C remains DEFERRED pending future canonical navigation/path-following movement stage (`DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md`). Not a P3 merge blocker; contract unreachable coverage PASS retained.
 
-Remaining manual C is an **accepted deferred validation dependency** on future navigation implementation — **not** a blocker for current P3 finalization, because deterministic contract unreachable coverage already exists and remains PASS.
-
-## Helpers
-- Kept: `gp.Resource.SpawnTestMainBase`, `gp.Resource.DestroyTestMainBase`
-- Abandoned / not implemented: `MakeTestMainBaseUnreachable`, `MakeTestMainBaseReachable`
+## Operator Local Assets
+untouched (DefaultEngine.ini, map, Blueprint/, Materials/ not committed)
 
 ## Commit
-`51f88c7d15b3fe2404cd7e07922cddf5513eab08`
+PENDING

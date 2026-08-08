@@ -1019,4 +1019,29 @@ void UGP_DropOffResilienceContractTestRunner::AdvanceStage()
 	}
 }
 
+#else
+void UGP_DropOffResilienceContractTestRunner::BeginDestroy()
+{
+	bFinished = true;
+	Super::BeginDestroy();
+}
+void UGP_DropOffResilienceContractTestRunner::Start(UWorld* InWorld) { (void)InWorld; }
+void UGP_DropOffResilienceContractTestRunner::ScheduleNext() {}
+void UGP_DropOffResilienceContractTestRunner::AdvanceStage() {}
+bool UGP_DropOffResilienceContractTestRunner::Expect(bool bOk, const TCHAR* Label)
+{
+	(void)bOk;
+	(void)Label;
+	return false;
+}
+void UGP_DropOffResilienceContractTestRunner::Abort(const TCHAR* Reason) { (void)Reason; }
+void UGP_DropOffResilienceContractTestRunner::Finish() { bFinished = true; }
+void UGP_DropOffResilienceContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	(void)World;
+	(void)bSessionEnded;
+	(void)bCleanupResources;
+}
+void UGP_DropOffResilienceContractTestRunner::UnbindWorldCleanup() {}
+void UGP_DropOffResilienceContractTestRunner::CleanupActors() {}
 #endif // !UE_BUILD_SHIPPING

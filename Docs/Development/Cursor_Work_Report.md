@@ -50,4 +50,4 @@ DefaultEngine.ini, existing operator BP soft paths, map, Blueprint/, Materials/,
 Operator PIE validation: Purchase Logistics Hub → READY++ → Deploy ghost → confirm → pod → hub spawn.
 
 ## 9. Final commit SHA
-(pending commit)
+c44a80f

@@ -142,4 +142,4 @@ Feature branch clean of intentional work after finalization commit; operator-loc
 
 ## 17. Finalization commit SHA
 
-_(filled after commit)_
+030efc55469153a8d1465ac81ae3996c1bd391cb

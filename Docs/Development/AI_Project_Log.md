@@ -5,8 +5,11 @@
 Status: **GP-S32R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
 - Branch: `feature/gp-s32r-orbital-building-drop` (base `427a2aa`)
-- Building Purchase → READY inventory → Deploy placement ghost → DropPod building payload
-- Contract: `gp.Building.RunOrbitalBuildingDropContractTest` (A–O)
+- Slice ID: **GP-S32R** (GP-S34 remains historical BuildingBase/Definition foundation; BuildingBase already present)
+- Catalog: settings keys on `UGP_OrbitalDeliverySettings` (no `UGP_BuildingDefinition` yet)
+- Purchase → OwnerOnly READY → ghost placement → shared DropPod building payload (no second Orbital spend)
+- INTERIM placement: deterministic building capsule extents (not ECC_Pawn overlap)
+- Contracts Failures=0: building drop + unit drop + S28 suite + container launch/HUD + dropoff + SalvageWalker + LOS
 - GPEditor Win64 Development + UHT **PASS** (candidate); GP Dev/Shipping **NOT RUN**
 - NOT MERGED — operator validation stop
 - Report: `Docs/Development/Cursor_Work_Report.md`

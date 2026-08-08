@@ -436,7 +436,10 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		Expect(Deploy.bAccepted, TEXT("G_DeployAccept"));
 		Expect(Deploy.ReadyAfter == 0, TEXT("G_ReadyConsumed"));
 		Expect(IsValid(Deploy.SpawnedPod.Get()), TEXT("G_PodSpawned"));
-		Expect(Deploy.SpawnedPod->GetPayloadKind() == EGP_DropPodPayloadKind::Building, TEXT("G_BuildingPayloadKind"));
+		if (IsValid(Deploy.SpawnedPod.Get()))
+		{
+			Expect(Deploy.SpawnedPod->GetPayloadKind() == EGP_DropPodPayloadKind::Building, TEXT("G_BuildingPayloadKind"));
+		}
 		Expect(FMath::IsNearlyEqual(
 			OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
 			OrbitalBeforeDeploy,
@@ -510,6 +513,16 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		Expect(!NoBase.bAccepted, TEXT("L_MissingMainBasePurchaseReject"));
 		Expect(NoBase.RejectReason == EGP_BuildingDropRejectReason::MissingMainBase, TEXT("L_MissingMainBaseReason"));
 
+		// Clear hubs from earlier deploy so interim overlap validation does not reject the stub pad.
+		for (TActorIterator<AGP_LogisticsHub> It(World); It; ++It)
+		{
+			It->Destroy();
+		}
+		for (TActorIterator<AGP_DropPod> It(World); It; ++It)
+		{
+			It->Destroy();
+		}
+
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		Params.ObjectFlags |= RF_Transient;
@@ -519,8 +532,13 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 			FRotator::ZeroRotator,
 			Params);
 		MainBaseWeak = Base;
+		if (!Expect(IsValid(Base), TEXT("L_RespawnMainBase")))
+		{
+			Finish();
+			return;
+		}
 		Base->SetTeamId(ContractTeam);
-		ValidDeployLocation = Base->GetActorLocation() + FVector(900.0f, 0.0f, 0.0f);
+		ValidDeployLocation = Base->GetActorLocation() + FVector(1200.0f, 0.0f, 0.0f);
 
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
@@ -538,7 +556,10 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 				EGP_OrbitalBuildingType::LogisticsHub,
 				FTransform(FRotator::ZeroRotator, ValidDeployLocation));
 		Expect(StubDeploy.bAccepted, TEXT("N_StubDeployAccept"));
-		LastPodWeak = StubDeploy.SpawnedPod;
+		if (IsValid(StubDeploy.SpawnedPod.Get()))
+		{
+			LastPodWeak = StubDeploy.SpawnedPod;
+		}
 
 		++StageIndex;
 		ScheduleNext(0.35f);

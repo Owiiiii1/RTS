@@ -28,18 +28,24 @@ Base: GP-S31R finalization tip @ `427a2aa`
 - **Deploy:** validate READY + interim placement → spawn DropPod → consume READY (rollback if spawn fails)
 - **No Orbital spend on deploy**
 - Building pods reuse `UnitDropPodClass` / `ResolveUnitDropPodClass()`
-- Interim placement: finite transform, distance from own MainBase, overlap vs MainBase/buildings (CDO capsule + margin)
+- Interim placement (`INTERIM_MVP_PLACEMENT_VALIDATION`): finite transform, distance from own MainBase, **deterministic capsule-extent overlap vs `AGP_BuildingBase`** (not ECC_Pawn physics — building capsules Ignore Pawn / Visibility-only)
 
-## Contracts
-| Command | Expect |
+## Contracts (verified NullRHI `-game`)
+| Command | Result |
 |---|---|
-| `gp.Building.RunOrbitalBuildingDropContractTest` | Failures=0 |
-| `gp.Resource.RunOrbitalUnitDropContractTest` | Failures=0 (regression in O) |
+| `gp.Building.RunOrbitalBuildingDropContractTest` | **Failures=0** |
+| `gp.Resource.RunOrbitalUnitDropContractTest` | **Failures=0** |
+| `gp.Resource.RunS28RegressionSuite` | **Failures=0** |
+| `gp.Resource.RunContainerLaunchContractTest` | **Failures=0** |
+| `gp.Resource.RunContainerLaunchHUDContractTest` | **Failures=0** |
+| `gp.Resource.RunDropOffResilienceContractTest` | **Failures=0** |
+| `gp.Combat.RunSalvageWalkerContractTest` | **Failures=0** |
+| `gp.Combat.RunLOSFireGateContractTest` | **Failures=0** |
 
 ## Builds
 | Target | Policy |
 |---|---|
-| GPEditor Win64 Development + UHT | **Required** |
+| GPEditor Win64 Development + UHT | **PASS** |
 | GP Win64 Development / Shipping | **NOT RUN** (candidate slice) |
 
 ## Operator assets untouched

@@ -10,7 +10,6 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/BoxComponent.h"
 #include "Effects/GPGE_SpendOrbital.h"
-#include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Game/GPGameState.h"
@@ -165,31 +164,32 @@ bool GPBuildingDropAuthority::ValidateInterimPlacement(
 	const float Margin = Settings != nullptr
 		? FMath::Max(0.0f, Settings->BuildingPlacementOverlapMarginCm)
 		: 25.0f;
-	PlaceRadius += Margin;
 
-	const FCollisionShape Shape = FCollisionShape::MakeCapsule(PlaceRadius, PlaceHalfHeight);
-	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(GPBuildingPlacementOverlap), false);
-	QueryParams.AddIgnoredActor(RequestingPlayerState);
-
-	TArray<FOverlapResult> Overlaps;
-	const bool bHit = World->OverlapMultiByChannel(
-		Overlaps,
-		Loc,
-		WorldTransform.GetRotation(),
-		ECC_Pawn,
-		Shape,
-		QueryParams);
-
-	if (bHit)
+	// INTERIM_MVP_PLACEMENT_VALIDATION:
+	// Building capsules intentionally Ignore ECC_Pawn (Visibility-only selection).
+	// Do not rely on physics OverlapMulti — iterate buildings and use capsule extents.
+	for (TActorIterator<AGP_BuildingBase> It(World); It; ++It)
 	{
-		for (const FOverlapResult& Overlap : Overlaps)
+		AGP_BuildingBase* OtherBuilding = *It;
+		if (!IsValid(OtherBuilding))
 		{
-			AActor* Other = Overlap.GetActor();
-			if (!IsValid(Other))
-			{
-				continue;
-			}
-			if (Other->IsA(AGP_BuildingBase::StaticClass()))
+			continue;
+		}
+
+		float OtherRadius = 80.0f;
+		float OtherHalfHeight = 120.0f;
+		GPBuildingDropAuthorityPrivate::GetPlacementCapsuleExtent(
+			OtherBuilding->GetClass(),
+			OtherRadius,
+			OtherHalfHeight);
+
+		const float MinSeparation2D = PlaceRadius + OtherRadius + Margin;
+		const float Dist2DToOther = FVector::Dist2D(Loc, OtherBuilding->GetActorLocation());
+		if (Dist2DToOther <= MinSeparation2D + KINDA_SMALL_NUMBER)
+		{
+			const float VerticalGap = FMath::Abs(Loc.Z - OtherBuilding->GetActorLocation().Z);
+			const float MinSeparationZ = PlaceHalfHeight + OtherHalfHeight + Margin;
+			if (VerticalGap <= MinSeparationZ + KINDA_SMALL_NUMBER)
 			{
 				OutReject = EGP_BuildingDropRejectReason::PlacementOverlap;
 				return false;

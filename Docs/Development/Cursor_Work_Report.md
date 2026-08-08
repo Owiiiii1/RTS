@@ -10,7 +10,7 @@ feature/gp-s28p3-dropoff-resilience
 3b1ae705d8b15fd54daf06553337885d0420dc57
 
 ## Final Tip
-`8888548697d0ab5244bba94db5c33b62e6614489`
+`f102b91` (branch tip; finalization content `500143c`)
 
 ## Operator Validation
 - A PASS
@@ -44,4 +44,4 @@ Scenario C remains DEFERRED pending future canonical navigation/path-following m
 untouched (DefaultEngine.ini, map, Blueprint/, Materials/ not committed)
 
 ## Commit
-`8888548697d0ab5244bba94db5c33b62e6614489`
+`500143cc6457896104b5e6a6b77062c42135a068` (READY_FOR_MERGE finalization)

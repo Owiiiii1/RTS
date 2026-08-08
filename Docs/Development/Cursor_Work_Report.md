@@ -1,22 +1,47 @@
-# Cursor Work Report — GP-S28P3 Spec Correction (Subscriptions)
+# Cursor Work Report — GP-S28P3 Finalization
 
 ## Status
-**GP-S28P3_SPEC_READY_FOR_REVIEW**
+GP-S28P3_READY_FOR_MERGE
 
-## Baseline
-`docs/gp-s28p3-dropoff-resilience-spec` (docs-only; main @ `e90b7bd…` includes P2)
+## Branch
+feature/gp-s28p3-dropoff-resilience
 
-## Review correction
-Fixed contradiction: mid-haul MainBase destruction cannot rely on bindings that exist only while WaitingForDropOff.
+## Base
+3b1ae705d8b15fd54daf06553337885d0420dc57
 
-## Active-haul interruption subscription
-While `ReturningToBase` / `DroppingOff`: bind GameState `OnMainBaseUnregistered` (preferred; matches ResourceNode registry pattern) filtered to **current haul target** → cancel move → WaitingForDropOff; preserve Cargo / Mine intent / search anchor. Clear binding on drop-off success, enter wait, command replace, haul leave, EndPlay.
+## Final Tip
+`008c2a38bfd28fe1cf3dbffb9a6ad20c2a92ad12`
 
-## Waiting registration wake subscription
-While WaitingForDropOff only: bind `OnMainBaseRegistered` → wake once → unsubscribe → clear retry → attempt haul. Unrelated register/unregister = no-op. Unregister while waiting = no-op.
+## Operator Validation
+- A PASS
+- B PASS
+- C DEFERRED
+- D PASS
 
-## Docs-only
-No C++ / Config / Blueprint / map / content changes.
+## Automated Tests
+| Command | Result |
+| --- | --- |
+| `gp.Resource.RunDropOffResilienceContractTest` | Complete Failures=0 Cancelled=None |
+| `gp.Resource.RunDepletionReassignmentContractTest` | Complete Failures=0 Cancelled=None |
+| `gp.Resource.RunS28RegressionSuite` | Complete Failures=0 |
+
+## Builds
+| Target | Result |
+| --- | --- |
+| GPEditor Win64 Development + UHT | PASSED |
+| GP Win64 Development | PASSED |
+| GP Win64 Shipping | PASSED |
+
+## Scope Audit
+Branch diff vs `3b1ae705…` is GP-S28P3 only: WaitingForDropOff rename, MainBase registry delegates, haul wait/wake/retry, DropOffRetrySeconds, P3 contract + suite, non-shipping Spawn/DestroyTestMainBase helpers, docs. No P4 HUD, Hub drop-off, storage-full redesign, orbital/Score, combat, construction, path-following redesign, Blueprint/map/content commits.
+
+Invariants confirmed: Cargo + Mine intent preserved in wait; command replacement blocks resurrect; current-target unregister; same-team register wake; timer/events not permanent Tick; one bind/timer each; Threat after Accepted only; overflow LOST unchanged; MainBase-only drop-off.
+
+## Deferred Validation
+Scenario C remains DEFERRED pending future canonical navigation/path-following movement stage (`DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md`). Not a P3 merge blocker; contract unreachable coverage PASS retained.
+
+## Operator Local Assets
+untouched (DefaultEngine.ini, map, Blueprint/, Materials/ not committed)
 
 ## Commit
-`e90fc0b244af884bfeb63a7592662d25abb24ecf`
+`500143cc6457896104b5e6a6b77062c42135a068` (READY_FOR_MERGE finalization)

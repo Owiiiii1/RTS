@@ -34,6 +34,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Waiting", meta = (ClampMin = "0.1"))
 	float WaitingForResourceRetrySeconds = 3.0f;
 
+	/** WaitingForDropOff safety retry interval (MainBase register wake remains primary). */
+	UPROPERTY(Config, EditAnywhere, Category = "Waiting", meta = (ClampMin = "0.1"))
+	float DropOffRetrySeconds = 3.0f;
+
 	/** Delay before Destroy after depletion transition (0 → next tick). */
 	UPROPERTY(Config, EditAnywhere, Category = "Depletion", meta = (ClampMin = "0.0"))
 	float DepletionDestroyDelaySeconds = 0.25f;

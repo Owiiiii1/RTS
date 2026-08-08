@@ -1,5 +1,130 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S28P3 Finalization
+
+Status: **GP-S28P3_READY_FOR_MERGE**
+
+### Branch / baseline
+- Branch: `feature/gp-s28p3-dropoff-resilience`
+- Base: `main` @ `3b1ae705d8b15fd54daf06553337885d0420dc57`
+- Task: `Docs/Development/Claude_Tasks/GP-S28P3_DropOff_Resilience.md`
+
+### Operator validation (final)
+| Scenario | Result |
+| --- | --- |
+| A Missing MainBase + register wake | **PASS** |
+| B Destroy MainBase mid-haul | **PASS** |
+| C Unreachable → restore → retry | **DEFERRED** (not failed; future canonical navigation/path-following) |
+| D Move replaces WaitingForDropOff | **PASS** |
+
+Deferred marker retained: [`DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md`](DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md).
+
+### Automated tests (re-run)
+- `gp.Resource.RunDropOffResilienceContractTest` → `Complete Failures=0 Cancelled=None`
+- `gp.Resource.RunDepletionReassignmentContractTest` → `Complete Failures=0 Cancelled=None`
+- `gp.Resource.RunS28RegressionSuite` → `Complete Failures=0`
+
+### Builds
+- GPEditor Win64 Development + UHT — **PASSED**
+- GP Win64 Development — **PASSED**
+- GP Win64 Shipping — **PASSED** (non-shipping helpers / contract runner Shipping stubs)
+
+### Scope
+P3 only vs base. No P4/combat/nav redesign/content. Operator-local assets untouched.
+
+### Stop condition
+READY_FOR_MERGE. Merge after tech-lead approval. Do not start P4.
+
+---
+
+## 2026-08-08 — GP-S28P3 Operator Validation Note (docs-only)
+
+Status: **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p3-dropoff-resilience` (no merge; docs only)
+
+### Operator results
+| Scenario | Result |
+| --- | --- |
+| A Missing MainBase + register wake | **PASS** |
+| B Destroy MainBase mid-haul + replacement | **PASS** |
+| C Unreachable → restore → retry | **DEFERRED** (current movement architecture; not a P3 failure) |
+| D Move replaces WaitingForDropOff | **PASS** |
+
+### Deferred marker
+[`DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md`](DEFERRED_VALIDATION_GP-S28P3_Scenario_C.md) — re-run after **future canonical navigation/path-following movement stage**.
+
+### Not implemented
+`gp.Resource.MakeTestMainBaseUnreachable` / `MakeTestMainBaseReachable` — proposal abandoned. `SpawnTestMainBase` / `DestroyTestMainBase` kept.
+
+### Production code
+None (docs only). Automated unreachable contract coverage unchanged / still PASS.
+
+### Stop condition
+Finalization still pending. Manual C is accepted deferred validation dependency, not a P3 semantic blocker. No merge. No P4.
+
+---
+
+## 2026-08-08 — GP-S28P3 Operator Test Helper Correction
+
+Status: **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch
+`feature/gp-s28p3-dropoff-resilience` (no merge)
+
+### Cause
+`AGP_UnitBase::TeamId` is `EditInstanceOnly` — Blueprint class defaults / drag-drop PIE leave MainBase at TeamId=-1; Details edits may not call `SetTeamId` → registry miss.
+
+### What was done
+- Non-shipping `gp.Resource.SpawnTestMainBase [TeamId]` — native `AGP_MainBase`, `SetTeamId`, registry verify log
+- Non-shipping `gp.Resource.DestroyTestMainBase [TeamId]` — destroy registered team MainBase
+- Contract asserts Spawn→BeginPlay(unassigned)→SetTeamId→register once→destroy→unregister once
+- Production MainBase lifecycle unchanged (`NotifyTeamIdChanged` already registers after runtime SetTeamId)
+
+### Tests / build
+- `gp.Resource.RunDropOffResilienceContractTest` → Failures=0
+- GPEditor Win64 Development + UHT — **PASSED**
+
+### Stop condition
+Still operator validation pending. No merge. No P4.
+
+---
+
+## 2026-08-08 — GP-S28P3 Drop-Off Resilience Implementation
+
+Status: **GP-S28P3_CODE_READY_OPERATOR_VALIDATION_PENDING**
+
+### Branch / baseline
+- Branch: `feature/gp-s28p3-dropoff-resilience`
+- Base: `main` @ `3b1ae705d8b15fd54daf06553337885d0420dc57`
+- Task: `Docs/Development/Claude_Tasks/GP-S28P3_DropOff_Resilience.md`
+
+### What was done
+- Rename unused `WaitingForStorage` → `WaitingForDropOff` (haul + Worker activity)
+- `AGP_GameState` authority multicasts `OnMainBaseRegistered` / `OnMainBaseUnregistered`
+- UnitCommand: `EnterWaitingForDropOff`, active-haul unregister bind, waiting register wake, `DropOffRetrySeconds` safety retry, deferred resume
+- Missing/destroyed/unreachable MainBase + Cargo > 0 preserves Cargo + held Mine (no `FinishHaulChain(true)` abandon)
+- Contract `gp.Resource.RunDropOffResilienceContractTest` + S28 suite entry; hauling ownership case updated for P3 wait
+- Operator-local Blueprint/Materials/map/DefaultEngine.ini left uncommitted
+
+### Tests (headless `-game -NullRHI`)
+- `gp.Resource.RunDropOffResilienceContractTest` → `Complete Failures=0 Cancelled=None`
+- `gp.Resource.RunDepletionReassignmentContractTest` → `Complete Failures=0 Cancelled=None`
+- `gp.Resource.RunS28RegressionSuite` → `Complete Failures=0`
+
+### Builds
+- GPEditor Win64 Development + UHT — **PASSED**
+- GP Dev / Shipping — deferred to finalization
+
+### Commit
+`fa98a64175b25c16244fe234aadff627896ad213`
+
+### Stop condition
+Operator PIE A–D pending. No merge. No P4.
+
+---
+
 ## 2026-08-08 — GP-S28P3 Spec Correction (Active-Haul vs Waiting Subscriptions)
 
 Status: **GP-S28P3_SPEC_READY_FOR_REVIEW**

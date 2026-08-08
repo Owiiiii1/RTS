@@ -1,18 +1,25 @@
 # Core Gameplay Loop
 
-> **Canonical model:** цей документ узгоджений з [ADR-0009 (Orbital Delivery)](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md). Усі non-initial units / buildings / walls прибувають **orbital drop** (no local production / construction). Деталі shipping pipeline — [`10_Orbital_Delivery`](10_Orbital_Delivery.md); two-state Ferronite — [`06_Resources`](06_Resources.md) §Container System; будівлі — [`05_Buildings`](05_Buildings.md). Where GDD/12 §4 надає більш деталізований loop spec, він — verbatim source; цей doc описує той самий loop без суперечностей.
+> **Canonical model:** узгоджений з [ADR-0009](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md) (+ 2026-08-08 procurement refinement). Усі non-initial units / buildings / walls прибувають **з орбіти** (no local production / construction). Units land at MainBase **Unit Drop Zone** (manifest + transport slots). Buildings: **Purchase → READY inventory → Deploy** (ghost). Shared DropPod/rocket. Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md); Ferronite — [`06_Resources`](06_Resources.md); будівлі — [`05_Buildings`](05_Buildings.md).
+
+```
+Mine → Containers → Launch → OrbitalFerronite (+ Score)
+  → Unit Order (manifest / slots) → DropPod → Unit Drop Zone → control units
+  → Building Purchase → READY → Deploy ghost → DropPod → building
+```
+
+Старт: MainBase + 2 Workers pre-deployed; `OrbitalFerronite = 0`.
 
 ## Canonical Loop (One Sentence Per Step)
 
 ```
 Land  ->  Scout  ->  Mine  ->  Carry to MainBase containers (raw Planetary Ferronite, +FerroniteThreatValue)
       ->  Container fills  ->  Launch to orbit (-FerroniteThreatValue, +OrbitalFerronite +FerroniteScore)
-      ->  Order drops (spend OrbitalFerronite)  ->  Pods deliver units / buildings / walls
+      ->  Units: manifest order (transport slots) -> DropPod -> MainBase Unit Drop Zone
+      ->  Buildings: Purchase -> READY inventory -> Deploy ghost -> DropPod -> placed building
       ->  Expand / Defend (SWARM scales with FerroniteThreatValue)
       ->  Win by Delivery Quota OR highest FerroniteScore at timer.
 ```
-
-Старт: MainBase + 2 Workers pre-deployed; `OrbitalFerronite = 0`.
 
 ## Loops Overview
 
@@ -29,8 +36,10 @@ Land  ->  Scout  ->  Mine  ->  Carry to MainBase containers (raw Planetary Ferro
 - Send Workers to Ferronite Deposit (`GP.Command.Mine`).
 - Worker mines → carries raw Ferronite → returns до MainBase → drop-off наповнює container (raw Planetary Ferronite, **raises `FerroniteThreatValue`**).
 - Container fills → launch to orbit: `-FerroniteThreatValue`, `+OrbitalFerronite`, `+FerroniteScore`.
-- Spend `OrbitalFerronite` через Order Menu: order orbital drops (Workers, Salvage Walkers, Logistics Hub, Defensive Turret, Walls).
-- Increase unit cap via Logistics Hub drop (`UGP_PlayerAttributeSet.MaxUnits`). Per Pillar 4 — capacity expansion є свідомий strategic spend.
+- Spend `OrbitalFerronite` via orbital procurement:
+  - **Units:** build transport-slot manifest → Confirm → DropPod to MainBase Unit Drop Zone.
+  - **Buildings:** Purchase → READY inventory → later Deploy (ghost) → DropPod to chosen location (no second spend).
+- Increase unit cap via Logistics Hub (purchase/deploy). Per Pillar 4 — capacity expansion є свідомий strategic spend.
 - React to SWARM waves: position Salvage Walker, drop Defensive Turret / Walls біля threatened deposits / buildings; Worker repairs damaged assets (`GP.Command.Repair`).
 - Scout opponent (minimap awareness, mid-match push для denied expansion).
 - Balance **greed vs safety**: тримати raw Ferronite у containers = вищий `FerroniteThreatValue` = більше swarm pressure; швидко shipping = безпечніше + швидше score.
@@ -103,20 +112,28 @@ AGP_PlayerController (local)
    - `GE_GP_AddOrbital` → `OrbitalFerronite += converted` (spendable).
    - `GE_GP_AddScore` → `FerroniteScore += converted` (monotonic victory score).
    - `FerroniteThreatValue -= launched` — shipping relieves SWARM pressure.
-8. Player витрачає `OrbitalFerronite` через `GE_GP_SpendOrbital` при order drop (Order Menu).
+8. Player витрачає `OrbitalFerronite` через `GE_GP_SpendOrbital`:
+   - Unit Confirm (manifest total), or
+   - Building Purchase (READY inventory).
+   Deploy of READY buildings does **not** spend again.
 
 Деталі — [`06_Resources`](06_Resources.md), [`10_Orbital_Delivery`](10_Orbital_Delivery.md).
 
-## Acquisition Loop (Orbital Drops — MVP)
+## Acquisition Loop (Orbital Procurement — MVP)
 
-Заміняє pre-pivot production + construction loops. Local production / construction усунено.
+Заміняє pre-pivot production + construction. Local production / construction усунено. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md).
 
-1. Player opens Order Menu (`GP.Command.OrderDrop`).
-2. Selects drop type: `GP.Drop.Type.{Unit, Building, Wall}` (Worker, Salvage Walker, Logistics Hub, Defensive Turret, Wall, Wall Turret).
-3. Server validates: `OrbitalFerronite >= UGP_OrbitalDropDefinition.Cost`, drop zone valid (actively-visible FoW, cell occupancy, clearance), `CurrentUnits < MaxUnits` для unit drops.
-4. `GE_GP_SpendOrbital` applied (-Cost `OrbitalFerronite`).
-5. `UGP_OrbitalDeliverySubsystem` спавнить `AGP_DropPod` (2-3 s telegraph descent, visible усім + SWARM).
-6. Pod lands → unit / building / wall deployed **immediately operational** (no construction phase).
+### Units
+
+1. Open Unit Order UI; fill manifest (transport slots; Worker example 1, Salvage Walker 2; pod capacity example 4).
+2. Server validates Orbital total, slots, MaxUnits (reject full manifest if over), MainBase Unit Drop Zone.
+3. `GE_GP_SpendOrbital` once → DropPod → Unit Drop Zone → multi-unit offsets → selectable.
+
+### Buildings
+
+1. Purchase → `GE_GP_SpendOrbital` once → READY inventory++.
+2. Deploy mode: ghost; Esc/RMB cancels (READY stays).
+3. LMB valid → consume one READY → DropPod → building (**no second spend**).
 
 Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md), [`05_Buildings`](05_Buildings.md), [`04_Units`](04_Units.md).
 
@@ -186,56 +203,29 @@ Balance цих failure loops — primary gameplay tension.
 
 ## Resource Spend Rule
 
-Усі spend transactions — через server-applied `UGameplayEffect`:
+Усі Orbital spends — через server-applied Instant `UGameplayEffect` (`GE_GP_SpendOrbital`). Direct attribute mutate banned.
 
-```
-Player Order Drop (Order Menu)
-   |
-   v
-Server validates:
-   - Player owns the order (AGP_PlayerState.TeamId).
-   - OrbitalFerronite >= UGP_OrbitalDropDefinition.Cost.
-   - CurrentUnits < MaxUnits (для unit drops).
-   - Drop zone valid (FoW visible, cell free, clearance OK).
-   |
-   v
-GE_GP_SpendOrbital applied (Instant, -Cost OrbitalFerronite).
-   |
-   v
-UGP_OrbitalDeliverySubsystem spawns AGP_DropPod.
-   |
-   v
-On landing -> unit / building / wall operational -> replicate.
-```
+Spend moments:
 
-При `OrbitalFerronite < Cost` — GE failure, order fails, UI shows "Insufficient Orbital Ferronite" feedback (per [`09_UI_UX`](09_UI_UX.md)).
+| Action | Spend? |
+| --- | --- |
+| Unit manifest Confirm | Yes — total cost once |
+| Building Purchase | Yes — purchase cost once → READY++ |
+| Building Deploy (READY) | **No** — consume READY only |
+| Cancel ghost placement | **No** |
+
+Unit Confirm also validates transport slots + MaxUnits (reject whole manifest if over) + Unit Drop Zone. Building Deploy validates READY + placement.
+
+При insufficient Orbital — order fails; UI "Insufficient Orbital Ferronite" (per [`09_UI_UX`](09_UI_UX.md)).
 
 ## Cap Increase Rule
 
-Per Pillar 4 (Capacity Is Strategy). `MaxUnits` зростає **тільки** через explicit `OrbitalFerronite` spend на Logistics Hub drop:
+Per Pillar 4 (Capacity Is Strategy). `MaxUnits` зростає **тільки** через Logistics Hub orbital **purchase** (READY) then **deploy**:
 
 ```
-Player orders Logistics Hub drop (Order Menu)
-   |
-   v
-Server validates: OrbitalFerronite >= Cost, drop zone valid.
-   |
-   v
-GE_GP_SpendOrbital applied (-Cost OrbitalFerronite).
-   |
-   v
-AGP_DropPod descends -> Logistics Hub lands operational.
-   |
-   v
-On landing:
-   - GE_GP_UnitCap_Plus5 applied to owner PlayerState (+5 MaxUnits, Infinite duration).
-   - +N MaxContainerCount bonus applied to MainBase Storage.
-   - HUD updates CurrentUnits / MaxUnits через RepNotify.
-   |
-   v
-On Logistics Hub destroyed / sold:
-   - GE_RemovalOnDestroy removes Infinite GE -> MaxUnits -= 5; container cap bonus removed.
-   - HUD updates.
+Purchase Logistics Hub → GE_GP_SpendOrbital → READY++
+Deploy READY → DropPod → On landing: GE_GP_UnitCap_Plus5 (+MaxUnits) + container cap bonus
+On Hub destroyed/sold → remove Infinite GE → MaxUnits/cap bonuses reverse
 ```
 
 **Hard constraint:** жодного auto-cap-growth, time-based cap, або bonus-cap-without-spend. Per A16 (Capacity-Ignoring Drift) у `gp-mechanics-validator`.

@@ -67,7 +67,10 @@ AGP_GameState.MatchTimeRemaining     ─►    RepNotify             ─►   UG
 UGP_OrbitalDeliverySubsystem.Catalog ─►    OnRep / delegate      ─►   UGP_OrderMenuVM      ◄─►  WBP_GP_HUD_OrderMenu
 ```
 
-> Post-pivot (per [ADR-0009](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md)): there is **no Build menu / Production queue UI**. Local production / construction is removed. The only ordering surface is the **orbital Order Menu** (`UGP_OrderMenuVM` → `WBP_GP_HUD_OrderMenu`), opened at the Logistics Hub / via the Order Menu, which orders drops through `UGP_OrbitalDeliverySubsystem` (`Server_RequestOrbitalDrop`). References to `UGP_ProductionVM` / `UGP_ConstructionVM` / `UGP_BuildMenuVM` and their widgets below are **superseded** and retained only as pre-pivot history.
+> Post-pivot (ADR-0009 + 2026-08-08 refinement): **no Build / Production queue UI**. Ordering surfaces:
+> - **Unit Order** — manifest builder (slots / costs) → DropPod → MainBase Unit Drop Zone (no world reticle for normal units).
+> - **Building Order** — Purchase → READY list → Deploy ghost (placement) → DropPod (no second spend).
+> Shared DropPod presentation. `UGP_OrderMenuVM` / TEMP HUD may host both panels. Pre-pivot Production/Construction/BuildMenu VMs superseded.
 
 Rules:
 
@@ -147,7 +150,7 @@ Stage — design only. Поверх existing widget naming у [`GDD/09_UI_UX`](.
 | Worker cargo bar | `UGP_CargoComponent.CurrentCargo` (worker) | `OnRep_CurrentCargo` | All clients (for "carry over head" indicator) |
 | Order menu items | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`, read via PC) | Static (set at match start) | N/A |
 | Command bar items | `SelectedUnits[i].UnitDefinition.AllowedCommands` | On `OnSelectionChanged` | N/A |
-| Drop-target reticle | Local drop-targeting reticle (replaces ghost-building actor) | N/A | Local only |
+| Drop-target reticle / building ghost | Local **building deploy** ghost (units use Unit Drop Zone — no free placement reticle) | N/A | Local only |
 | Predictive command pulse decal | Local PC spawn | N/A | Local only |
 | Rejected command red pulse | `Client_NotifyCommandRejected` RPC | One-shot | RPC-driven |
 | Idle worker alert | `UGP_MiningComponent::OnIdleWithNoDeposit` delegate per worker | Delegate | Local only |

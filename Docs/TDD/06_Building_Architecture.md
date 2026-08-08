@@ -76,29 +76,28 @@ public:
 
 `EffectsOnPlacement` apply the moment the drop pod lands (no construction wait). There is no `BuildTime`, no `AllowedProductions` — buildings do not build other things; new units/buildings come from the global Order Menu (orbital). Grid fields (`FootprintCells`, `ClearanceCells`, `bMountsOnWall`, `bCanHostWallMount`) and economy fields (`bSellable`, `SellRefundRate`) are documented in §Build Grid System and §Sell + Demolish System.
 
-## Building Lifecycle — Orbital Drop
+## Building Lifecycle — Orbital Procurement
 
-**Усе крім initial MainBase прибуває з орбіти.** Player не будує локально. Орбітальний drop flow:
+**Усе крім initial MainBase прибуває з орбіти.** Player не будує локально.
 
 ```
-Player orders building from Order Menu (per TDD/14_Orbital_Delivery)
-  → Server spends OrbitalFerronite (GE_GP_SpendOrbital)
-  → UGP_OrbitalDeliverySubsystem schedules drop pod (AGP_DropPod)
-  → Pod descent telegraph (multicast cosmetic, 2-3 s)
-  → Pod lands at chosen grid cell (validated via UGP_BuildGridSubsystem)
-  → Server spawns final AGP_BuildingBase (already complete — no construction phase)
-  → Pod actor destroyed
-  → Building immediately operational; EffectsOnPlacement applied
+Purchase → GE_GP_SpendOrbital → READY inventory++
+Deploy ghost (LMB) → READY-- → DropPod → AGP_BuildingBase operational
+Esc/RMB cancel deploy → READY unchanged (no refund; purchase already paid)
 ```
+
+Units use a **separate** Unit Delivery path to MainBase Unit Drop Zone (manifest + transport slots) — see TDD/14 / GDD/10. Buildings do **not** land on the Unit Drop Zone.
+
+Building deploy still uses grid/FoW validation when those systems exist (TDD/06 grid + TDD/15). EffectsOnPlacement apply on landing.
 
 MVP buildings list:
 
 | Building | Source | Function |
 | --- | --- | --- |
-| `AGP_MainBase` | Initial deployment (game start, pre-placed per faction StartingBuildings) | Container storage + ship-to-orbit launch + Worker drop-off zone + sight source |
-| `AGP_LogisticsHub` | Orbital drop | +5 MaxUnits + expanded container cap (DA-tunable) + sight source |
-| `AGP_DefensiveTurret` | Orbital drop | Auto-attack SWARM/enemy у range + sight source |
-| `AGP_Wall` / `AGP_WallTurret` | Orbital drop (drag-build pipeline) | Perimeter defense; turret mounts on wall (see §Wall System) |
+| `AGP_MainBase` | Initial deployment (game start, pre-placed per faction StartingBuildings) | Container storage + launch + Worker drop-off + **Unit Drop Zone** + sight |
+| `AGP_LogisticsHub` | Orbital purchase → READY → deploy | +5 MaxUnits + expanded container cap (DA-tunable) + sight |
+| `AGP_DefensiveTurret` | Orbital purchase → READY → deploy | Auto-attack SWARM/enemy у range + sight |
+| `AGP_Wall` / `AGP_WallTurret` | Orbital purchase → READY → deploy (drag later) | Perimeter defense; turret mounts on wall |
 | `AGP_FerroniteDeposit` | Level-placed (natural) | Resource node, not player-controlled |
 
 ## Storage Component

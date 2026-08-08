@@ -120,6 +120,22 @@ Reject — same hybrid issue. Cleaner to commit fully.
 
 Adds parallel system. Pillar 8 (Simple Core) violation — two ways to do same thing.
 
+## Refinement — 2026-08-08 (Owner-approved; does not replace ADR)
+
+This note **refines placement/procurement UX** without overturning the pillar (no local production; all non-initial assets via DropPod; GAS spend; FoW remains relevant for **building** deploy when FoW exists).
+
+| Topic | Refinement |
+| --- | --- |
+| Dual flows | **Unit Delivery** vs **Building Purchase→READY→Deploy** share one DropPod/rocket family. |
+| Unit landing | No free world placement for normal units. Land at authored MainBase **Unit Drop Zone** (not hardcoded BaseLocation+offset). |
+| Transport slots | Unit pods use data-driven **PodTransportSlotCapacity** + per-unit **TransportSlotCost** (MVP examples: capacity 4; Worker 1; Salvage Walker 2). Distinct from MaxUnits. |
+| Unit spend | Spend once on manifest Confirm. Reject whole manifest if over MaxUnits (no silent partial fill). |
+| Building spend | Spend on **Purchase** → READY inventory. Deploy consumes READY; **no second Orbital charge**. Esc cancel keeps READY. |
+| FoW rule #4 | Continues to apply to **building placement / deploy validation** when FoW ships. Unit Drop Zone path does not use FoW click targeting. |
+| Presentation | Native DropPod lifecycle + authored BP mesh/Niagara soft refs; owner-replaceable visuals without gameplay rewrite. |
+
+Canonical player docs: `Docs/GDD/10_Orbital_Delivery.md`. Engineering: `Docs/TDD/14_Orbital_Delivery.md`.
+
 ## References
 
 - Memory rule: `project_orbital_delivery_model`.

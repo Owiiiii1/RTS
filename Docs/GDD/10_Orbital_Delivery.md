@@ -2,149 +2,274 @@
 
 ## Core Fantasy
 
-Гравець керує **видобувною експедицією** на ворожій планеті. Усе, що з'являється на планеті після initial landing — прибуває з орбіти. Player не будує локально. Player order-ить drop pods за Orbital Ferronite. Reference fantasy: Helldivers orbital deployment / supply drops.
+Гравець керує **видобувною експедицією** на ворожій планеті. Усе, що з'являється на планеті після initial landing — прибуває з орбіти. Player **нічого не виробляє локально**. Reference fantasy: Helldivers orbital deployment / supply drops.
 
-Цей doc описує **гравецьке відчуття і правила**. Engineering implementation — [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md).
+**Canonical pipeline:**
+
+```
+Planetary Ferronite → containers → launch → Orbital Ferronite
+→ orbital procurement → orbital delivery → deployed asset
+```
+
+**NO:** barracks/factory production, Worker Build ability, local construction queue, local unit production.
+
+Цей doc описує **гравецьке відчуття і правила**. Engineering — [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md).
+
+> **Owner refinement (2026-08-08):** Unit delivery and building procurement are **two flows** sharing one DropPod/rocket presentation. Units land at the MainBase **Unit Drop Zone** (no free world placement). Buildings are **purchased into orbital inventory (READY)** then **deployed later** via ghost placement — spend happens at purchase, not at placement confirm.
 
 ## Two-State Resource (Recap)
 
-Per [`06_Resources`](06_Resources.md) — Ferronite існує у двох станах:
+Per [`06_Resources`](06_Resources.md):
 
 | State | Source | Use |
 | --- | --- | --- |
-| **Planetary** | Mined by Workers, dropped at MainBase | Sits у Containers. **Не spendable.** Vulnerable. |
-| **Orbital** | Container shipped to orbit | **Spendable currency** для orbital drops. Safe (off-planet). |
+| **Planetary** | Mined by Workers, dropped at MainBase | Containers. **Not spendable.** Vulnerable. |
+| **Orbital** | Container shipped to orbit | **Spendable currency** for orbital procurement. Safe. |
 
-Conversion: Container full → launch (2-3 s delay, vulnerable window) → Container departs → Orbital Ferronite += Container.Volume.
+## Philosophy — Reaffirm
 
-## What's Orderable (MVP)
+| Rule | Meaning |
+| --- | --- |
+| No local production | Nothing is built/trained on the planet surface after match start. |
+| Initial exception only | MainBase + **2 Workers** pre-deployed. |
+| All else from orbit | Additional Workers, Salvage Walkers, Logistics Hub, Turrets, Walls — orbital only. |
+| Shared delivery actor | Units and buildings use the **same** MVP DropPod/rocket visual family. |
 
-| Drop Type | Cost (DA placeholder) | Effect |
+## Two Procurement Flows
+
+| Flow | Spend moment | Placement | Payload |
+| --- | --- | --- | --- |
+| **A. Unit Delivery** | On Confirm Order (manifest) | Fixed: MainBase **Unit Drop Zone** | 1..N units packed by **Transport Slots** |
+| **B. Building Procurement + Deployment** | On **Purchase** → READY inventory | Later: ghost placement → DropPod to chosen cell | Exactly **one** READY building item |
+
+Buildings do **not** land in the Unit Drop Zone. Units do **not** use free world placement for normal orders.
+
+---
+
+## A — Unit Delivery
+
+### MainBase Unit Drop Zone
+
+Player does **not** choose a world landing point for normal unit orders.
+
+All ordered player units arrive at an authored **Unit Drop Zone** relative to MainBase:
+
+- Authored scene anchor / component on MainBase (exact class = implementation decision).
+- Server-resolved; replicated delivery targets the same authoritative point.
+- Owner can move the landing pad in BP/MainBase visual **without** C++ rewrite of offsets.
+- Location must **not** be hardcoded as `BaseLocation + FVector(...)`.
+
+Unit Drop Zone is for **unit transport pods only**.
+
+### Transport Slots (pod capacity)
+
+Unit orbital delivery uses **Transport Slot Capacity** of one pod — **different** from `MaxUnits` / `CurrentUnits`.
+
+| Concept | Meaning |
+| --- | --- |
+| `PodTransportSlotCapacity` | Capacity of **one** delivery pod (data-driven). |
+| `UnitTransportSlotCost` | Slots consumed per unit type (data-driven). |
+| `MaxUnits` / `CurrentUnits` | Total army/workforce cap (player attribute). |
+
+**MVP tuning example (not immutable balance):**
+
+| Field | Example |
+| --- | --- |
+| Pod capacity | **4** slots |
+| Worker | **1** slot |
+| Salvage Walker | **2** slots |
+
+Valid packings (examples): 4 Workers; 2 Salvage Walkers; 2 Workers + 1 Salvage Walker; etc.
+
+**Rule:**
+
+```
+sum(UnitCount × UnitTransportSlotCost) <= PodTransportSlotCapacity
+```
+
+Future-proof schema (do not implement now): larger pods, doctrines/upgrades modifying capacity, heavier units with higher slot costs.
+
+### Unit procurement flow (player view)
+
+1. Player has Orbital Ferronite.
+2. Opens Unit Order / Orbital Procurement UI.
+3. Builds a **pod manifest** up to transport-slot limit.
+4. UI shows: slots used/capacity, unit counts, per-unit Orbital cost, per-unit slot cost, **total Orbital cost**.
+5. Confirm Order.
+6. Server validates: funds, transport slots, unit-cap, MainBase / Unit Drop Zone validity.
+7. Orbital Ferronite spends **exactly once** (GAS Instant spend GE).
+8. One DropPod/rocket scheduled to Unit Drop Zone.
+9. Rocket descends (~2–3 s, data-driven).
+10. Landing FX → units spawn/deploy at/around Drop Zone (deterministic offsets).
+11. Units become selectable/controllable.
+
+**No world-placement mode** for normal unit deliveries.
+
+### Unit Cap vs Transport Slots
+
+- If complete manifest would exceed free `MaxUnits` room → **reject entire order** (simplest deterministic MVP). Do **not** silently partial-fill.
+- Do not conflate `PodTransportSlotCapacity` with `MaxUnits`.
+
+### Multi-unit spawn
+
+Do not spawn multiple units at the identical transform. Server uses deterministic authored/simple formation offsets around the Drop Zone / pod center. Collision-safe spacing; no complex formation AI.
+
+---
+
+## B — Building Procurement + Deployment
+
+Buying and deploying are **two actions**.
+
+### Purchase → Orbital Building Inventory
+
+1. Player selects a building type (Logistics Hub, Defensive Turret, Wall, …).
+2. Pays Orbital Ferronite **immediately** (GAS spend).
+3. Building becomes owned **orbital inventory** item with status **READY**.
+4. It does **not** descend yet.
+
+Example UI: `Logistics Hub ×1 — READY`, `Defensive Turret ×2 — READY`.
+
+Authoritative MVP representation (conceptual): `(BuildingType / DropDefinition, ReadyCount)` — server-authoritative, supports multiples of same type, owner-visible UI, decrement exactly once on accepted deploy. Exact type = implementation decision for the building slice.
+
+### Deploy READY item
+
+1. Player clicks a READY item → **building deployment mode**.
+2. Semi-transparent building ghost follows cursor; footprint shown; valid/invalid visuals.
+3. Final FoW/grid rules layer in when those systems exist.
+4. **LMB** on valid location: consume **one** READY item → schedule DropPod to that location. **No second Orbital charge.**
+5. **RMB / Esc:** cancel placement; item stays READY; no refund (purchase already completed).
+
+Server must prevent: double-deploy of same item, duplicate RPC double-spawn, losing READY on client-only cancel.
+
+### Building drop target
+
+Building pods use player-confirmed placement. Same DropPod/rocket actor/visual as units. Payload = exactly one READY building.
+
+---
+
+## Shared MVP Drop Rocket / Presentation
+
+Units and buildings share the **same** delivery animation family.
+
+Desired MVP sequence:
+
+1. Rocket/pod appears above landing target.
+2. Descends vertically (~2–3 s, data-driven).
+3. Simple cylinder/rocket body + Niagara exhaust while descending.
+4. Impact Niagara (smoke/dust).
+5. Rocket clears/opens/disappears.
+6. Payload appears.
+7. DropPod cleans up.
+
+**Gameplay native (`AGP_DropPod`):** authority, replication, descent lifecycle, timing, landing, payload spawn, presentation hooks.  
+**Authored visual (e.g. `BP_DropPod_MVP`):** mesh, exhaust Niagara, impact Niagara, scale/offsets — soft-ref / BP class. Owner replaces visuals without rewriting delivery gameplay.
+
+Conceptual hooks: OnDescentStarted, descent progress/transform, OnImpact, OnPayloadDeploy (exact C++ names = implementation).
+
+### Payload spawn timing (MVP recommendation)
+
+Authority spawn occurs **once** at deterministic landing-complete. Impact FX can mask reveal; optional short configurable cosmetic delay. Prefer multiplayer-safe single authoritative spawn over cinematic delayed authority.
+
+---
+
+## What's Orderable (MVP roster)
+
+| Asset | How acquired | Notes |
 | --- | --- | --- |
-| **Worker** | Low | Mining / repair unit. Drops near MainBase or chosen point. |
-| **Salvage Walker** | Mid | Combat unit. Drops near base or controlled zone. |
-| **Defensive Turret** | Mid | Static defense. Player picks location. |
-| **Logistics Hub** | High | +5 MaxUnits + expanded container cap. Player picks location. |
+| **Worker** | Unit manifest → Unit Drop Zone | Slot cost example 1 |
+| **Salvage Walker** | Unit manifest → Unit Drop Zone | Slot cost example 2 |
+| **Logistics Hub** | Purchase → READY → deploy ghost | Cap / logistics expansion |
+| **Defensive Turret** | Purchase → READY → deploy ghost | Static defense |
+| **Wall Segment** | Purchase → READY → deploy (drag later) | Perimeter |
+| **Wall-mounted Turret** | Purchase → READY → deploy on wall | Mounted defense |
+| **MainBase** | Initial only | Not purchased |
+| **Ferronite Deposit** | Environment | Not purchased |
 
-Балансові значення — DA-driven, TBD у balance pass per [Pillar 9 — Data-Driven First].
+Roster = MVP **target catalog**, not one implementation task. Next playable slice may ship **units only**.
 
-Post-MVP (per Out of Scope): modules, repair drops, upgrade containers, special structures, black market alternates.
+Costs / slot values — DataAsset-driven, TBD balance (Pillar 9).
 
-## Order Flow (Player View)
-
-1. Player opens **Order Menu** (hotkey `O` or HUD button).
-2. Sees list of orderable types з:
-   - Icon, name, 1-sentence description.
-   - Cost (Orbital Ferronite).
-   - Can-afford indicator (green / grey).
-   - Cooldown if any (post-MVP for spam-prevention).
-3. Player selects type → enters **drop-targeting mode**:
-   - Cursor shows drop reticle.
-   - Valid drop zones highlighted (controlled territory + actively-visible terrain).
-   - Invalid drop zones tinted red (unexplored, water, hostile-occupied — see Validation).
-4. Player clicks valid zone → server validates → spend Orbital Ferronite → drop pod scheduled.
-5. 2-3 s telegraph: pod descends from sky (visible to all players + SWARM AI). Reticle marker visible on minimap.
-6. Pod lands → asset deployed → pod actor destroyed.
-7. Player gains control of new asset (or asset is auto-positioned for static structures).
+---
 
 ## Drop Zone Validation
 
+### Unit pods
+
 | Constraint | Validation |
 | --- | --- |
-| Player owns valid drop right | Spent Orbital Ferronite successfully (server-side spend gate). |
-| Cell у player's actively-visible FoW | Must be currently visible (not just explored). Prevents blind drops behind enemy lines. |
-| Cell is navigable terrain (NavMesh-projectable) | `ProjectPointToNavigation` snap with `MaxNavSnapExtent` (per drop type). |
-| Not under stationary blocker (existing building, cliff, water) | Sphere overlap check sized to drop type footprint. |
-| Within map bounds | World bounds OR explicit drop-allowed boundary actor. |
-| Not too close to enemy unit (combat units only, post-MVP) | Reserved hook. Не enforced у MVP. |
+| Manifest affordability | Orbital >= total cost; spend once via GAS |
+| Transport slots | Sum of slot costs <= pod capacity |
+| Unit cap | Full manifest must fit `MaxUnits`; else reject |
+| Unit Drop Zone | Valid authored MainBase anchor for owning team |
 
-Invalid → red reticle tint + `Client_NotifyCommandRejected(OrderDrop, EReason::InvalidDropZone)` + no spend.
+No free-world FoW click for normal unit drops.
+
+### Building pods (deploy)
+
+| Constraint | Validation |
+| --- | --- |
+| READY inventory | Exactly one READY item of requested type available |
+| Placement | Grid / footprint / blockers (FoW when available) |
+| Spend | **None at deploy** — already paid at purchase |
+
+Invalid → notify + no inventory consume / no second spend.
+
+---
 
 ## Risk Layer
 
-Drop pod **telegraphs**:
+Drop pod **telegraphs** (visible descent, audio, minimap, 2–3 s). Window of vulnerability for opponent / SWARM. Default MVP: pod always lands.
 
-- Visible descent VFX (column of light + smoke trail).
-- 3D positional audio.
-- Minimap marker.
-- 2-3 s delay between order and arrival.
-
-Це створює **window of vulnerability**:
-- Opponent може концентрувати fire на drop site.
-- SWARM AI може redirect waves до landing zone (post-MVP enhancement).
-- Bad drop location = wasted Orbital Ferronite (if pod gets destroyed in flight? або if blocked? — TBD; default `pod always lands`).
+---
 
 ## Initial Match State
 
-At match start:
+- **MainBase** pre-deployed.
+- **2 Workers** pre-deployed near MainBase (not ordered).
+- **0 Orbital Ferronite**.
+- All additional content requires orbital cycle.
 
-- Player has **MainBase** already deployed (the expedition's landing pod, manually positioned for both sides at map start points).
-- Player has **2 initial Workers** already deployed near MainBase (came with initial expedition, no order required).
-- Player starts with **0 Orbital Ferronite** (empty pool — per Pillar 3 «empty pool» rule).
-- All other content (additional Workers, Salvage Walker, Turret, Logistics Hub) — requires орбітальний цикл.
+---
 
-Worker initial drop NOT through order menu — they're pre-deployed. First "real" order requires shipping enough resource to afford something.
+## Core Loop (Expanded)
 
-## Core Loop (Expanded — see [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md))
+1. Initial landing (given).
+2. Workers mine → containers → Threat ↑.
+3. Launch → OrbitalFerronite + FerroniteScore ↑; Threat ↓.
+4. **Units:** fill manifest → Confirm → spend → pod → Unit Drop Zone → control units.
+5. **Buildings:** Purchase → READY → later ghost deploy → pod → building operational.
+6. Defend / expand / score race.
 
-1. Initial landing (state given).
-2. Initial Workers scout / mine nearby deposit.
-3. Resource drops at MainBase → enters Container → raw Ferronite stored at base → FerroniteThreatValue rises (more swarm pressure).
-4. Container fills → ships to orbit → OrbitalFerronite + FerroniteScore increments; FerroniteThreatValue DROPS (raw stock left the base — swarm relief).
-5. Player orders Worker / Walker / Turret з OrbitalFerronite pool.
-6. Drop pod arrives → asset deployed.
-7. Expand control of map.
-8. Defend проти SWARM (intensity scales з FerroniteThreatValue = raw Ferronite stored at base RIGHT NOW; hoarding raises it, shipping lowers it).
-9. Optionally engage opponent.
-10. Win when delivery quota (FerroniteScore) reached OR highest FerroniteScore at timer expiry.
+See [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md).
 
-## Match Stages (per Match_Flow)
-
-| Stage | Orbital Delivery Role |
-| --- | --- |
-| **Early** | Розвідка + перші mining cycles. Containers fill slowly. Maybe 1 small drop (extra Worker). |
-| **Mid** | Container ships регулярні. First Salvage Walker / Defensive Turret drops. Логістика налаштована. |
-| **Late** | Multiple containers ship simultaneously. SWARM peak. Big drops (Logistics Hub multi-layer). Final-second mass shipping race. |
+---
 
 ## Validation per Pillars
 
-**Pillar 8 (Simple Core) check:**
-- 1-2 sentence: "Spend Orbital Ferronite, click on map, pod drops with your asset."
-- Fun у v1: yes — pod-drop game feel.
-- New decision: where/when/what to drop.
-- Cheap: ONE pod actor, ONE menu, ONE drop animation.
-- Scales via content: more droppable types via DataAsset.
-
-**Pillar 1 (Industrial Extraction First):** orbital delivery is the means; mining/shipping is the score-driver. Consistent.
-
-**Pillar 3 (One Resource):** single currency (Ferronite, у its orbital state). No split currencies.
-
-**Pillar 6 (SWARM as Environmental Pressure):** raw Ferronite hoarded at base raises FerroniteThreatValue → more swarm pressure; shipping it to orbit lowers the threat. Greed-vs-safety loop.
+**Pillar 8:** “Ship Ferronite to orbit, spend Orbital Ferronite, drop units at base pad or deploy READY buildings.”  
+**Pillar 1 / 3 / 6:** mining/shipping remains the score and threat loop; orbital is the acquisition sink.
 
 ## Open Questions
 
-1. **Drop interruption**: if pod is destroyed mid-flight (post-MVP combat ability), is Orbital Ferronite refunded? Recommend: full refund of spend (drop = service-not-rendered).
-2. **Drop cap**: max simultaneous in-flight pods? Recommend: 3 per player у MVP.
-3. **Drop point persistence**: rally-point-like memory of last-drop-location? Reserve post-MVP.
-4. **Initial Workers spawn point**: tight cluster vs spread? Tight cluster recommended for new-player legibility.
-5. **Drop pod cosmetic**: shared visual for all drop types vs per-type animation? Recommend shared у MVP, per-type у post-MVP.
+1. Drop interruption / refund mid-flight (post-MVP).
+2. Max simultaneous in-flight pods (recommend soft cap later).
+3. Exact Unit Drop Zone component vs scene socket naming.
+4. Wall drag-build vs single READY segment UX (building slice).
+5. Whether unit-cap check also reserves slots during in-flight pods (recommend count at confirm).
 
 ## Out of MVP
 
-- Repair modules (orbital service for damaged units).
-- Upgrade containers (orbital tech tree).
-- Special structures (research, scanners, communication relays).
-- Modules для existing units (combat retrofit).
-- Drop cooldowns / rate limits.
-- Drop pod intercept abilities (player-vs-player anti-drop).
-- Black market alternate adressees (different orbital recipients with different reward catalogs).
+- Repair modules, upgrade containers, special structures, unit modules.
+- Drop cooldowns, intercept abilities, black market.
+- Separate unit vs building drop animations (post-MVP art variety).
+- Implementing full building roster in the first unit-drop slice.
 
 ## References
 
-- Core Loop — [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md).
-- Resources / Containers — [`06_Resources`](06_Resources.md).
-- Match Flow — [`07_Match_Flow`](07_Match_Flow.md).
-- Win Conditions — [`08_Win_Lose_Conditions`](08_Win_Lose_Conditions.md).
-- Fog of War (drop targeting depends on visibility) — [`11_Fog_of_War`](11_Fog_of_War.md).
-- Engineering implementation — [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md).
-- Pillars — [`01_Game_Pillars`](01_Game_Pillars.md) (Pillar 1, 3, 6, 8).
+- Core Loop — [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md)
+- Units — [`04_Units`](04_Units.md)
+- Buildings — [`05_Buildings`](05_Buildings.md)
+- Resources — [`06_Resources`](06_Resources.md)
+- FoW (building deploy / future validation) — [`11_Fog_of_War`](11_Fog_of_War.md)
+- Engineering — [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md)
+- ADR — [`../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar`](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md)

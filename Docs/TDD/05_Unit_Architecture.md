@@ -87,6 +87,8 @@ public:
 
     UPROPERTY(EditAnywhere, Category = "GP|Economy")
     float DeliveryTime = 0.f;                    // orbital drop descent/telegraph time (no local production)
+    int32 TransportSlotCost = 1;                 // pod packing cost (Worker 1 / Salvage Walker 2 MVP examples; DA-driven)
+    int32 DropCost = 0;                          // OrbitalFerronite per unit in manifest (DA-driven)
 
     UPROPERTY(EditAnywhere, Category = "GP|Combat")
     float Damage = 0.f;

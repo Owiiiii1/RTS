@@ -145,7 +145,78 @@ Spend Orbital → DropPod telegraph → spawn Worker and/or Salvage Walker near 
 - **Pros:** Slice 8 content fantasy.
 - **Cons:** Needs drop pipeline first (ADR: all non-initial assets via DropPod).
 
-**Winner: C1.**
+**Winner: C1** — still correct after 2026-08-08 owner refinements (see § Owner-approved orbital procurement refinement). Building inventory/ghost becomes the **follow-on** vertical on the same DropPod pipeline.
+
+---
+
+## Owner-approved orbital procurement refinement (2026-08-08)
+
+Owner accepted design that **updates canonical GDD/TDD/ADR-0009 refinement** before audit merge. Philosophy reaffirmed: **no local production** after start (MainBase + 2 Workers initial only).
+
+### Unit Drop Zone
+
+- Normal units do **not** free-place in world.
+- Land at authored MainBase **Unit Drop Zone** (scene anchor/component; server-resolved; not `BaseLocation + hardcoded offset`).
+- Buildings never use this pad.
+
+### Transport Slots
+
+- Pod packing capacity ≠ MaxUnits.
+- MVP tuning examples (DA-driven, not final balance): capacity **4**; Worker **1**; Salvage Walker **2**.
+- Manifest: `sum(count × slotCost) <= capacity`.
+- Future-proof: larger pods / upgrades / heavier units — schema only now.
+
+### Unit manifest semantics
+
+UI builds manifest → shows slots, counts, per-unit Orbital + slot costs, total → Confirm → validate → spend once → one DropPod → Drop Zone → multi-unit deterministic offsets → control.
+
+### UnitCap vs DropSlots
+
+Distinct systems. MVP: **reject entire manifest** if it would exceed free MaxUnits (no silent partial fill).
+
+### Building Orbital Inventory / READY
+
+Purchase spends Orbital immediately → READY count++. Deploy later. Conceptual SoT: `(BuildingType/DropDef, ReadyCount)` — server-authoritative, owner UI, decrement once on accepted deploy. Spec for **building slice**; not S31R.
+
+### Building deployment ghost
+
+READY click → ghost → LMB consume READY + DropPod (no second spend); Esc/RMB cancel keeps READY.
+
+### Shared rocket presentation
+
+One `AGP_DropPod` + authored BP (mesh/Niagara). Unit and building share MVP animation family. Hooks: descent start / progress / impact / payload deploy (exact names = impl).
+
+### Authored Niagara/mesh seam
+
+Gameplay C++ must not hardcode Niagara/mesh. Soft-ref BP visual; owner replaces without rewrite.
+
+### Multi-unit spawn offsets
+
+Server deterministic offsets around Drop Zone; no identical transforms; basic spacing; no formation AI.
+
+### Revised GP-S31R scope
+
+**Still the best next cut.** Expanded vs prior audit draft:
+
+**IN for GP-S31R:**
+- GAS SpendOrbital
+- Unit drop defs + TransportSlotCost + PodTransportSlotCapacity
+- Unit manifest TEMP UI (slots/costs/total/Confirm)
+- MainBase Unit Drop Zone authored seam
+- Real minimal AGP_DropPod + presentation hooks / soft visual class
+- Worker + Salvage Walker multi-payload spawn + offsets
+- Select/control after landing
+- Contracts for funds/slots/cap/manifest/TeamId/no double-spend
+
+**OUT of GP-S31R (next building vertical):**
+- Building READY inventory
+- Building ghost placement
+- Build Grid / FoW
+- Logistics Hub / Turret / Walls implementation
+
+### Future building deployment slice dependency
+
+Requires shared DropPod + Spend GE from S31R; adds Purchase/READY/Deploy RPCs + ghost + building payloads.
 
 ---
 
@@ -167,69 +238,52 @@ Spend Orbital → DropPod telegraph → spawn Worker and/or Salvage Walker near 
 
 ---
 
-## Exact In-Scope (proposal)
+## Exact In-Scope (GP-S31R proposal — revised)
 
-1. **`UGP_OrbitalDropDefinition`** DataAsset (cost, descent duration, soft payload class, TEMP operator costs).
-2. **Two DAs (or equivalent):** Worker drop + Salvage Walker drop — **one generic spawn path**, no duplicate spawn systems.
-3. **`UGP_GE_SpendOrbital`** Instant native GE (SetByCaller magnitude; mirror AddOrbital). Authority-only apply. Reject insufficient funds **before** spend. Spend exactly once on accepted order.
-4. **Thin `UGP_OrbitalDeliverySubsystem`** (or equivalent single authority owner): validate → spend → spawn DropPod → on land spawn payload.
-5. **`AGP_DropPod`** minimal replicated actor: 2–3 s telegraph, visible, then payload spawn + destroy/cleanup. No elaborate VFX.
-6. **`Server_RequestOrbitalDrop(DropDef, Location)`** on PlayerController (client intent only).
-7. **Interim drop policy (see below).**
-8. **Payload init:** `SetTeamId` to owning player team; unit usable (select + Move/Attack as class allows).
-9. **TEMP Order UI** on existing TEMP HUD: buttons e.g. Order Worker / Order Salvage Walker — **no console required** for acceptance. Console diagnostic optional.
-10. **Contracts** listed below + GPEditor candidate builds.
+1. `UGP_GE_SpendOrbital` Instant GE (mirror AddOrbital).
+2. Unit catalog / DropDefs with OrbitalCost + TransportSlotCost; PodTransportSlotCapacity (DA/settings).
+3. Unit **manifest** order path + `Server_RequestUnitDrop(Manifest)` (name TBD).
+4. Thin `UGP_OrbitalDeliverySubsystem` (or equivalent): validate → spend once → DropPod.
+5. MainBase **Unit Drop Zone** authored anchor (server resolve).
+6. `AGP_DropPod` + soft-ref authored visual BP hooks (no hardcoded Niagara/mesh).
+7. Worker + Salvage Walker payloads; deterministic multi-unit offsets; SetTeamId; selectable.
+8. TEMP Unit Order UI (manifest fill UI) — no console required.
+9. Unit-cap gate: reject whole manifest if over MaxUnits (when MaxUnits policy active).
+10. Contracts + GPEditor candidate builds.
 
-### Exact Out-of-Scope
+## Exact Out-of-Scope (GP-S31R)
 
-- Build Grid / wall placement / Defensive Turret / Logistics Hub
-- FoW visibility validation (final policy)
-- Full production Order Menu / MVVM / complex reticle
-- Minimap / SWARM / AI opponent / Steam
-- Pathfinding / AttackMove / TargetingComponent
-- Match timer/quota win wiring
-- Production VFX/audio, cooldowns, pod interception, multi-pod caps (unless trivial)
-- UnitDefinition DA family (use soft class on DropDef)
-- Direct attribute mutation of OrbitalFerronite
-- Operator-local `.uasset` / map / DefaultEngine.ini commits
+- Building READY inventory / Purchase / Deploy ghost
+- Build Grid / FoW / Logistics Hub / Turret / Walls
+- Full production Order Menu / MVVM polish
+- Minimap / SWARM / AI / Steam / pathfinding / AttackMove / Targeting
+- Win wiring / cooldowns / intercept / multi-pod caps
+- Direct Orbital attribute mutate
+- Operator-local assets
 
 ---
 
 ## Temporary vs Canonical Decisions
 
-### Drop location — **recommend interim A with B-shaped API**
+### Unit landing — **canonical Unit Drop Zone (owner-approved)**
 
-| Option | Verdict |
-| --- | --- |
-| **A. Auto-drop near own MainBase** | **MVP UX:** TEMP buttons request drop; server picks validated offset near team MainBase. |
-| **B. Player click + Nav/overlap** | **API shape now:** RPC always carries `FVector`; validation = MainBase radius + `ProjectPointToNavigation` + blocker overlap. Optional click can be added without redesign. |
-| **C. Full FoW + grid** | **Defer** until FoW + BuildGrid exist. |
+Replaces prior audit interim “MainBase radius click/auto” as the **player-facing** unit policy. Implementation still resolves an authored MainBase-relative transform (not hardcoded offset). FoW/grid remain for **buildings** later.
 
-**Chosen policy:** Server validates drop as:
+### Building placement — **Purchase→READY→Deploy** (owner-approved)
 
-1. Owner has playable TeamId and team MainBase.
-2. Location within configurable radius of own MainBase (TEMP default — DA/settings, not hardcoded magic in call sites).
-3. NavMesh projectable.
-4. No blocking overlap for payload footprint (simple sphere/capsule).
-5. **Not** FoW / **not** grid.
+Canonical; not in S31R scope.
 
-**Later replacement:** same `ValidateDropZone` gains Actively Visible FoW + `UGP_BuildGridSubsystem` footprint checks per TDD/14 / ADR-0009. Interim radius policy is explicitly temporary.
+### Pod vs delay — **real DropPod** (unchanged)
 
-### Payload choice — **C: both Worker + Salvage Walker**
+### Payload both Worker + SW — **yes** via manifest (unchanged intent; now slot-packed)
 
-Both classes exist. One DropDefinition → soft class path keeps scope small and proves combat + economy payloads. Prefer data-driven dual catalog over Worker-only if costs are TEMP.
+### Unit cap — **gate when MaxUnits active**
 
-### Pod vs delay — **real minimal `AGP_DropPod`**
-
-ADR-0009 / GDD pillar requires visible telegraph. A replicated DropPod actor with timer is cheap and avoids a throwaway “delayed SpawnActor” that violates “all assets via DropPod.” No fancy VFX required.
-
-### Unit cap — **temporary soft**
-
-`CurrentUnits` / `MaxUnits` attributes exist but have **no production mutators**. For S31R: either (preferred if cheap) Instant GE / authority helper to ++ CurrentUnits on spawn and gate when `MaxUnits > 0`, **or** document temporary no-cap with follow-up slice. Do not invent permanent balance MaxUnits.
+Attrs exist without mutators today. S31R: increment CurrentUnits on spawn if feasible; reject manifest over cap; if MaxUnits==0 temporary soft-open with explicit note.
 
 ### Economy TEMP costs
 
-Operator-test costs only (e.g. low Worker cost, higher Salvage Walker). Not permanent balance. Exact numbers locked in implementation task / DA, not this audit.
+Operator-test costs only (Worker cheaper than Salvage Walker). Not permanent balance.
 
 ---
 
@@ -237,15 +291,15 @@ Operator-test costs only (e.g. low Worker cost, higher Salvage Walker). Not perm
 
 1. Mine → fill → Launch Container (existing).
 2. See Orbital balance increase on TEMP HUD.
-3. Press TEMP **Order Worker** (and **Order Salvage Walker**).
-4. Orbital decreases once.
-5. See DropPod telegraph ~2–3 s near MainBase.
-6. Payload appears with correct team.
-7. Select and Move (Worker also Mine; Salvage Walker Attack).
-8. Insufficient Orbital → reject, no spend, no pod.
-9. Spam/duplicate request → no double-spend.
+3. Open TEMP Unit Order; fill manifest within slots (e.g. mix Workers + Salvage Walker).
+4. Confirm → Orbital decreases **once** by total cost.
+5. DropPod telegraph ~2–3 s at MainBase Unit Drop Zone.
+6. Multiple units appear with spacing; correct TeamId.
+7. Select/control (Mine / Attack as class allows).
+8. Insufficient Orbital / over slots / over MaxUnits → reject, no spend.
+9. Duplicate Confirm → no double-spend.
 
-Console may exist as diagnostic fallback only.
+Console diagnostic optional only.
 
 ---
 
@@ -255,15 +309,16 @@ Recommend `gp.Resource.RunOrbitalUnitDropContractTest` (or `gp.Orbital.RunUnitDr
 
 | Case | Expect |
 | --- | --- |
-| Insufficient Orbital | Reject; attribute unchanged; no pod; no payload |
-| Valid order | Spend once; Orbital decreases by Cost |
-| Telegraph | DropPod exists / in-flight state for duration |
-| Landing | Payload spawned; DropPod cleaned up |
-| TeamId / owner | Payload TeamId == ordering player team |
-| Worker usable | Accepts Mine/Move |
-| Salvage Walker usable | Accepts Attack/Move |
-| Duplicate RPC / re-entry | No double-spend |
-| Authority | Client intent only; server validates |
+| Insufficient Orbital | Reject; no spend; no pod |
+| Slots overflow | Reject; no spend |
+| Unit cap overflow | Reject full manifest; no spend |
+| Valid manifest | Spend once; Orbital -= total |
+| Telegraph | DropPod in-flight ~duration |
+| Landing | Units spawned near Drop Zone; non-overlapping |
+| TeamId | Matches ordering player |
+| Worker / SW usable | Mine / Attack as applicable |
+| Duplicate RPC | No double-spend |
+| Authority | Client intent only |
 
 Also keep S28 / ContainerLaunch / combat regressions green on finalization.
 
@@ -280,13 +335,12 @@ Also keep S28 / ContainerLaunch / combat regressions green on finalization.
 
 | Risk | Mitigation |
 | --- | --- |
-| Interim drop policy mistaken for final | Document replace-with-FoW/Grid in task + ADR note |
-| Soft class spawn failures | Contract asserts resolved class; fail closed (refund or never spend — prefer never spend until spawn scheduled) |
-| Spend-before-validate double charge | Validate → spend → spawn pod; reject path never spends |
-| CurrentUnits/MaxUnits unused | Explicit temporary policy in task |
-| Scope creep into FoW/Grid/Order Menu | Hard out-of-scope list; stop condition |
-| TDD S31 ID collision | Use **GP-S31R** reconciled name |
-| BP payload / soft ref packaging | Prefer native C++ classes already on disk for MVP DAs |
+| Hardcoded BaseLocation+offset | Require authored Unit Drop Zone seam |
+| Scope creep into buildings | Hard OUT list; building slice after DropPod lands |
+| Spend-before-validate | Validate → spend → pod |
+| Soft visual missing | Soft-ref + fail-closed diagnostics |
+| MaxUnits unset (0) | Explicit temporary policy in task |
+| TDD S31 ID collision | Keep **GP-S31R** |
 
 ---
 
@@ -296,18 +350,18 @@ Also keep S28 / ContainerLaunch / combat regressions green on finalization.
 | --- | --- |
 | Branch | `feature/gp-s31r-minimal-orbital-unit-drop` |
 | Task file | `Docs/Development/Claude_Tasks/GP-S31R_Minimal_Orbital_Unit_Drop.md` |
-| Status after audit merge | NEXT = GP-S31R SPEC / implementation assignment — **not started** by this audit |
+| Status after audit merge | NEXT = GP-S31R SPEC / assignment — **not started** by this audit |
 
 ---
 
 ## Stop Condition
 
-This audit is complete when:
+This audit refinement is complete when:
 
-1. Status docs record **GP-S30 DONE / MERGED** @ `main` `0c2bfd2…`
-2. This file exists and recommends **GP-S31R Minimal Orbital Unit Drop** with in/out scope
-3. Audit branch pushed; **not merged** without review
-4. **No** gameplay C++ / Content / operator-local files changed
-5. Next implementation slice **not** started
+1. Canonical GDD/TDD/ADR refinement docs match owner decisions
+2. This file records revised GP-S31R in/out scope
+3. Branch pushed; **not merged** without review
+4. **No** gameplay C++ / Content / operator-local files
+5. GP-S31R implementation **not** started
 
 Do **not** auto-start GP-S31R from this PR.

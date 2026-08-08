@@ -1,5 +1,7 @@
 # UI / UX
 
+> **Orbital procurement (2026-08-08):** No local Build menu. Unit Order = manifest → Unit Drop Zone. Building Order = Purchase→READY→Deploy ghost. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md). Command bar shows Move/Stop/Attack/Mine/Repair — **not** Build.
+
 ## MVP UI Surface
 
 Мінімально необхідний набір екранів і HUD elements для playable target.
@@ -28,7 +30,7 @@
 | +--------------------+   +---------------+               |
 | | Selection Panel    |   | Command Bar   |               |
 | | (selected units +  |   | (Move/Stop/   |               |
-| |  group portraits)  |   |  Attack/Build)|               |
+| |  group portraits)  |   |  Attack/Mine)|               |
 | +--------------------+   +---------------+               |
 +----------------------------------------------------------+
 ```
@@ -118,7 +120,7 @@ Owner decision: **hybrid right-click context + hotkeys.**
 - RMB на enemy → Attack.
 - RMB на Ferronite Deposit → Mine (only Worker).
 - RMB на own building → Repair або Drop-off (context-dependent, MVP — Drop-off implicit при Move).
-- RMB на construction site → Continue Build (Worker).
+- ~~RMB на construction site → Continue Build~~ — removed (no local construction).
 
 Smart context, що читає target і issues найбільш intuitive command.
 
@@ -127,9 +129,10 @@ Smart context, що читає target і issues найбільш intuitive comma
 - `A` → Attack-move mode (next click — attack-move command).
 - `M` → Move mode (next click — explicit move, no auto-target).
 - `S` → Stop selected units.
-- `B` → Build menu open (Worker selected only).
-- `P` → Patrol mode.
-- `Esc` → Cancel current mode.
+- `O` → Orbital Order / procurement UI (units + buildings panels).
+- ~~`B` → Build menu~~ — removed (orbital model; no Worker Build).
+- `P` → Patrol mode (if/when AttackMove/Patrol ships).
+- `Esc` → Cancel current mode (incl. building deploy ghost).
 
 ### Other Mandatory Hotkeys
 

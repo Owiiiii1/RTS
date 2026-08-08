@@ -1,5 +1,15 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — Post-GP-S30 Orbital Procurement Design Refinement
+
+Status: **POST_GP_S30_ORBITAL_PROCUREMENT_DESIGN_REFINEMENT_READY_FOR_REVIEW**
+
+- Same branch `audit/post-gp-s30-next-slice` (docs only)
+- Prior audit commit: `2d90a083…`
+- Owner-approved: Unit Drop Zone + transport slots + Building Purchase→READY→Deploy + shared DropPod presentation
+- Canonical GDD/TDD + ADR-0009 refinement updated; GP-S31R scope revised (units now; buildings next)
+- Implementation **not** started; report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-08 — Post-GP-S30 Next Slice Audit
 
 Status: **POST_GP_S30_NEXT_SLICE_AUDIT_READY_FOR_REVIEW**

@@ -4,7 +4,7 @@
 
 | Building | Source | Role | Footprint | Data Asset |
 | --- | --- | --- | --- | --- |
-| Main Base | Initial deployment (pre-placed at match start) | Container storage + ship-to-orbit launch + worker drop-off zone + sight source | 5×5 | `DA_GP_Building_MainBase` |
+| Main Base | Initial deployment (pre-placed at match start) | Container storage + ship-to-orbit launch + worker drop-off zone + **Unit Drop Zone** (authored unit landing pad) + sight source | 5×5 | `DA_GP_Building_MainBase` |
 | Logistics Hub | **Orbital drop** | +5 MaxUnits + expanded container cap + sight source | 4×4 | `DA_GP_Building_LogisticsHub` |
 | Defensive Turret (free-standing) | **Orbital drop** | Static defense vs SWARM / enemy units + sight source | 4×4 | `DA_GP_Building_DefensiveTurret` |
 | Wall segment | **Orbital drop** (drag-build) | Defensive perimeter — auto-connects 8-dir; hosts wall-mounted turret | 2×2 | `DA_GP_Building_Wall` |
@@ -13,7 +13,9 @@
 
 Шість building entity-типів у MVP (4 player-orderable + 1 wall-mounted variant + 1 environment). Без research, без supply, без upgrade tiers, без faction-unique buildings.
 
-**Pivot note (2026-05-16):** усе крім Main Base і Ferronite Deposit arrives **only via orbital drop** (per [`../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar`](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md) і [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Worker не будує локально. "Assembly Yard" renamed to "Logistics Hub" для accurate framing (це **logistics expansion node**, не assembly facility).
+**Pivot note (2026-05-16):** усе крім Main Base і Ferronite Deposit arrives **only via orbital delivery** (per ADR-0009 і [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Worker не будує локально. "Assembly Yard" → "Logistics Hub".
+
+**Owner refinement (2026-08-08):** Buildings are **Purchased** into **orbital READY inventory** (Orbital spend at purchase), then **Deployed** later via ghost placement (DropPod to confirmed location; **no second spend**). Buildings do **not** land in the MainBase Unit Drop Zone (that pad is for **units** only). Shared DropPod/rocket visual with unit deliveries.
 
 Per Pillar 2 (Engineer, Not Soldier) і Pillar 7 (Simple Machines, Strong Readability) з [`01_Game_Pillars`](01_Game_Pillars.md). Усі buildings — industrial / engineering visual identity. Жодних military bunkers, fortress towers, або command centers з військовою aesthetic.
 
@@ -124,7 +126,7 @@ Landing capsule / mobile command rig. Жовто-чорні danger striping, п�
 - `DisplayName`: "Logistics Hub"
 - `BuildingType`: `GP.Unit.Type.Building`
 - `BuildingRole`: `GP.Building.Role.Logistics`
-- `Source`: **orbital drop** only. Order through Order Menu (cost у Orbital Ferronite — TBD balance). Player picks drop location.
+- `Source`: **orbital purchase → READY → deploy**. Cost in Orbital Ferronite paid at **Purchase**. Player later places via ghost; DropPod delivers to confirmed location.
 - `BuildTime`: 0 (no construction phase — drop pod arrives, building operational immediately).
 - `MaxHealth`: TBD balance.
 - `UnitTags`: `GP.Unit.Type.Building`, `GP.Building.Type.LogisticsHub`, `GP.Building.Role.Logistics`, `GP.Faction.Corporate`.
@@ -135,10 +137,9 @@ Landing capsule / mobile command rig. Жовто-чорні danger striping, п�
 
 ### Behavior
 
-- Player orders Logistics Hub з Order Menu (spends Orbital Ferronite).
-- Drop targeting reticle — player picks valid spot у actively-visible FoW.
-- Drop pod descends (2-3 s telegraph).
-- Building deploys immediately at landing point.
+- Player **Purchases** Logistics Hub (Orbital spend → READY inventory).
+- Later **Deploys** READY via ghost → DropPod (2–3 s; **no second spend**).
+- Building operational on landing; unit-cap / container bonuses apply.
 - +5 MaxUnits available instantly.
 - +N MaxContainerCount applied to owning MainBase's StorageComponent.
 
@@ -278,7 +279,7 @@ Defensive Turret — primary oborona проти SWARM waves і opponent harass. 
 - `DisplayName`: "Defensive Turret"
 - `BuildingType`: `GP.Unit.Type.Building`
 - `BuildingRole`: `GP.Building.Role.Defense`
-- `Source`: **orbital drop** only. Order via Order Menu (cost у Orbital Ferronite — TBD balance).
+- `Source`: **orbital purchase → READY → deploy**. Cost in Orbital Ferronite at **Purchase**. Deploy later via ghost / placement.
 - `BuildTime`: 0 (no construction phase).
 - `MaxHealth`: TBD balance (нижче за Logistics Hub, бо turret — disposable defense).
 - `UnitTags`: `GP.Unit.Type.Building`, `GP.Building.Type.DefensiveTurret`, `GP.Building.Role.Defense`, `GP.Faction.Corporate`.
@@ -291,8 +292,9 @@ Defensive Turret — primary oborona проти SWARM waves і opponent harass. 
 
 ### Behavior
 
-- Player orders Defensive Turret з Order Menu (spends Orbital Ferronite).
-- Player picks drop location у actively-visible FoW (typically choke points біля base, near deposits, або forward у contested area).
+- Player **Purchases** Defensive Turret (Orbital spend → READY).
+- Later **Deploys** via ghost (typically choke / deposit / contested) → DropPod; **no second Orbital charge**.
+- FoW/grid validation applies at **deploy** when those systems exist.
 - Drop pod descent telegraph.
 - Static — після приземлення не рухається.
 - Auto-engages targets у `AttackRange` через `UGP_TargetingComponent`.
@@ -388,18 +390,27 @@ Engineering implementation, RPC contracts, refund formula, replication rules —
 
 ## Deployment Model
 
-MVP — **orbital deployment** (no local construction):
+MVP — **orbital procurement** (no local construction):
 
-1. Player opens Order Menu (hotkey `O`) — `GP.Command.OrderDrop`.
-2. Selects drop type (`GP.Drop.Type.{Unit, Building, Wall}`): Logistics Hub / Defensive Turret / Wall / Wall Turret / Worker / Salvage Walker.
-3. Drop targeting mode active — picks location у actively-visible FoW.
-4. Server validates: `GE_GP_SpendOrbital` (spend Orbital Ferronite), drop zone valid, не overlap.
-5. `UGP_OrbitalDeliverySubsystem` спавнить `AGP_DropPod` (2-3 s telegraph descent visible to all + SWARM).
-6. Pod lands → building / unit / wall deployed immediately operational.
+### Units (separate flow)
 
-Деталі drop validation — [`10_Orbital_Delivery`](10_Orbital_Delivery.md) і [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md).
+Unit Order manifest → MainBase **Unit Drop Zone**. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md) / [`04_Units`](04_Units.md).
 
-**Eliminated** (з pre-pivot): Worker channel-build, `UGP_ConstructionComponent`, construction sites, ghost preview placement (replaced by drop reticle).
+### Buildings
+
+1. Open Building Order UI.
+2. **Purchase** Logistics Hub / Defensive Turret / Wall / Wall Turret → `GE_GP_SpendOrbital` → READY inventory++.
+3. Click READY → **deployment mode** (semi-transparent ghost + footprint; valid/invalid tint).
+4. **LMB** valid: consume one READY → DropPod → building operational.
+5. **RMB / Esc:** cancel; READY unchanged; no refund.
+
+Server: no double-consume READY; no duplicate spawn; **no Orbital charge on deploy**.
+
+Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md), [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md).
+
+**Eliminated** (pre-pivot): Worker channel-build, ConstructionComponent, construction sites.  
+**Superseded (2026-08-08):** immediate spend-on-placement for buildings. Canonical = Purchase→READY→Deploy.  
+**Ghost** returns for **building deploy only**; unit orders do not free-place.
 
 ## Out of MVP
 

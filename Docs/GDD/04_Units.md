@@ -9,7 +9,7 @@
 
 Дві unit-категорії у MVP. Жодних support / siege / hero / specialist юнітів. SWARM units описані у [`03_Factions`](03_Factions.md) (не player-controllable).
 
-**Усі units (Worker, Salvage Walker) ACQUIRED via orbital drops, не produced** (per [ADR-0009](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md), [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Local production усунено. Старт: MainBase + 2 Workers pre-deployed; додаткові units замовляються через Order Menu (spend `OrbitalFerronite`).
+**Усі units (Worker, Salvage Walker) ACQUIRED via orbital unit delivery, не produced** (per [ADR-0009](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md), [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Local production усунено. Старт: MainBase + 2 Workers pre-deployed; додаткові units — Unit Order **manifest** → DropPod → MainBase **Unit Drop Zone** (не free world placement). Packing uses **Transport Slots** (pod capacity ≠ MaxUnits).
 
 Per Pillar 2 (Engineer, Not Soldier) і Pillar 7 (Simple Machines, Strong Readability) з [`01_Game_Pillars`](01_Game_Pillars.md). Жодних military silhouettes, hero units або humanoid combat anims.
 
@@ -31,7 +31,8 @@ Per Pillar 2 (Engineer, Not Soldier) і Pillar 7 (Simple Machines, Strong Readab
 
 - `DisplayName`: "Worker"
 - `UnitType`: `GP.Unit.Type.Worker`
-- `DropCost`: TBD Orbital Ferronite (acquisition via orbital drop — `UGP_OrbitalDropDefinition.Cost`; balance pass)
+- `DropCost`: TBD Orbital Ferronite (per-unit cost in unit manifest; balance pass)
+- `TransportSlotCost`: **1** (MVP tuning example; DataAsset-driven, not immutable)
 - `MaxHealth`: 50
 - `MoveSpeed`: 350 cm/s
 - `CarryCapacity`: 50 Ferronite (визначає, скільки raw Ferronite worker несе за один trip у MainBase containers; TBD)
@@ -108,7 +109,8 @@ Salvage Walker — primary defender MVP. **Не military mech.** Це перео
 
 - `DisplayName`: "Salvage Walker"
 - `UnitType`: `GP.Unit.Type.SalvageWalker`
-- `DropCost`: TBD Orbital Ferronite (acquisition via orbital drop — `UGP_OrbitalDropDefinition.Cost`; balance pass)
+- `DropCost`: TBD Orbital Ferronite (per-unit cost in unit manifest; balance pass)
+- `TransportSlotCost`: **2** (MVP tuning example; DataAsset-driven, not immutable)
 - `MaxHealth`: 200 (TBD; durable tier — приблизно 4× Worker HP)
 - `Armor`: 0 (MVP — без armor type system; raw HP)
 - `MoveSpeed`: 250 cm/s (TBD; повільніше за Worker для heavy industrial feel)
@@ -164,27 +166,28 @@ Range live у Data Assets. Baseline values для проектування:
 
 Salvage Walker стартує з `AttackRange: 600`. Уточнюється у playtest, value live у `DA_GP_Unit_SalvageWalker`.
 
-## Acquisition (Orbital Drops)
+## Acquisition (Unit Delivery)
 
-Units **не виробляються локально.** Усі units прибувають orbital drop:
+Units **не виробляються локально.** Additional units arrive via **Unit Delivery**:
 
 - Старт: MainBase + 2 Workers pre-deployed (per `DA_GP_Faction_Default.StartingUnits`).
-- Додаткові Workers / Salvage Walkers замовляються через Order Menu (`GP.Command.OrderDrop`, `GP.Drop.Type.Unit`), spend `OrbitalFerronite` (cost = `UGP_OrbitalDropDefinition.Cost`, TBD).
-- `UGP_OrbitalDeliverySubsystem` спавнить `AGP_DropPod`; unit operational on landing.
+- Додаткові Workers / Salvage Walkers: Unit Order **manifest** → spend `OrbitalFerronite` once → DropPod → **MainBase Unit Drop Zone** (no free world placement).
+- Transport packing: `sum(count × TransportSlotCost) <= PodTransportSlotCapacity` (MVP examples: Worker **1**, Salvage Walker **2**, pod **4**).
+- `MaxUnits` / `CurrentUnits` is a **separate** army-cap gate; reject the **full** manifest if over cap (no silent partial fill).
 
-Деталі drop pipeline — [`10_Orbital_Delivery`](10_Orbital_Delivery.md), [`05_Buildings`](05_Buildings.md).
+Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md), [`05_Buildings`](05_Buildings.md).
 
 ## Unit Cap (Capacity)
 
-Per Pillar 4 (Capacity Is Strategy) — unit capacity це **strategic resource**, не пасивний ліміт.
+Per Pillar 4 (Capacity Is Strategy) — unit capacity це **strategic resource**, не пасивний ліміт. **Do not conflate** with pod **Transport Slots**.
 
 `AGP_PlayerState.ASC` має `UGP_PlayerAttributeSet.MaxUnits` (default 5 на старті).
 
-Кожна Logistics Hub додає +5 до `MaxUnits` через `UGameplayEffect` (`GE_GP_UnitCap_Plus5`), що активується on construction-complete. Кожне розширення capacity — це Ferronite spend, що не йде у score. Tradeoff явний.
+Кожна Logistics Hub додає +5 до `MaxUnits` через `UGameplayEffect` (`GE_GP_UnitCap_Plus5`) on **deploy landing**. Кожне розширення capacity — Ferronite spend at **purchase** that does not add FerroniteScore. Tradeoff явний.
 
 `UGP_PlayerAttributeSet.CurrentUnits` — replicated, інкрементується при spawn, декрементується при death.
 
-Якщо `CurrentUnits >= MaxUnits` — production blocked на server-side validation з UI failure feedback.
+Якщо complete unit manifest would exceed free MaxUnits room — order **rejected** with UI feedback (MVP: no partial fill).
 
 ## Movement Constraint
 

@@ -1,207 +1,137 @@
-# Cursor Work Report — GP-S30 Finalization
+# Cursor Work Report — Post-GP-S30 Next Slice Audit
 
 ## Status
-**GP-S30_FINALIZATION_READY_FOR_MERGE_REVIEW**
+**POST_GP_S30_NEXT_SLICE_AUDIT_READY_FOR_REVIEW**
 
-Merge: **NOT merged**
-
----
-
-## 1. Branch
-
-`feature/gp-s30-container-launch-orbital-conversion`
+Merge: **NOT merged** (audit branch only)
 
 ---
 
-## 2. Current remote main / base SHA
+## 1. Branch + base SHA
 
-`origin/main` @ `89ce3c50ebd05a4bf1e58a5b4e117544dc68cb8f`
-
-Verified full-storage Worker candidate: `d5863cad67ffbf8402f4f9873876374a64c54c45`
-
----
-
-## 3. Complete GP-S30 summary
-
-Container Launch / Orbital Conversion for First Playable:
-
-- Authority Storage launch transaction (Ready → Launching → Empty)
-- Instant GAS OrbitalFerronite + FerroniteScore on completion
-- FerroniteThreatValue decrease
-- TEMP HUD (Base/container breakdown + Orbital + Launch)
-- Full-storage Worker wait/resume (WaitingForDropOff)
-- Operator PIE PASS including multi-worker competition for freed capacity
+- Branch: `audit/post-gp-s30-next-slice`
+- Base / remote `main`: `0c2bfd2799f85fe281e9920404664d7a16067bf4`
+- GP-S30 finalization parent: `824bf82f203b43387c16beb45b5edf4eb96c7ec1`
 
 ---
 
-## 4. Original container launch implementation
+## 2. Files / code inspected
 
-`UGP_StorageComponent::TryLaunchReadyContainer` — first Ready container → Launching timer → Empty slot.  
-Console diagnostic: `gp.Resource.LaunchReadyContainer`.  
-Server RPC: `AGP_PlayerController::Server_RequestLaunchReadyContainer`.
+**Docs:** README, DOCUMENTATION_INDEX, AI_Project_Log, Claude_Tasks README, Claude_Task_Backlog, GDD/02, GDD/06, GDD/10, TDD/14, TDD/13, ADR-0009, prior `Next_Slice_Audit_Post_S29R.md`.
 
----
-
-## 5. GAS Orbital / Score conversion
-
-Instant GEs: `UGP_GE_AddOrbital`, `UGP_GE_AddScore` (native SetByCaller).  
-Rates 1:1 on `UGP_ResourceDefinition`. Launch duration 2.5s on `UGP_ResourceGameplaySettings`.  
-Applied on launch **completion**, not accept.
+**Production (read-only):** PlayerAttributeSet / PlayerState / PlayerController RPCs; Storage launch + AddOrbital/AddScore GEs; TEMP HUD; Worker; SalvageWalker; MainBase; TeamId paths; tags; GPUIRuntime shell; absence of DropPod/Order/FoW/BuildGrid/Spend GE.
 
 ---
 
-## 6. Threat behavior
+## 3. GP-S30 merge sync
 
-On launch completion: FerroniteThreatValue decreases for owning team (TeamId → PlayerState ownership).  
-On Worker drop-off accept: threat increases by accepted × ThreatPerStoredUnit (unchanged S28 path).
-
----
-
-## 7. HUD lifecycle failure + RebuildWidget fix
-
-Operator FAIL: TEMP HUD invisible in PIE.  
-Root: WidgetTree built in NativeConstruct after empty RebuildWidget Slate.  
-Fix: `EnsureWidgetTreeBuilt()` in `RebuildWidget()` before Super; contract TakeWidget Slate asserts.
+Synced status docs from obsolete “FINALIZATION_READY / not merged” → **GP-S30 DONE / MERGED** on `main` @ `0c2bfd2…`.
 
 ---
 
-## 8. HUD container breakdown UX (late operator fix A)
+## 4. Production inventory
+
+- OrbitalFerronite: grant via launch GE only; **no spend path**
+- PC RPCs: `Server_RequestCommand`, `Server_RequestLaunchReadyContainer` only
+- Worker + SalvageWalker: native classes ready as payloads
+- FoW / BuildGrid / DropPod / OrbitalDeliverySubsystem / OrderMenu: **absent**
+- Spend GE: **absent**
+
+---
+
+## 5. Blockers identified
+
+Immediate gap: Orbital spend → drop telegraph → payload → control.  
+Canonical FoW/grid targeting **not** required if interim MainBase-radius + Nav validation is explicit.
+
+---
+
+## 6. Options evaluated
+
+| ID | Option | Result |
+| --- | --- | --- |
+| C1 | Minimal Orbital Unit Drop | **Recommended** |
+| C2 | Full TDD/14 + FoW/Grid/Order Menu | Too wide |
+| C3 | Pathfinding / Targeting / AttackMove | Wrong unlock |
+| C4 | Buildings / Hub / walls first | Needs drop pipeline |
+
+Drop location: A (auto near MainBase) UX + B-shaped RPC/validation.  
+Payload: both Worker + Salvage Walker via one DropDefinition path.  
+Pod: real minimal `AGP_DropPod`.
+
+---
+
+## 7. Recommended next slice
+
+**GP-S31R — Minimal Orbital Unit Drop**
+
+---
+
+## 8. Recommended slice ID
+
+**GP-S31R** (reconciled): historical TDD/13 `GP-S31` = Damage GE (shipped). Avoid plain `GP-S31` collision; follow S29R naming pattern.
+
+---
+
+## 9. Precise scope / out-of-scope
+
+See `Docs/Development/Next_Slice_Audit_Post_GP-S30.md` §§ Exact In-Scope / Out-of-Scope.
+
+In: Spend GE, DropDefinition, thin delivery subsystem, DropPod, Server_RequestOrbitalDrop, interim near-MainBase validation, TEMP Order buttons, Worker+SW payloads, contracts.
+
+Out: FoW, BuildGrid, full Order Menu, buildings/walls/turrets, SWARM/AI/Steam, pathfinding/AttackMove, win wiring, console-only acceptance.
+
+---
+
+## 10. Dependency rationale
+
+S30 grants Orbital; acquisition fantasy and ADR-0009 require spend→drop next. FoW/Grid are later validators on the same RPC/subsystem seam.
+
+---
+
+## 11. Operator validation concept
+
+UI-only: Launch → Orbital↑ → Order Worker/SW buttons → Orbital↓ → telegraph → select/control payload. Insufficient funds reject without spend.
+
+---
+
+## 12. Proposed contracts
+
+`gp.Resource.RunOrbitalUnitDropContractTest` (name TBD at impl): insufficient / spend-once / telegraph / spawn / TeamId / Worker+SW usable / no double-spend / authority.
+
+---
+
+## 13. Build policy
+
+Candidate: GPEditor Dev+UHT only.  
+After operator PASS: GP Development + Shipping.
+
+---
+
+## 14. Exact files changed (this audit)
 
 ```
-База: <GetTotalStored> / <GetTotalCapacity>
-Контейнер 1 — <amount>
-…
-Контейнер N — <amount>
-Orbital: <OrbitalFerronite>
-[Launch Container]
-```
-
-Dynamic from Storage; no hardcoded 5/500; stable indices; Launch/RPC/gameplay unchanged.
-
----
-
-## 9. Full-storage Worker bug root cause (late operator fix B)
-
-`BeginDropOffAtMainBase` on Rejected>0 called `Cargo->ClearCargo()` then `ContinueMineAfterSuccessfulHaul` — Workers resumed mining while Storage full.
-
----
-
-## 10. WaitingForDropOff fix
-
-- Remaining cargo → `EnterWaitingForDropOff(StorageFull)`; no ClearCargo on reject
-- No mining while cargo remains (cargo-first)
-- Resume via `OnStorageChanged` when capacity > 0 (no Tick)
-- Capacity gate only for StorageFull reason (MainBase replacement still works)
-
----
-
-## 11. Multi-worker operator validation PASS
-
-Operator confirmed: waiting Workers use freed space after Launch; unloaded Workers resume mining; Workers without room keep cargo and stay WaitingForDropOff; no overflow.
-
----
-
-## 12. Final operator acceptance summary
-
-PIE PASS:
-
-- HUD Base/container/Orbital/Launch
-- Full Storage → Workers wait at MainBase, no mining
-- Launch frees space → waiting Workers resume drop-off
-- Multi-worker authority Storage competition correct
-
----
-
-## 13. Automated contracts (finalization rerun)
-
-| Command | Result |
-| --- | --- |
-| `gp.Resource.RunS28RegressionSuite` | **PASS** Failures=0 |
-| `gp.Resource.RunDropOffResilienceContractTest` | **PASS** Failures=0 |
-| `gp.Resource.RunContainerLaunchContractTest` | **PASS** Failures=0 |
-| `gp.Resource.RunContainerLaunchHUDContractTest` | **PASS** Failures=0 |
-| `gp.Worker.RunHaulingContractTest` | **PASS** Failures=0 |
-| `gp.Combat.RunLOSFireGateContractTest` | **PASS** Failures=0 |
-| `gp.Combat.RunSalvageWalkerContractTest` | **PASS** Failures=0 |
-| `gp.Combat.RunHealthBarContractTest` | **PASS** Failures=0 |
-| `gp.Combat.RunTeamColorContractTest` | **PASS** Failures=0 |
-
----
-
-## 14. GPEditor + UHT
-
-`GPEditor Win64 Development` — **PASS**
-
----
-
-## 15. GP Development
-
-`GP Win64 Development` — **PASS**
-
----
-
-## 16. GP Shipping
-
-`GP Win64 Shipping` — **PASS**
-
----
-
-## 17. Exact full branch changed-file list (`origin/main...HEAD`)
-
-```
+Docs/Development/Next_Slice_Audit_Post_GP-S30.md
+Docs/Development/DOCUMENTATION_INDEX.md
 Docs/Development/AI_Project_Log.md
-Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md
 Docs/Development/Claude_Tasks/README.md
 Docs/Development/Cursor_Work_Report.md
-Docs/Development/DOCUMENTATION_INDEX.md
-GP/Config/DefaultGame.ini
-GP/Source/GPEditor/Private/Resources/GPResourceDefinitionSeedCommandlet.cpp
-GP/Source/GPGASRuntime/Private/Effects/GPGE_AddOrbital.cpp
-GP/Source/GPGASRuntime/Private/Effects/GPGE_AddScore.cpp
-GP/Source/GPGASRuntime/Public/Effects/GPGE_AddOrbital.h
-GP/Source/GPGASRuntime/Public/Effects/GPGE_AddScore.h
-GP/Source/GPRuntime/Private/Debug/GPContainerLaunchContractTest.cpp
-GP/Source/GPRuntime/Private/Debug/GPContainerLaunchHUDContractTest.cpp
-GP/Source/GPRuntime/Private/Debug/GPDropOffResilienceContractTest.cpp
-GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp
-GP/Source/GPRuntime/Private/Resources/GPResourceDefinition.cpp
-GP/Source/GPRuntime/Private/Resources/GPStorageComponent.cpp
-GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp
-GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp
-GP/Source/GPRuntime/Private/Units/GPWorker.cpp
-GP/Source/GPRuntime/Public/Player/GPPlayerController.h
-GP/Source/GPRuntime/Public/Resources/GPResourceDefinition.h
-GP/Source/GPRuntime/Public/Resources/GPStorageComponent.h
-GP/Source/GPRuntime/Public/Settings/GPResourceGameplaySettings.h
-GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h
-GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h
-GP/Source/GPRuntime/Public/Units/GPWorker.h
 ```
 
 ---
 
-## 18. Operator assets untouched
+## 15. Confirmation DOCS ONLY
 
-Not committed / remain local only:
-
-- `GP/Config/DefaultEngine.ini`
-- `L_PrototypeArena.umap`
-- `Blueprint/`
-- `Materials/`
-- authored ResourceNode `.uasset`
-- Niagara / `BP_SalvageWalker` / `Tools/` / other operator `.uasset`/`.umap`
+No gameplay C++. No Content assets. No DefaultGame.ini / uproject changes.
 
 ---
 
-## 19. Git status summary (pre-finalization-commit)
+## 16. Operator assets untouched
 
-Branch ahead of origin with clean tracked GP-S30 files. Local operator dirt present and **excluded** from commit:
-
-- modified: DefaultEngine.ini, L_PrototypeArena.umap, BP_ResourceNode_AuthoredExample.uasset
-- untracked: Blueprint/, Materials/, Tools/
+Local dirt left uncommitted: DefaultEngine.ini, L_PrototypeArena.umap, authored ResourceNode, Blueprint/, Materials/, Tools/.
 
 ---
 
-## 20. Final commit SHA
+## 17. Commit SHA
 
-824bf82f203b43387c16beb45b5edf4eb96c7ec1
+*(filled after commit)*

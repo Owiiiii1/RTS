@@ -6,9 +6,9 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-08 (post GP-S29R merge). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-08 (post GP-S30 merge). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Slice 8 economy unlock. **GP-S29R DONE / MERGED**. **GP-S30** on `feature/gp-s30-container-launch-orbital-conversion` — **GP-S30_FINALIZATION_READY_FOR_MERGE_REVIEW**.
+**Поточна фаза:** Slice 8 economy unlock. **GP-S30 DONE / MERGED** @ `main` `0c2bfd2…`. Current: **POST_GP_S30_NEXT_SLICE_AUDIT**.
 
 **Status snapshot:**
 
@@ -16,15 +16,16 @@
 |---|---|
 | GP-S01 … GP-S28 | **DONE / merged** on `main` |
 | GP-S28P1…P4 | **DONE / MERGED** on `main` |
-| **GP-S29R** LOS + HealthBar + TeamColors + Salvage Walker | **DONE / MERGED** @ `3673a689…` — operator PASS; final builds PASS |
-| Post-S29R next-slice audit | [`../Next_Slice_Audit_Post_S29R.md`](../Next_Slice_Audit_Post_S29R.md) |
-| **GP-S30** Container Launch / Orbital Conversion | **GP-S30_FINALIZATION_READY_FOR_MERGE_REVIEW** — [`GP-S30_Container_Launch_Orbital_Conversion.md`](GP-S30_Container_Launch_Orbital_Conversion.md) — operator PASS (HUD breakdown + full-storage Worker); final builds PASS; **not merged** |
+| **GP-S29R** LOS + HealthBar + TeamColors + Salvage Walker | **DONE / MERGED** @ `3673a689…` |
+| **GP-S30** Container Launch / Orbital Conversion | **DONE / MERGED** @ `0c2bfd2…` — [`GP-S30_Container_Launch_Orbital_Conversion.md`](GP-S30_Container_Launch_Orbital_Conversion.md) |
+| Post-GP-S30 next-slice audit | [`../Next_Slice_Audit_Post_GP-S30.md`](../Next_Slice_Audit_Post_GP-S30.md) — **POST_GP_S30_NEXT_SLICE_AUDIT** |
+| Recommended NEXT (not started) | **GP-S31R Minimal Orbital Unit Drop** |
 
-**NEXT action для агента:** await operator merge/close of GP-S30. Do **not** auto-start GP-S31 / pathfinding / AttackMove / DropPod. Historical TDD/13 “GP-S30 = TargetingComponent” is **not** this stage.
+**NEXT action для агента:** await review/merge of post-GP-S30 audit. Do **not** auto-start GP-S31R implementation / FoW / BuildGrid / full Order Menu / pathfinding / AttackMove. Historical TDD/13 “GP-S31 = Damage GE” is **not** this stage.
 
 ### Drift Warning
 
-Cursor must match [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) + `AI_Project_Log.md`. Older “GP-S29R pending” / “NEXT = GP-S16 after GP-S15” is obsolete. One slice = one PR.
+Cursor must match [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md) + `AI_Project_Log.md`. Older “GP-S30 FINALIZATION_READY / not merged” is obsolete. One slice = one PR.
 
 ---
 

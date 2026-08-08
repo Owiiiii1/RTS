@@ -1,7 +1,28 @@
 # GP-S30 — Container Launch / Orbital Conversion
 
 ## Status
-**GP-S30_FINALIZATION_READY_FOR_MERGE_REVIEW**
+**DONE / MERGED**
+
+Merged to `main` @ `0c2bfd2799f85fe281e9920404664d7a16067bf4` (finalization `824bf82…`).
+
+## Slice Group
+Slice 8 — Buildings + Orbital Drops
+
+## Branch (historical)
+`feature/gp-s30-container-launch-orbital-conversion`  
+Base was `main` @ `89ce3c50…`
+
+## Operator validation
+**PASS** (final retest). Includes HUD container breakdown + full-storage multi-worker WaitingForDropOff.
+
+## Late operator fixes
+
+**A. HUD container breakdown** — Base total/capacity + stable per-container lines + Orbital + Launch.
+
+**B. Full-storage Worker** — cargo retained; WaitingForDropOff; no mining while cargo remains; OnStorageChanged resume; multi-worker authority competition.
+
+## Note
+Next playable gap after this stage: Orbital spend → drop → payload. See [`../Next_Slice_Audit_Post_GP-S30.md`](../Next_Slice_Audit_Post_GP-S30.md) (recommended **GP-S31R**, not started).
 
 ## Slice Group
 Slice 8 — Buildings + Orbital Drops

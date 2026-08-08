@@ -1468,7 +1468,7 @@ void AGP_PlayerController::EnsurePlanetaryFerroniteHUD()
 	}
 
 	PlanetaryFerroniteHUD->AddToViewport(PlanetaryFerroniteHUDZOrder);
-	PlanetaryFerroniteHUD->SetPlanetaryFerroniteDisplay(0.0f, false);
+	PlanetaryFerroniteHUD->SetStorageDisplay(false, 0.0f, 0.0f, TArray<float>());
 	PlanetaryFerroniteHUD->SetOrbitalFerroniteDisplay(0.0f);
 	PlanetaryFerroniteHUD->SetLaunchButtonEnabled(false);
 }
@@ -1547,11 +1547,22 @@ void AGP_PlayerController::SyncPlanetaryFerroniteHUDFromStorage()
 
 	if (UGP_StorageComponent* Storage = BoundPlanetaryStorage.Get())
 	{
-		PlanetaryFerroniteHUD->SetPlanetaryFerroniteDisplay(Storage->GetTotalStored(), true);
+		TArray<float> Amounts;
+		const TArray<FGP_StorageContainer>& Containers = Storage->GetContainers();
+		Amounts.Reserve(Containers.Num());
+		for (const FGP_StorageContainer& Container : Containers)
+		{
+			Amounts.Add(Container.CurrentAmount);
+		}
+		PlanetaryFerroniteHUD->SetStorageDisplay(
+			true,
+			Storage->GetTotalStored(),
+			Storage->GetTotalCapacity(),
+			Amounts);
 	}
 	else
 	{
-		PlanetaryFerroniteHUD->SetPlanetaryFerroniteDisplay(0.0f, false);
+		PlanetaryFerroniteHUD->SetStorageDisplay(false, 0.0f, 0.0f, TArray<float>());
 	}
 }
 
@@ -1638,12 +1649,9 @@ void AGP_PlayerController::HandleStorageChangedForHUD(
 	float TotalCapacity)
 {
 	(void)PreviousTotalStored;
+	(void)NewTotalStored;
 	(void)TotalCapacity;
-	EnsurePlanetaryFerroniteHUD();
-	if (PlanetaryFerroniteHUD != nullptr)
-	{
-		PlanetaryFerroniteHUD->SetPlanetaryFerroniteDisplay(NewTotalStored, BoundPlanetaryStorage.IsValid());
-	}
+	SyncPlanetaryFerroniteHUDFromStorage();
 	SyncLaunchButtonFromStorage();
 }
 

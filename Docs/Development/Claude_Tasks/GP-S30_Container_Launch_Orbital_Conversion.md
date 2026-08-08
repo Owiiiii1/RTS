@@ -1,77 +1,46 @@
 # GP-S30 — Container Launch / Orbital Conversion
 
 ## Status
-**GP-S30_FINALIZATION_READY_FOR_MERGE_REVIEW**
+**GP-S30_HUD_CONTAINER_BREAKDOWN_READY_FOR_OPERATOR_VALIDATION**
 
 ## Slice Group
-Slice 8 — Buildings + Orbital Drops (economy unlock vertical; first coding slice after GP-S29R)
-
-## Code Allowed
-**YES** — finalization complete on feature branch (not yet merged).
-
-## Depends On
-- `main` @ `89ce3c50ebd05a4bf1e58a5b4e117544dc68cb8f`
-- GP-S28 Storage + Worker haul (merged)
-- ADR-0009 Orbital Delivery (Accepted)
+Slice 8 — Buildings + Orbital Drops
 
 ## Branch
-`feature/gp-s30-container-launch-orbital-conversion`
+`feature/gp-s30-container-launch-orbital-conversion`  
+Base: `main` @ `89ce3c50ebd05a4bf1e58a5b4e117544dc68cb8f`  
+Prior finalization: `030efc55469153a8d1465ac81ae3996c1bd391cb` — **not merged**; operator requested HUD UX follow-up.
 
-## Goal
-Authority-side MainBase container launch that converts Ready planetary Ferronite into spendable `OrbitalFerronite` + cumulative `FerroniteScore`, and lowers `FerroniteThreatValue`.
+## Operator validation
+Previous PIE PASS for launch economy + HUD lifecycle.  
+**Current:** awaiting retest of container breakdown TEMP HUD (not merge-ready).
 
-## Operator validation — PASS
+## TEMP HUD (this follow-up)
 
-Operator PIE confirmed:
+```
+База: <GetTotalStored> / <GetTotalCapacity>
+Контейнер 1 — <amount>
+…
+Контейнер N — <amount>
+Orbital: <OrbitalFerronite>
+[Launch Container]
+```
 
-- HUD restored after RebuildWidget lifecycle fix
-- Ferronite + Orbital counters visible
-- Launch Container button visible
-- Workers mine/haul successfully
-- Launch enabled when container Ready
-- Button launch succeeds (no console)
-- After telegraph: Planetary decreases; Orbital increases; HUD updates
+- No hardcoded 5 / 500
+- Stable container indices
+- RebuildWidget lifecycle preserved
+- Launch button / RPC / Storage / GAS unchanged
 
-**Note:** HUD Ferronite is **total stored across containers**, not one-container capacity. Default: capacity **100** × count **5** = total **500**.
-
-## Delivered
-
-### Production flow
-Worker → mine → haul → Storage → Ready → Launch Container → Launching → completion → Empty; OrbitalFerronite + FerroniteScore via Instant GEs; Threat decreases.
-
-### TEMP HUD
-- Top: `Ferronite` + `Orbital`
-- Bottom: `Launch Container` UButton
-- Root `SelfHitTestInvisible`; button Visible
-- WidgetTree built in `RebuildWidget` (lifecycle fix)
-
-### Interaction
-HUD → `RequestLaunchReadyContainer` → `Server_RequestLaunchReadyContainer` → own-team `TryLaunchReadyContainer`
-
-### Storage defaults
-| Knob | Value |
-| --- | --- |
-| ContainerCapacity | 100 |
-| ContainerCount | 5 |
-| Total default | 500 |
-| Orbital/Score rates | 1:1 |
-| Launch duration | 2.5 s |
-
-## Contracts (finalization)
+## Contracts
 | Command | Result |
 | --- | --- |
 | `gp.Resource.RunContainerLaunchHUDContractTest` | Failures=0 |
 | `gp.Resource.RunContainerLaunchContractTest` | Failures=0 |
 | `gp.Resource.RunS28RegressionSuite` | Failures=0 |
-| `gp.Combat.RunLOSFireGateContractTest` | Failures=0 |
-| `gp.Combat.RunSalvageWalkerContractTest` | Failures=0 |
-| `gp.Combat.RunHealthBarContractTest` | Failures=0 |
-| `gp.Combat.RunTeamColorContractTest` | Failures=0 |
 
-## Builds (finalization)
+## Builds
 - GPEditor Win64 Development + UHT — **PASS**
-- GP Win64 Development — **PASS**
-- GP Win64 Shipping — **PASS** (see Cursor_Work_Report)
+- GP Development / Shipping — **NOT RUN** (after this C++ HUD change)
 
 ## Stop Condition
-Merge/close when operator requests. Do **not** auto-start GP-S31.
+Operator retests HUD breakdown. Do **not** merge until PASS. Do **not** auto-start GP-S31.

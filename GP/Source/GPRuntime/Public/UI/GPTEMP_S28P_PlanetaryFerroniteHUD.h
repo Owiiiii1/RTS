@@ -9,9 +9,10 @@
 class UButton;
 class UTextBlock;
 class UCanvasPanel;
+class UVerticalBox;
 
 /**
- * TEMP_S28P_HUD — Planetary + Orbital Ferronite readout + Launch Container button (GP-S28P4 / GP-S30).
+ * TEMP_S28P_HUD — Base storage breakdown + Orbital + Launch Container (GP-S28P4 / GP-S30).
  * Local PC-owned. Not production RTS HUD. Root is SelfHitTestInvisible so empty space passes RTS input;
  * only the Launch button consumes mouse hits.
  *
@@ -23,7 +24,17 @@ class GPRUNTIME_API UGP_TEMP_S28P_PlanetaryFerroniteHUD : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	/** bHasBase=false shows "--"; otherwise integer-rounded stored amount. */
+	/**
+	 * Planetary storage snapshot from UGP_StorageComponent.
+	 * ContainerAmounts[i] maps to stable container index i (1-based label for user).
+	 */
+	void SetStorageDisplay(
+		bool bHasBase,
+		float TotalStored,
+		float TotalCapacity,
+		const TArray<float>& ContainerAmounts);
+
+	/** Backward-compatible total-only update (clears per-container lines when unbound). */
 	void SetPlanetaryFerroniteDisplay(float StoredAmount, bool bHasBase);
 
 	/** Orbital Ferronite from local PlayerAttributeSet (GAS). Shows 0 when unbound. */
@@ -36,14 +47,18 @@ public:
 	void HandleLaunchClicked();
 
 #if !UE_BUILD_SHIPPING
-	FString GetCountersDisplayTextForContract() const { return CountersDisplayText; }
+	FString GetBaseLineTextForContract() const;
+	FString GetOrbitalLineTextForContract() const;
+	int32 GetContainerLineCountForContract() const;
+	FString GetContainerLineTextForContract(int32 ZeroBasedIndex) const;
 	bool IsLaunchButtonEnabledForContract() const;
 	bool HasInteractiveLaunchButtonForContract() const;
 	bool HasWidgetTreeRootForContract() const;
-	bool HasCountersWidgetForContract() const;
+	bool HasStatusPanelForContract() const;
 	bool HasLaunchButtonWidgetForContract() const;
 	float GetDisplayedOrbitalForContract() const { return DisplayOrbital; }
-	float GetDisplayedPlanetaryForContract() const { return DisplayStored; }
+	float GetDisplayedStoredForContract() const { return DisplayStored; }
+	float GetDisplayedCapacityForContract() const { return DisplayCapacity; }
 	bool HasResolvedBaseForContract() const { return bHasResolvedBase; }
 #endif
 
@@ -55,13 +70,27 @@ protected:
 private:
 	void EnsureWidgetTreeBuilt();
 	void BindLaunchClickedIdempotent();
-	void RefreshCountersText();
+	void EnsureContainerLineCount(int32 DesiredCount);
+	void RefreshStatusText();
+	void RefreshOrbitalText();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UCanvasPanel> RootCanvas;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UTextBlock> CountersText;
+	TObjectPtr<UVerticalBox> StatusPanel;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> BaseLineText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UVerticalBox> ContainerLinesBox;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UTextBlock>> ContainerLineTexts;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> OrbitalLineText;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UButton> LaunchButton;
@@ -71,8 +100,9 @@ private:
 
 	bool bHasResolvedBase = false;
 	float DisplayStored = 0.0f;
+	float DisplayCapacity = 0.0f;
+	TArray<float> DisplayContainerAmounts;
 	float DisplayOrbital = 0.0f;
-	FString CountersDisplayText = TEXT("Ferronite: --     Orbital: 0");
 	bool bLaunchEnabled = false;
 	bool bTreeBuilt = false;
 };

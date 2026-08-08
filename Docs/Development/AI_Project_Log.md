@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S30 TEMP HUD container breakdown UX
+
+Status: **GP-S30_HUD_CONTAINER_BREAKDOWN_READY_FOR_OPERATOR_VALIDATION**
+
+- Same branch; prior finalization `030efc5…` not merged
+- TEMP HUD: `База: current/capacity` + dynamic `Контейнер N — amount` + Orbital
+- No hardcoded 5/500; Storage GetTotalStored/GetTotalCapacity/GetContainers
+- Launch button/RPC/gameplay unchanged; RebuildWidget lifecycle preserved
+- Contracts: ContainerLaunchHUD / ContainerLaunch / S28 — Failures=0
+- GPEditor PASS; GP Dev/Shipping NOT RUN
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-08 — GP-S30 Finalization
 
 Status: **GP-S30_FINALIZATION_READY_FOR_MERGE_REVIEW**

@@ -10,7 +10,7 @@ feature/gp-s28p4-planetary-ferronite-hud
 fb699db32d1bc79a62809274e39b8a588633cf3c
 
 ## Final Tip
-(pending commit SHA — updated after push)
+`0aec7582ad7e07e2977e6545f3ec166bb87a2f18`
 
 ## Client-safe MainBase resolve
 - Authority `RegisterMainBase` / `UnregisterMainBase` remain mutation SoT (existing per-team registry).

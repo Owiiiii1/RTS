@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S31R Minimal Orbital Unit Drop (implementation candidate)
+
+Status: **GP-S31R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s31r-minimal-orbital-unit-drop` from `main` @ `118660bb…`
+- Spend GE + DropPod + UnitDropZone + TEMP Unit Drop HUD + settings-driven slots/costs
+- Contract: `gp.Resource.RunOrbitalUnitDropContractTest`
+- GPEditor Win64 Development + UHT **PASS**; GP Dev/Shipping **NOT RUN**
+- NOT MERGE — operator validation stop
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-08 — Post-GP-S30 Orbital Procurement Design Refinement
 
 Status: **POST_GP_S30_ORBITAL_PROCUREMENT_DESIGN_REFINEMENT_READY_FOR_REVIEW**

@@ -6,10 +6,14 @@
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Orbital/GPUnitDropManifest.h"
 #include "Player/GPPlayerController.h"
+#include "Settings/GPOrbitalDeliverySettings.h"
 #include "Styling/CoreStyle.h"
 
 namespace GPTempS28PHUDPrivate
@@ -29,6 +33,62 @@ namespace GPTempS28PHUDPrivate
 		Text->SetColorAndOpacity(FSlateColor(FLinearColor(0.92f, 0.95f, 0.85f, 1.0f)));
 		Text->SetFont(MakeStatusFont(16));
 	}
+
+	static UButton* MakeSmallButton(UWidgetTree* Tree, const FName& Name, const FString& Label, UTextBlock*& OutLabel)
+	{
+		UButton* Button = Tree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
+		Button->SetVisibility(ESlateVisibility::Visible);
+		OutLabel = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *FString::Printf(TEXT("%s_Label"), *Name.ToString()));
+		OutLabel->SetText(FText::FromString(Label));
+		OutLabel->SetJustification(ETextJustify::Center);
+		OutLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+		OutLabel->SetFont(MakeStatusFont(14));
+		Button->SetContent(OutLabel);
+		return Button;
+	}
+
+	static UHorizontalBox* MakeStepperRow(
+		UWidgetTree* Tree,
+		const FName& RowName,
+		const FString& Title,
+		UButton*& OutMinus,
+		UTextBlock*& OutCount,
+		UButton*& OutPlus,
+		UTextBlock*& OutMinusLabel,
+		UTextBlock*& OutPlusLabel)
+	{
+		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), RowName);
+		Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+		UTextBlock* TitleText = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *FString::Printf(TEXT("%s_Title"), *RowName.ToString()));
+		StyleStatusText(TitleText);
+		TitleText->SetText(FText::FromString(Title));
+		if (UHorizontalBoxSlot* TitleSlot = Row->AddChildToHorizontalBox(TitleText))
+		{
+			TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
+			TitleSlot->SetVerticalAlignment(VAlign_Center);
+		}
+
+		OutMinus = MakeSmallButton(Tree, *FString::Printf(TEXT("%s_Minus"), *RowName.ToString()), TEXT("-"), OutMinusLabel);
+		if (UHorizontalBoxSlot* MinusSlot = Row->AddChildToHorizontalBox(OutMinus))
+		{
+			MinusSlot->SetPadding(FMargin(0.0f, 0.0f, 4.0f, 0.0f));
+		}
+
+		OutCount = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *FString::Printf(TEXT("%s_Count"), *RowName.ToString()));
+		StyleStatusText(OutCount);
+		OutCount->SetMinDesiredWidth(28.0f);
+		OutCount->SetJustification(ETextJustify::Center);
+		if (UHorizontalBoxSlot* CountSlot = Row->AddChildToHorizontalBox(OutCount))
+		{
+			CountSlot->SetPadding(FMargin(0.0f, 0.0f, 4.0f, 0.0f));
+			CountSlot->SetVerticalAlignment(VAlign_Center);
+		}
+
+		OutPlus = MakeSmallButton(Tree, *FString::Printf(TEXT("%s_Plus"), *RowName.ToString()), TEXT("+"), OutPlusLabel);
+		Row->AddChildToHorizontalBox(OutPlus);
+		return Row;
+	}
 }
 
 TSharedRef<SWidget> UGP_TEMP_S28P_PlanetaryFerroniteHUD::RebuildWidget()
@@ -45,8 +105,10 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeConstruct()
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	RefreshStatusText();
 	RefreshOrbitalText();
+	RefreshUnitDropPanel();
 	SetLaunchButtonEnabled(bLaunchEnabled);
 	BindLaunchClickedIdempotent();
+	BindUnitDropClickedIdempotent();
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeDestruct()
@@ -54,6 +116,26 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeDestruct()
 	if (LaunchButton != nullptr)
 	{
 		LaunchButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked);
+	}
+	if (ConfirmDropButton != nullptr)
+	{
+		ConfirmDropButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleConfirmUnitDropClicked);
+	}
+	if (WorkerMinusButton != nullptr)
+	{
+		WorkerMinusButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWorkerMinusClicked);
+	}
+	if (WorkerPlusButton != nullptr)
+	{
+		WorkerPlusButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWorkerPlusClicked);
+	}
+	if (WalkerMinusButton != nullptr)
+	{
+		WalkerMinusButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWalkerMinusClicked);
+	}
+	if (WalkerPlusButton != nullptr)
+	{
+		WalkerPlusButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWalkerPlusClicked);
 	}
 	Super::NativeDestruct();
 }
@@ -66,6 +148,35 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::BindLaunchClickedIdempotent()
 	}
 	LaunchButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked);
 	LaunchButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked);
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::BindUnitDropClickedIdempotent()
+{
+	if (WorkerMinusButton != nullptr)
+	{
+		WorkerMinusButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWorkerMinusClicked);
+		WorkerMinusButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWorkerMinusClicked);
+	}
+	if (WorkerPlusButton != nullptr)
+	{
+		WorkerPlusButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWorkerPlusClicked);
+		WorkerPlusButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWorkerPlusClicked);
+	}
+	if (WalkerMinusButton != nullptr)
+	{
+		WalkerMinusButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWalkerMinusClicked);
+		WalkerMinusButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWalkerMinusClicked);
+	}
+	if (WalkerPlusButton != nullptr)
+	{
+		WalkerPlusButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWalkerPlusClicked);
+		WalkerPlusButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWalkerPlusClicked);
+	}
+	if (ConfirmDropButton != nullptr)
+	{
+		ConfirmDropButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleConfirmUnitDropClicked);
+		ConfirmDropButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleConfirmUnitDropClicked);
+	}
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
@@ -82,9 +193,12 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 		&& BaseLineText != nullptr
 		&& ContainerLinesBox != nullptr
 		&& OrbitalLineText != nullptr
-		&& LaunchButton != nullptr)
+		&& LaunchButton != nullptr
+		&& UnitDropPanel != nullptr
+		&& ConfirmDropButton != nullptr)
 	{
 		BindLaunchClickedIdempotent();
+		BindUnitDropClickedIdempotent();
 		return;
 	}
 
@@ -141,9 +255,89 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 		ButtonSlot->SetPosition(FVector2D(0.0f, -28.0f));
 	}
 
+	UnitDropPanel = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("UnitDropPanel"));
+	UnitDropPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (UCanvasPanelSlot* DropSlot = RootCanvas->AddChildToCanvas(UnitDropPanel))
+	{
+		DropSlot->SetAnchors(FAnchors(1.0f, 0.0f, 1.0f, 0.0f));
+		DropSlot->SetAlignment(FVector2D(1.0f, 0.0f));
+		DropSlot->SetAutoSize(true);
+		DropSlot->SetOffsets(FMargin(0.0f, 24.0f, 24.0f, 0.0f));
+	}
+
+	UnitDropTitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("UnitDropTitle"));
+	GPTempS28PHUDPrivate::StyleStatusText(UnitDropTitleText);
+	UnitDropTitleText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(18));
+	UnitDropTitleText->SetText(FText::FromString(TEXT("Unit Drop")));
+	UnitDropPanel->AddChildToVerticalBox(UnitDropTitleText);
+
+	UTextBlock* WorkerMinusLabel = nullptr;
+	UTextBlock* WorkerPlusLabel = nullptr;
+	UButton* WorkerMinusRaw = nullptr;
+	UButton* WorkerPlusRaw = nullptr;
+	UTextBlock* WorkerCountRaw = nullptr;
+	UHorizontalBox* WorkerRow = GPTempS28PHUDPrivate::MakeStepperRow(
+		WidgetTree,
+		TEXT("WorkerRow"),
+		TEXT("Worker:"),
+		WorkerMinusRaw,
+		WorkerCountRaw,
+		WorkerPlusRaw,
+		WorkerMinusLabel,
+		WorkerPlusLabel);
+	WorkerMinusButton = WorkerMinusRaw;
+	WorkerPlusButton = WorkerPlusRaw;
+	WorkerCountText = WorkerCountRaw;
+	if (UVerticalBoxSlot* WorkerSlot = UnitDropPanel->AddChildToVerticalBox(WorkerRow))
+	{
+		WorkerSlot->SetPadding(FMargin(0.0f, 6.0f, 0.0f, 0.0f));
+	}
+
+	UTextBlock* WalkerMinusLabel = nullptr;
+	UTextBlock* WalkerPlusLabel = nullptr;
+	UButton* WalkerMinusRaw = nullptr;
+	UButton* WalkerPlusRaw = nullptr;
+	UTextBlock* WalkerCountRaw = nullptr;
+	UHorizontalBox* WalkerRow = GPTempS28PHUDPrivate::MakeStepperRow(
+		WidgetTree,
+		TEXT("WalkerRow"),
+		TEXT("Salvage Walker:"),
+		WalkerMinusRaw,
+		WalkerCountRaw,
+		WalkerPlusRaw,
+		WalkerMinusLabel,
+		WalkerPlusLabel);
+	WalkerMinusButton = WalkerMinusRaw;
+	WalkerPlusButton = WalkerPlusRaw;
+	WalkerCountText = WalkerCountRaw;
+	if (UVerticalBoxSlot* WalkerSlot = UnitDropPanel->AddChildToVerticalBox(WalkerRow))
+	{
+		WalkerSlot->SetPadding(FMargin(0.0f, 4.0f, 0.0f, 0.0f));
+	}
+
+	SlotsCostText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("SlotsCostText"));
+	GPTempS28PHUDPrivate::StyleStatusText(SlotsCostText);
+	if (UVerticalBoxSlot* SlotsSlot = UnitDropPanel->AddChildToVerticalBox(SlotsCostText))
+	{
+		SlotsSlot->SetPadding(FMargin(0.0f, 6.0f, 0.0f, 4.0f));
+	}
+
+	ConfirmDropButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("ConfirmDropButton"));
+	ConfirmDropButton->SetVisibility(ESlateVisibility::Visible);
+	ConfirmDropLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("ConfirmDropLabel"));
+	ConfirmDropLabel->SetText(FText::FromString(TEXT("Confirm Drop")));
+	ConfirmDropLabel->SetJustification(ETextJustify::Center);
+	ConfirmDropLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	ConfirmDropLabel->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(15));
+	ConfirmDropButton->SetContent(ConfirmDropLabel);
+	UnitDropPanel->AddChildToVerticalBox(ConfirmDropButton);
+
+	BindUnitDropClickedIdempotent();
+
 	bTreeBuilt = true;
 	RefreshStatusText();
 	RefreshOrbitalText();
+	RefreshUnitDropPanel();
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureContainerLineCount(int32 DesiredCount)
@@ -219,6 +413,102 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshOrbitalText()
 			TEXT("Orbital: %d"),
 			FMath::RoundToInt(DisplayOrbital))));
 	}
+	RefreshUnitDropPanel();
+}
+
+int32 UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetPodCapacity() const
+{
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	return Settings != nullptr ? FMath::Max(1, Settings->PodTransportSlotCapacity) : 4;
+}
+
+int32 UGP_TEMP_S28P_PlanetaryFerroniteHUD::ComputeSlotCost() const
+{
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	if (Settings == nullptr)
+	{
+		return WorkerCount + SalvageWalkerCount * 2;
+	}
+	return WorkerCount * FMath::Max(1, Settings->WorkerTransportSlotCost)
+		+ SalvageWalkerCount * FMath::Max(1, Settings->SalvageWalkerTransportSlotCost);
+}
+
+float UGP_TEMP_S28P_PlanetaryFerroniteHUD::ComputeOrbitalCost() const
+{
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	if (Settings == nullptr)
+	{
+		return static_cast<float>(WorkerCount) * 25.0f + static_cast<float>(SalvageWalkerCount) * 50.0f;
+	}
+	return static_cast<float>(WorkerCount) * Settings->WorkerOrbitalDropCost
+		+ static_cast<float>(SalvageWalkerCount) * Settings->SalvageWalkerOrbitalDropCost;
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::CanConfirmLocally() const
+{
+	if (WorkerCount + SalvageWalkerCount <= 0)
+	{
+		return false;
+	}
+	if (ComputeSlotCost() > GetPodCapacity())
+	{
+		return false;
+	}
+	if (ComputeOrbitalCost() > DisplayOrbital + KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+	return true;
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshUnitDropPanel()
+{
+	if (WorkerCountText != nullptr)
+	{
+		WorkerCountText->SetText(FText::FromString(FString::Printf(TEXT("%d"), WorkerCount)));
+	}
+	if (WalkerCountText != nullptr)
+	{
+		WalkerCountText->SetText(FText::FromString(FString::Printf(TEXT("%d"), SalvageWalkerCount)));
+	}
+	if (SlotsCostText != nullptr)
+	{
+		SlotsCostText->SetText(FText::FromString(FString::Printf(
+			TEXT("Slots: %d / %d\nCost: %d Orbital"),
+			ComputeSlotCost(),
+			GetPodCapacity(),
+			FMath::RoundToInt(ComputeOrbitalCost()))));
+	}
+	if (ConfirmDropButton != nullptr)
+	{
+		ConfirmDropButton->SetIsEnabled(CanConfirmLocally());
+	}
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::AdjustWorkerCount(int32 Delta)
+{
+	const int32 Next = FMath::Max(0, WorkerCount + Delta);
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	const int32 WorkerSlots = Settings != nullptr ? FMath::Max(1, Settings->WorkerTransportSlotCost) : 1;
+	const int32 WalkerSlots = Settings != nullptr ? FMath::Max(1, Settings->SalvageWalkerTransportSlotCost) : 2;
+	const int32 Cap = GetPodCapacity();
+	const int32 UsedWithoutWorker = SalvageWalkerCount * WalkerSlots;
+	const int32 MaxWorkers = FMath::Max(0, (Cap - UsedWithoutWorker) / WorkerSlots);
+	WorkerCount = FMath::Clamp(Next, 0, MaxWorkers);
+	RefreshUnitDropPanel();
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::AdjustWalkerCount(int32 Delta)
+{
+	const int32 Next = FMath::Max(0, SalvageWalkerCount + Delta);
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	const int32 WorkerSlots = Settings != nullptr ? FMath::Max(1, Settings->WorkerTransportSlotCost) : 1;
+	const int32 WalkerSlots = Settings != nullptr ? FMath::Max(1, Settings->SalvageWalkerTransportSlotCost) : 2;
+	const int32 Cap = GetPodCapacity();
+	const int32 UsedWithoutWalker = WorkerCount * WorkerSlots;
+	const int32 MaxWalkers = FMath::Max(0, (Cap - UsedWithoutWalker) / WalkerSlots);
+	SalvageWalkerCount = FMath::Clamp(Next, 0, MaxWalkers);
+	RefreshUnitDropPanel();
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetStorageDisplay(
@@ -267,6 +557,43 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked()
 		return;
 	}
 	PC->RequestLaunchReadyContainer();
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleConfirmUnitDropClicked()
+{
+	if (!CanConfirmLocally())
+	{
+		return;
+	}
+	AGP_PlayerController* PC = Cast<AGP_PlayerController>(GetOwningPlayer());
+	if (PC == nullptr)
+	{
+		return;
+	}
+	FGP_UnitDropManifest Manifest;
+	Manifest.WorkerCount = WorkerCount;
+	Manifest.SalvageWalkerCount = SalvageWalkerCount;
+	PC->RequestUnitDrop(Manifest);
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWorkerMinusClicked()
+{
+	AdjustWorkerCount(-1);
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWorkerPlusClicked()
+{
+	AdjustWorkerCount(1);
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWalkerMinusClicked()
+{
+	AdjustWalkerCount(-1);
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleWalkerPlusClicked()
+{
+	AdjustWalkerCount(1);
 }
 
 #if !UE_BUILD_SHIPPING
@@ -322,5 +649,10 @@ bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasStatusPanelForContract() const
 bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasLaunchButtonWidgetForContract() const
 {
 	return LaunchButton != nullptr && GetWidgetFromName(TEXT("LaunchButton")) == LaunchButton;
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::IsConfirmDropEnabledForContract() const
+{
+	return ConfirmDropButton != nullptr && ConfirmDropButton->GetIsEnabled();
 }
 #endif

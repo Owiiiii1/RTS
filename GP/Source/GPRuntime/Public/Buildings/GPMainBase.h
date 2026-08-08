@@ -43,6 +43,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Presentation")
 	USceneComponent* GetDropOffVisualAnchor() const;
 
+	/** Authored Unit Drop Zone (unit pods only). Reposition in BP-derived MainBase. */
+	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Orbital")
+	USceneComponent* GetUnitDropZone() const;
+
 	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Storage")
 	float GetPlanetaryStored() const;
 
@@ -73,6 +77,13 @@ protected:
 	/** Presentation-only drop-off marker. Gameplay DropOffRangeCm is independent. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Presentation", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USceneComponent> DropOffVisualAnchor;
+
+	/**
+	 * Unit DropPod landing anchor (GP-S31R). Authored-relative; not used by building pods later.
+	 * Default offset from PresentationRoot — reposition in BP without C++ hardcoded world coords.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Orbital", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> UnitDropZone;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Storage", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_StorageComponent> StorageComponent;

@@ -10,11 +10,12 @@ class UButton;
 class UTextBlock;
 class UCanvasPanel;
 class UVerticalBox;
+class UHorizontalBox;
 
 /**
- * TEMP_S28P_HUD — Base storage breakdown + Orbital + Launch Container (GP-S28P4 / GP-S30).
+ * TEMP_S28P_HUD — Base storage + Orbital + Launch + Unit Drop (GP-S28P4 / GP-S30 / GP-S31R).
  * Local PC-owned. Not production RTS HUD. Root is SelfHitTestInvisible so empty space passes RTS input;
- * only the Launch button consumes mouse hits.
+ * Launch / Unit Drop controls consume mouse hits.
  *
  * Programmatic WidgetTree must be built in RebuildWidget (before Super), not only in NativeConstruct.
  */
@@ -46,6 +47,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GP|TEMP HUD")
 	void HandleLaunchClicked();
 
+	UFUNCTION(BlueprintCallable, Category = "GP|TEMP HUD")
+	void HandleConfirmUnitDropClicked();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|TEMP HUD")
+	void HandleWorkerMinusClicked();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|TEMP HUD")
+	void HandleWorkerPlusClicked();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|TEMP HUD")
+	void HandleWalkerMinusClicked();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|TEMP HUD")
+	void HandleWalkerPlusClicked();
+
 #if !UE_BUILD_SHIPPING
 	FString GetBaseLineTextForContract() const;
 	FString GetOrbitalLineTextForContract() const;
@@ -60,6 +76,9 @@ public:
 	float GetDisplayedStoredForContract() const { return DisplayStored; }
 	float GetDisplayedCapacityForContract() const { return DisplayCapacity; }
 	bool HasResolvedBaseForContract() const { return bHasResolvedBase; }
+	int32 GetWorkerCountForContract() const { return WorkerCount; }
+	int32 GetSalvageWalkerCountForContract() const { return SalvageWalkerCount; }
+	bool IsConfirmDropEnabledForContract() const;
 #endif
 
 protected:
@@ -70,9 +89,17 @@ protected:
 private:
 	void EnsureWidgetTreeBuilt();
 	void BindLaunchClickedIdempotent();
+	void BindUnitDropClickedIdempotent();
 	void EnsureContainerLineCount(int32 DesiredCount);
 	void RefreshStatusText();
 	void RefreshOrbitalText();
+	void RefreshUnitDropPanel();
+	void AdjustWorkerCount(int32 Delta);
+	void AdjustWalkerCount(int32 Delta);
+	int32 ComputeSlotCost() const;
+	float ComputeOrbitalCost() const;
+	int32 GetPodCapacity() const;
+	bool CanConfirmLocally() const;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UCanvasPanel> RootCanvas;
@@ -98,6 +125,39 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> LaunchButtonLabel;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UVerticalBox> UnitDropPanel;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> UnitDropTitleText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> WorkerCountText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> WalkerCountText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> SlotsCostText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UButton> WorkerMinusButton;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UButton> WorkerPlusButton;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UButton> WalkerMinusButton;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UButton> WalkerPlusButton;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UButton> ConfirmDropButton;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> ConfirmDropLabel;
+
 	bool bHasResolvedBase = false;
 	float DisplayStored = 0.0f;
 	float DisplayCapacity = 0.0f;
@@ -105,4 +165,6 @@ private:
 	float DisplayOrbital = 0.0f;
 	bool bLaunchEnabled = false;
 	bool bTreeBuilt = false;
+	int32 WorkerCount = 0;
+	int32 SalvageWalkerCount = 0;
 };

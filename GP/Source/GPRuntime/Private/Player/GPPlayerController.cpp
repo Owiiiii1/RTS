@@ -30,6 +30,8 @@
 #include "UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h"
 #include "Buildings/GPMainBase.h"
 #include "Game/GPGameState.h"
+#include "Orbital/GPUnitDropAuthority.h"
+#include "Orbital/GPDropPod.h"
 #include "Resources/GPStorageComponent.h"
 #include "Units/GPUnitBase.h"
 
@@ -984,6 +986,58 @@ void AGP_PlayerController::RequestLaunchReadyContainer()
 	}
 
 	Server_RequestLaunchReadyContainer();
+}
+
+void AGP_PlayerController::RequestUnitDrop(const FGP_UnitDropManifest& Manifest)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	Server_RequestUnitDrop(Manifest);
+}
+
+bool AGP_PlayerController::Server_RequestUnitDrop_Validate(const FGP_UnitDropManifest& Manifest)
+{
+	(void)Manifest;
+	return true;
+}
+
+void AGP_PlayerController::Server_RequestUnitDrop_Implementation(const FGP_UnitDropManifest& Manifest)
+{
+	AuthorityTryRequestUnitDrop(Manifest);
+}
+
+bool AGP_PlayerController::AuthorityTryRequestUnitDrop(const FGP_UnitDropManifest& Manifest)
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+
+	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	if (PS == nullptr)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP UnitDrop Rejected: PC=%s Reason=MissingPlayerState"),
+			*GetName());
+		return false;
+	}
+
+	const GPUnitDropAuthority::FEvalResult Result =
+		GPUnitDropAuthority::AuthorityRequestUnitDrop(GetWorld(), PS, Manifest);
+	UE_LOG(LogTemp, Log,
+		TEXT("GP UnitDrop Result: PC=%s Team=%d Accepted=%s Reason=%d Slots=%d Cost=%.3f Units=%d Pod=%s"),
+		*GetName(),
+		PS->GetTeamId(),
+		Result.bAccepted ? TEXT("true") : TEXT("false"),
+		static_cast<int32>(Result.RejectReason),
+		Result.SlotCost,
+		Result.OrbitalCost,
+		Result.UnitCount,
+		*GetNameSafe(Result.SpawnedPod.Get()));
+	return Result.bAccepted;
 }
 
 bool AGP_PlayerController::Server_RequestLaunchReadyContainer_Validate()

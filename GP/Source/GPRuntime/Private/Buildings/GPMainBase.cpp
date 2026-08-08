@@ -34,6 +34,12 @@ AGP_MainBase::AGP_MainBase()
 	DropOffVisualAnchor->SetupAttachment(PresentationRoot);
 	DropOffVisualAnchor->SetCanEverAffectNavigation(false);
 
+	UnitDropZone = CreateDefaultSubobject<USceneComponent>(TEXT("UnitDropZone"));
+	UnitDropZone->SetupAttachment(PresentationRoot);
+	UnitDropZone->SetCanEverAffectNavigation(false);
+	// Default authored-relative offset (tuning). Owner repositions in BP-derived MainBase.
+	UnitDropZone->SetRelativeLocation(FVector(350.0f, 0.0f, 0.0f));
+
 	StorageComponent = CreateDefaultSubobject<UGP_StorageComponent>(TEXT("StorageComponent"));
 	DropOffRangeCm = 400.0f;
 
@@ -124,6 +130,11 @@ USceneComponent* AGP_MainBase::GetPresentationRoot() const
 USceneComponent* AGP_MainBase::GetDropOffVisualAnchor() const
 {
 	return DropOffVisualAnchor;
+}
+
+USceneComponent* AGP_MainBase::GetUnitDropZone() const
+{
+	return UnitDropZone;
 }
 
 float AGP_MainBase::GetPlanetaryStored() const
@@ -223,6 +234,14 @@ bool AGP_MainBase::ValidateMainBaseContract(TArray<FText>& OutErrors, TArray<FTe
 	if (IsValid(DropOffVisualAnchor) && DropOffVisualAnchor->GetAttachParent() != PresentationRoot)
 	{
 		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrDropOffAttach", "DropOffVisualAnchor must attach to PresentationRoot."));
+	}
+	if (!IsValid(UnitDropZone))
+	{
+		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrUnitDropZone", "MainBase requires UnitDropZone."));
+	}
+	if (IsValid(UnitDropZone) && UnitDropZone->GetAttachParent() != PresentationRoot)
+	{
+		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrUnitDropZoneAttach", "UnitDropZone must attach to PresentationRoot."));
 	}
 
 	if (!FMath::IsFinite(DropOffRangeCm) || DropOffRangeCm <= 0.0f)

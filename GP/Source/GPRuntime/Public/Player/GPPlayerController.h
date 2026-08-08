@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Command/GPCommandRequest.h"
 #include "GameFramework/PlayerController.h"
+#include "Orbital/GPUnitDropManifest.h"
 #include "GPPlayerController.generated.h"
 
 class UGP_AbilitySystemComponent;
@@ -50,6 +51,18 @@ public:
 	 * Client calls Server_RequestLaunchReadyContainer — does not mutate Storage locally.
 	 */
 	void RequestLaunchReadyContainer();
+
+	/**
+	 * Local TEMP HUD Unit Drop intent (GP-S31R).
+	 * Client submits counts only — server resolves classes/costs/slots.
+	 */
+	void RequestUnitDrop(const FGP_UnitDropManifest& Manifest);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestUnitDrop(const FGP_UnitDropManifest& Manifest);
+
+	/** Authority helper used by Server RPC and non-shipping contracts. */
+	bool AuthorityTryRequestUnitDrop(const FGP_UnitDropManifest& Manifest);
 
 	/** Authority launch intent: resolve own-team MainBase → TryLaunchReadyContainer. */
 	UFUNCTION(Server, Reliable, WithValidation)

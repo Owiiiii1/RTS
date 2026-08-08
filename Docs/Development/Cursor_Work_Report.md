@@ -1,134 +1,104 @@
-# Cursor Work Report — Post-GP-S30 Orbital Procurement Design Refinement
+# Cursor Work Report — GP-S31R Minimal Orbital Unit Drop
 
 ## Status
-**POST_GP_S30_ORBITAL_PROCUREMENT_DESIGN_REFINEMENT_READY_FOR_REVIEW**
+**GP-S31R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-Branch: `audit/post-gp-s30-next-slice`  
-Merge: **NOT merged**  
-Stage remains: **POST_GP_S30_NEXT_SLICE_AUDIT** (no implementation started)
+NOT MERGED. Stop for operator validation.
 
 ---
 
-## 1. Previous audit commit
+## 1. Branch / base SHA
 
-`2d90a08365680544e5629a7388c884b75c38e66f`
+- Branch: `feature/gp-s31r-minimal-orbital-unit-drop`
+- Base: `main` @ `118660bb24bda51c7d5e5c1b97cbc1b9d5cb0d4c`
+- Repo: `Owiiiii1/RTS`
 
----
+## 2. Factual source inventory
 
-## 2. Owner-approved decisions
+- No `UGP_UnitDefinition` on main — catalog via `UGP_OrbitalDeliverySettings`
+- No Spend GE → created `UGP_GE_SpendOrbital`
+- No DropPod → `AGP_DropPod`
+- Launch mirror: PC → MainBase → Storage / GAS
+- CurrentUnits/MaxUnits attributes present, production tracking unwired (MaxUnits=0 soft-open)
+- TEMP HUD `UGP_TEMP_S28P_PlanetaryFerroniteHUD` extended
 
-- No local production after start (MainBase + 2 Workers only).
-- Split: **Unit Delivery** vs **Building Purchase→READY→Deploy**.
-- Units land at authored MainBase **Unit Drop Zone** (no free placement).
-- Transport slots pack unit pods (≠ MaxUnits).
-- Buildings: spend on purchase; deploy consumes READY; no second spend.
-- Shared DropPod/rocket presentation; authored mesh/Niagara seam.
-- Multi-unit deterministic spawn offsets.
+## 3. Architecture chosen
 
----
+Settings-driven slots/costs → manifest counts → `GPUnitDropAuthority` validate/spend/spawn one `AGP_DropPod` → landing → spawn Worker/SW via existing classes + `SetTeamId`. No subsystem. No building payload.
 
-## 3. Canonical docs changed
+## 4. Spend GE path
 
-- `Docs/GDD/10_Orbital_Delivery.md` (rewrite)
-- `Docs/GDD/02_Core_Gameplay_Loop.md`
-- `Docs/GDD/04_Units.md`
-- `Docs/GDD/05_Buildings.md`
-- `Docs/GDD/09_UI_UX.md`
-- `Docs/TDD/14_Orbital_Delivery.md` (rewrite)
-- `Docs/TDD/05_Unit_Architecture.md`
-- `Docs/TDD/06_Building_Architecture.md`
-- `Docs/TDD/12_UI_Architecture.md`
-- `Docs/Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md` (dated refinement)
-- `Docs/Development/Next_Slice_Audit_Post_GP-S30.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
+`UGP_GE_SpendOrbital`: Instant Additive OrbitalFerronite, SetByCaller key `GP.Drop.OrbitalSpendMagnitude`, apply **negative** magnitude after funds check. Rejects never spend.
 
----
+## 5. Unit catalog / data fields
 
-## 4. Unit Drop Zone decision
+`UGP_OrbitalDeliverySettings`: PodTransportSlotCapacity, Worker/SW TransportSlotCost, Worker/SW OrbitalDropCost, descent/altitude/spacing/cleanup. Server resolves `AGP_Worker` / `AGP_SalvageWalker` classes — client cannot pick class.
 
-Authored MainBase-relative landing pad for **unit** pods only; server-resolved; owner-movable in BP; not hardcoded BaseLocation+offset.
+## 6. TEMP costs / slot tuning
 
----
+Capacity 4; Worker 1 slot / 25 Orbital; SW 2 slots / 50 Orbital. Marked TEMP in settings + DefaultGame.ini. Not final balance.
 
-## 5. Transport slot model
+## 7. MainBase Unit Drop Zone
 
-`PodTransportSlotCapacity` + per-unit `TransportSlotCost`; DA-driven; future upgrades schema-ready, not implemented.
+`UnitDropZone` SceneComponent under PresentationRoot; default relative `(350,0,0)`; getter `GetUnitDropZone()`; missing/invalid → reject, no spend. Building pods will not use this anchor.
 
----
+## 8. Manifest representation
 
-## 6. Worker / SW slot examples
+`FGP_UnitDropManifest { WorkerCount, SalvageWalkerCount }` + `EGP_UnitDropRejectReason`.
 
-MVP tuning examples: Worker **1**, Salvage Walker **2**, pod capacity **4**.
+## 9. MaxUnits / CurrentUnits
 
----
+Soft-open when MaxUnits≤0. Cap reject when MaxUnits>0 and overflow. Increment CurrentUnits on spawn only when MaxUnits active. Death decrement not wired (production cap inactive).
 
-## 7. Unit manifest flow
+## 10. DropPod lifecycle
 
-Fill slots → show costs → Confirm → validate → spend once → one DropPod → Drop Zone → offsets → control.
+AuthorityInit → tick lerp descent → OnImpact → spawn payload once → cleanup timer → Destroy. `bReplicates=true`.
 
----
+## 11–12. Presentation / placeholder
 
-## 8. Building READY inventory flow
+BP events OnDescentStarted/OnImpact/OnPayloadDeployed. Native Engine `/Engine/BasicShapes/Cylinder` placeholder (no committed Content asset).
 
-Purchase → Orbital spend → READY++ → later Deploy → READY-- → DropPod. Spec for building slice.
+## 13. Spawn offsets
 
----
+Deterministic ring around Drop Zone using local Forward/Right × spacing. No RNG.
 
-## 9. Ghost placement semantics
+## 14. Worker/SW init
 
-READY click → ghost; LMB valid deploy; Esc/RMB cancel keeps READY; no refund; no second Orbital charge.
+`SpawnActor` + `SetTeamId` (same pattern as diagnostics/contracts).
 
----
+## 15. TEMP UI
 
-## 10. Shared rocket / drop presentation
+Unit Drop panel (top-right): steppers, Slots X/Cap, Cost, Confirm Drop. Keeps Base/containers/Orbital/Launch.
 
-One native `AGP_DropPod` lifecycle for units and buildings; shared MVP visual family.
+## 16. RPC
 
----
+`Server_RequestUnitDrop(FGP_UnitDropManifest)` + `AuthorityTryRequestUnitDrop`. TeamId from owning PlayerState.
 
-## 11. Niagara / mesh authoring seam
+## 17. Contracts
 
-Gameplay hooks + soft-ref BP (`BP_DropPod_MVP` recommended name); no hardcoded Niagara/mesh in C++.
+Implemented `gp.Resource.RunOrbitalUnitDropContractTest` (A–N). Operator PIE: also rerun S28 / ContainerLaunch(+HUD) / DropOff / SalvageWalker / LOSFireGate — Failures=0 required.
 
----
+## 18. GPEditor + UHT
 
-## 12. Revised next slice recommendation
+**PASS**
 
-**GP-S31R — Minimal Orbital Unit Drop** remains best next cut, now including Unit Drop Zone + transport-slot manifest + shared DropPod. Buildings deferred to follow-on slice.
+## 19. GP Dev / Shipping
 
----
+**NOT RUN** (await operator PASS)
 
-## 13. Exact in / out scope
+## 20. Files changed (intended commit)
 
-See updated `Next_Slice_Audit_Post_GP-S30.md` §§ Exact In-Scope / Out-of-Scope.
+- `GP/Source/GPGASRuntime/.../GPGE_SpendOrbital.*`
+- `GP/Source/GPRuntime/.../Orbital/*` (DropPod, Authority, Manifest, Contract)
+- `GP/Source/GPRuntime/.../Settings/GPOrbitalDeliverySettings.*`
+- MainBase, PlayerController, TEMP HUD
+- `GP/Config/DefaultGame.ini` (Orbital Delivery section only)
+- Docs: task, AI log, DOCUMENTATION_INDEX, Claude_Tasks README, this report
 
----
+## 21. Operator assets untouched
 
-## 14. Docs consistency checks
+Not committed: DefaultEngine.ini, L_PrototypeArena.umap, Blueprint/, Materials/, authored ResourceNode, Niagara, BP_SalvageWalker, Tools/, other local .uasset/.umap
 
-Removed/overrode: free unit world placement; spend-on-building-placement; Build-menu-as-primary. ADR-0009 refined without rewriting history. New ADR not required.
+## 22. Commit SHA
 
----
-
-## 15. Exact files changed
-
-Listed in §3.
-
----
-
-## 16. Confirmation DOCS ONLY
-
-No gameplay C++. No Content assets.
-
----
-
-## 17. Operator assets untouched
-
-DefaultEngine.ini / map / Blueprint / Materials / authored ResourceNode / Tools remain local uncommitted dirt.
-
----
-
-## 18. Commit SHA
-
-06e58cbe801bb2cb07ce525690954fc8e9ebc423
+*(filled after commit)*

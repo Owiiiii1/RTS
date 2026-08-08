@@ -1,13 +1,13 @@
 # GP-S29R — Combat LOS Fire Gate + Minimal Health Bar + Team Color Presentation
 
 ## Status
-**GP-S29R_SALVAGE_WALKER_READY_FOR_OPERATOR_VALIDATION**
+**GP-S29R_FINALIZATION_READY_FOR_MERGE_REVIEW**
 
 ## Slice Group
 Slice 7 — Combat (reconciliation path; preserves Attack FSM, not CombatComponent)
 
 ## Code Allowed
-**YES**
+**YES** (implementation complete; finalization docs/builds only)
 
 ## Depends On
 - Main @ `d75fb426b043c80005c8363bef0f61ac37408fc5` (Merge GP-S28P4 planetary Ferronite HUD)
@@ -23,10 +23,22 @@ Slice 7 — Combat (reconciliation path; preserves Attack FSM, not CombatCompone
 - `GPCombatLOS` helpers: 3-pair `ECC_Visibility` traces (Eye→Head, Chest→Chest, Feet→Feet); ANY clear pair succeeds; ignore Source; Target hit = clear; fail-closed.
 - Wired in `UGP_UnitCommandComponent::AttemptAttackHit` after range/hysteresis, before GAS damage.
 - Blocked LOS: no damage, no successful-hit presentation, no successful-hit cooldown spend, Attack intent retained (Ready retries via existing cadence Tick).
+- Transition diagnostics: `AttackLOSBlocked` / `AttackLOSRestored` (no per-retry spam).
+
+### Accepted temporary LOS-blocked semantics (operator-validated)
+When target is in range and LOS is blocked:
+- do not fire / do not apply damage;
+- do not spend successful attack cooldown;
+- do not cancel Attack;
+- stay in place;
+- periodically re-check LOS;
+- automatically resume fire when LOS clears (no new Attack command).
+
+**Future work (explicitly not S29R):** navigation / pathfinding / obstacle avoidance / firing-position search / repositioning around LOS blockers / TargetingComponent / AttackMove / auto-acquire.
 
 ### Health bar
 - `UGP_HealthBarComponent` (WidgetComponent) + `UGP_HealthBarWidget` (NativePaint green fill / dark frame).
-- Owned by `AGP_UnitBase` (covers Workers + MainBase/buildings).
+- Owned by `AGP_UnitBase` (covers Workers + MainBase/buildings + Salvage Walker).
 - GAS Health/MaxHealth SoT via ASC attribute change delegates; initial sync on BeginPlay; no health polling Tick.
 - Fill stays green for all teams.
 
@@ -36,29 +48,36 @@ Slice 7 — Combat (reconciliation path; preserves Attack FSM, not CombatCompone
 - `UGP_TeamPresentationComponent` on `AGP_UnitBase`; refresh on BeginPlay, `NotifyTeamIdChanged`, `OnRep_TeamId`.
 - Native prototype tint via MID vector params (`TeamColor` preferred) + `UGP_UnitVisualComponent::RefreshTeamColorFromPresentation`.
 
-### Salvage Walker (post health-bar / Details cleanup)
-- Native `AGP_SalvageWalker : AGP_Unit` for player-facing combat validation.
-- Operator creates `BP_SalvageWalker` manually (not in this stage).
+### Salvage Walker
+- Native `AGP_SalvageWalker : AGP_Unit`.
+- Operator-created `BP_SalvageWalker` (operator-local; not committed by agent).
 - Defaults: Health/MaxHealth 200, Damage 20, AttackCooldown 1.0, AttackRange 600, MoveSpeed 250, VisualSourceMode=AuthoredComponents.
+- No Cargo/Mining; single Movement; single UnitVisual.
+
+### Unit Details cleanup
+- Actor pointers: `GP|Components|Movement`, `GP|Components|Visual` (tunables remain `GP|Movement` / `GP|Visual`).
 
 ## Automated contracts
 | Command | Coverage |
 | --- | --- |
-| `gp.Combat.RunLOSFireGateContractTest` | A–H LOS / resume / cooldown / approach / FF / death |
+| `gp.Combat.RunLOSFireGateContractTest` | LOS / resume / cooldown / approach / FF / death / LOS latch reset |
 | `gp.Combat.RunHealthBarContractTest` | ratio / frame / zero / initial / no Tick |
 | `gp.Combat.RunTeamColorContractTest` | settings resolve / apply / change / OnRep / no mutate TeamId |
 | `gp.Combat.RunSalvageWalkerContractTest` | native class hierarchy / composition / GDD defaults |
+| `gp.Resource.RunS28RegressionSuite` | resource regression |
 
-Expected: Failures=0 (operator runs in PIE / existing prototype map).
+Expected: Failures=0.
+
+## Operator validation
+**PASS** (PIE): Team Colors; Health Bar (incl. Salvage Walker); Salvage Walker authored visual/combat; Combat Attack/damage/death; LOS block/restore; LOS log spam fix.
 
 ## Build
-GPEditor Win64 Development + UHT — **PASS**
-
-## Operator validation (pending)
-See Cursor Work Report §Operator Local Assets / manual checklist (team tint, green health bars, LOS block/resume).
+- GPEditor Win64 Development + UHT — **PASS**
+- GP Win64 Development — **PASS** (finalization)
+- GP Win64 Shipping — **PASS** (finalization)
 
 ## Scope exclusions (confirmed)
-No TargetingComponent, AttackMove, cooldown GE, projectiles, damage numbers, shields/armor bars, team-colored health fill, selection/minimap/FoW redesign, resource/construction changes, duplicate CombatComponent.
+No TargetingComponent, AttackMove, cooldown GE, projectiles, damage numbers, shields/armor bars, team-colored health fill, selection/minimap/FoW redesign, resource/construction changes, duplicate CombatComponent, pathfinding/repositioning, AI/SWARM, new combat unit types.
 
 ## Stop Condition
-Code ready; operator validation pending; do **not** start GP-S30; do **not** merge without approval.
+Finalization complete; **do not merge** without tech-lead approval; do **not** start GP-S30.

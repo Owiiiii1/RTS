@@ -1,104 +1,173 @@
-# Cursor Work Report — GP-S29R LOS Log Spam Fix
+# Cursor Work Report — GP-S29R Finalization
 
 ## Status
-**GP-S29R_LOS_LOG_SPAM_FIX_READY_FOR_OPERATOR_VALIDATION**
+**GP-S29R_FINALIZATION_READY_FOR_MERGE_REVIEW**
 
 ## Branch
 `feature/gp-s29r-combat-los-healthbar-teamcolors`
 
-## Scope
-Diagnostic/logging only. **Not** GP-S29R finalization. No gameplay/LOS algorithm changes.
+## Base
+`main` @ `d75fb426b043c80005c8363bef0f61ac37408fc5`
+
+## Merge
+**NOT merged.** Push only; await tech-lead approval.
 
 ---
 
-## Root cause
+## 1. Final scope summary
 
-After a successful hit schedules `NextAttackHitTime`, blocked LOS retries in `AttemptAttackHit` return without advancing cadence. Once `Now >= NextAttackHitTime`, Ready cadence retries every tick and previously logged `AttackHitRejected Reason=LOSBlocked` on **every** retry.
+GP-S29R delivers Slice 7 combat presentation + LOS fire gate on the existing Attack FSM:
 
-Gameplay (stay Ready, no damage, no success cooldown) was already correct — only logging spammed.
+- Canonical 3-point `ECC_Visibility` LOS gate in `AttemptAttackHit`
+- Minimal health bar (`UGP_HealthBarComponent` + `UGP_HealthBarWidget`) on `AGP_UnitBase`
+- Config-driven team colors (`UGP_GameplayPresentationSettings` + `UGP_TeamPresentationComponent`)
+- Native MVP combat class `AGP_SalvageWalker : AGP_Unit` (operator BP authored separately)
+- Details category cleanup for Movement/Visual component pointers
+- Transition-based LOS diagnostic logs (no blocked spam)
 
----
-
-## Exact LOS diagnostic state implementation
-
-On `UGP_UnitCommandComponent` Attack executor runtime:
-
-- `bool bAttackLOSBlocked` — latched per active Attack (unit-scoped, not global/static)
-- `IsAttackLOSBlocked()` — read accessor for contracts/diagnostics
-- Cleared in `ClearAttackCadenceState()` (used by `ResetAttackExecutor` / `FinishAttack` / replacement / death / EndPlay paths)
-
-### Transition logs
-
-| Transition | Log | Behavior |
-| --- | --- | --- |
-| CLEAR → BLOCKED | `GP AttackLOSBlocked` once | set `bAttackLOSBlocked=true` |
-| BLOCKED → BLOCKED | none | no-op |
-| BLOCKED → CLEAR | `GP AttackLOSRestored` once | clear flag, then continue hit path |
-| CLEAR → CLEAR | none | no extra LOS state logs |
-
-Removed per-retry `AttackHitRejected Reason=LOSBlocked`.
+No pathfinding / TargetingComponent / CombatComponent / AttackMove / AI / new unit archetypes.
 
 ---
 
-## Gameplay semantics unchanged
+## 2. Operator validation
 
-Unchanged: LOS algorithm / 3-point / ECC_Visibility / retry cadence / Ready retention / damage / cooldown scheduling / movement / range/hysteresis / target death / combat presentation.
-
----
-
-## Reset paths
-
-`bAttackLOSBlocked` resets via `ClearAttackCadenceState` when Attack executor resets:
-
-- new Attack / target replacement (`ResetAttackExecutorForReplacement`)
-- Attack finish / cancel (`FinishAttack`)
-- owner death / EndPlay / related executor resets
+| Area | Result |
+| --- | --- |
+| Team Colors (TeamId 1/2) | **PASS** |
+| Health Bar (display / Health react / Salvage Walker) | **PASS** |
+| Salvage Walker (BP AuthoredComponents, visuals, team, health, move) | **PASS** |
+| Combat (hostile Attack, range/cadence, Damage 20, death) | **PASS** |
+| LOS clear / blocked / restore without new Attack | **PASS** |
+| LOS log spam fix (one Blocked / one Restored) | **PASS** |
 
 ---
 
-## Tests
+## 3. Accepted temporary LOS behavior
 
-Extended `gp.Combat.RunLOSFireGateContractTest`:
+Target in range + LOS blocked:
 
-- clear hit path unchanged
-- latched blocked state after first blocked attempt
-- repeated blocked retries keep state / no damage / no success cooldown advance
-- restore → damage without new Attack; state clears
-- Attack replacement resets latched LOS diagnostic state
-- new Attack / Attack end leave state clear
+- do not shoot / do not damage
+- do not spend successful attack cooldown
+- do not cancel Attack
+- stay in place
+- periodically re-check LOS
+- auto-resume fire when LOS restores (no new Attack command)
 
-No brittle UE_LOG capture.
+**Deferred (not S29R):** navigation, NavMesh pathfinding, obstacle avoidance, firing-position search, repositioning around blockers, auto-acquire, TargetingComponent, AttackMove.
+
+Friendly-fire policy unchanged (disabled / current semantics).
 
 ---
 
-## Validation
+## 4. Automated tests
 
 | Command | Result |
 | --- | --- |
-| `gp.Combat.RunLOSFireGateContractTest` | Failures=0 |
-| `gp.Combat.RunSalvageWalkerContractTest` | Failures=0 |
-| `gp.Combat.RunHealthBarContractTest` | Failures=0 |
-| `gp.Combat.RunTeamColorContractTest` | Failures=0 |
-| `gp.Resource.RunS28RegressionSuite` | Failures=0 |
+| `gp.Combat.RunLOSFireGateContractTest` | **PASS** Failures=0 |
+| `gp.Combat.RunSalvageWalkerContractTest` | **PASS** Failures=0 |
+| `gp.Combat.RunHealthBarContractTest` | **PASS** Failures=0 |
+| `gp.Combat.RunTeamColorContractTest` | **PASS** Failures=0 |
+| `gp.Resource.RunS28RegressionSuite` | **PASS** Failures=0 |
 
-GPEditor Win64 Development + UHT: **PASS**  
-GP Development / Shipping: **not run**
+Related Attack/Movement/GAS surfaces: no separate `Run*ContractTest` beyond the S29R combat contracts above; existing `gp.Attack.*` / `gp.Movement.*` / `gp.Combat.ApplyDamage` are interactive diagnostics, not staged contract suites. S28 suite covers resource/Worker regression.
+
+No new large test suite added for finalization. No production code changes in this finalization commit.
 
 ---
 
-## Files changed
+## 5. Builds
 
-- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPCombatLOSFireGateContractTest.cpp`
+| Target | Result |
+| --- | --- |
+| GPEditor Win64 Development + UHT | **PASS** |
+| GP Win64 Development | **PASS** |
+| GP Win64 Shipping | **PASS** |
+
+---
+
+## 6. Final relevant architecture
+
+```
+AGP_UnitBase
+  UnitCommandComponent (Attack FSM + LOS gate + cadence)
+  CombatPresentationComponent
+  TeamPresentationComponent
+  HealthBarComponent
+  AbilitySystemComponent + UnitAttributeSet
+  -> AGP_MobileUnit
+       MovementComponent (UGP_MovementComponent) ×1
+       -> AGP_Unit
+            Capsule + UnitVisualComponent ×1
+            -> AGP_SalvageWalker
+       -> AGP_Worker (Cargo/Mining; not Unit child)
+```
+
+LOS: `GPCombatLOS` Eye→Head / Chest→Chest / Feet→Feet; ANY clear pair allows fire.
+
+---
+
+## 7. Final Salvage Walker defaults
+
+| Field | Value |
+| --- | --- |
+| MaxHealth / Health | 200 |
+| Damage | 20 |
+| AttackRange | 600 |
+| AttackCooldown | 1.0 |
+| MoveSpeed | 250 (`UGP_MovementComponent::MoveSpeed`) |
+| VisualSourceMode | AuthoredComponents |
+| Cargo / Mining | none |
+| Duplicate Movement / UnitVisual | none |
+
+Operator `BP_SalvageWalker` is local — not committed by agent.
+
+---
+
+## 8. Explicit out-of-scope / deferred
+
+pathfinding, NavMesh integration, obstacle avoidance, firing-position search, LOS repositioning, auto-acquire, TargetingComponent, AttackMove, CombatComponent, cooldown GE, weapon system, AI, SWARM, Soldier/Trooper/etc., new visual archetypes.
+
+---
+
+## 9. Files changed during finalization
+
+Docs only:
+
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Operator assets untouched
-
-DefaultEngine.ini, maps, Blueprint/, Materials/, Niagara, authored ResourceNode, other operator `.uasset`/`.umap` — not modified / not committed.
+No C++ / content changes in finalization.
 
 ---
 
-## Commit SHA
+## 10. Operator assets untouched
 
-_01db51baa78bb879f522c0eefecabd13c76359ec_
+Not modified/committed by finalization:
+
+- `GP/Config/DefaultEngine.ini`
+- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
+- `GP/Content/GrimProtocol/Blueprint/` (incl. BP_SalvageWalker)
+- `GP/Content/GrimProtocol/Materials/`
+- authored ResourceNode / Niagara / other operator `.uasset`/`.umap`
+
+---
+
+## 11. Git status summary (post-commit expectation)
+
+Committed: finalization docs only.
+
+Operator-local uncommitted (left alone):
+
+- `M GP/Config/DefaultEngine.ini`
+- `M GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
+- `M GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`
+- `?? GP/Content/GrimProtocol/Blueprint/`
+- `?? GP/Content/GrimProtocol/Materials/`
+- `?? Tools/`
+
+---
+
+## 12. Final commit SHA
+
+_(filled after commit)_

@@ -1,8 +1,21 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S29R Finalization
+
+Status: **GP-S29R_FINALIZATION_READY_FOR_MERGE_REVIEW**
+
+- Branch: `feature/gp-s29r-combat-los-healthbar-teamcolors`
+- Base: `main` @ `d75fb426b043c80005c8363bef0f61ac37408fc5`
+- Operator validation **PASS** (Team Colors, Health Bar, Salvage Walker, Combat, LOS block/restore, LOS log spam fix)
+- Accepted temporary in-range LOS-blocked hold-and-retry (no repositioning/pathfinding yet)
+- Contracts: LOS / SalvageWalker / HealthBar / TeamColor / S28RegressionSuite — Failures=0
+- Builds: GPEditor Dev+UHT, GP Win64 Development, GP Win64 Shipping — PASS
+- No merge; do not start GP-S30
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-08 — GP-S29R Salvage Walker native class
 
-Status: **GP-S29R_SALVAGE_WALKER_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S29R_SALVAGE_WALKER_READY_FOR_OPERATOR_VALIDATION** (superseded by finalization)
 
 - Branch: `feature/gp-s29r-combat-los-healthbar-teamcolors`
 - `AGP_SalvageWalker : AGP_Unit` with GDD/04 interim defaults (HP 200, dmg 20, CD 1.0, range 600, MoveSpeed 250)

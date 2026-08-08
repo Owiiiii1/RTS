@@ -35,6 +35,7 @@ UGP_ResourceDefinition::UGP_ResourceDefinition()
 	MiningCycleDurationSeconds = 1.0f;
 	InteractionRangeCm = 200.0f;
 	ScoreConversionRate = 1.0f;
+	OrbitalConversionRate = 1.0f;
 	ThreatPerStoredUnit = 0.5f;
 	Tint = FLinearColor(0.15f, 0.75f, 0.85f, 1.0f);
 }
@@ -118,6 +119,14 @@ bool UGP_ResourceDefinition::ValidateDefinition(TArray<FText>& OutErrors, TArray
 			"ScoreConversionRate must be finite and >= 0."));
 	}
 
+	if (!FMath::IsFinite(OrbitalConversionRate) || OrbitalConversionRate < 0.0f)
+	{
+		OutErrors.Add(NSLOCTEXT(
+			"GPResourceDefinition",
+			"ErrOrbitalRate",
+			"OrbitalConversionRate must be finite and >= 0."));
+	}
+
 	if (!FMath::IsFinite(ThreatPerStoredUnit) || ThreatPerStoredUnit < 0.0f)
 	{
 		OutErrors.Add(NSLOCTEXT(
@@ -198,7 +207,7 @@ namespace GPResourceDefinitionDebug
 		}
 
 		UE_LOG(LogGPResourceDefinition, Log,
-			TEXT("GP ResourceDefinition.Inspect: Path=%s PrimaryAssetId=%s ResourceType=%s DisplayName=%s GameplayTag=%s AmountPerMiningCycle=%.3f MiningCycleDurationSeconds=%.3f EffectiveMineRatePerWorker=%.3f InteractionRangeCm=%.1f ScoreConversionRate=%.3f ThreatPerStoredUnit=%.3f Valid=%s Errors=%d Warnings=%d Resolution=%s"),
+			TEXT("GP ResourceDefinition.Inspect: Path=%s PrimaryAssetId=%s ResourceType=%s DisplayName=%s GameplayTag=%s AmountPerMiningCycle=%.3f MiningCycleDurationSeconds=%.3f EffectiveMineRatePerWorker=%.3f InteractionRangeCm=%.1f ScoreConversionRate=%.3f OrbitalConversionRate=%.3f ThreatPerStoredUnit=%.3f Valid=%s Errors=%d Warnings=%d Resolution=%s"),
 			*Definition->GetPathName(),
 			*Definition->GetPrimaryAssetId().ToString(),
 			GPResourceTypePrivate::ToString(Definition->ResourceType),
@@ -209,6 +218,7 @@ namespace GPResourceDefinitionDebug
 			Definition->GetEffectiveMineRatePerWorker(),
 			Definition->InteractionRangeCm,
 			Definition->ScoreConversionRate,
+			Definition->OrbitalConversionRate,
 			Definition->ThreatPerStoredUnit,
 			bValid ? TEXT("true") : TEXT("false"),
 			Errors.Num(),

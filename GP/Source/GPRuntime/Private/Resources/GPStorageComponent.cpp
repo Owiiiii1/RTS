@@ -2,12 +2,22 @@
 
 #include "Resources/GPStorageComponent.h"
 
+#include "AbilitySystem/GPAbilitySystemComponent.h"
+#include "AttributeSets/GPPlayerAttributeSet.h"
+#include "Buildings/GPMainBase.h"
+#include "Effects/GPGE_AddOrbital.h"
+#include "Effects/GPGE_AddScore.h"
 #include "Engine/AssetManager.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
 #include "Debug/GPContractTestCoordinator.h"
+#include "Game/GPGameState.h"
+#include "GameFramework/PlayerState.h"
 #include "Net/UnrealNetwork.h"
+#include "Player/GPPlayerState.h"
 #include "Resources/GPResourceDefinition.h"
+#include "Settings/GPResourceGameplaySettings.h"
+#include "TimerManager.h"
 
 #include <limits>
 
@@ -36,6 +46,12 @@ void UGP_StorageComponent::BeginPlay()
 		EnsureContainerArray();
 		ResolveResourceDefinition(false);
 	}
+}
+
+void UGP_StorageComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	ClearLaunchRuntimeState();
+	Super::EndPlay(EndPlayReason);
 }
 
 void UGP_StorageComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -98,6 +114,396 @@ float UGP_StorageComponent::GetThreatPerStoredUnit() const
 	}
 	// Code default matches UGP_ResourceDefinition::ThreatPerStoredUnit (0.5).
 	return 0.5f;
+}
+
+float UGP_StorageComponent::GetOrbitalConversionRate() const
+{
+	if (const UGP_ResourceDefinition* Definition = ResolveResourceDefinition(true))
+	{
+		if (FMath::IsFinite(Definition->OrbitalConversionRate) && Definition->OrbitalConversionRate >= 0.0f)
+		{
+			return Definition->OrbitalConversionRate;
+		}
+	}
+	return 1.0f;
+}
+
+float UGP_StorageComponent::GetScoreConversionRate() const
+{
+	if (const UGP_ResourceDefinition* Definition = ResolveResourceDefinition(true))
+	{
+		if (FMath::IsFinite(Definition->ScoreConversionRate) && Definition->ScoreConversionRate >= 0.0f)
+		{
+			return Definition->ScoreConversionRate;
+		}
+	}
+	return 1.0f;
+}
+
+bool UGP_StorageComponent::IsLaunchInFlight() const
+{
+	return ActiveLaunchContainerIndex != INDEX_NONE
+		&& LaunchTelegraphTimerHandle.IsValid();
+}
+
+void UGP_StorageComponent::ClearLaunchRuntimeState()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(LaunchTelegraphTimerHandle);
+	}
+	LaunchTelegraphTimerHandle.Invalidate();
+	ActiveLaunchContainerIndex = INDEX_NONE;
+	ActiveLaunchPlanetaryAmount = 0.0f;
+	ActiveLaunchSerial = 0;
+}
+
+int32 UGP_StorageComponent::FindFirstReadyContainerIndex() const
+{
+	for (int32 Index = 0; Index < Containers.Num(); ++Index)
+	{
+		if (Containers[Index].State == EGP_StorageContainerState::Ready
+			&& Containers[Index].CurrentAmount > KINDA_SMALL_NUMBER)
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
+float UGP_StorageComponent::ResolveLaunchDurationSeconds() const
+{
+	if (const UGP_ResourceGameplaySettings* Settings = UGP_ResourceGameplaySettings::Get())
+	{
+		if (FMath::IsFinite(Settings->ContainerLaunchDurationSeconds)
+			&& Settings->ContainerLaunchDurationSeconds >= 0.05f)
+		{
+			return Settings->ContainerLaunchDurationSeconds;
+		}
+	}
+	return 2.5f;
+}
+
+AGP_PlayerState* UGP_StorageComponent::ResolveOwningPlayerState() const
+{
+	const AGP_MainBase* MainBase = Cast<AGP_MainBase>(GetOwner());
+	if (MainBase == nullptr)
+	{
+		return nullptr;
+	}
+
+	const int32 TeamId = MainBase->GetTeamId();
+	if (TeamId < 1)
+	{
+		return nullptr;
+	}
+
+	const UWorld* World = GetWorld();
+	const AGameStateBase* GameState = World != nullptr ? World->GetGameState() : nullptr;
+	if (GameState == nullptr)
+	{
+		return nullptr;
+	}
+
+	for (APlayerState* Candidate : GameState->PlayerArray)
+	{
+		AGP_PlayerState* GPPS = Cast<AGP_PlayerState>(Candidate);
+		if (IsValid(GPPS) && GPPS->GetTeamId() == TeamId)
+		{
+			return GPPS;
+		}
+	}
+	return nullptr;
+}
+
+bool UGP_StorageComponent::ValidateLaunchPreconditions(
+	int32& OutReadyIndex,
+	float& OutAmount,
+	AGP_PlayerState*& OutPlayerState,
+	UGP_AbilitySystemComponent*& OutASC,
+	AGP_GameState*& OutGameState,
+	EGP_ContainerLaunchRejectReason& OutReason) const
+{
+	OutReadyIndex = INDEX_NONE;
+	OutAmount = 0.0f;
+	OutPlayerState = nullptr;
+	OutASC = nullptr;
+	OutGameState = nullptr;
+	OutReason = EGP_ContainerLaunchRejectReason::None;
+
+	const AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority())
+	{
+		OutReason = EGP_ContainerLaunchRejectReason::NoAuthority;
+		return false;
+	}
+
+	if (IsLaunchInFlight())
+	{
+		OutReason = EGP_ContainerLaunchRejectReason::LaunchInFlight;
+		return false;
+	}
+
+	UWorld* World = GetWorld();
+	OutGameState = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	if (OutGameState == nullptr)
+	{
+		OutReason = EGP_ContainerLaunchRejectReason::MissingGameState;
+		return false;
+	}
+
+	OutReadyIndex = FindFirstReadyContainerIndex();
+	if (OutReadyIndex == INDEX_NONE)
+	{
+		OutReason = EGP_ContainerLaunchRejectReason::NoReadyContainer;
+		return false;
+	}
+
+	OutAmount = Containers[OutReadyIndex].CurrentAmount;
+	if (!IsFinitePositive(OutAmount))
+	{
+		OutReason = EGP_ContainerLaunchRejectReason::InvalidAmount;
+		return false;
+	}
+
+	OutPlayerState = ResolveOwningPlayerState();
+	if (!IsValid(OutPlayerState))
+	{
+		OutReason = EGP_ContainerLaunchRejectReason::MissingPlayerState;
+		return false;
+	}
+
+	OutASC = OutPlayerState->GetGPAbilitySystemComponent();
+	if (OutASC == nullptr || OutPlayerState->GetPlayerAttributeSet() == nullptr)
+	{
+		OutReason = EGP_ContainerLaunchRejectReason::MissingASC;
+		return false;
+	}
+
+	const float OrbitalRate = GetOrbitalConversionRate();
+	const float ScoreRate = GetScoreConversionRate();
+	const float ThreatRate = GetThreatPerStoredUnit();
+	if (!FMath::IsFinite(OrbitalRate) || OrbitalRate < 0.0f
+		|| !FMath::IsFinite(ScoreRate) || ScoreRate < 0.0f
+		|| !FMath::IsFinite(ThreatRate) || ThreatRate < 0.0f)
+	{
+		OutReason = EGP_ContainerLaunchRejectReason::InvalidConfig;
+		return false;
+	}
+
+	return true;
+}
+
+bool UGP_StorageComponent::ApplyLaunchRewards(
+	UGP_AbilitySystemComponent* ASC,
+	float PlanetaryAmount,
+	float& OutOrbitalGranted,
+	float& OutScoreGranted) const
+{
+	OutOrbitalGranted = 0.0f;
+	OutScoreGranted = 0.0f;
+	if (ASC == nullptr || !IsFinitePositive(PlanetaryAmount))
+	{
+		return false;
+	}
+
+	const float OrbitalGrant = PlanetaryAmount * GetOrbitalConversionRate();
+	const float ScoreGrant = PlanetaryAmount * GetScoreConversionRate();
+	if (!FMath::IsFinite(OrbitalGrant) || OrbitalGrant < 0.0f
+		|| !FMath::IsFinite(ScoreGrant) || ScoreGrant < 0.0f)
+	{
+		return false;
+	}
+
+	FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
+	Context.AddSourceObject(GetOwner());
+
+	const FGameplayEffectSpecHandle OrbitalSpec =
+		ASC->MakeOutgoingSpec(UGP_GE_AddOrbital::StaticClass(), 1.0f, Context);
+	const FGameplayEffectSpecHandle ScoreSpec =
+		ASC->MakeOutgoingSpec(UGP_GE_AddScore::StaticClass(), 1.0f, Context);
+	if (!OrbitalSpec.IsValid() || !ScoreSpec.IsValid())
+	{
+		return false;
+	}
+
+	OrbitalSpec.Data->SetSetByCallerMagnitude(UGP_GE_AddOrbital::GetMagnitudeDataName(), OrbitalGrant);
+	ScoreSpec.Data->SetSetByCallerMagnitude(UGP_GE_AddScore::GetMagnitudeDataName(), ScoreGrant);
+
+	ASC->ApplyGameplayEffectSpecToSelf(*OrbitalSpec.Data.Get());
+	ASC->ApplyGameplayEffectSpecToSelf(*ScoreSpec.Data.Get());
+
+	OutOrbitalGranted = OrbitalGrant;
+	OutScoreGranted = ScoreGrant;
+	return true;
+}
+
+FGP_ContainerLaunchResult UGP_StorageComponent::TryLaunchReadyContainer()
+{
+	FGP_ContainerLaunchResult Result;
+
+	int32 ReadyIndex = INDEX_NONE;
+	float Amount = 0.0f;
+	AGP_PlayerState* PlayerState = nullptr;
+	UGP_AbilitySystemComponent* ASC = nullptr;
+	AGP_GameState* GameState = nullptr;
+	EGP_ContainerLaunchRejectReason Reason = EGP_ContainerLaunchRejectReason::None;
+
+	if (!ValidateLaunchPreconditions(ReadyIndex, Amount, PlayerState, ASC, GameState, Reason))
+	{
+		Result.RejectReason = Reason;
+		UE_LOG(LogGPStorage, Log,
+			TEXT("GP Storage.Launch Rejected: Owner=%s Reason=%d"),
+			*GetNameSafe(GetOwner()),
+			static_cast<int32>(Reason));
+		return Result;
+	}
+
+	EnsureContainerArray();
+	FGP_StorageContainer& Container = Containers[ReadyIndex];
+	if (Container.State != EGP_StorageContainerState::Ready)
+	{
+		Result.RejectReason = EGP_ContainerLaunchRejectReason::NoReadyContainer;
+		return Result;
+	}
+
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		Result.RejectReason = EGP_ContainerLaunchRejectReason::MissingGameState;
+		return Result;
+	}
+
+	const float Duration = ResolveLaunchDurationSeconds();
+	const float PreviousTotal = GetTotalStored();
+	Container.State = EGP_StorageContainerState::Launching;
+	ActiveLaunchContainerIndex = ReadyIndex;
+	ActiveLaunchPlanetaryAmount = Amount;
+	ActiveLaunchSerial = NextLaunchSerial++;
+	if (ActiveLaunchSerial == 0)
+	{
+		ActiveLaunchSerial = NextLaunchSerial++;
+	}
+
+	World->GetTimerManager().SetTimer(
+		LaunchTelegraphTimerHandle,
+		FTimerDelegate::CreateUObject(this, &UGP_StorageComponent::HandleLaunchTelegraphComplete),
+		Duration,
+		false);
+
+	// Total unchanged; notify observers of Ready → Launching state.
+	BroadcastStorageChanged(PreviousTotal);
+
+	Result.bAccepted = true;
+	Result.RejectReason = EGP_ContainerLaunchRejectReason::None;
+	Result.ContainerIndex = ReadyIndex;
+	Result.LaunchedPlanetaryAmount = Amount;
+	Result.LaunchDurationSeconds = Duration;
+
+	UE_LOG(LogGPStorage, Log,
+		TEXT("GP Storage.Launch Accepted: Owner=%s Index=%d Amount=%.3f Duration=%.3f Serial=%u"),
+		*GetNameSafe(GetOwner()),
+		ReadyIndex,
+		Amount,
+		Duration,
+		ActiveLaunchSerial);
+	return Result;
+}
+
+void UGP_StorageComponent::HandleLaunchTelegraphComplete()
+{
+	LaunchTelegraphTimerHandle.Invalidate();
+
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority())
+	{
+		ClearLaunchRuntimeState();
+		return;
+	}
+
+	EnsureContainerArray();
+	const int32 Index = ActiveLaunchContainerIndex;
+	const float ExpectedAmount = ActiveLaunchPlanetaryAmount;
+	const uint32 Serial = ActiveLaunchSerial;
+
+	if (!Containers.IsValidIndex(Index)
+		|| Containers[Index].State != EGP_StorageContainerState::Launching
+		|| !FMath::IsNearlyEqual(Containers[Index].CurrentAmount, ExpectedAmount, 0.01f))
+	{
+		UE_LOG(LogGPStorage, Error,
+			TEXT("GP Storage.Launch Complete Abort: Owner=%s Index=%d Serial=%u invariant broken — restoring Ready if possible"),
+			*GetNameSafe(Owner),
+			Index,
+			Serial);
+		if (Containers.IsValidIndex(Index)
+			&& Containers[Index].State == EGP_StorageContainerState::Launching
+			&& Containers[Index].CurrentAmount > KINDA_SMALL_NUMBER)
+		{
+			const float PreviousTotal = GetTotalStored();
+			Containers[Index].State = EGP_StorageContainerState::Ready;
+			BroadcastStorageChanged(PreviousTotal);
+		}
+		ClearLaunchRuntimeState();
+		return;
+	}
+
+	AGP_PlayerState* PlayerState = ResolveOwningPlayerState();
+	UGP_AbilitySystemComponent* ASC =
+		IsValid(PlayerState) ? PlayerState->GetGPAbilitySystemComponent() : nullptr;
+	AGP_GameState* GameState = GetWorld() != nullptr ? GetWorld()->GetGameState<AGP_GameState>() : nullptr;
+	const AGP_MainBase* MainBase = Cast<AGP_MainBase>(Owner);
+
+	if (!IsValid(PlayerState) || ASC == nullptr || PlayerState->GetPlayerAttributeSet() == nullptr
+		|| GameState == nullptr || MainBase == nullptr || MainBase->GetTeamId() < 1)
+	{
+		// Fail-safe: do not empty storage or grant rewards. Restore Ready so Ferronite is not lost.
+		const float PreviousTotal = GetTotalStored();
+		Containers[Index].State = EGP_StorageContainerState::Ready;
+		ClearLaunchRuntimeState();
+		BroadcastStorageChanged(PreviousTotal);
+		UE_LOG(LogGPStorage, Error,
+			TEXT("GP Storage.Launch Complete FailedOwner: Owner=%s Index=%d Serial=%u restored Ready (no reward)"),
+			*GetNameSafe(Owner),
+			Index,
+			Serial);
+		return;
+	}
+
+	float OrbitalGranted = 0.0f;
+	float ScoreGranted = 0.0f;
+	if (!ApplyLaunchRewards(ASC, ExpectedAmount, OrbitalGranted, ScoreGranted))
+	{
+		const float PreviousTotal = GetTotalStored();
+		Containers[Index].State = EGP_StorageContainerState::Ready;
+		ClearLaunchRuntimeState();
+		BroadcastStorageChanged(PreviousTotal);
+		UE_LOG(LogGPStorage, Error,
+			TEXT("GP Storage.Launch Complete FailedGE: Owner=%s Index=%d Serial=%u restored Ready (no reward)"),
+			*GetNameSafe(Owner),
+			Index,
+			Serial);
+		return;
+	}
+
+	const float PreviousTotal = GetTotalStored();
+	const float ThreatDelta = ExpectedAmount * GetThreatPerStoredUnit();
+	Containers[Index].CurrentAmount = 0.0f;
+	Containers[Index].State = EGP_StorageContainerState::Empty;
+	ClearLaunchRuntimeState();
+
+	GameState->AddFerroniteThreatValueForTeam(MainBase->GetTeamId(), -ThreatDelta);
+	BroadcastStorageChanged(PreviousTotal);
+
+	UE_LOG(LogGPStorage, Log,
+		TEXT("GP Storage.Launch Complete: Owner=%s Index=%d Serial=%u Planetary=%.3f Orbital+=%.3f Score+=%.3f ThreatDelta=%.3f Stored=%.3f"),
+		*GetNameSafe(Owner),
+		Index,
+		Serial,
+		ExpectedAmount,
+		OrbitalGranted,
+		ScoreGranted,
+		-ThreatDelta,
+		GetTotalStored());
 }
 
 #if !UE_BUILD_SHIPPING

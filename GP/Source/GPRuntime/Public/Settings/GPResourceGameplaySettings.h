@@ -38,6 +38,13 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Waiting", meta = (ClampMin = "0.1"))
 	float DropOffRetrySeconds = 3.0f;
 
+	/**
+	 * Container Ready → Launching telegraph duration (GDD 2–3 s window).
+	 * Event/timer driven; no permanent Tick.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Launch", meta = (ClampMin = "0.05"))
+	float ContainerLaunchDurationSeconds = 2.5f;
+
 	/** Delay before Destroy after depletion transition (0 → next tick). */
 	UPROPERTY(Config, EditAnywhere, Category = "Depletion", meta = (ClampMin = "0.0"))
 	float DepletionDestroyDelaySeconds = 0.25f;

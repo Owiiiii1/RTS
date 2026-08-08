@@ -1,16 +1,31 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S30 Container Launch / Orbital Conversion (candidate)
+
+Status: **GP-S30_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s30-container-launch-orbital-conversion`
+- Base: `main` @ `89ce3c50ebd05a4bf1e58a5b4e117544dc68cb8f`
+- Task: `Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md`
+- Production: `UGP_StorageComponent::TryLaunchReadyContainer` Ready→Launching→Empty; Instant GEs `UGP_GE_AddOrbital` / `UGP_GE_AddScore`; Threat decrease; TeamId→PlayerState ownership
+- Rates: Orbital/Score 1:1 on ResourceDefinition; launch duration 2.5s on ResourceGameplaySettings
+- Console: `gp.Resource.LaunchReadyContainer`, `gp.Resource.RunContainerLaunchContractTest`
+- Contracts: ContainerLaunch Failures=0; S28RegressionSuite Failures=0
+- Build: GPEditor Dev+UHT **PASS**; GP Dev/Shipping **NOT RUN**
+- Not finalization / not merge
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-08 — Post-S29R Next Slice Audit
 
-Status: **POST_S29R_NEXT_SLICE_AUDIT_READY_FOR_REVIEW**
+Status: **POST_S29R_NEXT_SLICE_AUDIT_READY_FOR_REVIEW** (merged polish on main @ `89ce3c50…`)
 
-- `main` @ `3673a6891b3638592da115887d95e373d2475b1e` — **GP-S29R DONE / MERGED**
+- `main` @ `3673a6891b3638592da115887d95e373d2475b1e` — **GP-S29R DONE / MERGED** (then audit polish)
 - Docs cursor synced (DOCUMENTATION_INDEX + Claude_Tasks README): S29R no longer pending
 - Audit: `Docs/Development/Next_Slice_Audit_Post_S29R.md`
-- Recommended NEXT: **GP-S30 Container Launch / Orbital Conversion** — `SPEC_READY_FOR_APPROVAL` (Code Allowed: NO)
+- Recommended NEXT: **GP-S30 Container Launch / Orbital Conversion**
 - Not next: pathfinding / AttackMove / Targeting as immediate stage (deferred combat QoL)
 - No ADR prerequisite (ADR-0009 Accepted); no production code in audit branch
-- Branch: `audit/post-s29r-next-slice` — do not merge without review
+- Branch: `audit/post-s29r-next-slice`
 
 ## 2026-08-08 — GP-S29R Finalization
 

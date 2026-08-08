@@ -56,12 +56,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Mining", meta = (ClampMin = "1.0", ForceUnits = "cm"))
 	float InteractionRangeCm = 200.0f;
 
-	/** 1 shipped unit → FerroniteScore units at orbital launch (metadata only; no execution in S23R). */
+	/** 1 shipped Planetary unit → FerroniteScore units at orbital launch (MVP 1:1). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Orbital", meta = (ClampMin = "0.0"))
 	float ScoreConversionRate = 1.0f;
 
+	/** 1 shipped Planetary unit → OrbitalFerronite units at orbital launch (MVP 1:1). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Orbital", meta = (ClampMin = "0.0"))
+	float OrbitalConversionRate = 1.0f;
+
 	/**
-	 * Multiplier from stored Planetary stock to SWARM FerroniteThreatValue pressure (metadata only).
+	 * Multiplier from stored Planetary stock to SWARM FerroniteThreatValue pressure.
 	 * Prototype placeholder (TDD recommended starting 0.5); not final balance.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Orbital", meta = (ClampMin = "0.0"))

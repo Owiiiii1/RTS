@@ -37,6 +37,7 @@ namespace GPResourceDefinitionSeedPrivate
 		Definition->MiningCycleDurationSeconds = 1.0f;
 		Definition->InteractionRangeCm = 200.0f;
 		Definition->ScoreConversionRate = 1.0f;
+		Definition->OrbitalConversionRate = 1.0f;
 		Definition->ThreatPerStoredUnit = 0.5f;
 		Definition->Tint = FLinearColor(0.15f, 0.75f, 0.85f, 1.0f);
 		Definition->Icon.Reset();

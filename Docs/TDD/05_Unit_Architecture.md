@@ -4,45 +4,53 @@
 
 ```
 AActor
-  AGP_UnitBase                  // abstract; owns ASC, UnitAttributeSet, tags, TeamId, UnitDefinition
-    AGP_MobileUnit              // moving units (workers, troopers)
-    AGP_BuildingBase            // static units (buildings, resource nodes)  -- see 06_Building_Architecture
+  APawn
+    AGP_UnitBase                    // abstract common ancestor
+      AGP_MobileUnit                // owns UGP_MovementComponent
+        AGP_Unit                    // concrete generic unit (Capsule + UnitVisual)
+        AGP_Worker                  // MobileUnit child; own presentation/resource composition
+      AGP_BuildingBase              // static buildings (e.g. MainBase)
 ```
 
-`AGP_UnitBase` — common ancestor. Building теж є "unit" у тег-сенсі (`GP.Unit.Type.Building`). Це дозволяє uniform GAS attribute handling (Health works the same way для unit і building).
+`AGP_UnitBase` — common ancestor. Buildings may carry `GP.Unit.Type.Building` capability tags for uniform selection/GAS Health handling.
+
+**Not BuildingBase:** `AGP_ResourceNode` is a separate `AActor` (resource deposit), not under `AGP_BuildingBase`.
+
+**Pending GDD combat unit:** Salvage Walker (canonical MVP combat unit per GDD/04) — implementation not present yet; do not treat `AGP_Unit` InfantryMelee cosmetic archetype as Salvage Walker.
 
 ## AGP_UnitBase
 
-### Composition
+### Composition (current)
 
-- `UAbilitySystemComponent* AbilitySystemComponent` — unit-scoped ASC. Replication mode: `Minimal`.
-- `UGP_UnitAttributeSet* UnitAttributeSet` — owned by ASC.
-- `UStaticMeshComponent` / `USkeletalMeshComponent` — visual; BP-overrideable.
-- `USphereComponent` — root collision/selection bound (sized by UnitDefinition or default).
+- `UGP_UnitCommandComponent` — Held command + Attack executor/FSM (and other command orchestration).
+- `UGP_CombatPresentationComponent` — cosmetic combat presentation channel.
+- `UGP_TeamPresentationComponent` — TeamId → team color presentation.
+- `UGP_HealthBarComponent` — world/screen health bar presentation (GAS Health/MaxHealth bind).
+- `UGP_AbilitySystemComponent` — unit-scoped ASC (project Mixed replication mode).
+- `UGP_UnitAttributeSet` — owned alongside ASC.
+- `TeamId` (replicated) + `CapabilityTags` (class defaults / interim selection facts).
+- Interim native combat defaults (`DefaultHealth`, `DefaultDamage`, `DefaultAttackRange`, …) until full UnitDefinition apply pipeline.
 
-### Replicated Properties
+**Not current:** UnitBase does **not** create a Sphere root and does **not** own StaticMesh/SkeletalMesh presentation directly. Capsule roots and visual ownership live on concrete children (`AGP_Unit`, `AGP_Worker`, buildings).
 
-- `UPROPERTY(ReplicatedUsing=OnRep_UnitDefinition) TSoftObjectPtr<UGP_UnitDefinition> UnitDefinitionAsset;`
-- `UPROPERTY(Replicated) int32 TeamId = 0;`
-- `UPROPERTY(Replicated) FGameplayTagContainer UnitTags;` (cached snapshot from UnitDefinition + runtime mods)
+### Replicated Properties (current core)
 
-### Lifecycle
+- `TeamId` (ReplicatedUsing OnRep).
+- Death flag / related death presentation fields on UnitBase.
+- CapabilityTags are EditDefaultsOnly class facts (not a live replicated UnitTags snapshot from UnitDefinition in current code).
+
+> Historical note: soft `UnitDefinitionAsset` / full definition apply remains the intended DataAsset direction; current interim defaults are native on UnitBase.
+
+### Lifecycle (simplified current)
 
 ```
-Server: AGP_GameMode::SpawnUnit(UnitDef, Location, TeamId)
+Server spawn concrete AGP_UnitBase child
    |
    v
-SpawnActor<AGP_UnitBase>
-   |
-   v
-AGP_UnitBase::BeginPlay
-   - Initialize ASC ActorInfo
-   - Apply UnitDefinition (read attributes, grant abilities)
-   - Replicate UnitDefinitionAsset (RepNotify on client triggers visual setup)
-   |
-   v
-Client: OnRep_UnitDefinition
-   - Setup mesh, materials, team color from UnitDefinition
+BeginPlay
+   - Init ASC ActorInfo
+   - Initialize combat attributes from interim defaults (authority)
+   - Presentation components bind / attach as implemented per component
 ```
 
 ### Authority Helpers
@@ -120,26 +128,47 @@ public:
 
 ## AGP_MobileUnit
 
-### Composition (Default)
+### Composition (current)
 
-- Inherits AGP_UnitBase.
-- `UCharacterMovementComponent` (через `ACharacter` base) — або custom `UGP_MovementComponent` поверх `UPawnMovementComponent`. **Decision:** `AGP_MobileUnit : public APawn` з custom `UGP_MovementComponent` для RTS-style movement (no jump, no Character humanoid coupling). Це простіше масштабувати на не-humanoid units.
-- `UGP_CommandReceiverComponent` (optional — або просто overridden `ReceiveCommand`).
-- For Worker: `UGP_MiningComponent`.
-- For Combat: `UGP_CombatComponent`, `UGP_TargetingComponent`.
+- Inherits `AGP_UnitBase`.
+- Owns exactly one `UGP_MovementComponent` (custom RTS straight-line / serial move backend on `UActorComponent` — **not** CharacterMovement).
+- Commands: `AGP_UnitBase::ReceiveCommand` → `UGP_UnitCommandComponent` (no separate CommandReceiverComponent).
+- Attack execution / LOS fire gate currently live in `UGP_UnitCommandComponent` Attack FSM. `UGP_CombatComponent` / `UGP_TargetingComponent` are **not** current required composition (deferred Slice 7 roadmap items).
+- Worker-specific components are owned by `AGP_Worker`, not by MobileUnit itself.
 
-Композиція задається у BP child (`BP_GP_Worker` додає MiningComponent; `BP_GP_Trooper` додає CombatComponent + TargetingComponent).
+Actor Class Defaults pointer category: `GP|Components|Movement`. Tunables on the component remain `GP|Movement`.
 
-Альтернатива: компоненти добавляються через `UGP_UnitDefinition.ComponentsToAdd : TArray<TSoftClassPtr<UActorComponent>>` (data-driven composition, async). Цей варіант **deferred** — для MVP BP-driven composition достатньо. Документувати у Backlog.
+## AGP_Unit
+
+Concrete Blueprintable generic mobile unit layer:
+
+- `UCapsuleComponent` root (`GP|Components`).
+- `UGP_UnitVisualComponent` (`GP|Components|Visual` pointer; component settings `GP|Visual`).
+- Inherits the single `UGP_MovementComponent` from `AGP_MobileUnit`.
+
+Suitable base for future combat BP (e.g. Salvage Walker) without adding a second movement/visual owner.
+
+## AGP_Worker
+
+`AGP_Worker : AGP_MobileUnit` — **not** a child of `AGP_Unit`.
+
+Own presentation/resource composition: Capsule root, `PresentationRoot` / cargo & mining anchors, `UGP_CargoComponent`, `UGP_MiningComponent`. Does not use `UGP_UnitVisualComponent` / InfantryMelee archetype path.
 
 ## Components
 
 ### UGP_MovementComponent
 
-- Pawn movement component.
-- `MoveTo(FVector Destination)` — RPC-free, server-only call.
-- Pathfinding — UE NavMesh (default RecastNavMesh).
-- Client interpolation through movement component replication (standard).
+- Owned by `AGP_MobileUnit` (one instance).
+- Authority-only `RequestMove` / serial stop API used by UnitCommand.
+- Straight-line movement backend (current); not CharacterMovement and not documented here as NavMesh pathfinding SoT.
+- Component property category: `GP|Movement`.
+
+### UGP_UnitVisualComponent
+
+- Cosmetic presentation ownership for `AGP_Unit`.
+- `NativeFallback` — generates transient Engine basic-shape meshes (`RF_Transient`); cleared on mode switch / EndPlay.
+- `AuthoredComponents` — clears generated parts; Blueprint/SCS meshes own presentation.
+- `VisualArchetype` (e.g. InfantryMelee) is **cosmetic prototype only** — not a gameplay classification and not Salvage Walker.
 
 ### UGP_MiningComponent
 
@@ -152,6 +181,10 @@ public:
 
 ### UGP_CombatComponent
 
+> **Deferred / not current.** Attack damage + cadence + LOS fire gate are implemented via `UGP_UnitCommandComponent` Attack FSM (GP-S24/S25/S29R path). Do not treat `UGP_CombatComponent` as required composition today.
+
+Historical sketch (roadmap):
+
 - Server-only tick.
 - `EngageTarget(AActor* Target)`.
 - On tick:
@@ -163,6 +196,8 @@ public:
   - Else: route to MovementComponent::MoveTo(Target->GetActorLocation()).
 
 ### UGP_TargetingComponent
+
+> **Deferred / not current.** Auto-acquire / TargetingComponent not implemented. Attack requires explicit command target.
 
 - Auto-targeting logic для combat units (auto-acquire visible enemies у range).
 - Out-of-scope для MVP першого playable target; **basic auto-target** включити, якщо MVP playtest показує необхідність.
@@ -185,11 +220,11 @@ Client: OnRep on Health attribute -> presentation
 
 ## Replication Hot-Path
 
-Movement — `UCharacterMovementComponent` / `UPawnMovementComponent` standard replication. Не custom.
+Movement — custom `UGP_MovementComponent` (authority mutates owner transform; not CharacterMovement replication path).
 
 Health — through GAS attribute replication.
 
-Position correction — engine standard.
+Position correction — project-specific as implemented by movement/command layers.
 
 ## Spawning Discipline
 

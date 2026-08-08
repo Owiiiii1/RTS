@@ -24,6 +24,6 @@ public:
 	UGP_MovementComponent* GetUnitMovementComponent() const;
 
 private:
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Movement", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Components|Movement", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_MovementComponent> MovementComponent;
 };

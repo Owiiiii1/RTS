@@ -373,6 +373,7 @@ void UGP_LOSFireGateContractTestRunner::AdvanceStage()
 		NextHitTimeAtBlock = Attacker->GetUnitCommandComponent()->GetNextAttackHitTime();
 		AttackSerialAtBlock = Attacker->GetUnitCommandComponent()->IsAttackActive() ? 1u : 0u;
 		Expect(Attacker->GetUnitCommandComponent()->IsAttackActive(), TEXT("D_AttackActiveBeforeBlockWait"));
+		Expect(!Attacker->GetUnitCommandComponent()->IsAttackLOSBlocked(), TEXT("B_LOSStateClearBeforeBlockedAttempt"));
 		PollTicks = 0;
 		++StageIndex;
 		ScheduleNext(0.5f);
@@ -405,10 +406,14 @@ void UGP_LOSFireGateContractTestRunner::AdvanceStage()
 		++PollTicks;
 		if (PollTicks < 3)
 		{
+			// Repeated blocked retries must keep latched diagnostic state (no gameplay change).
+			Expect(Attacker->GetUnitCommandComponent()->IsAttackLOSBlocked(), TEXT("B_LOSStateStaysBlockedAcrossRetries"));
+			Expect(FMath::IsNearlyEqual(GPLOSFireGateDebug::ReadHealth(Target), HealthAtBlock, 0.05f), TEXT("B_BlockedHealthStableAcrossRetries"));
 			ScheduleNext(0.4f);
 			return;
 		}
 
+		Expect(Attacker->GetUnitCommandComponent()->IsAttackLOSBlocked(), TEXT("B_LOSStateBlockedAfterWait"));
 		++StageIndex;
 		ScheduleNext(0.05f);
 		break;
@@ -451,6 +456,7 @@ void UGP_LOSFireGateContractTestRunner::AdvanceStage()
 		if (HealthNow < HealthAtBlock - 0.5f)
 		{
 			Expect(true, TEXT("C_ResumeDamageAfterLOSRestore"));
+			Expect(!Attacker->GetUnitCommandComponent()->IsAttackLOSBlocked(), TEXT("C_LOSStateClearAfterRestoreHit"));
 			++StageIndex;
 			ScheduleNext(0.05f);
 			return;
@@ -468,6 +474,95 @@ void UGP_LOSFireGateContractTestRunner::AdvanceStage()
 	}
 	case 6:
 	{
+		// I — blocked diagnostic state resets on Attack replacement (new target command).
+		AGP_Worker* Attacker = AttackerWeak.Get();
+		AGP_Worker* Target = TargetWeak.Get();
+		if (!Expect(IsValid(Attacker) && IsValid(Target), TEXT("I_ActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		const FVector Mid =
+			(Attacker->GetActorLocation() + Target->GetActorLocation()) * 0.5f + FVector(0.0f, 0.0f, 40.0f);
+		AActor* Blocker = GPLOSFireGateDebug::SpawnVisibilityBlocker(World, Mid);
+		BlockerWeak = Blocker;
+		if (!Expect(IsValid(Blocker), TEXT("I_SpawnBlocker")))
+		{
+			Finish();
+			return;
+		}
+		Expect(!GPCombatLOS::HasLineOfSight(World, Attacker, Target), TEXT("I_LOSBlockedHelper"));
+		PollTicks = 0;
+		++StageIndex;
+		ScheduleNext(0.5f);
+		break;
+	}
+	case 7:
+	{
+		AGP_Worker* Attacker = AttackerWeak.Get();
+		AGP_Worker* Target = TargetWeak.Get();
+		if (!Expect(IsValid(Attacker) && IsValid(Target), TEXT("I_ActorsAliveWait")))
+		{
+			Finish();
+			return;
+		}
+
+		if (!Attacker->GetUnitCommandComponent()->IsAttackLOSBlocked())
+		{
+			++PollTicks;
+			if (PollTicks > 20)
+			{
+				Expect(false, TEXT("I_LOSBlockedStateTimeout"));
+				Finish();
+				return;
+			}
+			ScheduleNext(0.2f);
+			return;
+		}
+
+		Expect(Attacker->GetUnitCommandComponent()->IsAttackLOSBlocked(), TEXT("I_LOSStateBlockedBeforeReplace"));
+
+		const uint32 SerialBeforeReplace = Attacker->GetUnitCommandComponent()->GetActiveAttackSerial();
+
+		// Place replacement out of range / clear of the mid blocker so Ready cannot re-latch LOS in the same frame.
+		AGP_Worker* Replacement = GPLOSFireGateDebug::SpawnWorker(
+			World, Attacker->GetActorLocation() + FVector(2500.0f, 200.0f, 0.0f), 2);
+		FriendlyWeak = Replacement;
+		if (!Expect(IsValid(Replacement), TEXT("I_SpawnReplacementTarget")))
+		{
+			Finish();
+			return;
+		}
+		GPLOSFireGateDebug::ApplyCombatStats(Replacement, 100.0f, 100.0f, 1.0f, 0.0f, 0.0f, 5.0f, 100.0f);
+		GPLOSFireGateDebug::IssueAttack(Attacker, Replacement);
+		Expect(Attacker->GetUnitCommandComponent()->IsAttackActive(), TEXT("I_AttackReplacedAccepted"));
+		Expect(
+			Attacker->GetUnitCommandComponent()->GetActiveAttackSerial() != SerialBeforeReplace,
+			TEXT("I_AttackSerialChangedOnReplace"));
+		Expect(
+			Attacker->GetUnitCommandComponent()->GetAttackTarget() == Replacement,
+			TEXT("I_AttackTargetReplaced"));
+		Expect(!Attacker->GetUnitCommandComponent()->IsAttackLOSBlocked(), TEXT("I_LOSStateResetOnAttackReplace"));
+
+		if (BlockerWeak.IsValid())
+		{
+			BlockerWeak->Destroy();
+			BlockerWeak.Reset();
+		}
+		if (TargetWeak.IsValid())
+		{
+			TargetWeak->Destroy();
+		}
+		TargetWeak = Replacement;
+		FriendlyWeak.Reset();
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 8:
+	{
 		// F — out-of-range existing approach preserved.
 		AGP_Worker* Attacker = AttackerWeak.Get();
 		AGP_Worker* Target = TargetWeak.Get();
@@ -483,7 +578,7 @@ void UGP_LOSFireGateContractTestRunner::AdvanceStage()
 		ScheduleNext(0.2f);
 		break;
 	}
-	case 7:
+	case 9:
 	{
 		AGP_Worker* Attacker = AttackerWeak.Get();
 		AGP_Worker* Target = TargetWeak.Get();
@@ -503,7 +598,7 @@ void UGP_LOSFireGateContractTestRunner::AdvanceStage()
 		ScheduleNext(0.05f);
 		break;
 	}
-	case 8:
+	case 10:
 	{
 		// G — same-team target rejected.
 		AGP_Worker* Attacker = AttackerWeak.Get();
@@ -540,7 +635,7 @@ void UGP_LOSFireGateContractTestRunner::AdvanceStage()
 		ScheduleNext(0.05f);
 		break;
 	}
-	case 9:
+	case 11:
 	{
 		// H — death clears Attack.
 		AGP_Worker* Attacker = AttackerWeak.Get();
@@ -563,12 +658,13 @@ void UGP_LOSFireGateContractTestRunner::AdvanceStage()
 		GPLOSFireGateDebug::ApplyCombatStats(Victim, 100.0f, 100.0f, 1.0f, 0.0f, 0.0f, 5.0f, 100.0f);
 		GPLOSFireGateDebug::IssueAttack(Attacker, Victim);
 		Expect(Attacker->GetUnitCommandComponent()->IsAttackActive(), TEXT("H_AttackStarted"));
+		Expect(!Attacker->GetUnitCommandComponent()->IsAttackLOSBlocked(), TEXT("H_LOSStateClearOnNewAttack"));
 		PollTicks = 0;
 		++StageIndex;
 		ScheduleNext(0.15f);
 		break;
 	}
-	case 10:
+	case 12:
 	{
 		AGP_Worker* Attacker = AttackerWeak.Get();
 		AGP_Worker* Victim = TargetWeak.Get();
@@ -582,6 +678,7 @@ void UGP_LOSFireGateContractTestRunner::AdvanceStage()
 		if (bVictimDead)
 		{
 			Expect(!Attacker->GetUnitCommandComponent()->IsAttackActive(), TEXT("H_DeathClearsAttack"));
+			Expect(!Attacker->GetUnitCommandComponent()->IsAttackLOSBlocked(), TEXT("H_LOSStateClearedOnAttackEnd"));
 			Expect(true, TEXT("SuiteComplete"));
 			Finish();
 			return;

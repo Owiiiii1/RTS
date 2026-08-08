@@ -133,6 +133,12 @@ public:
 	EGP_AttackRangeSource GetAttackRangeSource() const;
 	const TCHAR* GetAttackRangeSourceLabel() const;
 
+	/**
+	 * Diagnostic: last observed Ready LOS fire-gate result for the active Attack.
+	 * True after CLEAR→BLOCKED until BLOCKED→CLEAR or Attack reset. Not replicated.
+	 */
+	bool IsAttackLOSBlocked() const;
+
 	EGP_MineExecutionState GetMineExecutionState() const;
 	uint32 GetActiveMineSerial() const;
 	AGP_ResourceNode* GetMineTarget() const;
@@ -415,6 +421,9 @@ private:
 	double NextAttackHitTime = -1.0;
 	bool bHasAttemptedFirstHit = false;
 	bool bAttackHitInProgress = false;
+
+	/** Diagnostic LOS fire-gate latched state for active Attack (spam-safe transition logs). */
+	bool bAttackLOSBlocked = false;
 
 	/** GP-S25B unreachable-range / no-progress approach tracking. */
 	bool bHasReachedOutOfRangeSample = false;

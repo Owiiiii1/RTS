@@ -1,112 +1,104 @@
-# Cursor Work Report — GP-S29R Salvage Walker
+# Cursor Work Report — GP-S29R LOS Log Spam Fix
 
 ## Status
-**GP-S29R_SALVAGE_WALKER_READY_FOR_OPERATOR_VALIDATION**
+**GP-S29R_LOS_LOG_SPAM_FIX_READY_FOR_OPERATOR_VALIDATION**
 
 ## Branch
 `feature/gp-s29r-combat-los-healthbar-teamcolors`
 
 ## Scope
-Native playable combat class for operator combat/LOS validation. **Not** GP-S29R finalization. No Blueprint asset created.
+Diagnostic/logging only. **Not** GP-S29R finalization. No gameplay/LOS algorithm changes.
 
 ---
 
-## Exact class hierarchy
+## Root cause
 
-```
-AGP_UnitBase
-  -> AGP_MobileUnit
-      -> AGP_Unit
-          -> AGP_SalvageWalker
-```
+After a successful hit schedules `NextAttackHitTime`, blocked LOS retries in `AttemptAttackHit` return without advancing cadence. Once `Now >= NextAttackHitTime`, Ready cadence retries every tick and previously logged `AttackHitRejected Reason=LOSBlocked` on **every** retry.
+
+Gameplay (stay Ready, no damage, no success cooldown) was already correct — only logging spammed.
 
 ---
 
-## Files created / changed
+## Exact LOS diagnostic state implementation
 
-### Created
-- `GP/Source/GPRuntime/Public/Units/GPSalvageWalker.h`
-- `GP/Source/GPRuntime/Private/Units/GPSalvageWalker.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPSalvageWalkerContractTest.cpp`
+On `UGP_UnitCommandComponent` Attack executor runtime:
 
-### Docs (minimal)
-- `Docs/TDD/05_Unit_Architecture.md` — SalvageWalker as implemented child
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Claude_Tasks/GP-S29R_Combat_LOS_HealthBar_TeamColors.md`
-- `Docs/Development/Cursor_Work_Report.md`
+- `bool bAttackLOSBlocked` — latched per active Attack (unit-scoped, not global/static)
+- `IsAttackLOSBlocked()` — read accessor for contracts/diagnostics
+- Cleared in `ClearAttackCadenceState()` (used by `ResetAttackExecutor` / `FinishAttack` / replacement / death / EndPlay paths)
 
----
+### Transition logs
 
-## Implemented native defaults
+| Transition | Log | Behavior |
+| --- | --- | --- |
+| CLEAR → BLOCKED | `GP AttackLOSBlocked` once | set `bAttackLOSBlocked=true` |
+| BLOCKED → BLOCKED | none | no-op |
+| BLOCKED → CLEAR | `GP AttackLOSRestored` once | clear flag, then continue hit path |
+| CLEAR → CLEAR | none | no extra LOS state logs |
 
-| Field | Value |
-| --- | --- |
-| `DefaultMaxHealth` | 200 |
-| `DefaultHealth` | 200 |
-| `DefaultDamage` | 20 |
-| `DefaultAttackCooldown` | 1.0 |
-| `DefaultAttackRange` | 600 |
-| CapabilityTags | inherited Selectable / Inspectable / Selection.Type.Unit + `GP.Unit.Type.SalvageWalker` |
+Removed per-retry `AttackHitRejected Reason=LOSBlocked`.
 
 ---
 
-## Movement default path
+## Gameplay semantics unchanged
 
-`AGP_SalvageWalker` constructor → `GetUnitMovementComponent()->MoveSpeed = 250.0f`
-
-Same sole `UGP_MovementComponent` owned by `AGP_MobileUnit`. No second MoveSpeed / no new movement system.
+Unchanged: LOS algorithm / 3-point / ECC_Visibility / retry cadence / Ready retention / damage / cooldown scheduling / movement / range/hysteresis / target death / combat presentation.
 
 ---
 
-## VisualSourceMode behavior
+## Reset paths
 
-Constructor calls existing `UGP_UnitVisualComponent::SetVisualSourceMode(AuthoredComponents)`.
+`bAttackLOSBlocked` resets via `ClearAttackCadenceState` when Attack executor resets:
 
-- `AGP_Unit` CDO remains `NativeFallback` for generic diagnostics/tests.
-- Salvage Walker CDO / instances default to AuthoredComponents so operator `BP_SalvageWalker` does not stack generated InfantryMelee.
-- No new visual ownership enum / second visual component / `bUseGeneratedPrototypeVisual`.
-
----
-
-## Composition confirmations
-
-- **One** `UGP_MovementComponent`
-- **One** `UGP_UnitVisualComponent`
-- **No** `UGP_CargoComponent`
-- **No** `UGP_MiningComponent`
-- Reuses: UnitCommand / Attack FSM / LOS / GAS / HealthBar / TeamPresentation / CombatPresentation
+- new Attack / target replacement (`ResetAttackExecutorForReplacement`)
+- Attack finish / cancel (`FinishAttack`)
+- owner death / EndPlay / related executor resets
 
 ---
 
-## Contract assertions (`gp.Combat.RunSalvageWalkerContractTest`)
+## Tests
 
-Spawn native class; hierarchy; one Movement; one UnitVisual; command/health/team/combat presentation present; no cargo/mining; selectable/inspectable/selection-type-unit; MoveSpeed 250; VisualSourceMode AuthoredComponents; post-BeginPlay GAS attrs MaxHealth/Health 200, Damage 20, AttackRange 600, AttackCooldown 1.0.
+Extended `gp.Combat.RunLOSFireGateContractTest`:
 
-Result: **Complete Failures=0**
+- clear hit path unchanged
+- latched blocked state after first blocked attempt
+- repeated blocked retries keep state / no damage / no success cooldown advance
+- restore → damage without new Attack; state clears
+- Attack replacement resets latched LOS diagnostic state
+- new Attack / Attack end leave state clear
+
+No brittle UE_LOG capture.
 
 ---
 
-## Regression
+## Validation
 
 | Command | Result |
 | --- | --- |
+| `gp.Combat.RunLOSFireGateContractTest` | Failures=0 |
 | `gp.Combat.RunSalvageWalkerContractTest` | Failures=0 |
 | `gp.Combat.RunHealthBarContractTest` | Failures=0 |
 | `gp.Combat.RunTeamColorContractTest` | Failures=0 |
-| `gp.Combat.RunLOSFireGateContractTest` | Failures=0 |
 | `gp.Resource.RunS28RegressionSuite` | Failures=0 |
 
 GPEditor Win64 Development + UHT: **PASS**  
-GP Win64 Development / Shipping: **not run**
+GP Development / Shipping: **not run**
 
 ---
 
+## Files changed
+
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPCombatLOSFireGateContractTest.cpp`
+- `Docs/Development/Cursor_Work_Report.md`
+
 ## Operator assets untouched
 
-Not modified / not committed: DefaultEngine.ini, L_PrototypeArena.umap, Blueprint/, Materials/, authored ResourceNode, Niagara, other operator `.uasset`/`.umap`. No BP_SalvageWalker created.
+DefaultEngine.ini, maps, Blueprint/, Materials/, Niagara, authored ResourceNode, other operator `.uasset`/`.umap` — not modified / not committed.
 
 ---
 
 ## Commit SHA
 
-_070656c1e32db25a592fdf619de012618d03c4d0_
+_(filled after commit)_

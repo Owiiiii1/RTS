@@ -533,6 +533,7 @@ void UGP_UnitCommandComponent::ClearAttackCadenceState()
 	NextAttackHitTime = -1.0;
 	bHasAttemptedFirstHit = false;
 	bAttackHitInProgress = false;
+	bAttackLOSBlocked = false;
 }
 
 void UGP_UnitCommandComponent::ClearApproachProgressState()
@@ -3777,15 +3778,31 @@ void UGP_UnitCommandComponent::AttemptAttackHit()
 	UWorld* World = Owner->GetWorld();
 	if (!GPCombatLOS::HasLineOfSight(World, OwnerUnit, Target))
 	{
+		if (!bAttackLOSBlocked)
+		{
+			bAttackLOSBlocked = true;
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP AttackLOSBlocked: Unit=%s Target=%s Serial=%u Distance=%.1f AttackRange=%.1f"),
+				*GetNameSafe(Owner),
+				*GetNameSafe(Target),
+				HitSerial,
+				Distance,
+				EffectiveRange);
+		}
+		// Stay Ready; do not apply damage, presentation, or successful-hit cooldown.
+		return;
+	}
+
+	if (bAttackLOSBlocked)
+	{
+		bAttackLOSBlocked = false;
 		UE_LOG(LogGPUnitCommandExecution, Log,
-			TEXT("GP AttackHitRejected: Unit=%s Target=%s Serial=%u Reason=LOSBlocked Distance=%.1f AttackRange=%.1f"),
+			TEXT("GP AttackLOSRestored: Unit=%s Target=%s Serial=%u Distance=%.1f AttackRange=%.1f"),
 			*GetNameSafe(Owner),
 			*GetNameSafe(Target),
 			HitSerial,
 			Distance,
 			EffectiveRange);
-		// Stay Ready; do not apply damage, presentation, or successful-hit cooldown.
-		return;
 	}
 
 	const double Now = World != nullptr ? World->GetTimeSeconds() : 0.0;
@@ -4579,6 +4596,11 @@ const TCHAR* UGP_UnitCommandComponent::GetAttackRangeSourceLabel() const
 double UGP_UnitCommandComponent::GetNextAttackHitTime() const
 {
 	return NextAttackHitTime;
+}
+
+bool UGP_UnitCommandComponent::IsAttackLOSBlocked() const
+{
+	return bAttackLOSBlocked;
 }
 
 bool UGP_UnitCommandComponent::HasAttemptedFirstAttackHit() const

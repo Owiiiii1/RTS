@@ -1,7 +1,7 @@
 # GP-S30 — Container Launch / Orbital Conversion
 
 ## Status
-**GP-S30_FULL_STORAGE_WORKER_FIX_READY_FOR_OPERATOR_RETEST**
+**GP-S30_FINALIZATION_READY_FOR_MERGE_REVIEW**
 
 ## Slice Group
 Slice 8 — Buildings + Orbital Drops
@@ -9,30 +9,53 @@ Slice 8 — Buildings + Orbital Drops
 ## Branch
 `feature/gp-s30-container-launch-orbital-conversion`  
 Base: `main` @ `89ce3c50ebd05a4bf1e58a5b4e117544dc68cb8f`  
-Prior finalization: `030efc55469153a8d1465ac81ae3996c1bd391cb` — **not merged**.
+Full-storage Worker candidate: `d5863cad67ffbf8402f4f9873876374a64c54c45`
 
 ## Operator validation
-Previous PIE PASS for launch economy + HUD.  
-**Current:** operator retest pending for full-storage Worker FSM fix (not merge-ready).
+**PASS** (final retest). Not merged.
 
-## Full-storage Worker fix (this follow-up)
+### Late operator fixes recorded
 
-- Symptom: Workers mined/looped while Storage full
-- Root: overflow `ClearCargo` + `ContinueMineAfterSuccessfulHaul`
-- Semantics: full/partial unload with remainder → `WaitingForDropOff`; cargo-first; resume on `OnStorageChanged`
-- Capacity unchanged (5×100=500)
+**A. HUD container breakdown**
 
-## Contracts
+- `База: total / capacity`
+- stable individual `Контейнер N — amount`
+- dynamic count from Storage (no hardcoded 5/500)
+- Orbital + Launch Container preserved
+
+**B. Full-storage Worker behavior**
+
+- cargo retained on reject/partial
+- `WaitingForDropOff` while cargo remains
+- no mining while cargo remains
+- automatic event-driven resume when Launch frees space
+- multi-worker authority Storage competition; rejected Workers stay waiting with cargo
+
+## Verified production semantics
+
+- Launch: Ready → Launching → Empty; Planetary↓ Orbital↑ Score↑ Threat↓
+- Storage defaults: 5 × 100 = 500; no overflow
+- Worker loop: mine → carry → drop-off → wait if full → resume → mine
+
+## Final contracts
 | Command | Result |
 | --- | --- |
 | `gp.Resource.RunS28RegressionSuite` | Failures=0 |
 | `gp.Resource.RunDropOffResilienceContractTest` | Failures=0 |
 | `gp.Resource.RunContainerLaunchContractTest` | Failures=0 |
 | `gp.Resource.RunContainerLaunchHUDContractTest` | Failures=0 |
+| `gp.Worker.RunHaulingContractTest` | Failures=0 |
+| `gp.Combat.RunLOSFireGateContractTest` | Failures=0 |
+| `gp.Combat.RunSalvageWalkerContractTest` | Failures=0 |
+| `gp.Combat.RunHealthBarContractTest` | Failures=0 |
+| `gp.Combat.RunTeamColorContractTest` | Failures=0 |
 
-## Builds
-- GPEditor Win64 Development + UHT: **PASS**
-- GP Win64 Development / Shipping: **NOT RUN**
+## Final builds
+| Target | Result |
+| --- | --- |
+| GPEditor Win64 Development + UHT | **PASS** |
+| GP Win64 Development | **PASS** |
+| GP Win64 Shipping | **PASS** |
 
 ## Report
 `Docs/Development/Cursor_Work_Report.md`

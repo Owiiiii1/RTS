@@ -4,6 +4,7 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
+#include "AttributeSets/GPPlayerAttributeSet.h"
 #include "Algo/Sort.h"
 #include "Blueprint/UserWidget.h"
 #include "Camera/GPCameraPawn.h"
@@ -18,6 +19,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
+#include "GameplayEffectTypes.h"
 #include "InputAction.h"
 #include "InputActionValue.h"
 #include "InputCoreTypes.h"
@@ -416,6 +418,13 @@ void AGP_PlayerController::OnAbilitySystemLinkReady(UGP_AbilitySystemComponent* 
 	UE_LOG(LogTemp, Log,
 		TEXT("AGP_PlayerController::OnAbilitySystemLinkReady: ASC linked (%s)."),
 		*GetNameSafe(InAbilitySystemComponent));
+
+	if (IsLocalController())
+	{
+		EnsurePlanetaryFerroniteHUD();
+		BindOrbitalFerroniteAttribute();
+		SyncOrbitalFerroniteHUDFromAttributes();
+	}
 }
 
 void AGP_PlayerController::LoadCameraInputAssets()
@@ -967,6 +976,97 @@ void AGP_PlayerController::Server_RequestCommand_Implementation(const FGP_Comman
 	}
 }
 
+void AGP_PlayerController::RequestLaunchReadyContainer()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	Server_RequestLaunchReadyContainer();
+}
+
+bool AGP_PlayerController::Server_RequestLaunchReadyContainer_Validate()
+{
+	// Intent-only RPC (no client payload). Authority revalidates ownership/Ready/ASC.
+	return true;
+}
+
+void AGP_PlayerController::Server_RequestLaunchReadyContainer_Implementation()
+{
+	AuthorityTryLaunchReadyContainerForOwningTeam();
+}
+
+bool AGP_PlayerController::AuthorityTryLaunchReadyContainerForOwningTeam()
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+
+	const AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	if (PS == nullptr)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP LaunchRequest Rejected: PC=%s Reason=MissingPlayerState"),
+			*GetName());
+		return false;
+	}
+
+	const int32 TeamId = PS->GetTeamId();
+	if (TeamId < 1)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP LaunchRequest Rejected: PC=%s Reason=InvalidTeamId Team=%d"),
+			*GetName(),
+			TeamId);
+		return false;
+	}
+
+	UWorld* World = GetWorld();
+	AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	if (GS == nullptr)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP LaunchRequest Rejected: PC=%s Team=%d Reason=MissingGameState"),
+			*GetName(),
+			TeamId);
+		return false;
+	}
+
+	AGP_MainBase* MainBase = GS->FindMainBaseForTeam(TeamId);
+	if (!IsValid(MainBase))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP LaunchRequest Rejected: PC=%s Team=%d Reason=MissingMainBase"),
+			*GetName(),
+			TeamId);
+		return false;
+	}
+
+	UGP_StorageComponent* Storage = MainBase->GetStorageComponent();
+	if (!IsValid(Storage))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP LaunchRequest Rejected: PC=%s Team=%d Reason=MissingStorage"),
+			*GetName(),
+			TeamId);
+		return false;
+	}
+
+	const FGP_ContainerLaunchResult Result = Storage->TryLaunchReadyContainer();
+	UE_LOG(LogTemp, Log,
+		TEXT("GP LaunchRequest Result: PC=%s Team=%d Base=%s Accepted=%s Reason=%d Index=%d Amount=%.3f"),
+		*GetName(),
+		TeamId,
+		*GetNameSafe(MainBase),
+		Result.bAccepted ? TEXT("true") : TEXT("false"),
+		static_cast<int32>(Result.RejectReason),
+		Result.ContainerIndex,
+		Result.LaunchedPlanetaryAmount);
+	return Result.bAccepted;
+}
+
 void AGP_PlayerController::OnSelectionStarted(const FInputActionValue& Value)
 {
 	(void)Value;
@@ -1353,7 +1453,7 @@ void AGP_PlayerController::EnsurePlanetaryFerroniteHUD()
 		{
 			PlanetaryFerroniteHUD->AddToViewport(PlanetaryFerroniteHUDZOrder);
 		}
-		PlanetaryFerroniteHUD->SetVisibility(ESlateVisibility::HitTestInvisible);
+		// Visibility owned by HUD NativeConstruct (SelfHitTestInvisible + Visible button).
 		return;
 	}
 
@@ -1367,9 +1467,10 @@ void AGP_PlayerController::EnsurePlanetaryFerroniteHUD()
 		return;
 	}
 
-	PlanetaryFerroniteHUD->SetVisibility(ESlateVisibility::HitTestInvisible);
 	PlanetaryFerroniteHUD->AddToViewport(PlanetaryFerroniteHUDZOrder);
 	PlanetaryFerroniteHUD->SetPlanetaryFerroniteDisplay(0.0f, false);
+	PlanetaryFerroniteHUD->SetOrbitalFerroniteDisplay(0.0f);
+	PlanetaryFerroniteHUD->SetLaunchButtonEnabled(false);
 }
 
 void AGP_PlayerController::DestroyPlanetaryFerroniteHUD()
@@ -1386,6 +1487,7 @@ void AGP_PlayerController::DestroyPlanetaryFerroniteHUD()
 void AGP_PlayerController::ClearPlanetaryFerroniteHUDBindings()
 {
 	UnbindPlanetaryFerroniteStorage();
+	UnbindOrbitalFerroniteAttribute();
 
 	if (AGP_GameState* GS = BoundPlanetaryGameState.Get())
 	{
@@ -1425,12 +1527,14 @@ void AGP_PlayerController::BindPlanetaryFerroniteStorage(AGP_MainBase* MainBase)
 	if (!IsValid(Storage))
 	{
 		SyncPlanetaryFerroniteHUDFromStorage();
+		SyncLaunchButtonFromStorage();
 		return;
 	}
 
 	BoundPlanetaryStorage = Storage;
 	Storage->OnStorageChanged.AddDynamic(this, &AGP_PlayerController::HandleStorageChangedForHUD);
 	SyncPlanetaryFerroniteHUDFromStorage();
+	SyncLaunchButtonFromStorage();
 }
 
 void AGP_PlayerController::SyncPlanetaryFerroniteHUDFromStorage()
@@ -1451,6 +1555,83 @@ void AGP_PlayerController::SyncPlanetaryFerroniteHUDFromStorage()
 	}
 }
 
+void AGP_PlayerController::SyncLaunchButtonFromStorage()
+{
+	EnsurePlanetaryFerroniteHUD();
+	if (PlanetaryFerroniteHUD == nullptr)
+	{
+		return;
+	}
+
+	bool bEnabled = false;
+	if (UGP_StorageComponent* Storage = BoundPlanetaryStorage.Get())
+	{
+		bEnabled = Storage->GetReadyCount() > 0 && !Storage->IsLaunchInFlight();
+	}
+	PlanetaryFerroniteHUD->SetLaunchButtonEnabled(bEnabled);
+}
+
+void AGP_PlayerController::UnbindOrbitalFerroniteAttribute()
+{
+	if (UGP_AbilitySystemComponent* ASC = BoundOrbitalASC.Get())
+	{
+		if (OrbitalFerroniteChangedHandle.IsValid())
+		{
+			ASC->GetGameplayAttributeValueChangeDelegate(
+				UGP_PlayerAttributeSet::GetOrbitalFerroniteAttribute()).Remove(OrbitalFerroniteChangedHandle);
+		}
+	}
+	OrbitalFerroniteChangedHandle.Reset();
+	BoundOrbitalASC.Reset();
+}
+
+void AGP_PlayerController::BindOrbitalFerroniteAttribute()
+{
+	UnbindOrbitalFerroniteAttribute();
+
+	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	UGP_AbilitySystemComponent* ASC = PS != nullptr ? PS->GetGPAbilitySystemComponent() : nullptr;
+	if (ASC == nullptr || PS->GetPlayerAttributeSet() == nullptr)
+	{
+		SyncOrbitalFerroniteHUDFromAttributes();
+		return;
+	}
+
+	BoundOrbitalASC = ASC;
+	OrbitalFerroniteChangedHandle = ASC->GetGameplayAttributeValueChangeDelegate(
+		UGP_PlayerAttributeSet::GetOrbitalFerroniteAttribute()).AddUObject(
+		this, &AGP_PlayerController::HandleOrbitalFerroniteAttributeChanged);
+	SyncOrbitalFerroniteHUDFromAttributes();
+}
+
+void AGP_PlayerController::SyncOrbitalFerroniteHUDFromAttributes()
+{
+	EnsurePlanetaryFerroniteHUD();
+	if (PlanetaryFerroniteHUD == nullptr)
+	{
+		return;
+	}
+
+	float Orbital = 0.0f;
+	if (const AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>())
+	{
+		if (const UGP_PlayerAttributeSet* AttrSet = PS->GetPlayerAttributeSet())
+		{
+			Orbital = AttrSet->GetOrbitalFerronite();
+		}
+	}
+	PlanetaryFerroniteHUD->SetOrbitalFerroniteDisplay(Orbital);
+}
+
+void AGP_PlayerController::HandleOrbitalFerroniteAttributeChanged(const FOnAttributeChangeData& Data)
+{
+	EnsurePlanetaryFerroniteHUD();
+	if (PlanetaryFerroniteHUD != nullptr)
+	{
+		PlanetaryFerroniteHUD->SetOrbitalFerroniteDisplay(Data.NewValue);
+	}
+}
+
 void AGP_PlayerController::HandleStorageChangedForHUD(
 	float PreviousTotalStored,
 	float NewTotalStored,
@@ -1463,6 +1644,7 @@ void AGP_PlayerController::HandleStorageChangedForHUD(
 	{
 		PlanetaryFerroniteHUD->SetPlanetaryFerroniteDisplay(NewTotalStored, BoundPlanetaryStorage.IsValid());
 	}
+	SyncLaunchButtonFromStorage();
 }
 
 void AGP_PlayerController::HandleResolvedMainBaseChanged(
@@ -1539,6 +1721,8 @@ void AGP_PlayerController::RefreshPlanetaryFerroniteHUDBinding()
 		? GS->FindMainBaseForTeamClientSafe(BoundPlanetaryTeamId)
 		: nullptr;
 	BindPlanetaryFerroniteStorage(Base);
+	BindOrbitalFerroniteAttribute();
+	SyncOrbitalFerroniteHUDFromAttributes();
 }
 
 void AGP_PlayerController::HideMarqueeWidget()

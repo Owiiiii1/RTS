@@ -344,3 +344,48 @@ private:
 	bool bCancelled = false;
 	FName CancelReason;
 };
+
+/** GP-S30 TEMP HUD Orbital display + Launch button / PC request contract. */
+UCLASS()
+class GPRUNTIME_API UGP_ContainerLaunchHUDContractTestRunner : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag) { ExecutionId = InExecutionId; OwnerTag = InOwnerTag; }
+	void Start(UWorld* InWorld);
+
+private:
+	void ScheduleNext(float DelaySeconds = 0.05f);
+	void AdvanceStage();
+	bool Expect(bool bOk, const TCHAR* Label);
+	void Abort(const TCHAR* Reason);
+	void Finish();
+	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void UnbindWorldCleanup();
+	void CleanupActors();
+	void HandleOrbitalAttrChanged(const struct FOnAttributeChangeData& Data);
+
+	int32 StageIndex = 0;
+	int32 Failures = 0;
+	bool bFinished = false;
+	FDelegateHandle WorldCleanupHandle;
+	FTimerHandle StageTimerHandle;
+	FDelegateHandle OrbitalAttrHandle;
+	TWeakObjectPtr<UWorld> WorldWeak;
+	TWeakObjectPtr<class AGP_MainBase> OwnBaseWeak;
+	TWeakObjectPtr<class AGP_MainBase> OtherBaseWeak;
+	TWeakObjectPtr<class AGP_PlayerState> OwnPSWeak;
+	TWeakObjectPtr<class AGP_PlayerState> OtherPSWeak;
+	TWeakObjectPtr<class AGP_PlayerController> OwnPCWeak;
+	TWeakObjectPtr<class AGP_PlayerController> OtherPCWeak;
+	TWeakObjectPtr<class UGP_TEMP_S28P_PlanetaryFerroniteHUD> HUDWeak;
+	TWeakObjectPtr<class UGP_AbilitySystemComponent> BoundASCWeak;
+	float LastOrbitalAttrValue = -1.0f;
+	int32 OrbitalAttrEventCount = 0;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
+};

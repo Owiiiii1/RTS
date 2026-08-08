@@ -1,158 +1,131 @@
-# Cursor Work Report — GP-S30 Container Launch / Orbital Conversion (implementation candidate)
+# Cursor Work Report — GP-S30 TEMP HUD Launch Button + Orbital Counter
 
 ## Status
 **GP-S30_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
 ---
 
-## 1. Branch / base SHA
+## 1. Previous implementation commit
 
-- Branch: `feature/gp-s30-container-launch-orbital-conversion`
-- Base: `main` @ `89ce3c50ebd05a4bf1e58a5b4e117544dc68cb8f`
-- Merge: **NOT merged**
+`b865b080be6628d710485d965d28e6c6fa4e205d` (production launch + Instant GEs + console diagnostic)
 
----
-
-## 2. Factual pre-implementation audit
-
-| Item | Result |
-| --- | --- |
-| Storage lifecycle | `Empty` / `Filling` / `Ready` / `Launching` scaffold in `UGP_StorageComponent`; Ready fill + Launching fill skip already present |
-| Player attributes | `UGP_PlayerAttributeSet::OrbitalFerronite` + `FerroniteScore` exist |
-| GE availability | No production `GE_GP_AddOrbital` / `GE_GP_AddScore` classes or content assets found |
-| Chosen GAS path | Native Instant C++ GEs mirroring `UGP_GE_Damage_Basic` pattern: `UGP_GE_AddOrbital`, `UGP_GE_AddScore` (SetByCaller magnitudes) |
+Branch: `feature/gp-s30-container-launch-orbital-conversion`  
+Base main: `89ce3c50ebd05a4bf1e58a5b4e117544dc68cb8f`  
+Merge: **NOT merged**
 
 ---
 
-## 3. Exact launch transaction / lifecycle
+## 2. UI requirement change
 
-1. **Validate** (authority, no in-flight launch, Ready index, finite amount, TeamId→PlayerState, ASC+AttributeSet, GameState, finite conversion/threat rates).
-2. **Accept:** Ready → Launching; start one-shot timer `ContainerLaunchDurationSeconds`; broadcast storage changed; no rewards yet.
-3. **During Launching:** fill skip on that slot; second `TryLaunchReadyContainer` → `LaunchInFlight`.
-4. **Complete:** re-check Launching+amount invariant; resolve owner/ASC; apply Instant GEs; empty container; decrease Threat; broadcast.
-5. **Fail-safe (owner/ASC/GE fail after accept):** restore Ready; clear launch runtime; **no** reward; **no** empty.
+Operator acceptance no longer uses debug console. Required:
 
----
-
-## 4. Data-driven settings / rates
-
-| Knob | Source | Value |
-| --- | --- | --- |
-| OrbitalConversionRate | `UGP_ResourceDefinition` (GDD MVP 1:1) | **1.0** |
-| ScoreConversionRate | `UGP_ResourceDefinition` (GDD MVP 1:1) | **1.0** |
-| ContainerLaunchDurationSeconds | `UGP_ResourceGameplaySettings` + `DefaultGame.ini` | **2.5** |
-| ThreatPerStoredUnit | existing ResourceDefinition | **0.5** (unchanged) |
-
-No magic balance constants inside launch completion beyond documented fallbacks matching DA defaults.
+- Top TEMP HUD: `Ferronite` + `Orbital` side by side
+- Bottom clickable `Launch Container` button invoking production server launch
 
 ---
 
-## 5. Ownership resolution
+## 3. Exact HUD implementation
 
-`AGP_MainBase::GetTeamId()` → first `AGP_PlayerState` in `GameState->PlayerArray` with matching `TeamId`.  
-Not `GetFirstPlayerController()`. Not team-wide grant.
+Extended existing `UGP_TEMP_S28P_PlanetaryFerroniteHUD` (no second HUD):
 
----
-
-## 6. Failure policy
-
-| Stage | Policy |
-| --- | --- |
-| Pre-accept invalid | Reject; no state change; no Ferronite loss |
-| Completion missing owner/ASC | Restore Ready; no GE; no Threat change |
-| Completion GE apply fail | Restore Ready; no empty |
-| Amount/state invariant break | Restore Ready if possible; abort |
+- Programmatic UMG: `UCanvasPanel` root + `UTextBlock` counters + `UButton` “Launch Container”
+- Root / canvas: `SelfHitTestInvisible` (empty area passes RTS input)
+- Counters text: `HitTestInvisible`
+- Launch button: `Visible` + real `OnClicked` (not painted rect / mouse polling)
+- Layout: top-left counters; bottom-center button
+- Still TEMP / playable-pass debt — no GPUIRuntime / CommonUI / WBP assets
 
 ---
 
-## 7. Threat mutation
+## 4. Orbital GAS delegate binding
 
-On successful completion only:  
-`AddFerroniteThreatValueForTeam(TeamId, -(LaunchedPlanetaryAmount * ThreatPerStoredUnit))`  
-GameState clamps Threat ≥ 0. Symmetric to drop-off Accepted math.
+`AGP_PlayerController`:
 
----
-
-## 8. Operator launch trigger
-
-`gp.Resource.LaunchReadyContainer [NameSubstring]` — calls production `TryLaunchReadyContainer` on MainBase Storage (non-shipping diagnostic surface).
+- `BindOrbitalFerroniteAttribute` → `ASC->GetGameplayAttributeValueChangeDelegate(OrbitalFerronite)`
+- Initial sync from `UGP_PlayerAttributeSet::GetOrbitalFerronite()`
+- Rebind on PlayerState / ASC ready + `RefreshPlanetaryFerroniteHUDBinding`
+- No Tick / no polling / no copied gameplay state on PC/HUD
 
 ---
 
-## 9. Replication / events
+## 5. Launch button enable/disable policy
 
-- Containers replicated (`OnRep_Containers` / `OnStorageChanged`)
-- Player GAS attributes via ASC Mixed replication
-- `FerroniteThreatValue` via GameState path
-- No gameplay Multicast; no client conversion math; no permanent Tick
+Enabled iff local MainBase Storage resolved AND `GetReadyCount() > 0` AND `!IsLaunchInFlight()`.  
+Updated on Storage `OnStorageChanged` (event-driven). UI affordance only.
 
 ---
 
-## 10. Automated tests
+## 6. Exact client → server → Storage path
+
+```
+UButton OnClicked
+→ UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked
+→ AGP_PlayerController::RequestLaunchReadyContainer (local)
+→ Server_RequestLaunchReadyContainer (Reliable, WithValidation)
+→ AuthorityTryLaunchReadyContainerForOwningTeam
+   → PlayerState TeamId
+   → GameState::FindMainBaseForTeam(TeamId)
+   → UGP_StorageComponent::TryLaunchReadyContainer()
+```
+
+No MainBase pointer / amount from client. Own-team resolve only.
+
+---
+
+## 7. Button does NOT call debug command
+
+Confirmed: HUD → PC RPC only. `gp.Resource.LaunchReadyContainer` remains non-shipping diagnostic fallback only.
+
+---
+
+## 8. Tests / results
 
 | Command | Result |
 | --- | --- |
-| `gp.Resource.RunContainerLaunchContractTest` | **PASS** Complete Failures=0 |
-| `gp.Resource.RunS28RegressionSuite` | **PASS** Complete Failures=0 |
-
-No dedicated PlayerAttributeSet runner exists; GAS path covered by ContainerLaunch contract (Orbital/Score deltas).
-
----
-
-## 11. GPEditor + UHT
-
-**PASS** (GPEditor Win64 Development)
+| `gp.Resource.RunContainerLaunchContractTest` | **PASS** Failures=0 |
+| `gp.Resource.RunContainerLaunchHUDContractTest` | **PASS** Failures=0 |
+| `gp.Resource.RunS28RegressionSuite` | **PASS** Failures=0 |
 
 ---
 
-## 12. GP Development / Shipping
+## 9. GPEditor + UHT
 
-**NOT RUN** (candidate stage — after operator validation only)
+**PASS**
 
 ---
 
-## 13. Files changed
+## 10. GP Development / Shipping
 
-**Created**
-- `GP/Source/GPGASRuntime/Public/Effects/GPGE_AddOrbital.h`
-- `GP/Source/GPGASRuntime/Private/Effects/GPGE_AddOrbital.cpp`
-- `GP/Source/GPGASRuntime/Public/Effects/GPGE_AddScore.h`
-- `GP/Source/GPGASRuntime/Private/Effects/GPGE_AddScore.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPContainerLaunchContractTest.cpp`
+**NOT RUN**
 
-**Modified**
-- `GP/Source/GPRuntime/Public/Resources/GPStorageComponent.h`
-- `GP/Source/GPRuntime/Private/Resources/GPStorageComponent.cpp`
-- `GP/Source/GPRuntime/Public/Resources/GPResourceDefinition.h`
-- `GP/Source/GPRuntime/Private/Resources/GPResourceDefinition.cpp`
-- `GP/Source/GPRuntime/Public/Settings/GPResourceGameplaySettings.h`
-- `GP/Source/GPEditor/Private/Resources/GPResourceDefinitionSeedCommandlet.cpp`
-- `GP/Config/DefaultGame.ini`
+---
+
+## 11. Files changed in this follow-up
+
+- `GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h`
+- `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Source/GPRuntime/Public/Resources/GPStorageComponent.h` (HUD contract runner decl)
+- `GP/Source/GPRuntime/Private/Debug/GPContainerLaunchHUDContractTest.cpp` (new)
 - `Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md`
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/DOCUMENTATION_INDEX.md`
-- `Docs/Development/Claude_Tasks/README.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
 ---
 
-## 14. Operator assets untouched
+## 12. Full branch status vs main
 
-Not committed / not modified by this work for commit:
-- `GP/Config/DefaultEngine.ini`
-- `L_PrototypeArena.umap`
-- Blueprint / Materials / authored ResourceNode / Niagara / BP_SalvageWalker / Tools /
-- other operator-local `.uasset` / `.umap`
+Feature branch ahead of `main` @ `89ce3c50…` with GP-S30 launch + this HUD interaction follow-up. Not merge-ready until operator PASS + finalization.
 
 ---
 
-## 15. git status summary
+## 13. Operator assets untouched
 
-Tracked intentional changes: source + `DefaultGame.ini` + docs listed above.  
-Operator-local dirty left as-is (DefaultEngine.ini, map, Blueprint/, Materials/, authored ResourceNode, Tools/).
+Left dirty / uncommitted: `DefaultEngine.ini`, map, Blueprint/, Materials/, authored ResourceNode, Tools/.
 
 ---
 
-## 16. Commit SHA
+## 14. Final commit SHA
 
-`b865b080be6628d710485d965d28e6c6fa4e205d`
+_(filled after commit)_

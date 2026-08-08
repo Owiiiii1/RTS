@@ -45,6 +45,19 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_RequestCommand(const FGP_CommandRequest& Request);
 
+	/**
+	 * Local TEMP HUD Launch Container intent (GP-S30).
+	 * Client calls Server_RequestLaunchReadyContainer — does not mutate Storage locally.
+	 */
+	void RequestLaunchReadyContainer();
+
+	/** Authority launch intent: resolve own-team MainBase → TryLaunchReadyContainer. */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestLaunchReadyContainer();
+
+	/** Authority helper used by Server RPC and non-shipping contracts. */
+	bool AuthorityTryLaunchReadyContainerForOwningTeam();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -98,7 +111,7 @@ private:
 	void HideMarqueeWidget();
 	void DestroyMarqueeWidget();
 
-	/** TEMP_S28P_HUD — Planetary Ferronite readout (GP-S28P4). Local-only, event-driven. */
+	/** TEMP_S28P_HUD — Planetary + Orbital Ferronite + Launch (GP-S28P4 / GP-S30). Local-only, event-driven. */
 	void EnsurePlanetaryFerroniteHUD();
 	void DestroyPlanetaryFerroniteHUD();
 	void RefreshPlanetaryFerroniteHUDBinding();
@@ -106,6 +119,11 @@ private:
 	void BindPlanetaryFerroniteStorage(AGP_MainBase* MainBase);
 	void UnbindPlanetaryFerroniteStorage();
 	void SyncPlanetaryFerroniteHUDFromStorage();
+	void SyncLaunchButtonFromStorage();
+	void BindOrbitalFerroniteAttribute();
+	void UnbindOrbitalFerroniteAttribute();
+	void SyncOrbitalFerroniteHUDFromAttributes();
+	void HandleOrbitalFerroniteAttributeChanged(const struct FOnAttributeChangeData& Data);
 	void HandleResolvedMainBaseChanged(int32 TeamId, AGP_MainBase* PreviousMainBase, AGP_MainBase* NewMainBase);
 	void HandlePlayerTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
 	UFUNCTION()
@@ -214,8 +232,10 @@ private:
 	TWeakObjectPtr<AGP_GameState> BoundPlanetaryGameState;
 	TWeakObjectPtr<AGP_PlayerState> BoundPlanetaryPlayerState;
 	TWeakObjectPtr<UGP_StorageComponent> BoundPlanetaryStorage;
+	TWeakObjectPtr<UGP_AbilitySystemComponent> BoundOrbitalASC;
 	FDelegateHandle ResolvedMainBaseChangedHandle;
 	FDelegateHandle PlayerTeamIdChangedHandle;
+	FDelegateHandle OrbitalFerroniteChangedHandle;
 	int32 BoundPlanetaryTeamId = -1;
 
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */

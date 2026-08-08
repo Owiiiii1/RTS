@@ -1,5 +1,19 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-08 — GP-S30 TEMP HUD Launch + Orbital counter
+
+Status: **GP-S30_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Same branch `feature/gp-s30-container-launch-orbital-conversion`
+- Prior launch commit: `b865b080…`
+- TEMP HUD: Ferronite + Orbital top counters; bottom `Launch Container` UButton
+- Hit-test: root SelfHitTestInvisible; button Visible
+- Orbital via ASC attribute change delegate; Launch via `Server_RequestLaunchReadyContainer` → production Storage
+- Operator path does **not** require console
+- Contracts: ContainerLaunch / ContainerLaunchHUD / S28RegressionSuite — Failures=0
+- GPEditor PASS; GP Dev/Shipping NOT RUN
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-08 — GP-S30 Container Launch / Orbital Conversion (candidate)
 
 Status: **GP-S30_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
@@ -9,7 +23,7 @@ Status: **GP-S30_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 - Task: `Docs/Development/Claude_Tasks/GP-S30_Container_Launch_Orbital_Conversion.md`
 - Production: `UGP_StorageComponent::TryLaunchReadyContainer` Ready→Launching→Empty; Instant GEs `UGP_GE_AddOrbital` / `UGP_GE_AddScore`; Threat decrease; TeamId→PlayerState ownership
 - Rates: Orbital/Score 1:1 on ResourceDefinition; launch duration 2.5s on ResourceGameplaySettings
-- Console: `gp.Resource.LaunchReadyContainer`, `gp.Resource.RunContainerLaunchContractTest`
+- Console: `gp.Resource.LaunchReadyContainer` (diagnostic only after HUD follow-up)
 - Contracts: ContainerLaunch Failures=0; S28RegressionSuite Failures=0
 - Build: GPEditor Dev+UHT **PASS**; GP Dev/Shipping **NOT RUN**
 - Not finalization / not merge

@@ -2,66 +2,141 @@
 
 #include "UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h"
 
-#include "Rendering/DrawElements.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/Button.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/TextBlock.h"
+#include "Player/GPPlayerController.h"
 #include "Styling/CoreStyle.h"
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeConstruct()
 {
 	Super::NativeConstruct();
+	EnsureWidgetTreeBuilt();
 	SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
 	SetAlignmentInViewport(FVector2D::ZeroVector);
-	SetVisibility(ESlateVisibility::HitTestInvisible);
+	// SelfHitTestInvisible: empty fullscreen area does not block RTS selection; children can still hit-test.
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	RefreshCountersText();
+	SetLaunchButtonEnabled(false);
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeDestruct()
+{
+	if (LaunchButton != nullptr)
+	{
+		LaunchButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked);
+	}
+	Super::NativeDestruct();
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
+{
+	if (bTreeBuilt || WidgetTree == nullptr)
+	{
+		return;
+	}
+
+	RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("RootCanvas"));
+	WidgetTree->RootWidget = RootCanvas;
+	RootCanvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+	CountersText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("CountersText"));
+	CountersText->SetVisibility(ESlateVisibility::HitTestInvisible);
+	CountersText->SetText(FText::FromString(CountersDisplayText));
+	CountersText->SetColorAndOpacity(FSlateColor(FLinearColor(0.92f, 0.95f, 0.85f, 1.0f)));
+	FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 18);
+	CountersText->SetFont(Font);
+
+	if (UCanvasPanelSlot* CounterSlot = RootCanvas->AddChildToCanvas(CountersText))
+	{
+		CounterSlot->SetAnchors(FAnchors(0.0f, 0.0f, 0.0f, 0.0f));
+		CounterSlot->SetAlignment(FVector2D(0.0f, 0.0f));
+		CounterSlot->SetAutoSize(true);
+		CounterSlot->SetOffsets(FMargin(24.0f, 24.0f, 0.0f, 0.0f));
+	}
+
+	LaunchButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("LaunchButton"));
+	LaunchButton->SetVisibility(ESlateVisibility::Visible);
+	LaunchButtonLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("LaunchButtonLabel"));
+	LaunchButtonLabel->SetText(FText::FromString(TEXT("Launch Container")));
+	LaunchButtonLabel->SetJustification(ETextJustify::Center);
+	LaunchButtonLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	LaunchButtonLabel->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 16));
+	LaunchButton->SetContent(LaunchButtonLabel);
+	LaunchButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked);
+
+	if (UCanvasPanelSlot* ButtonSlot = RootCanvas->AddChildToCanvas(LaunchButton))
+	{
+		ButtonSlot->SetAnchors(FAnchors(0.5f, 1.0f, 0.5f, 1.0f));
+		ButtonSlot->SetAlignment(FVector2D(0.5f, 1.0f));
+		ButtonSlot->SetAutoSize(false);
+		ButtonSlot->SetSize(FVector2D(220.0f, 44.0f));
+		ButtonSlot->SetPosition(FVector2D(0.0f, -28.0f));
+	}
+
+	bTreeBuilt = true;
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshCountersText()
+{
+	const FString FerronitePart = bHasResolvedBase
+		? FString::Printf(TEXT("Ferronite: %d"), FMath::RoundToInt(DisplayStored))
+		: FString(TEXT("Ferronite: --"));
+	const FString OrbitalPart = FString::Printf(TEXT("Orbital: %d"), FMath::RoundToInt(DisplayOrbital));
+	CountersDisplayText = FerronitePart + TEXT("     ") + OrbitalPart;
+
+	if (CountersText != nullptr)
+	{
+		CountersText->SetText(FText::FromString(CountersDisplayText));
+	}
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetPlanetaryFerroniteDisplay(float StoredAmount, bool bHasBase)
 {
+	EnsureWidgetTreeBuilt();
 	bHasResolvedBase = bHasBase;
 	DisplayStored = StoredAmount;
-	if (!bHasBase)
-	{
-		DisplayText = TEXT("Ferronite: --");
-	}
-	else
-	{
-		const int32 Rounded = FMath::RoundToInt(StoredAmount);
-		DisplayText = FString::Printf(TEXT("Ferronite: %d"), Rounded);
-	}
-	InvalidateLayoutAndVolatility();
+	RefreshCountersText();
 }
 
-int32 UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativePaint(
-	const FPaintArgs& Args,
-	const FGeometry& AllottedGeometry,
-	const FSlateRect& MyCullingRect,
-	FSlateWindowElementList& OutDrawElements,
-	int32 LayerId,
-	const FWidgetStyle& InWidgetStyle,
-	bool bParentEnabled) const
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetOrbitalFerroniteDisplay(float OrbitalAmount)
 {
-	const int32 MaxLayer = Super::NativePaint(
-		Args,
-		AllottedGeometry,
-		MyCullingRect,
-		OutDrawElements,
-		LayerId,
-		InWidgetStyle,
-		bParentEnabled);
-
-	const FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 18);
-	const FVector2D Position(PadX, PadY);
-	const FVector2D Size(420.0f, 36.0f);
-	const FSlateLayoutTransform LayoutTransform(Position);
-
-	FSlateDrawElement::MakeText(
-		OutDrawElements,
-		MaxLayer + 1,
-		AllottedGeometry.ToPaintGeometry(Size, LayoutTransform),
-		DisplayText,
-		Font,
-		ESlateDrawEffect::None,
-		FLinearColor(0.92f, 0.95f, 0.85f, 1.0f));
-
-	(void)bHasResolvedBase;
-	(void)DisplayStored;
-	return MaxLayer + 1;
+	EnsureWidgetTreeBuilt();
+	DisplayOrbital = FMath::IsFinite(OrbitalAmount) ? FMath::Max(0.0f, OrbitalAmount) : 0.0f;
+	RefreshCountersText();
 }
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetLaunchButtonEnabled(bool bEnabled)
+{
+	EnsureWidgetTreeBuilt();
+	bLaunchEnabled = bEnabled;
+	if (LaunchButton != nullptr)
+	{
+		LaunchButton->SetIsEnabled(bEnabled);
+	}
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleLaunchClicked()
+{
+	AGP_PlayerController* PC = Cast<AGP_PlayerController>(GetOwningPlayer());
+	if (PC == nullptr)
+	{
+		return;
+	}
+	PC->RequestLaunchReadyContainer();
+}
+
+#if !UE_BUILD_SHIPPING
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::IsLaunchButtonEnabledForContract() const
+{
+	return LaunchButton != nullptr && LaunchButton->GetIsEnabled();
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasInteractiveLaunchButtonForContract() const
+{
+	return LaunchButton != nullptr
+		&& LaunchButton->GetVisibility() == ESlateVisibility::Visible;
+}
+#endif

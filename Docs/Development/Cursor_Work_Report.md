@@ -72,4 +72,4 @@ No BP/Niagara/map/DefaultEngine.ini committed.
 
 ## Commit SHA
 
-*(filled after commit)*
+8c661ba7fc496ac62e406c01accc38b9648d987b

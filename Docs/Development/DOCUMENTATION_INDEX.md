@@ -38,19 +38,19 @@
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
 | Last closed / merged stage | **GP-S28P3** @ `main` `fb699db32d1bc79a62809274e39b8a588633cf3c` |
 | Slice 6 | **Completed** |
-| Current stage | **GP-S28P4_CODE_READY_OPERATOR_VALIDATION_PENDING** (`feature/gp-s28p4-planetary-ferronite-hud`) |
+| Current stage | **GP-S28P4_READY_FOR_MERGE** (`feature/gp-s28p4-planetary-ferronite-hud`) |
 
 ---
 
 ## Current NEXT Task
 
-**Current:** GP-S28P4 — Minimal Planetary Ferronite HUD. Task: [`Claude_Tasks/GP-S28P4_Planetary_Ferronite_HUD.md`](Claude_Tasks/GP-S28P4_Planetary_Ferronite_HUD.md). Status: **GP-S28P4_CODE_READY_OPERATOR_VALIDATION_PENDING**. Branch: `feature/gp-s28p4-planetary-ferronite-hud` from `main` @ `fb699db…`.
+**Current:** GP-S28P4 — Minimal Planetary Ferronite HUD. Task: [`Claude_Tasks/GP-S28P4_Planetary_Ferronite_HUD.md`](Claude_Tasks/GP-S28P4_Planetary_Ferronite_HUD.md). Status: **GP-S28P4_READY_FOR_MERGE**. Branch: `feature/gp-s28p4-planetary-ferronite-hud` from `main` @ `fb699db…`. Operator A–D **PASS**.
 
 **Prior:** GP-S28P3 merged on `main` @ `fb699db…` (operator A/B/D PASS; C DEFERRED). GP-S28P2 @ `e90b7bd…`. GP-S28P1 @ `86bcc974…`. P0 historical audit — [`Resource_Playable_Pass_Audit.md`](Resource_Playable_Pass_Audit.md).
 
 **Parallel (pending review, not cancelled):** Slice 7 combat reconciliation audit on `audit/gp-slice7-combat-reconciliation` — separate from S28P.
 
-**NEXT:** Operator validates P4 in Editor. Do **not** merge. Do **not** start P5 / next stage until explicitly assigned.
+**NEXT:** Merge GP-S28P4 only after tech-lead approval. Do **not** start next Resource Playable Pass stage until explicitly assigned.
 
 > Obsolete: older index text “NEXT = GP-S16 after GP-S15”. Selection through GP-S28 already merged on main.
 
@@ -60,7 +60,7 @@
 2. GP-S16…GP-S28 — **DONE / merged** (selection, commands, movement, attack, worker/resources/storage)
 3. GP-SLICE7-AUDIT — combat reconciliation audit **completed on branch**, pending review (separate from S28P)
 4. **GP-S28P0** — historical resource playable pass audit / implementation plan (completed)
-5. GP-S28P1 — **DONE / MERGED** @ `86bcc974…`; GP-S28P2 — **DONE / MERGED** @ `e90b7bd…`; GP-S28P3 — **DONE / MERGED** @ `fb699db…`; GP-S28P4 — **CODE_READY_OPERATOR_VALIDATION_PENDING**
+5. GP-S28P1 — **DONE / MERGED** @ `86bcc974…`; GP-S28P2 — **DONE / MERGED** @ `e90b7bd…`; GP-S28P3 — **DONE / MERGED** @ `fb699db…`; GP-S28P4 — **READY_FOR_MERGE**
 
 ---
 

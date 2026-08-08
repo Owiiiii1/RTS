@@ -1,7 +1,7 @@
-# Cursor Work Report — GP-S28P4 Planetary Ferronite HUD
+# Cursor Work Report — GP-S28P4 Finalization
 
 ## Status
-GP-S28P4_CODE_READY_OPERATOR_VALIDATION_PENDING
+GP-S28P4_READY_FOR_MERGE
 
 ## Branch
 feature/gp-s28p4-planetary-ferronite-hud
@@ -10,48 +10,41 @@ feature/gp-s28p4-planetary-ferronite-hud
 fb699db32d1bc79a62809274e39b8a588633cf3c
 
 ## Final Tip
-`17460451d54ff22ddacf02c52bb2832037505210`
+(pending)
 
-## Client-safe MainBase resolve
-- Authority `RegisterMainBase` / `UnregisterMainBase` remain mutation SoT (existing per-team registry).
-- Replicated `TArray<FGP_ReplicatedMainBaseEntry> ReplicatedMainBases` on `AGP_GameState`.
-- API: `FindMainBaseForTeamClientSafe(int32 TeamId)`.
-- Event: `OnResolvedMainBaseChanged(TeamId, PreviousMainBase, NewMainBase)` — authority mutation + `OnRep_ReplicatedMainBases`.
-- Survives register / replace / unregister / late join / TeamId replication without world Tick or `GetAllActorsOfClass` polling.
+## Operator Validation
+- A Initial HUD PASS
+- B Storage live update PASS
+- C MainBase destroy/unresolve PASS
+- D MainBase replacement/rebind PASS
 
-## HUD
-- Class: `UGP_TEMP_S28P_PlanetaryFerroniteHUD` (`TEMP_S28P_HUD`)
-- Ownership: local `AGP_PlayerController` (CreateWidget + AddToViewport ZOrder 900)
-- Display: `Ferronite: <int>` or `Ferronite: --` (NativePaint; no ViewModel required for one number)
-- SoT: bound MainBase `UGP_StorageComponent::GetTotalStored()`
-
-## Event binding flow
-1. Local PlayerState TeamId valid → resolve via `FindMainBaseForTeamClientSafe`
-2. Bind `Storage.OnStorageChanged` + initial sync
-3. Storage OnRep/event → update text
-4. `OnResolvedMainBaseChanged` for local team → unbind old, bind new
-5. `OnTeamIdChanged` → re-resolve / rebind
-6. EndPlay / destroy base → safe `--` / 0 until replacement
-
-## Automated tests
+## Automated Tests
 | Command | Result |
 | --- | --- |
 | `gp.Resource.RunPlanetaryFerroniteHUDContractTest` | Complete Failures=0 Cancelled=None |
 | `gp.Resource.RunS28RegressionSuite` | Complete Failures=0 |
 
-Contract covers: Team1 register resolve, Team2 isolation, unregister clear, replacement, Storage initial sync + change notification, no Tick required.
-
 ## Builds
 | Target | Result |
 | --- | --- |
 | GPEditor Win64 Development + UHT | PASSED |
-| GP Win64 Development / Shipping | Not required (candidate stage) |
+| GP Win64 Development | PASSED |
+| GP Win64 Shipping | PASSED |
 
-## Scope audit
-Branch vs `fb699db…` is GP-S28P4 only: GameState replicated MainBase handles + resolve API/delegate; PlayerState TeamId changed delegate; TEMP HUD widget; PC bind/sync; P4 contract + S28 suite entry; docs. No combat, P3 haul semantics, orbital/Score/Hub, storage overflow, construction, nav, projectiles, Blueprint/map/content.
+## Client-safe MainBase Contract
+Authority Register/Unregister remains mutation SoT. Replicated `ReplicatedMainBases` (`FGP_ReplicatedMainBaseEntry`) on `AGP_GameState`. Clients use `FindMainBaseForTeamClientSafe(TeamId)`. `OnResolvedMainBaseChanged(TeamId, Previous, New)` fires on authority mutation and OnRep. Survives register/replace/unregister/late join/TeamId replication without Tick or actor polling.
 
-## No Tick / no actor-per-frame polling
-Confirmed: HUD updates via Storage + MainBase resolve + TeamId delegates only. No Tick on HUD/PC for this readout. No `GetAllActorsOfClass` per frame.
+## HUD Contract
+`UGP_TEMP_S28P_PlanetaryFerroniteHUD` (`TEMP_S28P_HUD`) — local PC-owned NativePaint readout `Ferronite: <int>` / `Ferronite: --`. SoT = bound MainBase Storage `GetTotalStored()`. PC binds TeamId + resolve + `OnStorageChanged` with immediate initial sync; rebinds on MainBase/Team change. TEMP playable-pass debt — not final production HUD.
 
-## Operator-local assets
+## Scope Audit
+Branch vs `fb699db…` is GP-S28P4 only. `GPWorker.h` change is solely `UGP_PlanetaryFerroniteHUDContractTestRunner` UCLASS declaration for debug contract (Shipping stubs in cpp) — no Worker gameplay API/semantics. No mining/haul/drop-off/Threat/Storage redesign/orbital/Score/Hub/combat/construction/nav/content commits.
+
+## Invariants
+Storage sole Planetary Ferronite SoT; no duplicate counter; replicated MainBase not second authority SoT; local-team isolation; unregister/rebind correct; initial sync; no Tick / no PC resource polling / no GetAllActorsOfClass per frame; no enemy/Threat/Orbital/Score in HUD.
+
+## Operator Local Assets
 untouched (DefaultEngine.ini, map, Blueprint/, Materials/, authored ResourceNode, Tools/ logs not committed)
+
+## Commit
+(pending)

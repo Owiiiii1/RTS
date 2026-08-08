@@ -6,9 +6,9 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-08 (GP-S28P4 candidate). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), [`../Resource_Playable_Pass_Audit.md`](../Resource_Playable_Pass_Audit.md).
+> Стан станом на 2026-08-08 (GP-S28P4 finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), [`../Resource_Playable_Pass_Audit.md`](../Resource_Playable_Pass_Audit.md).
 
-**Поточна фаза:** Slice 6 **closed**. Current stage = **GP-S28P4** minimal Planetary Ferronite HUD — **CODE_READY_OPERATOR_VALIDATION_PENDING**.
+**Поточна фаза:** Slice 6 **closed**. Current stage = **GP-S28P4** minimal Planetary Ferronite HUD — **READY_FOR_MERGE**.
 
 **Status snapshot:**
 
@@ -19,10 +19,10 @@
 | GP-S28P1 Blueprint + cargo visual | **DONE / MERGED** on `main` @ `86bcc9740fde0f19ac40c70f2f49298680f5f7d6` |
 | GP-S28P2 Depletion + reassignment | **DONE / MERGED** on `main` @ `e90b7bd48fb9080a881e6dda7be889eaa99a3161` — [`GP-S28P2_Depletion_Resource_Reassignment.md`](GP-S28P2_Depletion_Resource_Reassignment.md) |
 | GP-S28P3 Drop-off resilience | **DONE / MERGED** on `main` @ `fb699db32d1bc79a62809274e39b8a588633cf3c` — [`GP-S28P3_DropOff_Resilience.md`](GP-S28P3_DropOff_Resilience.md) (operator A/B/D PASS, C DEFERRED) |
-| **GP-S28P4** Planetary Ferronite HUD | **CODE_READY_OPERATOR_VALIDATION_PENDING** — [`GP-S28P4_Planetary_Ferronite_HUD.md`](GP-S28P4_Planetary_Ferronite_HUD.md) (`feature/gp-s28p4-planetary-ferronite-hud`) |
+| **GP-S28P4** Planetary Ferronite HUD | **READY_FOR_MERGE** — [`GP-S28P4_Planetary_Ferronite_HUD.md`](GP-S28P4_Planetary_Ferronite_HUD.md) (`feature/gp-s28p4-planetary-ferronite-hud`; operator A–D PASS) |
 | GP-SLICE7-AUDIT | Separate pending review — not part of P4; do not rewrite audit conclusions |
 
-**NEXT action для агента:** operator validates P4 in Editor. Do **not** merge. Do **not** start next stage until explicitly assigned.
+**NEXT action для агента:** merge GP-S28P4 only after tech-lead approval. Do **not** start next Resource Playable Pass stage until explicitly assigned.
 
 ### Drift Warning
 

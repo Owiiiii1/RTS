@@ -178,7 +178,7 @@ namespace GPMineReassignmentHaulDebug
 			|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::DroppingOff;
 	}
 
-	/** Production-equivalent MainBase NavArea_Null footprint (transient Recast may not carve; skip-mask covers radial block). */
+	/** Operator-like MainBase NavArea_Null footprint (~ClearanceHalfXY 218.2). */
 	static void ActivateMainBaseNavigationObstacle(AGP_MainBase* Base)
 	{
 		if (!IsValid(Base))
@@ -190,12 +190,27 @@ namespace GPMineReassignmentHaulDebug
 		{
 			return;
 		}
-		NavBox->SetBoxExtent(FVector(160.0f, 160.0f, 130.0f));
+		NavBox->SetBoxExtent(FVector(218.2f, 218.2f, 130.0f));
 		NavBox->SetCanEverAffectNavigation(true);
 		NavBox->bDynamicObstacle = true;
 		NavBox->SetAreaClassOverride(UNavArea_Null::StaticClass());
 		NavBox->UpdateBounds();
 		NavBox->MarkRenderStateDirty();
+	}
+
+	/** Elevate MainBase actor origin so legacy 3D approach geometry fails (operator DeltaZ repro). */
+	static void ElevateMainBaseOriginForDeltaZRepro(AGP_MainBase* Base, float DeltaZCm = 280.0f)
+	{
+		if (!IsValid(Base))
+		{
+			return;
+		}
+		const FVector Loc = Base->GetActorLocation();
+		Base->SetActorLocation(
+			FVector(Loc.X, Loc.Y, Loc.Z + DeltaZCm),
+			false,
+			nullptr,
+			ETeleportType::TeleportPhysics);
 	}
 
 	/** Force candidate index 0 (direct radial) unavailable so haul must pick an alternate sector. */
@@ -487,9 +502,13 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 		NodeALocation = Scenario.ResourceNode->GetActorLocation();
 
 		ActivateMainBaseNavigationObstacle(Scenario.MainBase);
+		ElevateMainBaseOriginForDeltaZRepro(Scenario.MainBase, 280.0f);
+		MainBaseLocation = Scenario.MainBase->GetActorLocation();
 		Expect(Scenario.MainBase->GetNavigationObstacle() != nullptr
 				&& Scenario.MainBase->GetNavigationObstacle()->CanEverAffectNavigation(),
 			TEXT("MainBaseNavigationObstacleActive"));
+		Expect(FMath::Abs(MainBaseLocation.Z - Scenario.Worker->GetActorLocation().Z) > 200.0f,
+			TEXT("MainBaseElevatedDeltaZ_ReproOld3DFailure"));
 
 		FString NodeBFail;
 		AGP_ResourceNode* NodeB = SpawnNodeBNearA(

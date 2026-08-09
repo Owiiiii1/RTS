@@ -1446,16 +1446,21 @@ bool UGP_UnitCommandComponent::TryMakeRangeApproachDestination(
 
 	const FVector OwnerLocation = Owner->GetActorLocation();
 	const FVector TargetLocation = Target->GetActorLocation();
+	const EGP_RangeApproachDistanceMode DistanceMode = Cast<AGP_MainBase>(Target) != nullptr
+		? EGP_RangeApproachDistanceMode::GroundPlane2D
+		: EGP_RangeApproachDistanceMode::ThreeDimensional;
+
 	const float DeltaZ = OwnerLocation.Z - TargetLocation.Z;
 	const float AbsDeltaZ = FMath::Abs(DeltaZ);
-
-	// Movement completes in a 2D acceptance circle; interaction validates 3D distance.
-	// Require: sqrt((D_h + Acc)^2 + DeltaZ^2) < Range
-	const float RangeSq = FMath::Square(InteractionRangeCm);
 	const float DeltaZSq = FMath::Square(AbsDeltaZ);
-	if (DeltaZSq >= RangeSq)
+	if (DistanceMode == EGP_RangeApproachDistanceMode::ThreeDimensional)
 	{
-		return false;
+		// Movement completes in a 2D acceptance circle; ResourceNode interaction validates 3D distance.
+		const float RangeSq = FMath::Square(InteractionRangeCm);
+		if (DeltaZSq >= RangeSq)
+		{
+			return false;
+		}
 	}
 
 	const float CollisionHalfXY = ResolveTargetApproachClearanceHalfXY(Target);
@@ -1468,7 +1473,8 @@ bool UGP_UnitCommandComponent::TryMakeRangeApproachDestination(
 			AcceptanceRadius,
 			ResolveApproachSafetyMarginCm() + FMath::Max(0.0f, ExtraInwardMarginCm),
 			CollisionHalfXY,
-			DesiredHorizontal))
+			DesiredHorizontal,
+			DistanceMode))
 	{
 		return false;
 	}
@@ -1481,14 +1487,22 @@ bool UGP_UnitCommandComponent::TryMakeRangeApproachDestination(
 			Away.IsNearlyZero() ? FVector::ForwardVector : Away,
 			DesiredHorizontal,
 			InteractionRangeCm,
-			OutDestination))
+			OutDestination,
+			DistanceMode))
 	{
 		return false;
 	}
 
 	OutDesiredHorizontalDistance = DesiredHorizontal;
-	OutPredictedWorstCaseDistance = FMath::Sqrt(
-		FMath::Square(DesiredHorizontal + AcceptanceRadius) + DeltaZSq);
+	if (DistanceMode == EGP_RangeApproachDistanceMode::GroundPlane2D)
+	{
+		OutPredictedWorstCaseDistance = DesiredHorizontal + AcceptanceRadius;
+	}
+	else
+	{
+		OutPredictedWorstCaseDistance = FMath::Sqrt(
+			FMath::Square(DesiredHorizontal + AcceptanceRadius) + DeltaZSq);
+	}
 	return OutPredictedWorstCaseDistance < InteractionRangeCm;
 }
 
@@ -1547,6 +1561,7 @@ bool UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination(
 	}
 #if !UE_BUILD_SHIPPING
 	DebugLastApproachCandidateIndex = -1;
+	DebugLastApproachCandidateCount = 0;
 #endif
 
 	if (!IsValid(Owner) || !IsValid(Target))
@@ -1558,6 +1573,10 @@ bool UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination(
 	const float ClearanceHalfXY = ResolveTargetApproachClearanceHalfXY(Target);
 	const float Safety =
 		ResolveApproachSafetyMarginCm() + FMath::Max(0.0f, ExtraInwardMarginCm);
+	const bool bMainBaseTarget = Cast<AGP_MainBase>(Target) != nullptr;
+	const EGP_RangeApproachDistanceMode DistanceMode = bMainBaseTarget
+		? EGP_RangeApproachDistanceMode::GroundPlane2D
+		: EGP_RangeApproachDistanceMode::ThreeDimensional;
 
 	GPResourceApproach::FRangeApproachParams Params;
 	Params.PathStart = Owner->GetActorLocation();
@@ -1567,6 +1586,7 @@ bool UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination(
 	Params.MaxPathLengthCm = 12000.0f;
 	Params.DirectionCount = 8;
 	Params.PathfindingActor = const_cast<AActor*>(Owner);
+	Params.DistanceMode = DistanceMode;
 	// Index 0 remains the direct radial toward Owner; distinct Worker positions yield distinct radials.
 	Params.StartAngleBiasDegrees = 0.0f;
 #if !UE_BUILD_SHIPPING
@@ -1574,7 +1594,7 @@ bool UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination(
 #endif
 
 	const FVector TargetLocation = Target->GetActorLocation();
-	const bool bHaulLog = Cast<AGP_MainBase>(Target) != nullptr;
+	const bool bHaulLog = bMainBaseTarget;
 
 	const GPResourceApproach::FRangeApproachResult Eval = GPResourceApproach::EvaluateRangeApproachPath(
 		World,
@@ -1588,7 +1608,7 @@ bool UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination(
 				return;
 			}
 			UE_LOG(LogGPUnitCommandExecution, Log,
-				TEXT("GP UnitCommandExecution HaulApproachCandidate: Unit=%s Serial=%u CandidateIndex=%d Candidate=%s Projected=%s WithinRange=%s PathResult=%s PathLength=%.1f Skipped=%s"),
+				TEXT("GP UnitCommandExecution HaulApproachCandidate: Unit=%s Serial=%u CandidateIndex=%d Candidate=%s Projected=%s WithinRange=%s PathResult=%s PathLength=%.1f Skipped=%s DistanceMode=%s"),
 				*GetNameSafe(Owner),
 				LogSerial,
 				Info.Index,
@@ -1597,8 +1617,13 @@ bool UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination(
 				Info.bWithinRange ? TEXT("true") : TEXT("false"),
 				Info.bPathOk ? TEXT("Ok") : (Info.bSkipped ? TEXT("Skipped") : TEXT("Fail")),
 				Info.PathLengthCm,
-				Info.bSkipped ? TEXT("true") : TEXT("false"));
+				Info.bSkipped ? TEXT("true") : TEXT("false"),
+				GPResourceApproach::DistanceModeToString(DistanceMode));
 		});
+
+#if !UE_BUILD_SHIPPING
+	DebugLastApproachCandidateCount = Eval.CandidateCount;
+#endif
 
 	if (!Eval.bReachable)
 	{
@@ -1606,29 +1631,41 @@ bool UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination(
 			&& ClearanceHalfXY + Safety + AcceptanceRadius >= InteractionRangeCm - 1.0f)
 		{
 			UE_LOG(LogGPUnitCommandExecution, Warning,
-				TEXT("GP UnitCommandExecution HaulApproachConfigFailure: Unit=%s Serial=%u Target=%s ClearanceHalfXY=%.1f DropOffRange=%.1f Safety=%.1f Acc=%.1f — NavigationObstacle nearly fills interaction range"),
+				TEXT("GP UnitCommandExecution HaulApproachConfigFailure: Unit=%s Serial=%u Target=%s ClearanceHalfXY=%.1f DropOffRange=%.1f Safety=%.1f Acc=%.1f DistanceMode=%s — NavigationObstacle nearly fills interaction range"),
 				*GetNameSafe(Owner),
 				LogSerial,
 				*GetNameSafe(Target),
 				ClearanceHalfXY,
 				InteractionRangeCm,
 				Safety,
-				AcceptanceRadius);
+				AcceptanceRadius,
+				GPResourceApproach::DistanceModeToString(DistanceMode));
 		}
 
 		if (bHaulLog)
 		{
 			UE_LOG(LogGPUnitCommandExecution, Warning,
-				TEXT("GP UnitCommandExecution HaulApproachNoReachableCandidate: Unit=%s Serial=%u MainBase=%s CandidateCount=%d Reason=%s ClearanceHalfXY=%.1f"),
+				TEXT("GP UnitCommandExecution HaulApproachNoReachableCandidate: Unit=%s Serial=%u MainBase=%s CandidateCount=%d Reason=%s DistanceMode=%s WorkerLocation=%s MainBaseLocation=%s DeltaZ=%.1f Distance2D=%.1f ClearanceHalfXY=%.1f DropOffRange=%.1f Acceptance=%.1f Safety=%.1f DesiredHorizontal=%.1f MaxHorizontalBudget=%.1f"),
 				*GetNameSafe(Owner),
 				LogSerial,
 				*GetNameSafe(Target),
 				Eval.CandidateCount,
 				GPResourceApproach::RejectReasonToString(Eval.RejectReason),
-				ClearanceHalfXY);
+				GPResourceApproach::DistanceModeToString(DistanceMode),
+				*Params.PathStart.ToCompactString(),
+				*TargetLocation.ToCompactString(),
+				Eval.DeltaZCm,
+				Eval.Distance2DCm,
+				ClearanceHalfXY,
+				InteractionRangeCm,
+				AcceptanceRadius,
+				Safety,
+				Eval.DesiredHorizontalCm,
+				Eval.MaxHorizontalBudgetCm);
 		}
 
-		// No nav / geometry: fall back to legacy single radial (may still Reject at RequestMove).
+		// No nav: fall back to legacy single radial (may still Reject at RequestMove).
+		// ApproachGeometryFailed must NOT fall back — that was the operator PathRejected loop.
 		if (Eval.RejectReason == EGP_ResourceCandidateRejectReason::NoNavSystem
 			|| Eval.RejectReason == EGP_ResourceCandidateRejectReason::PathStartProjectionFailed)
 		{
@@ -1647,9 +1684,16 @@ bool UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination(
 
 	OutDestination = Eval.BestApproachLocation;
 	OutDesiredHorizontalDistance = Eval.DesiredHorizontalCm;
-	const float DeltaZ = Owner->GetActorLocation().Z - TargetLocation.Z;
-	OutPredictedWorstCaseDistance = FMath::Sqrt(
-		FMath::Square(Eval.DesiredHorizontalCm + AcceptanceRadius) + FMath::Square(DeltaZ));
+	if (DistanceMode == EGP_RangeApproachDistanceMode::GroundPlane2D)
+	{
+		OutPredictedWorstCaseDistance = Eval.DesiredHorizontalCm + AcceptanceRadius;
+	}
+	else
+	{
+		const float DeltaZ = Owner->GetActorLocation().Z - TargetLocation.Z;
+		OutPredictedWorstCaseDistance = FMath::Sqrt(
+			FMath::Square(Eval.DesiredHorizontalCm + AcceptanceRadius) + FMath::Square(DeltaZ));
+	}
 	if (OutPathLengthCm != nullptr)
 	{
 		*OutPathLengthCm = Eval.PathLengthCm;
@@ -1665,7 +1709,7 @@ bool UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination(
 	if (bHaulLog)
 	{
 		UE_LOG(LogGPUnitCommandExecution, Log,
-			TEXT("GP UnitCommandExecution HaulApproachSelected: Unit=%s Serial=%u CandidateIndex=%d Destination=%s PathLength=%.1f MainBase=%s DropOffRange=%.1f ClearanceHalfXY=%.1f"),
+			TEXT("GP UnitCommandExecution HaulApproachSelected: Unit=%s Serial=%u CandidateIndex=%d Destination=%s PathLength=%.1f MainBase=%s DropOffRange=%.1f ClearanceHalfXY=%.1f DistanceMode=%s DeltaZ=%.1f Distance2D=%.1f DesiredHorizontal=%.1f CandidateCount=%d"),
 			*GetNameSafe(Owner),
 			LogSerial,
 			Eval.BestCandidateIndex,
@@ -1673,7 +1717,12 @@ bool UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination(
 			Eval.PathLengthCm,
 			*GetNameSafe(Target),
 			InteractionRangeCm,
-			ClearanceHalfXY);
+			ClearanceHalfXY,
+			GPResourceApproach::DistanceModeToString(DistanceMode),
+			Eval.DeltaZCm,
+			Eval.Distance2DCm,
+			Eval.DesiredHorizontalCm,
+			Eval.CandidateCount);
 	}
 
 	return OutPredictedWorstCaseDistance < InteractionRangeCm;
@@ -2593,20 +2642,22 @@ void UGP_UnitCommandComponent::StartHaulReturnToBase(
 	HaulMainBase = MainBase;
 	HaulDropOffRangeCm = MainBase->GetDropOffRangeCm();
 
-	const float Distance = FVector::Dist(Owner->GetActorLocation(), MainBase->GetActorLocation());
+	const float Distance = MainBase->ComputeDropOffDistance2D(Owner->GetActorLocation());
+	const float DeltaZ = Owner->GetActorLocation().Z - MainBase->GetActorLocation().Z;
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution HaulReturnToBase: Unit=%s HaulSerial=%u Deposit=%s MainBase=%s Distance=%.1f DropOffRange=%.1f ReturnToDeposit=%s Role=%s NetMode=%s"),
+		TEXT("GP UnitCommandExecution HaulReturnToBase: Unit=%s HaulSerial=%u Deposit=%s MainBase=%s Distance2D=%.1f DeltaZ=%.1f DropOffRange=%.1f DistanceMode=GroundPlane2D ReturnToDeposit=%s Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
 		ChainSerial,
 		*GetNameSafe(Deposit),
 		*GetNameSafe(MainBase),
 		Distance,
+		DeltaZ,
 		HaulDropOffRangeCm,
 		bReturnToDeposit ? TEXT("true") : TEXT("false"),
 		GPUnitCommandStatePrivate::RoleToString(Role),
 		GPUnitCommandStatePrivate::NetModeToString(NetMode));
 
-	if (Distance <= HaulDropOffRangeCm)
+	if (MainBase->IsWithinDropOffRange2D(Owner->GetActorLocation()))
 	{
 		if (UGP_MovementComponent* Movement = ResolveMovementComponent())
 		{
@@ -2796,7 +2847,7 @@ void UGP_UnitCommandComponent::BeginDropOffAtMainBase(uint32 HaulSerial)
 		return;
 	}
 
-	float Distance = FVector::Dist(Owner->GetActorLocation(), MainBase->GetActorLocation());
+	float Distance = MainBase->ComputeDropOffDistance2D(Owner->GetActorLocation());
 #if !UE_BUILD_SHIPPING
 	if (bDebugForceNextHaulArrivalOutOfRange)
 	{
@@ -2811,12 +2862,13 @@ void UGP_UnitCommandComponent::BeginDropOffAtMainBase(uint32 HaulSerial)
 	if (Distance > HaulDropOffRangeCm)
 	{
 		UE_LOG(LogGPUnitCommandExecution, Warning,
-			TEXT("GP UnitCommandExecution HaulArrivalOutOfRange: Unit=%s HaulSerial=%u MainBase=%s Distance=%.1f Range=%.1f Attempt=%d Role=%s NetMode=%s"),
+			TEXT("GP UnitCommandExecution HaulArrivalOutOfRange: Unit=%s HaulSerial=%u MainBase=%s Distance2D=%.1f Range=%.1f DeltaZ=%.1f DistanceMode=GroundPlane2D Attempt=%d Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			HaulSerial,
 			*GetNameSafe(MainBase),
 			Distance,
 			HaulDropOffRangeCm,
+			Owner->GetActorLocation().Z - MainBase->GetActorLocation().Z,
 			HaulApproachAttempt,
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));

@@ -7,83 +7,64 @@ NOT MERGED.
 
 ## Branch
 `feature/gp-s33m-rts-movement-reconciliation`  
-Prior remote head: `e9e3f6aca3bffc13710572a87c780856e1699ae6`  
-This revision: `45138d679c70f9488247580f35ff7ea95274c216`
+Prior remote head: `71184d1db098149086a73faa65317e084815dada`  
+This revision: (see commit after push)
 
-## Operator third-pass facts
+## Operator fourth-pass facts
 | Check | Result |
 | --- | --- |
-| Building NavigationObstacle | **PASS** (unchanged; keep authored footprint) |
-| Natural reassignment → CargoFull → `HaulReturnToBase` | **PASS** (proven by operator logs) |
-| Haul `RequestMove` after CargoFull | **FAIL** — `Reason=PathNotFound` → `HaulApproachMoveRejected` → `DropOffWait Enter Reason=PathRejected` → StillUnreachable |
+| Building NavigationObstacle | **PASS** (unchanged) |
+| CargoFull → `HaulReturnToBase` | **PASS** (all workers) |
+| Haul approach candidate generation | **FAIL** — `HaulApproachNoReachableCandidate` before any candidate loop |
 
-### Log fact (third failure)
-```
-HaulReturnToBase ... Cargo=50
-MoveRejected ... Reason=PathNotFound
-HaulApproachMoveRejected
-DropOffWait Enter Reason=PathRejected
-Retry → StillUnreachable
-```
-CargoFull → haul transition is proven working. Failure is isolated to navigation approach selection around MainBase after NavigationObstacle (`NavArea_Null`) was added.
+### Exact supplied values
+| Field | Value |
+| --- | --- |
+| ClearanceHalfXY | 218.2 |
+| DropOffRange | 400 |
+| Acceptance | 50 |
+| Safety | 25 |
+| CandidateCount | 0 |
+| Reason | ApproachGeometryFailed |
 
-## Root problem
-Haul used a single deterministic radial destination from `TryMakeRangeApproachDestination(Owner, MainBase, DropOffRange, …)` then `UGP_MovementComponent::RequestMove` → project + `FindPathSync`.
+Horizontal room exists: `218.2 + 50 + 25 = 293.2 < 400`. Failure was inside `TryComputeDesiredHorizontalDistance()` before the 8-candidate loop.
 
-With a building NavArea_Null footprint that one point may land on a disconnected polygon, behind the obstacle relative to approach lanes, or project on-nav with **no complete path**. Observed result is `PathNotFound`, not `DestinationOffNav`.
+### Proven runtime DeltaZ (contract instrumentation)
+`GeometryRepro: DeltaZ=-280.0` with Clearance=218.2 / Range=400 / Acc=50 / Safety=25.  
+Old 3D budget: `MaxHorizontal = sqrt(400² − 280²) ≈ 285.7` < `MinOutside(228.2) + Acc + Safety (303.2)` → geometry false, CandidateCount stays 0.
 
-Worker only needs `DistanceToMainBase <= DropOffRangeCm` — not one predetermined XY.
+## Formula bug
+`TryComputeDesiredHorizontalDistance` used `DeltaZ = PathStart.Z − TargetLocation.Z` and `MaxHorizontalBudget = sqrt(Range² − DeltaZ²)`.
 
-Do **not** weaken pathfinding with straight-line through buildings. Do **not** remove NavigationObstacle. Do **not** tell operator to shrink the nav box.
+MainBase actor/root Z (capsule / BP placement) must not consume the horizontal drop-off budget. NavigationObstacle is an XY footprint; DropOffRange is a planar interaction radius; pathfinding is ground-plane.
 
-## Fix — nav-aware reachable approach
-Ownership: `UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination` (interaction-range semantics).
+## Fix — GroundPlane2D building semantics
+- `EGP_RangeApproachDistanceMode::{ThreeDimensional, GroundPlane2D}`
+- MainBase haul approach: **GroundPlane2D** (`MaxHorizontalBudget = InteractionRangeCm`)
+- ResourceNode mining: **ThreeDimensional** preserved
+- Canonical MainBase metric: `AGP_MainBase::ComputeDropOffDistance2D` / `IsWithinDropOffRange2D` (`FVector::Dist2D` to actor center)
 
-Shared evaluator: `GPResourceApproach::EvaluateRangeApproachPath` (8 directions).
+### MainBase checks unified to Dist2D
+- `StartHaulReturnToBase` in-range gate + logs (`Distance2D`, `DeltaZ`, `DistanceMode=GroundPlane2D`)
+- `BeginDropOffAtMainBase` arrival validation
+- Approach candidate / projected WithinRange checks for GroundPlane2D
+- Predicted worst-case for buildings = `DesiredHorizontal + Acceptance` (no DeltaZ)
 
-### Candidate algorithm
-- Index 0 = direct radial toward worker (legacy geometry)
-- ±45°, ±90°, ±135°, 180° (8 total)
-- Candidate radius: outside NavigationObstacle world-bounds XY clearance + unit/acceptance safety, and **inside** `DropOffRangeCm`
-- Clearance from `AGP_BuildingBase::GetNavigationObstacle()` bounds (`Bounds.BoxExtent`); ResourceNode uses collision box
-- If obstacle nearly fills DropOffRange → `HaulApproachConfigFailure` (no silent route into Null)
+### Diagnostics (one-shot)
+Failure/selection logs include WorkerLocation, MainBaseLocation, DeltaZ, Distance2D, ClearanceHalfXY, DropOffRange, Acceptance, Safety, DesiredHorizontal, MaxHorizontalBudget, DistanceMode. CandidateCount is 8 when geometry is valid.
 
-### Validation / scoring
-Per candidate: project to nav → still within DropOffRange → complete `FindPathSync` (no partial) → score by **shortest nav path length**, then lowest candidate index.
-
-No global scans. Generic `UGP_MovementComponent` PathNotFound at far distance unchanged.
-
-### Fallback
-- Prefer reachable alternate if radial fails
-- All candidates fail → existing `WaitingForDropOff` / `PathRejected` + rate-limited retry
-- No-nav / start projection fail → legacy single radial (may still reject at RequestMove)
-
-### Two workers
-Distinct Worker positions yield distinct radials (index 0). No docking-slot architecture this slice.
-
-### ResourceNode mine approach
-Same helper reused via `TryMakeMineApproachDestination`. Mining slot semantics unchanged.
-
-### Diagnostics (one-shot, not per-frame)
-- `HaulApproachCandidate` (Unit, Serial, CandidateIndex, Candidate, Projected, WithinRange, PathResult, PathLength)
-- `HaulApproachSelected` (… Destination, PathLength, MainBase, DropOffRange)
-- `HaulApproachNoReachableCandidate` / `HaulApproachConfigFailure`
-
-## Retained prior worker fixes
-Natural reassignment ownership, SelfSupersede Mine/Haul, post-BeginMining reaffirmation, stale-node fix, orphan CargoFull safety, no-teleport/no-second-Mine contract methodology. Manual Mine with full cargo remains rejected.
+## Contracts
+1. **`gp.Resource.RunHaulNavApproachContractTest`** — operator numbers (Clearance≈218.2, Range=400, Acc=50, Safety=25) + elevated MainBase Z; old 3D fails; GroundPlane2D CandidateCount=8; Dist2D-in-range / Dist3D-out-of-range unload via storage delta; alternate-candidate + all-unreachable cases retained.
+2. **`gp.Resource.RunMineReassignmentHaulContractTest`** — elevated MainBase Z + clearance ~218.2; natural chain unload still PASS.
 
 ## Building NavigationObstacle
-Operator PASS. Not altered this revision (getter/bounds only for clearance).
-
-## Contract coverage
-1. **`gp.Resource.RunMineReassignmentHaulContractTest`** — MainBase NavigationObstacle activated; `DebugSkipCandidateMask` forces radial unavailable; asserts alternate candidate index > 0; unload succeeds. Fails if implementation only retries the same PathNotFound radial.
-2. **`gp.Resource.RunHaulNavApproachContractTest`** (new) — A direct fails / B alternate succeeds / C dest on-nav, in DropOffRange, outside obstacle / D all unreachable → WaitingForDropOff / E no straight-line Null fallback.
+Operator PASS. Not altered (extent only in transient contract harness).
 
 ## Test results (Failures=0)
 | Test | Result |
 | --- | --- |
-| gp.Resource.RunMineReassignmentHaulContractTest | PASS |
 | gp.Resource.RunHaulNavApproachContractTest | PASS |
+| gp.Resource.RunMineReassignmentHaulContractTest | PASS |
 | gp.Resource.RunS28RegressionSuite | PASS |
 | gp.Resource.RunDropOffResilienceContractTest | PASS |
 | gp.Resource.RunContainerLaunchContractTest | PASS |
@@ -101,8 +82,7 @@ GPEditor Win64 Development + UHT: **PASS**
 GP Development / Shipping: not run.
 
 ## Operator retest
-Same current map, same authored MainBase NavigationObstacle, same two Workers, occupied deposit A, one Mine:
-automatic B → CargoFull → HaulReturnToBase → path chooses reachable side of MainBase → workers route around building/nav obstacle → enter DropOffRange → unload → continue chain.  
-No operator NavigationObstacle changes required.
+Same map / MainBase / NavigationObstacle — no operator tuning.  
+Expected: `HaulApproachCandidate…` → `HaulApproachSelected…` → move → arrival → `HaulDropOffComplete`.
 
 ## NOT MERGED

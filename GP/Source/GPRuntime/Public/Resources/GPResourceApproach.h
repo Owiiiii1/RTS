@@ -10,6 +10,16 @@ class AGP_ResourceNode;
 class AActor;
 class UWorld;
 
+/** Interaction-range distance mode for approach geometry (GP-S33M). */
+UENUM(BlueprintType)
+enum class EGP_RangeApproachDistanceMode : uint8
+{
+	/** Classic 3D budget: MaxHorizontal = sqrt(Range^2 - DeltaZ^2). ResourceNode mining. */
+	ThreeDimensional UMETA(DisplayName = "Three Dimensional"),
+	/** Planar XY budget: MaxHorizontal = Range. MainBase drop-off / building footprint. */
+	GroundPlane2D UMETA(DisplayName = "Ground Plane 2D")
+};
+
 /** Exact rejection / acceptance reason for ResourceNode candidate evaluation (GP-S28P2). */
 UENUM(BlueprintType)
 enum class EGP_ResourceCandidateRejectReason : uint8
@@ -40,9 +50,12 @@ namespace GPResourceApproach
 {
 	GPRUNTIME_API const TCHAR* RejectReasonToString(EGP_ResourceCandidateRejectReason Reason);
 
+	GPRUNTIME_API const TCHAR* DistanceModeToString(EGP_RangeApproachDistanceMode Mode);
+
 	/**
-	 * Horizontal distance from node center so worst-case arrival stays inside InteractionRange.
-	 * Accounts for DeltaZ, AcceptanceRadius, safety margin, and CollisionBox XY extent.
+	 * Horizontal distance from target center so worst-case arrival stays inside InteractionRange.
+	 * ThreeDimensional: consumes |DeltaZ| from the budget.
+	 * GroundPlane2D: MaxHorizontalBudget = InteractionRangeCm (actor-origin Z ignored).
 	 */
 	GPRUNTIME_API bool TryComputeDesiredHorizontalDistance(
 		const FVector& PathStart,
@@ -51,7 +64,8 @@ namespace GPResourceApproach
 		float AcceptanceRadiusCm,
 		float SafetyMarginCm,
 		float CollisionHalfExtentXY,
-		float& OutDesiredHorizontal);
+		float& OutDesiredHorizontal,
+		EGP_RangeApproachDistanceMode DistanceMode = EGP_RangeApproachDistanceMode::ThreeDimensional);
 
 	/** Single approach sample in DirectionFromNode (normalized XY); Z from PathStart. */
 	GPRUNTIME_API bool TryMakeApproachPoint(
@@ -60,7 +74,8 @@ namespace GPResourceApproach
 		const FVector& DirectionFromNodeXY,
 		float DesiredHorizontal,
 		float InteractionRangeCm,
-		FVector& OutApproachPoint);
+		FVector& OutApproachPoint,
+		EGP_RangeApproachDistanceMode DistanceMode = EGP_RangeApproachDistanceMode::ThreeDimensional);
 
 	struct FEvaluateParams
 	{
@@ -100,6 +115,7 @@ namespace GPResourceApproach
 		float MaxPathLengthCm = 12000.0f;
 		int32 DirectionCount = 8;
 		TWeakObjectPtr<AActor> PathfindingActor;
+		EGP_RangeApproachDistanceMode DistanceMode = EGP_RangeApproachDistanceMode::ThreeDimensional;
 		/** Rotates the radial (index 0) sector; used for multi-worker approach diversity. */
 		float StartAngleBiasDegrees = 0.0f;
 #if !UE_BUILD_SHIPPING
@@ -114,8 +130,12 @@ namespace GPResourceApproach
 		FVector BestApproachLocation = FVector::ZeroVector;
 		float PathLengthCm = 0.0f;
 		float DesiredHorizontalCm = -1.0f;
+		float DeltaZCm = 0.0f;
+		float Distance2DCm = 0.0f;
+		float MaxHorizontalBudgetCm = -1.0f;
 		int32 BestCandidateIndex = -1;
 		int32 CandidateCount = 0;
+		EGP_RangeApproachDistanceMode DistanceMode = EGP_RangeApproachDistanceMode::ThreeDimensional;
 		EGP_ResourceCandidateRejectReason RejectReason = EGP_ResourceCandidateRejectReason::None;
 	};
 

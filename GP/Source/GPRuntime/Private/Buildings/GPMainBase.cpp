@@ -58,6 +58,16 @@ AGP_MainBase::AGP_MainBase()
 	}
 }
 
+float AGP_MainBase::ComputeDropOffDistance2D(const FVector& FromLocation) const
+{
+	return FVector::Dist2D(FromLocation, GetActorLocation());
+}
+
+bool AGP_MainBase::IsWithinDropOffRange2D(const FVector& FromLocation) const
+{
+	return ComputeDropOffDistance2D(FromLocation) <= DropOffRangeCm + KINDA_SMALL_NUMBER;
+}
+
 void AGP_MainBase::BeginPlay()
 {
 	Super::BeginPlay();

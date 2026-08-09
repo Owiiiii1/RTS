@@ -13,8 +13,10 @@
 #include "NavAreas/NavArea_Null.h"
 #include "Resources/GPCargoComponent.h"
 #include "Resources/GPMiningComponent.h"
+#include "Resources/GPResourceApproach.h"
 #include "Resources/GPResourceLoopDiagnostics.h"
 #include "Resources/GPResourceNode.h"
+#include "Resources/GPStorageComponent.h"
 #include "Tags/GPGameplayTags.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
@@ -60,6 +62,12 @@ namespace GPHaulNavApproachDebug
 		}
 	}
 
+	static constexpr float OperatorClearanceHalfXY = 218.2f;
+	static constexpr float OperatorDropOffRangeCm = 400.0f;
+	static constexpr float OperatorAcceptanceCm = 50.0f;
+	static constexpr float OperatorSafetyCm = 25.0f;
+	static constexpr float OperatorDeltaZReproCm = 280.0f;
+
 	static void ActivateMainBaseNavigationObstacle(AGP_MainBase* Base)
 	{
 		if (!IsValid(Base))
@@ -71,12 +79,26 @@ namespace GPHaulNavApproachDebug
 		{
 			return;
 		}
-		NavBox->SetBoxExtent(FVector(160.0f, 160.0f, 130.0f));
+		NavBox->SetBoxExtent(FVector(OperatorClearanceHalfXY, OperatorClearanceHalfXY, 130.0f));
 		NavBox->SetCanEverAffectNavigation(true);
 		NavBox->bDynamicObstacle = true;
 		NavBox->SetAreaClassOverride(UNavArea_Null::StaticClass());
 		NavBox->UpdateBounds();
 		NavBox->MarkRenderStateDirty();
+	}
+
+	static void ElevateMainBaseOriginForDeltaZRepro(AGP_MainBase* Base)
+	{
+		if (!IsValid(Base))
+		{
+			return;
+		}
+		const FVector Loc = Base->GetActorLocation();
+		Base->SetActorLocation(
+			FVector(Loc.X, Loc.Y, Loc.Z + OperatorDeltaZReproCm),
+			false,
+			nullptr,
+			ETeleportType::TeleportPhysics);
 	}
 
 	static bool HaulActiveTowardBase(UGP_UnitCommandComponent* Cmd)
@@ -282,6 +304,8 @@ void UGP_HaulNavApproachContractTestRunner::Start(UWorld* InWorld)
 	MovementWaitTicks = 0;
 	SelectedCandidateIndex = -1;
 	SelectedDestination = FVector::ZeroVector;
+	bArrival2DSetupDone = false;
+	bAllUnreachableSetupDone = false;
 	UnbindWorldCleanup();
 	WorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(
 		this, &UGP_HaulNavApproachContractTestRunner::OnWorldCleanup);
@@ -326,7 +350,7 @@ void UGP_HaulNavApproachContractTestRunner::AdvanceStage()
 	{
 	case 0:
 	{
-		// Spawn MainBase + Worker + deposit; activate NavigationObstacle; skip radial candidate.
+		// Spawn + operator-like clearance/DeltaZ; prove old 3D geometry fails, GroundPlane2D succeeds.
 		FVector Anchor = FVector(0.0f, 0.0f, 100.0f);
 		FVector Projected;
 		if (GPResourceLoopDiagnostics::IsNavPointProjected(World, Anchor, &Projected, 2000.0f, 2000.0f))
@@ -354,6 +378,76 @@ void UGP_HaulNavApproachContractTestRunner::AdvanceStage()
 		}
 
 		ActivateMainBaseNavigationObstacle(Base);
+		ElevateMainBaseOriginForDeltaZRepro(Base);
+		MainBaseLocation = Base->GetActorLocation();
+
+		const float ClearanceHalfXY = FMath::Max(
+			Base->GetNavigationObstacle()->Bounds.BoxExtent.X,
+			Base->GetNavigationObstacle()->Bounds.BoxExtent.Y);
+		Expect(FMath::IsNearlyEqual(ClearanceHalfXY, OperatorClearanceHalfXY, 1.0f),
+			TEXT("Geometry_ClearanceHalfXY_218"));
+
+		const FVector WorkerLoc = Worker->GetActorLocation();
+		const float DeltaZ = WorkerLoc.Z - MainBaseLocation.Z;
+		const float Distance2D = FVector::Dist2D(WorkerLoc, MainBaseLocation);
+		UE_LOG(LogGPHaulNavApproach, Log,
+			TEXT("GeometryRepro: Worker=%s MainBase=%s DeltaZ=%.1f Distance2D=%.1f Clearance=%.1f Range=%.1f Acc=%.1f Safety=%.1f"),
+			*WorkerLoc.ToCompactString(),
+			*MainBaseLocation.ToCompactString(),
+			DeltaZ,
+			Distance2D,
+			ClearanceHalfXY,
+			OperatorDropOffRangeCm,
+			OperatorAcceptanceCm,
+			OperatorSafetyCm);
+
+		float Desired3D = -1.0f;
+		const bool bOld3DOk = GPResourceApproach::TryComputeDesiredHorizontalDistance(
+			WorkerLoc,
+			MainBaseLocation,
+			OperatorDropOffRangeCm,
+			OperatorAcceptanceCm,
+			OperatorSafetyCm,
+			OperatorClearanceHalfXY,
+			Desired3D,
+			EGP_RangeApproachDistanceMode::ThreeDimensional);
+		Expect(!bOld3DOk, TEXT("Geometry_Old3D_ApproachGeometryFailed"));
+
+		float Desired2D = -1.0f;
+		const bool bNew2DOk = GPResourceApproach::TryComputeDesiredHorizontalDistance(
+			WorkerLoc,
+			MainBaseLocation,
+			OperatorDropOffRangeCm,
+			OperatorAcceptanceCm,
+			OperatorSafetyCm,
+			OperatorClearanceHalfXY,
+			Desired2D,
+			EGP_RangeApproachDistanceMode::GroundPlane2D);
+		Expect(bNew2DOk, TEXT("Geometry_GroundPlane2D_Valid"));
+		Expect(Desired2D > 0.0f, TEXT("Geometry_GroundPlane2D_DesiredHorizontal"));
+
+		GPResourceApproach::FRangeApproachParams EvalParams;
+		EvalParams.PathStart = WorkerLoc;
+		EvalParams.InteractionRangeCm = OperatorDropOffRangeCm;
+		EvalParams.AcceptanceRadiusCm = OperatorAcceptanceCm;
+		EvalParams.SafetyMarginCm = OperatorSafetyCm;
+		EvalParams.MaxPathLengthCm = 12000.0f;
+		EvalParams.DirectionCount = 8;
+		EvalParams.PathfindingActor = Worker;
+		EvalParams.DistanceMode = EGP_RangeApproachDistanceMode::GroundPlane2D;
+		const GPResourceApproach::FRangeApproachResult Eval = GPResourceApproach::EvaluateRangeApproachPath(
+			World, MainBaseLocation, OperatorClearanceHalfXY, EvalParams);
+		Expect(Eval.CandidateCount == 8, TEXT("Geometry_CandidateCount8"));
+		Expect(Eval.bReachable || Eval.RejectReason != EGP_ResourceCandidateRejectReason::ApproachGeometryFailed,
+			TEXT("Geometry_NotApproachGeometryFailed"));
+		if (Eval.bReachable)
+		{
+			Expect(DestinationOutsideNavObstacle(Base, Eval.BestApproachLocation),
+				TEXT("Geometry_CandidateOutsideObstacle"));
+			Expect(FVector::Dist2D(Eval.BestApproachLocation, MainBaseLocation) <= OperatorDropOffRangeCm + KINDA_SMALL_NUMBER,
+				TEXT("Geometry_CandidateInsideDropOffXY"));
+		}
+
 		Expect(Base->GetNavigationObstacle() != nullptr
 				&& Base->GetNavigationObstacle()->CanEverAffectNavigation(),
 			TEXT("A_MainBaseNavObstacleActive"));
@@ -422,18 +516,16 @@ void UGP_HaulNavApproachContractTestRunner::AdvanceStage()
 		SelectedCandidateIndex = Cmd->DebugGetLastApproachCandidateIndex();
 		SelectedDestination = Cmd->GetHaulApproachDestination();
 
-		// A: direct radial skipped/unavailable; B: alternate selected.
+		Expect(Cmd->DebugGetLastApproachCandidateCount() == 8, TEXT("B_CandidateCount8_AfterHaul"));
 		Expect(SelectedCandidateIndex > 0, TEXT("A_DirectCandidateSkipped_B_AlternateSelected"));
 		Expect(SelectedCandidateIndex != 0, TEXT("B_NotRadialIndex0"));
 
 		const float DropOff = Base->GetDropOffRangeCm();
-		Expect(FVector::Dist(SelectedDestination, Base->GetActorLocation()) <= DropOff + KINDA_SMALL_NUMBER,
-			TEXT("C_DestinationInsideDropOffRange"));
+		Expect(FVector::Dist2D(SelectedDestination, Base->GetActorLocation()) <= DropOff + KINDA_SMALL_NUMBER,
+			TEXT("C_DestinationInsideDropOffRangeXY"));
 		Expect(DestinationOutsideNavObstacle(Base, SelectedDestination),
 			TEXT("C_DestinationOutsideNavObstacleFootprint"));
 		Expect(!SelectedDestination.IsNearlyZero(), TEXT("C_DestinationNonZero"));
-
-		// Soft assertion that we did not route to MainBase center (would be inside Null footprint).
 		Expect(FVector::Dist2D(SelectedDestination, Base->GetActorLocation()) > 50.0f,
 			TEXT("E_NoCenterStraightThroughObstacle"));
 
@@ -474,6 +566,71 @@ void UGP_HaulNavApproachContractTestRunner::AdvanceStage()
 	}
 	case 3:
 	{
+		// Dist2D in DropOffRange but Dist3D > Range → still unload (GroundPlane2D arrival).
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* Node = NodeWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		UGP_CargoComponent* Cargo = IsValid(Worker) ? Worker->GetCargoComponent() : nullptr;
+		UGP_MiningComponent* Mining = IsValid(Worker) ? Worker->GetMiningComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(Node) && IsValid(Base) && Cmd && Cargo && Mining,
+				TEXT("Arrival2DObjects")))
+		{
+			Finish();
+			return;
+		}
+
+		if (!bArrival2DSetupDone)
+		{
+			Cmd->DebugSetApproachSkipCandidateMask(0);
+			Cargo->ClearCargo();
+			if (Mining->IsMining())
+			{
+				Mining->StopMining(EGP_MiningStopReason::ManualStop);
+			}
+
+			const FVector BaseLoc = Base->GetActorLocation();
+			const FVector InRange2DLoc(BaseLoc.X + 300.0f, BaseLoc.Y, WorkerSpawnLocation.Z);
+			Expect(FVector::Dist(InRange2DLoc, BaseLoc) > OperatorDropOffRangeCm,
+				TEXT("Arrival_Dist3D_ExceedsDropOff"));
+			Expect(Base->ComputeDropOffDistance2D(InRange2DLoc) <= OperatorDropOffRangeCm,
+				TEXT("Arrival_Dist2D_WithinDropOff"));
+
+			Worker->SetActorLocation(InRange2DLoc, false, nullptr, ETeleportType::TeleportPhysics);
+			Node->SetActorLocation(
+				InRange2DLoc + FVector(80.0f, 0.0f, 0.0f),
+				false,
+				nullptr,
+				ETeleportType::TeleportPhysics);
+
+			UGP_StorageComponent* Storage = Base->GetStorageComponent();
+			const float StoredBefore = IsValid(Storage) ? Storage->GetTotalStored() : 0.0f;
+
+			IssueMine(Worker, Node);
+			if (Mining->GetCurrentResourceNode() != Node)
+			{
+				Mining->BeginMining(Node);
+			}
+			FillCargoFull(Worker);
+
+			const float StoredAfter = IsValid(Storage) ? Storage->GetTotalStored() : 0.0f;
+			Expect(StoredAfter >= StoredBefore + 49.0f,
+				TEXT("Arrival2D_UnloadSucceededDespiteDist3D"));
+			Expect(FVector::Dist(Worker->GetActorLocation(), Base->GetActorLocation()) > OperatorDropOffRangeCm,
+				TEXT("Arrival2D_Dist3DStillAboveDropOff"));
+			Expect(Base->IsWithinDropOffRange2D(Worker->GetActorLocation()),
+				TEXT("Arrival2D_Dist2DStillWithinDropOff"));
+
+			bArrival2DSetupDone = true;
+		}
+
+		++StageIndex;
+		MovementWaitTicks = 0;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 4:
+	{
 		// D: all candidates unreachable → WaitingForDropOff (PathRejected), no infinite spam.
 		AGP_Worker* Worker = WorkerWeak.Get();
 		AGP_ResourceNode* Node = NodeWeak.Get();
@@ -488,15 +645,28 @@ void UGP_HaulNavApproachContractTestRunner::AdvanceStage()
 			return;
 		}
 
-		Cmd->DebugSetApproachSkipCandidateMask(SkipAllCandidatesMask);
-		Cargo->ClearCargo();
-		Worker->SetActorLocation(WorkerSpawnLocation, false, nullptr, ETeleportType::TeleportPhysics);
-		IssueMine(Worker, Node);
-		if (Mining->GetCurrentResourceNode() != Node)
+		if (!bAllUnreachableSetupDone)
 		{
-			Mining->BeginMining(Node);
+			if (Mining->IsMining())
+			{
+				Mining->StopMining(EGP_MiningStopReason::ManualStop);
+			}
+			Cmd->DebugSetApproachSkipCandidateMask(SkipAllCandidatesMask);
+			Cargo->ClearCargo();
+			Worker->SetActorLocation(WorkerSpawnLocation, false, nullptr, ETeleportType::TeleportPhysics);
+			Node->SetActorLocation(
+				WorkerSpawnLocation + FVector(70.0f, 0.0f, 0.0f),
+				false,
+				nullptr,
+				ETeleportType::TeleportPhysics);
+			IssueMine(Worker, Node);
+			if (Mining->GetCurrentResourceNode() != Node)
+			{
+				Mining->BeginMining(Node);
+			}
+			FillCargoFull(Worker);
+			bAllUnreachableSetupDone = true;
 		}
-		FillCargoFull(Worker);
 
 		const bool bWaiting = Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::WaitingForDropOff
 			|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::WaitingForDropOff;
@@ -509,7 +679,6 @@ void UGP_HaulNavApproachContractTestRunner::AdvanceStage()
 		Expect(Cargo->IsFull() || Cargo->GetCurrentCargoAmount() > KINDA_SMALL_NUMBER,
 			TEXT("D_CargoRetained"));
 		Expect(Cmd->DebugIsDropOffRetryArmed() || bWaiting, TEXT("D_RetryArmedOrWaiting"));
-		// E: no accepted approach move — WaitingForDropOff, not ReturningToBase through Null.
 		Expect(!HaulActiveTowardBase(Cmd), TEXT("E_NoAcceptedMoveThroughNavAreaNull"));
 		Expect(Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::WaitingForDropOff,
 			TEXT("E_PathRejectedWaitNotStraightFallback"));
@@ -518,7 +687,7 @@ void UGP_HaulNavApproachContractTestRunner::AdvanceStage()
 		ScheduleNext(0.05f);
 		break;
 	}
-	case 4:
+	case 5:
 	{
 		Finish();
 		break;

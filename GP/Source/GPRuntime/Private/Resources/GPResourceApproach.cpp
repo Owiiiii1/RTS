@@ -7,6 +7,16 @@
 #include "NavigationSystem.h"
 #include "Resources/GPResourceNode.h"
 
+const TCHAR* GPResourceApproach::DistanceModeToString(EGP_RangeApproachDistanceMode Mode)
+{
+	switch (Mode)
+	{
+	case EGP_RangeApproachDistanceMode::ThreeDimensional: return TEXT("ThreeDimensional");
+	case EGP_RangeApproachDistanceMode::GroundPlane2D: return TEXT("GroundPlane2D");
+	default: return TEXT("Unknown");
+	}
+}
+
 const TCHAR* GPResourceApproach::RejectReasonToString(EGP_ResourceCandidateRejectReason Reason)
 {
 	switch (Reason)
@@ -41,7 +51,8 @@ bool GPResourceApproach::TryComputeDesiredHorizontalDistance(
 	float AcceptanceRadiusCm,
 	float SafetyMarginCm,
 	float CollisionHalfExtentXY,
-	float& OutDesiredHorizontal)
+	float& OutDesiredHorizontal,
+	EGP_RangeApproachDistanceMode DistanceMode)
 {
 	OutDesiredHorizontal = -1.0f;
 	if (!FMath::IsFinite(InteractionRangeCm) || InteractionRangeCm <= 0.0f
@@ -53,14 +64,19 @@ bool GPResourceApproach::TryComputeDesiredHorizontalDistance(
 
 	const float DeltaZ = PathStart.Z - NodeLocation.Z;
 	const float AbsDeltaZ = FMath::Abs(DeltaZ);
-	const float RangeSq = FMath::Square(InteractionRangeCm);
 	const float DeltaZSq = FMath::Square(AbsDeltaZ);
-	if (DeltaZSq >= RangeSq)
+	const float RangeSq = FMath::Square(InteractionRangeCm);
+
+	float MaxHorizontalBudget = InteractionRangeCm;
+	if (DistanceMode == EGP_RangeApproachDistanceMode::ThreeDimensional)
 	{
-		return false;
+		if (DeltaZSq >= RangeSq)
+		{
+			return false;
+		}
+		MaxHorizontalBudget = FMath::Sqrt(RangeSq - DeltaZSq);
 	}
 
-	const float MaxHorizontalBudget = FMath::Sqrt(RangeSq - DeltaZSq);
 	const float TotalInward = AcceptanceRadiusCm + SafetyMarginCm;
 	if (MaxHorizontalBudget <= TotalInward + 1.0f)
 	{
@@ -79,10 +95,21 @@ bool GPResourceApproach::TryComputeDesiredHorizontalDistance(
 		DesiredHorizontal = MinOutsideBox;
 	}
 
-	const float PredictedWorst = FMath::Sqrt(FMath::Square(DesiredHorizontal + AcceptanceRadiusCm) + DeltaZSq);
-	if (PredictedWorst >= InteractionRangeCm)
+	if (DistanceMode == EGP_RangeApproachDistanceMode::GroundPlane2D)
 	{
-		return false;
+		const float PredictedWorst2D = DesiredHorizontal + AcceptanceRadiusCm;
+		if (PredictedWorst2D >= InteractionRangeCm)
+		{
+			return false;
+		}
+	}
+	else
+	{
+		const float PredictedWorst = FMath::Sqrt(FMath::Square(DesiredHorizontal + AcceptanceRadiusCm) + DeltaZSq);
+		if (PredictedWorst >= InteractionRangeCm)
+		{
+			return false;
+		}
 	}
 
 	OutDesiredHorizontal = DesiredHorizontal;
@@ -95,7 +122,8 @@ bool GPResourceApproach::TryMakeApproachPoint(
 	const FVector& DirectionFromNodeXY,
 	float DesiredHorizontal,
 	float InteractionRangeCm,
-	FVector& OutApproachPoint)
+	FVector& OutApproachPoint,
+	EGP_RangeApproachDistanceMode DistanceMode)
 {
 	OutApproachPoint = FVector::ZeroVector;
 	FVector Dir = DirectionFromNodeXY;
@@ -108,7 +136,10 @@ bool GPResourceApproach::TryMakeApproachPoint(
 	const FVector Candidate(NodeLocation.X + Dir.X * DesiredHorizontal,
 		NodeLocation.Y + Dir.Y * DesiredHorizontal,
 		PathStart.Z);
-	if (FVector::Dist(Candidate, NodeLocation) > InteractionRangeCm - KINDA_SMALL_NUMBER)
+	const float DistToTarget = (DistanceMode == EGP_RangeApproachDistanceMode::GroundPlane2D)
+		? FVector::Dist2D(Candidate, NodeLocation)
+		: FVector::Dist(Candidate, NodeLocation);
+	if (DistToTarget > InteractionRangeCm - KINDA_SMALL_NUMBER)
 	{
 		return false;
 	}
@@ -159,6 +190,10 @@ GPResourceApproach::FRangeApproachResult GPResourceApproach::EvaluateRangeApproa
 		return Result;
 	}
 
+	Result.DistanceMode = Params.DistanceMode;
+	Result.DeltaZCm = Params.PathStart.Z - TargetLocation.Z;
+	Result.Distance2DCm = FVector::Dist2D(Params.PathStart, TargetLocation);
+
 	FNavLocation ProjectedStart;
 	if (!NavSys->ProjectPointToNavigation(Params.PathStart, ProjectedStart, FVector(250.0f, 250.0f, 400.0f)))
 	{
@@ -174,12 +209,37 @@ GPResourceApproach::FRangeApproachResult GPResourceApproach::EvaluateRangeApproa
 			Params.AcceptanceRadiusCm,
 			Params.SafetyMarginCm,
 			CollisionHalfExtentXY,
-			DesiredHorizontal))
+			DesiredHorizontal,
+			Params.DistanceMode))
 	{
+		// Populate budget diagnostics even on geometry failure (operator DeltaZ repro).
+		if (Params.DistanceMode == EGP_RangeApproachDistanceMode::GroundPlane2D)
+		{
+			Result.MaxHorizontalBudgetCm = Params.InteractionRangeCm;
+		}
+		else
+		{
+			const float AbsDeltaZ = FMath::Abs(Result.DeltaZCm);
+			const float RangeSq = FMath::Square(Params.InteractionRangeCm);
+			const float DeltaZSq = FMath::Square(AbsDeltaZ);
+			Result.MaxHorizontalBudgetCm = (DeltaZSq < RangeSq)
+				? FMath::Sqrt(RangeSq - DeltaZSq)
+				: -1.0f;
+		}
 		Result.RejectReason = EGP_ResourceCandidateRejectReason::ApproachGeometryFailed;
 		return Result;
 	}
 	Result.DesiredHorizontalCm = DesiredHorizontal;
+	if (Params.DistanceMode == EGP_RangeApproachDistanceMode::GroundPlane2D)
+	{
+		Result.MaxHorizontalBudgetCm = Params.InteractionRangeCm;
+	}
+	else
+	{
+		const float AbsDeltaZ = FMath::Abs(ProjectedStart.Location.Z - TargetLocation.Z);
+		Result.MaxHorizontalBudgetCm = FMath::Sqrt(
+			FMath::Square(Params.InteractionRangeCm) - FMath::Square(AbsDeltaZ));
+	}
 
 	const int32 DirCount = FMath::Clamp(Params.DirectionCount, 4, 16);
 	Result.CandidateCount = DirCount;
@@ -223,7 +283,8 @@ GPResourceApproach::FRangeApproachResult GPResourceApproach::EvaluateRangeApproa
 				Rotated,
 				DesiredHorizontal,
 				Params.InteractionRangeCm,
-				Info.RawCandidate))
+				Info.RawCandidate,
+				Params.DistanceMode))
 		{
 			OnCandidate(Info);
 			continue;
@@ -239,8 +300,10 @@ GPResourceApproach::FRangeApproachResult GPResourceApproach::EvaluateRangeApproa
 		Info.Projected = ProjectedApproach.Location;
 		bAnyProjected = true;
 
-		Info.bWithinRange =
-			FVector::Dist(ProjectedApproach.Location, TargetLocation) <= Params.InteractionRangeCm - KINDA_SMALL_NUMBER;
+		const float DistToTarget = (Params.DistanceMode == EGP_RangeApproachDistanceMode::GroundPlane2D)
+			? FVector::Dist2D(ProjectedApproach.Location, TargetLocation)
+			: FVector::Dist(ProjectedApproach.Location, TargetLocation);
+		Info.bWithinRange = DistToTarget <= Params.InteractionRangeCm - KINDA_SMALL_NUMBER;
 		if (!Info.bWithinRange)
 		{
 			OnCandidate(Info);

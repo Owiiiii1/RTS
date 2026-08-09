@@ -52,6 +52,8 @@ private:
 	float MovementWaitTimeoutSeconds = 45.0f;
 	int32 SelectedCandidateIndex = -1;
 	FVector SelectedDestination = FVector::ZeroVector;
+	bool bArrival2DSetupDone = false;
+	bool bAllUnreachableSetupDone = false;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

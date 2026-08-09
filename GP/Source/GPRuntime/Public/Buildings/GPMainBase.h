@@ -60,6 +60,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|MainBase")
 	float GetDropOffRangeCm() const { return DropOffRangeCm; }
 
+	/**
+	 * Canonical MainBase drop-off distance (GP-S33M): ground-plane Dist2D to actor center.
+	 * Actor-origin Z must not consume DropOffRange budget.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GP|MainBase")
+	float ComputeDropOffDistance2D(const FVector& FromLocation) const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|MainBase")
+	bool IsWithinDropOffRange2D(const FVector& FromLocation) const;
+
 	bool ValidateMainBaseContract(TArray<FText>& OutErrors, TArray<FText>& OutWarnings) const;
 
 #if WITH_EDITOR

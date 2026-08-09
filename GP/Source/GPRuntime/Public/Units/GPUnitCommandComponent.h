@@ -251,6 +251,7 @@ public:
 	void DebugSetApproachSkipCandidateMask(int32 Mask) { DebugApproachSkipCandidateMask = Mask; }
 	int32 DebugGetApproachSkipCandidateMask() const { return DebugApproachSkipCandidateMask; }
 	int32 DebugGetLastApproachCandidateIndex() const { return DebugLastApproachCandidateIndex; }
+	int32 DebugGetLastApproachCandidateCount() const { return DebugLastApproachCandidateCount; }
 #endif
 
 	/**
@@ -598,6 +599,7 @@ private:
 	int32 DebugSameTargetRetargetAttempts = 0;
 	int32 DebugApproachSkipCandidateMask = 0;
 	mutable int32 DebugLastApproachCandidateIndex = -1;
+	mutable int32 DebugLastApproachCandidateCount = 0;
 #endif
 
 	/** GP-S28 Haul orchestration (Worker only; shares Mine command serial as chain id). */

@@ -6,6 +6,8 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPUnitAttributeSet.h"
+#include "Buildings/GPLogisticsHub.h"
+#include "Buildings/GPMainBase.h"
 #include "Command/GPCommandComponent.h"
 #include "Command/GPCommandRequest.h"
 #include "Command/GPStoredUnitCommand.h"
@@ -346,6 +348,11 @@ void UGP_RTSMovementReconciliationContractTestRunner::CleanupActors()
 	GPRTSMovementReconDebug::DestroyWeakWorker(WorkerWeak);
 	GPRTSMovementReconDebug::DestroyWeakActor(WallWeak);
 	GPRTSMovementReconDebug::DestroyWeakActor(NavBoundsWeak);
+	if (AGP_MainBase* Building = BuildingWeak.Get())
+	{
+		Building->Destroy();
+	}
+	BuildingWeak.Reset();
 	if (AGP_PlayerController* PC = PCWeak.Get())
 	{
 		PC->Destroy();
@@ -980,13 +987,66 @@ void UGP_RTSMovementReconciliationContractTestRunner::AdvanceStage()
 		ScheduleNext(0.2f);
 		break;
 	}
-	case 12: // M unreachable / off-nav
+	case 12: // Building NavigationObstacle seam + M unreachable / off-nav
 	{
 		AGP_SalvageWalker* Walker = WalkerWeak.Get();
 		if (!Expect(IsValid(Walker), TEXT("M_WalkerAlive")))
 		{
 			Finish();
 			return;
+		}
+
+		// BuildingBase NavigationObstacle — structural contract (Recast path-around = operator PIE).
+		{
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			Params.ObjectFlags |= RF_Transient;
+			AGP_MainBase* Building = World->SpawnActor<AGP_MainBase>(
+				AGP_MainBase::StaticClass(),
+				Origin + FVector(0.0f, 2000.0f, 0.0f),
+				FRotator::ZeroRotator,
+				Params);
+			BuildingWeak = Building;
+			if (!Expect(IsValid(Building), TEXT("Building_SpawnMainBase")))
+			{
+				Finish();
+				return;
+			}
+
+			UBoxComponent* NavBox = Building->GetNavigationObstacle();
+			if (!Expect(NavBox != nullptr, TEXT("Building_HasNavigationObstacle")))
+			{
+				Finish();
+				return;
+			}
+			Expect(NavBox->CanEverAffectNavigation(), TEXT("Building_NavRelevant"));
+			Expect(NavBox->bDynamicObstacle, TEXT("Building_DynamicObstacle"));
+			Expect(NavBox->GetCollisionResponseToChannel(ECC_Visibility) == ECR_Ignore,
+				TEXT("Building_NavBoxNoVisibilityBlock"));
+			Expect(NavBox->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Ignore,
+				TEXT("Building_NavBoxNoPawnBlock"));
+			Expect(!NavBox->IsSimulatingPhysics(), TEXT("Building_NavBoxNoPhysics"));
+			const FVector ExtentBefore = NavBox->GetUnscaledBoxExtent();
+			NavBox->SetBoxExtent(ExtentBefore + FVector(25.0f, 15.0f, 10.0f));
+			Expect(NavBox->GetUnscaledBoxExtent().Equals(ExtentBefore + FVector(25.0f, 15.0f, 10.0f), 0.1f),
+				TEXT("Building_ExtentIndependentlyEditable"));
+			NavBox->SetRelativeLocation(FVector(40.0f, -20.0f, 0.0f));
+			Expect(NavBox->GetRelativeLocation().Equals(FVector(40.0f, -20.0f, 0.0f), 0.1f),
+				TEXT("Building_RelativeLocationEditable"));
+
+			AGP_LogisticsHub* Hub = World->SpawnActor<AGP_LogisticsHub>(
+				AGP_LogisticsHub::StaticClass(),
+				Origin + FVector(0.0f, 2400.0f, 0.0f),
+				FRotator::ZeroRotator,
+				Params);
+			if (Expect(IsValid(Hub), TEXT("Building_SpawnLogisticsHub")))
+			{
+				Expect(Hub->GetNavigationObstacle() != nullptr, TEXT("Building_HubHasNavigationObstacle"));
+				Hub->Destroy();
+			}
+
+			UE_LOG(LogGPRTSMovementRecon, Log,
+				TEXT("gp.Movement.RunRTSMovementReconciliationContractTest NOTE: path-around-building Recast proof is operator PIE (Runtime Generation=Dynamic for orbital spawn)"));
 		}
 
 		Walker->SetActorLocation(Origin);

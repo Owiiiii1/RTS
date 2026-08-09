@@ -2,6 +2,7 @@
 
 #include "Buildings/GPLogisticsHub.h"
 
+#include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SceneComponent.h"
 #include "Tags/GPGameplayTags.h"
@@ -18,6 +19,13 @@ AGP_LogisticsHub::AGP_LogisticsHub()
 	CapsuleComponent->SetGenerateOverlapEvents(false);
 	CapsuleComponent->SetCanEverAffectNavigation(false);
 	CapsuleComponent->SetSimulatePhysics(false);
+
+	AttachNavigationObstacleToRoot();
+	if (NavigationObstacle)
+	{
+		// Rough LogisticsHub footprint — BP may retune freely.
+		NavigationObstacle->SetBoxExtent(FVector(140.0f, 140.0f, 120.0f));
+	}
 
 	PresentationRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PresentationRoot"));
 	PresentationRoot->SetupAttachment(CapsuleComponent);

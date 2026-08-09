@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-09 — GP-S33M operator defect revision (building nav + reassignment haul)
+
+Status: **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s33m-rts-movement-reconciliation` (prior head `f72794da…`)
+- Operator PASS: NavMesh, unit nav, unit↔unit avoidance
+- Operator FAIL fixed: BuildingBase `NavigationObstacle` UBoxComponent; Worker reassignment CargoFull→Haul (Idle-during-BeginMining cleared serial/unbind)
+- Contract `gp.Resource.RunMineReassignmentHaulContractTest` Failures=0; listed regressions Failures=0; GPEditor+UHT **PASS**
+- Manual Mine+CargoFull reject preserved
+- NOT MERGED — await operator retest A/B
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-09 — GP-S33M RTS Movement Reconciliation (implementation candidate)
 
 Status: **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

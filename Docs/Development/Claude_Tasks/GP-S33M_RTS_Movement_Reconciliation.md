@@ -3,7 +3,7 @@
 ## Status
 **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-NOT MERGED. Await operator PIE validation.
+NOT MERGED. Await operator PIE retest (building nav + reassignment haul).
 
 ## Slice Group
 Post-GP-S32A combat QoL / movement production layer
@@ -11,7 +11,8 @@ Post-GP-S32A combat QoL / movement production layer
 ## Branch
 `feature/gp-s33m-rts-movement-reconciliation`  
 Base: `main` @ `0df4468445e939aaca33ed73548a78c2caabb86d`  
-Candidate: `322385465539436dd426c24ade2912c2b9dbfecd`
+Prior candidate: `f72794da169dd8efd3b881443453655547b63264`  
+Operator defect revision: *(see HEAD after push)*
 
 ## Goal
 Replace straight-line-only movement with a minimal production RTS movement layer while keeping a single backend (`UGP_MovementComponent`) and existing Move / Attack / AttackMove / Mine / Haul contracts.
@@ -22,37 +23,44 @@ Replace straight-line-only movement with a minimal production RTS movement layer
 3. Group destination spreading for Move / AttackMove at dispatch
 4. `EGP_MovementResult::Failed` + reject reasons for nav failures
 5. Contract `gp.Movement.RunRTSMovementReconciliationContractTest`
+6. **Revision:** `AGP_BuildingBase::NavigationObstacle` authored dynamic NavArea_Null box
+7. **Revision:** Worker SlotFull reassignment → CargoFull → automatic haul fix
+8. Contract `gp.Resource.RunMineReassignmentHaulContractTest`
 
 ## Out of scope
-MassAI · AIController-per-unit · formation persistence · BuildingBase redesign · dynamic orbital building nav carve · map/config commits · GP Dev/Shipping builds (candidate gate = GPEditor + UHT only)
+MassAI · AIController-per-unit · formation persistence · BuildingBase redesign beyond nav footprint · map/config commits · GP Dev/Shipping builds (candidate gate = GPEditor + UHT only)
 
 ## Architecture
 - Single backend: `RequestMove` / `StopMove` / `OnMovementResult`
 - Server-authoritative; no client gameplay prediction
 - Capsules: Pawn=Overlap (separation queries); WorldStatic=Ignore (static avoidance via NavMesh)
+- Buildings: independent `NavigationObstacle` box (not capsule); dynamic obstacle / NavArea_Null
 - Off-nav / missing NavData → straight-line fallback; on-nav unreachable → reject/fail
+- Reassignment updates `HeldCommand.TargetActor` + `MineTarget` to active deposit; CargoFull must haul
 
-## Operator setup (NavMesh)
-Do **not** commit `L_PrototypeArena.umap`.
+## Operator first-pass
+- NavMesh / unit nav / unit avoidance: **PASS**
+- Building nav obstacle: **FAIL → fixed**
+- Reassigned Worker CargoFull→Haul: **FAIL → fixed**
+- Manual Mine+CargoFull reject: **intentional, preserved**
 
-If PIE has no usable NavMesh:
-1. Open `L_PrototypeArena`
-2. Place `NavMeshBoundsVolume` covering the playable floor
-3. Build Paths (or PIE with runtime generation if project already enables it)
-4. Confirm green Recast nav overlay in editor
+## Operator setup
+Do **not** commit `L_PrototypeArena.umap` / DefaultEngine.ini / DefaultGame.ini.
 
-Local map edits stay operator-local.
+NavMeshBoundsVolume: as before if missing.
 
-## PIE acceptance sketch
-**A.** Obstacle between unit and RMB Move destination → unit goes **around**, not through.  
-**B.** Select 3–4 units → RMB same point → loose group, no permanent stack, visibly separated slots.  
-**C.** AttackMove through same area → nav + combat interrupt + resume **per-unit** assigned slot.
+**Runtime orbital buildings:** Project Settings → Navigation Mesh → **Runtime Generation = Dynamic** (local) so spawned `NavigationObstacle` updates Recast.
 
-## Contract / regressions (candidate)
+## Operator retests
+**A. Building:** BP child → inherited NavigationObstacle move/rotate/resize → PIE path around building.  
+**B. Worker:** A full → reassign B → mine full → auto haul → unload → resume B (no manual Mine after CargoFull).
+
+## Contract / regressions (revision)
 - `gp.Movement.RunRTSMovementReconciliationContractTest` Failures=0
-- AttackMove / AutoAcquire / SalvageWalker / LOS / S28 / DropOff / ContainerLaunch / HUD / Orbital Unit+Building Drop → Failures=0
+- `gp.Resource.RunMineReassignmentHaulContractTest` Failures=0
+- S28 / DropOff / ContainerLaunch / HUD / AttackMove / AutoAcquire / SalvageWalker / LOS / Orbital Unit+Building Drop → Failures=0
 - GPEditor Win64 Development + UHT **PASS**
-- GP Dev / Shipping **not run** (post-operator finalization)
+- GP Dev / Shipping **not run**
 
 ## Stop Condition
-Operator validation. Do **not** merge. Do **not** auto-start next slice.
+Operator retest A/B. Do **not** merge. Do **not** auto-start next slice.

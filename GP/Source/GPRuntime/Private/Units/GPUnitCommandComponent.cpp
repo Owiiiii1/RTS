@@ -1950,7 +1950,7 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	AGP_ResourceNode* Node = Cast<AGP_ResourceNode>(Held.TargetActor.Get());
 	UGP_MiningComponent* Mining = Worker->GetMiningComponent();
 	UGP_CargoComponent* Cargo = Worker->GetCargoComponent();
-	if (!IsValid(Mining) || !IsValid(Cargo) || Cargo->IsFull())
+	if (!IsValid(Mining) || !IsValid(Cargo))
 	{
 		UE_LOG(LogGPUnitCommandExecution, Warning,
 			TEXT("GP UnitCommandExecution MineArrivalRejected: Unit=%s MineSerial=%u Target=%s Reason=InvalidArrivalPrereq Role=%s NetMode=%s"),
@@ -1961,6 +1961,20 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
 		ClearHeldCommand();
 		ResetMineExecutor();
+		return;
+	}
+	if (Cargo->IsFull())
+	{
+		// Arrival with full cargo must haul — never clear Held and idle.
+		ActiveMineSerial = MineSerial;
+		MineTarget = IsValid(Node) ? Node : MineTarget;
+		StartHaulReturnToBase(
+			MineSerial,
+			IsValid(Node) ? Node : MineTarget.Get(),
+			IsValid(Node)
+				&& !Node->IsDepleted()
+				&& !Node->HasCompletedDepletionTransition()
+				&& !Node->IsDestroyPending());
 		return;
 	}
 	if (!IsValid(Node) || Node->IsDepleted() || Node->HasCompletedDepletionTransition() || Node->IsDestroyPending())
@@ -2048,6 +2062,17 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 		HaulMainBase.Reset();
 		bShouldReturnToDepositAfterHaul = false;
 	}
+
+	// Stop prior node occupancy while unbound so BeginMining's internal ManualStop→Idle
+	// cannot clear ActiveMineSerial via HandleMiningStateChanged.
+	if (IsValid(Mining)
+		&& (Mining->IsMining() || Mining->IsWaitingForSlot())
+		&& Mining->GetCurrentResourceNode() != Node)
+	{
+		UnbindMiningStateEvents();
+		Mining->StopMining(EGP_MiningStopReason::ManualStop);
+	}
+
 	BindMiningStateEvents(Mining);
 
 	// Alternative free-slot search BEFORE entering FIFO on a full target (preserves 5th→NodeB).
@@ -2124,6 +2149,18 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 			return;
 		}
 		EnterWaitingForResource(MineSerial);
+		return;
+	}
+
+	if (BeginResult == EGP_BeginMiningResult::RejectedCargoFull)
+	{
+		StartHaulReturnToBase(
+			MineSerial,
+			Node,
+			IsValid(Node)
+				&& !Node->IsDepleted()
+				&& !Node->HasCompletedDepletionTransition()
+				&& !Node->IsDestroyPending());
 		return;
 	}
 
@@ -3780,6 +3817,14 @@ void UGP_UnitCommandComponent::HandleMiningStateChanged(
 		|| NewState == EGP_MiningState::Idle;
 
 	if (!bTerminal)
+	{
+		return;
+	}
+
+	// BeginMining may StopMining(ManualStop)→Idle while UnitCommand is still bound during
+	// BeginMiningAtHeldTarget. Ignoring that Idle keeps ActiveMineSerial for the remine.
+	// External Idle (test/player StopMining, teardown) must still clear the chain.
+	if (NewState == EGP_MiningState::Idle && bBeginMiningAtHeldTargetInProgress)
 	{
 		return;
 	}

@@ -2,6 +2,7 @@
 
 #include "Buildings/GPMainBase.h"
 
+#include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SceneComponent.h"
 #include "Game/GPGameState.h"
@@ -25,6 +26,13 @@ AGP_MainBase::AGP_MainBase()
 	CapsuleComponent->SetGenerateOverlapEvents(false);
 	CapsuleComponent->SetCanEverAffectNavigation(false);
 	CapsuleComponent->SetSimulatePhysics(false);
+
+	AttachNavigationObstacleToRoot();
+	if (NavigationObstacle)
+	{
+		// Rough MainBase footprint (~capsule 80r / 120hh) — BP may retune freely.
+		NavigationObstacle->SetBoxExtent(FVector(160.0f, 160.0f, 130.0f));
+	}
 
 	PresentationRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PresentationRoot"));
 	PresentationRoot->SetupAttachment(CapsuleComponent);

@@ -48,6 +48,7 @@ private:
 	TWeakObjectPtr<class AGP_PlayerState> PSWeak;
 	TWeakObjectPtr<AActor> WallWeak;
 	TWeakObjectPtr<AActor> NavBoundsWeak;
+	TWeakObjectPtr<class AGP_MainBase> BuildingWeak;
 	TWeakObjectPtr<class UGP_MovementComponent> BoundMovementWeak;
 
 	FVector Origin = FVector::ZeroVector;

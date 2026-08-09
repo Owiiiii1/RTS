@@ -12,7 +12,7 @@ NOT MERGED.
 |---|---|
 | Branch | `feature/gp-s33m-rts-movement-reconciliation` |
 | Base (`main`) | `0df4468445e939aaca33ed73548a78c2caabb86d` |
-| Candidate | *(recorded after commit — see HEAD)* |
+| Candidate | `322385465539436dd426c24ade2912c2b9dbfecd` |
 
 ## 2. Old factual movement model
 - `UGP_MovementComponent` server-authoritative straight-line tick

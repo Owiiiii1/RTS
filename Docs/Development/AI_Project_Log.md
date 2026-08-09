@@ -5,6 +5,7 @@
 Status: **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
 - Branch: `feature/gp-s33m-rts-movement-reconciliation` (base `main` @ `0df4468445e939aaca33ed73548a78c2caabb86d`)
+- Candidate: `322385465539436dd426c24ade2912c2b9dbfecd`
 - NavMesh pathfinding + Failed results + separation + group destination spread inside existing `UGP_MovementComponent` / CommandComponent
 - Contract `gp.Movement.RunRTSMovementReconciliationContractTest` Failures=0; listed regressions Failures=0; GPEditor+UHT **PASS**
 - No map/config/content commits; NavMeshBoundsVolume remains operator-local if needed

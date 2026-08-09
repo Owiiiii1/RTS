@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S32R merged** on `main` @ `ba98383…` |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S30R** on `main` tip `989ca3fe…` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S32R** + roadmap audit on `main` (tip `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2`) |
+| Last closed / merged stage | **GP-S30R** Combat Auto-Acquire on `main` (tip `989ca3fe6eae31b177ba2fade2ca1f02300d3326`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S30R_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s30r-combat-auto-acquire` |
+| Current stage | **GP-S32A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s32a-attack-move-reconciliation` |
 
 ---
 
@@ -49,14 +49,9 @@
 
 **Prior closed:** GP-S32R / GP-S31R / GP-S30 / GP-S29R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md`](Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md) — **GP-S30R_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s30r-combat-auto-acquire`. Operator FULL PASS. All final builds PASS. NOT MERGED — await human merge/check. Do **not** auto-start next code slice.
+**Current:** [`Claude_Tasks/GP-S32A_Attack_Move_Reconciliation.md`](Claude_Tasks/GP-S32A_Attack_Move_Reconciliation.md) — **GP-S32A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. GPEditor+UHT candidate. NOT MERGED. Do **not** auto-start RTS Movement Reconciliation.
 
-Approved planning order after merge (not started):
-1. Attack-Move reconciliation
-2. RTS Movement Reconciliation (pathfinding / collision / local avoidance / group destination spreading)
-3. Unit Cap + LogisticsHub gameplay
-4. Match win flow
-5. BuildingDefinition / BuildGrid
+GP-S30R remains finalized on its feature branch / merged tip as prior baseline (`989ca3fe…` on `main` includes GP-S30R finalization).
 
 **After operator PASS:** finalize builds; do **not** auto-assign Attack-Move.
 
@@ -72,7 +67,8 @@ Approved planning order after merge (not started):
 4. **GP-S31R** — Orbital Unit Drop — **DONE / MERGED**
 5. **GP-S32R** — Orbital Building Drop — **DONE / MERGED**
 6. Roadmap reconciliation — **DONE / MERGED** @ `ba98383…`
-7. **GP-S30R** — Combat Auto-Acquire — **FINALIZATION_READY_FOR_MERGE** (not merged)
+7. **GP-S30R** — Combat Auto-Acquire — **FINALIZATION_READY_FOR_MERGE** / on `main` baseline tip  
+8. **GP-S32A** — Attack-Move Reconciliation — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (not merged)
 
 ---
 
@@ -156,4 +152,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S32R + roadmap reconciliation are closed / merged. Current `main` baseline: `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2`. Current stage: **GP-S30R_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s30r-combat-auto-acquire`. See [`Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md`](Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md). Do not auto-start the next code slice after merge.
+SETUP-001, DOCS-001, GP-S01…GP-S32R + roadmap reconciliation + GP-S30R are on `main` baseline tip `989ca3fe6eae31b177ba2fade2ca1f02300d3326`. Current stage: **GP-S32A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s32a-attack-move-reconciliation`. See [`Claude_Tasks/GP-S32A_Attack_Move_Reconciliation.md`](Claude_Tasks/GP-S32A_Attack_Move_Reconciliation.md).

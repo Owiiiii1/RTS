@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-09 — GP-S32A Attack-Move Reconciliation (implementation candidate)
+
+Status: **GP-S32A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s32a-attack-move-reconciliation` (base `main` @ `989ca3fe`)
+- Attack-Move MVP: A modal → LMB ground → Held AttackMove travel + Sight acquire → Attack FSM → resume destination
+- Pure Move auto-acquire suppress preserved; Worker rejected at validate
+- Contract `gp.Combat.RunAttackMoveContractTest` Failures=0; regressions Failures=0; GPEditor+UHT **PASS**
+- NOT MERGED — operator validation stop; do **not** auto-start RTS Movement Reconciliation
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-09 — GP-S30R Combat Auto-Acquire (finalization)
 
 Status: **GP-S30R_FINALIZATION_READY_FOR_MERGE**

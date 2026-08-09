@@ -117,6 +117,31 @@ public:
 	 */
 	void UpdateBuildingPlacementInputEdgesForContract(bool bLMBDown, bool bRMBDown);
 
+	/** GP-S32A: enter local Attack-Move modal (A). Next ground LMB issues AttackMove. */
+	UFUNCTION(BlueprintCallable, Category = "GP|Commands|AttackMove")
+	void EnterAttackMoveMode();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|Commands|AttackMove")
+	void CancelAttackMoveMode();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|Commands|AttackMove")
+	void ConfirmAttackMoveDestination();
+
+	UFUNCTION(BlueprintPure, Category = "GP|Commands|AttackMove")
+	bool IsAttackMoveModeActive() const { return bAttackMoveModeActive; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|Commands|AttackMove")
+	bool IsAttackMoveCommandInputBlocked() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Commands|AttackMove")
+	bool IsAttackMoveSelectionInputBlocked() const;
+
+	/** RMB while AttackMove modal: cancel mode and block command click-through. */
+	bool ConsumeAttackMoveCommandInput();
+
+	/** Contract seam for AttackMove modal edges without hardware input. */
+	void UpdateAttackMoveInputEdgesForContract(bool bLMBDown, bool bRMBDown, bool bADown, bool bEscDown);
+
 	/** Authority launch intent: resolve own-team MainBase → TryLaunchReadyContainer. */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestLaunchReadyContainer();
@@ -223,6 +248,10 @@ private:
 	void BindBuildingInventoryEvents();
 	void UnbindBuildingInventoryEvents();
 
+	void CancelAttackMoveModeFromRMB();
+	void UpdateAttackMoveInputOwnership();
+	bool SelectionHasAttackMoveEligibleUnit() const;
+
 	bool IsControlModifierDown() const;
 	bool IsShiftModifierDown() const;
 
@@ -328,6 +357,15 @@ private:
 	bool bBuildingPlacementSuppressConfirmUntilLMBRelease = false;
 	/** Block command until the RMB that cancelled placement is released. */
 	bool bBuildingPlacementSuppressCommandUntilRMBRelease = false;
+
+	/** GP-S32A local Attack-Move modal (A → LMB ground). Independent of building placement. */
+	bool bAttackMoveModeActive = false;
+	bool bAttackMoveKeyWasDown = false;
+	bool bAttackMoveEscWasDown = false;
+	bool bAttackMoveRMBWasDown = false;
+	bool bAttackMoveLMBWasDown = false;
+	bool bAttackMoveSuppressConfirmUntilLMBRelease = false;
+	bool bAttackMoveSuppressCommandUntilRMBRelease = false;
 
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */
 	TWeakObjectPtr<APawn> LastInitializedLocalPawn;

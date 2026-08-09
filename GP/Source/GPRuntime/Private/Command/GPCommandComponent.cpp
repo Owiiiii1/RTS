@@ -236,9 +236,10 @@ bool UGP_CommandComponent::ValidateAndNormalizeCommand(
 	const FGameplayTag& CommandTag = ClientRequest.CommandTag;
 	const bool bIsMove = CommandTag == GPTags.Command_Move;
 	const bool bIsAttack = CommandTag == GPTags.Command_Attack;
+	const bool bIsAttackMove = CommandTag == GPTags.Command_AttackMove;
 	const bool bIsMine = CommandTag == GPTags.Command_Mine;
 	const bool bIsStop = CommandTag == GPTags.Command_Stop;
-	if (!bIsMove && !bIsAttack && !bIsMine && !bIsStop)
+	if (!bIsMove && !bIsAttack && !bIsAttackMove && !bIsMine && !bIsStop)
 	{
 		return Fail(EGP_CommandRejectReason::UnsupportedCommandTag);
 	}
@@ -307,13 +308,37 @@ bool UGP_CommandComponent::ValidateAndNormalizeCommand(
 	AActor* NormalizedTargetActor = nullptr;
 	FVector NormalizedLocation = FVector::ZeroVector;
 
-	if (bIsMove)
+	if (bIsMove || bIsAttackMove)
 	{
 		NormalizedTargetActor = nullptr;
 		NormalizedLocation = ClientRequest.TargetLocation;
 		if (!GPCommandPrivate::IsCommandLocationSane(NormalizedLocation))
 		{
 			return Fail(EGP_CommandRejectReason::InvalidTargetLocation);
+		}
+
+		// GP-S32A: AttackMove is combat-capable movable units only (SalvageWalker MVP).
+		if (bIsAttackMove)
+		{
+			TArray<TObjectPtr<AGP_UnitBase>> CombatUnits;
+			CombatUnits.Reserve(AcceptedUnits.Num());
+			for (const TObjectPtr<AGP_UnitBase>& UnitPtr : AcceptedUnits)
+			{
+				AGP_UnitBase* Unit = UnitPtr.Get();
+				if (IsValid(Unit)
+					&& GPTags.Unit_Type_SalvageWalker.IsValid()
+					&& Unit->HasCapabilityTag(GPTags.Unit_Type_SalvageWalker))
+				{
+					CombatUnits.Add(UnitPtr);
+				}
+			}
+
+			if (CombatUnits.Num() == 0)
+			{
+				return Fail(EGP_CommandRejectReason::UnsupportedUnit);
+			}
+
+			AcceptedUnits = MoveTemp(CombatUnits);
 		}
 	}
 	else if (bIsAttack)

@@ -449,8 +449,15 @@ bool UGP_UnitCommandComponent::HasExactActiveHeldAttack() const
 	}
 
 	const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
-	return Held.CommandTag == FGPGameplayTags::Get().Command_Attack
-		&& Held.CommandSerial == ActiveAttackSerial;
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	if (Held.CommandSerial != ActiveAttackSerial)
+	{
+		return false;
+	}
+
+	// Explicit Attack or AttackMove engagement share the Attack FSM serial ownership.
+	return Held.CommandTag == GPTags.Command_Attack
+		|| Held.CommandTag == GPTags.Command_AttackMove;
 }
 
 bool UGP_UnitCommandComponent::ValidateAttackTarget(
@@ -585,6 +592,7 @@ bool UGP_UnitCommandComponent::IsEligibleForCombatAutoAcquire() const
 		const FGameplayTag& HeldTag = HeldCommand.GetValue().CommandTag;
 		if (HeldTag == GPTags.Command_Move
 			|| HeldTag == GPTags.Command_Attack
+			|| HeldTag == GPTags.Command_AttackMove
 			|| HeldTag == GPTags.Command_Mine)
 		{
 			return false;
@@ -600,6 +608,72 @@ bool UGP_UnitCommandComponent::IsEligibleForCombatAutoAcquire() const
 	}
 
 	return true;
+}
+
+bool UGP_UnitCommandComponent::IsEligibleForAttackMoveAcquire() const
+{
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority())
+	{
+		return false;
+	}
+
+	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
+	if (OwnerUnit == nullptr || OwnerUnit->IsDead() || !IsCombatCapableForAutoAcquire(OwnerUnit))
+	{
+		return false;
+	}
+
+	if (IsAttackActive())
+	{
+		return false;
+	}
+
+	if (MineState != EGP_MineExecutionState::Idle || ActiveMineSerial != 0)
+	{
+		return false;
+	}
+	if (HaulState != EGP_HaulExecutionState::Idle || ActiveHaulSerial != 0)
+	{
+		return false;
+	}
+
+	if (!HeldCommand.IsSet())
+	{
+		return false;
+	}
+
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	return HeldCommand.GetValue().CommandTag == GPTags.Command_AttackMove;
+}
+
+bool UGP_UnitCommandComponent::IsAttackMoveActive() const
+{
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	return HeldCommand.IsSet()
+		&& HeldCommand.GetValue().CommandTag == GPTags.Command_AttackMove;
+}
+
+bool UGP_UnitCommandComponent::IsAttackMoveEngaging() const
+{
+	return IsAttackMoveActive() && IsAttackActive();
+}
+
+FVector UGP_UnitCommandComponent::GetAttackMoveDestination() const
+{
+	if (!IsAttackMoveActive())
+	{
+		return FVector::ZeroVector;
+	}
+	return HeldCommand.GetValue().TargetLocation;
+}
+
+bool UGP_UnitCommandComponent::IsHeldAttackMove(uint32 Serial) const
+{
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	return HeldCommand.IsSet()
+		&& HeldCommand.GetValue().CommandTag == GPTags.Command_AttackMove
+		&& HeldCommand.GetValue().CommandSerial == Serial;
 }
 
 void UGP_UnitCommandComponent::StartCombatAutoAcquireTimer()
@@ -724,6 +798,132 @@ void UGP_UnitCommandComponent::TryIssueAutoAcquireAttack(AGP_UnitBase* Target)
 	HandleCommand(AttackCommand);
 }
 
+void UGP_UnitCommandComponent::TryIssueAttackMoveAcquire(AGP_UnitBase* Target)
+{
+	if (!IsValid(Target) || !IsEligibleForAttackMoveAcquire())
+	{
+		return;
+	}
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AttackMoveAcquire: Unit=%s Target=%s Sight=%.1f Dest=%s"),
+		*GetNameSafe(GetOwner()),
+		*GetNameSafe(Target),
+		GetEffectiveAutoAcquireRange(),
+		*GetAttackMoveDestination().ToCompactString());
+
+	StartAttackMoveEngagement(Target);
+}
+
+bool UGP_UnitCommandComponent::StartAttackMoveEngagement(AGP_UnitBase* Target)
+{
+	AActor* Owner = GetOwner();
+	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
+	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+
+	if (Owner == nullptr || !Owner->HasAuthority() || !IsAttackMoveActive())
+	{
+		return false;
+	}
+
+	const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
+	const uint32 AttackSerial = Held.CommandSerial;
+
+	if (!IsAttackConfigValid())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution AttackMoveEngageRejected: Unit=%s Serial=%u Target=%s Reason=InvalidAttackConfig Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			AttackSerial,
+			*GetNameSafe(Target),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return false;
+	}
+
+	AGP_UnitBase* ValidTarget = nullptr;
+	EGP_AttackTerminalReason FailReason = EGP_AttackTerminalReason::InvalidTarget;
+	if (!ValidateAttackTarget(Target, ValidTarget, FailReason) || ValidTarget == nullptr)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution AttackMoveEngageRejected: Unit=%s Serial=%u Target=%s Reason=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			AttackSerial,
+			*GetNameSafe(Target),
+			AttackTerminalReasonToString(FailReason),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return false;
+	}
+
+	float EffectiveRange = 0.0f;
+	EGP_AttackRangeSource RangeSource = EGP_AttackRangeSource::Invalid;
+	if (!TryResolveEffectiveAttackRange(EffectiveRange, RangeSource))
+	{
+		return false;
+	}
+
+	// Preserve Held AttackMove destination; run Attack FSM under the same serial.
+	ClearAttackCadenceState();
+	ClearApproachProgressState();
+	ActiveAttackSerial = AttackSerial;
+	AttackTarget = ValidTarget;
+	BindAttackTargetDeath(ValidTarget);
+	SetAttackTickEnabled(true);
+
+	float Distance = -1.0f;
+	const bool bDistanceAvailable = TryComputeAttackDistance2D(Owner, ValidTarget, Distance);
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AttackMoveEngageAccepted: Unit=%s Serial=%u Target=%s Distance=%.1f AttackRange=%.1f Dest=%s Role=%s NetMode=%s"),
+		*GetNameSafe(Owner),
+		AttackSerial,
+		*GetNameSafe(ValidTarget),
+		Distance,
+		EffectiveRange,
+		*Held.TargetLocation.ToCompactString(),
+		GPUnitCommandStatePrivate::RoleToString(Role),
+		GPUnitCommandStatePrivate::NetModeToString(NetMode));
+
+	if (bDistanceAvailable && Distance <= EffectiveRange)
+	{
+		EnterAttackReady();
+	}
+	else
+	{
+		EnterAttackApproaching();
+	}
+
+	return IsAttackActive();
+}
+
+bool UGP_UnitCommandComponent::ResumeAttackMoveTravelAfterEngagement()
+{
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority() || !IsAttackMoveActive())
+	{
+		return false;
+	}
+
+	const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
+	AGP_MobileUnit* MobileUnit = Cast<AGP_MobileUnit>(Owner);
+	UGP_MovementComponent* Movement =
+		MobileUnit != nullptr ? MobileUnit->GetUnitMovementComponent() : ResolveMovementComponent();
+	if (Movement == nullptr)
+	{
+		return false;
+	}
+
+	const FGP_MovementRequestOutcome Outcome =
+		Movement->RequestMove(Held.TargetLocation, Held.CommandSerial);
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AttackMoveResume: Unit=%s Serial=%u Destination=%s Accepted=%s"),
+		*GetNameSafe(Owner),
+		Held.CommandSerial,
+		*Held.TargetLocation.ToCompactString(),
+		Outcome.IsAccepted() ? TEXT("true") : TEXT("false"));
+	return Outcome.IsAccepted();
+}
+
 float UGP_UnitCommandComponent::GetEffectiveAutoAcquireRange() const
 {
 	const float EffectiveAttackRange = GetAttackRange();
@@ -767,13 +967,26 @@ void UGP_UnitCommandComponent::UpdateAttackFacingTowardTarget(float DeltaTime)
 void UGP_UnitCommandComponent::OnCombatAutoAcquireScan()
 {
 	LastAutoAcquireCandidate.Reset();
-	if (!IsEligibleForCombatAutoAcquire())
+
+	const float Range = GetEffectiveAutoAcquireRange();
+	if (Range <= KINDA_SMALL_NUMBER)
 	{
 		return;
 	}
 
-	const float Range = GetEffectiveAutoAcquireRange();
-	if (Range <= KINDA_SMALL_NUMBER)
+	// GP-S32A: AttackMove travelling may acquire; pure Move stays suppressed via Idle eligibility.
+	if (IsEligibleForAttackMoveAcquire())
+	{
+		AGP_UnitBase* Target = FindNearestAutoAcquireTarget(Range);
+		LastAutoAcquireCandidate = Target;
+		if (Target != nullptr)
+		{
+			TryIssueAttackMoveAcquire(Target);
+		}
+		return;
+	}
+
+	if (!IsEligibleForCombatAutoAcquire())
 	{
 		return;
 	}
@@ -4367,6 +4580,12 @@ void UGP_UnitCommandComponent::FinishAttack(
 		{
 			ClearHeldCommand();
 		}
+		else if (Held.CommandTag == FGPGameplayTags::Get().Command_AttackMove
+			&& Held.CommandSerial == FinishedSerial)
+		{
+			// Engagement ended under AttackMove ownership — resume original destination.
+			ResumeAttackMoveTravelAfterEngagement();
+		}
 	}
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
@@ -4665,16 +4884,27 @@ void UGP_UnitCommandComponent::HandleMovementResult(
 	}
 
 	const FGP_StoredUnitCommand& CurrentHeld = HeldCommand.GetValue();
-	const FGameplayTag MoveTag = FGPGameplayTags::Get().Command_Move;
-	if (!(CurrentHeld.CommandTag == MoveTag))
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	const FGameplayTag MoveTag = GPTags.Command_Move;
+	const FGameplayTag AttackMoveTag = GPTags.Command_AttackMove;
+	const bool bHeldDestinationTravel =
+		CurrentHeld.CommandTag == MoveTag || CurrentHeld.CommandTag == AttackMoveTag;
+	if (!bHeldDestinationTravel)
 	{
-		LogIgnored(TEXT("HeldTagNotMove"), CurrentHeld.CommandSerial, CurrentHeld.CommandTag.ToString(), false);
+		LogIgnored(TEXT("HeldTagNotDestinationTravel"), CurrentHeld.CommandSerial, CurrentHeld.CommandTag.ToString(), false);
 		return;
 	}
 
 	if (CurrentHeld.CommandSerial != Serial)
 	{
 		LogIgnored(TEXT("SerialMismatch"), CurrentHeld.CommandSerial, CurrentHeld.CommandTag.ToString(), false);
+		return;
+	}
+
+	// While AttackMove is engaging, destination travel results are owned by Attack approach/cleanup.
+	if (CurrentHeld.CommandTag == AttackMoveTag && IsAttackActive())
+	{
+		LogIgnored(TEXT("AttackMoveEngaging"), CurrentHeld.CommandSerial, CurrentHeld.CommandTag.ToString(), false);
 		return;
 	}
 
@@ -4852,7 +5082,10 @@ bool UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 
 	const FGP_StoredUnitCommand& CurrentHeld = HeldCommand.GetValue();
 	const FGameplayTag MoveTag = FGPGameplayTags::Get().Command_Move;
+	const FGameplayTag AttackMoveTag = FGPGameplayTags::Get().Command_AttackMove;
 	const bool bCurrentIsMove = CurrentHeld.CommandTag == MoveTag;
+	const bool bCurrentIsAttackMove = CurrentHeld.CommandTag == AttackMoveTag;
+	const bool bCurrentRequestsDestinationTravel = bCurrentIsMove || bCurrentIsAttackMove;
 
 	const uint32 PreviousSerial = PreviousCommand.IsSet() ? PreviousCommand.GetValue().CommandSerial : 0;
 	const FString PreviousTagString = PreviousCommand.IsSet()
@@ -4862,7 +5095,7 @@ bool UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 	AGP_MobileUnit* MobileUnit = Cast<AGP_MobileUnit>(Owner);
 	if (MobileUnit == nullptr)
 	{
-		if (bCurrentIsMove)
+		if (bCurrentRequestsDestinationTravel)
 		{
 			UE_LOG(LogGPUnitCommandExecution, Warning,
 				TEXT("GP UnitCommandExecution MovementUnavailable: Unit=%s Serial=%u Destination=%s Reason=NonMobileOwner Role=%s NetMode=%s"),
@@ -4878,7 +5111,7 @@ bool UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 	UGP_MovementComponent* Movement = MobileUnit->GetUnitMovementComponent();
 	if (Movement == nullptr)
 	{
-		if (bCurrentIsMove)
+		if (bCurrentRequestsDestinationTravel)
 		{
 			UE_LOG(LogGPUnitCommandExecution, Warning,
 				TEXT("GP UnitCommandExecution MovementUnavailable: Unit=%s Serial=%u Destination=%s Reason=MissingComponent Role=%s NetMode=%s"),
@@ -4891,7 +5124,7 @@ bool UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 		return HeldCommand.IsSet();
 	}
 
-	if (bCurrentIsMove)
+	if (bCurrentRequestsDestinationTravel)
 	{
 		const uint32 RequestedSerial = CurrentHeld.CommandSerial;
 		const FGameplayTag RequestedTag = CurrentHeld.CommandTag;
@@ -4903,9 +5136,10 @@ bool UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 		if (Outcome.IsAccepted())
 		{
 			UE_LOG(LogGPUnitCommandExecution, Log,
-				TEXT("GP UnitCommandExecution MoveExecutionRequested: Unit=%s Serial=%u Destination=%s PreviousSerial=%u PreviousTag=%s Role=%s NetMode=%s"),
+				TEXT("GP UnitCommandExecution MoveExecutionRequested: Unit=%s Serial=%u Tag=%s Destination=%s PreviousSerial=%u PreviousTag=%s Role=%s NetMode=%s"),
 				*GetNameSafe(Owner),
 				RequestedSerial,
+				*RequestedTag.ToString(),
 				*RequestedDestination.ToCompactString(),
 				PreviousSerial,
 				*PreviousTagString,
@@ -4926,7 +5160,8 @@ bool UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 		if (HeldCommand.IsSet())
 		{
 			const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
-			if (Held.CommandTag == MoveTag && Held.CommandSerial == RequestedSerial)
+			if ((Held.CommandTag == MoveTag || Held.CommandTag == AttackMoveTag)
+				&& Held.CommandSerial == RequestedSerial)
 			{
 				HeldCommand.Reset();
 

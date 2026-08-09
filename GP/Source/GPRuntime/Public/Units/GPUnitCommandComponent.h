@@ -143,6 +143,21 @@ public:
 	/** GP-S30R: true when Idle and eligible for combat auto-acquire scan. */
 	bool IsEligibleForCombatAutoAcquire() const;
 
+	/**
+	 * GP-S32A: true when Held AttackMove may scan while travelling (not Idle Move).
+	 * Pure Move remains suppressed via IsEligibleForCombatAutoAcquire.
+	 */
+	bool IsEligibleForAttackMoveAcquire() const;
+
+	/** GP-S32A: Held command is AttackMove (destination travel or temporary engage). */
+	bool IsAttackMoveActive() const;
+
+	/** GP-S32A: Attack FSM currently running under AttackMove ownership. */
+	bool IsAttackMoveEngaging() const;
+
+	/** GP-S32A: original AttackMove destination (Held TargetLocation while active). */
+	FVector GetAttackMoveDestination() const;
+
 	/** GP-S30R diagnostic: last auto-acquire scan found a candidate (not replicated). */
 	AGP_UnitBase* DebugGetLastAutoAcquireCandidate() const { return LastAutoAcquireCandidate.Get(); }
 
@@ -446,6 +461,12 @@ private:
 	AGP_UnitBase* FindNearestAutoAcquireTarget(float MaxRangeCm) const;
 	void TryIssueAutoAcquireAttack(AGP_UnitBase* Target);
 	void UpdateAttackFacingTowardTarget(float DeltaTime);
+
+	/** GP-S32A: engage under Held AttackMove without replacing destination ownership. */
+	bool StartAttackMoveEngagement(AGP_UnitBase* Target);
+	void TryIssueAttackMoveAcquire(AGP_UnitBase* Target);
+	bool ResumeAttackMoveTravelAfterEngagement();
+	bool IsHeldAttackMove(uint32 Serial) const;
 
 	static const TCHAR* AttackStateToString(EGP_AttackExecutionState State);
 	static const TCHAR* AttackTerminalResultToString(EGP_AttackTerminalResult Result);

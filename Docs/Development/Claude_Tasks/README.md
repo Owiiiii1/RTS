@@ -6,20 +6,20 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-09 (GP-S30R finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-09 (GP-S32A Attack-Move). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Post-GP-S32R combat QoL. **Current: GP-S30R_FINALIZATION_READY_FOR_MERGE**.
+**Поточна фаза:** Post-GP-S30R combat QoL. **Current: GP-S32A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
-| GP-S01 … GP-S32R | **DONE / merged** on `main` @ `ba98383…` |
+| GP-S01 … GP-S32R + GP-S30R | **DONE / on `main` tip** `989ca3fe…` |
 | Roadmap reconciliation | **DONE / MERGED** |
-| **GP-S30R** Combat Auto-Acquire | **FINALIZATION_READY_FOR_MERGE** — [`GP-S30R_Combat_Auto_Acquire.md`](GP-S30R_Combat_Auto_Acquire.md) |
-| Attack-Move / BuildingDefinition / FoW | **Not assigned** |
+| **GP-S32A** Attack-Move Reconciliation | **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** — [`GP-S32A_Attack_Move_Reconciliation.md`](GP-S32A_Attack_Move_Reconciliation.md) |
+| RTS Movement Reconciliation | **Not started** (do not auto-assign) |
 
-**NEXT action для агента:** await human merge/check of GP-S30R. Do **not** auto-merge. Do **not** auto-start the next code slice. Approved planning order after merge: (1) Attack-Move reconciliation (2) RTS Movement Reconciliation (3) Unit Cap + LogisticsHub gameplay (4) Match win flow (5) BuildingDefinition / BuildGrid.
+**NEXT action для агента:** await operator PIE validation of GP-S32A. Do **not** auto-merge. Do **not** auto-start RTS Movement Reconciliation.
 
 ### Drift Warning
 

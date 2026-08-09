@@ -12,7 +12,7 @@ Post-GP-S32A combat QoL / movement production layer
 `feature/gp-s33m-rts-movement-reconciliation`  
 Base: `main` @ `0df4468445e939aaca33ed73548a78c2caabb86d`  
 Prior candidate: `f72794da169dd8efd3b881443453655547b63264`  
-Operator defect revision: *(see HEAD after push)*
+Operator defect revision: 1e34ae348fe99e1cac74b36e26254407128486cf
 
 ## Goal
 Replace straight-line-only movement with a minimal production RTS movement layer while keeping a single backend (`UGP_MovementComponent`) and existing Move / Attack / AttackMove / Mine / Haul contracts.

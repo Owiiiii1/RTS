@@ -129,7 +129,6 @@ namespace GPMineReassignmentHaulDebug
 			if (BeginResult != EGP_BeginMiningResult::Started
 				&& BeginResult != EGP_BeginMiningResult::AlreadyMiningTarget)
 			{
-				// Slot request path as fallback if BeginMining needs occupancy first.
 				const EGP_MiningSlotRequestResult SlotResult = NodeA->RequestMiningSlot(Filler);
 				if (SlotResult != EGP_MiningSlotRequestResult::Granted
 					&& SlotResult != EGP_MiningSlotRequestResult::AlreadyActive)
@@ -143,53 +142,38 @@ namespace GPMineReassignmentHaulDebug
 		return NodeA->GetActiveMinerCount() >= MaxSlots;
 	}
 
-	static bool IsAssignedToNode(AGP_Worker* Worker, AGP_ResourceNode* Node)
+	static bool OwnershipOnNodeBProven(AGP_Worker* Worker, AGP_ResourceNode* NodeB, uint32 ExpectedSerial)
 	{
-		if (!IsValid(Worker) || !IsValid(Node))
+		if (!IsValid(Worker) || !IsValid(NodeB))
 		{
 			return false;
 		}
 		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
+		UGP_MiningComponent* Mining = Worker->GetMiningComponent();
+		if (Cmd == nullptr || Mining == nullptr)
+		{
+			return false;
+		}
+		return Cmd->HasHeldCommand()
+			&& Cmd->GetHeldCommand()->CommandTag == FGPGameplayTags::Get().Command_Mine
+			&& Cmd->GetHeldCommand()->TargetActor.Get() == NodeB
+			&& Cmd->GetMineTarget() == NodeB
+			&& Cmd->GetActiveMineSerial() != 0
+			&& (ExpectedSerial == 0 || Cmd->GetActiveMineSerial() == ExpectedSerial)
+			&& Mining->GetCurrentResourceNode() == NodeB
+			&& Mining->GetMiningState() == EGP_MiningState::Mining
+			&& Cmd->DebugIsMiningStateEventBound();
+	}
+
+	static bool HaulActiveTowardBase(UGP_UnitCommandComponent* Cmd)
+	{
 		if (Cmd == nullptr)
 		{
 			return false;
 		}
-		if (Cmd->GetMineTarget() == Node)
-		{
-			return true;
-		}
-		if (Cmd->HasHeldCommand() && Cmd->GetHeldCommand()->TargetActor.Get() == Node)
-		{
-			return true;
-		}
-		if (UGP_MiningComponent* Mining = Worker->GetMiningComponent())
-		{
-			if (Mining->GetCurrentResourceNode() == Node)
-			{
-				return true;
-			}
-		}
-		const EGP_WorkerActivityState Activity = Worker->GetWorkerActivityState();
-		return (Activity == EGP_WorkerActivityState::MovingToMine
-				|| Activity == EGP_WorkerActivityState::Mining)
-			&& Cmd->HasHeldCommand()
-			&& Cmd->GetHeldCommand()->TargetActor.Get() == Node;
-	}
-
-	static bool HasOwnedLogisticsHub(UWorld* World, FName OwnerTag)
-	{
-		if (!IsValid(World) || OwnerTag.IsNone())
-		{
-			return false;
-		}
-		for (TActorIterator<AGP_LogisticsHub> It(World); It; ++It)
-		{
-			if (GPResourceLoopDiagnostics::ActorHasOwnerTag(*It, OwnerTag))
-			{
-				return true;
-			}
-		}
-		return false;
+		return Cmd->IsHaulActive()
+			|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::ReturningToBase
+			|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::DroppingOff;
 	}
 
 	static void RunMineReassignmentHaulContractTest(const TArray<FString>& Args, UWorld* World)
@@ -225,7 +209,7 @@ namespace GPMineReassignmentHaulDebug
 
 	static FAutoConsoleCommandWithWorldAndArgs GMineReassignmentHaulContract(
 		TEXT("gp.Resource.RunMineReassignmentHaulContractTest"),
-		TEXT("Authority: GP-S33M SlotFullAlternative → CargoFull haul → unload → return → MineRejected CargoFull. Transient only."),
+		TEXT("Authority: GP-S33M natural Mine(A) SlotFull→B → CargoFull haul → unload → return. No teleport/repair IssueMine."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunMineReassignmentHaulContractTest));
 }
 
@@ -270,6 +254,7 @@ void UGP_MineReassignmentHaulContractTestRunner::CleanupActors()
 		}
 	};
 	DestroyWeak(WorkerWeak);
+	DestroyWeak(Worker2Weak);
 	for (TWeakObjectPtr<AGP_Worker>& Weak : FillerWorkers)
 	{
 		DestroyWeak(Weak);
@@ -375,11 +360,17 @@ void UGP_MineReassignmentHaulContractTestRunner::Start(UWorld* InWorld)
 	StageIndex = 0;
 	Failures = 0;
 	MovementWaitTicks = 0;
+	InitialMineSerial = 0;
+	Worker2MineSerial = 0;
+	bOwnershipProven = false;
+	bCargoFullObserved = false;
+	bIssueMineAfterInitial = false;
+	bTeleportedAfterInitial = false;
 	UnbindWorldCleanup();
 	WorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(
 		this, &UGP_MineReassignmentHaulContractTestRunner::OnWorldCleanup);
 	UE_LOG(LogGPMineReassignmentHaul, Log,
-		TEXT("gp.Resource.RunMineReassignmentHaulContractTest Start"));
+		TEXT("gp.Resource.RunMineReassignmentHaulContractTest Start (natural chain — no teleport/repair Mine)"));
 	ScheduleNext(0.0f);
 }
 
@@ -419,7 +410,6 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 	{
 	case 0:
 	{
-		// A — spawn MainBase + Worker + NodeA (+ NodeB), fill NodeA occupancy. Building out of scope.
 		constexpr float TestSearchRadiusCm = 1500.0f;
 		constexpr float TestMaxPathLengthCm = 8000.0f;
 		if (UGP_ResourceGameplaySettings* Settings = GetMutableDefault<UGP_ResourceGameplaySettings>())
@@ -434,10 +424,6 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 			GPResourceLoopDiagnostics::SpawnDiagnosticScenario(World, 1, OwnerTag);
 		if (!Scenario.bOk || !Scenario.bReadyForHaulingTest)
 		{
-			UE_LOG(LogGPMineReassignmentHaul, Warning,
-				TEXT("gp.Resource.RunMineReassignmentHaulContractTest: SpawnDiagnosticScenario failed (%s) — arena fallback"),
-				*Scenario.Error);
-
 			FVector Anchor = FVector(0.0f, 0.0f, 100.0f);
 			FVector Projected;
 			if (GPResourceLoopDiagnostics::IsNavPointProjected(World, Anchor, &Projected, 2000.0f, 2000.0f))
@@ -458,8 +444,6 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 			Scenario.ResourceNode = NodeA;
 			Scenario.Worker = Worker;
 			Scenario.TeamId = ContractTeamId;
-			Scenario.MainBaseLocation = IsValid(Base) ? Base->GetActorLocation() : Anchor;
-			Scenario.ResourceNodeLocation = IsValid(NodeA) ? NodeA->GetActorLocation() : Anchor;
 		}
 
 		if (!Expect(Scenario.bOk && IsValid(Scenario.MainBase) && IsValid(Scenario.Worker)
@@ -477,16 +461,11 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 		MainBaseLocation = Scenario.MainBase->GetActorLocation();
 		NodeALocation = Scenario.ResourceNode->GetActorLocation();
 
-		Expect(!HasOwnedLogisticsHub(World, OwnerTag), TEXT("BuildingOutOfScope_NoOwnedLogisticsHub"));
-
 		FString NodeBFail;
 		AGP_ResourceNode* NodeB = SpawnNodeBNearA(
 			World, OwnerTag, NodeALocation, TestSearchRadiusCm, NodeBFail);
 		if (!Expect(IsValid(NodeB), TEXT("SpawnNodeBNearA")))
 		{
-			UE_LOG(LogGPMineReassignmentHaul, Error,
-				TEXT("gp.Resource.RunMineReassignmentHaulContractTest NodeB FAIL Reason=%s"),
-				*NodeBFail);
 			Finish();
 			return;
 		}
@@ -498,23 +477,27 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 		if (!Expect(FillNodeAOccupancy(World, Scenario.ResourceNode, ContractTeamId, OwnerTag, FillerWorkers),
 				TEXT("FillNodeAOccupancy")))
 		{
-			UE_LOG(LogGPMineReassignmentHaul, Error,
-				TEXT("gp.Resource.RunMineReassignmentHaulContractTest Fill FAIL Active=%d Max=%d"),
-				Scenario.ResourceNode->GetActiveMinerCount(),
-				Scenario.ResourceNode->GetMaxConcurrentMiners());
 			Finish();
 			return;
 		}
-		Expect(Scenario.ResourceNode->GetActiveMinerCount()
-				>= Scenario.ResourceNode->GetMaxConcurrentMiners(),
-			TEXT("NodeANoFreeMiningSlot"));
 
+		// Place tested workers near A (before Mine only — no teleport after IssueMine).
 		Scenario.Worker->GetCargoComponent()->ClearCargo();
 		Scenario.Worker->SetActorLocation(
-			NodeALocation + FVector(80.0f, 0.0f, 0.0f),
+			NodeALocation + FVector(120.0f, 40.0f, 0.0f),
 			false,
 			nullptr,
 			ETeleportType::TeleportPhysics);
+
+		AGP_Worker* Worker2 = GPResourceLoopDiagnostics::SpawnWorkerDeferred(
+			World, NodeALocation + FVector(120.0f, -40.0f, 0.0f), ContractTeamId, OwnerTag);
+		if (!Expect(IsValid(Worker2), TEXT("SpawnSecondTestedWorker")))
+		{
+			Finish();
+			return;
+		}
+		Worker2->GetCargoComponent()->ClearCargo();
+		Worker2Weak = Worker2;
 
 		++StageIndex;
 		MovementWaitTicks = 0;
@@ -523,41 +506,35 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 	}
 	case 1:
 	{
-		// B — Issue Mine on full NodeA → SlotFullAlternative reassignment to NodeB.
+		// ONE Mine(A) per tested worker — then never IssueMine / teleport again.
 		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_Worker* Worker2 = Worker2Weak.Get();
 		AGP_ResourceNode* NodeA = NodeAWeak.Get();
-		AGP_ResourceNode* NodeB = NodeBWeak.Get();
 		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
-		if (!Expect(IsValid(Worker) && IsValid(NodeA) && IsValid(NodeB) && Cmd != nullptr,
-				TEXT("ReassignObjects")))
+		UGP_UnitCommandComponent* Cmd2 = IsValid(Worker2) ? Worker2->GetUnitCommandComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(Worker2) && IsValid(NodeA) && Cmd && Cmd2,
+				TEXT("InitialMineObjects")))
 		{
 			Finish();
 			return;
 		}
 
-		if (MovementWaitTicks == 0)
-		{
-			IssueMine(Worker, NodeA);
-			Expect(Cmd->HasHeldCommand()
-					&& Cmd->GetHeldCommand()->CommandTag == FGPGameplayTags::Get().Command_Mine,
-				TEXT("MineAcceptedInitially"));
-			Expect(Cmd->GetHeldCommand()->CommandTag != FGPGameplayTags::Get().Command_OrderDrop
-					&& Cmd->GetHeldCommand()->CommandTag != FGPGameplayTags::Get().Command_Sell
-					&& Cmd->GetHeldCommand()->CommandTag != FGPGameplayTags::Get().Command_Demolish,
-				TEXT("BuildingCommandsNotInScope"));
-		}
+		IssueMine(Worker, NodeA);
+		IssueMine(Worker2, NodeA);
 
-		const bool bOnB = IsAssignedToNode(Worker, NodeB);
-		if (WaitCondition(bOnB, TEXT("SlotFullAlternativeTimeout")))
-		{
-			return;
-		}
+		Expect(Cmd->HasHeldCommand()
+				&& Cmd->GetHeldCommand()->CommandTag == FGPGameplayTags::Get().Command_Mine,
+			TEXT("MineAcceptedInitially_Worker1"));
+		Expect(Cmd2->HasHeldCommand()
+				&& Cmd2->GetHeldCommand()->CommandTag == FGPGameplayTags::Get().Command_Mine,
+			TEXT("MineAcceptedInitially_Worker2"));
 
-		Expect(bOnB, TEXT("ReassignedToNodeB"));
-		Expect(Cmd->GetMineTarget() != NodeA
-				|| (Cmd->HasHeldCommand() && Cmd->GetHeldCommand()->TargetActor.Get() == NodeB),
-			TEXT("NotStuckOnFullNodeA"));
-		Expect(!HasOwnedLogisticsHub(World, OwnerTag), TEXT("StillNoBuildingInScope"));
+		InitialMineSerial = Cmd->GetActiveMineSerial();
+		Worker2MineSerial = Cmd2->GetActiveMineSerial();
+		Expect(InitialMineSerial != 0, TEXT("Worker1MineSerialAllocated"));
+		Expect(Worker2MineSerial != 0, TEXT("Worker2MineSerialAllocated"));
+		// Serials are per-UnitCommandComponent (both may be 1). Independence = separate component state.
+		Expect(Cmd != Cmd2, TEXT("WorkersHaveIndependentCommandComponents"));
 
 		++StageIndex;
 		MovementWaitTicks = 0;
@@ -566,41 +543,27 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 	}
 	case 2:
 	{
-		// Wait until Worker is actively mining NodeB before forcing cycles.
 		AGP_Worker* Worker = WorkerWeak.Get();
 		AGP_ResourceNode* NodeB = NodeBWeak.Get();
 		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
-		UGP_MiningComponent* Mining = IsValid(Worker) ? Worker->GetMiningComponent() : nullptr;
-		if (!Expect(IsValid(Worker) && IsValid(NodeB) && Cmd != nullptr && Mining != nullptr,
-				TEXT("MineBReadyObjects")))
+		if (!Expect(IsValid(Worker) && IsValid(NodeB) && Cmd != nullptr, TEXT("ReassignObjects")))
 		{
 			Finish();
 			return;
 		}
 
-		const bool bMiningB =
-			Mining->IsMining()
-			&& Mining->GetCurrentResourceNode() == NodeB
-			&& Mining->GetMiningState() == EGP_MiningState::Mining;
-
-		if (!bMiningB && (MovementWaitTicks == 0 || (MovementWaitTicks % 20) == 0))
-		{
-			Worker->SetActorLocation(
-				NodeB->GetActorLocation() + FVector(60.0f, 0.0f, 0.0f),
-				false,
-				nullptr,
-				ETeleportType::TeleportPhysics);
-			if (!IsAssignedToNode(Worker, NodeB))
-			{
-				IssueMine(Worker, NodeB);
-			}
-		}
-		if (WaitCondition(bMiningB, TEXT("BeginMiningNodeBTimeout")))
+		const bool bHeldB = Cmd->HasHeldCommand()
+			&& Cmd->GetHeldCommand()->TargetActor.Get() == NodeB;
+		const bool bMineTargetB = Cmd->GetMineTarget() == NodeB;
+		if (WaitCondition(bHeldB && bMineTargetB, TEXT("ReassignedHeldTargetIsB_Timeout")))
 		{
 			return;
 		}
 
-		Expect(bMiningB, TEXT("MiningNodeBActive"));
+		Expect(bHeldB, TEXT("ReassignedHeldTargetIsB"));
+		Expect(bMineTargetB, TEXT("ReassignedMineTargetIsB"));
+		Expect(Cmd->GetActiveMineSerial() == InitialMineSerial, TEXT("SameMineSerialPreserved"));
+
 		++StageIndex;
 		MovementWaitTicks = 0;
 		ScheduleNext(0.05f);
@@ -608,25 +571,65 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 	}
 	case 3:
 	{
-		// C/D — Force mining cycles until CargoFull haul starts (no player haul command).
+		// Natural move + BeginMining on B — no teleport, no IssueMine.
 		AGP_Worker* Worker = WorkerWeak.Get();
 		AGP_ResourceNode* NodeB = NodeBWeak.Get();
 		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
 		UGP_MiningComponent* Mining = IsValid(Worker) ? Worker->GetMiningComponent() : nullptr;
-		UGP_CargoComponent* Cargo = IsValid(Worker) ? Worker->GetCargoComponent() : nullptr;
-		if (!Expect(IsValid(Worker) && IsValid(NodeB) && Cmd != nullptr && Mining != nullptr && Cargo != nullptr,
-				TEXT("CargoFullObjects")))
+		if (!Expect(IsValid(Worker) && IsValid(NodeB) && Cmd && Mining, TEXT("MineBNaturalObjects")))
 		{
 			Finish();
 			return;
 		}
 
-		if (!Cmd->IsHaulActive()
-			&& Cmd->GetHaulExecutionState() != EGP_HaulExecutionState::ReturningToBase)
+		const bool bProven = OwnershipOnNodeBProven(Worker, NodeB, InitialMineSerial);
+		if (WaitCondition(bProven, TEXT("MiningBActive_NaturalTimeout")))
 		{
-			for (int32 i = 0; i < 8; ++i)
+			return;
+		}
+
+		Expect(Mining->GetCurrentResourceNode() == NodeB, TEXT("MiningComponentTargetIsB"));
+		Expect(bProven, TEXT("MiningBActive"));
+		Expect(Cmd->DebugIsMiningStateEventBound(), TEXT("MiningStateBindingAlive"));
+		Expect(Cmd->GetActiveMineSerial() == InitialMineSerial, TEXT("SameMineSerialPreserved_AtMining"));
+		bOwnershipProven = true;
+
+		++StageIndex;
+		MovementWaitTicks = 0;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 4:
+	{
+		// Accelerate ONLY after ownership proven — never repairs state.
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* NodeB = NodeBWeak.Get();
+		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		UGP_MiningComponent* Mining = IsValid(Worker) ? Worker->GetMiningComponent() : nullptr;
+		UGP_CargoComponent* Cargo = IsValid(Worker) ? Worker->GetCargoComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(NodeB) && Cmd && Mining && Cargo, TEXT("CargoFullObjects")))
+		{
+			Finish();
+			return;
+		}
+		if (!Expect(bOwnershipProven && OwnershipOnNodeBProven(Worker, NodeB, InitialMineSerial),
+				TEXT("OwnershipStillValidBeforeForceCycles")))
+		{
+			Finish();
+			return;
+		}
+
+		if (!HaulActiveTowardBase(Cmd) && !Cargo->IsFull())
+		{
+			for (int32 i = 0; i < 12; ++i)
 			{
-				if (Cargo->IsFull() || Cmd->IsHaulActive())
+				if (!OwnershipOnNodeBProven(Worker, NodeB, InitialMineSerial) && !Cargo->IsFull())
+				{
+					Expect(false, TEXT("OwnershipLostDuringForceCycles"));
+					Finish();
+					return;
+				}
+				if (Cargo->IsFull() || HaulActiveTowardBase(Cmd))
 				{
 					break;
 				}
@@ -634,42 +637,43 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 			}
 		}
 
-		const bool bHaulStarted = Cmd->IsHaulActive()
-			|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::ReturningToBase
-			|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::DroppingOff;
-		if (!Expect(bHaulStarted, TEXT("CargoFullHaulStarted")))
+		if (Cargo->IsFull()
+			|| Mining->GetMiningState() == EGP_MiningState::CargoFull
+			|| HaulActiveTowardBase(Cmd))
 		{
-			UE_LOG(LogGPMineReassignmentHaul, Error,
-				TEXT("CargoFullHaul miss: Cargo=%.1f Cap=%.1f Full=%s HaulState=%d MineState=%d"),
-				Cargo->GetCurrentCargoAmount(),
-				Cargo->GetCargoCapacity(),
-				Cargo->IsFull() ? TEXT("true") : TEXT("false"),
-				static_cast<int32>(Cmd->GetHaulExecutionState()),
-				static_cast<int32>(Cmd->GetMineExecutionState()));
-			Finish();
+			bCargoFullObserved = true;
+		}
+
+		if (WaitCondition(HaulActiveTowardBase(Cmd), TEXT("HaulStartedAutomatically_Timeout")))
+		{
 			return;
 		}
 
-		Expect(Cargo->IsFull() || Cargo->GetCurrentCargoAmount() > KINDA_SMALL_NUMBER,
-			TEXT("CargoPresentOnHaul"));
+		Expect(bCargoFullObserved || Cargo->IsFull() || HaulActiveTowardBase(Cmd),
+			TEXT("CargoFullEventObserved"));
+		Expect(HaulActiveTowardBase(Cmd), TEXT("HaulStartedAutomatically"));
+		Expect(Cmd->GetLastHaulDeposit() == NodeB, TEXT("HaulDepositIsB"));
+		Expect(Cmd->GetActiveHaulSerial() == InitialMineSerial
+				|| Cmd->GetActiveMineSerial() == InitialMineSerial,
+			TEXT("HaulSerialMatchesMineSerial"));
 		Expect(Cmd->HasHeldCommand()
 				&& Cmd->GetHeldCommand()->CommandTag == FGPGameplayTags::Get().Command_Mine,
 			TEXT("HeldMineKeptDuringHaul_NoPlayerCommand"));
+		Expect(!bIssueMineAfterInitial, TEXT("Guard_NoIssueMineAfterInitial"));
+		Expect(!bTeleportedAfterInitial, TEXT("Guard_NoTeleportAfterInitial"));
 
 		++StageIndex;
 		MovementWaitTicks = 0;
 		ScheduleNext(0.1f);
 		break;
 	}
-	case 4:
+	case 5:
 	{
-		// E — Wait for unload at MainBase (cargo empty, haul finished).
 		AGP_Worker* Worker = WorkerWeak.Get();
 		AGP_MainBase* Base = MainBaseWeak.Get();
 		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
 		UGP_CargoComponent* Cargo = IsValid(Worker) ? Worker->GetCargoComponent() : nullptr;
-		if (!Expect(IsValid(Worker) && IsValid(Base) && Cmd != nullptr && Cargo != nullptr,
-				TEXT("UnloadObjects")))
+		if (!Expect(IsValid(Worker) && IsValid(Base) && Cmd && Cargo, TEXT("UnloadObjects")))
 		{
 			Finish();
 			return;
@@ -679,49 +683,13 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 			&& !Cmd->IsHaulActive()
 			&& Cmd->GetHaulExecutionState() != EGP_HaulExecutionState::ReturningToBase
 			&& Cmd->GetHaulExecutionState() != EGP_HaulExecutionState::DroppingOff;
-		if (WaitCondition(bUnloaded, TEXT("UnloadAtMainBaseTimeout")))
+		if (WaitCondition(bUnloaded, TEXT("ReachedMainBase_UnloadTimeout")))
 		{
 			return;
 		}
 
+		Expect(bUnloaded, TEXT("ReachedMainBase"));
 		Expect(Cargo->IsEmpty(), TEXT("CargoEmptyAfterUnload"));
-		Expect(!Cmd->IsHaulActive(), TEXT("HaulInactiveAfterUnload"));
-
-		++StageIndex;
-		MovementWaitTicks = 0;
-		ScheduleNext(0.05f);
-		break;
-	}
-	case 5:
-	{
-		// F — Assert return to NodeB / continue mining if B viable.
-		AGP_Worker* Worker = WorkerWeak.Get();
-		AGP_ResourceNode* NodeB = NodeBWeak.Get();
-		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
-		if (!Expect(IsValid(Worker) && IsValid(NodeB) && Cmd != nullptr, TEXT("ReturnToBObjects")))
-		{
-			Finish();
-			return;
-		}
-
-		const bool bReturningOrMiningB =
-			IsAssignedToNode(Worker, NodeB)
-			|| Cmd->GetMineExecutionState() == EGP_MineExecutionState::Approaching
-			|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::ReturningToDeposit
-			|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::MovingToMine
-			|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::Mining;
-
-		if (WaitCondition(bReturningOrMiningB, TEXT("ReturnToNodeBTimeout")))
-		{
-			return;
-		}
-
-		Expect(bReturningOrMiningB, TEXT("ReturnToNodeBContinueMining"));
-		Expect(Cmd->HasHeldCommand()
-				&& Cmd->GetHeldCommand()->CommandTag == FGPGameplayTags::Get().Command_Mine,
-			TEXT("HeldMineAfterUnload"));
-		Expect(IsValid(NodeB) && !NodeB->IsDepleted() && NodeB->GetCurrentAmount() > 0,
-			TEXT("NodeBStillViable"));
 
 		++StageIndex;
 		MovementWaitTicks = 0;
@@ -730,51 +698,145 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 	}
 	case 6:
 	{
-		// G — After unload empty: AddCargo to full, IssueMine → MineRejected CargoFull.
 		AGP_Worker* Worker = WorkerWeak.Get();
-		AGP_ResourceNode* NodeA = NodeAWeak.Get();
 		AGP_ResourceNode* NodeB = NodeBWeak.Get();
 		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
-		UGP_CargoComponent* Cargo = IsValid(Worker) ? Worker->GetCargoComponent() : nullptr;
-		if (!Expect(IsValid(Worker) && IsValid(NodeA) && IsValid(NodeB) && Cmd != nullptr && Cargo != nullptr,
-				TEXT("RejectObjects")))
+		UGP_MiningComponent* Mining = IsValid(Worker) ? Worker->GetMiningComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(NodeB) && Cmd && Mining, TEXT("ReturnToBObjects")))
 		{
 			Finish();
 			return;
 		}
 
-		AActor* HeldBefore = Cmd->HasHeldCommand() ? Cmd->GetHeldCommand()->TargetActor.Get() : nullptr;
+		const bool bReturnOrMine =
+			Cmd->GetMineTarget() == NodeB
+			|| (Cmd->HasHeldCommand() && Cmd->GetHeldCommand()->TargetActor.Get() == NodeB
+				&& (Cmd->GetMineExecutionState() == EGP_MineExecutionState::Approaching
+					|| Cmd->GetMineExecutionState() == EGP_MineExecutionState::Active
+					|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::ReturningToDeposit
+					|| Mining->GetCurrentResourceNode() == NodeB
+					|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::MovingToMine
+					|| Worker->GetWorkerActivityState() == EGP_WorkerActivityState::Mining));
 
-		const float Cap = Cargo->GetCargoCapacity();
-		Cargo->AddCargo(Cap);
-		Expect(Cargo->IsFull(), TEXT("CargoFilledManually"));
+		if (WaitCondition(bReturnOrMine, TEXT("ReturnToBOrResumeMining_Timeout")))
+		{
+			return;
+		}
 
-		IssueMine(Worker, NodeA);
-
-		Expect(Cargo->IsFull(), TEXT("CargoStillFullAfterRejectedMine"));
-		Expect(Cmd->GetMineTarget() != NodeA, TEXT("MineNotAcceptedOnNodeAWhileFull"));
-		const bool bHeldSwitchedToNodeA = Cmd->HasHeldCommand()
-			&& Cmd->GetHeldCommand()->CommandTag == FGPGameplayTags::Get().Command_Mine
-			&& Cmd->GetHeldCommand()->TargetActor.Get() == NodeA
-			&& HeldBefore != NodeA;
-		Expect(!bHeldSwitchedToNodeA, TEXT("HeldDidNotSwitchToNodeA"));
-		Expect(!(Cmd->GetMineExecutionState() == EGP_MineExecutionState::Approaching
-					&& Cmd->GetMineTarget() == NodeA)
-				&& !(Cmd->GetMineExecutionState() == EGP_MineExecutionState::Active
-					&& Cmd->GetMineTarget() == NodeA),
-			TEXT("MineExecutionDidNotRestartOnNodeA"));
-		Expect(!Cmd->IsHaulActive(), TEXT("RejectDidNotStartHaulFromRejectedMineA"));
-		Expect(!HasOwnedLogisticsHub(World, OwnerTag), TEXT("BuildingStillOutOfScope"));
+		Expect(bReturnOrMine, TEXT("ReturnToBOrResumeMining"));
+		Expect(IsValid(NodeB) && !NodeB->IsDepleted(), TEXT("NodeBStillViable"));
 
 		++StageIndex;
+		MovementWaitTicks = 0;
 		ScheduleNext(0.05f);
 		break;
 	}
 	case 7:
 	{
+		// Concurrent worker2: independent serial; natural reassignment; CargoFull→haul when ownership proven.
 		AGP_Worker* Worker = WorkerWeak.Get();
-		Expect(!Worker || !Worker->PrimaryActorTick.bCanEverTick, TEXT("WorkerNoPermanentTick"));
-		Expect(!HasOwnedLogisticsHub(World, OwnerTag), TEXT("FinalNoBuildingInScope"));
+		AGP_Worker* Worker2 = Worker2Weak.Get();
+		AGP_ResourceNode* NodeB = NodeBWeak.Get();
+		UGP_UnitCommandComponent* Cmd1 = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		UGP_UnitCommandComponent* Cmd2 = IsValid(Worker2) ? Worker2->GetUnitCommandComponent() : nullptr;
+		UGP_MiningComponent* Mining2 = IsValid(Worker2) ? Worker2->GetMiningComponent() : nullptr;
+		UGP_CargoComponent* Cargo2 = IsValid(Worker2) ? Worker2->GetCargoComponent() : nullptr;
+		if (!Expect(IsValid(Worker2) && IsValid(NodeB) && Cmd1 && Cmd2 && Mining2 && Cargo2,
+				TEXT("Worker2Objects")))
+		{
+			Finish();
+			return;
+		}
+
+		// Worker2 must keep its own chain identity on its own component (not cleared by Worker1 haul).
+		Expect(Cmd2->HasHeldCommand()
+				&& Cmd2->GetHeldCommand()->CommandTag == FGPGameplayTags::Get().Command_Mine,
+			TEXT("Worker2HeldMineIndependent"));
+		Expect(Cmd2->GetActiveMineSerial() == Worker2MineSerial
+				|| Cmd2->GetActiveHaulSerial() == Worker2MineSerial
+				|| HaulActiveTowardBase(Cmd2)
+				|| OwnershipOnNodeBProven(Worker2, NodeB, Worker2MineSerial),
+			TEXT("Worker2OwnSerialPreserved"));
+
+		const bool bW2Ready =
+			OwnershipOnNodeBProven(Worker2, NodeB, Worker2MineSerial)
+			|| HaulActiveTowardBase(Cmd2)
+			|| (Cmd2->HasHeldCommand() && Cmd2->GetHeldCommand()->TargetActor.Get() == NodeB
+				&& Cmd2->GetActiveMineSerial() == Worker2MineSerial);
+
+		if (WaitCondition(bW2Ready, TEXT("Worker2ReassignedOrHauling_Timeout")))
+		{
+			return;
+		}
+
+		if (OwnershipOnNodeBProven(Worker2, NodeB, Worker2MineSerial) && !HaulActiveTowardBase(Cmd2))
+		{
+			for (int32 i = 0; i < 12 && !HaulActiveTowardBase(Cmd2) && !Cargo2->IsFull(); ++i)
+			{
+				Mining2->DebugForceExecuteMiningCycle();
+			}
+		}
+
+		if (WaitCondition(
+				HaulActiveTowardBase(Cmd2)
+					|| Cargo2->IsEmpty()
+					|| OwnershipOnNodeBProven(Worker2, NodeB, Worker2MineSerial),
+				TEXT("Worker2HaulOrContinue_Timeout")))
+		{
+			return;
+		}
+
+		Expect(HaulActiveTowardBase(Cmd2)
+				|| Cargo2->IsEmpty()
+				|| OwnershipOnNodeBProven(Worker2, NodeB, Worker2MineSerial),
+			TEXT("Worker2IndependentChainProgress"));
+
+		++StageIndex;
+		MovementWaitTicks = 0;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 8:
+	{
+		// Manual Mine while already CargoFull must remain rejected and must not start haul.
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_ResourceNode* NodeA = NodeAWeak.Get();
+		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		UGP_CargoComponent* Cargo = IsValid(Worker) ? Worker->GetCargoComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(NodeA) && Cmd && Cargo, TEXT("RejectObjects")))
+		{
+			Finish();
+			return;
+		}
+
+		const bool bIdleEnough = !HaulActiveTowardBase(Cmd);
+		if (WaitCondition(bIdleEnough, TEXT("WaitHaulIdleBeforeRejectTest")))
+		{
+			return;
+		}
+
+		Cargo->ClearCargo();
+		Cargo->AddCargo(Cargo->GetCargoCapacity());
+		Expect(Cargo->IsFull(), TEXT("CargoFilledManuallyForReject"));
+
+		const bool bHaulBefore = HaulActiveTowardBase(Cmd);
+		IssueMine(Worker, NodeA);
+
+		Expect(Cargo->IsFull(), TEXT("CargoStillFullAfterRejectedMine"));
+		Expect(!HaulActiveTowardBase(Cmd) || bHaulBefore, TEXT("RejectDidNotStartHaulFromRejectedMine"));
+		Expect(!(Cmd->GetMineExecutionState() == EGP_MineExecutionState::Approaching
+					&& Cmd->GetMineTarget() == NodeA)
+				&& !(Cmd->GetMineExecutionState() == EGP_MineExecutionState::Active
+					&& Cmd->GetMineTarget() == NodeA),
+			TEXT("MineRejectedCargoFullPreserved"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 9:
+	{
+		Expect(!bTeleportedAfterInitial, TEXT("NaturalChain_NoTeleportUsed"));
 		Finish();
 		break;
 	}

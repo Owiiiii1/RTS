@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-09 — GP-S33M second operator FAIL: natural reassignment CargoFull→haul
+
+Status: **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s33m-rts-movement-reconciliation` (prior head `1e47b728…`)
+- Building NavigationObstacle operator **PASS** (unchanged)
+- Worker reassignment CargoFull→haul still **FAIL** in PIE; prior contract false-positive (teleport + second IssueMine)
+- Fix: Mine/Haul SelfSupersede keep-chain; reaffirm mining ownership after BeginMining; orphan CargoFull notify; LastMineDepositForHaul; natural-chain contract rewrite
+- Manual Mine+CargoFull reject preserved
+- Regressions Failures=0; GPEditor+UHT **PASS**; NOT MERGED
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-09 — GP-S33M operator defect revision (building nav + reassignment haul)
 
 Status: **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

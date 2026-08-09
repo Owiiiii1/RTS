@@ -1587,6 +1587,7 @@ bool UGP_UnitCommandComponent::RequestMineApproachMove(
 	MineState = EGP_MineExecutionState::Approaching;
 	ActiveMineSerial = MineSerial;
 	MineTarget = Node;
+	LastMineDepositForHaul = Node;
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
 		TEXT("GP UnitCommandExecution MineApproachRequested: Unit=%s MineSerial=%u Target=%s Label=%s Attempt=%d Destination=%s DesiredHoriz=%.1f PredictedWorst=%.1f Range=%.1f Acc=%.1f Safety=%.1f Role=%s NetMode=%s"),
@@ -1737,6 +1738,7 @@ void UGP_UnitCommandComponent::ResetMineExecutor()
 	MineState = EGP_MineExecutionState::Idle;
 	ActiveMineSerial = 0;
 	MineTarget.Reset();
+	LastMineDepositForHaul.Reset();
 	MineApproachDestination = FVector::ZeroVector;
 	MineApproachDesiredNodeDistance = -1.0f;
 	MinePredictedWorstCaseDistance = -1.0f;
@@ -2004,6 +2006,7 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 			|| Mining->GetMiningState() == EGP_MiningState::Mining))
 	{
 		MineTarget = Node;
+		LastMineDepositForHaul = Node;
 		MineState = EGP_MineExecutionState::Active;
 		ActiveMineSerial = MineSerial;
 		BindMiningStateEvents(Mining);
@@ -2051,6 +2054,7 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	}
 
 	MineTarget = Node;
+	LastMineDepositForHaul = Node;
 	MineState = EGP_MineExecutionState::Active;
 	ActiveMineSerial = MineSerial;
 	// Successful re-entry into mining ends the haul leg of the chain.
@@ -2062,6 +2066,8 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 		HaulMainBase.Reset();
 		bShouldReturnToDepositAfterHaul = false;
 	}
+
+	const EGP_MiningState MiningStateBefore = Mining->GetMiningState();
 
 	// Stop prior node occupancy while unbound so BeginMining's internal ManualStop→Idle
 	// cannot clear ActiveMineSerial via HandleMiningStateChanged.
@@ -2094,6 +2100,14 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 				}
 			}
 		}
+		// Retarget may have mutated Held/MineTarget; never BeginMining a stale local Node pointer.
+		if (HeldCommand.IsSet())
+		{
+			if (AGP_ResourceNode* HeldNode = Cast<AGP_ResourceNode>(HeldCommand.GetValue().TargetActor.Get()))
+			{
+				Node = HeldNode;
+			}
+		}
 		// No free alternative — fall through to BeginMining → WaitingForSlot (stable FIFO).
 	}
 
@@ -2102,34 +2116,43 @@ void UGP_UnitCommandComponent::BeginMiningAtHeldTarget(uint32 MineSerial)
 	++DebugMineBeginCallsThisTransition;
 #endif
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution MineBegin: Unit=%s MineSerial=%u Target=%s Result=%d Distance=%.1f Range=%.1f Role=%s NetMode=%s"),
+		TEXT("GP UnitCommandExecution BeginMiningAtHeldTarget: Unit=%s MineSerial=%u HeldTarget=%s MineTarget=%s BoundMining=%s MiningStateBefore=%d MiningStateAfter=%d BeginResult=%d Distance=%.1f Range=%.1f Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
 		MineSerial,
 		*GetNameSafe(Node),
+		*GetNameSafe(MineTarget.Get()),
+		BoundMiningComponent.IsValid() ? TEXT("true") : TEXT("false"),
+		static_cast<int32>(MiningStateBefore),
+		static_cast<int32>(Mining->GetMiningState()),
 		static_cast<int32>(BeginResult),
 		Distance,
 		InteractionRange,
 		GPUnitCommandStatePrivate::RoleToString(Role),
 		GPUnitCommandStatePrivate::NetModeToString(NetMode));
 
-	if (BeginResult == EGP_BeginMiningResult::WaitingForSlot)
+	if (BeginResult == EGP_BeginMiningResult::WaitingForSlot
+		|| BeginResult == EGP_BeginMiningResult::AlreadyMiningTarget
+		|| BeginResult == EGP_BeginMiningResult::Started)
 	{
-		// Stable FIFO — no SlotFullAlternative search, no same-target retarget.
-		const int32 WaitIndex = Node->FindWaitingMinerIndex(Owner);
-		UE_LOG(LogGPUnitCommandExecution, Log,
-			TEXT("GP UnitCommandExecution MineWaitingForSlot: Unit=%s MineSerial=%u Node=%s Position=%d Active=%d Waiting=%d Max=%d"),
-			*GetNameSafe(Owner),
-			MineSerial,
-			*GetNameSafe(Node),
-			WaitIndex >= 0 ? WaitIndex + 1 : -1,
-			Node->GetActiveMinerCount(),
-			Node->GetWaitingMinerCount(),
-			Node->GetMaxConcurrentMiners());
-		return;
-	}
-
-	if (BeginResult == EGP_BeginMiningResult::AlreadyMiningTarget)
-	{
+		// Reaffirm ownership after BeginMining remine Idle / retarget paths.
+		MineTarget = Node;
+		LastMineDepositForHaul = Node;
+		MineState = EGP_MineExecutionState::Active;
+		ActiveMineSerial = MineSerial;
+		BindMiningStateEvents(Mining);
+		if (BeginResult == EGP_BeginMiningResult::WaitingForSlot)
+		{
+			const int32 WaitIndex = Node->FindWaitingMinerIndex(Owner);
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP UnitCommandExecution MineWaitingForSlot: Unit=%s MineSerial=%u Node=%s Position=%d Active=%d Waiting=%d Max=%d"),
+				*GetNameSafe(Owner),
+				MineSerial,
+				*GetNameSafe(Node),
+				WaitIndex >= 0 ? WaitIndex + 1 : -1,
+				Node->GetActiveMinerCount(),
+				Node->GetWaitingMinerCount(),
+				Node->GetMaxConcurrentMiners());
+		}
 		return;
 	}
 
@@ -2203,6 +2226,7 @@ bool UGP_UnitCommandComponent::StartMineExecutor()
 	const uint32 MineSerial = Held.CommandSerial;
 	ActiveMineSerial = MineSerial;
 	MineTarget = Node;
+	LastMineDepositForHaul = Node;
 	MineApproachAttempt = 0;
 	// Persistent cluster SearchCenter for the whole Mine/haul/reassignment intent.
 	SetMineSearchAnchorFromNode(Node);
@@ -2272,6 +2296,24 @@ bool UGP_UnitCommandComponent::TryConsumeMineMovementResult(
 	AActor* Owner = GetOwner();
 	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
 	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
+	UGP_MovementComponent* Movement = ResolveMovementComponent();
+
+	// Same pattern as Attack: RequestMineApproachMove replace must not tear down the Mine chain.
+	if (Result == EGP_MovementResult::Cancelled && Reason == EGP_MovementResultReason::Superseded)
+	{
+		if (Movement != nullptr
+			&& Movement->IsMoving()
+			&& Movement->GetActiveMoveSerial() == ActiveMineSerial)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP UnitCommandExecution MineApproachResultIgnored: Unit=%s MineSerial=%u IgnoreReason=SelfSupersede Role=%s NetMode=%s"),
+				*GetNameSafe(Owner),
+				Serial,
+				GPUnitCommandStatePrivate::RoleToString(Role),
+				GPUnitCommandStatePrivate::NetModeToString(NetMode));
+			return true;
+		}
+	}
 
 	if (Result == EGP_MovementResult::Cancelled || Result == EGP_MovementResult::Failed)
 	{
@@ -2729,6 +2771,7 @@ void UGP_UnitCommandComponent::ContinueMineAfterSuccessfulHaul(uint32 ChainSeria
 		ActiveHaulSerial = ChainSerial;
 		ActiveMineSerial = ChainSerial;
 		MineTarget = Deposit;
+		LastMineDepositForHaul = Deposit;
 		MineApproachAttempt = 0;
 
 		UE_LOG(LogGPUnitCommandExecution, Log,
@@ -2853,6 +2896,22 @@ bool UGP_UnitCommandComponent::TryConsumeHaulMovementResult(
 
 	if (Result == EGP_MovementResult::Cancelled || Result == EGP_MovementResult::Failed)
 	{
+		UGP_MovementComponent* Movement = ResolveMovementComponent();
+		if (Result == EGP_MovementResult::Cancelled
+			&& Reason == EGP_MovementResultReason::Superseded
+			&& Movement != nullptr
+			&& Movement->IsMoving()
+			&& Movement->GetActiveMoveSerial() == ActiveHaulSerial)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP UnitCommandExecution HaulApproachResultIgnored: Unit=%s HaulSerial=%u IgnoreReason=SelfSupersede Role=%s NetMode=%s"),
+				*GetNameSafe(Owner),
+				Serial,
+				GPUnitCommandStatePrivate::RoleToString(Role),
+				GPUnitCommandStatePrivate::NetModeToString(NetMode));
+			return true;
+		}
+
 		UE_LOG(LogGPUnitCommandExecution, Log,
 			TEXT("GP UnitCommandExecution HaulApproachCancelled: Unit=%s HaulSerial=%u MovementResult=%s MovementReason=%s Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
@@ -2868,7 +2927,7 @@ bool UGP_UnitCommandComponent::TryConsumeHaulMovementResult(
 			return true;
 		}
 
-		// Manual/Superseded/Failed with cargo → wait (destroyed target / path loss). Without cargo → clear.
+		// Manual/Failed with cargo → wait (destroyed target / path loss). Without cargo → clear.
 		if (WorkerHasHaulCargo())
 		{
 			EnterWaitingForDropOff(FName(TEXT("MoveFailed")));
@@ -3505,9 +3564,11 @@ bool UGP_UnitCommandComponent::TryRetargetMineToNode(
 		Mining->StopMining(EGP_MiningStopReason::ManualStop);
 	}
 
+	const AGP_ResourceNode* OldTarget = HeldTarget;
 	FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
 	Held.TargetActor = NewNode;
 	MineTarget = NewNode;
+	LastMineDepositForHaul = NewNode;
 	ActiveMineSerial = MineSerial;
 	MineApproachAttempt = 0;
 #if !UE_BUILD_SHIPPING
@@ -3515,10 +3576,13 @@ bool UGP_UnitCommandComponent::TryRetargetMineToNode(
 #endif
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution MineRetarget: Unit=%s MineSerial=%u NewTarget=%s"),
+		TEXT("GP UnitCommandExecution MineRetarget: Unit=%s MineSerial=%u OldTarget=%s NewTarget=%s HeldTarget=%s MineTarget=%s"),
 		*GetNameSafe(Owner),
 		MineSerial,
-		*GetNameSafe(NewNode));
+		*GetNameSafe(OldTarget),
+		*GetNameSafe(NewNode),
+		*GetNameSafe(Cast<AGP_ResourceNode>(Held.TargetActor.Get())),
+		*GetNameSafe(MineTarget.Get()));
 
 	if (!bStartApproach)
 	{
@@ -3534,21 +3598,28 @@ bool UGP_UnitCommandComponent::TryRetargetMineToNode(
 		if (bBeginMiningAtHeldTargetInProgress && IsValid(Mining))
 		{
 			MineState = EGP_MineExecutionState::Active;
+			LastMineDepositForHaul = NewNode;
 			BindMiningStateEvents(Mining);
 			const EGP_BeginMiningResult NestedResult = Mining->BeginMining(NewNode);
 #if !UE_BUILD_SHIPPING
 			++DebugMineBeginCallsThisTransition;
 #endif
 			UE_LOG(LogGPUnitCommandExecution, Log,
-				TEXT("GP UnitCommandExecution MineBegin: Unit=%s MineSerial=%u Target=%s Result=%d Label=RetargetNested"),
+				TEXT("GP UnitCommandExecution BeginMiningAtHeldTarget: Unit=%s MineSerial=%u HeldTarget=%s MineTarget=%s BoundMining=%s BeginResult=%d Label=RetargetNested"),
 				*GetNameSafe(Owner),
 				MineSerial,
 				*GetNameSafe(NewNode),
+				*GetNameSafe(MineTarget.Get()),
+				BoundMiningComponent.IsValid() ? TEXT("true") : TEXT("false"),
 				static_cast<int32>(NestedResult));
 			if (NestedResult == EGP_BeginMiningResult::WaitingForSlot
 				|| NestedResult == EGP_BeginMiningResult::AlreadyMiningTarget
 				|| NestedResult == EGP_BeginMiningResult::Started)
 			{
+				MineTarget = NewNode;
+				LastMineDepositForHaul = NewNode;
+				ActiveMineSerial = MineSerial;
+				BindMiningStateEvents(Mining);
 				if (NestedResult == EGP_BeginMiningResult::WaitingForSlot
 					|| NestedResult == EGP_BeginMiningResult::AlreadyMiningTarget)
 				{
@@ -3798,15 +3869,82 @@ void UGP_UnitCommandComponent::HandleWaitingForResourceSafetyRetry()
 	}
 }
 
+void UGP_UnitCommandComponent::NotifyMiningComponentTerminal(
+	EGP_MiningState PreviousState,
+	EGP_MiningState NewState,
+	EGP_MiningStopReason Reason)
+{
+	// Multicast already invoked HandleMiningStateChanged when bound; that path starts haul / clears.
+	// This direct call covers the unbound orphan case after reassignment remine Idle cleared binding.
+	if (HaulState == EGP_HaulExecutionState::ReturningToBase
+		|| HaulState == EGP_HaulExecutionState::DroppingOff
+		|| HaulState == EGP_HaulExecutionState::WaitingForDropOff
+		|| HaulState == EGP_HaulExecutionState::ReturningToDeposit)
+	{
+		return;
+	}
+	if (bFinishingMine)
+	{
+		return;
+	}
+	HandleMiningStateChanged(PreviousState, NewState, Reason);
+}
+
 void UGP_UnitCommandComponent::HandleMiningStateChanged(
 	EGP_MiningState PreviousState,
 	EGP_MiningState NewState,
 	EGP_MiningStopReason Reason)
 {
 	(void)PreviousState;
-	if (bFinishingMine || ActiveMineSerial == 0)
+	if (bFinishingMine)
 	{
 		return;
+	}
+
+	// Idempotent: CargoFull/partial terminals must not restart haul when already hauling.
+	if ((NewState == EGP_MiningState::CargoFull
+			|| NewState == EGP_MiningState::DepositDepleted)
+		&& (HaulState == EGP_HaulExecutionState::ReturningToBase
+			|| HaulState == EGP_HaulExecutionState::DroppingOff
+			|| HaulState == EGP_HaulExecutionState::WaitingForDropOff
+			|| HaulState == EGP_HaulExecutionState::ReturningToDeposit))
+	{
+		return;
+	}
+
+	AActor* Owner = GetOwner();
+	AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+	UGP_CargoComponent* Cargo = Worker != nullptr ? Worker->GetCargoComponent() : nullptr;
+	UGP_MiningComponent* Mining = Worker != nullptr ? Worker->GetMiningComponent() : nullptr;
+	const float CargoAmount = IsValid(Cargo) ? Cargo->GetCurrentCargoAmount() : 0.0f;
+
+	// Recover chain identity if remine Idle cleared ActiveMineSerial before CargoFull.
+	if (ActiveMineSerial == 0)
+	{
+		if (NewState == EGP_MiningState::CargoFull
+			&& CargoAmount > KINDA_SMALL_NUMBER
+			&& HeldCommand.IsSet()
+			&& HeldCommand.GetValue().CommandTag == FGPGameplayTags::Get().Command_Mine)
+		{
+			ActiveMineSerial = HeldCommand.GetValue().CommandSerial;
+			if (!MineTarget.IsValid())
+			{
+				MineTarget = Cast<AGP_ResourceNode>(HeldCommand.GetValue().TargetActor.Get());
+			}
+			if (!LastMineDepositForHaul.IsValid())
+			{
+				LastMineDepositForHaul = MineTarget;
+			}
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution MineTerminalSerialRecovered: Unit=%s MineSerial=%u HeldTarget=%s"),
+				*GetNameSafe(Owner),
+				ActiveMineSerial,
+				*GetNameSafe(MineTarget.Get()));
+		}
+		else
+		{
+			return;
+		}
 	}
 
 	const bool bTerminal =
@@ -3822,26 +3960,46 @@ void UGP_UnitCommandComponent::HandleMiningStateChanged(
 	}
 
 	// BeginMining may StopMining(ManualStop)→Idle while UnitCommand is still bound during
-	// BeginMiningAtHeldTarget. Ignoring that Idle keeps ActiveMineSerial for the remine.
-	// External Idle (test/player StopMining, teardown) must still clear the chain.
+	// BeginMiningAtHeldTarget (including nested retarget BeginMining). Ignore that Idle only
+	// while the remine guard is set — external StopMining(ManualStop) must still clear the chain.
 	if (NewState == EGP_MiningState::Idle && bBeginMiningAtHeldTargetInProgress)
 	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution MiningStateChangedIgnored: Unit=%s Serial=%u NewState=Idle Reason=%d IgnoreReason=BeginMiningRemine HeldPresent=%s BoundMiningMatches=%s"),
+			*GetNameSafe(Owner),
+			ActiveMineSerial,
+			static_cast<int32>(Reason),
+			HeldCommand.IsSet() ? TEXT("true") : TEXT("false"),
+			BoundMiningComponent.Get() == Mining ? TEXT("true") : TEXT("false"));
 		return;
 	}
 
-	AActor* Owner = GetOwner();
+	AGP_ResourceNode* HeldTarget =
+		HeldCommand.IsSet() ? Cast<AGP_ResourceNode>(HeldCommand.GetValue().TargetActor.Get()) : nullptr;
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution MineTerminal: Unit=%s MineSerial=%u NewState=%d Reason=%d"),
+		TEXT("GP UnitCommandExecution MiningStateChanged: Unit=%s Serial=%u Node=%s NewState=%d Reason=%d HeldPresent=%s HeldTarget=%s MineTarget=%s ActiveMineSerial=%u BoundMiningMatches=%s Cargo=%.1f"),
 		*GetNameSafe(Owner),
 		ActiveMineSerial,
+		*GetNameSafe(MineTarget.IsValid() ? MineTarget.Get() : LastMineDepositForHaul.Get()),
 		static_cast<int32>(NewState),
-		static_cast<int32>(Reason));
+		static_cast<int32>(Reason),
+		HeldCommand.IsSet() ? TEXT("true") : TEXT("false"),
+		*GetNameSafe(HeldTarget),
+		*GetNameSafe(MineTarget.Get()),
+		ActiveMineSerial,
+		BoundMiningComponent.Get() == Mining ? TEXT("true") : TEXT("false"),
+		CargoAmount);
 
 	const uint32 Serial = ActiveMineSerial;
 	AGP_ResourceNode* DepositBeforeReset = MineTarget.Get();
-	AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
-	UGP_CargoComponent* Cargo = Worker != nullptr ? Worker->GetCargoComponent() : nullptr;
-	const float CargoAmount = IsValid(Cargo) ? Cargo->GetCurrentCargoAmount() : 0.0f;
+	if (!IsValid(DepositBeforeReset))
+	{
+		DepositBeforeReset = LastMineDepositForHaul.Get();
+	}
+	if (!IsValid(DepositBeforeReset))
+	{
+		DepositBeforeReset = HeldTarget;
+	}
 
 	const bool bHaulCargoFull = NewState == EGP_MiningState::CargoFull;
 	const bool bHaulDepletedPartial =
@@ -3896,11 +4054,19 @@ void UGP_UnitCommandComponent::HandleMiningStateChanged(
 				ClearHeldCommand();
 			}
 			ResetHaulExecutor();
+			LastMineDepositForHaul.Reset();
 		}
 	}
 
 	if (bStartHaul)
 	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution CargoFullHaulDecision: Unit=%s MineSerial=%u Deposit=%s Cargo=%.1f StartHaul=true ReturnToDeposit=%s MainBaseWillResolve=true"),
+			*GetNameSafe(Owner),
+			Serial,
+			*GetNameSafe(DepositBeforeReset),
+			CargoAmount,
+			bReturnToDeposit ? TEXT("true") : TEXT("false"));
 		UE_LOG(LogGPUnitCommandExecution, Log,
 			TEXT("GP UnitCommandExecution MineTerminalHaul: Unit=%s MineSerial=%u Deposit=%s Cargo=%.1f ReturnToDeposit=%s"),
 			*GetNameSafe(Owner),
@@ -3911,6 +4077,15 @@ void UGP_UnitCommandComponent::HandleMiningStateChanged(
 		StartHaulReturnToBase(Serial, DepositBeforeReset, bReturnToDeposit);
 		return;
 	}
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution CargoFullHaulDecision: Unit=%s MineSerial=%u Deposit=%s Cargo=%.1f StartHaul=false ReassignAfter=%s NewState=%d"),
+		*GetNameSafe(Owner),
+		Serial,
+		*GetNameSafe(DepositBeforeReset),
+		CargoAmount,
+		bReassignAfter ? TEXT("true") : TEXT("false"),
+		static_cast<int32>(NewState));
 
 	if (bReassignAfter)
 	{

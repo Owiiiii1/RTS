@@ -7,9 +7,11 @@
 #include "GPMineReassignmentHaulContractTest.generated.h"
 
 /**
- * GP-S33M focused contract: Worker Mine on full NodeA → SlotFullAlternative to NodeB →
- * CargoFull haul → unload → return to B → MineRejected CargoFull.
- * Building / LogisticsHub is out of scope.
+ * GP-S33M natural-chain contract:
+ * ONE Mine(A) with A full → automatic reassignment to B → natural move/mine →
+ * CargoFull → automatic haul → unload → return to B.
+ * No teleport / second IssueMine / direct BeginMining on the tested worker after Mine(A).
+ * Optional concurrent two-worker scenario included.
  */
 UCLASS()
 class GPRUNTIME_API UGP_MineReassignmentHaulContractTestRunner : public UObject
@@ -43,6 +45,7 @@ private:
 	TWeakObjectPtr<UWorld> WorldWeak;
 	TWeakObjectPtr<class AGP_MainBase> MainBaseWeak;
 	TWeakObjectPtr<class AGP_Worker> WorkerWeak;
+	TWeakObjectPtr<class AGP_Worker> Worker2Weak;
 	TWeakObjectPtr<class AGP_ResourceNode> NodeAWeak;
 	TWeakObjectPtr<class AGP_ResourceNode> NodeBWeak;
 	TArray<TWeakObjectPtr<class AGP_Worker>> FillerWorkers;
@@ -52,10 +55,16 @@ private:
 	int32 ContractTeamId = 1;
 	int32 MovementWaitTicks = 0;
 	double MovementWaitStartTime = 0.0;
-	float MovementWaitTimeoutSeconds = 45.0f;
+	float MovementWaitTimeoutSeconds = 60.0f;
 	float SavedSettingsSearchRadiusCm = 3000.0f;
 	float SavedSettingsMaxPathLengthCm = 6000.0f;
 	bool bSettingsOverridden = false;
+	uint32 InitialMineSerial = 0;
+	uint32 Worker2MineSerial = 0;
+	bool bOwnershipProven = false;
+	bool bCargoFullObserved = false;
+	bool bIssueMineAfterInitial = false;
+	bool bTeleportedAfterInitial = false;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

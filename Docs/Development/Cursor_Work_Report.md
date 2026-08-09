@@ -1,115 +1,96 @@
-# Cursor Work Report — GP-S33M RTS Movement Reconciliation (operator defect revision)
+# Cursor Work Report — GP-S33M RTS Movement Reconciliation
 
 ## Status
 **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
 NOT MERGED.
 
----
+## Branch
+`feature/gp-s33m-rts-movement-reconciliation`  
+Prior remote head: `1e47b728042fea96266ee1e270c2b1bf1c9b4372`  
+This revision: *(recorded after commit)*
 
-## 1. Branch / SHAs
-| | |
-|---|---|
-| Branch | `feature/gp-s33m-rts-movement-reconciliation` |
-| Base (`main`) | `0df4468445e939aaca33ed73548a78c2caabb86d` |
-| Prior candidate | `f72794da169dd8efd3b881443453655547b63264` |
-| This revision | `1e34ae348fe99e1cac74b36e26254407128486cf` (SHA note `796e6c4eddc31d73eba13250baad3ef15a90e42e`) |
-
-## 2. Operator first-pass facts
+## Operator second-pass facts
 | Check | Result |
-|---|---|
-| NavMesh on L_PrototypeArena | **PASS** |
-| Units use navigation | **PASS** |
-| Unit↔unit avoidance | **PASS** |
-| Building nav obstacle | **FAIL** (no authored footprint) |
-| Reassigned Worker CargoFull→Haul | **FAIL** (stood with full cargo) |
+| --- | --- |
+| Building NavigationObstacle | **PASS** (unchanged) |
+| NavMesh / unit nav / unit↔unit avoidance | PASS (prior) |
+| Reassigned Worker CargoFull → automatic haul | **FAIL** (second operator pass) |
 
-## 3. Worker bug — root cause
-`HandleMiningStateChanged` treated `EGP_MiningState::Idle` as a mine-chain terminal.
+### Log fact
+Manual Mine after standing full cargo → `MineRejected: Reason=CargoFull`.  
+Proves cargo did fill from mining, but automatic HaulReturnToBase had not started. Manual CargoFull reject remains intentional.
 
-During reassignment / remine, `BeginMining` can call `StopMining(ManualStop)` → Idle **while UnitCommand is still bound** inside `BeginMiningAtHeldTarget`.
+## Why previous contract was a false positive
+`GPMineReassignmentHaulContractTest` masked the bug:
+- teleported tested Worker near NodeB
+- issued a second `IssueMine(Worker, NodeB)` if assignment looked wrong
 
-That Idle handler:
-1. cleared `ActiveMineSerial`
-2. cleared Held Mine
-3. unbound `OnMiningStateChanged`
+That repaired broken Held/binding/serial state before forcing mining cycles, so CargoFull→haul could pass without proving the natural reassignment chain.
 
-Then `BeginMining` continued and reached `Started` / mining on deposit B **without** UnitCommand listening.
+## Corrected contract methodology
+`gp.Resource.RunMineReassignmentHaulContractTest` rewritten:
+1. Fill A slots with fillers
+2. Spawn two tested workers
+3. Issue **exactly one** `Mine(A)` per tested worker
+4. **No** teleport / second IssueMine / direct BeginMining / retarget helpers on tested workers after that
+5. Wait for natural reassignment → move → mining B
+6. Prove ownership (Held=B, MineTarget=B, ActiveMineSerial, Mining node=B, Mining state, binding alive) **before** any `DebugForceExecuteMiningCycle`
+7. Force cycles only accelerate already-valid mining
+8. Assert automatic haul, unload, return to B
+9. Concurrent worker2 keeps independent component chain
+10. End-stage manual Mine while full cargo remains rejected (does not start haul)
 
-Later `CargoFull` broadcast had **no** UnitCommand consumer → no `StartHaulReturnToBase`.
+## Proven root cause
+Not only the prior Idle-during-`BeginMiningAtHeldTarget` gap.
 
-Manual Mine while full correctly hit `MineRejected: CargoFull` (intentional; not the bug).
+Factual failures in the natural chain:
+1. **Mine SelfSupersede teardown** — `RequestMineApproachMove` replace while moving broadcast `Cancelled/Superseded` with the same serial; `TryConsumeMineMovementResult` cleared Held + `ResetMineExecutor`, leaving approach without coherent Mine ownership (Attack already ignored SelfSupersede; Mine did not). Haul had the analogous Superseded→`WaitingForDropOff` path.
+2. **Post-BeginMining ownership not reaffirmed** after remine/retarget — binding/serial/MineTarget could diverge from the active deposit after SlotFullAlternative → B.
+3. **Stale local Node after retarget** — fallthrough could `BeginMining` the pre-retarget Node pointer after Held was updated to B.
+4. **Orphan CargoFull** — if UnitCommand was unbound when MiningComponent reached CargoFull, multicast never started haul; cargo stayed full → later manual Mine correctly rejected `CargoFull`.
 
-## 4. Worker fix
-- Ignore Idle terminals **only** when `bBeginMiningAtHeldTargetInProgress` (internal remine).
-- External Idle (player/test `StopMining`) still clears the chain.
-- Belt-and-suspenders: stop prior-node occupancy **unbound** before `Bind`+`BeginMining`; arrival/`RejectedCargoFull` starts haul instead of clearing Held.
+## Exact code fix
+- Mine/Haul: ignore movement `Cancelled+Superseded` self-replace (keep chain)
+- After successful `BeginMining` (Started/Waiting/Already): reaffirm `MineTarget`, `LastMineDepositForHaul`, `ActiveMineSerial`, `BindMiningStateEvents`
+- Retarget: log Old/New/Held/MineTarget; refresh Node from Held after SlotFullAlternative
+- `LastMineDepositForHaul` survives `MineTarget.Reset()` for haul deposit resolution
+- `UGP_MiningComponent::SetMiningState` direct `NotifyMiningComponentTerminal` after multicast (orphan CargoFull safety net)
+- CargoFull: recover `ActiveMineSerial` from Held if cleared; idempotent when haul already active
+- Idle remine ignore remains **only** under `bBeginMiningAtHeldTargetInProgress` (external `StopMining` still clears)
 
-### State ownership after reassignment
-| Field | Role |
-|---|---|
-| `HeldCommand.TargetActor` | Active Mine intent deposit (updated by `TryRetargetMineToNode` to B) |
-| `MineTarget` | Runtime active deposit (B after retarget/approach) |
-| `ActiveMineSerial` | Shared Mine/Haul chain identity |
-| Manual `Mine` + full cargo | Still rejected `CargoFull` unless `IsActiveHaulChainForDeposit` |
+## State ownership after reassignment
+- `HeldCommand.TargetActor` = active mine intent deposit (updated to B on retarget)
+- `MineTarget` / `LastMineDepositForHaul` = runtime active deposit for approach/haul
+- `ActiveMineSerial` = chain identity shared with haul
+- Manual Mine + full cargo still rejected; does not start haul
 
-## 5. Building NavigationObstacle
-| Item | Value |
-|---|---|
-| Component | `UBoxComponent* NavigationObstacle` on `AGP_BuildingBase` |
-| BP seam | Inherited `GP\|Navigation`; Relative Location / Rotation / Box Extent editable |
-| Collision | QueryOnly; **all channels Ignore** (no Visibility / Pawn gameplay block) |
-| Nav | `CanEverAffectNavigation=true`, `bDynamicObstacle=true`, `SetAreaClassOverride(UNavArea_Null)` |
-| Defaults | MainBase extent `(160,160,130)`; LogisticsHub `(140,140,120)`; base default `(140,140,120)` |
-| Capsule | Remains non-nav (`SetCanEverAffectNavigation(false)`) |
+## Building NavigationObstacle
+Operator PASS. Implementation not changed this revision.
 
-### Runtime Recast
-Orbital/runtime-spawned buildings need Recast **Runtime Generation = Dynamic** (or Dynamic Modifiers Only) for dynamic obstacles to update nav at runtime.
+## Test results (Failures=0)
+| Test | Result |
+| --- | --- |
+| gp.Resource.RunMineReassignmentHaulContractTest | PASS |
+| gp.Resource.RunS28RegressionSuite | PASS |
+| gp.Resource.RunDropOffResilienceContractTest | PASS |
+| gp.Resource.RunContainerLaunchContractTest | PASS |
+| gp.Resource.RunContainerLaunchHUDContractTest | PASS |
+| gp.Movement.RunRTSMovementReconciliationContractTest | PASS |
+| gp.Combat.RunAttackMoveContractTest | PASS |
+| gp.Combat.RunAutoAcquireContractTest | PASS |
+| gp.Combat.RunSalvageWalkerContractTest | PASS |
+| gp.Combat.RunLOSFireGateContractTest | PASS |
+| gp.Resource.RunOrbitalUnitDropContractTest | PASS |
+| gp.Building.RunOrbitalBuildingDropContractTest | PASS |
 
-**Do not** edit operator `DefaultEngine.ini` / map in this slice.
+## Build
+GPEditor Win64 Development + UHT: **PASS**  
+GP Development / Shipping: not run.
 
-Operator must set Project Settings → Navigation Mesh → Runtime Generation locally if runtime Hub spawn must carve nav in PIE.
+## Operator retest (Worker only)
+Two workers, deposit A full/unavailable, one player Mine(A):
+- reassign → mine B → CargoFull → automatic MainBase haul → unload → continue  
+- no manual Mine after cargo full
 
-Static placed buildings with baked nav / editor rebuild still benefit from the authored footprint when paths are built.
-
-## 6. Contracts / regressions
-| Command | Failures |
-|---|---|
-| `gp.Movement.RunRTSMovementReconciliationContractTest` | **0** (incl. Building_* seam checks) |
-| `gp.Resource.RunMineReassignmentHaulContractTest` | **0** |
-| `gp.Resource.RunS28RegressionSuite` | **0** |
-| `gp.Resource.RunDropOffResilienceContractTest` | **0** |
-| `gp.Resource.RunContainerLaunchContractTest` | **0** |
-| `gp.Resource.RunContainerLaunchHUDContractTest` | **0** |
-| `gp.Combat.RunAttackMoveContractTest` | **0** |
-| `gp.Combat.RunAutoAcquireContractTest` | **0** |
-| `gp.Combat.RunSalvageWalkerContractTest` | **0** |
-| `gp.Combat.RunLOSFireGateContractTest` | **0** |
-| `gp.Resource.RunOrbitalUnitDropContractTest` | **0** |
-| `gp.Building.RunOrbitalBuildingDropContractTest` | **0** |
-
-## 7. Builds
-- GPEditor Win64 Development + UHT **PASS**
-- GP Dev / Shipping **not run**
-
-## 8. Config / map / content
-**None committed.** Operator-local ini/umap/assets untouched.
-
-## 9. Exact operator retests
-
-### TEST A — Building
-1. Open BP child of MainBase or LogisticsHub.
-2. Confirm inherited **NavigationObstacle** in Components.
-3. Move / rotate / resize Box Extent.
-4. PIE: RMB Move unit to opposite side of building → path goes around authored footprint.
-5. If testing **runtime** orbital Hub: ensure Navigation Mesh Runtime Generation = **Dynamic** (local setting).
-
-### TEST B — Worker
-1. Two deposits; fill deposit A so no free mining place.
-2. Mine A → Worker reassigns to B → mines to full → **automatically** hauls to MainBase → unloads → resumes B.
-3. No manual Mine after CargoFull.
-4. Manual Mine while already full still rejects `CargoFull`.
-
-## 10. Known limitations
-- Headless contract does not prove Recast carve around building (operator PIE).
-- Dynamic orbital building nav requires Runtime Generation=Dynamic (operator-local).
+## NOT MERGED

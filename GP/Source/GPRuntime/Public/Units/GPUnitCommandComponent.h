@@ -243,7 +243,19 @@ public:
 	int32 DebugGetMineBeginCallsThisTransition() const { return DebugMineBeginCallsThisTransition; }
 	int32 DebugGetReassignmentAttemptsThisTransition() const { return DebugReassignmentAttemptsThisTransition; }
 	int32 DebugGetSameTargetRetargetAttempts() const { return DebugSameTargetRetargetAttempts; }
+
+	/** True when UnitCommand is subscribed to MiningComponent::OnMiningStateChanged. */
+	bool DebugIsMiningStateEventBound() const { return BoundMiningComponent.IsValid(); }
 #endif
+
+	/**
+	 * Direct terminal notify from MiningComponent after multicast broadcast.
+	 * Safety net when UnitCommand was unbound but a Mine chain still owns the cargo terminal.
+	 */
+	void NotifyMiningComponentTerminal(
+		EGP_MiningState PreviousState,
+		EGP_MiningState NewState,
+		EGP_MiningStopReason Reason);
 
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Attack")
 	float AttackRange = 250.0f;
@@ -513,6 +525,12 @@ private:
 	/** GP-S27 Mine orchestration (Worker only). */
 	EGP_MineExecutionState MineState = EGP_MineExecutionState::Idle;
 	uint32 ActiveMineSerial = 0;
+
+	/**
+	 * Last deposit chosen for the active Mine chain (original or reassigned).
+	 * Survives MineTarget.Reset() during terminal handling so CargoFull can resolve haul deposit.
+	 */
+	TWeakObjectPtr<AGP_ResourceNode> LastMineDepositForHaul;
 	TWeakObjectPtr<AGP_ResourceNode> MineTarget;
 	TWeakObjectPtr<UGP_MiningComponent> BoundMiningComponent;
 	bool bFinishingMine = false;

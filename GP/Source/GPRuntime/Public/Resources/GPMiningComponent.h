@@ -134,6 +134,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Mining")
 	bool IsMiningTimerActive() const;
 
+	/** True while StopMining is on the stack (ManualStop remine Idle is broadcast under this). */
+	bool IsStopInProgress() const { return bIsStoppingMining; }
+
 	bool ValidateMiningContract(TArray<FText>& OutErrors, TArray<FText>& OutWarnings) const;
 
 #if WITH_EDITOR

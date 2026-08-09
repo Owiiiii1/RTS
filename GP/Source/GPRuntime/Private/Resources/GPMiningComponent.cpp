@@ -9,6 +9,8 @@
 #include "Resources/GPResourceDefinition.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
+#include "Units/GPUnitCommandComponent.h"
+#include "Units/GPWorker.h"
 
 #include <limits>
 
@@ -361,6 +363,24 @@ void UGP_MiningComponent::SetMiningState(EGP_MiningState NewState, EGP_MiningSto
 	if (HasAuthorityOwner())
 	{
 		OnMiningStateChanged.Broadcast(Previous, NewState, Reason);
+
+		// Direct UnitCommand notify after multicast: covers unbound listeners after reassignment remine.
+		const bool bTerminal =
+			NewState == EGP_MiningState::CargoFull
+			|| NewState == EGP_MiningState::DepositDepleted
+			|| NewState == EGP_MiningState::OutOfRange
+			|| NewState == EGP_MiningState::Invalid
+			|| NewState == EGP_MiningState::Idle;
+		if (bTerminal)
+		{
+			if (AGP_Worker* Worker = Cast<AGP_Worker>(GetOwner()))
+			{
+				if (UGP_UnitCommandComponent* Commands = Worker->GetUnitCommandComponent())
+				{
+					Commands->NotifyMiningComponentTerminal(Previous, NewState, Reason);
+				}
+			}
+		}
 	}
 }
 

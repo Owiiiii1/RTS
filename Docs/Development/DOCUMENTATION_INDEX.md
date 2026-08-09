@@ -39,7 +39,7 @@
 | Last closed / merged stage | **GP-S32R** + roadmap audit on `main` (tip `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S30R_FACING_AND_SIGHT_READY_FOR_OPERATOR_RETEST** on `feature/gp-s30r-combat-auto-acquire` |
+| Current stage | **GP-S30R_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s30r-combat-auto-acquire` |
 
 ---
 
@@ -49,7 +49,14 @@
 
 **Prior closed:** GP-S32R / GP-S31R / GP-S30 / GP-S29R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md`](Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md) — **GP-S30R_FACING_AND_SIGHT_READY_FOR_OPERATOR_RETEST** on `feature/gp-s30r-combat-auto-acquire`. GPEditor+UHT candidate. NOT MERGED.
+**Current:** [`Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md`](Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md) — **GP-S30R_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s30r-combat-auto-acquire`. Operator FULL PASS. All final builds PASS. NOT MERGED — await human merge/check. Do **not** auto-start next code slice.
+
+Approved planning order after merge (not started):
+1. Attack-Move reconciliation
+2. RTS Movement Reconciliation (pathfinding / collision / local avoidance / group destination spreading)
+3. Unit Cap + LogisticsHub gameplay
+4. Match win flow
+5. BuildingDefinition / BuildGrid
 
 **After operator PASS:** finalize builds; do **not** auto-assign Attack-Move.
 
@@ -65,7 +72,7 @@
 4. **GP-S31R** — Orbital Unit Drop — **DONE / MERGED**
 5. **GP-S32R** — Orbital Building Drop — **DONE / MERGED**
 6. Roadmap reconciliation — **DONE / MERGED** @ `ba98383…`
-7. **GP-S30R** — Combat Auto-Acquire — **FACING_AND_SIGHT_READY_FOR_OPERATOR_RETEST** (not merged)
+7. **GP-S30R** — Combat Auto-Acquire — **FINALIZATION_READY_FOR_MERGE** (not merged)
 
 ---
 
@@ -149,4 +156,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S32R + roadmap reconciliation are closed / merged. Current `main` baseline: `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2`. Current stage: **GP-S30R_FACING_AND_SIGHT_READY_FOR_OPERATOR_RETEST** on `feature/gp-s30r-combat-auto-acquire`. See [`Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md`](Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md).
+SETUP-001, DOCS-001, GP-S01…GP-S32R + roadmap reconciliation are closed / merged. Current `main` baseline: `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2`. Current stage: **GP-S30R_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s30r-combat-auto-acquire`. See [`Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md`](Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md). Do not auto-start the next code slice after merge.

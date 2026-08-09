@@ -1,9 +1,9 @@
-# Cursor Work Report — GP-S30R Facing + Sight Range
+# Cursor Work Report — GP-S30R Finalization
 
 ## Status
-**GP-S30R_FACING_AND_SIGHT_READY_FOR_OPERATOR_RETEST**
+**GP-S30R_FINALIZATION_READY_FOR_MERGE**
 
-NOT MERGED. Do **not** finalize until operator retest PASS.
+NOT MERGED.
 
 ---
 
@@ -12,56 +12,51 @@ NOT MERGED. Do **not** finalize until operator retest PASS.
 |---|---|
 | Branch | `feature/gp-s30r-combat-auto-acquire` |
 | Base (`main`) | `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2` |
-| Prior remote head (operator base-acquire PASS) | `c3f231368b72891972ecda8b68d0dc2172b3665c` |
-| This candidate | `123dccc9bcd1563311fc866cad28705cfc14916a` |
+| Operator-validated candidate | `a7338e19eaba39f062b2c075413baf4d671ad1e6` |
+| Final head | *(set after finalization commit)* |
 
-## 2. AttackRange factual source
-- **Runtime fire/engage range:** `UGP_UnitAttributeSet::AttackRange` via `UGP_UnitCommandComponent::TryResolveEffectiveAttackRange` (GAS preferred; component `AttackRange` fallback only if GAS ≤0).
-- **Salvage Walker CDO seed:** `AGP_SalvageWalker::DefaultAttackRange = 600.f` → applied to GAS on spawn (`GPUnitBase`).
-- Editable: unit CDO / Blueprint defaults for `DefaultAttackRange`, or live GAS attribute; **not** duplicated as a new auto-acquire constant.
+## 2. Operator FULL PASS
+Confirmed:
+- Idle SW auto-discovers enemy and attacks via existing Attack/LOS/Damage pipeline
+- Enemy in Sight, outside AttackRange → acquire → approach → no OOR damage → fire in range
+- Yaw faces current target before/during firing
+- SightRange > AttackRange correct; overall flow correct
 
-## 3. Damage factual source
-- **Runtime:** `UGP_UnitAttributeSet::Damage` (existing Attack hit / damage application path).
-- **SW CDO seed:** `DefaultDamage = 20.f`.
-- No second damage SoT for auto-acquire.
+## 3. Architecture
+- `UGP_UnitCommandComponent` only (no Targeting/Combat component)
+- Rate-limited Idle scan → `HandleCommand(Attack)` → existing Attack FSM
+- Gate: `GP.Unit.Type.SalvageWalker`; buildings excluded this slice
+- `Command_Stop` clears Held → Idle may resume scan
 
-## 4. AttackCooldown factual source
-- **Runtime:** `UGP_UnitAttributeSet::AttackCooldown` via `ResolveSanitizedAttackCooldown`.
-- **SW CDO seed:** `DefaultAttackCooldown = 1.f`.
-- Cadence unchanged; auto-acquire only issues `HandleCommand(Attack)`.
-
-## 5. New / updated tuning (component seam)
-| Property | Default | Editable |
+## 4. Tuning sources / defaults
+| Parameter | Source | Default |
 |---|---|---|
-| `AutoAcquireSightRangeCm` | **900** | `UGP_UnitCommandComponent` EditAnywhere `GP\|Combat\|AutoAcquire`; SW CDO sets 900 |
-| `AutoAcquireScanIntervalSeconds` | **0.35** | same category |
-| `AttackFacingRotationSpeedDegreesPerSecond` | **360** | EditAnywhere `GP\|Combat\|Facing`; SW CDO sets 360 |
+| AttackRange | GAS `AttackRange` (SW CDO `DefaultAttackRange`) | **600** |
+| Damage | GAS `Damage` (SW CDO `DefaultDamage`) | **20** |
+| AttackCooldown | GAS `AttackCooldown` (SW CDO `DefaultAttackCooldown`) | **1** |
+| AutoAcquireSightRangeCm | `UGP_UnitCommandComponent` EditAnywhere | **900** |
+| Effective acquire | `max(Sight, AttackRange)` | — |
+| AutoAcquireScanIntervalSeconds | same component | **0.35** |
+| AttackFacingRotationSpeedDegreesPerSecond | same component | **360** |
 
-## 6. Effective Sight ≥ Attack semantics
-- Runtime: `GetEffectiveAutoAcquireRange() = max(AutoAcquireSightRangeCm, AttackRange)`.
-- Designer may set Sight < AttackRange; acquire still uses at least AttackRange (predictable; no hard reject).
-- Sight is **not** fire range. Fire remains AttackRange + existing LOS gate.
+## 5. Command priority
+- Explicit Attack: not overridden by nearer auto-acquire while Held/active
+- Pure Move: suppresses auto-acquire while Move held / moving
+- Stop → Idle → later auto-acquire may resume
+- Auto path never creates a parallel fire/damage implementation
 
-## 7. Rotation implementation
-- Authority-only, **yaw only** on owning Pawn/Actor (`SetActorRotation` pitch/roll 0).
-- Active only in Attack FSM **Ready** (Approaching facing stays movement-driven via `UGP_MovementComponent`).
-- `FMath::RInterpConstantTo` at `AttackFacingRotationSpeedDegreesPerSecond` (same pattern as movement; no instant snap).
-- Explicit Attack and auto-acquired Attack share Attack FSM → same facing path.
-- No separate aim/animation system; no child-mesh-only rotation.
+## 6. Sight vs fire
+- Sight/AutoAcquire scans within effective sight range
+- Fire only inside AttackRange after existing LOS gate
+- Sight is **not** fire range
 
-## 8. Contract stages (updated)
-`gp.Combat.RunAutoAcquireContractTest` extended:
-- Prior A–H auto-acquire / Stop / reacquire stages retained
-- **Sight:** enemy in Sight, outside AttackRange → acquire + Approaching; no damage OOR; enter AttackRange → Ready/damage
-- **Facing A:** side target while Ready → yaw toward target (angular tolerance)
-- **Facing B:** repositioned target → facing tracks
-- **Facing C:** Idle / no attack → no arbitrary combat facing spin
+## 7. Facing
+- Authority yaw-only on owning actor while Attack **Ready**/firing
+- `RInterpConstantTo` at facing speed; no instant snap
+- Approaching orientation remains movement-driven
+- Explicit and auto Attack share the same facing path
 
-## 9. Builds
-GPEditor Win64 Development + UHT: **PASS**  
-GP Dev / Shipping: **NOT RUN**
-
-## 10. Contracts / regressions (NullRHI `-game`) — Failures=0
+## 8. Final regressions (NullRHI `-game`) — Failures=0
 | Command | Result |
 |---|---|
 | `gp.Combat.RunAutoAcquireContractTest` | **0** |
@@ -72,17 +67,36 @@ GP Dev / Shipping: **NOT RUN**
 | `gp.Resource.RunS28RegressionSuite` | **0** |
 | `gp.Resource.RunDropOffResilienceContractTest` | **0** |
 | `gp.Resource.RunContainerLaunchContractTest` | **0** |
+| `gp.Resource.RunContainerLaunchHUDContractTest` | **0** |
 | `gp.Resource.RunOrbitalUnitDropContractTest` | **0** |
 | `gp.Building.RunOrbitalBuildingDropContractTest` | **0** |
 
-## 11. Changed files
-- `GPUnitCommandComponent.h/.cpp` — SightRange, effective acquire max, Ready facing
-- `GPSalvageWalker.cpp` — CDO defaults for Sight 900 + facing 360
-- `GPCombatAutoAcquireContractTest.h/.cpp` — sight + facing stages
-- Docs: task, AI log, DOCUMENTATION_INDEX, Claude_Tasks README, Cursor_Work_Report
+## 9. Final builds
+| Target | Result |
+|---|---|
+| GPEditor Win64 Development + UHT | **PASS** |
+| GP Win64 Development | **PASS** |
+| GP Win64 Shipping | **PASS** |
 
-## 12. Operator assets untouched
+No C++ correction required during finalization.
+
+## 10. Files changed during finalization
+Docs only:
+- `Docs/Development/Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md`
+- `Docs/Development/Cursor_Work_Report.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/Development/Claude_Tasks/README.md`
+
+## 11. Operator assets untouched
 DefaultEngine/Game.ini, map, Blueprint/, Materials/, VFX, Tools/, `.uasset`/`.umap` — not committed.
 
-## 13. Next
-Operator retest of facing + sight semantics. Do **not** merge / finalize until PASS. Do **not** auto-assign Attack-Move.
+## 12. NEXT (planning order only — do not auto-start)
+After human merge/check:
+1. Attack-Move reconciliation  
+2. RTS Movement Reconciliation (pathfinding / collision / local avoidance / group destination spreading)  
+3. Unit Cap + LogisticsHub gameplay  
+4. Match win flow  
+5. BuildingDefinition / BuildGrid  
+
+Do **not** auto-assign the next production code slice.

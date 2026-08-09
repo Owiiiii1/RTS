@@ -1,14 +1,27 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-09 — GP-S30R Combat Auto-Acquire (finalization)
+
+Status: **GP-S30R_FINALIZATION_READY_FOR_MERGE**
+
+- Branch: `feature/gp-s30r-combat-auto-acquire` (base `main` @ `ba98383`)
+- Operator-validated candidate: `a7338e19eaba39f062b2c075413baf4d671ad1e6`
+- Operator FULL PASS: base auto-acquire + sight>fire + approach + no OOR damage + facing
+- Final regressions Failures=0 (incl. ContainerLaunchHUD); GPEditor+UHT / GP Dev / GP Shipping **PASS**
+- No C++ correction during finalization (docs only)
+- NOT MERGED — await human merge/check; do **not** auto-start next code slice
+- Approved planning order after merge: Attack-Move → RTS Movement Reconciliation → Unit Cap+Hub → Match win → BuildingDefinition/BuildGrid
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-09 — GP-S30R Facing + Sight Range (operator retest candidate)
 
-Status: **GP-S30R_FACING_AND_SIGHT_READY_FOR_OPERATOR_RETEST**
+Status: **GP-S30R_FACING_AND_SIGHT_READY_FOR_OPERATOR_RETEST** (superseded by finalization)
 
 - Branch: `feature/gp-s30r-combat-auto-acquire` (prior head `c3f2313`; base `main` @ `ba98383`)
 - Ready yaw facing toward Attack target (`AttackFacingRotationSpeedDegreesPerSecond`, default 360)
 - Separate `AutoAcquireSightRangeCm` (default 900); effective acquire `max(Sight, AttackRange)`; fire still AttackRange+LOS
 - Contract extended (sight-OOR approach, facing A/B/C); all listed regressions Failures=0; GPEditor+UHT **PASS**
-- NOT MERGED — operator retest required before finalization; Attack-Move not auto-assigned
+- Operator FULL PASS confirmed → finalization
 - Report: `Docs/Development/Cursor_Work_Report.md`
 
 ## 2026-08-09 — GP-S30R Combat Auto-Acquire (implementation candidate)

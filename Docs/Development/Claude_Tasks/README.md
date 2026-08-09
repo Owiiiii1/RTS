@@ -6,9 +6,9 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-09 (GP-S30R facing + sight). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-09 (GP-S30R finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Post-GP-S32R combat QoL. **Current: GP-S30R_FACING_AND_SIGHT_READY_FOR_OPERATOR_RETEST**.
+**Поточна фаза:** Post-GP-S32R combat QoL. **Current: GP-S30R_FINALIZATION_READY_FOR_MERGE**.
 
 **Status snapshot:**
 
@@ -16,10 +16,10 @@
 |---|---|
 | GP-S01 … GP-S32R | **DONE / merged** on `main` @ `ba98383…` |
 | Roadmap reconciliation | **DONE / MERGED** |
-| **GP-S30R** Combat Auto-Acquire | **FACING_AND_SIGHT_READY_FOR_OPERATOR_RETEST** — [`GP-S30R_Combat_Auto_Acquire.md`](GP-S30R_Combat_Auto_Acquire.md) |
+| **GP-S30R** Combat Auto-Acquire | **FINALIZATION_READY_FOR_MERGE** — [`GP-S30R_Combat_Auto_Acquire.md`](GP-S30R_Combat_Auto_Acquire.md) |
 | Attack-Move / BuildingDefinition / FoW | **Not assigned** |
 
-**NEXT action для агента:** await operator PIE retest of GP-S30R facing + sight. Do **not** finalize/merge. Do **not** auto-start Attack-Move.
+**NEXT action для агента:** await human merge/check of GP-S30R. Do **not** auto-merge. Do **not** auto-start the next code slice. Approved planning order after merge: (1) Attack-Move reconciliation (2) RTS Movement Reconciliation (3) Unit Cap + LogisticsHub gameplay (4) Match win flow (5) BuildingDefinition / BuildGrid.
 
 ### Drift Warning
 

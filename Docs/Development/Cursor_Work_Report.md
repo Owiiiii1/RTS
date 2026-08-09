@@ -13,7 +13,7 @@ NOT MERGED.
 | Branch | `feature/gp-s32a-attack-move-reconciliation` |
 | Base (`main`) | `989ca3fe6eae31b177ba2fade2ca1f02300d3326` |
 | Operator-validated candidate | `5e6b3f192821a92737cd16e98e2aaa99ef73f7b6` |
-| Final head | *(set after finalization commit)* |
+| Final head | 604a519c2ea7c40d4a313c837480cd893b77f4f8 |
 
 ## 2. Operator FULL PASS
 Confirmed:

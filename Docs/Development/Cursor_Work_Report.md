@@ -1,4 +1,4 @@
-﻿# Cursor Work Report — GP-S33M RTS Movement Reconciliation
+# Cursor Work Report — GP-S33M RTS Movement Reconciliation
 
 ## Status
 **GP-S33M_FINALIZATION_READY_FOR_MERGE**
@@ -8,7 +8,7 @@ NOT MERGED.
 ## Branch
 `feature/gp-s33m-rts-movement-reconciliation`  
 Base `main` SHA: `0df4468445e939aaca33ed73548a78c2caabb86d`  
-Final feature head SHA: (recorded after finalization commit)
+Final feature head SHA: `e3af1ae03bba7334331f1bc18ac79ec9cdcfc31b`
 
 ## Operator validation FINAL PASS
 - NavMesh exists; units use NavMesh pathfinding and route around obstacles

@@ -12,7 +12,7 @@ NOT MERGED.
 |---|---|
 | Branch | `feature/gp-s30r-combat-auto-acquire` |
 | Base (`main`) | `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2` |
-| Candidate head | *(this commit)* |
+| Candidate head | e4529b4fa8cf512f47d6ada48d194031fb3ebb4f |
 
 ## 2. Architecture
 - Integrated into **`UGP_UnitCommandComponent`** (no new Targeting/Combat component)

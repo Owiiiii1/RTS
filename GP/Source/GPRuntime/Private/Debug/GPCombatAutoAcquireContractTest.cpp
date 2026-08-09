@@ -173,10 +173,20 @@ void UGP_CombatAutoAcquireContractTestRunner::CleanupActors()
 	{
 		W->Destroy();
 	}
+	if (AGP_Worker* W = SightEnemyWeak.Get())
+	{
+		W->Destroy();
+	}
+	if (AGP_Worker* W = FacingEnemyWeak.Get())
+	{
+		W->Destroy();
+	}
 	WalkerWeak.Reset();
 	NearEnemyWeak.Reset();
 	FarEnemyWeak.Reset();
 	FriendlyWeak.Reset();
+	SightEnemyWeak.Reset();
+	FacingEnemyWeak.Reset();
 }
 
 void UGP_CombatAutoAcquireContractTestRunner::Finish()
@@ -194,6 +204,7 @@ void UGP_CombatAutoAcquireContractTestRunner::Finish()
 			if (UGP_UnitCommandComponent* Cmd = SW->GetUnitCommandComponent())
 			{
 				Cmd->AutoAcquireScanIntervalSeconds = SavedScanInterval;
+				Cmd->AutoAcquireSightRangeCm = SavedSightRange;
 			}
 		}
 	}
@@ -296,8 +307,15 @@ void UGP_CombatAutoAcquireContractTestRunner::AdvanceStage()
 		if (UGP_UnitCommandComponent* Cmd = Walker->GetUnitCommandComponent())
 		{
 			SavedScanInterval = Cmd->AutoAcquireScanIntervalSeconds;
+			SavedSightRange = Cmd->AutoAcquireSightRangeCm;
 			Cmd->AutoAcquireScanIntervalSeconds = 0.1f;
+			Cmd->AutoAcquireSightRangeCm = 900.0f;
+			Cmd->AttackFacingRotationSpeedDegreesPerSecond = 360.0f;
 			Cmd->RefreshCombatAutoAcquireTimer();
+			Expect(Cmd->GetEffectiveAutoAcquireRange() >= Cmd->GetAttackRange() - KINDA_SMALL_NUMBER,
+				TEXT("A_EffectiveSightGteAttack"));
+			Expect(FMath::IsNearlyEqual(Cmd->GetEffectiveAutoAcquireRange(), 900.0f, 1.0f),
+				TEXT("A_EffectiveSightUsesConfiguredSight"));
 		}
 
 		Expect(Walker->GetUnitCommandComponent()->IsEligibleForCombatAutoAcquire(), TEXT("A_EligibleIdle"));
@@ -496,6 +514,221 @@ void UGP_CombatAutoAcquireContractTestRunner::AdvanceStage()
 		}
 		UGP_UnitCommandComponent* Cmd = Walker->GetUnitCommandComponent();
 		Expect(!Cmd->IsAttackActive(), TEXT("C_DeadEnemyIgnoredNoAttack"));
+
+		// Setup: Sight > AttackRange, enemy between them (750cm with Attack 600 / Sight 900).
+		if (AGP_Worker* W = NearEnemyWeak.Get())
+		{
+			W->Destroy();
+			NearEnemyWeak.Reset();
+		}
+		if (AGP_Worker* W = FarEnemyWeak.Get())
+		{
+			W->Destroy();
+			FarEnemyWeak.Reset();
+		}
+		if (AGP_Worker* W = FriendlyWeak.Get())
+		{
+			W->Destroy();
+			FriendlyWeak.Reset();
+		}
+
+		Walker->SetActorLocation(Origin);
+		Walker->SetActorRotation(FRotator::ZeroRotator);
+		GPCombatAutoAcquireDebug::ApplyCombatStats(Walker, 200.0f, 20.0f, 600.0f, 1.0f);
+		Cmd->AutoAcquireSightRangeCm = 900.0f;
+		Cmd->AutoAcquireScanIntervalSeconds = 0.1f;
+		Cmd->RefreshCombatAutoAcquireTimer();
+
+		AGP_Worker* SightEnemy = GPCombatAutoAcquireDebug::SpawnWorker(
+			World, Origin + FVector(750.0f, 0.0f, 0.0f), TeamB);
+		SightEnemyWeak = SightEnemy;
+		if (!Expect(IsValid(SightEnemy), TEXT("S_SightEnemySpawn")))
+		{
+			Finish();
+			return;
+		}
+		GPCombatAutoAcquireDebug::ApplyCombatStats(SightEnemy, 200.0f, 1.0f, 100.0f, 5.0f);
+		SightEnemyHpAtAcquire = SightEnemy->GetUnitAttributeSet()->GetHealth();
+
+		Expect(Cmd->GetEffectiveAutoAcquireRange() >= 900.0f - 1.0f, TEXT("S_EffectiveSight900"));
+		Expect(Cmd->GetAttackRange() <= 600.0f + 1.0f, TEXT("S_AttackRange600"));
+		Expect(FVector::Dist(Walker->GetActorLocation(), SightEnemy->GetActorLocation()) > Cmd->GetAttackRange(),
+			TEXT("S_EnemyOutsideAttackRange"));
+		Expect(FVector::Dist(Walker->GetActorLocation(), SightEnemy->GetActorLocation())
+			<= Cmd->GetEffectiveAutoAcquireRange() + 1.0f,
+			TEXT("S_EnemyInsideSightRange"));
+
+		GPCombatAutoAcquireDebug::IssueCommand(Walker, GPTags.Command_Stop, nullptr, FVector::ZeroVector);
+		++StageIndex;
+		ScheduleNext(0.45f);
+		break;
+	}
+	case 8: // Sight acquire → Approaching; no damage outside AttackRange
+	{
+		AGP_SalvageWalker* Walker = WalkerWeak.Get();
+		AGP_Worker* SightEnemy = SightEnemyWeak.Get();
+		if (!Expect(IsValid(Walker) && IsValid(SightEnemy), TEXT("S2_ActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		UGP_UnitCommandComponent* Cmd = Walker->GetUnitCommandComponent();
+		Expect(Cmd->IsAttackActive(), TEXT("S_AutoAcquiredOutsideFireRange"));
+		Expect(Cmd->GetAttackTarget() == SightEnemy, TEXT("S_SightTargetSelected"));
+		Expect(Cmd->GetAttackExecutionState() == EGP_AttackExecutionState::Approaching
+			|| Cmd->GetAttackExecutionState() == EGP_AttackExecutionState::Ready,
+			TEXT("S_ApproachOrReadyStarted"));
+
+		const float HpNow = SightEnemy->GetUnitAttributeSet()->GetHealth();
+		const float Dist = FVector::Dist(Walker->GetActorLocation(), SightEnemy->GetActorLocation());
+		if (Dist > Cmd->GetAttackRange() + 5.0f)
+		{
+			Expect(FMath::IsNearlyEqual(HpNow, SightEnemyHpAtAcquire, 0.5f),
+				TEXT("S_NoDamageOutsideAttackRange"));
+		}
+
+		++StageIndex;
+		ScheduleNext(2.5f);
+		break;
+	}
+	case 9: // After approach: Ready/fire allowed inside AttackRange
+	{
+		AGP_SalvageWalker* Walker = WalkerWeak.Get();
+		AGP_Worker* SightEnemy = SightEnemyWeak.Get();
+		if (!Expect(IsValid(Walker) && IsValid(SightEnemy), TEXT("S3_ActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		UGP_UnitCommandComponent* Cmd = Walker->GetUnitCommandComponent();
+		const float Dist = FVector::Dist(Walker->GetActorLocation(), SightEnemy->GetActorLocation());
+		Expect(Dist <= Cmd->GetAttackRange() + 40.0f, TEXT("S_EnteredAttackRange"));
+		Expect(Cmd->IsAttackActive(), TEXT("S_AttackStillActiveAfterApproach"));
+		const float HpNow = SightEnemy->GetUnitAttributeSet()->GetHealth();
+		Expect(HpNow < SightEnemyHpAtAcquire - KINDA_SMALL_NUMBER
+			|| Cmd->GetAttackExecutionState() == EGP_AttackExecutionState::Ready,
+			TEXT("S_ReadyOrDamageInsideAttackRange"));
+
+		// Facing setup: Stop, face +X, place enemy on +Y inside AttackRange.
+		GPCombatAutoAcquireDebug::IssueCommand(Walker, GPTags.Command_Stop, nullptr, FVector::ZeroVector);
+		if (IsValid(SightEnemy))
+		{
+			SightEnemy->Destroy();
+			SightEnemyWeak.Reset();
+		}
+		Walker->SetActorLocation(Origin);
+		Walker->SetActorRotation(FRotator::ZeroRotator);
+		FacingYawBaseline = Walker->GetActorRotation().Yaw;
+
+		AGP_Worker* FacingEnemy = GPCombatAutoAcquireDebug::SpawnWorker(
+			World, Origin + FVector(0.0f, 350.0f, 0.0f), TeamB);
+		FacingEnemyWeak = FacingEnemy;
+		if (!Expect(IsValid(FacingEnemy), TEXT("F_FacingEnemySpawn")))
+		{
+			Finish();
+			return;
+		}
+		GPCombatAutoAcquireDebug::ApplyCombatStats(FacingEnemy, 500.0f, 1.0f, 100.0f, 5.0f);
+		GPCombatAutoAcquireDebug::ApplyCombatStats(Walker, 200.0f, 1.0f, 600.0f, 5.0f);
+		Cmd->AttackFacingRotationSpeedDegreesPerSecond = 360.0f;
+		Cmd->AutoAcquireSightRangeCm = 900.0f;
+
+		GPCombatAutoAcquireDebug::IssueCommand(
+			Walker, GPTags.Command_Attack, FacingEnemy, FacingEnemy->GetActorLocation());
+		Expect(Cmd->IsAttackActive(), TEXT("F_ExplicitAttackForFacing"));
+
+		++StageIndex;
+		ScheduleNext(0.8f);
+		break;
+	}
+	case 10: // Facing A: Ready yaw turns toward side target
+	{
+		AGP_SalvageWalker* Walker = WalkerWeak.Get();
+		AGP_Worker* FacingEnemy = FacingEnemyWeak.Get();
+		if (!Expect(IsValid(Walker) && IsValid(FacingEnemy), TEXT("F2_ActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		UGP_UnitCommandComponent* Cmd = Walker->GetUnitCommandComponent();
+		// Force Ready path: ensure in range without relying on approach orientation.
+		if (Cmd->GetAttackExecutionState() == EGP_AttackExecutionState::Approaching)
+		{
+			Walker->SetActorLocation(FacingEnemy->GetActorLocation() + FVector(-200.0f, 0.0f, 0.0f));
+		}
+		Expect(Cmd->GetAttackExecutionState() == EGP_AttackExecutionState::Ready
+			|| Cmd->IsAttackActive(),
+			TEXT("F_AttackReadyOrActive"));
+
+		const float YawNow = Walker->GetActorRotation().Yaw;
+		FVector ToTarget = FacingEnemy->GetActorLocation() - Walker->GetActorLocation();
+		ToTarget.Z = 0.0f;
+		const float DesiredYaw = FMath::RadiansToDegrees(FMath::Atan2(ToTarget.Y, ToTarget.X));
+		const float DeltaToTarget = FMath::Abs(FMath::FindDeltaAngleDegrees(YawNow, DesiredYaw));
+		const float DeltaFromBaseline = FMath::Abs(FMath::FindDeltaAngleDegrees(YawNow, FacingYawBaseline));
+		Expect(DeltaFromBaseline > 20.0f, TEXT("F_YawChangedTowardSideTarget"));
+		Expect(DeltaToTarget < 35.0f, TEXT("F_YawAlignedWithinTolerance"));
+
+		// Reposition target; facing should update.
+		FacingEnemy->SetActorLocation(Walker->GetActorLocation() + FVector(0.0f, -350.0f, 0.0f));
+		++StageIndex;
+		ScheduleNext(0.9f);
+		break;
+	}
+	case 11: // Facing B: tracks repositioned target
+	{
+		AGP_SalvageWalker* Walker = WalkerWeak.Get();
+		AGP_Worker* FacingEnemy = FacingEnemyWeak.Get();
+		if (!Expect(IsValid(Walker) && IsValid(FacingEnemy), TEXT("F3_ActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		UGP_UnitCommandComponent* Cmd = Walker->GetUnitCommandComponent();
+		Expect(Cmd->IsAttackActive(), TEXT("F_AttackActiveDuringTrack"));
+		if (Cmd->GetAttackExecutionState() != EGP_AttackExecutionState::Ready)
+		{
+			Walker->SetActorLocation(FacingEnemy->GetActorLocation() + FVector(200.0f, 0.0f, 0.0f));
+		}
+
+		const float YawNow = Walker->GetActorRotation().Yaw;
+		FVector ToTarget = FacingEnemy->GetActorLocation() - Walker->GetActorLocation();
+		ToTarget.Z = 0.0f;
+		const float DesiredYaw = FMath::RadiansToDegrees(FMath::Atan2(ToTarget.Y, ToTarget.X));
+		const float DeltaToTarget = FMath::Abs(FMath::FindDeltaAngleDegrees(YawNow, DesiredYaw));
+		Expect(DeltaToTarget < 40.0f, TEXT("F_FacingTracksRepositionedTarget"));
+
+		GPCombatAutoAcquireDebug::IssueCommand(Walker, GPTags.Command_Stop, nullptr, FVector::ZeroVector);
+		Expect(!Cmd->IsAttackActive(), TEXT("F_StopEndsAttackFacing"));
+		IdleYawBaseline = Walker->GetActorRotation().Yaw;
+		if (IsValid(FacingEnemy))
+		{
+			FacingEnemy->Destroy();
+			FacingEnemyWeak.Reset();
+		}
+
+		++StageIndex;
+		ScheduleNext(0.6f);
+		break;
+	}
+	case 12: // Facing C: no active attack → no arbitrary combat facing spin
+	{
+		AGP_SalvageWalker* Walker = WalkerWeak.Get();
+		if (!Expect(IsValid(Walker), TEXT("F4_WalkerAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		UGP_UnitCommandComponent* Cmd = Walker->GetUnitCommandComponent();
+		Expect(!Cmd->IsAttackActive(), TEXT("F_IdleNoAttack"));
+		const float YawNow = Walker->GetActorRotation().Yaw;
+		const float Drift = FMath::Abs(FMath::FindDeltaAngleDegrees(YawNow, IdleYawBaseline));
+		Expect(Drift < 5.0f, TEXT("F_NoArbitraryFacingWhenIdle"));
 		Finish();
 		break;
 	}

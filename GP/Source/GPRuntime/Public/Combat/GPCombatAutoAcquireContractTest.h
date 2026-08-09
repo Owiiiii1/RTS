@@ -41,7 +41,13 @@ private:
 	TWeakObjectPtr<class AGP_Worker> NearEnemyWeak;
 	TWeakObjectPtr<class AGP_Worker> FarEnemyWeak;
 	TWeakObjectPtr<class AGP_Worker> FriendlyWeak;
+	TWeakObjectPtr<class AGP_Worker> SightEnemyWeak;
+	TWeakObjectPtr<class AGP_Worker> FacingEnemyWeak;
 	float SavedScanInterval = 0.35f;
+	float SavedSightRange = 900.0f;
+	float SightEnemyHpAtAcquire = 0.0f;
+	float FacingYawBaseline = 0.0f;
+	float IdleYawBaseline = 0.0f;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

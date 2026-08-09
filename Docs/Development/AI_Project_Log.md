@@ -1,13 +1,24 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-09 — GP-S30R Facing + Sight Range (operator retest candidate)
+
+Status: **GP-S30R_FACING_AND_SIGHT_READY_FOR_OPERATOR_RETEST**
+
+- Branch: `feature/gp-s30r-combat-auto-acquire` (prior head `c3f2313`; base `main` @ `ba98383`)
+- Ready yaw facing toward Attack target (`AttackFacingRotationSpeedDegreesPerSecond`, default 360)
+- Separate `AutoAcquireSightRangeCm` (default 900); effective acquire `max(Sight, AttackRange)`; fire still AttackRange+LOS
+- Contract extended (sight-OOR approach, facing A/B/C); all listed regressions Failures=0; GPEditor+UHT **PASS**
+- NOT MERGED — operator retest required before finalization; Attack-Move not auto-assigned
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-09 — GP-S30R Combat Auto-Acquire (implementation candidate)
 
-Status: **GP-S30R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S30R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (superseded by facing+sight retest candidate)
 
 - Branch: `feature/gp-s30r-combat-auto-acquire` (base `main` @ `ba98383`)
 - Idle Salvage Walker auto-engage via `UGP_UnitCommandComponent` (no TargetingComponent)
 - Contract `gp.Combat.RunAutoAcquireContractTest` Failures=0; regressions Failures=0; GPEditor+UHT **PASS**
-- NOT MERGED — operator validation stop; Attack-Move not auto-assigned
+- Operator base auto-acquire **PASS**; facing + separate sight range required before finalization
 - Report: `Docs/Development/Cursor_Work_Report.md`
 
 ## 2026-08-09 — Roadmap Reconciliation Post GP-S32R (audit)

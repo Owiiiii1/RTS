@@ -124,8 +124,14 @@ public:
 	uint32 GetActiveAttackSerial() const;
 	AGP_UnitBase* GetAttackTarget() const;
 
-	/** Effective runtime Attack range (GAS if >0, else component fallback). */
+	/** Effective runtime Attack range (GAS if >0, else component fallback). Fire/engage range. */
 	float GetAttackRange() const;
+
+	/**
+	 * GP-S30R: effective auto-acquire / sight range (cm).
+	 * Runtime: max(configured AutoAcquireSightRangeCm, AttackRange) so sight never under-fires acquire.
+	 */
+	float GetEffectiveAutoAcquireRange() const;
 
 	bool IsAttackActive() const;
 	double GetNextAttackHitTime() const;
@@ -146,6 +152,20 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, Category = "GP|Combat|AutoAcquire", meta = (ClampMin = "0.05"))
 	float AutoAcquireScanIntervalSeconds = 0.35f;
+
+	/**
+	 * GP-S30R: sight / auto-acquire range (cm). Not fire range.
+	 * Effective acquire uses max(this, AttackRange). SW default tuned to 900 with AttackRange 600.
+	 */
+	UPROPERTY(EditAnywhere, Category = "GP|Combat|AutoAcquire", meta = (ClampMin = "0.0"))
+	float AutoAcquireSightRangeCm = 900.0f;
+
+	/**
+	 * GP-S30R: yaw-only facing toward Attack target while Ready (deg/sec).
+	 * Approaching facing remains movement-driven (UGP_MovementComponent::RotationSpeed).
+	 */
+	UPROPERTY(EditAnywhere, Category = "GP|Combat|Facing", meta = (ClampMin = "0.0"))
+	float AttackFacingRotationSpeedDegreesPerSecond = 360.0f;
 
 	/** Authority helper: apply interval and restart scan timer (contracts / tuning). */
 	void RefreshCombatAutoAcquireTimer();
@@ -425,6 +445,7 @@ private:
 	bool IsCombatCapableForAutoAcquire(const AGP_UnitBase* Unit) const;
 	AGP_UnitBase* FindNearestAutoAcquireTarget(float MaxRangeCm) const;
 	void TryIssueAutoAcquireAttack(AGP_UnitBase* Target);
+	void UpdateAttackFacingTowardTarget(float DeltaTime);
 
 	static const TCHAR* AttackStateToString(EGP_AttackExecutionState State);
 	static const TCHAR* AttackTerminalResultToString(EGP_AttackTerminalResult Result);

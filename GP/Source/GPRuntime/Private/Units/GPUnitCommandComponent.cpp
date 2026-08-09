@@ -320,6 +320,12 @@ void UGP_UnitCommandComponent::TickComponent(
 		return;
 	}
 
+	// Ready/firing: authority yaw toward Attack target. Approaching uses movement orientation.
+	if (AttackState == EGP_AttackExecutionState::Ready)
+	{
+		UpdateAttackFacingTowardTarget(DeltaTime);
+	}
+
 	EvaluateAttack();
 }
 
@@ -718,6 +724,46 @@ void UGP_UnitCommandComponent::TryIssueAutoAcquireAttack(AGP_UnitBase* Target)
 	HandleCommand(AttackCommand);
 }
 
+float UGP_UnitCommandComponent::GetEffectiveAutoAcquireRange() const
+{
+	const float EffectiveAttackRange = GetAttackRange();
+	const float Sight = FMath::Max(0.0f, AutoAcquireSightRangeCm);
+	// Predictable semantics: sight never shrinks acquire below fire range.
+	return FMath::Max(Sight, EffectiveAttackRange);
+}
+
+void UGP_UnitCommandComponent::UpdateAttackFacingTowardTarget(float DeltaTime)
+{
+	if (DeltaTime <= 0.0f || AttackFacingRotationSpeedDegreesPerSecond <= KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	AActor* Owner = GetOwner();
+	AGP_UnitBase* Target = AttackTarget.Get();
+	if (Owner == nullptr || !Owner->HasAuthority() || !IsValid(Target) || Target->IsDead())
+	{
+		return;
+	}
+
+	FVector ToTarget = Target->GetActorLocation() - Owner->GetActorLocation();
+	ToTarget.Z = 0.0f;
+	if (!ToTarget.Normalize())
+	{
+		return;
+	}
+
+	const float TargetYaw = FMath::RadiansToDegrees(FMath::Atan2(ToTarget.Y, ToTarget.X));
+	const FRotator CurrentRotation = Owner->GetActorRotation();
+	const FRotator TargetRotation(0.0f, TargetYaw, 0.0f);
+	const FRotator NewRotation = FMath::RInterpConstantTo(
+		CurrentRotation,
+		TargetRotation,
+		DeltaTime,
+		AttackFacingRotationSpeedDegreesPerSecond);
+	Owner->SetActorRotation(FRotator(0.0f, NewRotation.Yaw, 0.0f));
+}
+
 void UGP_UnitCommandComponent::OnCombatAutoAcquireScan()
 {
 	LastAutoAcquireCandidate.Reset();
@@ -726,7 +772,7 @@ void UGP_UnitCommandComponent::OnCombatAutoAcquireScan()
 		return;
 	}
 
-	const float Range = GetAttackRange();
+	const float Range = GetEffectiveAutoAcquireRange();
 	if (Range <= KINDA_SMALL_NUMBER)
 	{
 		return;

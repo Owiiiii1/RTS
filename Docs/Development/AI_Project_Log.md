@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-09 — GP-S32R Orbital Building Drop (finalization)
+
+Status: **GP-S32R_FINALIZATION_READY_FOR_MERGE**
+
+- Branch: `feature/gp-s32r-orbital-building-drop` (base `main` @ `427a2aa`)
+- Operator-validated candidate: `71c19854…` (input ownership fix)
+- Operator FULL PASS: Purchase → READY → ghost → deselect → RMB cancel without command → LMB deploy → DropPod → building; authored LogisticsHub BP child seam OK
+- Final regressions Failures=0 (building/unit/S28/dropoff/launch/HUD/hauling/salvage/LOS/health/team)
+- GPEditor + GP Development + GP Shipping **PASS**
+- NOT MERGED
+- Next after merge: **ROADMAP_RECONCILIATION_AUDIT_POST_GP-S32R** (do not auto-assign GP-S34)
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-09 — GP-S32R Input Ownership Fix (placement vs RTS RMB)
 
 Status: **GP-S32R_INPUT_OWNERSHIP_FIX_READY_FOR_OPERATOR_RETEST**

@@ -12,7 +12,7 @@ NOT MERGED.
 |---|---|
 | Branch | `feature/gp-s32r-orbital-building-drop` |
 | Prior candidate | `b922b18a6a75066b6d85d380d6e0e1b19c61771b` |
-| Final commit | *(this push HEAD)* |
+| Final commit | 71c19854f45fd659e35cc9b8ab4cc609e9799674 |
 
 ## 2. Operator bug
 While a unit was selected, **Deploy READY** created the placement ghost and **RMB cancelled the ghost**, but the **same RMB also issued a normal RTS command** to the selected unit.

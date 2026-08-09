@@ -13,7 +13,7 @@ NOT MERGED.
 | Branch | `feature/gp-s33m-rts-movement-reconciliation` |
 | Base (`main`) | `0df4468445e939aaca33ed73548a78c2caabb86d` |
 | Prior candidate | `f72794da169dd8efd3b881443453655547b63264` |
-| This revision | *(recorded after commit — see HEAD)* |
+| This revision | `1e34ae348fe99e1cac74b36e26254407128486cf` (SHA note `796e6c4eddc31d73eba13250baad3ef15a90e42e`) |
 
 ## 2. Operator first-pass facts
 | Check | Result |

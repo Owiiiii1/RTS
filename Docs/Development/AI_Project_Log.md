@@ -5,6 +5,7 @@
 Status: **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
 - Branch: `feature/gp-s33m-rts-movement-reconciliation` (prior head `f72794da…`)
+- Revision: `1e34ae348fe99e1cac74b36e26254407128486cf`
 - Operator PASS: NavMesh, unit nav, unit↔unit avoidance
 - Operator FAIL fixed: BuildingBase `NavigationObstacle` UBoxComponent; Worker reassignment CargoFull→Haul (Idle-during-BeginMining cleared serial/unbind)
 - Contract `gp.Resource.RunMineReassignmentHaulContractTest` Failures=0; listed regressions Failures=0; GPEditor+UHT **PASS**

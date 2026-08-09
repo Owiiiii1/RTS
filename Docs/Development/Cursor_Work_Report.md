@@ -13,7 +13,7 @@ NOT MERGED.
 | Branch | `feature/gp-s30r-combat-auto-acquire` |
 | Base (`main`) | `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2` |
 | Operator-validated candidate | `a7338e19eaba39f062b2c075413baf4d671ad1e6` |
-| Final head | *(set after finalization commit)* |
+| Final head | 6ab60b26625a95e814dabff4195c09f7ef495b79 |
 
 ## 2. Operator FULL PASS
 Confirmed:

@@ -6,23 +6,23 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-09 (GP-S32R finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-09 (post GP-S32R roadmap audit). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Slice 8 economy unlock. **GP-S31R DONE / MERGED**. **Current: GP-S32R FINALIZATION_READY_FOR_MERGE**.
+**Поточна фаза:** Slice 8 economy unlock closed through GP-S32R. **Current: roadmap reconciliation audit in review.**
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
 | GP-S01 … GP-S28 | **DONE / merged** on `main` |
-| GP-S28P1…P4 | **DONE / MERGED** on `main` |
-| **GP-S29R** LOS + HealthBar + TeamColors + Salvage Walker | **DONE / MERGED** @ `3673a689…` |
+| **GP-S29R** Combat presentation reconciliation | **DONE / MERGED** |
 | **GP-S30** Container Launch / Orbital Conversion | **DONE / MERGED** |
-| **GP-S31R** Minimal Orbital Unit Drop | **DONE / MERGED** @ `main` `427a2aa6…` |
-| **GP-S32R** Orbital Building Drop | **FINALIZATION_READY_FOR_MERGE** — [`GP-S32R_Orbital_Building_Drop.md`](GP-S32R_Orbital_Building_Drop.md) |
-| Next after GP-S32R merge | **ROADMAP_RECONCILIATION_AUDIT_POST_GP-S32R** (not auto GP-S34) |
+| **GP-S31R** Minimal Orbital Unit Drop | **DONE / MERGED** |
+| **GP-S32R** Orbital Building Drop | **DONE / MERGED** @ `main` `2042d4e…` |
+| Roadmap reconciliation | **READY_FOR_REVIEW** — [`../Roadmap_Reconciliation_Post_GP-S32R.md`](../Roadmap_Reconciliation_Post_GP-S32R.md) |
+| Proposed NEXT (not started) | **GP-S30R — Combat Auto-Acquire** |
 
-**NEXT action для агента:** await human merge of GP-S32R. Do **not** auto-merge. Do **not** start FoW / BuildGrid / Order Menu / GP-S34 without roadmap audit.
+**NEXT action для агента:** await human review of reconciliation audit. Do **not** implement GP-S30R / BuildingDefinition / BuildGrid / FoW until explicitly assigned.
 
 ### Drift Warning
 

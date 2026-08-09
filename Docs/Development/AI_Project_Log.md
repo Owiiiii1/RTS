@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-09 — Roadmap Reconciliation Post GP-S32R (audit)
+
+Status: **ROADMAP_RECONCILIATION_POST_GP-S32R_READY_FOR_REVIEW**
+
+- Branch: `audit/roadmap-reconciliation-post-gp-s32r` (base `main` @ `2042d4e`)
+- Audit-only: historical TDD/13 GP-S29…S53 vs factual Source after S29R–S32R
+- Recommended NEXT (not started): **GP-S30R — Combat Auto-Acquire**
+- Explicit NOT-NEXT: BuildingDefinition, BuildGrid, Hub bonuses, Attack-Move, FoW, Order Menu, turrets/walls
+- Artifact: `Docs/Development/Roadmap_Reconciliation_Post_GP-S32R.md`
+- NOT MERGED
+
 ## 2026-08-09 — GP-S32R Orbital Building Drop (finalization)
 
 Status: **GP-S32R_FINALIZATION_READY_FOR_MERGE**

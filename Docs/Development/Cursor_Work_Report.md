@@ -12,7 +12,7 @@ NOT MERGED.
 |---|---|
 | Branch | `feature/gp-s32a-attack-move-reconciliation` |
 | Base (`main`) | `989ca3fe6eae31b177ba2fade2ca1f02300d3326` |
-| Candidate head | *(set after commit)* |
+| Candidate head | 222170ad18c0c7d1bc236e88523e3b938c6ec7e7 |
 
 ## 2. Factual input path
 - `A` key edge (polled in Tick via `UpdateAttackMoveInputOwnership`) → `EnterAttackMoveMode` when selection has SalvageWalker

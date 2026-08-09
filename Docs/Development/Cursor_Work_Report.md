@@ -7,71 +7,83 @@ NOT MERGED.
 
 ## Branch
 `feature/gp-s33m-rts-movement-reconciliation`  
-Prior remote head: `1e47b728042fea96266ee1e270c2b1bf1c9b4372`  
-This revision: `2d6f37bb13cc4dc2c0a3daaba93b8346c4f5bd24`
+Prior remote head: `e9e3f6aca3bffc13710572a87c780856e1699ae6`  
+This revision: (see commit after push)
 
-## Operator second-pass facts
+## Operator third-pass facts
 | Check | Result |
 | --- | --- |
-| Building NavigationObstacle | **PASS** (unchanged) |
-| NavMesh / unit nav / unit↔unit avoidance | PASS (prior) |
-| Reassigned Worker CargoFull → automatic haul | **FAIL** (second operator pass) |
+| Building NavigationObstacle | **PASS** (unchanged; keep authored footprint) |
+| Natural reassignment → CargoFull → `HaulReturnToBase` | **PASS** (proven by operator logs) |
+| Haul `RequestMove` after CargoFull | **FAIL** — `Reason=PathNotFound` → `HaulApproachMoveRejected` → `DropOffWait Enter Reason=PathRejected` → StillUnreachable |
 
-### Log fact
-Manual Mine after standing full cargo → `MineRejected: Reason=CargoFull`.  
-Proves cargo did fill from mining, but automatic HaulReturnToBase had not started. Manual CargoFull reject remains intentional.
+### Log fact (third failure)
+```
+HaulReturnToBase ... Cargo=50
+MoveRejected ... Reason=PathNotFound
+HaulApproachMoveRejected
+DropOffWait Enter Reason=PathRejected
+Retry → StillUnreachable
+```
+CargoFull → haul transition is proven working. Failure is isolated to navigation approach selection around MainBase after NavigationObstacle (`NavArea_Null`) was added.
 
-## Why previous contract was a false positive
-`GPMineReassignmentHaulContractTest` masked the bug:
-- teleported tested Worker near NodeB
-- issued a second `IssueMine(Worker, NodeB)` if assignment looked wrong
+## Root problem
+Haul used a single deterministic radial destination from `TryMakeRangeApproachDestination(Owner, MainBase, DropOffRange, …)` then `UGP_MovementComponent::RequestMove` → project + `FindPathSync`.
 
-That repaired broken Held/binding/serial state before forcing mining cycles, so CargoFull→haul could pass without proving the natural reassignment chain.
+With a building NavArea_Null footprint that one point may land on a disconnected polygon, behind the obstacle relative to approach lanes, or project on-nav with **no complete path**. Observed result is `PathNotFound`, not `DestinationOffNav`.
 
-## Corrected contract methodology
-`gp.Resource.RunMineReassignmentHaulContractTest` rewritten:
-1. Fill A slots with fillers
-2. Spawn two tested workers
-3. Issue **exactly one** `Mine(A)` per tested worker
-4. **No** teleport / second IssueMine / direct BeginMining / retarget helpers on tested workers after that
-5. Wait for natural reassignment → move → mining B
-6. Prove ownership (Held=B, MineTarget=B, ActiveMineSerial, Mining node=B, Mining state, binding alive) **before** any `DebugForceExecuteMiningCycle`
-7. Force cycles only accelerate already-valid mining
-8. Assert automatic haul, unload, return to B
-9. Concurrent worker2 keeps independent component chain
-10. End-stage manual Mine while full cargo remains rejected (does not start haul)
+Worker only needs `DistanceToMainBase <= DropOffRangeCm` — not one predetermined XY.
 
-## Proven root cause
-Not only the prior Idle-during-`BeginMiningAtHeldTarget` gap.
+Do **not** weaken pathfinding with straight-line through buildings. Do **not** remove NavigationObstacle. Do **not** tell operator to shrink the nav box.
 
-Factual failures in the natural chain:
-1. **Mine SelfSupersede teardown** — `RequestMineApproachMove` replace while moving broadcast `Cancelled/Superseded` with the same serial; `TryConsumeMineMovementResult` cleared Held + `ResetMineExecutor`, leaving approach without coherent Mine ownership (Attack already ignored SelfSupersede; Mine did not). Haul had the analogous Superseded→`WaitingForDropOff` path.
-2. **Post-BeginMining ownership not reaffirmed** after remine/retarget — binding/serial/MineTarget could diverge from the active deposit after SlotFullAlternative → B.
-3. **Stale local Node after retarget** — fallthrough could `BeginMining` the pre-retarget Node pointer after Held was updated to B.
-4. **Orphan CargoFull** — if UnitCommand was unbound when MiningComponent reached CargoFull, multicast never started haul; cargo stayed full → later manual Mine correctly rejected `CargoFull`.
+## Fix — nav-aware reachable approach
+Ownership: `UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination` (interaction-range semantics).
 
-## Exact code fix
-- Mine/Haul: ignore movement `Cancelled+Superseded` self-replace (keep chain)
-- After successful `BeginMining` (Started/Waiting/Already): reaffirm `MineTarget`, `LastMineDepositForHaul`, `ActiveMineSerial`, `BindMiningStateEvents`
-- Retarget: log Old/New/Held/MineTarget; refresh Node from Held after SlotFullAlternative
-- `LastMineDepositForHaul` survives `MineTarget.Reset()` for haul deposit resolution
-- `UGP_MiningComponent::SetMiningState` direct `NotifyMiningComponentTerminal` after multicast (orphan CargoFull safety net)
-- CargoFull: recover `ActiveMineSerial` from Held if cleared; idempotent when haul already active
-- Idle remine ignore remains **only** under `bBeginMiningAtHeldTargetInProgress` (external `StopMining` still clears)
+Shared evaluator: `GPResourceApproach::EvaluateRangeApproachPath` (8 directions).
 
-## State ownership after reassignment
-- `HeldCommand.TargetActor` = active mine intent deposit (updated to B on retarget)
-- `MineTarget` / `LastMineDepositForHaul` = runtime active deposit for approach/haul
-- `ActiveMineSerial` = chain identity shared with haul
-- Manual Mine + full cargo still rejected; does not start haul
+### Candidate algorithm
+- Index 0 = direct radial toward worker (legacy geometry)
+- ±45°, ±90°, ±135°, 180° (8 total)
+- Candidate radius: outside NavigationObstacle world-bounds XY clearance + unit/acceptance safety, and **inside** `DropOffRangeCm`
+- Clearance from `AGP_BuildingBase::GetNavigationObstacle()` bounds (`Bounds.BoxExtent`); ResourceNode uses collision box
+- If obstacle nearly fills DropOffRange → `HaulApproachConfigFailure` (no silent route into Null)
+
+### Validation / scoring
+Per candidate: project to nav → still within DropOffRange → complete `FindPathSync` (no partial) → score by **shortest nav path length**, then lowest candidate index.
+
+No global scans. Generic `UGP_MovementComponent` PathNotFound at far distance unchanged.
+
+### Fallback
+- Prefer reachable alternate if radial fails
+- All candidates fail → existing `WaitingForDropOff` / `PathRejected` + rate-limited retry
+- No-nav / start projection fail → legacy single radial (may still reject at RequestMove)
+
+### Two workers
+Distinct Worker positions yield distinct radials (index 0). No docking-slot architecture this slice.
+
+### ResourceNode mine approach
+Same helper reused via `TryMakeMineApproachDestination`. Mining slot semantics unchanged.
+
+### Diagnostics (one-shot, not per-frame)
+- `HaulApproachCandidate` (Unit, Serial, CandidateIndex, Candidate, Projected, WithinRange, PathResult, PathLength)
+- `HaulApproachSelected` (… Destination, PathLength, MainBase, DropOffRange)
+- `HaulApproachNoReachableCandidate` / `HaulApproachConfigFailure`
+
+## Retained prior worker fixes
+Natural reassignment ownership, SelfSupersede Mine/Haul, post-BeginMining reaffirmation, stale-node fix, orphan CargoFull safety, no-teleport/no-second-Mine contract methodology. Manual Mine with full cargo remains rejected.
 
 ## Building NavigationObstacle
-Operator PASS. Implementation not changed this revision.
+Operator PASS. Not altered this revision (getter/bounds only for clearance).
+
+## Contract coverage
+1. **`gp.Resource.RunMineReassignmentHaulContractTest`** — MainBase NavigationObstacle activated; `DebugSkipCandidateMask` forces radial unavailable; asserts alternate candidate index > 0; unload succeeds. Fails if implementation only retries the same PathNotFound radial.
+2. **`gp.Resource.RunHaulNavApproachContractTest`** (new) — A direct fails / B alternate succeeds / C dest on-nav, in DropOffRange, outside obstacle / D all unreachable → WaitingForDropOff / E no straight-line Null fallback.
 
 ## Test results (Failures=0)
 | Test | Result |
 | --- | --- |
 | gp.Resource.RunMineReassignmentHaulContractTest | PASS |
+| gp.Resource.RunHaulNavApproachContractTest | PASS |
 | gp.Resource.RunS28RegressionSuite | PASS |
 | gp.Resource.RunDropOffResilienceContractTest | PASS |
 | gp.Resource.RunContainerLaunchContractTest | PASS |
@@ -88,9 +100,9 @@ Operator PASS. Implementation not changed this revision.
 GPEditor Win64 Development + UHT: **PASS**  
 GP Development / Shipping: not run.
 
-## Operator retest (Worker only)
-Two workers, deposit A full/unavailable, one player Mine(A):
-- reassign → mine B → CargoFull → automatic MainBase haul → unload → continue  
-- no manual Mine after cargo full
+## Operator retest
+Same current map, same authored MainBase NavigationObstacle, same two Workers, occupied deposit A, one Mine:
+automatic B → CargoFull → HaulReturnToBase → path chooses reachable side of MainBase → workers route around building/nav obstacle → enter DropOffRange → unload → continue chain.  
+No operator NavigationObstacle changes required.
 
 ## NOT MERGED

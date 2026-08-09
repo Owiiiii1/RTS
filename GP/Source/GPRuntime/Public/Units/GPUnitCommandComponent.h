@@ -246,6 +246,11 @@ public:
 
 	/** True when UnitCommand is subscribed to MiningComponent::OnMiningStateChanged. */
 	bool DebugIsMiningStateEventBound() const { return BoundMiningComponent.IsValid(); }
+
+	/** Bitmask of haul/mine approach candidate indices to skip (contract harness). */
+	void DebugSetApproachSkipCandidateMask(int32 Mask) { DebugApproachSkipCandidateMask = Mask; }
+	int32 DebugGetApproachSkipCandidateMask() const { return DebugApproachSkipCandidateMask; }
+	int32 DebugGetLastApproachCandidateIndex() const { return DebugLastApproachCandidateIndex; }
 #endif
 
 	/**
@@ -363,6 +368,26 @@ private:
 		FVector& OutDestination,
 		float& OutDesiredHorizontalDistance,
 		float& OutPredictedWorstCaseDistance) const;
+
+	/**
+	 * Nav-aware interaction approach: several deterministic candidates around Target,
+	 * project + complete FindPathSync, pick shortest reachable path inside InteractionRange
+	 * and outside NavigationObstacle / collision footprint when authored.
+	 */
+	bool TryFindReachableRangeApproachDestination(
+		const AActor* Owner,
+		const AActor* Target,
+		float InteractionRangeCm,
+		float AcceptanceRadius,
+		float ExtraInwardMarginCm,
+		uint32 LogSerial,
+		FVector& OutDestination,
+		float& OutDesiredHorizontalDistance,
+		float& OutPredictedWorstCaseDistance,
+		float* OutPathLengthCm = nullptr,
+		int32* OutCandidateIndex = nullptr) const;
+
+	float ResolveTargetApproachClearanceHalfXY(const AActor* Target) const;
 
 	bool TryMakeMineApproachDestination(
 		const AActor* Owner,
@@ -571,6 +596,8 @@ private:
 	int32 DebugMineBeginCallsThisTransition = 0;
 	int32 DebugReassignmentAttemptsThisTransition = 0;
 	int32 DebugSameTargetRetargetAttempts = 0;
+	int32 DebugApproachSkipCandidateMask = 0;
+	mutable int32 DebugLastApproachCandidateIndex = -1;
 #endif
 
 	/** GP-S28 Haul orchestration (Worker only; shares Mine command serial as chain id). */

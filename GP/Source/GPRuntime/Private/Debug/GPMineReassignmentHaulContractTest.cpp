@@ -7,10 +7,12 @@
 #include "Buildings/GPLogisticsHub.h"
 #include "Buildings/GPMainBase.h"
 #include "Command/GPUnitCommand.h"
+#include "Components/BoxComponent.h"
 #include "Debug/GPContractTestCoordinator.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
+#include "NavAreas/NavArea_Null.h"
 #include "Resources/GPCargoComponent.h"
 #include "Resources/GPMiningComponent.h"
 #include "Resources/GPResourceLoopDiagnostics.h"
@@ -175,6 +177,29 @@ namespace GPMineReassignmentHaulDebug
 			|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::ReturningToBase
 			|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::DroppingOff;
 	}
+
+	/** Production-equivalent MainBase NavArea_Null footprint (transient Recast may not carve; skip-mask covers radial block). */
+	static void ActivateMainBaseNavigationObstacle(AGP_MainBase* Base)
+	{
+		if (!IsValid(Base))
+		{
+			return;
+		}
+		UBoxComponent* NavBox = Base->GetNavigationObstacle();
+		if (NavBox == nullptr)
+		{
+			return;
+		}
+		NavBox->SetBoxExtent(FVector(160.0f, 160.0f, 130.0f));
+		NavBox->SetCanEverAffectNavigation(true);
+		NavBox->bDynamicObstacle = true;
+		NavBox->SetAreaClassOverride(UNavArea_Null::StaticClass());
+		NavBox->UpdateBounds();
+		NavBox->MarkRenderStateDirty();
+	}
+
+	/** Force candidate index 0 (direct radial) unavailable so haul must pick an alternate sector. */
+	static constexpr int32 SkipDirectRadialCandidateMask = 1 << 0;
 
 	static void RunMineReassignmentHaulContractTest(const TArray<FString>& Args, UWorld* World)
 	{
@@ -461,6 +486,11 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 		MainBaseLocation = Scenario.MainBase->GetActorLocation();
 		NodeALocation = Scenario.ResourceNode->GetActorLocation();
 
+		ActivateMainBaseNavigationObstacle(Scenario.MainBase);
+		Expect(Scenario.MainBase->GetNavigationObstacle() != nullptr
+				&& Scenario.MainBase->GetNavigationObstacle()->CanEverAffectNavigation(),
+			TEXT("MainBaseNavigationObstacleActive"));
+
 		FString NodeBFail;
 		AGP_ResourceNode* NodeB = SpawnNodeBNearA(
 			World, OwnerTag, NodeALocation, TestSearchRadiusCm, NodeBFail);
@@ -488,6 +518,11 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 			false,
 			nullptr,
 			ETeleportType::TeleportPhysics);
+		if (UGP_UnitCommandComponent* Cmd1Setup = Scenario.Worker->GetUnitCommandComponent())
+		{
+			// Radial haul candidate forced unavailable — must choose alternate around MainBase.
+			Cmd1Setup->DebugSetApproachSkipCandidateMask(SkipDirectRadialCandidateMask);
+		}
 
 		AGP_Worker* Worker2 = GPResourceLoopDiagnostics::SpawnWorkerDeferred(
 			World, NodeALocation + FVector(120.0f, -40.0f, 0.0f), ContractTeamId, OwnerTag);
@@ -497,6 +532,10 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 			return;
 		}
 		Worker2->GetCargoComponent()->ClearCargo();
+		if (UGP_UnitCommandComponent* Cmd2Setup = Worker2->GetUnitCommandComponent())
+		{
+			Cmd2Setup->DebugSetApproachSkipCandidateMask(SkipDirectRadialCandidateMask);
+		}
 		Worker2Weak = Worker2;
 
 		++StageIndex;
@@ -659,6 +698,8 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 		Expect(Cmd->HasHeldCommand()
 				&& Cmd->GetHeldCommand()->CommandTag == FGPGameplayTags::Get().Command_Mine,
 			TEXT("HeldMineKeptDuringHaul_NoPlayerCommand"));
+		Expect(Cmd->DebugGetLastApproachCandidateIndex() > 0,
+			TEXT("HaulChoseAlternateCandidate_NotRadial0"));
 		Expect(!bIssueMineAfterInitial, TEXT("Guard_NoIssueMineAfterInitial"));
 		Expect(!bTeleportedAfterInitial, TEXT("Guard_NoTeleportAfterInitial"));
 

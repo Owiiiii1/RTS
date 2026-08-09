@@ -1458,15 +1458,7 @@ bool UGP_UnitCommandComponent::TryMakeRangeApproachDestination(
 		return false;
 	}
 
-	float CollisionHalfXY = 0.0f;
-	if (const AGP_ResourceNode* Node = Cast<AGP_ResourceNode>(Target))
-	{
-		if (const UBoxComponent* Box = Node->GetCollisionBox())
-		{
-			const FVector Extent = Box->GetScaledBoxExtent();
-			CollisionHalfXY = FMath::Max(Extent.X, Extent.Y);
-		}
-	}
+	const float CollisionHalfXY = ResolveTargetApproachClearanceHalfXY(Target);
 
 	float DesiredHorizontal = -1.0f;
 	if (!GPResourceApproach::TryComputeDesiredHorizontalDistance(
@@ -1500,6 +1492,193 @@ bool UGP_UnitCommandComponent::TryMakeRangeApproachDestination(
 	return OutPredictedWorstCaseDistance < InteractionRangeCm;
 }
 
+float UGP_UnitCommandComponent::ResolveTargetApproachClearanceHalfXY(const AActor* Target) const
+{
+	if (!IsValid(Target))
+	{
+		return 0.0f;
+	}
+
+	if (const AGP_BuildingBase* Building = Cast<AGP_BuildingBase>(Target))
+	{
+		if (const UBoxComponent* NavBox = Building->GetNavigationObstacle())
+		{
+			// World bounds half-extent captures BP rotation / non-uniform scale.
+			const FVector BoundExtent = NavBox->Bounds.BoxExtent;
+			return FMath::Max(BoundExtent.X, BoundExtent.Y);
+		}
+	}
+
+	if (const AGP_ResourceNode* Node = Cast<AGP_ResourceNode>(Target))
+	{
+		if (const UBoxComponent* Box = Node->GetCollisionBox())
+		{
+			const FVector Extent = Box->GetScaledBoxExtent();
+			return FMath::Max(Extent.X, Extent.Y);
+		}
+	}
+
+	return 0.0f;
+}
+
+bool UGP_UnitCommandComponent::TryFindReachableRangeApproachDestination(
+	const AActor* Owner,
+	const AActor* Target,
+	float InteractionRangeCm,
+	float AcceptanceRadius,
+	float ExtraInwardMarginCm,
+	uint32 LogSerial,
+	FVector& OutDestination,
+	float& OutDesiredHorizontalDistance,
+	float& OutPredictedWorstCaseDistance,
+	float* OutPathLengthCm,
+	int32* OutCandidateIndex) const
+{
+	OutDestination = FVector::ZeroVector;
+	OutDesiredHorizontalDistance = -1.0f;
+	OutPredictedWorstCaseDistance = -1.0f;
+	if (OutPathLengthCm != nullptr)
+	{
+		*OutPathLengthCm = -1.0f;
+	}
+	if (OutCandidateIndex != nullptr)
+	{
+		*OutCandidateIndex = -1;
+	}
+#if !UE_BUILD_SHIPPING
+	DebugLastApproachCandidateIndex = -1;
+#endif
+
+	if (!IsValid(Owner) || !IsValid(Target))
+	{
+		return false;
+	}
+
+	UWorld* World = Owner->GetWorld();
+	const float ClearanceHalfXY = ResolveTargetApproachClearanceHalfXY(Target);
+	const float Safety =
+		ResolveApproachSafetyMarginCm() + FMath::Max(0.0f, ExtraInwardMarginCm);
+
+	GPResourceApproach::FRangeApproachParams Params;
+	Params.PathStart = Owner->GetActorLocation();
+	Params.InteractionRangeCm = InteractionRangeCm;
+	Params.AcceptanceRadiusCm = AcceptanceRadius;
+	Params.SafetyMarginCm = Safety;
+	Params.MaxPathLengthCm = 12000.0f;
+	Params.DirectionCount = 8;
+	Params.PathfindingActor = const_cast<AActor*>(Owner);
+	// Index 0 remains the direct radial toward Owner; distinct Worker positions yield distinct radials.
+	Params.StartAngleBiasDegrees = 0.0f;
+#if !UE_BUILD_SHIPPING
+	Params.DebugSkipCandidateMask = DebugApproachSkipCandidateMask;
+#endif
+
+	const FVector TargetLocation = Target->GetActorLocation();
+	const bool bHaulLog = Cast<AGP_MainBase>(Target) != nullptr;
+
+	const GPResourceApproach::FRangeApproachResult Eval = GPResourceApproach::EvaluateRangeApproachPath(
+		World,
+		TargetLocation,
+		ClearanceHalfXY,
+		Params,
+		[&](const GPResourceApproach::FRangeApproachCandidateInfo& Info)
+		{
+			if (!bHaulLog)
+			{
+				return;
+			}
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP UnitCommandExecution HaulApproachCandidate: Unit=%s Serial=%u CandidateIndex=%d Candidate=%s Projected=%s WithinRange=%s PathResult=%s PathLength=%.1f Skipped=%s"),
+				*GetNameSafe(Owner),
+				LogSerial,
+				Info.Index,
+				*Info.RawCandidate.ToCompactString(),
+				Info.bProjected ? *Info.Projected.ToCompactString() : TEXT("None"),
+				Info.bWithinRange ? TEXT("true") : TEXT("false"),
+				Info.bPathOk ? TEXT("Ok") : (Info.bSkipped ? TEXT("Skipped") : TEXT("Fail")),
+				Info.PathLengthCm,
+				Info.bSkipped ? TEXT("true") : TEXT("false"));
+		});
+
+	if (!Eval.bReachable)
+	{
+		if (Eval.RejectReason == EGP_ResourceCandidateRejectReason::ApproachGeometryFailed
+			&& ClearanceHalfXY + Safety + AcceptanceRadius >= InteractionRangeCm - 1.0f)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution HaulApproachConfigFailure: Unit=%s Serial=%u Target=%s ClearanceHalfXY=%.1f DropOffRange=%.1f Safety=%.1f Acc=%.1f — NavigationObstacle nearly fills interaction range"),
+				*GetNameSafe(Owner),
+				LogSerial,
+				*GetNameSafe(Target),
+				ClearanceHalfXY,
+				InteractionRangeCm,
+				Safety,
+				AcceptanceRadius);
+		}
+
+		if (bHaulLog)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Warning,
+				TEXT("GP UnitCommandExecution HaulApproachNoReachableCandidate: Unit=%s Serial=%u MainBase=%s CandidateCount=%d Reason=%s ClearanceHalfXY=%.1f"),
+				*GetNameSafe(Owner),
+				LogSerial,
+				*GetNameSafe(Target),
+				Eval.CandidateCount,
+				GPResourceApproach::RejectReasonToString(Eval.RejectReason),
+				ClearanceHalfXY);
+		}
+
+		// No nav / geometry: fall back to legacy single radial (may still Reject at RequestMove).
+		if (Eval.RejectReason == EGP_ResourceCandidateRejectReason::NoNavSystem
+			|| Eval.RejectReason == EGP_ResourceCandidateRejectReason::PathStartProjectionFailed)
+		{
+			return TryMakeRangeApproachDestination(
+				Owner,
+				Target,
+				InteractionRangeCm,
+				AcceptanceRadius,
+				ExtraInwardMarginCm,
+				OutDestination,
+				OutDesiredHorizontalDistance,
+				OutPredictedWorstCaseDistance);
+		}
+		return false;
+	}
+
+	OutDestination = Eval.BestApproachLocation;
+	OutDesiredHorizontalDistance = Eval.DesiredHorizontalCm;
+	const float DeltaZ = Owner->GetActorLocation().Z - TargetLocation.Z;
+	OutPredictedWorstCaseDistance = FMath::Sqrt(
+		FMath::Square(Eval.DesiredHorizontalCm + AcceptanceRadius) + FMath::Square(DeltaZ));
+	if (OutPathLengthCm != nullptr)
+	{
+		*OutPathLengthCm = Eval.PathLengthCm;
+	}
+	if (OutCandidateIndex != nullptr)
+	{
+		*OutCandidateIndex = Eval.BestCandidateIndex;
+	}
+#if !UE_BUILD_SHIPPING
+	DebugLastApproachCandidateIndex = Eval.BestCandidateIndex;
+#endif
+
+	if (bHaulLog)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution HaulApproachSelected: Unit=%s Serial=%u CandidateIndex=%d Destination=%s PathLength=%.1f MainBase=%s DropOffRange=%.1f ClearanceHalfXY=%.1f"),
+			*GetNameSafe(Owner),
+			LogSerial,
+			Eval.BestCandidateIndex,
+			*OutDestination.ToCompactString(),
+			Eval.PathLengthCm,
+			*GetNameSafe(Target),
+			InteractionRangeCm,
+			ClearanceHalfXY);
+	}
+
+	return OutPredictedWorstCaseDistance < InteractionRangeCm;
+}
+
 bool UGP_UnitCommandComponent::TryMakeMineApproachDestination(
 	const AActor* Owner,
 	const AGP_ResourceNode* Node,
@@ -1510,12 +1689,13 @@ bool UGP_UnitCommandComponent::TryMakeMineApproachDestination(
 	float& OutDesiredHorizontalDistance,
 	float& OutPredictedWorstCaseDistance) const
 {
-	return TryMakeRangeApproachDestination(
+	return TryFindReachableRangeApproachDestination(
 		Owner,
 		Node,
 		InteractionRangeCm,
 		AcceptanceRadius,
 		ExtraInwardMarginCm,
+		0u,
 		OutDestination,
 		OutDesiredHorizontalDistance,
 		OutPredictedWorstCaseDistance);
@@ -2490,15 +2670,20 @@ bool UGP_UnitCommandComponent::RequestHaulApproachMove(
 	FVector Destination = FVector::ZeroVector;
 	float DesiredHorizontal = -1.0f;
 	float PredictedWorst = -1.0f;
-	if (!TryMakeRangeApproachDestination(
+	float PathLength = -1.0f;
+	int32 CandidateIndex = -1;
+	if (!TryFindReachableRangeApproachDestination(
 		Owner,
 		MainBase,
 		DropOffRange,
 		AcceptanceRadius,
 		ExtraInwardMarginCm,
+		HaulSerial,
 		Destination,
 		DesiredHorizontal,
-		PredictedWorst))
+		PredictedWorst,
+		&PathLength,
+		&CandidateIndex))
 	{
 		UE_LOG(LogGPUnitCommandExecution, Warning,
 			TEXT("GP UnitCommandExecution HaulApproachGeometryFailed: Unit=%s HaulSerial=%u MainBase=%s Label=%s Range=%.1f Acc=%.1f Safety=%.1f ExtraInward=%.1f Role=%s NetMode=%s"),
@@ -2519,10 +2704,11 @@ bool UGP_UnitCommandComponent::RequestHaulApproachMove(
 	if (!Outcome.IsAccepted())
 	{
 		UE_LOG(LogGPUnitCommandExecution, Warning,
-			TEXT("GP UnitCommandExecution HaulApproachMoveRejected: Unit=%s HaulSerial=%u Label=%s Role=%s NetMode=%s"),
+			TEXT("GP UnitCommandExecution HaulApproachMoveRejected: Unit=%s HaulSerial=%u Label=%s CandidateIndex=%d Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			HaulSerial,
 			LogLabel,
+			CandidateIndex,
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
 		return false;
@@ -2541,13 +2727,15 @@ bool UGP_UnitCommandComponent::RequestHaulApproachMove(
 	BindActiveHaulMainBaseUnregister();
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution HaulApproachRequested: Unit=%s HaulSerial=%u MainBase=%s Label=%s Attempt=%d Destination=%s DesiredHoriz=%.1f PredictedWorst=%.1f Range=%.1f Acc=%.1f Safety=%.1f Role=%s NetMode=%s"),
+		TEXT("GP UnitCommandExecution HaulApproachRequested: Unit=%s HaulSerial=%u MainBase=%s Label=%s Attempt=%d CandidateIndex=%d Destination=%s PathLength=%.1f DesiredHoriz=%.1f PredictedWorst=%.1f Range=%.1f Acc=%.1f Safety=%.1f Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
 		HaulSerial,
 		*GetNameSafe(MainBase),
 		LogLabel,
 		HaulApproachAttempt,
+		CandidateIndex,
 		*Destination.ToCompactString(),
+		PathLength,
 		DesiredHorizontal,
 		PredictedWorst,
 		DropOffRange,

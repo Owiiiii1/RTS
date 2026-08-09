@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/Function.h"
 #include "GPResourceApproach.generated.h"
 
 class AGP_ResourceNode;
@@ -88,4 +89,64 @@ namespace GPResourceApproach
 		UWorld* World,
 		const AGP_ResourceNode* Node,
 		const FEvaluateParams& Params);
+
+	/** Generic interaction-range approach around any target center (MainBase haul / ResourceNode). */
+	struct FRangeApproachParams
+	{
+		FVector PathStart = FVector::ZeroVector;
+		float InteractionRangeCm = 400.0f;
+		float AcceptanceRadiusCm = 50.0f;
+		float SafetyMarginCm = 25.0f;
+		float MaxPathLengthCm = 12000.0f;
+		int32 DirectionCount = 8;
+		TWeakObjectPtr<AActor> PathfindingActor;
+		/** Rotates the radial (index 0) sector; used for multi-worker approach diversity. */
+		float StartAngleBiasDegrees = 0.0f;
+#if !UE_BUILD_SHIPPING
+		/** Bit i skips candidate i after geometry (contract: force alternate selection). */
+		int32 DebugSkipCandidateMask = 0;
+#endif
+	};
+
+	struct FRangeApproachResult
+	{
+		bool bReachable = false;
+		FVector BestApproachLocation = FVector::ZeroVector;
+		float PathLengthCm = 0.0f;
+		float DesiredHorizontalCm = -1.0f;
+		int32 BestCandidateIndex = -1;
+		int32 CandidateCount = 0;
+		EGP_ResourceCandidateRejectReason RejectReason = EGP_ResourceCandidateRejectReason::None;
+	};
+
+	struct FRangeApproachCandidateInfo
+	{
+		int32 Index = 0;
+		FVector RawCandidate = FVector::ZeroVector;
+		FVector Projected = FVector::ZeroVector;
+		bool bProjected = false;
+		bool bWithinRange = false;
+		bool bPathOk = false;
+		bool bSkipped = false;
+		float PathLengthCm = -1.0f;
+	};
+
+	/**
+	 * 8-direction (configurable) reachable approach around TargetLocation.
+	 * Index 0 = toward PathStart (plus StartAngleBiasDegrees); scores by nav path length,
+	 * then lowest candidate index.
+	 */
+	GPRUNTIME_API FRangeApproachResult EvaluateRangeApproachPath(
+		UWorld* World,
+		const FVector& TargetLocation,
+		float CollisionHalfExtentXY,
+		const FRangeApproachParams& Params);
+
+	/** Same as EvaluateRangeApproachPath with per-candidate callback (haul diagnostics). */
+	GPRUNTIME_API FRangeApproachResult EvaluateRangeApproachPath(
+		UWorld* World,
+		const FVector& TargetLocation,
+		float CollisionHalfExtentXY,
+		const FRangeApproachParams& Params,
+		TFunctionRef<void(const FRangeApproachCandidateInfo&)> OnCandidate);
 }

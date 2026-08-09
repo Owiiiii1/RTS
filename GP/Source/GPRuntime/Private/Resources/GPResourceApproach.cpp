@@ -117,13 +117,29 @@ bool GPResourceApproach::TryMakeApproachPoint(
 	return true;
 }
 
-GPResourceApproach::FEvaluateResult GPResourceApproach::EvaluateNodeApproachPath(
+GPResourceApproach::FRangeApproachResult GPResourceApproach::EvaluateRangeApproachPath(
 	UWorld* World,
-	const AGP_ResourceNode* Node,
-	const FEvaluateParams& Params)
+	const FVector& TargetLocation,
+	float CollisionHalfExtentXY,
+	const FRangeApproachParams& Params)
 {
-	FEvaluateResult Result;
-	if (!IsValid(World) || !IsValid(Node) || Params.PathfindingActor.Get() == nullptr)
+	return EvaluateRangeApproachPath(
+		World,
+		TargetLocation,
+		CollisionHalfExtentXY,
+		Params,
+		[](const FRangeApproachCandidateInfo&) {});
+}
+
+GPResourceApproach::FRangeApproachResult GPResourceApproach::EvaluateRangeApproachPath(
+	UWorld* World,
+	const FVector& TargetLocation,
+	float CollisionHalfExtentXY,
+	const FRangeApproachParams& Params,
+	TFunctionRef<void(const FRangeApproachCandidateInfo&)> OnCandidate)
+{
+	FRangeApproachResult Result;
+	if (!IsValid(World) || Params.PathfindingActor.Get() == nullptr)
 	{
 		Result.RejectReason = EGP_ResourceCandidateRejectReason::InvalidNode;
 		return Result;
@@ -144,40 +160,39 @@ GPResourceApproach::FEvaluateResult GPResourceApproach::EvaluateNodeApproachPath
 	}
 
 	FNavLocation ProjectedStart;
-	if (!NavSys->ProjectPointToNavigation(Params.PathStart, ProjectedStart, FVector(200.0f, 200.0f, 400.0f)))
+	if (!NavSys->ProjectPointToNavigation(Params.PathStart, ProjectedStart, FVector(250.0f, 250.0f, 400.0f)))
 	{
 		Result.RejectReason = EGP_ResourceCandidateRejectReason::PathStartProjectionFailed;
 		return Result;
 	}
 
-	const FVector NodeLocation = Node->GetActorLocation();
-	float CollisionHalfXY = 60.0f;
-	if (const UBoxComponent* Box = Node->GetCollisionBox())
-	{
-		const FVector Extent = Box->GetScaledBoxExtent();
-		CollisionHalfXY = FMath::Max(Extent.X, Extent.Y);
-	}
-
 	float DesiredHorizontal = -1.0f;
 	if (!TryComputeDesiredHorizontalDistance(
 			ProjectedStart.Location,
-			NodeLocation,
+			TargetLocation,
 			Params.InteractionRangeCm,
 			Params.AcceptanceRadiusCm,
 			Params.SafetyMarginCm,
-			CollisionHalfXY,
+			CollisionHalfExtentXY,
 			DesiredHorizontal))
 	{
 		Result.RejectReason = EGP_ResourceCandidateRejectReason::ApproachGeometryFailed;
 		return Result;
 	}
+	Result.DesiredHorizontalCm = DesiredHorizontal;
 
 	const int32 DirCount = FMath::Clamp(Params.DirectionCount, 4, 16);
-	FVector TowardWorker = ProjectedStart.Location - NodeLocation;
+	Result.CandidateCount = DirCount;
+
+	FVector TowardWorker = ProjectedStart.Location - TargetLocation;
 	TowardWorker.Z = 0.0f;
 	if (!TowardWorker.Normalize())
 	{
 		TowardWorker = FVector::ForwardVector;
+	}
+	if (!FMath::IsNearlyZero(Params.StartAngleBiasDegrees))
+	{
+		TowardWorker = TowardWorker.RotateAngleAxis(Params.StartAngleBiasDegrees, FVector::UpVector);
 	}
 
 	bool bAnyProjected = false;
@@ -187,30 +202,56 @@ GPResourceApproach::FEvaluateResult GPResourceApproach::EvaluateNodeApproachPath
 
 	for (int32 Index = 0; Index < DirCount; ++Index)
 	{
+		FRangeApproachCandidateInfo Info;
+		Info.Index = Index;
+
+#if !UE_BUILD_SHIPPING
+		if ((Params.DebugSkipCandidateMask & (1 << Index)) != 0)
+		{
+			Info.bSkipped = true;
+			OnCandidate(Info);
+			continue;
+		}
+#endif
+
 		const float AngleRad = (2.0f * PI) * (static_cast<float>(Index) / static_cast<float>(DirCount));
 		const FVector Rotated = TowardWorker.RotateAngleAxis(FMath::RadiansToDegrees(AngleRad), FVector::UpVector);
 
-		FVector RawApproach = FVector::ZeroVector;
 		if (!TryMakeApproachPoint(
 				ProjectedStart.Location,
-				NodeLocation,
+				TargetLocation,
 				Rotated,
 				DesiredHorizontal,
 				Params.InteractionRangeCm,
-				RawApproach))
+				Info.RawCandidate))
 		{
+			OnCandidate(Info);
 			continue;
 		}
 
 		FNavLocation ProjectedApproach;
-		if (!NavSys->ProjectPointToNavigation(RawApproach, ProjectedApproach, FVector(250.0f, 250.0f, 400.0f)))
+		if (!NavSys->ProjectPointToNavigation(Info.RawCandidate, ProjectedApproach, FVector(250.0f, 250.0f, 400.0f)))
 		{
+			OnCandidate(Info);
 			continue;
 		}
+		Info.bProjected = true;
+		Info.Projected = ProjectedApproach.Location;
 		bAnyProjected = true;
 
-		if (FVector::Dist(ProjectedApproach.Location, NodeLocation) > Params.InteractionRangeCm - KINDA_SMALL_NUMBER)
+		Info.bWithinRange =
+			FVector::Dist(ProjectedApproach.Location, TargetLocation) <= Params.InteractionRangeCm - KINDA_SMALL_NUMBER;
+		if (!Info.bWithinRange)
 		{
+			OnCandidate(Info);
+			continue;
+		}
+
+		// Prefer projected points that remain outside the authored obstacle footprint.
+		const float MinOutside = FMath::Max(0.0f, CollisionHalfExtentXY + 5.0f);
+		if (FVector::Dist2D(ProjectedApproach.Location, TargetLocation) + KINDA_SMALL_NUMBER < MinOutside)
+		{
+			OnCandidate(Info);
 			continue;
 		}
 
@@ -225,26 +266,38 @@ GPResourceApproach::FEvaluateResult GPResourceApproach::EvaluateNodeApproachPath
 		if (!PathResult.IsSuccessful() || !PathResult.Path.IsValid())
 		{
 			bSawPathInvalid = true;
+			OnCandidate(Info);
 			continue;
 		}
 		if (PathResult.IsPartial())
 		{
 			bSawPathPartial = true;
+			OnCandidate(Info);
 			continue;
 		}
 
 		const float PathLength = PathResult.Path->GetLength();
+		Info.PathLengthCm = PathLength;
 		if (!FMath::IsFinite(PathLength) || PathLength > Params.MaxPathLengthCm + KINDA_SMALL_NUMBER)
 		{
 			bSawPathTooLong = true;
+			OnCandidate(Info);
 			continue;
 		}
 
-		if (!Result.bReachable || PathLength < Result.PathLengthCm)
+		Info.bPathOk = true;
+		OnCandidate(Info);
+
+		const bool bBetter =
+			!Result.bReachable
+			|| PathLength < Result.PathLengthCm - KINDA_SMALL_NUMBER
+			|| (FMath::IsNearlyEqual(PathLength, Result.PathLengthCm) && Index < Result.BestCandidateIndex);
+		if (bBetter)
 		{
 			Result.bReachable = true;
 			Result.BestApproachLocation = ProjectedApproach.Location;
 			Result.PathLengthCm = PathLength;
+			Result.BestCandidateIndex = Index;
 			Result.RejectReason = EGP_ResourceCandidateRejectReason::Accepted;
 		}
 	}
@@ -274,5 +327,46 @@ GPResourceApproach::FEvaluateResult GPResourceApproach::EvaluateNodeApproachPath
 	{
 		Result.RejectReason = EGP_ResourceCandidateRejectReason::CandidateProjectionFailed;
 	}
+	return Result;
+}
+
+GPResourceApproach::FEvaluateResult GPResourceApproach::EvaluateNodeApproachPath(
+	UWorld* World,
+	const AGP_ResourceNode* Node,
+	const FEvaluateParams& Params)
+{
+	FEvaluateResult Result;
+	if (!IsValid(Node))
+	{
+		Result.RejectReason = EGP_ResourceCandidateRejectReason::InvalidNode;
+		return Result;
+	}
+
+	float CollisionHalfXY = 60.0f;
+	if (const UBoxComponent* Box = Node->GetCollisionBox())
+	{
+		const FVector Extent = Box->GetScaledBoxExtent();
+		CollisionHalfXY = FMath::Max(Extent.X, Extent.Y);
+	}
+
+	FRangeApproachParams RangeParams;
+	RangeParams.PathStart = Params.PathStart;
+	RangeParams.InteractionRangeCm = Params.InteractionRangeCm;
+	RangeParams.AcceptanceRadiusCm = Params.AcceptanceRadiusCm;
+	RangeParams.SafetyMarginCm = Params.SafetyMarginCm;
+	RangeParams.MaxPathLengthCm = Params.MaxPathLengthCm;
+	RangeParams.DirectionCount = Params.DirectionCount;
+	RangeParams.PathfindingActor = Params.PathfindingActor;
+
+	const FRangeApproachResult RangeResult = EvaluateRangeApproachPath(
+		World,
+		Node->GetActorLocation(),
+		CollisionHalfXY,
+		RangeParams);
+
+	Result.bReachable = RangeResult.bReachable;
+	Result.BestApproachLocation = RangeResult.BestApproachLocation;
+	Result.PathLengthCm = RangeResult.PathLengthCm;
+	Result.RejectReason = RangeResult.RejectReason;
 	return Result;
 }

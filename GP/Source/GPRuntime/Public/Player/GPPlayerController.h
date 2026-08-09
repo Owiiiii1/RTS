@@ -94,6 +94,29 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Orbital|Building")
 	bool IsBuildingPlacementActive() const { return bBuildingPlacementActive; }
 
+	/**
+	 * Placement owns RMB while active, and until RMB release after an RMB cancel
+	 * (prevents same-frame command click-through).
+	 */
+	UFUNCTION(BlueprintPure, Category = "GP|Orbital|Building")
+	bool IsBuildingPlacementCommandInputBlocked() const;
+
+	/** Placement owns LMB (confirm) while active — normal selection/marquee suppressed. */
+	UFUNCTION(BlueprintPure, Category = "GP|Orbital|Building")
+	bool IsBuildingPlacementSelectionInputBlocked() const;
+
+	/**
+	 * Command-path seam: if placement owns RMB, cancel placement and block the command.
+	 * @return true when the caller must not issue a unit command.
+	 */
+	bool ConsumeBuildingPlacementCommandInput();
+
+	/**
+	 * Contract seam: drive placement mouse edge/suppress state without hardware input.
+	 * Mirrors Tick ownership updates for LMB/RMB down state.
+	 */
+	void UpdateBuildingPlacementInputEdgesForContract(bool bLMBDown, bool bRMBDown);
+
 	/** Authority launch intent: resolve own-team MainBase → TryLaunchReadyContainer. */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestLaunchReadyContainer();
@@ -194,6 +217,9 @@ private:
 	bool TraceGroundUnderCursor(FVector& OutGroundLocation, FRotator& OutGroundRotation) const;
 	void UpdateBuildingPlacementGhost();
 	void DestroyBuildingPlacementGhost();
+	void CancelBuildingPlacementFromRMB();
+	void UpdateBuildingPlacementInputOwnership();
+	void ClearSelectionForBuildingPlacementEnter();
 	void BindBuildingInventoryEvents();
 	void UnbindBuildingInventoryEvents();
 
@@ -297,6 +323,11 @@ private:
 	EGP_OrbitalBuildingType ActiveBuildingPlacementType = EGP_OrbitalBuildingType::None;
 	bool bBuildingPlacementActive = false;
 	bool bBuildingPlacementRMBWasDown = false;
+	bool bBuildingPlacementLMBWasDown = false;
+	/** Block confirm until the LMB that opened HUD Deploy / ended placement is released. */
+	bool bBuildingPlacementSuppressConfirmUntilLMBRelease = false;
+	/** Block command until the RMB that cancelled placement is released. */
+	bool bBuildingPlacementSuppressCommandUntilRMBRelease = false;
 
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */
 	TWeakObjectPtr<APawn> LastInitializedLocalPawn;

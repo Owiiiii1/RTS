@@ -20,10 +20,13 @@
 #include "Orbital/GPDropPod.h"
 #include "Orbital/GPUnitDropAuthority.h"
 #include "Orbital/GPUnitDropManifest.h"
+#include "Player/GPPlayerController.h"
 #include "Player/GPPlayerState.h"
+#include "Player/GPSelectionComponent.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
+#include "Units/GPWorker.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPOrbitalBuildingDrop, Log, All);
 
@@ -367,7 +370,7 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		ScheduleNext(0.05f);
 		break;
 	}
-	case 2: // D deploy without ready after consume setup + E radius + F overlap
+	case 2: // Placement input ownership + D deploy without ready + E radius + F overlap
 	{
 		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
 		AGP_MainBase* Base = MainBaseWeak.Get();
@@ -375,6 +378,87 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		{
 			Finish();
 			return;
+		}
+
+		// --- Placement input ownership (gates / selection clear / RMB cancel Ready) ---
+		if (AGP_PlayerController* PC = Cast<AGP_PlayerController>(World->GetFirstPlayerController()))
+		{
+			AGP_PlayerState* PCPS = PC->GetPlayerState<AGP_PlayerState>();
+			UGP_SelectionComponent* Selection = PC->GetSelectionComponent();
+			UGP_OrbitalBuildingInventoryComponent* PCInv =
+				PCPS != nullptr ? PCPS->GetOrbitalBuildingInventoryComponent() : nullptr;
+			if (Expect(IsValid(PCPS) && Selection != nullptr && PCInv != nullptr, TEXT("P_PCSelectionInventory")))
+			{
+				if (PCInv->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub) < 1)
+				{
+					PCInv->AuthorityAddReady(EGP_OrbitalBuildingType::LogisticsHub, 1);
+				}
+
+				FActorSpawnParameters WorkerParams;
+				WorkerParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				WorkerParams.ObjectFlags |= RF_Transient;
+				AGP_Worker* SelectedWorker = World->SpawnActor<AGP_Worker>(
+					AGP_Worker::StaticClass(),
+					Base->GetActorLocation() + FVector(0.0f, 600.0f, 100.0f),
+					FRotator::ZeroRotator,
+					WorkerParams);
+				if (Expect(IsValid(SelectedWorker), TEXT("P_SpawnSelectedWorker")))
+				{
+					SelectedWorker->SetTeamId(ContractTeam);
+					Selection->ReplaceSelectionWithUnit(SelectedWorker);
+					Expect(Selection->HasSelection(), TEXT("P_SelectionBeforeEnter"));
+
+					PC->EnterBuildingPlacementMode(EGP_OrbitalBuildingType::LogisticsHub);
+					Expect(PC->IsBuildingPlacementActive(), TEXT("P_PlacementActive"));
+					Expect(!Selection->HasSelection(), TEXT("P_EnterClearsSelection"));
+					Expect(PC->IsBuildingPlacementCommandInputBlocked(), TEXT("P_CommandBlockedWhileActive"));
+					Expect(PC->IsBuildingPlacementSelectionInputBlocked(), TEXT("P_SelectionBlockedWhileActive"));
+
+					const int32 ReadyBeforeCancel =
+						PCInv->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub);
+					Expect(PC->ConsumeBuildingPlacementCommandInput(), TEXT("P_ConsumeCommandCancels"));
+					Expect(!PC->IsBuildingPlacementActive(), TEXT("P_CancelledInactive"));
+					Expect(PC->IsBuildingPlacementCommandInputBlocked(), TEXT("P_CommandSuppressedUntilRMBRelease"));
+					Expect(PCInv->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub) == ReadyBeforeCancel,
+						TEXT("P_CancelPreservesReady"));
+
+					PC->UpdateBuildingPlacementInputEdgesForContract(/*bLMBDown=*/false, /*bRMBDown=*/false);
+					Expect(!PC->IsBuildingPlacementCommandInputBlocked(), TEXT("P_CommandUnblockedAfterRMBRelease"));
+					Expect(!PC->IsBuildingPlacementSelectionInputBlocked(), TEXT("P_SelectionUnblockedAfterExit"));
+
+					// RMB edge cancel path (Tick/contract edges) also preserves READY.
+					if (PCInv->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub) < 1)
+					{
+						PCInv->AuthorityAddReady(EGP_OrbitalBuildingType::LogisticsHub, 1);
+					}
+					PC->EnterBuildingPlacementMode(EGP_OrbitalBuildingType::LogisticsHub);
+					const int32 ReadyBeforeEdgeCancel =
+						PCInv->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub);
+					PC->UpdateBuildingPlacementInputEdgesForContract(/*bLMBDown=*/false, /*bRMBDown=*/false);
+					PC->UpdateBuildingPlacementInputEdgesForContract(/*bLMBDown=*/false, /*bRMBDown=*/true);
+					Expect(!PC->IsBuildingPlacementActive(), TEXT("P_EdgeRMBCancels"));
+					Expect(PCInv->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub) == ReadyBeforeEdgeCancel,
+						TEXT("P_EdgeRMBCancelPreservesReady"));
+					PC->UpdateBuildingPlacementInputEdgesForContract(/*bLMBDown=*/false, /*bRMBDown=*/false);
+
+					SelectedWorker->Destroy();
+				}
+
+				// Leave PC inventory at 0 so OwnerPS Ready=1 remains the deploy SoT for later stages.
+				while (PCInv->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub) > 0)
+				{
+					PCInv->AuthorityTryConsumeReady(EGP_OrbitalBuildingType::LogisticsHub, 1);
+				}
+				if (PC->IsBuildingPlacementActive())
+				{
+					PC->CancelBuildingPlacement();
+				}
+				PC->UpdateBuildingPlacementInputEdgesForContract(false, false);
+			}
+		}
+		else
+		{
+			Expect(false, TEXT("P_MissingLocalPC"));
 		}
 
 		// Temporarily zero ready

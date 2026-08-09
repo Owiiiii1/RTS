@@ -208,24 +208,16 @@ void AGP_PlayerController::Tick(float DeltaSeconds)
 		return;
 	}
 
-	if (bBuildingPlacementActive)
-	{
-		UpdateBuildingPlacementGhost();
-
-		const bool bRMBDown = IsInputKeyDown(EKeys::RightMouseButton);
-		if (bRMBDown && !bBuildingPlacementRMBWasDown)
-		{
-			CancelBuildingPlacement();
-		}
-		bBuildingPlacementRMBWasDown = bRMBDown;
-	}
-	else
-	{
-		bBuildingPlacementRMBWasDown = false;
-	}
+	UpdateBuildingPlacementInputOwnership();
 
 	// Temporary validation-only boxes; not marquee work and not a world scan.
 	DrawLocalSelectionDebugVisualization();
+
+	// Placement mode owns LMB — never start/update marquee while active.
+	if (bBuildingPlacementActive)
+	{
+		return;
+	}
 
 	if (!bSelectionPressActive)
 	{
@@ -811,6 +803,12 @@ void AGP_PlayerController::OnCommandInputStarted(const FInputActionValue& Value)
 		return;
 	}
 
+	// Placement owns RMB: cancel + suppress until release. Do not rely on empty selection.
+	if (ConsumeBuildingPlacementCommandInput())
+	{
+		return;
+	}
+
 	float MouseX = 0.0f;
 	float MouseY = 0.0f;
 	if (!GetMousePosition(MouseX, MouseY))
@@ -1185,9 +1183,15 @@ void AGP_PlayerController::EnterBuildingPlacementMode(EGP_OrbitalBuildingType Bu
 		return;
 	}
 
+	ClearSelectionForBuildingPlacementEnter();
+
 	ActiveBuildingPlacementType = BuildingType;
 	bBuildingPlacementActive = true;
 	bBuildingPlacementRMBWasDown = IsInputKeyDown(EKeys::RightMouseButton);
+	bBuildingPlacementLMBWasDown = IsInputKeyDown(EKeys::LeftMouseButton);
+	// HUD Deploy click must not confirm on the same LMB press/release.
+	bBuildingPlacementSuppressConfirmUntilLMBRelease = bBuildingPlacementLMBWasDown;
+	bBuildingPlacementSuppressCommandUntilRMBRelease = false;
 
 	if (BuildingPlacementGhost == nullptr)
 	{
@@ -1208,6 +1212,81 @@ void AGP_PlayerController::EnterBuildingPlacementMode(EGP_OrbitalBuildingType Bu
 	}
 }
 
+void AGP_PlayerController::ClearSelectionForBuildingPlacementEnter()
+{
+	CancelActiveMarquee(/*bLogCanceled=*/false);
+	bSelectionPressActive = false;
+	SelectionPressScreenPosition = FVector2D::ZeroVector;
+
+	if (SelectionComponent == nullptr)
+	{
+		return;
+	}
+
+	// Clear active selection + inspect + pending marquee only — control groups preserved.
+	SelectionComponent->ClearSelection();
+	SelectionComponent->ClearInspectedTarget();
+	SelectionComponent->CancelMarquee();
+}
+
+bool AGP_PlayerController::IsBuildingPlacementCommandInputBlocked() const
+{
+	return bBuildingPlacementActive || bBuildingPlacementSuppressCommandUntilRMBRelease;
+}
+
+bool AGP_PlayerController::IsBuildingPlacementSelectionInputBlocked() const
+{
+	return bBuildingPlacementActive || bBuildingPlacementSuppressConfirmUntilLMBRelease;
+}
+
+bool AGP_PlayerController::ConsumeBuildingPlacementCommandInput()
+{
+	if (bBuildingPlacementActive)
+	{
+		CancelBuildingPlacementFromRMB();
+		return true;
+	}
+	return bBuildingPlacementSuppressCommandUntilRMBRelease;
+}
+
+void AGP_PlayerController::CancelBuildingPlacementFromRMB()
+{
+	CancelBuildingPlacement();
+	bBuildingPlacementSuppressCommandUntilRMBRelease = true;
+	bBuildingPlacementRMBWasDown = true;
+}
+
+void AGP_PlayerController::UpdateBuildingPlacementInputOwnership()
+{
+	const bool bLMBDown = IsInputKeyDown(EKeys::LeftMouseButton);
+	const bool bRMBDown = IsInputKeyDown(EKeys::RightMouseButton);
+	UpdateBuildingPlacementInputEdgesForContract(bLMBDown, bRMBDown);
+}
+
+void AGP_PlayerController::UpdateBuildingPlacementInputEdgesForContract(bool bLMBDown, bool bRMBDown)
+{
+	if (bBuildingPlacementActive)
+	{
+		UpdateBuildingPlacementGhost();
+		if (bRMBDown && !bBuildingPlacementRMBWasDown)
+		{
+			CancelBuildingPlacementFromRMB();
+		}
+	}
+
+	bBuildingPlacementRMBWasDown = bRMBDown;
+	bBuildingPlacementLMBWasDown = bLMBDown;
+
+	if (bBuildingPlacementSuppressConfirmUntilLMBRelease && !bLMBDown)
+	{
+		bBuildingPlacementSuppressConfirmUntilLMBRelease = false;
+	}
+	if (bBuildingPlacementSuppressCommandUntilRMBRelease && !bRMBDown)
+	{
+		bBuildingPlacementSuppressCommandUntilRMBRelease = false;
+	}
+}
+
 void AGP_PlayerController::CancelBuildingPlacement()
 {
 	if (!IsLocalController())
@@ -1217,12 +1296,19 @@ void AGP_PlayerController::CancelBuildingPlacement()
 
 	bBuildingPlacementActive = false;
 	ActiveBuildingPlacementType = EGP_OrbitalBuildingType::None;
+	bSelectionPressActive = false;
+	SelectionPressScreenPosition = FVector2D::ZeroVector;
 	DestroyBuildingPlacementGhost();
 }
 
 void AGP_PlayerController::ConfirmBuildingPlacement()
 {
 	if (!IsLocalController() || !bBuildingPlacementActive)
+	{
+		return;
+	}
+
+	if (bBuildingPlacementSuppressConfirmUntilLMBRelease)
 	{
 		return;
 	}
@@ -1237,6 +1323,9 @@ void AGP_PlayerController::ConfirmBuildingPlacement()
 	const EGP_OrbitalBuildingType Type = ActiveBuildingPlacementType;
 	const FTransform DeployTransform(GroundRot, GroundLoc);
 	CancelBuildingPlacement();
+	// Prevent the confirm release / held LMB from becoming a selection click.
+	bBuildingPlacementSuppressConfirmUntilLMBRelease = true;
+	bBuildingPlacementLMBWasDown = true;
 	RequestBuildingDeploy(Type, DeployTransform);
 }
 
@@ -1470,7 +1559,29 @@ void AGP_PlayerController::OnSelectionStarted(const FInputActionValue& Value)
 		return;
 	}
 
+	// Placement owns LMB: track confirm press only — no marquee / click-select start.
 	if (bBuildingPlacementActive)
+	{
+		if (bBuildingPlacementSuppressConfirmUntilLMBRelease)
+		{
+			return;
+		}
+
+		float MouseX = 0.0f;
+		float MouseY = 0.0f;
+		if (!GetMousePosition(MouseX, MouseY))
+		{
+			bSelectionPressActive = false;
+			SelectionPressScreenPosition = FVector2D::ZeroVector;
+			return;
+		}
+
+		SelectionPressScreenPosition = FVector2D(MouseX, MouseY);
+		bSelectionPressActive = true;
+		return;
+	}
+
+	if (bBuildingPlacementSuppressConfirmUntilLMBRelease)
 	{
 		return;
 	}
@@ -1502,7 +1613,19 @@ void AGP_PlayerController::OnSelectionCompleted(const FInputActionValue& Value)
 {
 	(void)Value;
 
-	if (!IsLocalController() || !bSelectionPressActive)
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	if (bBuildingPlacementSuppressConfirmUntilLMBRelease && !bBuildingPlacementActive)
+	{
+		bSelectionPressActive = false;
+		SelectionPressScreenPosition = FVector2D::ZeroVector;
+		return;
+	}
+
+	if (!bSelectionPressActive)
 	{
 		return;
 	}
@@ -1523,12 +1646,13 @@ void AGP_PlayerController::OnSelectionCompleted(const FInputActionValue& Value)
 	{
 		const float PixelDistance =
 			FVector2D::Distance(SelectionPressScreenPosition, ReleasePosition);
-		if (PixelDistance <= SelectionDragThresholdPixels)
+		bSelectionPressActive = false;
+		SelectionPressScreenPosition = FVector2D::ZeroVector;
+		if (!bBuildingPlacementSuppressConfirmUntilLMBRelease
+			&& PixelDistance <= SelectionDragThresholdPixels)
 		{
 			ConfirmBuildingPlacement();
 		}
-		bSelectionPressActive = false;
-		SelectionPressScreenPosition = FVector2D::ZeroVector;
 		return;
 	}
 

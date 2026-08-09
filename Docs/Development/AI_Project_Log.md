@@ -1,5 +1,15 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-09 — GP-S32R Input Ownership Fix (placement vs RTS RMB)
+
+Status: **GP-S32R_INPUT_OWNERSHIP_FIX_READY_FOR_OPERATOR_RETEST**
+
+- Same branch `feature/gp-s32r-orbital-building-drop` (base candidate `b922b18`)
+- Enter placement clears active selection; command + selection paths gated while placement owns mouse
+- RMB cancel suppresses command until RMB release (no dual Move/Attack)
+- Contracts Failures=0; GPEditor+UHT **PASS**; NOT MERGED
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-09 — GP-S32R Orbital Building Drop (implementation candidate)
 
 Status: **GP-S32R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

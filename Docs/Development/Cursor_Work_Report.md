@@ -13,7 +13,7 @@ NOT MERGED.
 | Branch | `feature/gp-s32r-orbital-building-drop` |
 | Base (`origin/main`) | `427a2aa6d9bc4c3733a044ec9b09d053d10dcc59` |
 | Operator-validated candidate | `71c19854f45fd659e35cc9b8ab4cc609e9799674` |
-| Final head | *(this finalization commit)* |
+| Final head | e96aa6658cdb33235a3329d1a82f21a0a2963dff |
 
 ## 2. Operator FULL PASS
 1. HUD present  

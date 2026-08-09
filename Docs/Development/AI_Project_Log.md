@@ -1,14 +1,27 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-09 — GP-S32A Attack-Move Reconciliation (finalization)
+
+Status: **GP-S32A_FINALIZATION_READY_FOR_MERGE**
+
+- Branch: `feature/gp-s32a-attack-move-reconciliation` (base `main` @ `989ca3fe`)
+- Operator-validated candidate: `5e6b3f192821a92737cd16e98e2aaa99ef73f7b6`
+- Operator FULL PASS: A-move → combat → resume original destination; RMB Move during combat → abandon, no stale resume
+- Final regressions Failures=0; GPEditor+UHT / GP Dev / GP Shipping **PASS**
+- No C++ correction during finalization (docs only)
+- NOT MERGED — await human merge/check; do **not** auto-start next code slice
+- Approved planning order after merge: RTS Movement Reconciliation → Unit Cap+Hub → Match win → BuildingDefinition/BuildGrid
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-09 — GP-S32A Attack-Move Reconciliation (implementation candidate)
 
-Status: **GP-S32A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S32A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (superseded by finalization)
 
 - Branch: `feature/gp-s32a-attack-move-reconciliation` (base `main` @ `989ca3fe`)
 - Attack-Move MVP: A modal → LMB ground → Held AttackMove travel + Sight acquire → Attack FSM → resume destination
 - Pure Move auto-acquire suppress preserved; Worker rejected at validate
 - Contract `gp.Combat.RunAttackMoveContractTest` Failures=0; regressions Failures=0; GPEditor+UHT **PASS**
-- NOT MERGED — operator validation stop; do **not** auto-start RTS Movement Reconciliation
+- Operator FULL PASS confirmed → finalization
 - Report: `Docs/Development/Cursor_Work_Report.md`
 
 ## 2026-08-09 — GP-S30R Combat Auto-Acquire (finalization)

@@ -232,7 +232,7 @@ void AGP_UnitBase::ReceiveCommand(const FGP_CommandRequest& Request)
 - Command queue (Shift+RMB chain) — design exists у `bQueue`, але queue логіка може бути спрощена до 1-deep replace-only у MVP.
 - Hold position, patrol points (Patrol — є у Command tag, але повна implementation deferred).
 - Formation movement.
-- ~~Attack-move.~~ **Implemented by GP-S32A** (`GP.Command.AttackMove`, A → LMB ground) — see `Claude_Tasks/GP-S32A_Attack_Move_Reconciliation.md`. Operator validation pending at time of annotation.
+- ~~Attack-move.~~ **Implemented by GP-S32A** (`GP.Command.AttackMove`, A → LMB ground) — see `Claude_Tasks/GP-S32A_Attack_Move_Reconciliation.md`. **Operator FULL PASS / FINALIZATION_READY_FOR_MERGE** (not yet merged).
 - Smart auto-acquire targets without explicit attack command — **Idle auto-acquire delivered by GP-S30R**; Attack-Move acquisition while travelling by GP-S32A.
 
 ## Detailed Selection Rules (GP-0202)
@@ -598,7 +598,7 @@ UnitDefinition `AllowedCommands` має містити `GP.Command.Move` для 
 
 - Formation movement (line, wedge, box).
 - Move queue (Shift+RMB chain) — `bQueue` exists, але implementation deferred to GP-0203B.
-- ~~Attack-move (covered у GP-0204).~~ **GP-S32A** implements Attack-Move MVP (not deferred).
+- ~~Attack-move (covered у GP-0204).~~ **GP-S32A** implements Attack-Move MVP — **FINALIZATION_READY_FOR_MERGE** (operator FULL PASS).
 - Patrol.
 - Stance-aware move (aggressive, hold-fire) — post-MVP.
 - Path preview indicator before click.

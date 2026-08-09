@@ -92,6 +92,8 @@ namespace GPUnitCommandStatePrivate
 			return TEXT("Reached");
 		case EGP_MovementResult::Cancelled:
 			return TEXT("Cancelled");
+		case EGP_MovementResult::Failed:
+			return TEXT("Failed");
 		default:
 			return TEXT("Unknown");
 		}
@@ -109,6 +111,14 @@ namespace GPUnitCommandStatePrivate
 			return TEXT("CommandReplaced");
 		case EGP_MovementResultReason::Manual:
 			return TEXT("Manual");
+		case EGP_MovementResultReason::PathNotFound:
+			return TEXT("PathNotFound");
+		case EGP_MovementResultReason::PathInvalid:
+			return TEXT("PathInvalid");
+		case EGP_MovementResultReason::DestinationOffNav:
+			return TEXT("DestinationOffNav");
+		case EGP_MovementResultReason::Blocked:
+			return TEXT("Blocked");
 		default:
 			return TEXT("Unknown");
 		}
@@ -132,6 +142,10 @@ namespace GPUnitCommandStatePrivate
 			return TEXT("InvalidMoveSpeed");
 		case EGP_MovementRejectReason::InvalidAcceptanceRadius:
 			return TEXT("InvalidAcceptanceRadius");
+		case EGP_MovementRejectReason::PathNotFound:
+			return TEXT("PathNotFound");
+		case EGP_MovementRejectReason::DestinationOffNav:
+			return TEXT("DestinationOffNav");
 		default:
 			return TEXT("Unknown");
 		}
@@ -2222,12 +2236,13 @@ bool UGP_UnitCommandComponent::TryConsumeMineMovementResult(
 	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
 	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
 
-	if (Result == EGP_MovementResult::Cancelled)
+	if (Result == EGP_MovementResult::Cancelled || Result == EGP_MovementResult::Failed)
 	{
 		UE_LOG(LogGPUnitCommandExecution, Log,
-			TEXT("GP UnitCommandExecution MineApproachCancelled: Unit=%s MineSerial=%u MovementReason=%s Role=%s NetMode=%s"),
+			TEXT("GP UnitCommandExecution MineApproachCancelled: Unit=%s MineSerial=%u MovementResult=%s MovementReason=%s Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			Serial,
+			GPUnitCommandStatePrivate::MovementResultToString(Result),
 			GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
@@ -2799,12 +2814,13 @@ bool UGP_UnitCommandComponent::TryConsumeHaulMovementResult(
 	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
 	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
 
-	if (Result == EGP_MovementResult::Cancelled)
+	if (Result == EGP_MovementResult::Cancelled || Result == EGP_MovementResult::Failed)
 	{
 		UE_LOG(LogGPUnitCommandExecution, Log,
-			TEXT("GP UnitCommandExecution HaulApproachCancelled: Unit=%s HaulSerial=%u MovementReason=%s Role=%s NetMode=%s"),
+			TEXT("GP UnitCommandExecution HaulApproachCancelled: Unit=%s HaulSerial=%u MovementResult=%s MovementReason=%s Role=%s NetMode=%s"),
 			*GetNameSafe(Owner),
 			Serial,
+			GPUnitCommandStatePrivate::MovementResultToString(Result),
 			GPUnitCommandStatePrivate::MovementResultReasonToString(Reason),
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
@@ -2815,7 +2831,7 @@ bool UGP_UnitCommandComponent::TryConsumeHaulMovementResult(
 			return true;
 		}
 
-		// Manual/Superseded with cargo → wait (destroyed target / path loss). Without cargo → clear.
+		// Manual/Superseded/Failed with cargo → wait (destroyed target / path loss). Without cargo → clear.
 		if (WorkerHasHaulCargo())
 		{
 			EnterWaitingForDropOff(FName(TEXT("MoveFailed")));
@@ -4793,6 +4809,13 @@ bool UGP_UnitCommandComponent::TryConsumeAttackMovementResult(
 		return true;
 	}
 
+	if (Result == EGP_MovementResult::Failed)
+	{
+		LogApproachResult(TEXT("MovementFailed"));
+		FinishAttack(EGP_AttackTerminalResult::Failed, EGP_AttackTerminalReason::MovementCancelled);
+		return true;
+	}
+
 	UE_LOG(LogGPUnitCommandExecution, Log,
 		TEXT("GP UnitCommandExecution AttackApproachResultIgnored: Unit=%s AttackSerial=%u ResultSerial=%u IgnoreReason=UnsupportedCombination MovementResult=%s MovementReason=%s Role=%s NetMode=%s"),
 		*GetNameSafe(Owner),
@@ -4867,7 +4890,9 @@ void UGP_UnitCommandComponent::HandleMovementResult(
 		return;
 	}
 
-	if (Result != EGP_MovementResult::Reached && Result != EGP_MovementResult::Cancelled)
+	if (Result != EGP_MovementResult::Reached
+		&& Result != EGP_MovementResult::Cancelled
+		&& Result != EGP_MovementResult::Failed)
 	{
 		const uint32 HeldSerial = HeldCommand.IsSet() ? HeldCommand.GetValue().CommandSerial : 0;
 		const FString HeldTag = HeldCommand.IsSet()

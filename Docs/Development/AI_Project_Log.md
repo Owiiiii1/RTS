@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-09 — GP-S33M RTS Movement Reconciliation (implementation candidate)
+
+Status: **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s33m-rts-movement-reconciliation` (base `main` @ `0df4468445e939aaca33ed73548a78c2caabb86d`)
+- NavMesh pathfinding + Failed results + separation + group destination spread inside existing `UGP_MovementComponent` / CommandComponent
+- Contract `gp.Movement.RunRTSMovementReconciliationContractTest` Failures=0; listed regressions Failures=0; GPEditor+UHT **PASS**
+- No map/config/content commits; NavMeshBoundsVolume remains operator-local if needed
+- NOT MERGED — await operator PIE validation
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-09 — GP-S32A Attack-Move Reconciliation (finalization)
 
 Status: **GP-S32A_FINALIZATION_READY_FOR_MERGE**

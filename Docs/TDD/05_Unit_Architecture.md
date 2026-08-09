@@ -134,7 +134,7 @@ public:
 ### Composition (current)
 
 - Inherits `AGP_UnitBase`.
-- Owns exactly one `UGP_MovementComponent` (custom RTS straight-line / serial move backend on `UActorComponent` — **not** CharacterMovement).
+- Owns exactly one `UGP_MovementComponent` (custom RTS NavMesh path + separation backend on `UActorComponent` — **not** CharacterMovement; GP-S33M).
 - Commands: `AGP_UnitBase::ReceiveCommand` → `UGP_UnitCommandComponent` (no separate CommandReceiverComponent).
 - Attack execution / LOS fire gate currently live in `UGP_UnitCommandComponent` Attack FSM. `UGP_CombatComponent` / `UGP_TargetingComponent` are **not** current required composition (deferred Slice 7 roadmap items).
 - Worker-specific components are owned by `AGP_Worker`, not by MobileUnit itself.
@@ -171,9 +171,12 @@ Own presentation/resource composition: Capsule root, `PresentationRoot` / cargo 
 ### UGP_MovementComponent
 
 - Owned by `AGP_MobileUnit` (one instance).
-- Authority-only `RequestMove` / serial stop API used by UnitCommand.
-- Straight-line movement backend (current); not CharacterMovement and not documented here as NavMesh pathfinding SoT.
-- Component property category: `GP|Movement`.
+- Authority-only `RequestMove` / `StopMove` / `OnMovementResult` used by UnitCommand (Move, Attack approach, AttackMove, Mine, Haul).
+- **GP-S33M:** NavMesh path follow via `UNavigationSystemV1` when the unit is on navigable ground; rate-limited repath; lightweight Pawn-overlap separation steering.
+- Terminal results: `Reached` / `Cancelled` / **`Failed`** (e.g. PathNotFound, DestinationOffNav, Blocked). Sync reject mirrors nav failures when applicable.
+- Missing NavData or unit outside nav coverage → straight-line fallback (diagnostic / isolation safe).
+- Not CharacterMovement; not MassAI; no AIController-per-unit requirement.
+- Component categories: `GP|Movement`, `GP|Movement|Navigation`, `GP|Movement|Separation`.
 
 ### UGP_UnitVisualComponent
 
@@ -232,7 +235,7 @@ Client: OnRep on Health attribute -> presentation
 
 ## Replication Hot-Path
 
-Movement — custom `UGP_MovementComponent` (authority mutates owner transform; not CharacterMovement replication path).
+Movement — custom `UGP_MovementComponent` (authority path follow + separation; actor transform replication; not CharacterMovement replication path).
 
 Health — through GAS attribute replication.
 

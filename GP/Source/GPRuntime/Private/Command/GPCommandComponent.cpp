@@ -4,6 +4,7 @@
 
 #include "Command/GPCommandRequest.h"
 #include "Command/GPUnitCommand.h"
+#include "NavigationSystem.h"
 #include "Player/GPPlayerController.h"
 #include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
@@ -23,6 +24,9 @@ namespace GPCommandPrivate
 {
 	static constexpr int32 MaxIssuingUnits = 24;
 	static constexpr double MaxAbsCoordinate = 10000000.0;
+	static constexpr float GroupSlotSpacingCm = 110.0f;
+	static constexpr float GroupSlotNavExtentXY = 250.0f;
+	static constexpr float GroupSlotNavExtentZ = 400.0f;
 
 	static bool IsCommandLocationSane(const FVector& Location)
 	{
@@ -46,6 +50,84 @@ namespace GPCommandPrivate
 		}
 
 		return true;
+	}
+
+	/** Deterministic compact grid around Center (1 unit → exact Center). */
+	static void BuildGroupDestinationSlots(const FVector& Center, int32 Count, TArray<FVector>& OutSlots)
+	{
+		OutSlots.Reset();
+		if (Count <= 0)
+		{
+			return;
+		}
+		if (Count == 1)
+		{
+			OutSlots.Add(Center);
+			return;
+		}
+
+		const int32 Cols = FMath::Max(1, FMath::CeilToInt(FMath::Sqrt(static_cast<float>(Count))));
+		const int32 Rows = FMath::Max(1, FMath::CeilToInt(static_cast<float>(Count) / static_cast<float>(Cols)));
+		const float OriginX = -0.5f * static_cast<float>(Cols - 1) * GroupSlotSpacingCm;
+		const float OriginY = -0.5f * static_cast<float>(Rows - 1) * GroupSlotSpacingCm;
+		OutSlots.Reserve(Count);
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			const int32 Row = Index / Cols;
+			const int32 Col = Index % Cols;
+			OutSlots.Add(FVector(
+				Center.X + OriginX + static_cast<float>(Col) * GroupSlotSpacingCm,
+				Center.Y + OriginY + static_cast<float>(Row) * GroupSlotSpacingCm,
+				Center.Z));
+		}
+	}
+
+	static FVector ProjectGroupSlotOrFallback(
+		UWorld* World,
+		const FVector& Desired,
+		const FVector& Center,
+		int32 SlotIndex)
+	{
+		if (World == nullptr || !IsCommandLocationSane(Desired))
+		{
+			return Center + FVector(static_cast<float>(SlotIndex) * 10.0f, 0.0f, 0.0f);
+		}
+
+		UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		if (NavSys == nullptr || NavSys->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) == nullptr)
+		{
+			return Desired;
+		}
+
+		const FVector Extent(GroupSlotNavExtentXY, GroupSlotNavExtentXY, GroupSlotNavExtentZ);
+		FNavLocation Projected;
+		if (NavSys->ProjectPointToNavigation(Desired, Projected, Extent))
+		{
+			return FVector(Projected.Location.X, Projected.Location.Y, Desired.Z);
+		}
+
+		// Nearby ring fallback so failed slots do not all collapse to Center.
+		static const FVector2D RingOffsets[] = {
+			FVector2D(GroupSlotSpacingCm, 0.0f),
+			FVector2D(-GroupSlotSpacingCm, 0.0f),
+			FVector2D(0.0f, GroupSlotSpacingCm),
+			FVector2D(0.0f, -GroupSlotSpacingCm),
+			FVector2D(GroupSlotSpacingCm, GroupSlotSpacingCm),
+			FVector2D(-GroupSlotSpacingCm, GroupSlotSpacingCm),
+			FVector2D(GroupSlotSpacingCm, -GroupSlotSpacingCm),
+			FVector2D(-GroupSlotSpacingCm, -GroupSlotSpacingCm)
+		};
+		for (const FVector2D& Offset : RingOffsets)
+		{
+			const FVector Candidate = Desired + FVector(Offset.X, Offset.Y, 0.0f);
+			if (NavSys->ProjectPointToNavigation(Candidate, Projected, Extent))
+			{
+				return FVector(Projected.Location.X, Projected.Location.Y, Desired.Z);
+			}
+		}
+
+		// Keep deterministic grid offsets when off-nav — never collapse all units to Center.
+		return Desired;
 	}
 }
 
@@ -469,18 +551,48 @@ int32 UGP_CommandComponent::DispatchValidatedCommand(const FGP_CommandRequest& V
 	UnitCommand.TargetActor = ValidatedRequest.TargetActor.Get();
 	UnitCommand.bQueue = ValidatedRequest.bQueue;
 
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	const bool bSpreadDestination =
+		ValidatedRequest.CommandTag == GPTags.Command_Move
+		|| ValidatedRequest.CommandTag == GPTags.Command_AttackMove;
+
+	TArray<FVector> SpreadSlots;
+	if (bSpreadDestination)
+	{
+		GPCommandPrivate::BuildGroupDestinationSlots(
+			ValidatedRequest.TargetLocation,
+			ValidatedRequest.IssuingUnits.Num(),
+			SpreadSlots);
+	}
+
 	int32 DeliveredUnits = 0;
+	int32 SlotIndex = 0;
 
 	for (const TObjectPtr<AGP_UnitBase>& UnitPtr : ValidatedRequest.IssuingUnits)
 	{
 		AGP_UnitBase* Unit = UnitPtr.Get();
 		if (!IsValid(Unit) || !Unit->HasAuthority())
 		{
+			++SlotIndex;
 			continue;
+		}
+
+		if (bSpreadDestination && SpreadSlots.IsValidIndex(SlotIndex))
+		{
+			UnitCommand.TargetLocation = GPCommandPrivate::ProjectGroupSlotOrFallback(
+				Unit->GetWorld(),
+				SpreadSlots[SlotIndex],
+				ValidatedRequest.TargetLocation,
+				SlotIndex);
+		}
+		else
+		{
+			UnitCommand.TargetLocation = ValidatedRequest.TargetLocation;
 		}
 
 		Unit->ReceiveCommand(UnitCommand);
 		++DeliveredUnits;
+		++SlotIndex;
 	}
 
 	return DeliveredUnits;

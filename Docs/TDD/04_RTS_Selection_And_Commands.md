@@ -470,10 +470,10 @@ RMB on ground / unit-not-enemy
 
 ### Group Movement (24-cap)
 
-- **Formation deferred** per [`ADR-0006`](../Architecture_Decisions/ADR_0006_Indie_Scope_No_Overengineering.md).
-- MVP rule: всі юніти отримують **той самий `SnappedDestination`**. NavMesh avoidance розкидає природно.
-- Risk: при cap 24 щільні юніти можуть jitter навколо точки. Acceptable у MVP; формаційний spread — у GP-0203B (post-MVP).
-- Workers і Combat у одному selection — обидва дістають Move до тієї ж точки; Mining/Combat поведінка перебивається move command (див. Command Interrupt).
+- **Formation deferred** per [`ADR-0006`](../Architecture_Decisions/ADR_0006_Indie_Scope_No_Overengineering.md). No formation object / facing persistence.
+- **GP-S33M:** Move and AttackMove multi-select dispatch assigns **deterministic grid slots** around the click (`GroupSlotSpacingCm`), each nav-projected with ring fallback; failed projection keeps the desired grid offset (no center collapse). 1 unit → exact click.
+- Soft unit separation during travel via MovementComponent overlap steering; static obstacles via NavMesh (not hard WorldStatic sweep block on unit capsules).
+- Workers і Combat у одному selection — обидва дістають Move (spread slots); Mining/Combat поведінка перебивається move command (див. Command Interrupt).
 
 ### Spam Handling
 

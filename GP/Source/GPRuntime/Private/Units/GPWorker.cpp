@@ -73,7 +73,10 @@ AGP_Worker::AGP_Worker()
 	CapsuleComponent->SetCollisionObjectType(ECC_Pawn);
 	CapsuleComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
 	CapsuleComponent->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
-	CapsuleComponent->SetGenerateOverlapEvents(false);
+	// Soft unit presence for separation queries; static obstacles via NavMesh (not hard sweep block).
+	CapsuleComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	CapsuleComponent->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Ignore);
+	CapsuleComponent->SetGenerateOverlapEvents(true);
 	CapsuleComponent->SetCanEverAffectNavigation(false);
 	CapsuleComponent->SetSimulatePhysics(false);
 

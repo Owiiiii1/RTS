@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-10 — GP-S33M RTS Movement Reconciliation (finalization)
+
+Status: **GP-S33M_FINALIZATION_READY_FOR_MERGE**
+
+- Branch: `feature/gp-s33m-rts-movement-reconciliation` (base `main` @ `0df4468445e939aaca33ed73548a78c2caabb86d`)
+- Operator validation **FINAL PASS**: NavMesh pathfinding, obstacle routing, unit separation, group spread, Building NavigationObstacle, Worker reassignment/haul, MainBase reachable approach + GroundPlane2D unload
+- Final regressions Failures=0 (movement + resource haul/reassignment + S28/DropOff/Container/Orbital + combat AttackMove/AutoAcquire/Salvage/LOS/HealthBar/TeamColor + Orbital Building)
+- GPEditor Win64 Development + UHT / GP Win64 Development / GP Win64 Shipping **PASS**
+- Finalization C++ changes: **none** (docs only)
+- **NOT MERGED** — await human merge/check; do **not** auto-start next code slice
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-09 — GP-S33M second operator FAIL: natural reassignment CargoFull→haul
 
 Status: **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

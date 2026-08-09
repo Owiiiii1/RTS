@@ -39,7 +39,7 @@
 | Last closed / merged stage | **GP-S32A** Attack-Move on `main` (tip `0df4468445e939aaca33ed73548a78c2caabb86d`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s33m-rts-movement-reconciliation` |
+| Current stage | **GP-S33M_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s33m-rts-movement-reconciliation` |
 
 ---
 
@@ -49,14 +49,14 @@
 
 **Prior closed:** GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md`](Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md) — **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. Await operator PIE. Do **not** merge. Do **not** auto-start next code slice.
+**Current:** [`Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md`](Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md) — **GP-S33M_FINALIZATION_READY_FOR_MERGE**. Operator FINAL PASS + final builds done. Do **not** merge from the agent. Do **not** auto-start next code slice. `main` does **not** contain GP-S33M yet.
 
-Approved planning order after operator PASS + merge (not started):
+Approved planning order after human merge (not started):
 1. Unit Cap + LogisticsHub gameplay
 2. Match win flow
 3. BuildingDefinition / BuildGrid
 
-**After operator PASS:** finalize builds; do **not** auto-assign next slice.
+**After merge:** do **not** auto-assign next slice without explicit assignment.
 
 **Do not** start BuildingDefinition / BuildGrid / FoW / Order Menu without explicit assignment.
 
@@ -72,7 +72,7 @@ Approved planning order after operator PASS + merge (not started):
 6. Roadmap reconciliation — **DONE / MERGED** @ `ba98383…`
 7. **GP-S30R** — Combat Auto-Acquire — **DONE / MERGED**
 8. **GP-S32A** — Attack-Move Reconciliation — **DONE / MERGED** @ `0df44684…`
-9. **GP-S33M** — RTS Movement Reconciliation — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+9. **GP-S33M** — RTS Movement Reconciliation — **FINALIZATION_READY_FOR_MERGE** (NOT on `main` yet)
 
 ---
 
@@ -156,4 +156,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S32A are on `main` baseline tip `0df4468445e939aaca33ed73548a78c2caabb86d`. Current stage: **GP-S33M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s33m-rts-movement-reconciliation`. See [`Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md`](Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md). Do not merge or auto-start the next code slice.
+SETUP-001, DOCS-001, GP-S01…GP-S32A are on `main` baseline tip `0df4468445e939aaca33ed73548a78c2caabb86d`. Current stage: **GP-S33M_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s33m-rts-movement-reconciliation`. See [`Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md`](Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md). Await human merge/check. Do not auto-start the next code slice.

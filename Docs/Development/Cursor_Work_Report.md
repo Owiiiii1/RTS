@@ -13,7 +13,7 @@ NOT MERGED. Do **not** finalize until operator retest PASS.
 | Branch | `feature/gp-s30r-combat-auto-acquire` |
 | Base (`main`) | `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2` |
 | Prior remote head (operator base-acquire PASS) | `c3f231368b72891972ecda8b68d0dc2172b3665c` |
-| This candidate | *(set after commit)* |
+| This candidate | `123dccc9bcd1563311fc866cad28705cfc14916a` |
 
 ## 2. AttackRange factual source
 - **Runtime fire/engage range:** `UGP_UnitAttributeSet::AttackRange` via `UGP_UnitCommandComponent::TryResolveEffectiveAttackRange` (GAS preferred; component `AttackRange` fallback only if GAS ≤0).

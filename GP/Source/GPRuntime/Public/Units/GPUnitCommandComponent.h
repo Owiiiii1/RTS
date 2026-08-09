@@ -134,6 +134,22 @@ public:
 	EGP_AttackRangeSource GetAttackRangeSource() const;
 	const TCHAR* GetAttackRangeSourceLabel() const;
 
+	/** GP-S30R: true when Idle and eligible for combat auto-acquire scan. */
+	bool IsEligibleForCombatAutoAcquire() const;
+
+	/** GP-S30R diagnostic: last auto-acquire scan found a candidate (not replicated). */
+	AGP_UnitBase* DebugGetLastAutoAcquireCandidate() const { return LastAutoAcquireCandidate.Get(); }
+
+	/**
+	 * GP-S30R: server Idle scan interval for combat auto-acquire (seconds).
+	 * Component tuning seam — not a new settings system.
+	 */
+	UPROPERTY(EditAnywhere, Category = "GP|Combat|AutoAcquire", meta = (ClampMin = "0.05"))
+	float AutoAcquireScanIntervalSeconds = 0.35f;
+
+	/** Authority helper: apply interval and restart scan timer (contracts / tuning). */
+	void RefreshCombatAutoAcquireTimer();
+
 	/**
 	 * Diagnostic: last observed Ready LOS fire-gate result for the active Attack.
 	 * True after CLEAR→BLOCKED until BLOCKED→CLEAR or Attack reset. Not replicated.
@@ -402,6 +418,14 @@ private:
 	FVector MakeApproachDestination(const AActor* Owner, const AActor* Target) const;
 	UGP_MovementComponent* ResolveMovementComponent() const;
 
+	/** GP-S30R Idle auto-acquire (authority, rate-limited). */
+	void StartCombatAutoAcquireTimer();
+	void StopCombatAutoAcquireTimer();
+	void OnCombatAutoAcquireScan();
+	bool IsCombatCapableForAutoAcquire(const AGP_UnitBase* Unit) const;
+	AGP_UnitBase* FindNearestAutoAcquireTarget(float MaxRangeCm) const;
+	void TryIssueAutoAcquireAttack(AGP_UnitBase* Target);
+
 	static const TCHAR* AttackStateToString(EGP_AttackExecutionState State);
 	static const TCHAR* AttackTerminalResultToString(EGP_AttackTerminalResult Result);
 	static const TCHAR* AttackTerminalReasonToString(EGP_AttackTerminalReason Reason);
@@ -417,6 +441,9 @@ private:
 	uint32 ActiveAttackSerial = 0;
 	TWeakObjectPtr<AGP_UnitBase> AttackTarget;
 	FVector LastApproachDestination = FVector::ZeroVector;
+
+	FTimerHandle AutoAcquireTimerHandle;
+	TWeakObjectPtr<AGP_UnitBase> LastAutoAcquireCandidate;
 	double LastApproachIssueTime = -1.0;
 	bool bExpectRangeEntryStop = false;
 	bool bFinishingAttack = false;

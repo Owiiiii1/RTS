@@ -237,7 +237,8 @@ bool UGP_CommandComponent::ValidateAndNormalizeCommand(
 	const bool bIsMove = CommandTag == GPTags.Command_Move;
 	const bool bIsAttack = CommandTag == GPTags.Command_Attack;
 	const bool bIsMine = CommandTag == GPTags.Command_Mine;
-	if (!bIsMove && !bIsAttack && !bIsMine)
+	const bool bIsStop = CommandTag == GPTags.Command_Stop;
+	if (!bIsMove && !bIsAttack && !bIsMine && !bIsStop)
 	{
 		return Fail(EGP_CommandRejectReason::UnsupportedCommandTag);
 	}
@@ -336,6 +337,11 @@ bool UGP_CommandComponent::ValidateAndNormalizeCommand(
 		{
 			return Fail(EGP_CommandRejectReason::InvalidTargetLocation);
 		}
+	}
+	else if (bIsStop)
+	{
+		NormalizedTargetActor = nullptr;
+		NormalizedLocation = FVector::ZeroVector;
 	}
 	else // Mine
 	{

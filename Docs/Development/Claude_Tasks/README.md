@@ -6,23 +6,20 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-09 (post GP-S32R roadmap audit). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-09 (GP-S30R implementation). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Slice 8 economy unlock closed through GP-S32R. **Current: roadmap reconciliation audit in review.**
+**Поточна фаза:** Post-GP-S32R combat QoL. **Current: GP-S30R IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
-| GP-S01 … GP-S28 | **DONE / merged** on `main` |
-| **GP-S29R** Combat presentation reconciliation | **DONE / MERGED** |
-| **GP-S30** Container Launch / Orbital Conversion | **DONE / MERGED** |
-| **GP-S31R** Minimal Orbital Unit Drop | **DONE / MERGED** |
-| **GP-S32R** Orbital Building Drop | **DONE / MERGED** @ `main` `2042d4e…` |
-| Roadmap reconciliation | **READY_FOR_REVIEW** — [`../Roadmap_Reconciliation_Post_GP-S32R.md`](../Roadmap_Reconciliation_Post_GP-S32R.md) |
-| Proposed NEXT (not started) | **GP-S30R — Combat Auto-Acquire** |
+| GP-S01 … GP-S32R | **DONE / merged** on `main` @ `ba98383…` |
+| Roadmap reconciliation | **DONE / MERGED** |
+| **GP-S30R** Combat Auto-Acquire | **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** — [`GP-S30R_Combat_Auto_Acquire.md`](GP-S30R_Combat_Auto_Acquire.md) |
+| Attack-Move / BuildingDefinition / FoW | **Not assigned** |
 
-**NEXT action для агента:** await human review of reconciliation audit. Do **not** implement GP-S30R / BuildingDefinition / BuildGrid / FoW until explicitly assigned.
+**NEXT action для агента:** await operator PIE validation of GP-S30R. Do **not** auto-merge. Do **not** auto-start Attack-Move.
 
 ### Drift Warning
 

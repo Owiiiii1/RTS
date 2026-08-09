@@ -1,5 +1,15 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-09 — GP-S30R Combat Auto-Acquire (implementation candidate)
+
+Status: **GP-S30R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s30r-combat-auto-acquire` (base `main` @ `ba98383`)
+- Idle Salvage Walker auto-engage via `UGP_UnitCommandComponent` (no TargetingComponent)
+- Contract `gp.Combat.RunAutoAcquireContractTest` Failures=0; regressions Failures=0; GPEditor+UHT **PASS**
+- NOT MERGED — operator validation stop; Attack-Move not auto-assigned
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-09 — Roadmap Reconciliation Post GP-S32R (audit)
 
 Status: **ROADMAP_RECONCILIATION_POST_GP-S32R_READY_FOR_REVIEW**

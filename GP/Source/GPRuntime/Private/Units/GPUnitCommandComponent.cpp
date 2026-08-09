@@ -3,6 +3,7 @@
 #include "Units/GPUnitCommandComponent.h"
 
 #include "AttributeSets/GPUnitAttributeSet.h"
+#include "Buildings/GPBuildingBase.h"
 #include "Buildings/GPMainBase.h"
 #include "Combat/GPCombatPresentationComponent.h"
 #include "Combat/GPCombatLOS.h"
@@ -11,6 +12,7 @@
 #include "Components/BoxComponent.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Game/GPGameState.h"
 #include "GameFramework/Actor.h"
 #include "Resources/GPCargoComponent.h"
@@ -28,7 +30,6 @@
 #include "Units/GPWorker.h"
 
 #if !UE_BUILD_SHIPPING
-#include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
 #include <limits>
 #endif
@@ -223,6 +224,8 @@ void UGP_UnitCommandComponent::BeginPlay()
 		return;
 	}
 
+	StartCombatAutoAcquireTimer();
+
 	AGP_MobileUnit* MobileUnit = Cast<AGP_MobileUnit>(Owner);
 	if (MobileUnit == nullptr)
 	{
@@ -248,6 +251,9 @@ void UGP_UnitCommandComponent::BeginPlay()
 
 void UGP_UnitCommandComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	StopCombatAutoAcquireTimer();
+	LastAutoAcquireCandidate.Reset();
+
 	if (AttackState != EGP_AttackExecutionState::Idle || ActiveAttackSerial != 0)
 	{
 		const AActor* Owner = GetOwner();
@@ -526,6 +532,212 @@ bool UGP_UnitCommandComponent::ValidateAttackTarget(
 	OutTarget = TargetUnit;
 	OutReason = EGP_AttackTerminalReason::InvalidTarget;
 	return true;
+}
+
+bool UGP_UnitCommandComponent::IsCombatCapableForAutoAcquire(const AGP_UnitBase* Unit) const
+{
+	if (Unit == nullptr)
+	{
+		return false;
+	}
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	return GPTags.Unit_Type_SalvageWalker.IsValid()
+		&& Unit->HasCapabilityTag(GPTags.Unit_Type_SalvageWalker);
+}
+
+bool UGP_UnitCommandComponent::IsEligibleForCombatAutoAcquire() const
+{
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority())
+	{
+		return false;
+	}
+
+	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
+	if (OwnerUnit == nullptr || OwnerUnit->IsDead() || !IsCombatCapableForAutoAcquire(OwnerUnit))
+	{
+		return false;
+	}
+
+	if (IsAttackActive())
+	{
+		return false;
+	}
+
+	if (MineState != EGP_MineExecutionState::Idle || ActiveMineSerial != 0)
+	{
+		return false;
+	}
+	if (HaulState != EGP_HaulExecutionState::Idle || ActiveHaulSerial != 0)
+	{
+		return false;
+	}
+
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	if (HeldCommand.IsSet())
+	{
+		const FGameplayTag& HeldTag = HeldCommand.GetValue().CommandTag;
+		if (HeldTag == GPTags.Command_Move
+			|| HeldTag == GPTags.Command_Attack
+			|| HeldTag == GPTags.Command_Mine)
+		{
+			return false;
+		}
+	}
+
+	if (const UGP_MovementComponent* Movement = ResolveMovementComponent())
+	{
+		if (Movement->IsMoving())
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+void UGP_UnitCommandComponent::StartCombatAutoAcquireTimer()
+{
+	UWorld* World = GetWorld();
+	AActor* Owner = GetOwner();
+	if (World == nullptr || Owner == nullptr || !Owner->HasAuthority())
+	{
+		return;
+	}
+
+	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
+	if (!IsCombatCapableForAutoAcquire(OwnerUnit))
+	{
+		return;
+	}
+
+	StopCombatAutoAcquireTimer();
+	const float Interval = FMath::Max(0.05f, AutoAcquireScanIntervalSeconds);
+	World->GetTimerManager().SetTimer(
+		AutoAcquireTimerHandle,
+		this,
+		&UGP_UnitCommandComponent::OnCombatAutoAcquireScan,
+		Interval,
+		true);
+}
+
+void UGP_UnitCommandComponent::RefreshCombatAutoAcquireTimer()
+{
+	StartCombatAutoAcquireTimer();
+}
+
+void UGP_UnitCommandComponent::StopCombatAutoAcquireTimer()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(AutoAcquireTimerHandle);
+	}
+	AutoAcquireTimerHandle.Invalidate();
+}
+
+AGP_UnitBase* UGP_UnitCommandComponent::FindNearestAutoAcquireTarget(float MaxRangeCm) const
+{
+	AActor* Owner = GetOwner();
+	UWorld* World = GetWorld();
+	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
+	if (World == nullptr || OwnerUnit == nullptr || MaxRangeCm <= 0.0f)
+	{
+		return nullptr;
+	}
+
+	AGP_UnitBase* Best = nullptr;
+	float BestDistSq = MaxRangeCm * MaxRangeCm;
+	FName BestName = NAME_None;
+	const FVector OwnerLoc = OwnerUnit->GetActorLocation();
+
+	for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
+	{
+		AGP_UnitBase* Candidate = *It;
+		if (!IsValid(Candidate) || Candidate == OwnerUnit)
+		{
+			continue;
+		}
+
+		// MVP: auto-acquire combat/units only — exclude buildings.
+		if (Candidate->IsA(AGP_BuildingBase::StaticClass()))
+		{
+			continue;
+		}
+
+		AGP_UnitBase* ValidTarget = nullptr;
+		EGP_AttackTerminalReason Reason = EGP_AttackTerminalReason::InvalidTarget;
+		if (!ValidateAttackTarget(Candidate, ValidTarget, Reason) || ValidTarget == nullptr)
+		{
+			continue;
+		}
+
+		const float DistSq = FVector::DistSquared2D(OwnerLoc, ValidTarget->GetActorLocation());
+		if (DistSq > BestDistSq + KINDA_SMALL_NUMBER)
+		{
+			continue;
+		}
+
+		const FName CandidateName = ValidTarget->GetFName();
+		if (Best != nullptr && FMath::IsNearlyEqual(DistSq, BestDistSq, KINDA_SMALL_NUMBER))
+		{
+			// Deterministic tie-break: prefer lexicographically smaller name.
+			if (CandidateName.ToString() >= BestName.ToString())
+			{
+				continue;
+			}
+		}
+
+		Best = ValidTarget;
+		BestDistSq = DistSq;
+		BestName = CandidateName;
+	}
+
+	return Best;
+}
+
+void UGP_UnitCommandComponent::TryIssueAutoAcquireAttack(AGP_UnitBase* Target)
+{
+	if (!IsValid(Target) || !IsEligibleForCombatAutoAcquire())
+	{
+		return;
+	}
+
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	FGP_UnitCommand AttackCommand;
+	AttackCommand.CommandTag = GPTags.Command_Attack;
+	AttackCommand.TargetActor = Target;
+	AttackCommand.TargetLocation = Target->GetActorLocation();
+	AttackCommand.bQueue = false;
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution AutoAcquire: Unit=%s Target=%s Range=%.1f"),
+		*GetNameSafe(GetOwner()),
+		*GetNameSafe(Target),
+		GetAttackRange());
+
+	HandleCommand(AttackCommand);
+}
+
+void UGP_UnitCommandComponent::OnCombatAutoAcquireScan()
+{
+	LastAutoAcquireCandidate.Reset();
+	if (!IsEligibleForCombatAutoAcquire())
+	{
+		return;
+	}
+
+	const float Range = GetAttackRange();
+	if (Range <= KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	AGP_UnitBase* Target = FindNearestAutoAcquireTarget(Range);
+	LastAutoAcquireCandidate = Target;
+	if (Target != nullptr)
+	{
+		TryIssueAutoAcquireAttack(Target);
+	}
 }
 
 void UGP_UnitCommandComponent::ClearAttackCadenceState()
@@ -4449,6 +4661,30 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 			*Command.CommandTag.ToString(),
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		return;
+	}
+
+	const FGPGameplayTags& IncomingTags = FGPGameplayTags::Get();
+	if (Command.CommandTag == IncomingTags.Command_Stop && !Command.bQueue)
+	{
+		const TOptional<FGP_StoredUnitCommand> PreviousCommand = HeldCommand;
+		ResetAttackExecutorForReplacement(PreviousCommand);
+		ResetMineExecutorForReplacement(PreviousCommand);
+		if (UGP_MovementComponent* Movement = ResolveMovementComponent())
+		{
+			Movement->StopMove(EGP_MovementStopReason::Manual);
+		}
+		if (HeldCommand.IsSet())
+		{
+			UE_LOG(LogGPUnitCommandState, Log,
+				TEXT("GP UnitCommandState HeldCleared: Unit=%s Serial=%u Tag=%s Reason=Stop Role=%s NetMode=%s"),
+				*GetNameSafe(Owner),
+				HeldCommand.GetValue().CommandSerial,
+				*HeldCommand.GetValue().CommandTag.ToString(),
+				GPUnitCommandStatePrivate::RoleToString(Role),
+				GPUnitCommandStatePrivate::NetModeToString(NetMode));
+			ClearHeldCommand();
+		}
 		return;
 	}
 

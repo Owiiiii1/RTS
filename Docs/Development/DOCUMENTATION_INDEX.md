@@ -34,39 +34,38 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S32R merged** on `main` @ `2042d4e…` |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S32R merged** on `main` @ `ba98383…` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S32R** on `main` (tip `2042d4ee395436ce8c0518e829e8cd4d6cd3bc82`) |
+| Last closed / merged stage | **GP-S32R** + roadmap audit on `main` (tip `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **Roadmap reconciliation audit** on `audit/roadmap-reconciliation-post-gp-s32r` |
+| Current stage | **GP-S30R IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s30r-combat-auto-acquire` |
 
 ---
 
 ## Current NEXT Task
 
-**Closed:** GP-S32R — Orbital Building Drop. Status: **DONE / MERGED** on `main` @ `2042d4e…`.
+**Closed:** Roadmap reconciliation post GP-S32R — **READY_FOR_REVIEW** artifact merged on `main` @ `ba98383…`.
 
-**Prior closed:** GP-S31R, GP-S30, GP-S29R — **DONE / MERGED**.
+**Prior closed:** GP-S32R / GP-S31R / GP-S30 / GP-S29R — **DONE / MERGED**.
 
-**Current:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md) — **ROADMAP_RECONCILIATION_POST_GP-S32R_READY_FOR_REVIEW** on `audit/roadmap-reconciliation-post-gp-s32r`. AUDIT-ONLY. NOT MERGED.
+**Current:** [`Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md`](Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md) — **GP-S30R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s30r-combat-auto-acquire`. GPEditor+UHT candidate. NOT MERGED.
 
-**Proposed NEXT after audit review (not started / no task yet):** **GP-S30R — Combat Auto-Acquire** (historical Targeting intent; chronological GP-S30 was Container Launch).
+**After operator PASS:** finalize builds; do **not** auto-assign Attack-Move.
 
-**Do not** auto-start BuildingDefinition / BuildGrid / FoW / Order Menu / Attack-Move / Hub bonuses without explicit assignment after audit acceptance.
+**Do not** start BuildingDefinition / BuildGrid / FoW / Order Menu without explicit assignment.
 
-**Prior audits:** [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md), [`Next_Slice_Audit_Post_S29R.md`](Next_Slice_Audit_Post_S29R.md).
+**Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 
 ### Foundation / Match Flow sequence
 
-1. GP-S01 … GP-S15 — **DONE**
-2. GP-S16…GP-S28 — **DONE / merged**
-3. GP-S28P1…P4 — **DONE / MERGED**
-4. **GP-S29R** — LOS + health bar + team colors + Salvage Walker — **DONE / MERGED**
-5. **GP-S30** — Container Launch / Orbital Conversion — **DONE / MERGED**
-6. **GP-S31R** — Minimal Orbital Unit Drop — **DONE / MERGED**
-7. **GP-S32R** — Orbital Building Drop — **DONE / MERGED** @ `2042d4e…`
-8. **Roadmap reconciliation audit** — in review (proposed next: GP-S30R Combat Auto-Acquire)
+1. GP-S01 … GP-S28 — **DONE / merged**
+2. **GP-S29R** — LOS + health bar + team colors + Salvage Walker — **DONE / MERGED**
+3. **GP-S30** — Container Launch — **DONE / MERGED**
+4. **GP-S31R** — Orbital Unit Drop — **DONE / MERGED**
+5. **GP-S32R** — Orbital Building Drop — **DONE / MERGED**
+6. Roadmap reconciliation — **DONE / MERGED** @ `ba98383…`
+7. **GP-S30R** — Combat Auto-Acquire — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (not merged)
 
 ---
 
@@ -150,4 +149,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S32R are closed / merged. Current `main` baseline: `2042d4ee395436ce8c0518e829e8cd4d6cd3bc82`. Current: roadmap reconciliation audit on `audit/roadmap-reconciliation-post-gp-s32r`. Proposed NEXT (pending review): **GP-S30R Combat Auto-Acquire**. See [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md).
+SETUP-001, DOCS-001, GP-S01…GP-S32R + roadmap reconciliation are closed / merged. Current `main` baseline: `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2`. Current stage: **GP-S30R IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s30r-combat-auto-acquire`. See [`Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md`](Claude_Tasks/GP-S30R_Combat_Auto_Acquire.md).

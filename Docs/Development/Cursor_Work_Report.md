@@ -1,7 +1,7 @@
-# Cursor Work Report — Roadmap Reconciliation Post GP-S32R
+# Cursor Work Report — GP-S30R Combat Auto-Acquire
 
 ## Status
-**ROADMAP_RECONCILIATION_POST_GP-S32R_READY_FOR_REVIEW**
+**GP-S30R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
 NOT MERGED.
 
@@ -10,34 +10,56 @@ NOT MERGED.
 ## 1. Branch / SHAs
 | | |
 |---|---|
-| Branch | `audit/roadmap-reconciliation-post-gp-s32r` |
-| Base (`main`) | `2042d4ee395436ce8c0518e829e8cd4d6cd3bc82` |
-| Audit head | 642c6c85b08c51ac0bdbeb4a6b47bf4cc7ed4455 |
+| Branch | `feature/gp-s30r-combat-auto-acquire` |
+| Base (`main`) | `ba98383ffca90dafc4645b8761bfaeb93fa5cdc2` |
+| Candidate head | *(this commit)* |
 
-## 2. Audit nature
-AUDIT-ONLY. No gameplay code. No Content assets. No PIE. No next-slice implementation task created.
+## 2. Architecture
+- Integrated into **`UGP_UnitCommandComponent`** (no new Targeting/Combat component)
+- Why: Idle auto-engage is a thin command-layer scan → existing `HandleCommand(Attack)` / Attack FSM; separation into a new component not justified
+- Combat-capable: `HasCapabilityTag(Unit_Type_SalvageWalker)`
+- Scan: looping authority timer, default **0.35s** (`AutoAcquireScanIntervalSeconds`)
+- Selection: nearest 2D distance within `GetAttackRange()` (GAS), tie-break lexicographic actor name; **buildings excluded**
+- Validation: reuse `ValidateAttackTarget` (alive, enemy team, not self)
 
-## 3. Documents / code inspected
-Operational + GDD/TDD/ADR sources listed in `Docs/Development/Roadmap_Reconciliation_Post_GP-S32R.md` § documents; factual Source audit of combat, orbital/buildings, commands, UI/FoW.
+## 3. Command priority
+- Explicit Attack → not overridden by nearer targets while Held/active
+- Move → cancels attack; suppresses auto-acquire while Move held / moving
+- Stop → clears Held + attack/move; Idle may resume scan
+- Auto path never creates a parallel fire/damage implementation
 
-## 4. Factual matrix summary
-- S29 CombatComponent → **SUPERSEDED** (UnitCommand + LOS DONE)
-- Historical Targeting / AttackMove → **NOT STARTED**
-- S30–S32R reconciliation delivery loop → **DONE** on main
-- BuildingBase DONE; BuildingDefinition / BuildGrid **NOT STARTED**; LogisticsHub identity DONE, bonuses **NOT STARTED**
-- FoW / Order Menu / production HUD → **NOT STARTED** / TEMP only
+## 4. Target loss
+Existing Attack FSM TargetDied / invalid clears Held; subsequent Idle scans may acquire another living enemy. No sticky invalid target.
 
-## 5. Recommended NEXT production slice
-**GP-S30R — Combat Auto-Acquire**
+## 5. Builds
+GPEditor Win64 Development + UHT: **PASS**  
+GP Dev / Shipping: **NOT RUN**
 
-Reason: earliest category-A gap after closed orbital economy; GDD Salvage Walker requires auto-target in AttackRange; Attack-Move and BuildingDefinition/Grid are explicitly NOT-NEXT.
+## 6. Contracts / regressions (NullRHI `-game`) — Failures=0
+| Command | Result |
+|---|---|
+| `gp.Combat.RunAutoAcquireContractTest` | **0** |
+| `gp.Combat.RunSalvageWalkerContractTest` | **0** |
+| `gp.Combat.RunLOSFireGateContractTest` | **0** |
+| `gp.Combat.RunHealthBarContractTest` | **0** |
+| `gp.Combat.RunTeamColorContractTest` | **0** |
+| `gp.Resource.RunS28RegressionSuite` | **0** |
+| `gp.Resource.RunDropOffResilienceContractTest` | **0** |
+| `gp.Resource.RunContainerLaunchContractTest` | **0** |
+| `gp.Resource.RunOrbitalUnitDropContractTest` | **0** |
+| `gp.Building.RunOrbitalBuildingDropContractTest` | **0** |
 
-## 6. Operator assets untouched
-DefaultEngine.ini, DefaultGame.ini, map, Blueprint/, Materials/, VFX packs, Tools/, `.uasset`/`.umap` — not modified/committed.
+## 7. Changed files
+- `GPUnitCommandComponent.h/.cpp` — auto-acquire + Stop
+- `GPCommandComponent.cpp` — accept `Command_Stop`
+- `GPCombatAutoAcquireContractTest.h/.cpp` — new contract
+- Docs: task, AI log, DOCUMENTATION_INDEX, Claude_Tasks README, Cursor_Work_Report
 
-## 7. Files changed
-- `Docs/Development/Roadmap_Reconciliation_Post_GP-S32R.md` (new)
-- `Docs/Development/Cursor_Work_Report.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/DOCUMENTATION_INDEX.md`
-- `Docs/Development/Claude_Tasks/README.md`
+## 8. Operator assets untouched
+DefaultEngine/Game.ini, map, Blueprint/, Materials/, VFX, Tools/, `.uasset`/`.umap` — not committed.
+
+## 9. Operator test sketch
+Idle SW + enemy in range → auto Attack; Move → obey Move (no continued auto combat).
+
+## 10. Next
+Pending operator validation only. Do **not** auto-assign Attack-Move.

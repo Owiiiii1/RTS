@@ -8,7 +8,7 @@ NOT MERGED.
 ## Branch
 `feature/gp-s33m-rts-movement-reconciliation`  
 Prior remote head: `e9e3f6aca3bffc13710572a87c780856e1699ae6`  
-This revision: (see commit after push)
+This revision: `45138d679c70f9488247580f35ff7ea95274c216`
 
 ## Operator third-pass facts
 | Check | Result |

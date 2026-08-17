@@ -12,7 +12,7 @@ Status: **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`
 
 ## Feature head SHA
-`PENDING_IMPLEMENTATION_COMMIT`
+`7aa0565f9e10e9fe447fe9898835eba28ddc9b81`
 
 ## Factual existing combat architecture
 There is **no `UGP_CombatComponent`**. Production combat lives on `UGP_UnitCommandComponent` (every `AGP_UnitBase`):

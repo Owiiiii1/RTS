@@ -10,6 +10,7 @@ Add the first functional combat building after Logistics Hub: Purchase → READY
 
 ## Inputs
 - Verified `origin/main` @ `9ace159714b5eca0f79e4985fc2496d34cbb7cc3` (includes GP-S36G)
+- Implementation: `7aa0565f9e10e9fe447fe9898835eba28ddc9b81`
 - GP-S35B native catalog row `DA_GP_OrbitalDrop_DefensiveTurret`
 - GP-S30R AutoAcquire / GP-S29R LOS / GP-S36G BuildGrid
 

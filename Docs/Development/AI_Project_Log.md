@@ -4,7 +4,7 @@
 
 Status: **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s37t-defensive-turret-mvp` (base verified `origin/main` @ `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`)
+- Branch: `feature/gp-s37t-defensive-turret-mvp` (base verified `origin/main` @ `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`, implementation `7aa0565f9e10e9fe447fe9898835eba28ddc9b81`)
 - Native `AGP_DefensiveTurret` reuses `UGP_UnitCommandComponent` AutoAcquire + `GPCombatLOS` + existing damage GE. No second combat framework.
 - Combat data: `AGP_UnitBase` Default* → GAS (range 600 / damage 20 / cooldown 1.0 / MaxHealth 400). Catalog `SpawnedClass` + 2×2 footprint. AttackMove remains Salvage Walker only.
 - Contract `gp.Building.RunDefensiveTurretContractTest` + listed regressions Failures=0; GPEditor Win64 Development + UHT **PASS**

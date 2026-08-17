@@ -6,6 +6,7 @@
 #include "Buildings/GPMainBase.h"
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Components/BoxComponent.h"
+#include "Components/SceneComponent.h"
 #include "NavAreas/NavArea_Null.h"
 #include "Net/UnrealNetwork.h"
 #include "Tags/GPGameplayTags.h"
@@ -85,49 +86,54 @@ void AGP_BuildingBase::ConfigurePlacementFootprintBoundsDefaults()
 	PlacementFootprintBounds->SetLineThickness(2.0f);
 }
 
-void AGP_BuildingBase::AttachPlacementFootprintBoundsToRoot()
+void AGP_BuildingBase::AttachDeferredComponentToRoot(USceneComponent* Component)
 {
-	if (!PlacementFootprintBounds)
+	if (Component == nullptr)
 	{
 		return;
 	}
 
 	USceneComponent* Root = GetRootComponent();
-	if (Root == nullptr)
+	if (Root == nullptr || Component == Root)
 	{
 		return;
 	}
 
-	if (PlacementFootprintBounds->GetAttachParent() != Root)
+	if (Component->GetAttachParent() == Root)
 	{
-		PlacementFootprintBounds->SetupAttachment(Root);
+		return;
 	}
+
+	if (Component->IsRegistered())
+	{
+		Component->AttachToComponent(Root, FAttachmentTransformRules::KeepRelativeTransform);
+	}
+	else
+	{
+		Component->SetupAttachment(Root);
+	}
+}
+
+void AGP_BuildingBase::AttachPlacementFootprintBoundsToRoot()
+{
+	AttachDeferredComponentToRoot(PlacementFootprintBounds);
 }
 
 void AGP_BuildingBase::AttachNavigationObstacleToRoot()
 {
-	if (!NavigationObstacle)
-	{
-		return;
-	}
+	AttachDeferredComponentToRoot(NavigationObstacle);
+}
 
-	USceneComponent* Root = GetRootComponent();
-	if (Root == nullptr)
-	{
-		return;
-	}
-
-	if (NavigationObstacle->GetAttachParent() != Root)
-	{
-		NavigationObstacle->SetupAttachment(Root);
-	}
+void AGP_BuildingBase::AttachDeferredSceneComponentsToRoot()
+{
+	AttachNavigationObstacleToRoot();
+	AttachPlacementFootprintBoundsToRoot();
 }
 
 void AGP_BuildingBase::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
-	AttachNavigationObstacleToRoot();
-	AttachPlacementFootprintBoundsToRoot();
+	AttachDeferredSceneComponentsToRoot();
 }
 
 void AGP_BuildingBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

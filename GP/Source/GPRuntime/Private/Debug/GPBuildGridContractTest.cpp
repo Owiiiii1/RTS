@@ -464,6 +464,76 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			BoundsStub->Destroy();
 		}
 
+		FActorSpawnParameters AttachParams;
+		AttachParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AttachParams.ObjectFlags |= RF_Transient;
+		const FTransform AttachTM(FRotator::ZeroRotator, FVector(-73000.0f, 9500.0f, 100.0f));
+		AGP_MainBase* DeferredBase = World->SpawnActorDeferred<AGP_MainBase>(
+			AGP_MainBase::StaticClass(),
+			AttachTM,
+			nullptr,
+			nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Expect(IsValid(DeferredBase)
+			&& DeferredBase->GetPlacementFootprintBounds() != nullptr
+			&& DeferredBase->GetNavigationObstacle() != nullptr,
+			TEXT("Attach_SpawnDeferredMainBase")))
+		{
+			UBoxComponent* Bounds = DeferredBase->GetPlacementFootprintBounds();
+			UBoxComponent* Nav = DeferredBase->GetNavigationObstacle();
+			USceneComponent* CtorRoot = DeferredBase->GetRootComponent();
+			Expect(Nav != nullptr && CtorRoot != nullptr && Nav->GetAttachParent() == CtorRoot,
+				TEXT("Attach_PreRegistrationPath"));
+			Bounds->SetRelativeLocation(FVector(80.0f, -55.0f, 12.0f));
+			Bounds->SetBoxExtent(FVector(200.0f, 200.0f, 20.0f));
+			DeferredBase->FinishSpawning(AttachTM);
+
+			USceneComponent* Root = DeferredBase->GetRootComponent();
+			Expect(Bounds->IsRegistered(), TEXT("Attach_BoundsRegisteredAfterSpawn"));
+			Expect(Root != nullptr && Bounds->GetAttachParent() == Root, TEXT("Attach_BoundsParentIsRoot"));
+			Expect(DeferredBase->GetNavigationObstacle()->IsRegistered()
+				&& DeferredBase->GetNavigationObstacle()->GetAttachParent() == Root,
+				TEXT("Attach_NavObstacleParentIsRoot"));
+			Expect(Bounds->GetRelativeLocation().Equals(FVector(80.0f, -55.0f, 12.0f), 0.1f),
+				TEXT("Attach_RelativeLocationSurvives"));
+			Expect(Bounds->GetUnscaledBoxExtent().Equals(FVector(200.0f, 200.0f, 20.0f), 0.1f),
+				TEXT("Attach_BoxExtentSurvives"));
+
+			DeferredBase->AttachDeferredSceneComponentsToRoot();
+			DeferredBase->AttachDeferredSceneComponentsToRoot();
+			Expect(Bounds->GetAttachParent() == Root
+				&& Bounds->GetRelativeLocation().Equals(FVector(80.0f, -55.0f, 12.0f), 0.1f)
+				&& Bounds->GetUnscaledBoxExtent().Equals(FVector(200.0f, 200.0f, 20.0f), 0.1f),
+				TEXT("Attach_HelperIdempotent"));
+			DeferredBase->Destroy();
+		}
+
+		AGP_MainBase* RegisteredBase = World->SpawnActor<AGP_MainBase>(
+			AGP_MainBase::StaticClass(),
+			AttachTM.GetLocation(),
+			AttachTM.Rotator(),
+			AttachParams);
+		if (Expect(IsValid(RegisteredBase)
+			&& RegisteredBase->GetPlacementFootprintBounds() != nullptr,
+			TEXT("Attach_SpawnRegisteredMainBase")))
+		{
+			UBoxComponent* Bounds = RegisteredBase->GetPlacementFootprintBounds();
+			USceneComponent* Root = RegisteredBase->GetRootComponent();
+			Expect(Bounds->IsRegistered() && Root != nullptr && Bounds->GetAttachParent() == Root,
+				TEXT("Attach_RegisteredPathBoundsOnRoot"));
+			Expect(RegisteredBase->GetNavigationObstacle() != nullptr
+				&& RegisteredBase->GetNavigationObstacle()->GetAttachParent() == Root,
+				TEXT("Attach_RegisteredPathNavOnRoot"));
+			Bounds->SetRelativeLocation(FVector(40.0f, 25.0f, 8.0f));
+			Bounds->SetBoxExtent(FVector(150.0f, 175.0f, 20.0f));
+			RegisteredBase->AttachDeferredSceneComponentsToRoot();
+			Expect(Bounds->GetRelativeLocation().Equals(FVector(40.0f, 25.0f, 8.0f), 0.1f)
+				&& Bounds->GetUnscaledBoxExtent().Equals(FVector(150.0f, 175.0f, 20.0f), 0.1f)
+				&& Bounds->GetAttachParent() == Root,
+				TEXT("Attach_RegisteredKeepRelativeTransform"));
+			RegisteredBase->Destroy();
+		}
+
 		Expect(FCString::Strcmp(
 			GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(true, EGP_BuildingDropRejectReason::None),
 			TEXT("VALID")) == 0, TEXT("Preview_LabelValid"));
@@ -653,6 +723,13 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		Expect(Base->GetGridFootprintSize() == FIntPoint(5, 5), TEXT("Q_MainBaseFallback5x5"));
 		Expect(GPBuildGridContractDebug::AllCellsOccupied(Grid, Base->GetGridOriginCell(), FIntPoint(5, 5)),
 			TEXT("Q_MainBaseOccupiesGrid"));
+		Expect(Base->GetPlacementFootprintBounds() != nullptr
+			&& Base->GetPlacementFootprintBounds()->IsRegistered()
+			&& Base->GetPlacementFootprintBounds()->GetAttachParent() == Base->GetRootComponent(),
+			TEXT("Attach_LiveMainBaseBoundsOnRoot"));
+		Expect(Base->GetNavigationObstacle() != nullptr
+			&& Base->GetNavigationObstacle()->GetAttachParent() == Base->GetRootComponent(),
+			TEXT("Attach_LiveMainBaseNavOnRoot"));
 
 		ValidDeployLocation = Base->GetActorLocation() + FVector(1400.0f, 0.0f, 0.0f);
 		const FVector Unsnapped = ValidDeployLocation + FVector(47.0f, -83.0f, 0.0f);

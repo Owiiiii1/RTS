@@ -7,6 +7,7 @@
 #include "GPBuildingBase.generated.h"
 
 class UBoxComponent;
+class USceneComponent;
 
 /**
  * Minimal static unit ancestor for buildings (GP-S28 adaptation ahead of full GP-S34).
@@ -40,6 +41,9 @@ public:
 	FIntPoint GetGridFootprintSize() const { return GridFootprintSize; }
 
 	FGuid GetGridOccupantId() const { return GridOccupantId; }
+
+	/** Attach deferred scene boxes under the current root. Safe before or after registration. */
+	void AttachDeferredSceneComponentsToRoot();
 
 	/** Authority/deferred-spawn: set canonical grid facts before BeginPlay when possible. */
 	void ConfigureGridPlacement(FIntPoint OriginCell, FIntPoint FootprintSize);
@@ -82,6 +86,7 @@ protected:
 	void TryUnregisterFromBuildGrid();
 
 private:
+	void AttachDeferredComponentToRoot(USceneComponent* Component);
 	FGuid GridOccupantId;
 	bool bGridPlacementConfigured = false;
 	bool bGridRegistered = false;

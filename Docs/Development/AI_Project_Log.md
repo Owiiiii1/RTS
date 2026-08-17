@@ -1,6 +1,28 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-17 — GP-S33C Unit Cap + Logistics Hub Capacity (implementation candidate)
+
+Status: **GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s33c-unit-cap-logistics-hub` (base `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`)
+- Base MaxUnits=5 via native infinite `UGP_GE_UnitCap_Base5` (once per PlayerState)
+- CurrentUnits = living Worker + Salvage Walker; Hub +5 MaxUnits via `UGP_GE_UnitCap_Plus5`
+- Pending orbital reservation; MaxUnits==0 is no longer unlimited
+- Container-cap Hub bonus **deferred** (N TBD)
+- Contract `gp.Resource.RunUnitCapLogisticsHubContractTest` + listed regressions Failures=0; GPEditor+UHT **PASS**
+- **NOT MERGED** — await operator PIE validation. Do not run GP Dev/Shipping until operator PASS
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+## 2026-08-17 — GP-S33M status correction (already on main)
+
+Status: **GP-S33M MERGED on remote main**
+
+- Verified remote `main` tip `e40d545b89c27e2d9738082009fb691a5c8e5a2a` already contains GP-S33M finalization
+- Prior log lines that said GP-S33M was NOT on `main` / NOT MERGED are stale as of this tip
+- Do not rewrite older S33M implementation entries
+
 ## 2026-08-10 — GP-S33M RTS Movement Reconciliation (finalization)
+
 
 Status: **GP-S33M_FINALIZATION_READY_FOR_MERGE**
 

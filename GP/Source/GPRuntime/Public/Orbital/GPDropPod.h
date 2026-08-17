@@ -83,6 +83,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|DropPod")
 	EGP_DropPodPhase GetPhase() const { return Phase; }
 
+#if !UE_BUILD_SHIPPING
+	/** Contract seam: accepted pod skips payload spawn and releases reservation. */
+	void DebugForceSkipPayloadSpawn() { bDebugSkipPayloadSpawn = true; }
+#endif
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "GP|DropPod|Presentation")
 	void OnDescentStarted();
 
@@ -151,6 +156,7 @@ private:
 	void ApplyNativePlaceholderVisibility();
 	void HideNativePlaceholder();
 	void AuthoritySetPhase(EGP_DropPodPhase NewPhase);
+	void AuthorityReleaseLeftoverUnitReservation();
 
 	FGP_UnitDropManifest PendingManifest;
 	EGP_OrbitalBuildingType PendingBuildingType = EGP_OrbitalBuildingType::None;
@@ -162,6 +168,10 @@ private:
 	float DescentElapsed = 0.0f;
 	bool bLandingCompleted = false;
 	bool bPayloadSpawned = false;
+	int32 RemainingUnitReservation = 0;
+#if !UE_BUILD_SHIPPING
+	bool bDebugSkipPayloadSpawn = false;
+#endif
 	FTimerHandle DeployTimerHandle;
 	FTimerHandle CleanupTimerHandle;
 };

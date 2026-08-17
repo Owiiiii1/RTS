@@ -34,27 +34,26 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S32A on main tip** `0df44684…` |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S33M on main tip** `e40d545b89c27e2d9738082009fb691a5c8e5a2a` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S32A** Attack-Move on `main` (tip `0df4468445e939aaca33ed73548a78c2caabb86d`) |
+| Last closed / merged stage | **GP-S33M** RTS Movement Reconciliation on `main` (tip `e40d545b89c27e2d9738082009fb691a5c8e5a2a`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S33M_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s33m-rts-movement-reconciliation` |
+| Current stage | **GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s33c-unit-cap-logistics-hub` |
 
 ---
 
 ## Current NEXT Task
 
-**Closed:** GP-S32A Attack-Move — **DONE / MERGED** on `main` @ `0df44684…`.
+**Closed:** GP-S33M RTS Movement Reconciliation — **DONE / MERGED** on `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`.
 
-**Prior closed:** GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
+**Prior closed:** GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md`](Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md) — **GP-S33M_FINALIZATION_READY_FOR_MERGE**. Operator FINAL PASS + final builds done. Do **not** merge from the agent. Do **not** auto-start next code slice. `main` does **not** contain GP-S33M yet.
+**Current:** [`Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md`](Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md) — **GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. Do **not** merge from the agent. Await operator PIE PASS. Do **not** run GP Development / GP Shipping until operator PASS.
 
 Approved planning order after human merge (not started):
-1. Unit Cap + LogisticsHub gameplay
-2. Match win flow
-3. BuildingDefinition / BuildGrid
+1. Match win flow
+2. BuildingDefinition / BuildGrid
 
 **After merge:** do **not** auto-assign next slice without explicit assignment.
 
@@ -72,7 +71,8 @@ Approved planning order after human merge (not started):
 6. Roadmap reconciliation — **DONE / MERGED** @ `ba98383…`
 7. **GP-S30R** — Combat Auto-Acquire — **DONE / MERGED**
 8. **GP-S32A** — Attack-Move Reconciliation — **DONE / MERGED** @ `0df44684…`
-9. **GP-S33M** — RTS Movement Reconciliation — **FINALIZATION_READY_FOR_MERGE** (NOT on `main` yet)
+9. **GP-S33M** — RTS Movement Reconciliation — **DONE / MERGED** @ `e40d545b…`
+10. **GP-S33C** — Unit Cap + Logistics Hub Capacity — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (NOT MERGED)
 
 ---
 
@@ -156,4 +156,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S32A are on `main` baseline tip `0df4468445e939aaca33ed73548a78c2caabb86d`. Current stage: **GP-S33M_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s33m-rts-movement-reconciliation`. See [`Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md`](Claude_Tasks/GP-S33M_RTS_Movement_Reconciliation.md). Await human merge/check. Do not auto-start the next code slice.
+SETUP-001, DOCS-001, GP-S01…GP-S33M are on `main` baseline tip `e40d545b89c27e2d9738082009fb691a5c8e5a2a`. Current stage: **GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s33c-unit-cap-logistics-hub`. See [`Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md`](Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md). Await operator PIE PASS. Do not merge. Do not run GP Dev/Shipping until operator PASS.

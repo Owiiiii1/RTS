@@ -1057,7 +1057,26 @@ bool AGP_PlayerController::AuthorityTryRequestUnitDrop(const FGP_UnitDropManifes
 		Result.OrbitalCost,
 		Result.UnitCount,
 		*GetNameSafe(Result.SpawnedPod.Get()));
+	if (!Result.bAccepted)
+	{
+		Client_NotifyUnitDropRejected(Result.RejectReason);
+	}
 	return Result.bAccepted;
+}
+
+void AGP_PlayerController::Client_NotifyUnitDropRejected_Implementation(EGP_UnitDropRejectReason Reason)
+{
+	if (Reason == EGP_UnitDropRejectReason::UnitCapReached)
+	{
+		EnsurePlanetaryFerroniteHUD();
+		if (PlanetaryFerroniteHUD != nullptr)
+		{
+			PlanetaryFerroniteHUD->SetUnitCapReachedFeedback(true);
+		}
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP UnitDrop HUD: Unit Cap reached PC=%s"),
+			*GetName());
+	}
 }
 
 void AGP_PlayerController::RequestBuildingPurchase(EGP_OrbitalBuildingType BuildingType)
@@ -2231,6 +2250,7 @@ void AGP_PlayerController::EnsurePlanetaryFerroniteHUD()
 	PlanetaryFerroniteHUD->AddToViewport(PlanetaryFerroniteHUDZOrder);
 	PlanetaryFerroniteHUD->SetStorageDisplay(false, 0.0f, 0.0f, TArray<float>());
 	PlanetaryFerroniteHUD->SetOrbitalFerroniteDisplay(0.0f);
+	PlanetaryFerroniteHUD->SetUnitCapDisplay(0, 0);
 	PlanetaryFerroniteHUD->SetLaunchButtonEnabled(false);
 }
 
@@ -2353,8 +2373,20 @@ void AGP_PlayerController::UnbindOrbitalFerroniteAttribute()
 			ASC->GetGameplayAttributeValueChangeDelegate(
 				UGP_PlayerAttributeSet::GetOrbitalFerroniteAttribute()).Remove(OrbitalFerroniteChangedHandle);
 		}
+		if (MaxUnitsChangedHandle.IsValid())
+		{
+			ASC->GetGameplayAttributeValueChangeDelegate(
+				UGP_PlayerAttributeSet::GetMaxUnitsAttribute()).Remove(MaxUnitsChangedHandle);
+		}
+		if (CurrentUnitsChangedHandle.IsValid())
+		{
+			ASC->GetGameplayAttributeValueChangeDelegate(
+				UGP_PlayerAttributeSet::GetCurrentUnitsAttribute()).Remove(CurrentUnitsChangedHandle);
+		}
 	}
 	OrbitalFerroniteChangedHandle.Reset();
+	MaxUnitsChangedHandle.Reset();
+	CurrentUnitsChangedHandle.Reset();
 	BoundOrbitalASC.Reset();
 }
 
@@ -2367,6 +2399,7 @@ void AGP_PlayerController::BindOrbitalFerroniteAttribute()
 	if (ASC == nullptr || PS->GetPlayerAttributeSet() == nullptr)
 	{
 		SyncOrbitalFerroniteHUDFromAttributes();
+		SyncUnitCapHUDFromAttributes();
 		return;
 	}
 
@@ -2374,7 +2407,14 @@ void AGP_PlayerController::BindOrbitalFerroniteAttribute()
 	OrbitalFerroniteChangedHandle = ASC->GetGameplayAttributeValueChangeDelegate(
 		UGP_PlayerAttributeSet::GetOrbitalFerroniteAttribute()).AddUObject(
 		this, &AGP_PlayerController::HandleOrbitalFerroniteAttributeChanged);
+	MaxUnitsChangedHandle = ASC->GetGameplayAttributeValueChangeDelegate(
+		UGP_PlayerAttributeSet::GetMaxUnitsAttribute()).AddUObject(
+		this, &AGP_PlayerController::HandleMaxUnitsAttributeChanged);
+	CurrentUnitsChangedHandle = ASC->GetGameplayAttributeValueChangeDelegate(
+		UGP_PlayerAttributeSet::GetCurrentUnitsAttribute()).AddUObject(
+		this, &AGP_PlayerController::HandleCurrentUnitsAttributeChanged);
 	SyncOrbitalFerroniteHUDFromAttributes();
+	SyncUnitCapHUDFromAttributes();
 }
 
 void AGP_PlayerController::SyncOrbitalFerroniteHUDFromAttributes()
@@ -2403,6 +2443,39 @@ void AGP_PlayerController::HandleOrbitalFerroniteAttributeChanged(const FOnAttri
 	{
 		PlanetaryFerroniteHUD->SetOrbitalFerroniteDisplay(Data.NewValue);
 	}
+}
+
+void AGP_PlayerController::SyncUnitCapHUDFromAttributes()
+{
+	EnsurePlanetaryFerroniteHUD();
+	if (PlanetaryFerroniteHUD == nullptr)
+	{
+		return;
+	}
+
+	int32 Current = 0;
+	int32 Max = 0;
+	if (const AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>())
+	{
+		if (const UGP_PlayerAttributeSet* AttrSet = PS->GetPlayerAttributeSet())
+		{
+			Current = FMath::Max(0, FMath::RoundToInt(AttrSet->GetCurrentUnits()));
+			Max = FMath::Max(0, FMath::RoundToInt(AttrSet->GetMaxUnits()));
+		}
+	}
+	PlanetaryFerroniteHUD->SetUnitCapDisplay(Current, Max);
+}
+
+void AGP_PlayerController::HandleMaxUnitsAttributeChanged(const FOnAttributeChangeData& Data)
+{
+	(void)Data;
+	SyncUnitCapHUDFromAttributes();
+}
+
+void AGP_PlayerController::HandleCurrentUnitsAttributeChanged(const FOnAttributeChangeData& Data)
+{
+	(void)Data;
+	SyncUnitCapHUDFromAttributes();
 }
 
 void AGP_PlayerController::HandleStorageChangedForHUD(
@@ -2494,6 +2567,7 @@ void AGP_PlayerController::RefreshPlanetaryFerroniteHUDBinding()
 	BindOrbitalFerroniteAttribute();
 	BindBuildingInventoryEvents();
 	SyncOrbitalFerroniteHUDFromAttributes();
+	SyncUnitCapHUDFromAttributes();
 }
 
 void AGP_PlayerController::HideMarqueeWidget()

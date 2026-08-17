@@ -3,28 +3,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Units/GPUnit.h"
-#include "GPSalvageWalker.generated.h"
+#include "Orbital/GPDropPod.h"
+#include "UObject/Object.h"
+#include "Units/GPWorker.h"
+#include "GPUnitCapLogisticsHubContractTest.generated.h"
 
-/**
- * Canonical MVP combat unit (GDD/04 Salvage Walker).
- * Concrete AGP_Unit child: existing Attack FSM / LOS / GAS / presentation stack.
- * Operator BP_SalvageWalker subclasses this class with AuthoredComponents visuals.
- */
-UCLASS(Blueprintable)
-class GPRUNTIME_API AGP_SalvageWalker : public AGP_Unit
-{
-	GENERATED_BODY()
-
-public:
-	AGP_SalvageWalker();
-
-	virtual bool CountsTowardPlayerUnitCap() const override { return true; }
-};
-
-/** Composition / GDD defaults contract for native AGP_SalvageWalker (no Blueprint asset). */
+/** GP-S33C unit cap + Logistics Hub contract runner. */
 UCLASS()
-class GPRUNTIME_API UGP_SalvageWalkerContractTestRunner : public UObject
+class GPRUNTIME_API UGP_UnitCapLogisticsHubContractTestRunner : public UObject
 {
 	GENERATED_BODY()
 
@@ -42,6 +28,7 @@ private:
 	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
 	void UnbindWorldCleanup();
 	void CleanupActors();
+	void RestoreSettings();
 
 	int32 StageIndex = 0;
 	int32 Failures = 0;
@@ -49,7 +36,20 @@ private:
 	FDelegateHandle WorldCleanupHandle;
 	FTimerHandle StageTimerHandle;
 	TWeakObjectPtr<UWorld> WorldWeak;
-	TWeakObjectPtr<AGP_SalvageWalker> UnitWeak;
+	TWeakObjectPtr<class AGP_MainBase> MainBaseWeak;
+	TWeakObjectPtr<class AGP_PlayerState> OwnerPSWeak;
+	TWeakObjectPtr<class AGP_PlayerState> OtherPSWeak;
+	TWeakObjectPtr<class AGP_DropPod> LastPodWeak;
+	TWeakObjectPtr<class AGP_LogisticsHub> HubAWeak;
+	TWeakObjectPtr<class AGP_LogisticsHub> HubBWeak;
+	float SavedDescent = 2.5f;
+	float SavedCleanup = 0.35f;
+	float SavedAltitude = 2500.0f;
+	float SavedDeployDelay = 1.25f;
+	float SavedBuildingDescent = 2.5f;
+	float SavedBuildingDeployDelay = 2.0f;
+	float SavedBuildingCleanup = 0.5f;
+	bool bSettingsMutated = false;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

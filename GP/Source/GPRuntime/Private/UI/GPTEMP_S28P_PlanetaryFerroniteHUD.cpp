@@ -106,6 +106,7 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeConstruct()
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	RefreshStatusText();
 	RefreshOrbitalText();
+	RefreshUnitCapText();
 	RefreshUnitDropPanel();
 	RefreshBuildingPanel();
 	SetLaunchButtonEnabled(bLaunchEnabled);
@@ -265,6 +266,14 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 	OrbitalLineText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(18));
 	StatusPanel->AddChildToVerticalBox(OrbitalLineText);
 
+	UnitsLineText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("UnitsLineText"));
+	GPTempS28PHUDPrivate::StyleStatusText(UnitsLineText);
+	UnitsLineText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(18));
+	if (UVerticalBoxSlot* UnitsSlot = StatusPanel->AddChildToVerticalBox(UnitsLineText))
+	{
+		UnitsSlot->SetPadding(FMargin(0.0f, 2.0f, 0.0f, 0.0f));
+	}
+
 	LaunchButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("LaunchButton"));
 	LaunchButton->SetVisibility(ESlateVisibility::Visible);
 	LaunchButtonLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("LaunchButtonLabel"));
@@ -351,6 +360,14 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 		SlotsSlot->SetPadding(FMargin(0.0f, 6.0f, 0.0f, 4.0f));
 	}
 
+	UnitCapFeedbackText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("UnitCapFeedbackText"));
+	GPTempS28PHUDPrivate::StyleStatusText(UnitCapFeedbackText);
+	UnitCapFeedbackText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.35f, 0.2f)));
+	if (UVerticalBoxSlot* CapSlot = UnitDropPanel->AddChildToVerticalBox(UnitCapFeedbackText))
+	{
+		CapSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 4.0f));
+	}
+
 	ConfirmDropButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("ConfirmDropButton"));
 	ConfirmDropButton->SetVisibility(ESlateVisibility::Visible);
 	ConfirmDropLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("ConfirmDropLabel"));
@@ -414,6 +431,7 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 	bTreeBuilt = true;
 	RefreshStatusText();
 	RefreshOrbitalText();
+	RefreshUnitCapText();
 	RefreshUnitDropPanel();
 	RefreshBuildingPanel();
 }
@@ -494,6 +512,21 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshOrbitalText()
 	RefreshUnitDropPanel();
 }
 
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshUnitCapText()
+{
+	if (UnitsLineText != nullptr)
+	{
+		UnitsLineText->SetText(FText::FromString(FString::Printf(
+			TEXT("UNITS %d / %d"),
+			DisplayCurrentUnits,
+			DisplayMaxUnits)));
+		const bool bOverCap = DisplayMaxUnits > 0 && DisplayCurrentUnits > DisplayMaxUnits;
+		UnitsLineText->SetColorAndOpacity(FSlateColor(
+			bOverCap ? FLinearColor(1.0f, 0.35f, 0.2f) : FLinearColor::White));
+	}
+	RefreshUnitDropPanel();
+}
+
 int32 UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetPodCapacity() const
 {
 	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
@@ -536,6 +569,10 @@ bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::CanConfirmLocally() const
 	{
 		return false;
 	}
+	if (WorkerCount + SalvageWalkerCount + DisplayCurrentUnits > DisplayMaxUnits)
+	{
+		return false;
+	}
 	return true;
 }
 
@@ -560,6 +597,22 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshUnitDropPanel()
 	if (ConfirmDropButton != nullptr)
 	{
 		ConfirmDropButton->SetIsEnabled(CanConfirmLocally());
+	}
+	if (UnitCapFeedbackText != nullptr)
+	{
+		const int32 ManifestCount = WorkerCount + SalvageWalkerCount;
+		const bool bWouldExceed =
+			ManifestCount > 0 && ManifestCount + DisplayCurrentUnits > DisplayMaxUnits;
+		if (bWouldExceed || bUnitCapReachedFeedback)
+		{
+			UnitCapFeedbackText->SetText(FText::FromString(TEXT("Unit Cap reached")));
+			UnitCapFeedbackText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			UnitCapFeedbackText->SetText(FText::GetEmpty());
+			UnitCapFeedbackText->SetVisibility(ESlateVisibility::Collapsed);
+		}
 	}
 }
 
@@ -643,6 +696,23 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetOrbitalFerroniteDisplay(float Orbit
 {
 	DisplayOrbital = FMath::IsFinite(OrbitalAmount) ? FMath::Max(0.0f, OrbitalAmount) : 0.0f;
 	RefreshOrbitalText();
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetUnitCapDisplay(int32 CurrentUnits, int32 MaxUnits)
+{
+	DisplayCurrentUnits = FMath::Max(0, CurrentUnits);
+	DisplayMaxUnits = FMath::Max(0, MaxUnits);
+	if (DisplayCurrentUnits <= DisplayMaxUnits)
+	{
+		bUnitCapReachedFeedback = false;
+	}
+	RefreshUnitCapText();
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetUnitCapReachedFeedback(bool bReached)
+{
+	bUnitCapReachedFeedback = bReached;
+	RefreshUnitDropPanel();
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetLaunchButtonEnabled(bool bEnabled)
@@ -730,6 +800,11 @@ FString UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetBaseLineTextForContract() const
 FString UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetOrbitalLineTextForContract() const
 {
 	return OrbitalLineText != nullptr ? OrbitalLineText->GetText().ToString() : FString();
+}
+
+FString UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetUnitsLineTextForContract() const
+{
+	return UnitsLineText != nullptr ? UnitsLineText->GetText().ToString() : FString();
 }
 
 int32 UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetContainerLineCountForContract() const

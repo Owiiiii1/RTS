@@ -584,22 +584,12 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 
 		// Unit cap when MaxUnits active
 		GPOrbitalUnitDropDebug::GrantOrbital(OwnerPS, 100.0f);
-		if (UGP_PlayerAttributeSet* Attr = const_cast<UGP_PlayerAttributeSet*>(OwnerPS->GetPlayerAttributeSet()))
-		{
-			Attr->SetMaxUnits(1.0f);
-			Attr->SetCurrentUnits(1.0f);
-		}
 		FGP_UnitDropManifest Cap;
 		Cap.WorkerCount = 1;
 		GPUnitDropAuthority::FEvalResult CapResult =
 			GPUnitDropAuthority::AuthorityRequestUnitDrop(World, OwnerPS, Cap);
 		Expect(!CapResult.bAccepted, TEXT("M_UnitCapReject"));
 		Expect(CapResult.RejectReason == EGP_UnitDropRejectReason::UnitCapReached, TEXT("M_UnitCapReason"));
-		if (UGP_PlayerAttributeSet* Attr = const_cast<UGP_PlayerAttributeSet*>(OwnerPS->GetPlayerAttributeSet()))
-		{
-			Attr->SetMaxUnits(0.0f);
-			Attr->SetCurrentUnits(0.0f);
-		}
 
 		// N: GP-S30 launch path still works (rewards apply on launch completion, not accept).
 		UGP_StorageComponent* Storage = Base->GetStorageComponent();

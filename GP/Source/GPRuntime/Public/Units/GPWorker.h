@@ -65,6 +65,8 @@ public:
 	AGP_Worker();
 
 	virtual void BeginPlay() override;
+
+	virtual bool CountsTowardPlayerUnitCap() const override { return true; }
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION(BlueprintPure, Category = "GP|Worker")

@@ -14,6 +14,7 @@
 #include "Engine/World.h"
 #include "GameplayEffectExtension.h"
 #include "Net/UnrealNetwork.h"
+#include "Player/GPPlayerState.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPUnitCommandComponent.h"
 
@@ -226,6 +227,94 @@ void AGP_UnitBase::BeginPlay()
 	AttachHealthBarToOwnerRoot();
 	InitializeAbilitySystemActorInfo();
 	InitializeCombatAttributesIfNeeded();
+	TryRegisterPlayerUnitCap();
+}
+
+void AGP_UnitBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	UnregisterPlayerUnitCap();
+	Super::EndPlay(EndPlayReason);
+}
+
+void AGP_UnitBase::NotifyAuthorityDeath()
+{
+	UnregisterPlayerUnitCap();
+}
+
+AGP_PlayerState* AGP_UnitBase::ResolveOwningPlayerStateForUnitCap() const
+{
+	if (AGP_PlayerState* OwnerPS = Cast<AGP_PlayerState>(GetOwner()))
+	{
+		return OwnerPS;
+	}
+
+	if (TeamId < 1)
+	{
+		return nullptr;
+	}
+
+	return AGP_PlayerState::FindAuthoritativeForTeam(GetWorld(), TeamId);
+}
+
+void AGP_UnitBase::TryRegisterPlayerUnitCap()
+{
+	if (!HasAuthority() || !CountsTowardPlayerUnitCap() || bIsDead || bCountedTowardPlayerUnitCap)
+	{
+		return;
+	}
+
+	AGP_PlayerState* PS = ResolveOwningPlayerStateForUnitCap();
+	if (!IsValid(PS))
+	{
+		if (TeamId >= 1)
+		{
+			UE_LOG(LogGPCombat, Warning,
+				TEXT("GP UnitCap unresolved owner: Unit=%s TeamId=%d Owner=%s — not counted"),
+				*GetName(),
+				TeamId,
+				*GetNameSafe(GetOwner()));
+		}
+		return;
+	}
+
+	PS->NotifyPlayerUnitBecameLive(this);
+}
+
+void AGP_UnitBase::UnregisterPlayerUnitCap()
+{
+	if (!HasAuthority() || !bCountedTowardPlayerUnitCap)
+	{
+		return;
+	}
+
+	AGP_PlayerState* PS = UnitCapOwnerWeak.Get();
+	if (!IsValid(PS))
+	{
+		PS = ResolveOwningPlayerStateForUnitCap();
+	}
+	if (IsValid(PS))
+	{
+		PS->NotifyPlayerUnitDied(this);
+		return;
+	}
+
+	ClearCountedTowardPlayerUnitCap();
+	UE_LOG(LogGPCombat, Warning,
+		TEXT("GP UnitCap unregister without owner: Unit=%s TeamId=%d"),
+		*GetName(),
+		TeamId);
+}
+
+void AGP_UnitBase::MarkCountedTowardPlayerUnitCap(AGP_PlayerState* OwnerPlayerState)
+{
+	bCountedTowardPlayerUnitCap = true;
+	UnitCapOwnerWeak = OwnerPlayerState;
+}
+
+void AGP_UnitBase::ClearCountedTowardPlayerUnitCap()
+{
+	bCountedTowardPlayerUnitCap = false;
+	UnitCapOwnerWeak.Reset();
 }
 
 void AGP_UnitBase::InitializeAbilitySystemActorInfo()
@@ -352,6 +441,7 @@ void AGP_UnitBase::NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId)
 	{
 		TeamPresentationComponent->RefreshTeamPresentation();
 	}
+	TryRegisterPlayerUnitCap();
 }
 
 bool AGP_UnitBase::IsNeutral() const
@@ -622,6 +712,8 @@ void AGP_UnitBase::HandleDeathInternal()
 	{
 		UnitCommandComponent->NotifyOwnerDied();
 	}
+
+	NotifyAuthorityDeath();
 
 	SetActorEnableCollision(false);
 

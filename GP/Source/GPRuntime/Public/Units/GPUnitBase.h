@@ -38,6 +38,7 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void PostInitializeComponents() override;
 
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
@@ -91,6 +92,19 @@ public:
 	 */
 	virtual void NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
 
+	/** Worker / Salvage Walker only. Buildings and other UnitBase children do not count. */
+	virtual bool CountsTowardPlayerUnitCap() const { return false; }
+
+	bool HasBeenCountedTowardPlayerUnitCap() const { return bCountedTowardPlayerUnitCap; }
+
+	/** Authority one-shot register against owning PlayerState. */
+	void TryRegisterPlayerUnitCap();
+
+	void UnregisterPlayerUnitCap();
+
+	void MarkCountedTowardPlayerUnitCap(class AGP_PlayerState* OwnerPlayerState);
+	void ClearCountedTowardPlayerUnitCap();
+
 	UFUNCTION(BlueprintPure, Category = "GP|Team")
 	bool HasAssignedTeam() const;
 
@@ -127,8 +141,10 @@ protected:
 	void InitializeAbilitySystemActorInfo();
 	void InitializeCombatAttributesIfNeeded();
 	void HandleDeathInternal();
+	virtual void NotifyAuthorityDeath();
 	void ApplyClientDeadPresentation();
 	void AttachHealthBarToOwnerRoot();
+	class AGP_PlayerState* ResolveOwningPlayerStateForUnitCap() const;
 
 	/** -1 unassigned, 0 neutral, 1+ playable teams. */
 	UPROPERTY(EditInstanceOnly, ReplicatedUsing = OnRep_TeamId, Category = "GP|Team")
@@ -192,4 +208,6 @@ private:
 
 	bool bCombatAttributesInitialized = false;
 	bool bDeathHandled = false;
+	bool bCountedTowardPlayerUnitCap = false;
+	TWeakObjectPtr<class AGP_PlayerState> UnitCapOwnerWeak;
 };

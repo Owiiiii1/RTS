@@ -7,6 +7,8 @@
 #include "GameFramework/PlayerState.h"
 #include "GPPlayerState.generated.h"
 
+class AGP_UnitBase;
+class UWorld;
 class UGP_AbilitySystemComponent;
 class UGP_OrbitalBuildingInventoryComponent;
 class UGP_PlayerAttributeSet;
@@ -47,6 +49,29 @@ public:
 	/** Local/UI: TeamId changed (authority SetTeamId or client OnRep). */
 	FOnGP_PlayerTeamIdChanged OnTeamIdChanged;
 
+	/** CurrentUnits + PendingOrbitalUnitCount. Authority accounting. */
+	int32 GetCommittedUnitCount() const;
+
+	int32 GetPendingOrbitalUnitCount() const { return PendingOrbitalUnitCount; }
+
+	/** True when Committed + ManifestCount <= MaxUnits. MaxUnits == 0 is not unlimited. */
+	bool CanAcceptManifestUnitCount(int32 ManifestUnitCount) const;
+
+	/** Authority: reserve manifest entity count exactly once on accepted unit order. */
+	bool TryReserveOrbitalUnits(int32 Count);
+
+	/** Authority: release leftover reservation (failed/incomplete payload). */
+	void ReleaseOrbitalUnitReservation(int32 Count);
+
+	/** Authority: living Worker / Salvage Walker entered ownership. */
+	void NotifyPlayerUnitBecameLive(AGP_UnitBase* Unit);
+
+	/** Authority: counted unit died or left play. */
+	void NotifyPlayerUnitDied(AGP_UnitBase* Unit);
+
+	/** One-shot team lookup (PlayerArray). No tick scans. */
+	static AGP_PlayerState* FindAuthoritativeForTeam(const UWorld* World, int32 InTeamId);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void ClientInitialize(AController* C) override;
@@ -57,6 +82,9 @@ protected:
 private:
 	void InitializeAbilitySystemActorInfo();
 	void BroadcastTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
+	void ApplyBaseUnitCapIfNeeded();
+	void AuthorityCatchUpExistingUnits();
+	void AuthorityAdjustCurrentUnits(int32 Delta);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|AbilitySystem", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_AbilitySystemComponent> AbilitySystemComponent;
@@ -70,4 +98,9 @@ private:
 	/** -1 unassigned, 0 neutral, 1+ playable teams. */
 	UPROPERTY(ReplicatedUsing = OnRep_TeamId, VisibleInstanceOnly, Category = "GP|Team")
 	int32 TeamId = -1;
+
+	/** Server-authoritative in-flight orbital unit reservations (entity count, not transport slots). */
+	int32 PendingOrbitalUnitCount = 0;
+
+	bool bBaseUnitCapApplied = false;
 };

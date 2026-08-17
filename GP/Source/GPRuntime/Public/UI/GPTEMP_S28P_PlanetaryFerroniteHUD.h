@@ -41,6 +41,12 @@ public:
 	/** Orbital Ferronite from local PlayerAttributeSet (GAS). Shows 0 when unbound. */
 	void SetOrbitalFerroniteDisplay(float OrbitalAmount);
 
+	/** Living player units / MaxUnits from local PlayerAttributeSet. */
+	void SetUnitCapDisplay(int32 CurrentUnits, int32 MaxUnits);
+
+	/** TEMP feedback when a unit order is rejected for cap (or local manifest would exceed). */
+	void SetUnitCapReachedFeedback(bool bReached);
+
 	/** UI affordance only — server revalidates launch. */
 	void SetLaunchButtonEnabled(bool bEnabled);
 
@@ -81,6 +87,9 @@ public:
 	bool HasStatusPanelForContract() const;
 	bool HasLaunchButtonWidgetForContract() const;
 	float GetDisplayedOrbitalForContract() const { return DisplayOrbital; }
+	FString GetUnitsLineTextForContract() const;
+	int32 GetDisplayedCurrentUnitsForContract() const { return DisplayCurrentUnits; }
+	int32 GetDisplayedMaxUnitsForContract() const { return DisplayMaxUnits; }
 	float GetDisplayedStoredForContract() const { return DisplayStored; }
 	float GetDisplayedCapacityForContract() const { return DisplayCapacity; }
 	bool HasResolvedBaseForContract() const { return bHasResolvedBase; }
@@ -103,6 +112,7 @@ private:
 	void EnsureContainerLineCount(int32 DesiredCount);
 	void RefreshStatusText();
 	void RefreshOrbitalText();
+	void RefreshUnitCapText();
 	void RefreshUnitDropPanel();
 	void RefreshBuildingPanel();
 	void AdjustWorkerCount(int32 Delta);
@@ -130,6 +140,12 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> OrbitalLineText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> UnitsLineText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> UnitCapFeedbackText;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UButton> LaunchButton;
@@ -196,6 +212,9 @@ private:
 	float DisplayCapacity = 0.0f;
 	TArray<float> DisplayContainerAmounts;
 	float DisplayOrbital = 0.0f;
+	int32 DisplayCurrentUnits = 0;
+	int32 DisplayMaxUnits = 0;
+	bool bUnitCapReachedFeedback = false;
 	bool bLaunchEnabled = false;
 	bool bTreeBuilt = false;
 	int32 WorkerCount = 0;

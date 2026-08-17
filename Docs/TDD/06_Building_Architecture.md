@@ -8,7 +8,7 @@
 AGP_UnitBase
   AGP_BuildingBase                   // static units; owns ASC + UnitAttributeSet
     AGP_MainBase        (Blueprint child)  // initial deployment; container storage + ship-to-orbit
-    AGP_LogisticsHub    (Blueprint child)  // orbital drop; +MaxUnits + container cap
+    AGP_LogisticsHub    (Blueprint child)  // orbital drop; +5 MaxUnits (GP-S33C); container cap deferred
     AGP_DefensiveTurret (Blueprint child)  // orbital drop; auto-attack
     AGP_Wall            (Blueprint child)  // orbital drop (drag-build); see Wall System
     AGP_FerroniteDeposit (Blueprint child) // level-placed natural resource node
@@ -331,7 +331,7 @@ The Logistics Hub is purely passive — no production, no construction. On the m
 
 1. Spawn final `AGP_LogisticsHub` (already operational).
 2. Apply `GE_GP_UnitCap_Plus5` (Infinite duration, source-bound to this building) → `MaxUnits += UnitCapContribution`.
-3. Add `ContainerCapContribution` to the owning player's MainBase `EffectiveMaxContainerCount` (additive storage cap; recomputed on hub place/destroy).
+3. Add `ContainerCapContribution` to the owning player's MainBase `EffectiveMaxContainerCount` (additive storage cap; recomputed on hub place/destroy). **GP-S33C deferred:** N is still TBD — do not invent a container-cap bonus. This slice implements **only** +5 MaxUnits.
 4. Register as a vision source (FoW sight, per TDD/15).
 
 ### Unit Cap Clamp — Building Destroyed
@@ -374,6 +374,7 @@ Reuses `AGP_BuildingBase` standard:
 ### Validation Checklist (Stop Condition)
 
 - [x] Cap / container contribution not hardcoded — DA-driven (`UnitCapContribution`, `ContainerCapContribution`).
+- **GP-S33C factual:** native `UGP_GE_UnitCap_Plus5` Additive +5 is live (C++ GE, not BuildingDefinition DA). Container-cap bonus remains deferred (N TBD).
 - [x] Arrives via orbital drop only — no `Server_BuildAt`, no construction component.
 - [x] UI shows cap increase — `MaxUnits` attribute change delegate → HUD ResourceReadout.
 - [x] Cap removal source-bound — `RemoveActiveGameplayEffectBySourceEffect` on destroy.

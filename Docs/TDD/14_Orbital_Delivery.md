@@ -115,8 +115,8 @@ Single-payload DropDef for buildings; multi-payload carried as **manifest on the
 
 1. Valid playable TeamId + MainBase + Unit Drop Zone.
 2. Manifest non-empty; slots OK; Orbital >= total cost.
-3. `CurrentUnits + ManifestUnitCount <= MaxUnits` (when MaxUnits policy active).
-4. Spend once → spawn pod at Drop Zone.
+3. `CurrentUnits + PendingOrbitalUnitCount + ManifestUnitCount <= MaxUnits` (always; MaxUnits == 0 is not unlimited). Full manifest reject (`UnitCapReached`). Entity count, not transport slots.
+4. Reserve manifest entity count once → Spend once → spawn pod at Drop Zone. Payload live converts reservation to CurrentUnits. Failed payload releases leftover reservation.
 
 ### Building Purchase
 
@@ -129,6 +129,7 @@ Single-payload DropDef for buildings; multi-payload carried as **manifest on the
 2. Placement valid (grid/FoW/blockers when systems exist; interim policy documented per slice).
 3. Decrement ReadyCount once → spawn pod at Loc.
 4. Cancel placement: no inventory change, no spend.
+5. **GP-S33C:** Logistics Hub `UGP_GE_UnitCap_Plus5` applies when the **payload building is live/operational**, not at Purchase READY, ghost, or while the DropPod is descending. Editor-placed owned live Hubs also grant the bonus once.
 
 ## Order UI (target / TEMP)
 

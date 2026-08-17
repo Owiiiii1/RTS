@@ -7,6 +7,15 @@ UGP_PlayerAttributeSet::UGP_PlayerAttributeSet()
 {
 }
 
+void UGP_PlayerAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
+{
+	Super::PreAttributeChange(Attribute, NewValue);
+	if (Attribute == GetCurrentUnitsAttribute())
+	{
+		NewValue = FMath::Max(0.0f, NewValue);
+	}
+}
+
 void UGP_PlayerAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);

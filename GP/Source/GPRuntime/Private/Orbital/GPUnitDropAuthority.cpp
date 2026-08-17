@@ -120,15 +120,10 @@ namespace GPUnitDropAuthority
 			return Result;
 		}
 
-		const float MaxUnits = Attr->GetMaxUnits();
-		if (MaxUnits > KINDA_SMALL_NUMBER)
+		if (!RequestingPlayerState->CanAcceptManifestUnitCount(Result.UnitCount))
 		{
-			const float Current = Attr->GetCurrentUnits();
-			if (Current + static_cast<float>(Result.UnitCount) > MaxUnits + KINDA_SMALL_NUMBER)
-			{
-				Result.RejectReason = EGP_UnitDropRejectReason::UnitCapReached;
-				return Result;
-			}
+			Result.RejectReason = EGP_UnitDropRejectReason::UnitCapReached;
+			return Result;
 		}
 
 		AGP_GameState* GS = World->GetGameState<AGP_GameState>();
@@ -161,6 +156,12 @@ namespace GPUnitDropAuthority
 			return Result;
 		}
 
+		if (!RequestingPlayerState->TryReserveOrbitalUnits(Result.UnitCount))
+		{
+			Result.RejectReason = EGP_UnitDropRejectReason::UnitCapReached;
+			return Result;
+		}
+
 		// Spend exactly once after validation, before spawn.
 		FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
 		Context.AddSourceObject(RequestingPlayerState);
@@ -168,6 +169,7 @@ namespace GPUnitDropAuthority
 			ASC->MakeOutgoingSpec(UGP_GE_SpendOrbital::StaticClass(), 1.0f, Context);
 		if (!Spec.IsValid())
 		{
+			RequestingPlayerState->ReleaseOrbitalUnitReservation(Result.UnitCount);
 			Result.RejectReason = EGP_UnitDropRejectReason::SpendFailed;
 			return Result;
 		}
@@ -179,7 +181,7 @@ namespace GPUnitDropAuthority
 		const float OrbitalAfter = Attr->GetOrbitalFerronite();
 		if (OrbitalAfter > Orbital - Result.OrbitalCost + 1.0f)
 		{
-			// Spend did not apply — abort without spawning.
+			RequestingPlayerState->ReleaseOrbitalUnitReservation(Result.UnitCount);
 			Result.RejectReason = EGP_UnitDropRejectReason::SpendFailed;
 			return Result;
 		}
@@ -201,6 +203,7 @@ namespace GPUnitDropAuthority
 			SpawnParams);
 		if (!IsValid(Pod))
 		{
+			RequestingPlayerState->ReleaseOrbitalUnitReservation(Result.UnitCount);
 			Result.RejectReason = EGP_UnitDropRejectReason::SpawnFailed;
 			return Result;
 		}

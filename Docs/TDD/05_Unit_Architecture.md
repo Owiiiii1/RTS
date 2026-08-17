@@ -19,6 +19,17 @@ AActor
 
 **Salvage Walker:** `AGP_SalvageWalker : AGP_Unit` is the native playable combat class. Operator creates `BP_SalvageWalker` manually. Do not treat `AGP_Unit` InfantryMelee cosmetic archetype as Salvage Walker.
 
+## Player unit cap (GP-S33C)
+
+Player `MaxUnits` / `CurrentUnits` live on `UGP_PlayerAttributeSet` (OwnerOnly). Capacity is **not** DropPod Transport Slots.
+
+- Base `MaxUnits = 5` via infinite native `UGP_GE_UnitCap_Base5`, applied once per PlayerState ASC (authority).
+- `CurrentUnits` counts living player-controllable **Worker** and **Salvage Walker** only. Buildings, DropPods, ghosts, nodes, SWARM do not count.
+- Register exactly once when the unit becomes live/owned; unregister exactly once on death (`HandleDeathInternal`) or EndPlay. Never negative.
+- Owner is `RequestingPlayerState` for orbital payload, or team lookup on GameState `PlayerArray` for preplaced units. Unresolved owner: warning, do not increment the wrong player.
+- Orbital orders reserve entity count on the PlayerState (`PendingOrbitalUnitCount`). Validate `Current + Pending + ManifestCount <= MaxUnits`. Failed/incomplete payload releases leftover reservation. Transport-slot cost is independent (Walker is 1 CurrentUnit, 2 slots).
+- Each living deployed `AGP_LogisticsHub` applies infinite `UGP_GE_UnitCap_Plus5` (+5 MaxUnits). Destroying a Hub removes that effect once. If Current > new Max, units stay alive; new orders reject `UnitCapReached` until attrition.
+
 ## AGP_UnitBase
 
 ### Composition (current)
@@ -226,7 +237,7 @@ Server: UGP_UnitAttributeSet::PostGameplayEffectExecute
      - Stop all components (Movement, Combat, Mining).
      - Schedule Destroy with delay (e.g., 3s for death animation).
      - Multicast_PlayDeathVFX.
-     - AGP_GameMode::OnUnitDied -> decrement CurrentUnits на PlayerState.
+     - AGP_UnitBase death path (HandleDeathInternal, before LifeSpan): AGP_PlayerState::NotifyPlayerUnitDied decrements CurrentUnits exactly once for Worker / Salvage Walker.
    |
    v
 Client: OnRep on Health attribute -> presentation

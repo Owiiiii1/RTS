@@ -63,6 +63,9 @@ public:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestUnitDrop(const FGP_UnitDropManifest& Manifest);
 
+	UFUNCTION(Client, Reliable)
+	void Client_NotifyUnitDropRejected(EGP_UnitDropRejectReason Reason);
+
 	/** Authority helper used by Server RPC and non-shipping contracts. */
 	bool AuthorityTryRequestUnitDrop(const FGP_UnitDropManifest& Manifest);
 
@@ -216,6 +219,9 @@ private:
 	void SyncOrbitalFerroniteHUDFromAttributes();
 	void SyncBuildingReadyHUDFromInventory();
 	void HandleOrbitalFerroniteAttributeChanged(const struct FOnAttributeChangeData& Data);
+	void HandleMaxUnitsAttributeChanged(const struct FOnAttributeChangeData& Data);
+	void HandleCurrentUnitsAttributeChanged(const struct FOnAttributeChangeData& Data);
+	void SyncUnitCapHUDFromAttributes();
 	void HandleBuildingReadyChanged(EGP_OrbitalBuildingType BuildingType, int32 NewReadyCount);
 	void HandleResolvedMainBaseChanged(int32 TeamId, AGP_MainBase* PreviousMainBase, AGP_MainBase* NewMainBase);
 	void HandlePlayerTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
@@ -342,6 +348,8 @@ private:
 	FDelegateHandle ResolvedMainBaseChangedHandle;
 	FDelegateHandle PlayerTeamIdChangedHandle;
 	FDelegateHandle OrbitalFerroniteChangedHandle;
+	FDelegateHandle MaxUnitsChangedHandle;
+	FDelegateHandle CurrentUnitsChangedHandle;
 	FDelegateHandle BuildingReadyChangedHandle;
 	int32 BoundPlanetaryTeamId = -1;
 

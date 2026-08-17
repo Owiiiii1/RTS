@@ -121,7 +121,22 @@ void AGP_DropPod::ClearLifecycleTimers()
 void AGP_DropPod::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	ClearLifecycleTimers();
+	AuthorityReleaseLeftoverUnitReservation();
 	Super::EndPlay(EndPlayReason);
+}
+
+void AGP_DropPod::AuthorityReleaseLeftoverUnitReservation()
+{
+	if (!HasAuthority() || RemainingUnitReservation <= 0)
+	{
+		return;
+	}
+
+	if (AGP_PlayerState* PS = RequestingPlayerStateWeak.Get())
+	{
+		PS->ReleaseOrbitalUnitReservation(RemainingUnitReservation);
+	}
+	RemainingUnitReservation = 0;
 }
 
 void AGP_DropPod::AuthorityInitUnitDrop(
@@ -157,6 +172,10 @@ void AGP_DropPod::AuthorityInitUnitDrop(
 	DescentProgress01 = 0.0f;
 	bLandingCompleted = false;
 	bPayloadSpawned = false;
+	RemainingUnitReservation = FMath::Max(0, Manifest.GetTotalUnitCount());
+#if !UE_BUILD_SHIPPING
+	bDebugSkipPayloadSpawn = false;
+#endif
 	ClearLifecycleTimers();
 
 	AuthoritySetPhase(EGP_DropPodPhase::Descending);
@@ -197,6 +216,7 @@ void AGP_DropPod::AuthorityInitBuildingDrop(
 	DescentProgress01 = 0.0f;
 	bLandingCompleted = false;
 	bPayloadSpawned = false;
+	RemainingUnitReservation = 0;
 	ClearLifecycleTimers();
 
 	AuthoritySetPhase(EGP_DropPodPhase::Descending);
@@ -306,6 +326,17 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 	}
 	bPayloadSpawned = true;
 
+#if !UE_BUILD_SHIPPING
+	if (bDebugSkipPayloadSpawn)
+	{
+		AuthorityReleaseLeftoverUnitReservation();
+		UE_LOG(LogTemp, Log,
+			TEXT("GP UnitCap DropPod skip payload spawn: Pod=%s ReleasedReservation"),
+			*GetName());
+		return;
+	}
+#endif
+
 	const int32 WorkerCount = FMath::Max(0, PendingManifest.WorkerCount);
 	const int32 WalkerCount = FMath::Max(0, PendingManifest.SalvageWalkerCount);
 	const int32 Total = WorkerCount + WalkerCount;
@@ -363,6 +394,10 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 			return;
 		}
 		Unit->SetTeamId(OwnerTeamId);
+		if (Unit->HasBeenCountedTowardPlayerUnitCap())
+		{
+			RemainingUnitReservation = FMath::Max(0, RemainingUnitReservation - 1);
+		}
 	};
 
 	for (int32 i = 0; i < WorkerCount; ++i)
@@ -374,18 +409,7 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 		SpawnTyped(*WalkerClass);
 	}
 
-	// Soft-open: only mutate CurrentUnits when MaxUnits is an active ceiling.
-	if (AGP_PlayerState* PS = RequestingPlayerStateWeak.Get())
-	{
-		if (UGP_PlayerAttributeSet* Attr = const_cast<UGP_PlayerAttributeSet*>(PS->GetPlayerAttributeSet()))
-		{
-			const float MaxUnits = Attr->GetMaxUnits();
-			if (MaxUnits > KINDA_SMALL_NUMBER)
-			{
-				Attr->SetCurrentUnits(Attr->GetCurrentUnits() + static_cast<float>(Total));
-			}
-		}
-	}
+	AuthorityReleaseLeftoverUnitReservation();
 }
 
 void AGP_DropPod::AuthoritySpawnBuildingPayload()

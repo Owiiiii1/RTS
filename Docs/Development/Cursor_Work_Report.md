@@ -12,7 +12,7 @@ Status: **GP-S36G_PREPLACED_OCCUPANCY_AUTHORING_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`PENDING_IMPLEMENTATION`
+`6c61b972993d6b85274ca93b58e8752e136267e5`
 
 ## Operator question and canonical answer
 Does `PlacementFootprintBounds` apply only while placing a building, or also to occupied/blocking area after construction?

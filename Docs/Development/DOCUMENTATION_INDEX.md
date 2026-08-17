@@ -39,7 +39,7 @@
 | Last closed / merged stage | **GP-S33M** RTS Movement Reconciliation on `main` (tip `e40d545b89c27e2d9738082009fb691a5c8e5a2a`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s33c-unit-cap-logistics-hub` |
+| Current stage | **GP-S33C_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s33c-unit-cap-logistics-hub` (**NOT MERGED**) |
 
 ---
 
@@ -49,7 +49,7 @@
 
 **Prior closed:** GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md`](Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md) — **GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. Do **not** merge from the agent. Await operator PIE PASS. Do **not** run GP Development / GP Shipping until operator PASS.
+**Current:** [`Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md`](Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md) — **GP-S33C_FINALIZATION_READY_FOR_MERGE**. Operator FINAL PASS complete. Do **not** merge from the agent. Do **not** claim `main` contains GP-S33C. Do **not** start Match Win/Lose.
 
 Approved planning order after human merge (not started):
 1. Match win flow
@@ -72,7 +72,7 @@ Approved planning order after human merge (not started):
 7. **GP-S30R** — Combat Auto-Acquire — **DONE / MERGED**
 8. **GP-S32A** — Attack-Move Reconciliation — **DONE / MERGED** @ `0df44684…`
 9. **GP-S33M** — RTS Movement Reconciliation — **DONE / MERGED** @ `e40d545b…`
-10. **GP-S33C** — Unit Cap + Logistics Hub Capacity — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (NOT MERGED)
+10. **GP-S33C** — Unit Cap + Logistics Hub Capacity — **FINALIZATION_READY_FOR_MERGE** (NOT MERGED; not on `main`)
 
 ---
 
@@ -156,4 +156,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S33M are on `main` baseline tip `e40d545b89c27e2d9738082009fb691a5c8e5a2a`. Current stage: **GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s33c-unit-cap-logistics-hub`. See [`Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md`](Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md). Await operator PIE PASS. Do not merge. Do not run GP Dev/Shipping until operator PASS.
+SETUP-001, DOCS-001, GP-S01…GP-S33M are on `main` baseline tip `e40d545b89c27e2d9738082009fb691a5c8e5a2a`. Current stage: **GP-S33C_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s33c-unit-cap-logistics-hub`. See [`Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md`](Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md). Operator FINAL PASS complete. **NOT MERGED.** Do not start Match Win/Lose.

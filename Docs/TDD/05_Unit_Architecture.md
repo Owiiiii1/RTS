@@ -21,6 +21,8 @@ AActor
 
 ## Player unit cap (GP-S33C)
 
+GP-S33C is **implementation + operator FINAL PASS complete** on `feature/gp-s33c-unit-cap-logistics-hub`. **NOT MERGED** (not on `main` yet).
+
 Player `MaxUnits` / `CurrentUnits` live on `UGP_PlayerAttributeSet` (OwnerOnly). Capacity is **not** DropPod Transport Slots.
 
 - Base `MaxUnits = 5` via infinite native `UGP_GE_UnitCap_Base5`, applied once per PlayerState ASC (authority).

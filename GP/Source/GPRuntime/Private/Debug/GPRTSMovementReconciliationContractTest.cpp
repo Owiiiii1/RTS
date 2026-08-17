@@ -463,11 +463,11 @@ void UGP_RTSMovementReconciliationContractTestRunner::AdvanceStage()
 	{
 	case 0: // A setup: SW + nav-blocking wall + nav coverage
 	{
-		// Isolation for combat/auto-acquire; path stage teleports onto arena nav below.
+		// Keep pathfinding on the isolated pad. Arena origin (0,0) has map-authored
+		// Salvage Walkers that interrupt RequestMove (A_ArrivedOrProgress).
 		Origin = FVector(-56000.0f, -14000.0f, 100.0f);
-		const FVector NavOrigin(0.0f, 0.0f, 100.0f);
-		PathDest = NavOrigin + FVector(1400.0f, 0.0f, 0.0f);
-		WallCenter = NavOrigin + FVector(700.0f, 0.0f, 150.0f);
+		PathDest = Origin + FVector(1400.0f, 0.0f, 0.0f);
+		WallCenter = Origin + FVector(700.0f, 0.0f, 150.0f);
 		WallHalfExtent = FVector(100.0f, 400.0f, 150.0f); // size ~200x800x300
 
 		AGP_SalvageWalker* Walker = GPRTSMovementReconDebug::SpawnSW(World, Origin, TeamA);
@@ -493,16 +493,13 @@ void UGP_RTSMovementReconciliationContractTestRunner::AdvanceStage()
 		}
 		AcceptanceRadiusCm = Movement->AcceptanceRadius;
 
-		// Pathfinding stage runs on arena navmesh, away from map-authored hostiles.
-		Walker->SetActorLocation(NavOrigin, false, nullptr, ETeleportType::TeleportPhysics);
-
 		AActor* Wall = GPRTSMovementReconDebug::SpawnNavBlockingBox(World, WallCenter, WallHalfExtent);
 		WallWeak = Wall;
 		Expect(IsValid(Wall), TEXT("A_SpawnWall"));
 
 		const FVector CoverHalf(2500.0f, 2500.0f, 800.0f);
 		bNavAvailable = GPRTSMovementReconDebug::EnsureNavCoverage(
-			World, NavOrigin + FVector(800.0f, 0.0f, 0.0f), CoverHalf, NavBoundsWeak);
+			World, Origin + FVector(800.0f, 0.0f, 0.0f), CoverHalf, NavBoundsWeak);
 
 		if (!bNavAvailable)
 		{

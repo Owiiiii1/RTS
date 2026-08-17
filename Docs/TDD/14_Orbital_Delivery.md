@@ -129,7 +129,7 @@ Single-payload DropDef for buildings; multi-payload carried as **manifest on the
 2. Placement valid (grid/FoW/blockers when systems exist; interim policy documented per slice).
 3. Decrement ReadyCount once → spawn pod at Loc.
 4. Cancel placement: no inventory change, no spend.
-5. **GP-S33C:** Logistics Hub `UGP_GE_UnitCap_Plus5` applies when the **payload building is live/operational**, not at Purchase READY, ghost, or while the DropPod is descending. Editor-placed owned live Hubs also grant the bonus once.
+5. **GP-S33C:** Logistics Hub `UGP_GE_UnitCap_Plus5` applies when the **payload building is live/operational**, not at Purchase READY, ghost, or while the DropPod is descending. Editor-placed owned live Hubs also grant the bonus once. Operator FINAL PASS complete on the feature branch; **NOT MERGED**.
 
 ## Order UI (target / TEMP)
 

@@ -374,7 +374,7 @@ Reuses `AGP_BuildingBase` standard:
 ### Validation Checklist (Stop Condition)
 
 - [x] Cap / container contribution not hardcoded — DA-driven (`UnitCapContribution`, `ContainerCapContribution`).
-- **GP-S33C factual:** native `UGP_GE_UnitCap_Plus5` Additive +5 is live (C++ GE, not BuildingDefinition DA). Container-cap bonus remains deferred (N TBD).
+- **GP-S33C factual:** native `UGP_GE_UnitCap_Plus5` Additive +5 is live (C++ GE, not BuildingDefinition DA). Container-cap bonus remains deferred (N TBD). Operator FINAL PASS complete on the feature branch; **NOT MERGED**.
 - [x] Arrives via orbital drop only — no `Server_BuildAt`, no construction component.
 - [x] UI shows cap increase — `MaxUnits` attribute change delegate → HUD ResourceReadout.
 - [x] Cap removal source-bound — `RemoveActiveGameplayEffectBySourceEffect` on destroy.

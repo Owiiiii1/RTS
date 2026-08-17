@@ -1,9 +1,9 @@
 # GP-S33C — Unit Cap + Logistics Hub Capacity
 
 ## Status
-**GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+**GP-S33C_FINALIZATION_READY_FOR_MERGE**
 
-NOT MERGED.
+**NOT MERGED.** Do not claim `main` contains GP-S33C.
 
 ## Slice Group
 Post-GP-S33M (RTS Movement Reconciliation is on `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`)
@@ -11,7 +11,8 @@ Post-GP-S33M (RTS Movement Reconciliation is on `main` @ `e40d545b89c27e2d973808
 ## Branch
 `feature/gp-s33c-unit-cap-logistics-hub`  
 Base: `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`  
-Head: `f8a8f2a70b8eb9531cebb68d37c4dfd26cf9a5ab`
+Implementation head: `f8a8f2a70b8eb9531cebb68d37c4dfd26cf9a5ab`  
+Finalization head: see SHA-record commit on this branch.
 
 ## Goal
 Authoritative player unit capacity (separate from DropPod Transport Slots) with base MaxUnits=5, living Worker/Salvage Walker CurrentUnits accounting, pending orbital reservation, and +5 MaxUnits per living deployed Logistics Hub via GAS.
@@ -31,7 +32,7 @@ Authoritative player unit capacity (separate from DropPod Transport Slots) with 
 - CommonUI / production Order Menu
 - Local unit production
 - BuildingDefinition DA for cap contribution
-- GP Development / GP Shipping (finalization after operator PASS)
+- Match Win/Lose (not started)
 
 ## Architecture
 - Server-authoritative; MaxUnits/CurrentUnits OwnerOnly via existing AttributeSet
@@ -41,14 +42,11 @@ Authoritative player unit capacity (separate from DropPod Transport Slots) with 
 - Editor-placed owned live Hub grants bonus once (gameplay belongs to the deployed entity)
 - READY / ghost / descending DropPod never grant bonus
 
-## Operator validation (manual — stop before merge)
-1. PIE with 2 starting Workers → HUD `UNITS 2 / 5`
-2. Order units until Current=5 → next order rejected Unit Cap reached
-3. Kill one own unit → Current 5→4; one new order possible
-4. Purchase Logistics Hub READY → Max remains 5
-5. Deploy: descending Max remains 5; live Hub Max 5→10
-6. Fill above 5 if practical
-7. Destroy Hub → Max returns toward 5; existing units remain; new orders blocked if Current > Max
+## Operator validation
+**FINAL PASS** (2026-08-17): start `UNITS 2 / 5`; fill to `5 / 5`; next manifest `Unit Cap reached` without Orbital spend; death `5 / 5 → 4 / 5` then re-order; live Hub `MaxUnits 5 → 10`; Hub destroy lowers Max; over-cap allowed without kill/clamp; new orders rejected while over-cap.
+
+## Finalization note
+Movement contract `A_ArrivedOrProgress` failed twice against map-authored Salvage Walkers at arena origin. Isolation-pad path restored in the contract only. Cap/Hub gameplay unchanged. GPEditor+UHT / GP Development / GP Shipping **PASS**. All listed regressions **Failures=0**.
 
 ## Stop Condition
-Implementation candidate ready. **NOT MERGED.** Await operator PIE PASS, then finalization builds (GP Dev / Shipping) in a later pass.
+Implementation + operator FINAL PASS complete. **NOT MERGED.** Do not start Match Win/Lose.

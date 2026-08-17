@@ -1,8 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-17 — GP-S33C Unit Cap + Logistics Hub Capacity (finalization)
+
+Status: **GP-S33C_FINALIZATION_READY_FOR_MERGE**
+
+- Branch: `feature/gp-s33c-unit-cap-logistics-hub` (base `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`)
+- Operator FINAL PASS: UNITS 2/5 → 5/5, reject without Orbital spend, death frees slot, live Hub 5→10, destroy lowers Max, over-cap allowed without kill/clamp
+- Final regressions Failures=0; GPEditor+UHT / GP Win64 Development / GP Win64 Shipping **PASS**
+- Finalization C++: movement contract isolation only (`A_ArrivedOrProgress` vs map-authored units at arena origin). Cap/Hub gameplay unchanged
+- Container-cap Hub bonus remains **deferred**. Match Win/Lose **not started**
+- **NOT MERGED.** Do not claim `main` contains GP-S33C
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-17 — GP-S33C Unit Cap + Logistics Hub Capacity (implementation candidate)
 
-Status: **GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (superseded by finalization)
 
 - Branch: `feature/gp-s33c-unit-cap-logistics-hub` (base `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`, head `f8a8f2a70b8eb9531cebb68d37c4dfd26cf9a5ab`)
 - Base MaxUnits=5 via native infinite `UGP_GE_UnitCap_Base5` (once per PlayerState)
@@ -10,7 +22,7 @@ Status: **GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 - Pending orbital reservation; MaxUnits==0 is no longer unlimited
 - Container-cap Hub bonus **deferred** (N TBD)
 - Contract `gp.Resource.RunUnitCapLogisticsHubContractTest` + listed regressions Failures=0; GPEditor+UHT **PASS**
-- **NOT MERGED** — await operator PIE validation. Do not run GP Dev/Shipping until operator PASS
+- **NOT MERGED** — operator PIE FINAL PASS confirmed in the finalization entry above
 - Report: `Docs/Development/Cursor_Work_Report.md`
 
 ## 2026-08-17 — GP-S33M status correction (already on main)

@@ -6,9 +6,9 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-17 (GP-S33C implementation candidate). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-17 (GP-S33C finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Post-GP-S33M unit capacity. **Current: GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**.
+**Поточна фаза:** Post-GP-S33M unit capacity. **Current: GP-S33C_FINALIZATION_READY_FOR_MERGE**.
 
 **Status snapshot:**
 
@@ -16,9 +16,9 @@
 |---|---|
 | GP-S01 … GP-S33M | **DONE / on `main` tip** `e40d545b…` |
 | Roadmap reconciliation | **DONE / MERGED** |
-| **GP-S33C** Unit Cap + Logistics Hub | **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** — [`GP-S33C_Unit_Cap_Logistics_Hub.md`](GP-S33C_Unit_Cap_Logistics_Hub.md) |
+| **GP-S33C** Unit Cap + Logistics Hub | **FINALIZATION_READY_FOR_MERGE** — [`GP-S33C_Unit_Cap_Logistics_Hub.md`](GP-S33C_Unit_Cap_Logistics_Hub.md) — **NOT MERGED** |
 
-**NEXT action для агента:** await operator PIE PASS of GP-S33C. Do **not** merge from the agent. Do **not** run GP Development / GP Shipping until operator PASS. Approved planning order after merge: (1) Match win flow (2) BuildingDefinition / BuildGrid.
+**NEXT action для агента:** do **not** merge from the agent. Do **not** claim `main` contains GP-S33C. Do **not** start Match Win/Lose. Approved planning order after human merge: (1) Match win flow (2) BuildingDefinition / BuildGrid.
 
 ### Drift Warning
 

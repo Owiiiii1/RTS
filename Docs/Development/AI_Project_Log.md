@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-17 — GP-S35B Multi-Building Data Architecture (finalization)
+
+Status: **GP-S35B_FINALIZATION_READY_FOR_MERGE**
+
+- Branch: `feature/gp-s35b-multi-building-data` (base `main` @ `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`, prior remote `3afc126468b873eaca2b61b506aef811564cb446`)
+- Operator FINAL PASS: four BUILDINGS catalog rows; Turret purchase READY-only (Deploy disabled, expected); Logistics Hub Purchase→Deploy→authored Hub→+5 MaxUnits; Editor-close no crash after catalog teardown fix
+- Shutdown blocker was dual `TStrongObjectPtr` + `AddToRoot`; fix released catalog on `OnEnginePreExit` (no AddToRoot/RemoveFromRoot)
+- Final regressions Failures=0; GPEditor+UHT / GP Win64 Development / GP Win64 Shipping **PASS**
+- Finalization C++: **none** (docs only)
+- **NOT MERGED.** Await human merge. Do not start BuildGrid / turret combat / Wall
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-17 — GP-S35B Multi-Building Data Architecture (implementation candidate)
 
 Status: **GP-S35B_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

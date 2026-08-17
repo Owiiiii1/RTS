@@ -39,7 +39,7 @@
 | Last closed / merged stage | **GP-S34W Match Win/Lose MVP** on `main` (tip `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S35B_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s35b-multi-building-data` (**NOT MERGED**) |
+| Current stage | **GP-S35B_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s35b-multi-building-data` (**NOT MERGED**) |
 
 ---
 
@@ -49,7 +49,7 @@
 
 **Prior closed:** TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S35B_Multi_Building_Data.md`](Claude_Tasks/GP-S35B_Multi_Building_Data.md) — **GP-S35B_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. Do **not** merge. Await operator PIE validation.
+**Current:** [`Claude_Tasks/GP-S35B_Multi_Building_Data.md`](Claude_Tasks/GP-S35B_Multi_Building_Data.md) — **GP-S35B_FINALIZATION_READY_FOR_MERGE**. Do **not** merge from the agent. Await human merge.
 
 **Do not** start BuildGrid / turret combat / Wall gameplay / FoW / Order Menu / Spectating / disconnect victory without explicit assignment.
 
@@ -69,7 +69,7 @@
 10. **GP-S33C** — Unit Cap + Logistics Hub Capacity — **DONE / MERGED** on `main`
 11. TEMP HUD layout reconciliation — **DONE / MERGED** @ `7873d282…`
 12. **GP-S34W** — Match Win/Lose MVP — **DONE / MERGED** @ `3b5cdb8…`
-13. **GP-S35B** — Multi-Building Data Architecture — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (NOT MERGED)
+13. **GP-S35B** — Multi-Building Data Architecture — **FINALIZATION_READY_FOR_MERGE** (NOT MERGED)
 
 ---
 
@@ -153,4 +153,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S34W are on verified `main` tip `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`. Current stage: **GP-S35B_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s35b-multi-building-data`. See [`Claude_Tasks/GP-S35B_Multi_Building_Data.md`](Claude_Tasks/GP-S35B_Multi_Building_Data.md). **NOT MERGED.**
+SETUP-001, DOCS-001, GP-S01…GP-S34W are on verified `main` tip `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`. Current stage: **GP-S35B_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s35b-multi-building-data`. See [`Claude_Tasks/GP-S35B_Multi_Building_Data.md`](Claude_Tasks/GP-S35B_Multi_Building_Data.md). **NOT MERGED.**

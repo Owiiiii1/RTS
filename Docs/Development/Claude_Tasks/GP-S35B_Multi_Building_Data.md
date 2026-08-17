@@ -11,7 +11,8 @@ Post-GP-S34W (Match Win/Lose MVP is on verified `main` @ `3b5cdb8afff9f10b28ee63
 ## Branch
 `feature/gp-s35b-multi-building-data`  
 Base: `main` @ `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`  
-Implementation: `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d`
+Implementation: `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d`  
+SHA-record / feature head: `dbdfde8a34da3957719f35c3c168688124c19a5a`
 
 ## Goal
 Replace the single-building temporary architecture (`BuildingOrbitalPurchaseCost` + `BuildingPayloadClass` + `EGP_OrbitalBuildingType { LogisticsHub }` + `ReadyLogisticsHubCount`) with a data-driven multi-type acquisition model. Architecture only. Logistics Hub gameplay must survive unchanged. No turret combat, Wall gameplay, wall mounting, BuildGrid, or drag-building.

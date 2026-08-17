@@ -4,7 +4,7 @@
 
 Status: **GP-S35B_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s35b-multi-building-data` (base verified `main` @ `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`, implementation `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d`)
+- Branch: `feature/gp-s35b-multi-building-data` (base verified `main` @ `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`, implementation `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d`, SHA-record `dbdfde8a34da3957719f35c3c168688124c19a5a`)
 - `UGP_BuildingDefinition` = intrinsic building facts; `UGP_OrbitalDropDefinition` = acquisition/delivery; Cost only on DropDef
 - READY keyed by `FPrimaryAssetId` of DropDef (`FGP_ReadyBuildingEntry` owner-only array)
 - Native catalog identities: Logistics Hub / Defensive Turret / Wall / Wall Turret; only Hub keeps full gameplay

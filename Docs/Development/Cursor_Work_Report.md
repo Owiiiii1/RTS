@@ -9,7 +9,7 @@
 `feature/gp-s35b-multi-building-data`  
 Base `main` SHA: `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`  
 Implementation SHA: `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d`  
-Feature head SHA: `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d`
+Feature head SHA: `dbdfde8a34da3957719f35c3c168688124c19a5a`
 
 ## Pre-slice temporary architecture found
 - One `UGP_OrbitalDeliverySettings.BuildingOrbitalPurchaseCost`

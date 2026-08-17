@@ -6,18 +6,18 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-17 (GP-S35B finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-17 (GP-S36G implementation). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Multi-building data architecture. **Current: GP-S35B_FINALIZATION_READY_FOR_MERGE**.
+**Поточна фаза:** BuildGrid MVP. **Current: GP-S36G_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
-| GP-S01 … GP-S34W | **DONE / on `main` tip** `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e` |
-| **GP-S35B** Multi-Building Data Architecture | **FINALIZATION_READY_FOR_MERGE** — [`GP-S35B_Multi_Building_Data.md`](GP-S35B_Multi_Building_Data.md) — **NOT MERGED** |
+| GP-S01 … GP-S35B | **DONE / on `main` tip** `6f258a1069fd92a45f99faf7c877c941528beb2a` |
+| **GP-S36G** BuildGrid MVP | **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** — [`GP-S36G_BuildGrid_MVP.md`](GP-S36G_BuildGrid_MVP.md) — **NOT MERGED** |
 
-**NEXT action для агента:** do **not** merge. Await human merge. Do **not** start BuildGrid / turret combat / Wall gameplay / Spectating / AI opponent.
+**NEXT action для агента:** do **not** merge. Await operator PIE validation. Do **not** start Wall gameplay / FoW placement / turret combat.
 
 ### Drift Warning
 

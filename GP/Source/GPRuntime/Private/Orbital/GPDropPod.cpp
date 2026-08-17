@@ -10,6 +10,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Buildings/GPBuildingBase.h"
 #include "Buildings/GPLogisticsHub.h"
+#include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Orbital/GPBuildingGroundPlacement.h"
 #include "Orbital/GPUnitGroundPlacement.h"
 #include "Player/GPPlayerState.h"
@@ -122,6 +123,7 @@ void AGP_DropPod::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	ClearLifecycleTimers();
 	AuthorityReleaseLeftoverUnitReservation();
+	AuthorityReleaseBuildingGridReservation();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -161,6 +163,10 @@ void AGP_DropPod::AuthorityInitUnitDrop(
 	PayloadKind = EGP_DropPodPayloadKind::Unit;
 	PendingDropDefinitionId = FPrimaryAssetId();
 	PendingBuildingPayloadClass = nullptr;
+	PendingGridOriginCell = FIntPoint::ZeroValue;
+	PendingGridFootprintSize = FIntPoint::ZeroValue;
+	BuildingGridReservationId.Invalidate();
+	bGridReservationPromoted = false;
 	PendingManifest = Manifest;
 	LandingLocation = LandingWorldLocation;
 	LandingRotation = LandingWorldRotation;
@@ -196,7 +202,10 @@ void AGP_DropPod::AuthorityInitBuildingDrop(
 	float InDescentDurationSeconds,
 	float SpawnAltitudeCm,
 	float InPayloadDeployDelaySeconds,
-	float InCleanupDelaySeconds)
+	float InCleanupDelaySeconds,
+	FIntPoint OriginCell,
+	FIntPoint FootprintSize,
+	FGuid GridReservationId)
 {
 	if (!HasAuthority())
 	{
@@ -209,6 +218,10 @@ void AGP_DropPod::AuthorityInitBuildingDrop(
 	PendingDropDefinitionId = DropDefinitionId;
 	PendingBuildingPayloadClass = PayloadClass;
 	PendingManifest = FGP_UnitDropManifest();
+	PendingGridOriginCell = OriginCell;
+	PendingGridFootprintSize = FootprintSize;
+	BuildingGridReservationId = GridReservationId;
+	bGridReservationPromoted = false;
 	LandingLocation = LandingWorldLocation;
 	LandingRotation = LandingWorldRotation;
 	DescentDurationSeconds = FMath::Max(0.05f, InDescentDurationSeconds);
@@ -415,6 +428,23 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 	AuthorityReleaseLeftoverUnitReservation();
 }
 
+void AGP_DropPod::AuthorityReleaseBuildingGridReservation()
+{
+	if (!HasAuthority() || bGridReservationPromoted || !BuildingGridReservationId.IsValid())
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>())
+		{
+			Grid->ReleaseReservation(BuildingGridReservationId);
+		}
+	}
+	BuildingGridReservationId.Invalidate();
+}
+
 void AGP_DropPod::AuthoritySpawnBuildingPayload()
 {
 	UWorld* World = GetWorld();
@@ -424,31 +454,70 @@ void AGP_DropPod::AuthoritySpawnBuildingPayload()
 	}
 	bPayloadSpawned = true;
 
+#if !UE_BUILD_SHIPPING
+	if (bDebugSkipPayloadSpawn)
+	{
+		AuthorityReleaseBuildingGridReservation();
+		return;
+	}
+#endif
+
 	if (PendingBuildingPayloadClass == nullptr)
 	{
+		AuthorityReleaseBuildingGridReservation();
 		return;
 	}
 
 	TSubclassOf<AGP_BuildingBase> BuildingClass = PendingBuildingPayloadClass;
-
 	if (BuildingClass == nullptr)
 	{
+		AuthorityReleaseBuildingGridReservation();
 		return;
 	}
 
 	const float OffsetZ = GPBuildingGroundPlacement::GetGroundSpawnOffsetZForBuildingClass(*BuildingClass);
 	const FVector Loc(LandingLocation.X, LandingLocation.Y, LandingLocation.Z + OffsetZ);
+	const FTransform SpawnTM(LandingRotation, Loc);
 
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride =
-		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	Params.Owner = RequestingPlayerStateWeak.Get();
 
-	AGP_BuildingBase* Building = World->SpawnActor<AGP_BuildingBase>(BuildingClass, Loc, LandingRotation, Params);
+	AGP_BuildingBase* Building = World->SpawnActorDeferred<AGP_BuildingBase>(
+		BuildingClass,
+		SpawnTM,
+		Params.Owner,
+		nullptr,
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!IsValid(Building))
 	{
+		AuthorityReleaseBuildingGridReservation();
 		return;
 	}
+
+	Building->ConfigureGridPlacement(PendingGridOriginCell, PendingGridFootprintSize);
+	if (UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>())
+	{
+		if (Grid->PromoteReservationToBuilding(
+				BuildingGridReservationId,
+				Building,
+				Building->GetGridOccupantId()))
+		{
+			bGridReservationPromoted = true;
+		}
+		else
+		{
+			Grid->ReleaseReservation(BuildingGridReservationId);
+			bGridReservationPromoted = true;
+		}
+	}
+	else
+	{
+		bGridReservationPromoted = true;
+	}
+
+	Building->FinishSpawning(SpawnTM);
 	Building->SetTeamId(OwnerTeamId);
 }
 

@@ -493,7 +493,7 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 				EGP_OrbitalBuildingType::LogisticsHub,
 				FTransform(FRotator::ZeroRotator, Base->GetActorLocation()));
 		Expect(!Overlap.bAccepted, TEXT("F_OverlapReject"));
-		Expect(Overlap.RejectReason == EGP_BuildingDropRejectReason::PlacementOverlap, TEXT("F_OverlapReason"));
+		Expect(Overlap.RejectReason == EGP_BuildingDropRejectReason::GridOccupied, TEXT("F_OverlapReason"));
 		Expect(Inventory->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub) == 1, TEXT("F_ReadyPreserved"));
 
 		++StageIndex;

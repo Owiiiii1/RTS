@@ -70,7 +70,10 @@ public:
 		float DescentDurationSeconds,
 		float SpawnAltitudeCm,
 		float PayloadDeployDelaySeconds,
-		float CleanupDelaySeconds);
+		float CleanupDelaySeconds,
+		FIntPoint OriginCell,
+		FIntPoint FootprintSize,
+		FGuid GridReservationId);
 
 	UFUNCTION(BlueprintPure, Category = "GP|DropPod")
 	EGP_DropPodPayloadKind GetPayloadKind() const { return PayloadKind; }
@@ -158,10 +161,15 @@ private:
 	void HideNativePlaceholder();
 	void AuthoritySetPhase(EGP_DropPodPhase NewPhase);
 	void AuthorityReleaseLeftoverUnitReservation();
+	void AuthorityReleaseBuildingGridReservation();
 
 	FGP_UnitDropManifest PendingManifest;
 	FPrimaryAssetId PendingDropDefinitionId;
 	TSubclassOf<AGP_BuildingBase> PendingBuildingPayloadClass;
+	FIntPoint PendingGridOriginCell = FIntPoint::ZeroValue;
+	FIntPoint PendingGridFootprintSize = FIntPoint::ZeroValue;
+	FGuid BuildingGridReservationId;
+	bool bGridReservationPromoted = false;
 	TWeakObjectPtr<AGP_PlayerState> RequestingPlayerStateWeak;
 	float DescentDurationSeconds = 2.5f;
 	float SpawnSpacingCm = 180.0f;

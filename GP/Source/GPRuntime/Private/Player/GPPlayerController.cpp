@@ -28,7 +28,9 @@
 #include "Player/GPSelectionComponent.h"
 #include "UI/GPMarqueeSelectionWidget.h"
 #include "UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h"
+#include "Buildings/GPBuildingDefinition.h"
 #include "Buildings/GPMainBase.h"
+#include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Game/GPGameState.h"
 #include "Orbital/GPUnitDropAuthority.h"
 #include "Orbital/GPBuildingDropAuthority.h"
@@ -1274,6 +1276,16 @@ void AGP_PlayerController::EnterBuildingPlacementMode(FPrimaryAssetId DropDefini
 
 	if (BuildingPlacementGhost != nullptr)
 	{
+		FIntPoint Footprint(1, 1);
+		if (UGP_OrbitalDropDefinition* DropDef =
+				UGP_BuildingDropCatalog::Get().FindDropDefinition(DropDefinitionId))
+		{
+			if (const UGP_BuildingDefinition* BuildingDef = DropDef->ResolveLoadedBuildingDefinition())
+			{
+				Footprint = BuildingDef->FootprintCells;
+			}
+		}
+		BuildingPlacementGhost->SetFootprintCells(Footprint);
 		BuildingPlacementGhost->SetGhostVisible(true);
 		UpdateBuildingPlacementGhost();
 	}
@@ -1593,7 +1605,30 @@ void AGP_PlayerController::ConfirmBuildingPlacement()
 	}
 
 	const FPrimaryAssetId DropId = ActiveBuildingPlacementDropId;
-	const FTransform DeployTransform(GroundRot, GroundLoc);
+	FVector DeployLoc = GroundLoc;
+	if (UWorld* World = GetWorld())
+	{
+		if (UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>())
+		{
+			FIntPoint Footprint(1, 1);
+			if (UGP_OrbitalDropDefinition* DropDef =
+					UGP_BuildingDropCatalog::Get().FindDropDefinition(DropId))
+			{
+				if (const UGP_BuildingDefinition* BuildingDef = DropDef->ResolveLoadedBuildingDefinition())
+				{
+					Footprint = BuildingDef->FootprintCells;
+				}
+			}
+			FIntPoint Origin = FIntPoint::ZeroValue;
+			FVector Snapped = GroundLoc;
+			if (Grid->ResolveSnappedPlacement(GroundLoc, Footprint, Origin, Snapped))
+			{
+				DeployLoc = Snapped;
+			}
+		}
+	}
+
+	const FTransform DeployTransform(FRotator::ZeroRotator, DeployLoc);
 	CancelBuildingPlacement();
 	// Prevent the confirm release / held LMB from becoming a selection click.
 	bBuildingPlacementSuppressConfirmUntilLMBRelease = true;
@@ -1660,10 +1695,43 @@ void AGP_PlayerController::UpdateBuildingPlacementGhost()
 
 	FVector GroundLoc = FVector::ZeroVector;
 	FRotator GroundRot = FRotator::ZeroRotator;
-	if (TraceGroundUnderCursor(GroundLoc, GroundRot))
+	if (!TraceGroundUnderCursor(GroundLoc, GroundRot))
 	{
-		BuildingPlacementGhost->UpdateGhostTransform(FTransform(GroundRot, GroundLoc));
+		return;
 	}
+
+	FIntPoint Footprint(1, 1);
+	if (UGP_OrbitalDropDefinition* DropDef =
+			UGP_BuildingDropCatalog::Get().FindDropDefinition(ActiveBuildingPlacementDropId))
+	{
+		if (const UGP_BuildingDefinition* BuildingDef = DropDef->ResolveLoadedBuildingDefinition())
+		{
+			Footprint = BuildingDef->FootprintCells;
+		}
+	}
+
+	FVector GhostLoc = GroundLoc;
+	bool bPreviewValid = false;
+	if (UWorld* World = GetWorld())
+	{
+		if (UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>())
+		{
+			BuildingPlacementGhost->SetFootprintCells(Footprint);
+			FIntPoint Origin = FIntPoint::ZeroValue;
+			FVector Snapped = GroundLoc;
+			if (Grid->ResolveSnappedPlacement(GroundLoc, Footprint, Origin, Snapped))
+			{
+				GhostLoc = Snapped;
+				EGP_GridRejectReason Reason = EGP_GridRejectReason::Free;
+				bPreviewValid = Grid->CanPlaceFootprint(Origin, Footprint, Reason)
+					&& Grid->IsFootprintNavigable(Origin, Footprint, Snapped.Z)
+					&& !Grid->IsFootprintEnvironmentBlocked(Origin, Footprint, Snapped.Z);
+			}
+		}
+	}
+
+	BuildingPlacementGhost->UpdateGhostTransform(FTransform(FRotator::ZeroRotator, GhostLoc));
+	BuildingPlacementGhost->SetPreviewValid(bPreviewValid);
 }
 
 void AGP_PlayerController::DestroyBuildingPlacementGhost()

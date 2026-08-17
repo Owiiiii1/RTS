@@ -1,125 +1,131 @@
-# Cursor Work Report — GP-S35B Multi-Building Data Architecture
+# Cursor Work Report
 
-## Status
-**GP-S35B_FINALIZATION_READY_FOR_MERGE**
+Status: **GP-S36G_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**
 
 ## Branch
-`feature/gp-s35b-multi-building-data`  
-Base `main` SHA: `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`  
-Prior remote feature head: `3afc126468b873eaca2b61b506aef811564cb446`  
-Implementation SHA: `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d`  
-Shutdown-fix SHA: `a0bdeff0c04016190ac0c3e510b9cad577277438`  
-Final feature head SHA: `60a986281d1f5dfa42a16cad177a84cb670308e6`
+`feature/gp-s36g-buildgrid-mvp`
 
-## Operator FINAL PASS
+## Base main SHA
+`6f258a1069fd92a45f99faf7c877c941528beb2a`
 
-### Multi-building catalog
-**PASS.** TEMP HUD BUILDINGS panel shows distinct rows for Logistics Hub, Defensive Turret, Wall, Wall Turret.
+## Feature head SHA
+*(filled in SHA-record commit)*
 
-### Definition-keyed READY inventory
-**PASS.** Operator purchased one Defensive Turret: purchase accepted, Orbital spent, Turret `READY: 1`, other READY buckets unchanged. Turret `Deploy READY` remained disabled (no payload class / gameplay actor in this slice — expected).
+## BuildGrid class / API
+`UGP_BuildGridSubsystem : UWorldSubsystem` in `GPRuntime` (`Buildings/Grid/`).
 
-### Logistics Hub compatibility
-**PASS.** Purchase → Hub `READY: 1` → Deploy mode → place → DropPod completed → authored/current Logistics Hub appeared → Hub READY 0 → MaxUnits +5.
+Core API: `GetCellSize`, `WorldToCell`, `CellToWorld`, `SnapOriginCell`, `GetFootprintCenterWorld`, `EnumerateFootprintCells`, `ResolveSnappedPlacement`, `CanPlaceFootprint`, `RegisterFootprint`, `UnregisterFootprint` / `UnregisterOccupant`, `IsCellOccupied`, `GetActorAtCell`, `TryReserveFootprint`, `BindReservationOwner`, `PromoteReservationToBuilding`, `ReleaseReservation`, `IsFootprintNavigable`, `IsFootprintEnvironmentBlocked`.
 
-### Editor shutdown lifecycle
-**PASS** after fix.
+Subsystem is **not** replicated.
 
-Original blocker:
+## Cell size
+`200.0f` cm (`UGP_BuildGridSubsystem::DefaultCellSizeCm`).
 
-```text
-Assertion failed: Index >= 0
-UObjectArray.h:1083
-UGP_BuildingDropCatalog::ShutdownCatalog()
-GPBuildingDropCatalog.cpp:40
-```
+## Grid origin semantics
+`GridOriginXY = (0,0)`. No per-frame NavMesh origin projection and no map-definition asset. Z is taken from the cursor/ground trace, not encoded in `FIntPoint`.
 
-Root cause: dual ownership (`TStrongObjectPtr` + manual `AddToRoot`). `RemoveFromRoot()` ran during late module shutdown after UObject-array teardown.
+## WorldToCell rules
+Per axis: `Floor(WorldCoord / 200 + 0.5)`. Cell centers sit at `n * 200`. Half-open Voronoi: `+100` belongs to the next positive cell; `-100` belongs to cell 0. Negative coordinates use the same Floor rule (no trunc-toward-zero bug). Roundtrip `Cell → World → Cell` holds for integer cells.
 
-Fix (already on branch, SHA `a0bdeff`):
+## OriginCell semantics
+Min/anchor cell of an axis-aligned footprint. Cells occupy `Origin.X .. Origin.X+Width-1` and `Origin.Y .. Origin.Y+Height-1`.
 
-- no `AddToRoot`
-- no `RemoveFromRoot`
-- `TStrongObjectPtr` is sole catalog owner
-- native definitions stay alive via catalog `UPROPERTY` children
-- `OnEnginePreExit` releases the strong pointer while UObject is valid
-- `ShutdownCatalog()` is idempotent (`Reset()` only)
+## Footprint center math
+World XY = `Origin * 200 + (Size - 1) * 100`. Even footprints (4×4) center between cells (e.g. Origin `(0,0)` → center `(300,300)`).
 
-Operator retest: launch Editor → PIE → BUILDINGS catalog appeared → stop PIE → close Editor completely. **No Crash Reporter / no assertion / Editor closed normally.**
+## Occupancy representation
+Server-only:
+- `TMap<FIntPoint, FGP_GridCellRecord>` (`FGuid OccupantId`, weak actor, `bIsReservation`)
+- `TMap<FGuid, TArray<FIntPoint>>` reverse lookup
 
-## BuildingDefinition schema
-`UGP_BuildingDefinition : UPrimaryDataAsset` — `DisplayName`, soft `Icon`, `BuildingTags`, soft `SpawnedClass`, `MaxHealth`, `FootprintCells`. No acquisition cost. Primary type `GPBuildingDefinition`.
+Identity is `FGuid`, not a raw pointer address. Stale weak actors are swept and cannot permanently hold cells.
 
-## OrbitalDropDefinition schema
-`UGP_OrbitalDropDefinition : UPrimaryDataAsset` — `DropTags`, `Cost` (OrbitalFerronite), soft `BuildingDefinition`. Primary type `GPOrbitalDropDefinition`. Display name resolved from BuildingDefinition.
+## Reservation model for in-flight pods
+After deploy is accepted: `FGuid` reservation covers the exact footprint. Bound to the DropPod. Payload spawn promotes reservation → building occupancy with no gap. Pod EndPlay / `DebugForceSkipPayloadSpawn` / failed spawn releases the reservation. Purchase does **not** reserve cells. Two accepted in-flight deploys cannot overlap.
 
-## Cost SoT
-`UGP_OrbitalDropDefinition.Cost` only. Not on BuildingDefinition. Settings `BuildingOrbitalPurchaseCost` is a deprecated Hub compatibility sync only.
+## Pre-placed MainBase handling
+Compatibility fallback footprint **5×5** derived from actor location at BeginPlay. No BuildingDefinition content asset required. Occupancy blocks overlapping Hub drops.
 
-## Stable identity
-READY / Purchase / Deploy keyed by `FPrimaryAssetId` of the OrbitalDropDefinition. Not pointer identity. Enum is not required for new buildings.
+## Ferronite Deposit handling
+`AGP_ResourceNode` is an `AActor`, **not** `AGP_BuildingBase`. GP-S36G does **not** register a 3×3 grid footprint. Existing environmental WorldStatic/WorldDynamic overlap still blocks placing a Hub through deposit collision.
 
-## READY replication
-Owner-only `TArray<FGP_ReadyBuildingEntry>` (`DropDefinitionId`, `ReadyCount`), `COND_OwnerOnly`. Independent buckets, no duplicate ids, no negative counts, exact-once consume, zero entries removed + UI notify, no client mutation.
+## Server validation sequence
+DropDef → BuildingDef → FootprintCells > 0 → payload class → finite transform → MainBase → **server snap** → max deploy radius on snapped XY → cells free/unreserved → NavMesh MVP → environmental overlap → reserve → spawn pod at snapped ground / yaw 0 → consume READY once → init pod with OriginCell / Footprint / ReservationId.
 
-## Purchase flow
-`Purchase(DropDef)` → validate definition + BuildingDefinition → Cost from DropDef → GAS spend once → READY[DropDef]++.
+Reject reasons: `GridOccupied`, `InvalidFootprint`, `NotNavigable` (plus existing radius / READY / definition reasons). World geometry uses `PlacementOverlap`. Client OriginCell is not trusted.
 
-## Deploy flow
-`Deploy(DropDef, Transform)` → READY[DropDef] > 0 → interim placement → spawn DropPod → consume READY once → payload from BuildingDefinition.SpawnedClass (Hub settings fallback). No second Orbital spend.
+## Client ghost snap behavior
+Ground trace → shared `ResolveSnappedPlacement` (no second formula in PlayerController) → ghost at snapped center. Engine cube scaled to `FootprintCells * 200 cm`. Local occupancy/nav/world query tints green/red; server remains authority. Confirm still sends a transform intent; server re-snaps.
 
-## Logistics Hub compatibility
-Native Hub DropDef identity. +5 MaxUnits only when live/operational; removed on destroy. Native actor logic (not EffectsOnPlacement). Authored `BuildingPayloadClass` / `BP_GP_LogisticsHUB` still used when Hub SpawnedClass is empty.
+## Rotation policy
+No rotation. Camera yaw ignored. Pod/building yaw canonical `0`.
 
-## DefaultGame.ini / authored BP bridge
-`DefaultGame.ini` **not modified / not committed**. Deprecated settings remain the Hub cost/payload bridge.
+## NavMesh validation rule
+Project footprint **center** with extent `(100, 100, 300)`. Success → navigable. Fail + WorldStatic ground hit → `NotNavigable`. Fail + empty void → allow (isolated contract locations). Runs before the new building's NavigationObstacle exists.
 
-## Legacy enum / settings
-`EGP_OrbitalBuildingType` is compatibility glue only (`LogisticsHub` → native Hub DropDef). Core path is definition-based.
+## World collision rule
+Raised footprint box vs WorldStatic/WorldDynamic, ignoring buildings / pods / pawns. Environmental sanity only. Structure-vs-structure SoT is grid occupancy.
 
-## Catalog lifecycle ownership
-Static `TStrongObjectPtr` → catalog → UPROPERTY native/registered definitions. No process-lifetime rooted UObject.
+## FoW
+`FoW placement validation deferred to FoW integration slice.`
 
-## TEMP HUD
-Layout unchanged (top-right Orbital+UNITS, bottom-right procurement, bottom-left container, bottom-center Launch, top-center match). Building panel: N catalog rows, independent READY, Purchase, Deploy only when READY > 0 **and** payload resolvable.
+## Walls
+Explicitly deferred. No `AGP_Wall`, connection component, 8-dir neighbors, drag, A*, wall-mounted turret, mount slots, wall-specific clearance, sequential wall pods.
 
-## BuildGrid
-**Deferred.** Only `FootprintCells` metadata. No snapping, occupancy, rotation, clearance, wall rules, FoW placement. Interim free placement unchanged.
+## READY exact-once preservation
+Invalid grid placement does not consume READY and does not spend Orbital again. Accepted deploy consumes READY exactly once after reservation + pod spawn.
 
-## Deferred defensive building gameplay
-No turret combat, Wall actor/gameplay, Wall Turret, wall mounting, drag-building.
+## Logistics Hub +5 preservation
+Unchanged native `AGP_LogisticsHub` apply when live/operational; remove on destroy.
+
+## NavigationObstacle preservation
+Unchanged authored `UBoxComponent` / `NavArea_Null` dynamic obstacle. BuildGrid is not a Recast replacement.
 
 ## Tests (all Failures=0)
-- `gp.Building.RunMultiBuildingDataContractTest: Complete Failures=0`
-- `gp.Building.RunOrbitalBuildingDropContractTest: Complete Failures=0`
-- `gp.Resource.RunUnitCapLogisticsHubContractTest: Complete Failures=0`
-- `GP Resource.RunOrbitalUnitDropContractTest: Complete Failures=0`
-- `gp.Match.RunWinLoseContractTest: Complete Failures=0`
-- `GP Resource.RunContainerLaunchContractTest: Complete Failures=0`
-- `GP Resource.RunContainerLaunchHUDContractTest: Complete Failures=0`
-- `GP-S28 RegressionSuite Complete Failures=0`
-- `gp.Movement.RunRTSMovementReconciliationContractTest: Complete Failures=0`
-- `gp.Combat.RunAttackMoveContractTest: Complete Failures=0`
-- `gp.Combat.RunAutoAcquireContractTest: Complete Failures=0`
-- `GP Combat.RunSalvageWalkerContractTest: Complete Failures=0`
-- `GP Combat.RunLOSFireGateContractTest: Complete Failures=0`
-- `GP Combat.RunHealthBarContractTest: Complete Failures=0`
+- `gp.Building.RunBuildGridContractTest`
+- `gp.Building.RunMultiBuildingDataContractTest`
+- `gp.Building.RunOrbitalBuildingDropContractTest`
+- `gp.Resource.RunUnitCapLogisticsHubContractTest`
+- `gp.Resource.RunOrbitalUnitDropContractTest`
+- `gp.Movement.RunRTSMovementReconciliationContractTest`
+- `gp.Match.RunWinLoseContractTest`
+- `gp.Resource.RunContainerLaunchContractTest`
+- `gp.Resource.RunContainerLaunchHUDContractTest`
+- `gp.Resource.RunS28RegressionSuite`
+- `gp.Combat.RunAttackMoveContractTest`
+- `gp.Combat.RunAutoAcquireContractTest`
 
 ## Builds
-- GPEditor Win64 Development + UHT **PASS**
-- GP Win64 Development **PASS**
-- GP Win64 Shipping **PASS**
+GPEditor Win64 Development + UHT **PASS**.  
+GP Win64 Development / Shipping **not run** (candidate stage).
 
-## Finalization C++
-**None.** Docs only.
-
-## Exact files changed during finalization
-- `Docs/Development/Claude_Tasks/GP-S35B_Multi_Building_Data.md`
+## Exact files changed during this slice
+- `GP/Source/GPRuntime/Public/Buildings/Grid/GPBuildGridSubsystem.h`
+- `GP/Source/GPRuntime/Private/Buildings/Grid/GPBuildGridSubsystem.cpp`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
+- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropAuthority.h`
+- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropAuthority.cpp`
+- `GP/Source/GPRuntime/Public/Orbital/GPDropPod.h`
+- `GP/Source/GPRuntime/Private/Orbital/GPDropPod.cpp`
+- `GP/Source/GPRuntime/Public/Orbital/GPBuildingPlacementGhost.h`
+- `GP/Source/GPRuntime/Private/Orbital/GPBuildingPlacementGhost.cpp`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Source/GPRuntime/Public/Orbital/GPBuildGridContractTest.h`
+- `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPOrbitalBuildingDropContractTest.cpp`
+- `Docs/Development/Claude_Tasks/GP-S36G_BuildGrid_MVP.md`
 - `Docs/Development/Claude_Tasks/README.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/TDD/06_Building_Architecture.md`
+- `Docs/TDD/14_Orbital_Delivery.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
+Not committed (operator-local): `DefaultEngine.ini`, `DefaultGame.ini`, `L_PrototypeArena.umap`, `BP_ResourceNode_AuthoredExample.uasset`, Blueprint/Materials/VFX packs, `Tools/`, AutoAcquire CRLF noise.
+
+## Explicit
 **NOT MERGED.**

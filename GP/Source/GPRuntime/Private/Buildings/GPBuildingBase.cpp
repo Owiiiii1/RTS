@@ -2,8 +2,12 @@
 
 #include "Buildings/GPBuildingBase.h"
 
+#include "Buildings/GPLogisticsHub.h"
+#include "Buildings/GPMainBase.h"
+#include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "NavAreas/NavArea_Null.h"
+#include "Net/UnrealNetwork.h"
 #include "Tags/GPGameplayTags.h"
 
 AGP_BuildingBase::AGP_BuildingBase()
@@ -78,4 +82,115 @@ void AGP_BuildingBase::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 	AttachNavigationObstacleToRoot();
+}
+
+void AGP_BuildingBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AGP_BuildingBase, GridOriginCell);
+	DOREPLIFETIME(AGP_BuildingBase, GridFootprintSize);
+}
+
+void AGP_BuildingBase::BeginPlay()
+{
+	Super::BeginPlay();
+	TryRegisterWithBuildGrid();
+}
+
+void AGP_BuildingBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	TryUnregisterFromBuildGrid();
+	Super::EndPlay(EndPlayReason);
+}
+
+void AGP_BuildingBase::ConfigureGridPlacement(FIntPoint OriginCell, FIntPoint FootprintSize)
+{
+	GridOriginCell = OriginCell;
+	GridFootprintSize = FootprintSize;
+	bGridPlacementConfigured = FootprintSize.X > 0 && FootprintSize.Y > 0;
+	if (!GridOccupantId.IsValid())
+	{
+		GridOccupantId = FGuid::NewGuid();
+	}
+}
+
+FIntPoint AGP_BuildingBase::ResolveFallbackFootprintSize() const
+{
+	if (GridFootprintSize.X > 0 && GridFootprintSize.Y > 0)
+	{
+		return GridFootprintSize;
+	}
+	if (IsA(AGP_MainBase::StaticClass()))
+	{
+		return FIntPoint(5, 5);
+	}
+	if (IsA(AGP_LogisticsHub::StaticClass()))
+	{
+		return FIntPoint(4, 4);
+	}
+	return FIntPoint(1, 1);
+}
+
+void AGP_BuildingBase::TryRegisterWithBuildGrid()
+{
+	if (bGridRegistered || !HasAuthority())
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	UGP_BuildGridSubsystem* Grid = World != nullptr ? World->GetSubsystem<UGP_BuildGridSubsystem>() : nullptr;
+	if (Grid == nullptr)
+	{
+		return;
+	}
+
+	const FIntPoint Footprint = ResolveFallbackFootprintSize();
+	if (Footprint.X <= 0 || Footprint.Y <= 0)
+	{
+		return;
+	}
+
+	if (!bGridPlacementConfigured)
+	{
+		FIntPoint Origin = FIntPoint::ZeroValue;
+		FVector Snapped = FVector::ZeroVector;
+		Grid->ResolveSnappedPlacement(GetActorLocation(), Footprint, Origin, Snapped);
+		GridOriginCell = Origin;
+		GridFootprintSize = Footprint;
+		bGridPlacementConfigured = true;
+	}
+
+	if (!GridOccupantId.IsValid())
+	{
+		GridOccupantId = FGuid::NewGuid();
+	}
+
+	if (Grid->RegisterFootprint(this, GridOriginCell, GridFootprintSize, GridOccupantId))
+	{
+		bGridRegistered = true;
+	}
+}
+
+void AGP_BuildingBase::TryUnregisterFromBuildGrid()
+{
+	if (!bGridRegistered && !GridOccupantId.IsValid())
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (UGP_BuildGridSubsystem* Grid = World != nullptr ? World->GetSubsystem<UGP_BuildGridSubsystem>() : nullptr)
+	{
+		if (GridOccupantId.IsValid())
+		{
+			Grid->UnregisterOccupant(GridOccupantId);
+		}
+		else
+		{
+			Grid->UnregisterFootprint(this);
+		}
+	}
+
+	bGridRegistered = false;
 }

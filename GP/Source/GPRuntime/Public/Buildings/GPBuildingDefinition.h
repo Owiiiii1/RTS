@@ -38,7 +38,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Vitals", meta = (ClampMin = "1.0"))
 	float MaxHealth = 500.0f;
 
-	/** Intrinsic grid footprint for future BuildGrid. Not consumed by interim free placement. */
+	/** Intrinsic grid footprint consumed by GP-S36G BuildGrid. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|BuildGrid")
 	FIntPoint FootprintCells = FIntPoint(1, 1);
 

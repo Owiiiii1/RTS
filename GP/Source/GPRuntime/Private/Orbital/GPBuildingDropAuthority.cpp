@@ -7,11 +7,9 @@
 #include "Buildings/GPBuildingBase.h"
 #include "Buildings/GPBuildingDefinition.h"
 #include "Buildings/GPMainBase.h"
-#include "Components/CapsuleComponent.h"
-#include "Components/BoxComponent.h"
+#include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Effects/GPGE_SpendOrbital.h"
 #include "Engine/World.h"
-#include "EngineUtils.h"
 #include "Game/GPGameState.h"
 #include "Orbital/GPBuildingDropCatalog.h"
 #include "Orbital/GPDropPod.h"
@@ -36,43 +34,21 @@ namespace GPBuildingDropAuthorityPrivate
 		return UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDrop();
 	}
 
-	static bool GetPlacementCapsuleExtent(UClass* BuildingClass, float& OutRadius, float& OutHalfHeight)
+	static EGP_BuildingDropRejectReason MapGridReason(EGP_GridRejectReason GridReason)
 	{
-		OutRadius = 80.0f;
-		OutHalfHeight = 120.0f;
-		if (BuildingClass == nullptr)
+		switch (GridReason)
 		{
-			return false;
+		case EGP_GridRejectReason::InvalidFootprint:
+			return EGP_BuildingDropRejectReason::InvalidFootprint;
+		case EGP_GridRejectReason::CellOccupied:
+			return EGP_BuildingDropRejectReason::GridOccupied;
+		case EGP_GridRejectReason::NotNavigable:
+			return EGP_BuildingDropRejectReason::NotNavigable;
+		case EGP_GridRejectReason::WorldBlocked:
+			return EGP_BuildingDropRejectReason::PlacementOverlap;
+		default:
+			return EGP_BuildingDropRejectReason::SpawnFailed;
 		}
-
-		const AActor* CDO = BuildingClass->GetDefaultObject<AActor>();
-		if (CDO == nullptr)
-		{
-			return false;
-		}
-
-		const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(CDO->GetRootComponent());
-		if (Capsule == nullptr)
-		{
-			Capsule = CDO->FindComponentByClass<UCapsuleComponent>();
-		}
-		if (Capsule != nullptr)
-		{
-			OutRadius = Capsule->GetScaledCapsuleRadius();
-			OutHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
-			return true;
-		}
-
-		const UBoxComponent* Box = CDO->FindComponentByClass<UBoxComponent>();
-		if (Box != nullptr)
-		{
-			const FVector Extent = Box->GetScaledBoxExtent();
-			OutRadius = FMath::Max(Extent.X, Extent.Y);
-			OutHalfHeight = Extent.Z;
-			return true;
-		}
-
-		return false;
 	}
 }
 
@@ -86,12 +62,15 @@ float GPBuildingDropAuthority::GetPurchaseCostForType(EGP_OrbitalBuildingType Bu
 	return GetPurchaseCost(GPBuildingDropAuthorityPrivate::ResolveLegacyDrop(BuildingType));
 }
 
-bool GPBuildingDropAuthority::ValidateInterimPlacement(
+bool GPBuildingDropAuthority::ValidateBuildingPlacement(
 	UWorld* World,
 	AGP_PlayerState* RequestingPlayerState,
 	const UGP_OrbitalDropDefinition* DropDefinition,
 	const FTransform& WorldTransform,
-	EGP_BuildingDropRejectReason& OutReject)
+	EGP_BuildingDropRejectReason& OutReject,
+	FIntPoint* OutOriginCell,
+	FIntPoint* OutFootprintSize,
+	FVector* OutSnappedGroundLocation)
 {
 	OutReject = EGP_BuildingDropRejectReason::None;
 
@@ -107,9 +86,17 @@ bool GPBuildingDropAuthority::ValidateInterimPlacement(
 		return false;
 	}
 
-	if (DropDefinition->ResolveLoadedBuildingDefinition() == nullptr)
+	const UGP_BuildingDefinition* BuildingDef = DropDefinition->ResolveLoadedBuildingDefinition();
+	if (BuildingDef == nullptr)
 	{
 		OutReject = EGP_BuildingDropRejectReason::MissingBuildingDefinition;
+		return false;
+	}
+
+	const FIntPoint Footprint = BuildingDef->FootprintCells;
+	if (Footprint.X <= 0 || Footprint.Y <= 0)
+	{
+		OutReject = EGP_BuildingDropRejectReason::InvalidFootprint;
 		return false;
 	}
 
@@ -144,66 +131,74 @@ bool GPBuildingDropAuthority::ValidateInterimPlacement(
 		return false;
 	}
 
+	UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>();
+	if (Grid == nullptr)
+	{
+		OutReject = EGP_BuildingDropRejectReason::SpawnFailed;
+		return false;
+	}
+
+	FIntPoint OriginCell = FIntPoint::ZeroValue;
+	FVector SnappedGround = FVector::ZeroVector;
+	if (!Grid->ResolveSnappedPlacement(Loc, Footprint, OriginCell, SnappedGround))
+	{
+		OutReject = EGP_BuildingDropRejectReason::InvalidTransform;
+		return false;
+	}
+
 	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
 	const float MaxRadius = Settings != nullptr
 		? FMath::Max(100.0f, Settings->BuildingMaxDeployRadiusFromMainBaseCm)
 		: 5000.0f;
-	const float Dist2D = FVector::Dist2D(Loc, MainBase->GetActorLocation());
+	const float Dist2D = FVector::Dist2D(SnappedGround, MainBase->GetActorLocation());
 	if (Dist2D > MaxRadius + KINDA_SMALL_NUMBER)
 	{
 		OutReject = EGP_BuildingDropRejectReason::OutOfDeployRadius;
 		return false;
 	}
 
-	float PlaceRadius = 80.0f;
-	float PlaceHalfHeight = 120.0f;
-	GPBuildingDropAuthorityPrivate::GetPlacementCapsuleExtent(*PayloadClass, PlaceRadius, PlaceHalfHeight);
-	const float Margin = Settings != nullptr
-		? FMath::Max(0.0f, Settings->BuildingPlacementOverlapMarginCm)
-		: 25.0f;
-
-	// INTERIM_MVP_PLACEMENT_VALIDATION (BuildGrid deferred):
-	// Building capsules intentionally Ignore ECC_Pawn (Visibility-only selection).
-	for (TActorIterator<AGP_BuildingBase> It(World); It; ++It)
+	EGP_GridRejectReason GridReason = EGP_GridRejectReason::Free;
+	if (!Grid->CanPlaceFootprint(OriginCell, Footprint, GridReason))
 	{
-		AGP_BuildingBase* OtherBuilding = *It;
-		if (!IsValid(OtherBuilding))
-		{
-			continue;
-		}
-
-		float OtherRadius = 80.0f;
-		float OtherHalfHeight = 120.0f;
-		GPBuildingDropAuthorityPrivate::GetPlacementCapsuleExtent(
-			OtherBuilding->GetClass(),
-			OtherRadius,
-			OtherHalfHeight);
-
-		const float MinSeparation2D = PlaceRadius + OtherRadius + Margin;
-		const float Dist2DToOther = FVector::Dist2D(Loc, OtherBuilding->GetActorLocation());
-		if (Dist2DToOther <= MinSeparation2D + KINDA_SMALL_NUMBER)
-		{
-			const float VerticalGap = FMath::Abs(Loc.Z - OtherBuilding->GetActorLocation().Z);
-			const float MinSeparationZ = PlaceHalfHeight + OtherHalfHeight + Margin;
-			if (VerticalGap <= MinSeparationZ + KINDA_SMALL_NUMBER)
-			{
-				OutReject = EGP_BuildingDropRejectReason::PlacementOverlap;
-				return false;
-			}
-		}
+		OutReject = GPBuildingDropAuthorityPrivate::MapGridReason(GridReason);
+		return false;
 	}
 
+	if (!Grid->IsFootprintNavigable(OriginCell, Footprint, SnappedGround.Z))
+	{
+		OutReject = EGP_BuildingDropRejectReason::NotNavigable;
+		return false;
+	}
+
+	if (Grid->IsFootprintEnvironmentBlocked(OriginCell, Footprint, SnappedGround.Z))
+	{
+		OutReject = EGP_BuildingDropRejectReason::PlacementOverlap;
+		return false;
+	}
+
+	if (OutOriginCell != nullptr)
+	{
+		*OutOriginCell = OriginCell;
+	}
+	if (OutFootprintSize != nullptr)
+	{
+		*OutFootprintSize = Footprint;
+	}
+	if (OutSnappedGroundLocation != nullptr)
+	{
+		*OutSnappedGroundLocation = SnappedGround;
+	}
 	return true;
 }
 
-bool GPBuildingDropAuthority::ValidateInterimPlacement(
+bool GPBuildingDropAuthority::ValidateBuildingPlacement(
 	UWorld* World,
 	AGP_PlayerState* RequestingPlayerState,
 	EGP_OrbitalBuildingType BuildingType,
 	const FTransform& WorldTransform,
 	EGP_BuildingDropRejectReason& OutReject)
 {
-	return ValidateInterimPlacement(
+	return ValidateBuildingPlacement(
 		World,
 		RequestingPlayerState,
 		GPBuildingDropAuthorityPrivate::ResolveLegacyDrop(BuildingType),
@@ -397,8 +392,19 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		return Result;
 	}
 
+	FIntPoint OriginCell = FIntPoint::ZeroValue;
+	FIntPoint FootprintSize = FIntPoint::ZeroValue;
+	FVector SnappedGround = FVector::ZeroVector;
 	EGP_BuildingDropRejectReason PlacementReject = EGP_BuildingDropRejectReason::None;
-	if (!ValidateInterimPlacement(World, RequestingPlayerState, DropDefinition, WorldTransform, PlacementReject))
+	if (!ValidateBuildingPlacement(
+			World,
+			RequestingPlayerState,
+			DropDefinition,
+			WorldTransform,
+			PlacementReject,
+			&OriginCell,
+			&FootprintSize,
+			&SnappedGround))
 	{
 		Result.RejectReason = PlacementReject;
 		return Result;
@@ -411,16 +417,31 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		return Result;
 	}
 
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	if (Settings == nullptr)
+	UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>();
+	if (Grid == nullptr)
 	{
 		Result.RejectReason = EGP_BuildingDropRejectReason::SpawnFailed;
 		return Result;
 	}
 
+	const FGuid ReservationId = FGuid::NewGuid();
+	if (!Grid->TryReserveFootprint(ReservationId, OriginCell, FootprintSize))
+	{
+		Result.RejectReason = EGP_BuildingDropRejectReason::GridOccupied;
+		return Result;
+	}
+
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	if (Settings == nullptr)
+	{
+		Grid->ReleaseReservation(ReservationId);
+		Result.RejectReason = EGP_BuildingDropRejectReason::SpawnFailed;
+		return Result;
+	}
+
 	const int32 TeamId = RequestingPlayerState->GetTeamId();
-	const FVector LandingLoc = WorldTransform.GetLocation();
-	const FRotator LandingRot = WorldTransform.GetRotation().Rotator();
+	const FVector LandingLoc = SnappedGround;
+	const FRotator LandingRot = FRotator::ZeroRotator;
 	const float Altitude = Settings->BuildingDropSpawnAltitudeCm;
 	const FVector StartLoc = LandingLoc + FVector(0.0f, 0.0f, Altitude);
 
@@ -436,12 +457,16 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		SpawnParams);
 	if (!IsValid(Pod))
 	{
+		Grid->ReleaseReservation(ReservationId);
 		Result.RejectReason = EGP_BuildingDropRejectReason::SpawnFailed;
 		return Result;
 	}
 
+	Grid->BindReservationOwner(ReservationId, Pod);
+
 	if (!Inventory->AuthorityTryConsumeReady(DropDefinition, 1))
 	{
+		Grid->ReleaseReservation(ReservationId);
 		Pod->Destroy();
 		Result.RejectReason = EGP_BuildingDropRejectReason::NoReadyInventory;
 		return Result;
@@ -457,11 +482,18 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		Settings->BuildingDropDescentDurationSeconds,
 		Settings->BuildingDropSpawnAltitudeCm,
 		Settings->BuildingDropPayloadDeployDelaySeconds,
-		Settings->BuildingDropCleanupDelaySeconds);
+		Settings->BuildingDropCleanupDelaySeconds,
+		OriginCell,
+		FootprintSize,
+		ReservationId);
 
 	Result.bAccepted = true;
 	Result.ReadyAfter = Inventory->GetReadyCount(DropDefinition);
 	Result.SpawnedPod = Pod;
+	Result.OriginCell = OriginCell;
+	Result.FootprintSize = FootprintSize;
+	Result.SnappedLocation = LandingLoc;
+	Result.ReservationId = ReservationId;
 	return Result;
 }
 

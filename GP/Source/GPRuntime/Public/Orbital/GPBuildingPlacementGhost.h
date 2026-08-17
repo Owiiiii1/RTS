@@ -7,6 +7,7 @@
 #include "GPBuildingPlacementGhost.generated.h"
 
 class UStaticMeshComponent;
+class UMaterialInstanceDynamic;
 
 /**
  * Local-only translucent placement ghost for orbital building deploy (GP-S32R).
@@ -22,8 +23,15 @@ public:
 
 	void SetGhostVisible(bool bVisible);
 	void UpdateGhostTransform(const FTransform& WorldTransform);
+	void SetFootprintCells(FIntPoint FootprintCells);
+	void SetPreviewValid(bool bValid);
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Building|Ghost")
 	TObjectPtr<UStaticMeshComponent> GhostMesh;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> GhostMaterial;
+
+	FIntPoint ActiveFootprintCells = FIntPoint(1, 1);
 };

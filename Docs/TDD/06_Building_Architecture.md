@@ -70,15 +70,15 @@ public:
     float MaxHealth = 500.f;
 
     UPROPERTY(EditAnywhere, Category = "GP|BuildGrid")
-    FIntPoint FootprintCells = FIntPoint(1, 1);       // stored for future BuildGrid; interim placement ignores it
+    FIntPoint FootprintCells = FIntPoint(1, 1);       // consumed by GP-S36G BuildGrid
 
-    // Future (not GP-S35B): EffectsOnPlacement, GrantedAbilities, Mesh, ClearanceCells, wall-mount flags, sell fields
+    // Future: EffectsOnPlacement, GrantedAbilities, Mesh, ClearanceCells, wall-mount flags, sell fields
 };
 ```
 
 **GP-S35B did not implement** `EffectsOnPlacement`. Logistics Hub `+5 MaxUnits` remains native on `AGP_LogisticsHub` (apply when live/operational; remove on destroy). Do not migrate that into a generic DA effect list until a dedicated slice.
 
-There is no `BuildTime`, no `AllowedProductions` — buildings do not build other things; new units/buildings come from the global Order Menu (orbital). Remaining grid fields (`ClearanceCells`, `bMountsOnWall`, `bCanHostWallMount`) and economy fields (`bSellable`, `SellRefundRate`) stay documented in §Build Grid System and §Sell + Demolish System. **BuildGrid itself is deferred** — GP-S35B only stores `FootprintCells`.
+There is no `BuildTime`, no `AllowedProductions` — buildings do not build other things; new units/buildings come from the global Order Menu (orbital). Remaining grid fields (`ClearanceCells`, `bMountsOnWall`, `bCanHostWallMount`) and economy fields (`bSellable`, `SellRefundRate`) stay documented in §Build Grid System and §Sell + Demolish System. **GP-S36G implements BuildGrid occupancy + snap.** `ClearanceCells`, rotation, Walls, and FoW placement remain deferred.
 
 ## Building Lifecycle — Orbital Procurement
 
@@ -464,9 +464,21 @@ Deprecated (pre-pivot, do not use): `GP.Building.Type.Barracks`, `GP.Building.Ty
 
 ### Grid Definition
 
-- **Cell size:** 200 cm × 200 cm (default; DA-driven `UGP_BuildGridConfig.CellSize`).
-- **Grid origin:** projected на NavMesh від world (0,0).
-- **Coordinates:** `FIntPoint Cell{X, Y}`. World location of cell center = `Origin + (Cell.X * CellSize, Cell.Y * CellSize, GroundZ)`.
+- **Cell size:** 200 cm × 200 cm (GP-S36G default constant; `UGP_BuildGridConfig` DA still deferred).
+- **Grid origin XY:** world `(0,0)`. GP-S36G does **not** project origin onto NavMesh per world init. Z is taken from the placement ground trace, not encoded in `FIntPoint`.
+- **Coordinates:** `FIntPoint Cell{X, Y}`. Cell center = `(Cell.X * CellSize, Cell.Y * CellSize, GroundZ)`.
+- **OriginCell:** min/anchor cell of the axis-aligned footprint. Enumerate `X = Origin.X .. Origin.X+Width-1` (same for Y). Actor XY is the footprint center: `Origin * CellSize + (Size - 1) * CellSize / 2`. Even footprints (4×4) center between cells.
+- **WorldToCell:** `Floor(World / CellSize + 0.5)` per axis (symmetric half-open cells; negative XY included).
+- **Occupancy identity:** `FGuid` per building/reservation. Not raw pointer addresses. Maps are server-only; subsystem does not replicate.
+- **In-flight reservation:** accepted Deploy reserves exact footprint cells with a `FGuid` bound to the DropPod; payload spawn promotes the reservation to the building without a gap; failed/skipped payload or pod EndPlay releases it.
+- **Pre-placed MainBase:** compatibility fallback footprint 5×5 from actor location. No BuildingDefinition asset required.
+- **Ferronite Deposit:** `AGP_ResourceNode` is not `AGP_BuildingBase`. No 3×3 grid registration in GP-S36G; environmental WorldStatic/WorldDynamic overlap remains.
+- **ClearanceCells:** not added in GP-S36G (deferred).
+- **Rotation:** none. Canonical yaw 0.
+- **NavMesh MVP:** project footprint center with extent `(CellSize/2, CellSize/2, 300)`. Success → navigable. Fail + WorldStatic ground hit → `NotNavigable`. Fail + empty void → allow (isolated contract locations). Validation runs before the new building's NavigationObstacle exists.
+- **World collision:** raised footprint box vs WorldStatic/WorldDynamic, ignoring buildings/pods/pawns. Not structure-vs-structure SoT.
+- **FoW placement validation deferred to FoW integration slice.**
+- **Walls deferred:** no `AGP_Wall`, drag, A*, mounting, wall-specific clearance.
 
 ### UGP_BuildGridSubsystem (UWorldSubsystem)
 
@@ -527,14 +539,14 @@ enum class EGP_GridRejectReason : uint8
 
 ### UGP_BuildingDefinition Update
 
-`FootprintCells` is implemented on `UGP_BuildingDefinition` as of GP-S35B (intrinsic payload fact). BuildGrid consumption, occupancy, rotation, and the remaining fields below are **deferred**.
+`FootprintCells` is implemented on `UGP_BuildingDefinition` as of GP-S35B and **consumed by GP-S36G BuildGrid**. Rotation, `ClearanceCells`, and wall-mount flags remain deferred.
 
 ```cpp
-// Already on UGP_BuildingDefinition (GP-S35B):
+// Already on UGP_BuildingDefinition:
 UPROPERTY(EditAnywhere, Category = "GP|BuildGrid")
 FIntPoint FootprintCells = FIntPoint(1, 1);
 
-// Deferred (not GP-S35B):
+// Deferred (not GP-S36G):
 UPROPERTY(EditAnywhere, Category = "GP|Grid")
 int32 ClearanceCells = 0;            // exclusion radius from other structures
 

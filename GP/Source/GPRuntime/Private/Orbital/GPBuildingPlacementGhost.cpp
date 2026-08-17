@@ -32,6 +32,7 @@ AGP_BuildingPlacementGhost::AGP_BuildingPlacementGhost()
 	{
 		if (UMaterialInstanceDynamic* Dyn = UMaterialInstanceDynamic::Create(BaseMat, this))
 		{
+			GhostMaterial = Dyn;
 			Dyn->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.2f, 0.85f, 0.35f, 0.45f));
 			GhostMesh->SetMaterial(0, Dyn);
 		}
@@ -51,4 +52,31 @@ void AGP_BuildingPlacementGhost::SetGhostVisible(bool bVisible)
 void AGP_BuildingPlacementGhost::UpdateGhostTransform(const FTransform& WorldTransform)
 {
 	SetActorTransform(WorldTransform);
+}
+
+void AGP_BuildingPlacementGhost::SetFootprintCells(FIntPoint FootprintCells)
+{
+	ActiveFootprintCells = FIntPoint(FMath::Max(1, FootprintCells.X), FMath::Max(1, FootprintCells.Y));
+	if (GhostMesh == nullptr)
+	{
+		return;
+	}
+
+	// Engine cube is 100 cm. Footprint cell is 200 cm.
+	const float ScaleXY_X = static_cast<float>(ActiveFootprintCells.X) * 2.0f;
+	const float ScaleXY_Y = static_cast<float>(ActiveFootprintCells.Y) * 2.0f;
+	GhostMesh->SetRelativeScale3D(FVector(ScaleXY_X, ScaleXY_Y, 0.2f));
+	GhostMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 10.0f));
+}
+
+void AGP_BuildingPlacementGhost::SetPreviewValid(bool bValid)
+{
+	if (GhostMaterial == nullptr)
+	{
+		return;
+	}
+	const FLinearColor Color = bValid
+		? FLinearColor(0.2f, 0.85f, 0.35f, 0.45f)
+		: FLinearColor(0.9f, 0.15f, 0.12f, 0.5f);
+	GhostMaterial->SetVectorParameterValue(TEXT("Color"), Color);
 }

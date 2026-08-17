@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-17 — GP-S36G BuildGrid MVP (implementation candidate)
+
+Status: **GP-S36G_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s36g-buildgrid-mvp` (base verified `main` @ `6f258a1069fd92a45f99faf7c877c941528beb2a`)
+- `UGP_BuildGridSubsystem`: 200 cm cells, origin XY `(0,0)`, server occupancy + in-flight DropPod reservations
+- Ghost/server share snap math; yaw 0; MainBase 5×5 fallback; Ferronite Deposit not on grid
+- ClearanceCells / Walls / FoW placement deferred
+- Contract `gp.Building.RunBuildGridContractTest` + listed regressions Failures=0; GPEditor Win64 Development + UHT **PASS**
+- **NOT MERGED** — await operator PIE validation. Do not self-approve
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-17 — GP-S35B Multi-Building Data Architecture (finalization)
 
 Status: **GP-S35B_FINALIZATION_READY_FOR_MERGE**

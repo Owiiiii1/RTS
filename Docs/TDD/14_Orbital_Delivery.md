@@ -40,10 +40,9 @@ Order UI Purchase(DropDef)   // UGP_OrbitalDropDefinition / FPrimaryAssetId
 
 Deploy mode (ghost)
   → Server_RequestBuildingDeploy(DropDef, Loc, Rot)
-  → Validate READY[DropDefId] + placement (interim: finite transform, MainBase radius, overlap)
-  → READY[DropDefId]-- exactly once
-  → Spawn AGP_DropPod → Landing = Loc
-  → OnLanding: spawn BuildingDefinition.SpawnedClass
+  → Server snaps Loc to BuildGrid; validate READY + footprint free/unreserved + radius + nav/world
+  → Reserve cells → spawn AGP_DropPod at snapped Loc (yaw 0) → READY[DropDefId]-- exactly once
+  → OnLanding: spawn BuildingDefinition.SpawnedClass with OriginCell/FootprintSize
   (NO second Orbital spend)
 ```
 
@@ -107,7 +106,7 @@ Multi-unit: deterministic server offsets around landing point; stable ordering; 
 
 **Building DropDef (`UGP_OrbitalDropDefinition`):** `Cost` (OrbitalFerronite) + `DropTags` + soft `BuildingDefinition`. Purchase cost only (deploy free of Orbital). Does **not** own spawned class or footprint.
 
-**Building Definition (`UGP_BuildingDefinition`):** intrinsic `SpawnedClass`, `FootprintCells`, `MaxHealth`, identity. Future BuildGrid reads `FootprintCells` from here.
+**Building Definition (`UGP_BuildingDefinition`):** intrinsic `SpawnedClass`, `FootprintCells`, `MaxHealth`, identity. GP-S36G BuildGrid reads `FootprintCells` from here.
 
 Single-payload DropDef for buildings; multi-payload carried as **manifest on the order**, not N separate pods unless future design says otherwise. MVP: **one pod per confirmed unit order**; **one pod per building deploy**.
 
@@ -129,8 +128,8 @@ Single-payload DropDef for buildings; multi-payload carried as **manifest on the
 ### Building Deploy
 
 1. READY[requested DropDefId] > 0.
-2. Placement valid (grid/FoW/blockers when systems exist; **GP-S35B interim:** finite transform, MainBase radius, overlap — no BuildGrid).
-3. Decrement READY[DropDefId] once after pod spawn → spawn pod at Loc → payload class from BuildingDefinition.SpawnedClass (Logistics Hub may fall back to deprecated settings `BuildingPayloadClass` / native `AGP_LogisticsHub`).
+2. Placement valid: finite transform; MainBase radius on **server-snapped** XY; `FootprintCells > 0`; all footprint cells free/unreserved; NavMesh MVP; environmental overlap sanity. **FoW placement validation deferred to FoW integration slice.** Server ignores unsnapped client precision and reconstructs OriginCell itself.
+3. Reserve footprint → spawn pod at snapped location (yaw 0) → decrement READY[DropDefId] once → payload class from BuildingDefinition.SpawnedClass (Logistics Hub may fall back to deprecated settings `BuildingPayloadClass` / native `AGP_LogisticsHub`). Payload receives OriginCell + FootprintSize before BeginPlay. Failed/skipped payload releases the reservation.
 4. Cancel placement: no inventory change, no spend.
 5. **GP-S33C / GP-S35B:** Logistics Hub `UGP_GE_UnitCap_Plus5` applies when the **payload building is live/operational**, not at Purchase READY, ghost, or while the DropPod is descending. Native Hub actor logic — not DA `EffectsOnPlacement`. Editor-placed owned live Hubs also grant the bonus once.
 
@@ -183,7 +182,7 @@ Shared rocket: vertical descent, exhaust while moving, impact smoke, clear, payl
 
 ## Out of this TDD’s first impl slice
 
-Full FoW, BuildGrid, Logistics Hub/Turret/Wall actors, production Order Menu polish — layered on the same DropPod pipeline in later slices.
+Full FoW, Logistics Hub/Turret/Wall **gameplay actors**, production Order Menu polish — layered on the same DropPod pipeline in later slices. GP-S36G added BuildGrid occupancy + snap only.
 
 ## References
 

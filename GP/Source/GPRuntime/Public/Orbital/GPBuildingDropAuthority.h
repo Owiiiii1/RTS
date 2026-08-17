@@ -28,7 +28,10 @@ enum class EGP_BuildingDropRejectReason : uint8
 	MatchFinished,
 	InvalidDefinition,
 	MissingBuildingDefinition,
-	MissingSpawnedClass
+	MissingSpawnedClass,
+	GridOccupied,
+	InvalidFootprint,
+	NotNavigable
 };
 
 /**
@@ -55,19 +58,26 @@ namespace GPBuildingDropAuthority
 		TWeakObjectPtr<AGP_DropPod> SpawnedPod;
 		FPrimaryAssetId DropDefinitionId;
 		TSubclassOf<::AGP_BuildingBase> PayloadClass;
+		FIntPoint OriginCell = FIntPoint::ZeroValue;
+		FIntPoint FootprintSize = FIntPoint::ZeroValue;
+		FVector SnappedLocation = FVector::ZeroVector;
+		FGuid ReservationId;
 	};
 
 	float GetPurchaseCost(const UGP_OrbitalDropDefinition* DropDefinition);
 	float GetPurchaseCostForType(EGP_OrbitalBuildingType BuildingType);
 
-	bool ValidateInterimPlacement(
+	bool ValidateBuildingPlacement(
 		UWorld* World,
 		AGP_PlayerState* RequestingPlayerState,
 		const UGP_OrbitalDropDefinition* DropDefinition,
 		const FTransform& WorldTransform,
-		EGP_BuildingDropRejectReason& OutReject);
+		EGP_BuildingDropRejectReason& OutReject,
+		FIntPoint* OutOriginCell = nullptr,
+		FIntPoint* OutFootprintSize = nullptr,
+		FVector* OutSnappedGroundLocation = nullptr);
 
-	bool ValidateInterimPlacement(
+	bool ValidateBuildingPlacement(
 		UWorld* World,
 		AGP_PlayerState* RequestingPlayerState,
 		EGP_OrbitalBuildingType BuildingType,

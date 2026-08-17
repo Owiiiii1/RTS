@@ -129,7 +129,7 @@ Single-payload DropDef for buildings; multi-payload carried as **manifest on the
 
 1. READY[requested DropDefId] > 0.
 2. Placement valid: finite transform; MainBase radius on **server-snapped** XY; `FootprintCells > 0`; all footprint cells free/unreserved; NavMesh MVP; environmental overlap sanity. **FoW placement validation deferred to FoW integration slice.** Server ignores unsnapped client precision and reconstructs OriginCell itself.
-3. Reserve footprint → spawn pod at snapped location (yaw 0) → decrement READY[DropDefId] once → payload class from BuildingDefinition.SpawnedClass (Logistics Hub may fall back to deprecated settings `BuildingPayloadClass` / native `AGP_LogisticsHub`). Payload receives OriginCell + FootprintSize before BeginPlay. Failed/skipped payload releases the reservation.
+3. Reserve footprint → spawn pod at snapped location (yaw 0) → decrement READY[DropDefId] once → payload class from BuildingDefinition.SpawnedClass (Logistics Hub may fall back to deprecated settings `BuildingPayloadClass` / native `AGP_LogisticsHub`). Payload receives OriginCell + FootprintSize before BeginPlay (`ConfigureGridPlacement` rectangular path). Failed/skipped payload releases the reservation. Pre-placed buildings occupy from live oriented `PlacementFootprintBounds`; orbital spawn remains yaw-0 rectangular.
 4. Cancel placement: no inventory change, no spend.
 5. **GP-S33C / GP-S35B:** Logistics Hub `UGP_GE_UnitCap_Plus5` applies when the **payload building is live/operational**, not at Purchase READY, ghost, or while the DropPod is descending. Native Hub actor logic — not DA `EffectsOnPlacement`. Editor-placed owned live Hubs also grant the bonus once.
 

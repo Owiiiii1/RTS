@@ -171,7 +171,7 @@ public:
 		FVector2D LocalCenterOffsetCm,
 		FRotator ActorRotation);
 
-	/** ActorLocation + rotation-only world offset. Footprint size stays world-axis-aligned. */
+	/** ActorLocation + rotation-only world offset. Yaw-0 rectangular reservation/configure path. */
 	static FVector MakeWorldFootprintCenter(
 		const FVector& ActorLocation,
 		FRotator ActorRotation,

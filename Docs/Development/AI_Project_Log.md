@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-17 — GP-S36G BuildGrid MVP (finalization)
+
+Status: **GP-S36G_FINALIZATION_READY_FOR_MERGE**
+
+- Branch: `feature/gp-s36g-buildgrid-mvp` (base verified `main` @ `6f258a1069fd92a45f99faf7c877c941528beb2a`)
+- Operator final PASS: 200 cm snap; landed/in-flight/MainBase occupancy; READY preserved on reject; destroy releases cells; authorable live `PlacementFootprintBounds`; parent scale ignored; oriented occupancy follows building position+rotation; yaw-0 orbital Hub path retained; preview/cancel/shutdown PASS
+- Final canon: live bounds are occupancy source; `ResolveOccupiedCellsFromBounds` + SAT cell set; `GridOriginCell`/`GridFootprintSize` are occupied-set AABB only; orbital reservations stay rectangular yaw 0; no orbital rotation UI
+- Contracts Failures=0 including BuildGrid, MultiBuilding, OrbitalBuilding, UnitCap Hub, OrbitalUnit, RTS movement, Win/Lose, S28 suite, AttackMove, AutoAcquire, ContainerLaunch + HUD
+- GPEditor Win64 Development + UHT **PASS**; GP Win64 Development **PASS**; GP Win64 Shipping **PASS**
+- **NOT MERGED.** Await human merge. Do not start Wall / FoW / turret combat
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-17 — GP-S36G BuildGrid visual feedback (operator validation)
 
 Status: **GP-S36G_VISUAL_FEEDBACK_READY_FOR_OPERATOR_VALIDATION**

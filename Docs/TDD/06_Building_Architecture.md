@@ -78,7 +78,7 @@ public:
 
 **GP-S35B did not implement** `EffectsOnPlacement`. Logistics Hub `+5 MaxUnits` remains native on `AGP_LogisticsHub` (apply when live/operational; remove on destroy). Do not migrate that into a generic DA effect list until a dedicated slice.
 
-There is no `BuildTime`, no `AllowedProductions` — buildings do not build other things; new units/buildings come from the global Order Menu (orbital). Remaining grid fields (`ClearanceCells`, `bMountsOnWall`, `bCanHostWallMount`) and economy fields (`bSellable`, `SellRefundRate`) stay documented in §Build Grid System and §Sell + Demolish System. **GP-S36G implements BuildGrid occupancy + snap.** `ClearanceCells`, rotation, Walls, and FoW placement remain deferred.
+There is no `BuildTime`, no `AllowedProductions` — buildings do not build other things; new units/buildings come from the global Order Menu (orbital). Remaining grid fields (`ClearanceCells`, `bMountsOnWall`, `bCanHostWallMount`) and economy fields (`bSellable`, `SellRefundRate`) stay documented in §Build Grid System and §Sell + Demolish System. **GP-S36G implements BuildGrid occupancy + snap.** `ClearanceCells`, orbital rotation UI, Walls, and FoW placement remain deferred.
 
 ## Building Lifecycle — Orbital Procurement
 
@@ -467,14 +467,16 @@ Deprecated (pre-pivot, do not use): `GP.Building.Type.Barracks`, `GP.Building.Ty
 - **Cell size:** 200 cm × 200 cm (GP-S36G default constant; `UGP_BuildGridConfig` DA still deferred).
 - **Grid origin XY:** world `(0,0)`. GP-S36G does **not** project origin onto NavMesh per world init. Z is taken from the placement ground trace, not encoded in `FIntPoint`.
 - **Coordinates:** `FIntPoint Cell{X, Y}`. Cell center = `(Cell.X * CellSize, Cell.Y * CellSize, GroundZ)`.
-- **OriginCell:** min/anchor cell of the axis-aligned footprint. Enumerate `X = Origin.X .. Origin.X+Width-1` (same for Y). Actor XY is the footprint center: `Origin * CellSize + (Size - 1) * CellSize / 2`. Even footprints (4×4) center between cells.
+- **OriginCell / GridFootprintSize:** occupied-set AABB of registered cells. Authoritative occupancy is the explicit cell set (`RegisterCells` / OccupantId). For yaw-0 rectangles, Origin+Size still enumerates `X = Origin.X .. Origin.X+Width-1` (same for Y). Actor XY for that rectangle is the footprint center: `Origin * CellSize + (Size - 1) * CellSize / 2`. Even footprints (4×4) center between cells.
 - **WorldToCell:** `Floor(World / CellSize + 0.5)` per axis (symmetric half-open cells; negative XY included).
 - **Occupancy identity:** `FGuid` per building/reservation. Not raw pointer addresses. Maps are server-only; subsystem does not replicate.
 - **In-flight reservation:** accepted Deploy reserves exact footprint cells with a `FGuid` bound to the DropPod; payload spawn promotes the reservation to the building without a gap; failed/skipped payload or pod EndPlay releases it.
-- **Pre-placed MainBase:** compatibility fallback footprint 5×5 from actor location. No BuildingDefinition asset required.
+- **PlacementFootprintBounds:** live gameplay source on `AGP_BuildingBase`. Location and rotation inherit parent/root. Parent/root scale is ignored. Own `BoxExtent` / `RelativeLocation` / `RelativeRotation` / `RelativeScale3D` are design data.
+- **Pre-placed occupancy:** `ResolveOccupiedCellsFromBounds` → deterministic `TArray<FIntPoint>` via OBB-vs-grid-cell SAT → `RegisterCells`. Exact unregister by OccupantId. Edge touch (`<= 1 cm` overlap) does not occupy. Yaw ~0°/180° uses the snapped rectangle path.
+- **Pre-placed MainBase:** uses the live visible `PlacementFootprintBounds` when usable. Compatibility fallback footprint 5×5 from actor location if bounds are unusable. No BuildingDefinition asset required.
 - **Ferronite Deposit:** `AGP_ResourceNode` is not `AGP_BuildingBase`. No 3×3 grid registration in GP-S36G; environmental WorldStatic/WorldDynamic overlap remains.
 - **ClearanceCells:** not added in GP-S36G (deferred).
-- **Rotation:** none. Canonical yaw 0.
+- **Orbital placement rotation:** yaw 0. Rectangular reservation / `ConfigureGridPlacement` retained. No orbital rotation UI in GP-S36G.
 - **NavMesh MVP:** project footprint center with extent `(CellSize/2, CellSize/2, 300)`. Success → navigable. Fail + WorldStatic ground hit → `NotNavigable`. Fail + empty void → allow (isolated contract locations). Validation runs before the new building's NavigationObstacle exists.
 - **World collision:** raised footprint box vs WorldStatic/WorldDynamic, ignoring buildings/pods/pawns. Not structure-vs-structure SoT.
 - **FoW placement validation deferred to FoW integration slice.**
@@ -539,7 +541,7 @@ enum class EGP_GridRejectReason : uint8
 
 ### UGP_BuildingDefinition Update
 
-`FootprintCells` is implemented on `UGP_BuildingDefinition` as of GP-S35B and **consumed by GP-S36G BuildGrid**. Rotation, `ClearanceCells`, and wall-mount flags remain deferred.
+`FootprintCells` is implemented on `UGP_BuildingDefinition` as of GP-S35B and **consumed by GP-S36G BuildGrid** for yaw-0 orbital rectangles when live bounds are unused. Orbital rotation UI, `ClearanceCells`, and wall-mount flags remain deferred.
 
 ```cpp
 // Already on UGP_BuildingDefinition:

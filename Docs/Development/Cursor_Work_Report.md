@@ -8,7 +8,7 @@
 ## Branch
 `feature/temp-hud-layout-reconciliation`  
 Base `main` SHA: `d442e7808e8bc6fa2a91bcf6bcbf73436d44617d`  
-Final feature head SHA: recorded after this finalization commit.
+Final feature head SHA: `547054368b81ff9aca89060fc0750b61bdd660df`
 
 ## Operator FINAL PASS
 * Top-right: horizontal Orbital + UNITS bar

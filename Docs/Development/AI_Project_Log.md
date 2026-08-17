@@ -4,7 +4,7 @@
 
 Status: **GP-S33C_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s33c-unit-cap-logistics-hub` (base `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`)
+- Branch: `feature/gp-s33c-unit-cap-logistics-hub` (base `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`, head `f8a8f2a70b8eb9531cebb68d37c4dfd26cf9a5ab`)
 - Base MaxUnits=5 via native infinite `UGP_GE_UnitCap_Base5` (once per PlayerState)
 - CurrentUnits = living Worker + Salvage Walker; Hub +5 MaxUnits via `UGP_GE_UnitCap_Plus5`
 - Pending orbital reservation; MaxUnits==0 is no longer unlimited

@@ -10,7 +10,8 @@ Post-GP-S33M (RTS Movement Reconciliation is on `main` @ `e40d545b89c27e2d973808
 
 ## Branch
 `feature/gp-s33c-unit-cap-logistics-hub`  
-Base: `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`
+Base: `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`  
+Head: `f8a8f2a70b8eb9531cebb68d37c4dfd26cf9a5ab`
 
 ## Goal
 Authoritative player unit capacity (separate from DropPod Transport Slots) with base MaxUnits=5, living Worker/Salvage Walker CurrentUnits accounting, pending orbital reservation, and +5 MaxUnits per living deployed Logistics Hub via GAS.

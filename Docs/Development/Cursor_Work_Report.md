@@ -8,7 +8,7 @@ NOT MERGED.
 ## Branch
 `feature/gp-s33c-unit-cap-logistics-hub`  
 Base `main` SHA: `e40d545b89c27e2d9738082009fb691a5c8e5a2a`  
-Feature head SHA: recorded after commit on this branch.
+Feature head SHA: `f8a8f2a70b8eb9531cebb68d37c4dfd26cf9a5ab`
 
 ## Factual pre-slice debt
 - `UGP_PlayerAttributeSet` already had `MaxUnits` / `CurrentUnits` (OwnerOnly) but the constructor did not initialize them.

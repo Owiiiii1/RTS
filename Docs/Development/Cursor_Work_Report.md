@@ -12,7 +12,7 @@ Status: **GP-S36G_AUTHORABLE_FOOTPRINT_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-*(filled in SHA-record commit)*
+`0ceab9ec449e0af6024d05a42ed10938c9c3855c`
 
 ## Operator feedback items
 1. Filled cells still showed per-cell contour lines and an outer AABB border. Wanted fills only; separation from inset/gap and center vs edge opacity.

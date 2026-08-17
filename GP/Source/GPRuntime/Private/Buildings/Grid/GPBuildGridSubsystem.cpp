@@ -109,6 +109,36 @@ void UGP_BuildGridSubsystem::EnumerateFootprintCells(
 	}
 }
 
+void UGP_BuildGridSubsystem::GetFootprintWorldAABB(
+	FIntPoint OriginCell,
+	FIntPoint FootprintSize,
+	float GroundZ,
+	FVector& OutMin,
+	FVector& OutMax) const
+{
+	const int32 Width = FMath::Max(1, FootprintSize.X);
+	const int32 Height = FMath::Max(1, FootprintSize.Y);
+	const FVector FirstCenter = CellToWorld(OriginCell, GroundZ);
+	OutMin = FirstCenter - FVector(CellSize * 0.5f, CellSize * 0.5f, 0.0f);
+	OutMax = OutMin + FVector(static_cast<float>(Width) * CellSize, static_cast<float>(Height) * CellSize, 0.0f);
+}
+
+bool UGP_BuildGridSubsystem::DoFootprintsOverlap(
+	FIntPoint OriginA,
+	FIntPoint SizeA,
+	FIntPoint OriginB,
+	FIntPoint SizeB) const
+{
+	if (!IsValidFootprintSize(SizeA) || !IsValidFootprintSize(SizeB))
+	{
+		return false;
+	}
+	return OriginA.X < OriginB.X + SizeB.X
+		&& OriginB.X < OriginA.X + SizeA.X
+		&& OriginA.Y < OriginB.Y + SizeB.Y
+		&& OriginB.Y < OriginA.Y + SizeA.Y;
+}
+
 bool UGP_BuildGridSubsystem::ResolveSnappedPlacement(
 	const FVector& RequestedWorld,
 	FIntPoint FootprintSize,

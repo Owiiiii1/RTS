@@ -87,6 +87,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|DropPod")
 	EGP_DropPodPhase GetPhase() const { return Phase; }
 
+	UFUNCTION(BlueprintPure, Category = "GP|BuildGrid")
+	FIntPoint GetBuildingGridOriginCell() const { return BuildingGridOriginCell; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|BuildGrid")
+	FIntPoint GetBuildingGridFootprintSize() const { return BuildingGridFootprintSize; }
+
 #if !UE_BUILD_SHIPPING
 	/** Contract seam: accepted pod skips payload spawn and releases reservation. */
 	void DebugForceSkipPayloadSpawn() { bDebugSkipPayloadSpawn = true; }
@@ -137,6 +143,13 @@ protected:
 	UPROPERTY(Replicated)
 	EGP_DropPodPayloadKind PayloadKind = EGP_DropPodPayloadKind::Unit;
 
+	/** Tiny client-preview seam for in-flight building reservation (not full grid replication). */
+	UPROPERTY(Replicated)
+	FIntPoint BuildingGridOriginCell = FIntPoint::ZeroValue;
+
+	UPROPERTY(Replicated)
+	FIntPoint BuildingGridFootprintSize = FIntPoint::ZeroValue;
+
 	UFUNCTION()
 	void OnRep_Phase(EGP_DropPodPhase PreviousPhase);
 
@@ -166,8 +179,6 @@ private:
 	FGP_UnitDropManifest PendingManifest;
 	FPrimaryAssetId PendingDropDefinitionId;
 	TSubclassOf<AGP_BuildingBase> PendingBuildingPayloadClass;
-	FIntPoint PendingGridOriginCell = FIntPoint::ZeroValue;
-	FIntPoint PendingGridFootprintSize = FIntPoint::ZeroValue;
 	FGuid BuildingGridReservationId;
 	bool bGridReservationPromoted = false;
 	TWeakObjectPtr<AGP_PlayerState> RequestingPlayerStateWeak;

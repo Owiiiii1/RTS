@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-17 — GP-S36G BuildGrid visual feedback (operator validation)
+
+Status: **GP-S36G_VISUAL_FEEDBACK_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s36g-buildgrid-mvp` (prior remote head `5c05cd68034eb44ef9d38ce5708f73449693e854`)
+- Operator logic A–H already **PASS**. Mechanics unchanged. This is **not** finalization.
+- Primary validity UX: local `ULineBatchComponent` footprint/cell lines + `UTextRenderComponent` (`VALID` / `BLOCKED: …`). Engine Cube MID `"Color"` is optional only — not assumed to exist, not primary.
+- Client preview predicts; server remains authoritative. Invalid local LMB does not send deploy RPC. In-flight reservation preview uses replicated DropPod OriginCell+FootprintSize (not full grid replication).
+- Contract `gp.Building.RunBuildGridContractTest` + listed regressions Failures=0; GPEditor Win64 Development + UHT **PASS**
+- **NOT MERGED** — await operator visual PIE. Do not self-approve
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-17 — GP-S36G BuildGrid MVP (implementation candidate)
 
 Status: **GP-S36G_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

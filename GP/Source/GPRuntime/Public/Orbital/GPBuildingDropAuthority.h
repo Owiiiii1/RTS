@@ -64,6 +64,15 @@ namespace GPBuildingDropAuthority
 		FGuid ReservationId;
 	};
 
+	struct FPlacementPreview
+	{
+		bool bValid = false;
+		EGP_BuildingDropRejectReason RejectReason = EGP_BuildingDropRejectReason::None;
+		FIntPoint OriginCell = FIntPoint::ZeroValue;
+		FIntPoint FootprintSize = FIntPoint::ZeroValue;
+		FVector SnappedGround = FVector::ZeroVector;
+	};
+
 	float GetPurchaseCost(const UGP_OrbitalDropDefinition* DropDefinition);
 	float GetPurchaseCostForType(EGP_OrbitalBuildingType BuildingType);
 
@@ -83,6 +92,18 @@ namespace GPBuildingDropAuthority
 		EGP_OrbitalBuildingType BuildingType,
 		const FTransform& WorldTransform,
 		EGP_BuildingDropRejectReason& OutReject);
+
+	/** Local presentation prediction. Server remains authoritative on confirm. */
+	bool EvaluateLocalPlacementPreview(
+		UWorld* World,
+		AGP_PlayerState* RequestingPlayerState,
+		const UGP_OrbitalDropDefinition* DropDefinition,
+		const FTransform& WorldTransform,
+		FPlacementPreview& OutPreview);
+
+	const TCHAR* GetPlacementPreviewStatusLabel(
+		bool bValid,
+		EGP_BuildingDropRejectReason RejectReason);
 
 	FPurchaseResult AuthorityPurchaseBuilding(
 		UWorld* World,

@@ -102,6 +102,8 @@ void AGP_DropPod::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME(AGP_DropPod, DescentProgress01);
 	DOREPLIFETIME(AGP_DropPod, Phase);
 	DOREPLIFETIME(AGP_DropPod, PayloadKind);
+	DOREPLIFETIME(AGP_DropPod, BuildingGridOriginCell);
+	DOREPLIFETIME(AGP_DropPod, BuildingGridFootprintSize);
 }
 
 void AGP_DropPod::BeginPlay()
@@ -163,8 +165,8 @@ void AGP_DropPod::AuthorityInitUnitDrop(
 	PayloadKind = EGP_DropPodPayloadKind::Unit;
 	PendingDropDefinitionId = FPrimaryAssetId();
 	PendingBuildingPayloadClass = nullptr;
-	PendingGridOriginCell = FIntPoint::ZeroValue;
-	PendingGridFootprintSize = FIntPoint::ZeroValue;
+	BuildingGridOriginCell = FIntPoint::ZeroValue;
+	BuildingGridFootprintSize = FIntPoint::ZeroValue;
 	BuildingGridReservationId.Invalidate();
 	bGridReservationPromoted = false;
 	PendingManifest = Manifest;
@@ -218,8 +220,8 @@ void AGP_DropPod::AuthorityInitBuildingDrop(
 	PendingDropDefinitionId = DropDefinitionId;
 	PendingBuildingPayloadClass = PayloadClass;
 	PendingManifest = FGP_UnitDropManifest();
-	PendingGridOriginCell = OriginCell;
-	PendingGridFootprintSize = FootprintSize;
+	BuildingGridOriginCell = OriginCell;
+	BuildingGridFootprintSize = FootprintSize;
 	BuildingGridReservationId = GridReservationId;
 	bGridReservationPromoted = false;
 	LandingLocation = LandingWorldLocation;
@@ -496,7 +498,7 @@ void AGP_DropPod::AuthoritySpawnBuildingPayload()
 		return;
 	}
 
-	Building->ConfigureGridPlacement(PendingGridOriginCell, PendingGridFootprintSize);
+	Building->ConfigureGridPlacement(BuildingGridOriginCell, BuildingGridFootprintSize);
 	if (UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>())
 	{
 		if (Grid->PromoteReservationToBuilding(

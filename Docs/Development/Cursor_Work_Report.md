@@ -1,8 +1,8 @@
 # Cursor Work Report
 
-Status: **GP-S36G_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S36G_VISUAL_FEEDBACK_READY_FOR_OPERATOR_VALIDATION**
 
-**NOT MERGED.**
+**NOT MERGED.** This is **not** finalization.
 
 ## Branch
 `feature/gp-s36g-buildgrid-mvp`
@@ -10,119 +10,108 @@ Status: **GP-S36G_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 ## Base main SHA
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
+## Prior remote feature head (before this visual patch)
+`5c05cd68034eb44ef9d38ce5708f73449693e854`
+
 ## Feature head SHA
-`0acd4930a43b11d7065b56fea75781dec3f12e2d`
+*(filled in SHA-record commit)*
 
-## BuildGrid class / API
-`UGP_BuildGridSubsystem : UWorldSubsystem` in `GPRuntime` (`Buildings/Grid/`).
+## Prior logic operator PASS (do not change mechanics)
 
-Core API: `GetCellSize`, `WorldToCell`, `CellToWorld`, `SnapOriginCell`, `GetFootprintCenterWorld`, `EnumerateFootprintCells`, `ResolveSnappedPlacement`, `CanPlaceFootprint`, `RegisterFootprint`, `UnregisterFootprint` / `UnregisterOccupant`, `IsCellOccupied`, `GetActorAtCell`, `TryReserveFootprint`, `BindReservationOwner`, `PromoteReservationToBuilding`, `ReleaseReservation`, `IsFootprintNavigable`, `IsFootprintEnvironmentBlocked`.
+Operator manually confirmed:
 
-Subsystem is **not** replicated.
+- A. Logistics Hub ghost snaps discretely on the 200 cm grid — **PASS**
+- B. First Hub deploys on free cells — **PASS**
+- C. Second Hub cannot be deployed overlapping an already-landed Hub — **PASS**
+- D. Rejected overlap does not consume READY — **PASS**
+- E. Second Hub can be deployed on adjacent free cells — **PASS**
+- F. In-flight reservation: while first Hub DropPod is still descending and payload has not spawned, second Hub cannot be deployed onto the same footprint — **PASS**
+- G. MainBase occupancy: Hub cannot be deployed through/over MainBase footprint — **PASS**
+- H. Occupancy release: after placed Hub is destroyed/removed, previous cells become available and another Hub can be deployed there — **PASS**
 
-## Cell size
-`200.0f` cm (`UGP_BuildGridSubsystem::DefaultCellSizeCm`).
+Occupancy rules, reservation lifecycle, WorldToCell, footprint anchor math, READY, Purchase, DropPod timing, Hub +5, MainBase fallback, NavigationObstacle, Walls, and FoW were not modified.
 
-## Grid origin semantics
-`GridOriginXY = (0,0)`. No per-frame NavMesh origin projection and no map-definition asset. Z is taken from the cursor/ground trace, not encoded in `FIntPoint`.
+## Operator UX issue
+Placement validity was not visually obvious. `AGP_BuildingPlacementGhost` used Engine BasicShapes Cube, scaled to footprint, created an MID, and called `SetVectorParameterValue("Color")`. Engine Cube's material is **not assumed** to expose `Color`. Feedback must remain readable even if that tint does nothing.
 
-## WorldToCell rules
-Per axis: `Floor(WorldCoord / 200 + 0.5)`. Cell centers sit at `n * 200`. Half-open Voronoi: `+100` belongs to the next positive cell; `-100` belongs to cell 0. Negative coordinates use the same Floor rule (no trunc-toward-zero bug). Roundtrip `Cell → World → Cell` holds for integer cells.
+## Exact visual implementation
+Asset-independent runtime path (no authored materials, no fabricated `.uasset`, no hardcoded `/Game/...` material paths):
 
-## OriginCell semantics
-Min/anchor cell of an axis-aligned footprint. Cells occupy `Origin.X .. Origin.X+Width-1` and `Origin.Y .. Origin.Y+Height-1`.
+- Unscaled `USceneComponent` root on the ghost.
+- Optional translucent Engine Cube fill still scaled to footprint.
+- Primary: local `ULineBatchComponent` lines from `UpdateGridPreview(Grid, OriginCell, FootprintSize, GroundZ, bValid, RejectReason)` using `UGP_BuildGridSubsystem::GetFootprintWorldAABB` + `GetCellSize`. Outer border + internal cell divisions. Direct `FColor` green/red. Lines at local Z 24 cm to avoid z-fighting. Current footprint only — no world-wide overlay.
+- Primary: `UTextRenderComponent` above the ghost with the same green/red and compact status text.
+- 4×4 Logistics Hub: outer 800×800 cm, 16 cells, 10 lines (4 border + 3+3 internals).
 
-## Footprint center math
-World XY = `Origin * 200 + (Size - 1) * 100`. Even footprints (4×4) center between cells (e.g. Origin `(0,0)` → center `(300,300)`).
+## Material Color parameter
+Optional MID `"Color"` tint is **kept** as an extra on the cube fill. It is **not** the primary acceptance path. This patch does not claim Engine Cube actually exposes `Color`. Validity is accepted from lines + text even if the cube color never changes.
 
-## Occupancy representation
-Server-only:
-- `TMap<FIntPoint, FGP_GridCellRecord>` (`FGuid OccupantId`, weak actor, `bIsReservation`)
-- `TMap<FGuid, TArray<FIntPoint>>` reverse lookup
+## Validity / reject text mapping
+Uses existing `EGP_BuildingDropRejectReason` (no new overlapping enum).
 
-Identity is `FGuid`, not a raw pointer address. Stale weak actors are swept and cannot permanently hold cells.
+- valid → `VALID`
+- `GridOccupied` → `BLOCKED: OCCUPIED`
+- `OutOfDeployRadius` → `BLOCKED: OUT OF RANGE`
+- `NotNavigable` → `BLOCKED: NOT NAVIGABLE`
+- `PlacementOverlap` → `BLOCKED: WORLD`
+- other → `BLOCKED`
 
-## Reservation model for in-flight pods
-After deploy is accepted: `FGuid` reservation covers the exact footprint. Bound to the DropPod. Payload spawn promotes reservation → building occupancy with no gap. Pod EndPlay / `DebugForceSkipPayloadSpawn` / failed spawn releases the reservation. Purchase does **not** reserve cells. Two accepted in-flight deploys cannot overlap.
+Local preview struct: `GPBuildingDropAuthority::FPlacementPreview` (`bValid`, `RejectReason`, snapped Origin/Size/ground). `ValidateBuildingPlacement` now writes snap outputs after a successful snap even when a later check rejects, so the ghost follows the snapped footprint (not raw cursor) while invalid. Gameplay accept/reject is unchanged.
 
-## Pre-placed MainBase handling
-Compatibility fallback footprint **5×5** derived from actor location at BeginPlay. No BuildingDefinition content asset required. Occupancy blocks overlapping Hub drops.
+Out-of-range uses `UGP_OrbitalDeliverySettings::BuildingMaxDeployRadiusFromMainBaseCm` (same as server).
 
-## Ferronite Deposit handling
-`AGP_ResourceNode` is an `AActor`, **not** `AGP_BuildingBase`. GP-S36G does **not** register a 3×3 grid footprint. Existing environmental WorldStatic/WorldDynamic overlap still blocks placing a Hub through deposit collision.
+## Local vs server authority
+Client preview predicts for feedback only. Occupancy maps stay server-only.
 
-## Server validation sequence
-DropDef → BuildingDef → FootprintCells > 0 → payload class → finite transform → MainBase → **server snap** → max deploy radius on snapped XY → cells free/unreserved → NavMesh MVP → environmental overlap → reserve → spawn pod at snapped ground / yaw 0 → consume READY once → init pod with OriginCell / Footprint / ReservationId.
+On LMB confirm: if local preview is invalid, **no deploy RPC** is sent; placement mode remains active; READY unchanged. If local preview is valid, client still sends a snapped transform intent; server re-snaps and re-validates. Race: local VALID + server reject → server wins. Contracts continue to call `AuthorityDeployBuilding` directly, so server rejection tests remain intact.
 
-Reject reasons: `GridOccupied`, `InvalidFootprint`, `NotNavigable` (plus existing radius / READY / definition reasons). World geometry uses `PlacementOverlap`. Client OriginCell is not trusted.
+## In-flight reservation preview
+Full BuildGrid replication was **not** added.
 
-## Client ghost snap behavior
-Ground trace → shared `ResolveSnappedPlacement` (no second formula in PlayerController) → ghost at snapped center. Engine cube scaled to `FootprintCells * 200 cm`. Local occupancy/nav/world query tints green/red; server remains authority. Confirm still sends a transform intent; server re-snaps.
+Tiny existing seam: `AGP_DropPod` replicates `BuildingGridOriginCell` + `BuildingGridFootprintSize` for building payloads. Local preview also scans replicated `AGP_BuildingBase` OriginCell/FootprintSize (landed Hub / MainBase). That is enough for immediate RED/`BLOCKED: OCCUPIED` on landed structures and, when the pod facts have replicated, on an in-flight Hub DropPod.
 
-## Rotation policy
-No rotation. Camera yaw ignored. Pod/building yaw canonical `0`.
+If those replicated facts have not arrived yet, in-flight overlap can still be a **server-only** reject. Server reservation remains authoritative. This is not a grid-replication architecture change.
 
-## NavMesh validation rule
-Project footprint **center** with extent `(100, 100, 300)`. Success → navigable. Fail + WorldStatic ground hit → `NotNavigable`. Fail + empty void → allow (isolated contract locations). Runs before the new building's NavigationObstacle exists.
-
-## World collision rule
-Raised footprint box vs WorldStatic/WorldDynamic, ignoring buildings / pods / pawns. Environmental sanity only. Structure-vs-structure SoT is grid occupancy.
-
-## FoW
-`FoW placement validation deferred to FoW integration slice.`
-
-## Walls
-Explicitly deferred. No `AGP_Wall`, connection component, 8-dir neighbors, drag, A*, wall-mounted turret, mount slots, wall-specific clearance, sequential wall pods.
-
-## READY exact-once preservation
-Invalid grid placement does not consume READY and does not spend Orbital again. Accepted deploy consumes READY exactly once after reservation + pod spawn.
-
-## Logistics Hub +5 preservation
-Unchanged native `AGP_LogisticsHub` apply when live/operational; remove on destroy.
-
-## NavigationObstacle preservation
-Unchanged authored `UBoxComponent` / `NavArea_Null` dynamic obstacle. BuildGrid is not a Recast replacement.
+## Presentation lifecycle
+Ghost + lines + text appear only while building Deploy mode is active, update with cursor snap, and are destroyed/cleared on successful confirm, Esc cancel (`OnSelectionCanceled`), RMB cancel, leaving placement mode, and PlayerController EndPlay / PIE teardown. `ClearGridPreview` flushes the line batch.
 
 ## Tests (all Failures=0)
-- `gp.Building.RunBuildGridContractTest`
+- `gp.Building.RunBuildGridContractTest` (extended: 4×4 outer 800, cell/line counts, label mapping, local occupied/out-of-range, cancel clears preview state — no pixel tests)
 - `gp.Building.RunMultiBuildingDataContractTest`
 - `gp.Building.RunOrbitalBuildingDropContractTest`
 - `gp.Resource.RunUnitCapLogisticsHubContractTest`
 - `gp.Resource.RunOrbitalUnitDropContractTest`
 - `gp.Movement.RunRTSMovementReconciliationContractTest`
 - `gp.Match.RunWinLoseContractTest`
-- `gp.Resource.RunContainerLaunchContractTest`
-- `gp.Resource.RunContainerLaunchHUDContractTest`
 - `gp.Resource.RunS28RegressionSuite`
 - `gp.Combat.RunAttackMoveContractTest`
-- `gp.Combat.RunAutoAcquireContractTest`
 
 ## Builds
 GPEditor Win64 Development + UHT **PASS**.  
-GP Win64 Development / Shipping **not run** (candidate stage).
+GP Win64 Development / Shipping **not run**.
 
-## Exact files changed during this slice
+## Next operator visual test
+1. Purchase Hub → Deploy.
+2. Free area: footprint cells visible, GREEN, `VALID`.
+3. Move over MainBase / existing Hub: RED, `BLOCKED: OCCUPIED`.
+4. Move outside deploy radius: RED, `BLOCKED: OUT OF RANGE`.
+5. Move back to valid: GREEN again.
+6. Cancel Esc/RMB: all preview visuals disappear.
+7. Close Editor: no crash.
+
+## Exact files changed during this visual patch
 - `GP/Source/GPRuntime/Public/Buildings/Grid/GPBuildGridSubsystem.h`
 - `GP/Source/GPRuntime/Private/Buildings/Grid/GPBuildGridSubsystem.cpp`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
-- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
 - `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropAuthority.h`
 - `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropAuthority.cpp`
-- `GP/Source/GPRuntime/Public/Orbital/GPDropPod.h`
-- `GP/Source/GPRuntime/Private/Orbital/GPDropPod.cpp`
 - `GP/Source/GPRuntime/Public/Orbital/GPBuildingPlacementGhost.h`
 - `GP/Source/GPRuntime/Private/Orbital/GPBuildingPlacementGhost.cpp`
+- `GP/Source/GPRuntime/Public/Orbital/GPDropPod.h`
+- `GP/Source/GPRuntime/Private/Orbital/GPDropPod.cpp`
 - `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-- `GP/Source/GPRuntime/Public/Orbital/GPBuildGridContractTest.h`
 - `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPOrbitalBuildingDropContractTest.cpp`
 - `Docs/Development/Claude_Tasks/GP-S36G_BuildGrid_MVP.md`
-- `Docs/Development/Claude_Tasks/README.md`
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/DOCUMENTATION_INDEX.md`
-- `Docs/TDD/06_Building_Architecture.md`
-- `Docs/TDD/14_Orbital_Delivery.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
 Not committed (operator-local): `DefaultEngine.ini`, `DefaultGame.ini`, `L_PrototypeArena.umap`, `BP_ResourceNode_AuthoredExample.uasset`, Blueprint/Materials/VFX packs, `Tools/`, AutoAcquire CRLF noise.

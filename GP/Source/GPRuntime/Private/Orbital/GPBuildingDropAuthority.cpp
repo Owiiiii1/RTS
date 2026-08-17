@@ -10,6 +10,7 @@
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Effects/GPGE_SpendOrbital.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Game/GPGameState.h"
 #include "Orbital/GPBuildingDropCatalog.h"
 #include "Orbital/GPDropPod.h"
@@ -146,6 +147,19 @@ bool GPBuildingDropAuthority::ValidateBuildingPlacement(
 		return false;
 	}
 
+	if (OutOriginCell != nullptr)
+	{
+		*OutOriginCell = OriginCell;
+	}
+	if (OutFootprintSize != nullptr)
+	{
+		*OutFootprintSize = Footprint;
+	}
+	if (OutSnappedGroundLocation != nullptr)
+	{
+		*OutSnappedGroundLocation = SnappedGround;
+	}
+
 	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
 	const float MaxRadius = Settings != nullptr
 		? FMath::Max(100.0f, Settings->BuildingMaxDeployRadiusFromMainBaseCm)
@@ -176,18 +190,6 @@ bool GPBuildingDropAuthority::ValidateBuildingPlacement(
 		return false;
 	}
 
-	if (OutOriginCell != nullptr)
-	{
-		*OutOriginCell = OriginCell;
-	}
-	if (OutFootprintSize != nullptr)
-	{
-		*OutFootprintSize = Footprint;
-	}
-	if (OutSnappedGroundLocation != nullptr)
-	{
-		*OutSnappedGroundLocation = SnappedGround;
-	}
 	return true;
 }
 
@@ -204,6 +206,123 @@ bool GPBuildingDropAuthority::ValidateBuildingPlacement(
 		GPBuildingDropAuthorityPrivate::ResolveLegacyDrop(BuildingType),
 		WorldTransform,
 		OutReject);
+}
+
+namespace GPBuildingDropAuthorityPrivate
+{
+	static bool DoesReplicatedOccupantOverlapFootprint(
+		UWorld* World,
+		UGP_BuildGridSubsystem* Grid,
+		FIntPoint OriginCell,
+		FIntPoint FootprintSize)
+	{
+		if (World == nullptr || Grid == nullptr)
+		{
+			return false;
+		}
+
+		for (TActorIterator<AGP_BuildingBase> It(World); It; ++It)
+		{
+			const AGP_BuildingBase* Building = *It;
+			if (!IsValid(Building))
+			{
+				continue;
+			}
+			const FIntPoint OtherSize = Building->GetGridFootprintSize();
+			if (OtherSize.X <= 0 || OtherSize.Y <= 0)
+			{
+				continue;
+			}
+			if (Grid->DoFootprintsOverlap(OriginCell, FootprintSize, Building->GetGridOriginCell(), OtherSize))
+			{
+				return true;
+			}
+		}
+
+		for (TActorIterator<AGP_DropPod> It(World); It; ++It)
+		{
+			const AGP_DropPod* Pod = *It;
+			if (!IsValid(Pod) || Pod->GetPayloadKind() != EGP_DropPodPayloadKind::Building)
+			{
+				continue;
+			}
+			const FIntPoint OtherSize = Pod->GetBuildingGridFootprintSize();
+			if (OtherSize.X <= 0 || OtherSize.Y <= 0)
+			{
+				continue;
+			}
+			if (Grid->DoFootprintsOverlap(OriginCell, FootprintSize, Pod->GetBuildingGridOriginCell(), OtherSize))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+}
+
+bool GPBuildingDropAuthority::EvaluateLocalPlacementPreview(
+	UWorld* World,
+	AGP_PlayerState* RequestingPlayerState,
+	const UGP_OrbitalDropDefinition* DropDefinition,
+	const FTransform& WorldTransform,
+	FPlacementPreview& OutPreview)
+{
+	OutPreview = FPlacementPreview();
+	EGP_BuildingDropRejectReason Reject = EGP_BuildingDropRejectReason::None;
+	if (!ValidateBuildingPlacement(
+			World,
+			RequestingPlayerState,
+			DropDefinition,
+			WorldTransform,
+			Reject,
+			&OutPreview.OriginCell,
+			&OutPreview.FootprintSize,
+			&OutPreview.SnappedGround))
+	{
+		OutPreview.bValid = false;
+		OutPreview.RejectReason = Reject;
+		return false;
+	}
+
+	if (UGP_BuildGridSubsystem* Grid = World != nullptr ? World->GetSubsystem<UGP_BuildGridSubsystem>() : nullptr)
+	{
+		if (GPBuildingDropAuthorityPrivate::DoesReplicatedOccupantOverlapFootprint(
+				World, Grid, OutPreview.OriginCell, OutPreview.FootprintSize))
+		{
+			OutPreview.bValid = false;
+			OutPreview.RejectReason = EGP_BuildingDropRejectReason::GridOccupied;
+			return false;
+		}
+	}
+
+	OutPreview.bValid = true;
+	OutPreview.RejectReason = EGP_BuildingDropRejectReason::None;
+	return true;
+}
+
+const TCHAR* GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(
+	bool bValid,
+	EGP_BuildingDropRejectReason RejectReason)
+{
+	if (bValid)
+	{
+		return TEXT("VALID");
+	}
+
+	switch (RejectReason)
+	{
+	case EGP_BuildingDropRejectReason::GridOccupied:
+		return TEXT("BLOCKED: OCCUPIED");
+	case EGP_BuildingDropRejectReason::OutOfDeployRadius:
+		return TEXT("BLOCKED: OUT OF RANGE");
+	case EGP_BuildingDropRejectReason::NotNavigable:
+		return TEXT("BLOCKED: NOT NAVIGABLE");
+	case EGP_BuildingDropRejectReason::PlacementOverlap:
+		return TEXT("BLOCKED: WORLD");
+	default:
+		return TEXT("BLOCKED");
+	}
 }
 
 GPBuildingDropAuthority::FPurchaseResult GPBuildingDropAuthority::AuthorityPurchaseBuilding(

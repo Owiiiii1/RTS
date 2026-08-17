@@ -19,6 +19,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Orbital/GPBuildingDropAuthority.h"
 #include "Orbital/GPBuildingDropCatalog.h"
+#include "Orbital/GPBuildingPlacementGhost.h"
 #include "Orbital/GPDropPod.h"
 #include "Orbital/GPOrbitalBuildingInventoryComponent.h"
 #include "Orbital/GPOrbitalDropDefinition.h"
@@ -190,6 +191,10 @@ void UGP_BuildGridContractTestRunner::CleanupActors()
 	if (UWorld* World = WorldWeak.Get())
 	{
 		for (TActorIterator<AGP_DropPod> It(World); It; ++It)
+		{
+			It->Destroy();
+		}
+		for (TActorIterator<AGP_BuildingPlacementGhost> It(World); It; ++It)
 		{
 			It->Destroy();
 		}
@@ -387,6 +392,65 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		const FVector Center5 = Grid->GetFootprintCenterWorld(FIntPoint(0, 0), FIntPoint(5, 5), 0.0f);
 		Expect(FMath::IsNearlyEqual(Center5.X, 400.0f), TEXT("E_OddFootprintCentersOnCell"));
 
+		FVector Min4 = FVector::ZeroVector;
+		FVector Max4 = FVector::ZeroVector;
+		Grid->GetFootprintWorldAABB(FIntPoint(0, 0), FIntPoint(4, 4), 0.0f, Min4, Max4);
+		Expect(FMath::IsNearlyEqual(Max4.X - Min4.X, 800.0f) && FMath::IsNearlyEqual(Max4.Y - Min4.Y, 800.0f),
+			TEXT("Preview_4x4Outer800"));
+		Expect(Grid->DoFootprintsOverlap(FIntPoint(0, 0), FIntPoint(4, 4), FIntPoint(1, 1), FIntPoint(4, 4)),
+			TEXT("Preview_OverlapTrue"));
+		Expect(!Grid->DoFootprintsOverlap(FIntPoint(0, 0), FIntPoint(4, 4), FIntPoint(4, 0), FIntPoint(4, 4)),
+			TEXT("Preview_AdjacentNoOverlap"));
+
+		Expect(FCString::Strcmp(
+			GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(true, EGP_BuildingDropRejectReason::None),
+			TEXT("VALID")) == 0, TEXT("Preview_LabelValid"));
+		Expect(FCString::Strcmp(
+			GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(false, EGP_BuildingDropRejectReason::GridOccupied),
+			TEXT("BLOCKED: OCCUPIED")) == 0, TEXT("Preview_LabelOccupied"));
+		Expect(FCString::Strcmp(
+			GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(false, EGP_BuildingDropRejectReason::OutOfDeployRadius),
+			TEXT("BLOCKED: OUT OF RANGE")) == 0, TEXT("Preview_LabelOutOfRange"));
+		Expect(FCString::Strcmp(
+			GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(false, EGP_BuildingDropRejectReason::NotNavigable),
+			TEXT("BLOCKED: NOT NAVIGABLE")) == 0, TEXT("Preview_LabelNotNavigable"));
+		Expect(FCString::Strcmp(
+			GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(false, EGP_BuildingDropRejectReason::PlacementOverlap),
+			TEXT("BLOCKED: WORLD")) == 0, TEXT("Preview_LabelWorld"));
+		Expect(FCString::Strcmp(
+			GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(false, EGP_BuildingDropRejectReason::InvalidType),
+			TEXT("BLOCKED")) == 0, TEXT("Preview_LabelFallback"));
+
+		FActorSpawnParameters GhostParams;
+		GhostParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		GhostParams.ObjectFlags |= RF_Transient;
+		AGP_BuildingPlacementGhost* Ghost = World->SpawnActor<AGP_BuildingPlacementGhost>(
+			AGP_BuildingPlacementGhost::StaticClass(),
+			FVector::ZeroVector,
+			FRotator::ZeroRotator,
+			GhostParams);
+		if (Expect(IsValid(Ghost), TEXT("Preview_SpawnGhost")))
+		{
+			Ghost->UpdateGridPreview(
+				Grid,
+				FIntPoint(0, 0),
+				FIntPoint(4, 4),
+				0.0f,
+				true,
+				EGP_BuildingDropRejectReason::None);
+			Expect(FMath::IsNearlyEqual(Ghost->GetPreviewOuterExtentXY().X, 800.0f)
+				&& FMath::IsNearlyEqual(Ghost->GetPreviewOuterExtentXY().Y, 800.0f),
+				TEXT("Preview_GhostOuter800"));
+			Expect(Ghost->GetPreviewCellCount() == 16, TEXT("Preview_GhostCellCount16"));
+			Expect(Ghost->GetPreviewGridLineCount() == 10, TEXT("Preview_GhostDivisionLines"));
+			Expect(Ghost->GetPreviewStatusLabel() == TEXT("VALID"), TEXT("Preview_GhostValidLabel"));
+			Expect(Ghost->HasActiveGridPreview(), TEXT("Preview_GhostActive"));
+			Ghost->ClearGridPreview();
+			Expect(!Ghost->HasActiveGridPreview() && Ghost->GetPreviewGridLineCount() == 0
+				&& Ghost->GetPreviewStatusLabel().IsEmpty(), TEXT("Preview_CancelClearsState"));
+			Ghost->Destroy();
+		}
+
 		++StageIndex;
 		ScheduleNext(0.05f);
 		break;
@@ -564,6 +628,34 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		Expect(!Far.bAccepted && Far.RejectReason == EGP_BuildingDropRejectReason::OutOfDeployRadius,
 			TEXT("S_DeployRadiusEnforced"));
 		Expect(Inventory->GetReadyCount(HubDrop) == ReadyBefore, TEXT("S_ReadyPreservedOnRadius"));
+
+		GPBuildingDropAuthority::FPlacementPreview OccupiedPreview;
+		GPBuildingDropAuthority::EvaluateLocalPlacementPreview(
+			World,
+			OwnerPS,
+			HubDrop,
+			FTransform(FRotator::ZeroRotator, Base->GetActorLocation()),
+			OccupiedPreview);
+		Expect(!OccupiedPreview.bValid
+			&& OccupiedPreview.RejectReason == EGP_BuildingDropRejectReason::GridOccupied,
+			TEXT("Preview_LocalOccupiedReason"));
+		Expect(FCString::Strcmp(
+			GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(OccupiedPreview.bValid, OccupiedPreview.RejectReason),
+			TEXT("BLOCKED: OCCUPIED")) == 0, TEXT("Preview_LocalOccupiedLabel"));
+
+		GPBuildingDropAuthority::FPlacementPreview RangePreview;
+		GPBuildingDropAuthority::EvaluateLocalPlacementPreview(
+			World,
+			OwnerPS,
+			HubDrop,
+			FTransform(FRotator::ZeroRotator, Base->GetActorLocation() + FVector(99999.0f, 0.0f, 0.0f)),
+			RangePreview);
+		Expect(!RangePreview.bValid
+			&& RangePreview.RejectReason == EGP_BuildingDropRejectReason::OutOfDeployRadius,
+			TEXT("Preview_LocalOutOfRangeReason"));
+		Expect(FCString::Strcmp(
+			GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(RangePreview.bValid, RangePreview.RejectReason),
+			TEXT("BLOCKED: OUT OF RANGE")) == 0, TEXT("Preview_LocalOutOfRangeLabel"));
 
 		UGP_BuildingDefinition* BadBuilding = NewObject<UGP_BuildingDefinition>(
 			this, FName(TEXT("DA_GP_Building_InvalidFootprint")), RF_Transient);

@@ -63,6 +63,15 @@ public:
 
 	void EnumerateFootprintCells(FIntPoint OriginCell, FIntPoint FootprintSize, TArray<FIntPoint>& OutCells) const;
 
+	void GetFootprintWorldAABB(
+		FIntPoint OriginCell,
+		FIntPoint FootprintSize,
+		float GroundZ,
+		FVector& OutMin,
+		FVector& OutMax) const;
+
+	bool DoFootprintsOverlap(FIntPoint OriginA, FIntPoint SizeA, FIntPoint OriginB, FIntPoint SizeB) const;
+
 	bool ResolveSnappedPlacement(
 		const FVector& RequestedWorld,
 		FIntPoint FootprintSize,

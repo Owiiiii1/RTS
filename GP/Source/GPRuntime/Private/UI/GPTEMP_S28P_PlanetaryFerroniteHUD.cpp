@@ -11,6 +11,7 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Orbital/GPBuildingDropCatalog.h"
 #include "Orbital/GPUnitDropManifest.h"
 #include "Orbital/GPOrbitalBuildingType.h"
 #include "Player/GPPlayerController.h"
@@ -168,6 +169,7 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeDestruct()
 	{
 		DeployLogisticsHubButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleDeployLogisticsHubClicked);
 	}
+	ExtraRowBinders.Reset();
 	Super::NativeDestruct();
 }
 
@@ -508,6 +510,13 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 	DeployLogisticsHubButton->SetContent(DeployLogisticsHubLabel);
 	BuildingPanel->AddChildToVerticalBox(DeployLogisticsHubButton);
 
+	BuildingExtraRowsBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BuildingExtraRows"));
+	BuildingExtraRowsBox->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (UVerticalBoxSlot* ExtraSlot = BuildingPanel->AddChildToVerticalBox(BuildingExtraRowsBox))
+	{
+		ExtraSlot->SetPadding(FMargin(0.0f, 8.0f, 0.0f, 0.0f));
+	}
+
 	BindBuildingPanelClickedIdempotent();
 
 	bTreeBuilt = true;
@@ -768,8 +777,119 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshUnitDropPanel()
 
 float UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetBuildingPurchaseCost() const
 {
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	return Settings != nullptr ? FMath::Max(0.0f, Settings->BuildingOrbitalPurchaseCost) : 100.0f;
+	const FPrimaryAssetId HubId = UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDropId();
+	for (const FGP_BuildingHudCatalogRow& Row : BuildingCatalogRows)
+	{
+		if (Row.DropDefinitionId == HubId)
+		{
+			return FMath::Max(0.0f, Row.Cost);
+		}
+	}
+	return UGP_BuildingDropCatalog::Get().GetPurchaseCost(
+		UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDrop());
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetBuildingCatalogDisplay(const TArray<FGP_BuildingHudCatalogRow>& Rows)
+{
+	BuildingCatalogRows = Rows;
+	const FPrimaryAssetId HubId = UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDropId();
+	ReadyLogisticsHubCount = 0;
+	for (const FGP_BuildingHudCatalogRow& Row : BuildingCatalogRows)
+	{
+		if (Row.DropDefinitionId == HubId)
+		{
+			ReadyLogisticsHubCount = FMath::Max(0, Row.ReadyCount);
+			break;
+		}
+	}
+	RefreshBuildingPanel();
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RequestBuildingPurchaseById(FPrimaryAssetId DropDefinitionId)
+{
+	AGP_PlayerController* PC = Cast<AGP_PlayerController>(GetOwningPlayer());
+	if (PC != nullptr)
+	{
+		PC->RequestBuildingPurchase(DropDefinitionId);
+	}
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RequestBuildingDeployById(FPrimaryAssetId DropDefinitionId)
+{
+	AGP_PlayerController* PC = Cast<AGP_PlayerController>(GetOwningPlayer());
+	if (PC != nullptr)
+	{
+		PC->EnterBuildingPlacementMode(DropDefinitionId);
+	}
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RebuildExtraBuildingRows()
+{
+	if (BuildingExtraRowsBox == nullptr || WidgetTree == nullptr)
+	{
+		return;
+	}
+
+	BuildingExtraRowsBox->ClearChildren();
+	ExtraRowBinders.Reset();
+
+	const FPrimaryAssetId HubId = UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDropId();
+	for (const FGP_BuildingHudCatalogRow& Row : BuildingCatalogRows)
+	{
+		if (!Row.DropDefinitionId.IsValid() || Row.DropDefinitionId == HubId)
+		{
+			continue;
+		}
+
+		UVerticalBox* RowBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+		RowBox->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+		UTextBlock* Line = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+		GPTempS28PHUDPrivate::StyleStatusText(Line);
+		Line->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(14));
+		Line->SetText(FText::FromString(FString::Printf(
+			TEXT("%s — Cost: %d — READY: %d"),
+			Row.DisplayName.IsEmpty() ? TEXT("Building") : *Row.DisplayName,
+			FMath::RoundToInt(Row.Cost),
+			Row.ReadyCount)));
+		RowBox->AddChildToVerticalBox(Line);
+
+		UGP_TEMP_BuildingCatalogRowBinder* Binder = NewObject<UGP_TEMP_BuildingCatalogRowBinder>(this);
+		Binder->OwnerHUD = this;
+		Binder->DropDefinitionId = Row.DropDefinitionId;
+		ExtraRowBinders.Add(Binder);
+
+		UButton* PurchaseButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
+		PurchaseButton->SetVisibility(ESlateVisibility::Visible);
+		UTextBlock* PurchaseLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+		PurchaseLabel->SetText(FText::FromString(FString::Printf(TEXT("Purchase %s"), *Row.DisplayName)));
+		PurchaseLabel->SetJustification(ETextJustify::Center);
+		PurchaseLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+		PurchaseLabel->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(13));
+		PurchaseButton->SetContent(PurchaseLabel);
+		PurchaseButton->OnClicked.AddDynamic(Binder, &UGP_TEMP_BuildingCatalogRowBinder::HandlePurchaseClicked);
+		if (UVerticalBoxSlot* PurchaseSlot = RowBox->AddChildToVerticalBox(PurchaseButton))
+		{
+			PurchaseSlot->SetPadding(FMargin(0.0f, 2.0f, 0.0f, 2.0f));
+		}
+
+		UButton* DeployButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
+		DeployButton->SetVisibility(ESlateVisibility::Visible);
+		UTextBlock* DeployLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+		DeployLabel->SetText(FText::FromString(TEXT("Deploy READY")));
+		DeployLabel->SetJustification(ETextJustify::Center);
+		DeployLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+		DeployLabel->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(13));
+		DeployButton->SetContent(DeployLabel);
+		DeployButton->SetIsEnabled(Row.bCanDeploy);
+		DeployButton->OnClicked.AddDynamic(Binder, &UGP_TEMP_BuildingCatalogRowBinder::HandleDeployClicked);
+		RowBox->AddChildToVerticalBox(DeployButton);
+
+		if (UVerticalBoxSlot* RowSlot = BuildingExtraRowsBox->AddChildToVerticalBox(RowBox))
+		{
+			RowSlot->SetPadding(FMargin(0.0f, 4.0f, 0.0f, 0.0f));
+		}
+	}
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshBuildingPanel()
@@ -785,6 +905,7 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshBuildingPanel()
 	{
 		DeployLogisticsHubButton->SetIsEnabled(ReadyLogisticsHubCount > 0);
 	}
+	RebuildExtraBuildingRows();
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetBuildingReadyDisplay(int32 InReadyLogisticsHubCount)
@@ -1134,3 +1255,19 @@ bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasNoDuplicateOrbitalOrUnitsWidgetsFor
 		&& GetWidgetFromName(TEXT("ResourceBar")) == ResourceBar;
 }
 #endif
+
+void UGP_TEMP_BuildingCatalogRowBinder::HandlePurchaseClicked()
+{
+	if (UGP_TEMP_S28P_PlanetaryFerroniteHUD* HUD = OwnerHUD.Get())
+	{
+		HUD->RequestBuildingPurchaseById(DropDefinitionId);
+	}
+}
+
+void UGP_TEMP_BuildingCatalogRowBinder::HandleDeployClicked()
+{
+	if (UGP_TEMP_S28P_PlanetaryFerroniteHUD* HUD = OwnerHUD.Get())
+	{
+		HUD->RequestBuildingDeployById(DropDefinitionId);
+	}
+}

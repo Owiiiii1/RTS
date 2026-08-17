@@ -159,7 +159,8 @@ void AGP_DropPod::AuthorityInitUnitDrop(
 	RequestingPlayerStateWeak = RequestingPlayerState;
 	OwnerTeamId = TeamId;
 	PayloadKind = EGP_DropPodPayloadKind::Unit;
-	PendingBuildingType = EGP_OrbitalBuildingType::None;
+	PendingDropDefinitionId = FPrimaryAssetId();
+	PendingBuildingPayloadClass = nullptr;
 	PendingManifest = Manifest;
 	LandingLocation = LandingWorldLocation;
 	LandingRotation = LandingWorldRotation;
@@ -188,7 +189,8 @@ void AGP_DropPod::AuthorityInitUnitDrop(
 void AGP_DropPod::AuthorityInitBuildingDrop(
 	AGP_PlayerState* RequestingPlayerState,
 	int32 TeamId,
-	EGP_OrbitalBuildingType BuildingType,
+	FPrimaryAssetId DropDefinitionId,
+	TSubclassOf<AGP_BuildingBase> PayloadClass,
 	const FVector& LandingWorldLocation,
 	const FRotator& LandingWorldRotation,
 	float InDescentDurationSeconds,
@@ -204,7 +206,8 @@ void AGP_DropPod::AuthorityInitBuildingDrop(
 	RequestingPlayerStateWeak = RequestingPlayerState;
 	OwnerTeamId = TeamId;
 	PayloadKind = EGP_DropPodPayloadKind::Building;
-	PendingBuildingType = BuildingType;
+	PendingDropDefinitionId = DropDefinitionId;
+	PendingBuildingPayloadClass = PayloadClass;
 	PendingManifest = FGP_UnitDropManifest();
 	LandingLocation = LandingWorldLocation;
 	LandingRotation = LandingWorldRotation;
@@ -421,19 +424,12 @@ void AGP_DropPod::AuthoritySpawnBuildingPayload()
 	}
 	bPayloadSpawned = true;
 
-	if (PendingBuildingType == EGP_OrbitalBuildingType::None)
+	if (PendingBuildingPayloadClass == nullptr)
 	{
 		return;
 	}
 
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	TSubclassOf<AGP_BuildingBase> BuildingClass = AGP_LogisticsHub::StaticClass();
-	if (PendingBuildingType == EGP_OrbitalBuildingType::LogisticsHub)
-	{
-		BuildingClass = Settings != nullptr
-			? Settings->ResolveBuildingPayloadClass()
-			: TSubclassOf<AGP_BuildingBase>(AGP_LogisticsHub::StaticClass());
-	}
+	TSubclassOf<AGP_BuildingBase> BuildingClass = PendingBuildingPayloadClass;
 
 	if (BuildingClass == nullptr)
 	{

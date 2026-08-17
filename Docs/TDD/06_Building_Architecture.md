@@ -38,6 +38,15 @@ Inherits from `AGP_UnitBase`. Plus:
 
 ## UGP_BuildingDefinition (Data Asset)
 
+**GP-S35B ownership (canonical):** `UGP_BuildingDefinition` owns **intrinsic building identity / gameplay facts**. Acquisition cost does **not** live here.
+
+| Owner | Facts |
+| --- | --- |
+| `UGP_BuildingDefinition` | `DisplayName`, soft `Icon`, `BuildingTags`, soft `SpawnedClass`, `MaxHealth`, `FootprintCells` |
+| `UGP_OrbitalDropDefinition` | Acquisition `Cost` (OrbitalFerronite), `DropTags`, soft ref to BuildingDefinition. READY key = this asset's `FPrimaryAssetId` |
+
+Display-name SoT for HUD/acquisition rows: `BuildingDefinition.DisplayName` (DropDef resolves via `GetAcquisitionDisplayName()`). Do not put `Cost` on BuildingDefinition.
+
 ```cpp
 UCLASS(BlueprintType)
 class GPRUNTIME_API UGP_BuildingDefinition : public UPrimaryDataAsset
@@ -54,27 +63,22 @@ public:
     UPROPERTY(EditAnywhere, Category = "GP|Identity")
     FGameplayTagContainer BuildingTags;
 
-    UPROPERTY(EditAnywhere, Category = "GP|Economy")
-    int32 Cost = 0;                                              // OrbitalFerronite cost of the drop order
+    UPROPERTY(EditAnywhere, Category = "GP|Payload")
+    TSoftClassPtr<AGP_BuildingBase> SpawnedClass;     // async-loaded by AssetManager; already-loaded resolve only
 
     UPROPERTY(EditAnywhere, Category = "GP|Vitals")
     float MaxHealth = 500.f;
 
-    UPROPERTY(EditAnywhere, Category = "GP|Effects")
-    TArray<TSoftClassPtr<UGameplayEffect>> EffectsOnPlacement;   // async-loaded, applied on pod landing, e.g., GE_GP_UnitCap_Plus5
+    UPROPERTY(EditAnywhere, Category = "GP|BuildGrid")
+    FIntPoint FootprintCells = FIntPoint(1, 1);       // stored for future BuildGrid; interim placement ignores it
 
-    UPROPERTY(EditAnywhere, Category = "GP|Abilities")
-    TArray<TSoftClassPtr<UGameplayAbility>> GrantedAbilities;    // async-loaded
-
-    UPROPERTY(EditAnywhere, Category = "GP|Visuals")
-    TSoftObjectPtr<UStaticMesh> Mesh;
-
-    UPROPERTY(EditAnywhere, Category = "GP|Components")
-    TSoftClassPtr<AGP_BuildingBase> SpawnedClass;     // async-loaded by AssetManager
+    // Future (not GP-S35B): EffectsOnPlacement, GrantedAbilities, Mesh, ClearanceCells, wall-mount flags, sell fields
 };
 ```
 
-`EffectsOnPlacement` apply the moment the drop pod lands (no construction wait). There is no `BuildTime`, no `AllowedProductions` — buildings do not build other things; new units/buildings come from the global Order Menu (orbital). Grid fields (`FootprintCells`, `ClearanceCells`, `bMountsOnWall`, `bCanHostWallMount`) and economy fields (`bSellable`, `SellRefundRate`) are documented in §Build Grid System and §Sell + Demolish System.
+**GP-S35B did not implement** `EffectsOnPlacement`. Logistics Hub `+5 MaxUnits` remains native on `AGP_LogisticsHub` (apply when live/operational; remove on destroy). Do not migrate that into a generic DA effect list until a dedicated slice.
+
+There is no `BuildTime`, no `AllowedProductions` — buildings do not build other things; new units/buildings come from the global Order Menu (orbital). Remaining grid fields (`ClearanceCells`, `bMountsOnWall`, `bCanHostWallMount`) and economy fields (`bSellable`, `SellRefundRate`) stay documented in §Build Grid System and §Sell + Demolish System. **BuildGrid itself is deferred** — GP-S35B only stores `FootprintCells`.
 
 ## Building Lifecycle — Orbital Procurement
 
@@ -313,7 +317,7 @@ All numerics are placeholders pending balance pass.
 | --- | --- | --- | --- |
 | `DisplayName` | `FText` | "Logistics Hub" | |
 | `BuildingTags` | `FGameplayTagContainer` | per Identity | |
-| `Cost` | `int32` | TBD | OrbitalFerronite cost of the drop order. |
+| `Cost` | — | — | **Not on BuildingDefinition.** Acquisition cost is `DA_GP_OrbitalDrop_LogisticsHub.Cost` (OrbitalFerronite). |
 | `MaxHealth` | `float` | TBD | |
 | `Armor` | `float` | TBD | |
 | `UnitCapContribution` | `int32` | `+5` | Applied via `GE_GP_UnitCap_Plus5` on landing. |
@@ -523,11 +527,14 @@ enum class EGP_GridRejectReason : uint8
 
 ### UGP_BuildingDefinition Update
 
+`FootprintCells` is implemented on `UGP_BuildingDefinition` as of GP-S35B (intrinsic payload fact). BuildGrid consumption, occupancy, rotation, and the remaining fields below are **deferred**.
+
 ```cpp
-// Additions to existing UGP_BuildingDefinition:
-UPROPERTY(EditAnywhere, Category = "GP|Grid")
+// Already on UGP_BuildingDefinition (GP-S35B):
+UPROPERTY(EditAnywhere, Category = "GP|BuildGrid")
 FIntPoint FootprintCells = FIntPoint(1, 1);
 
+// Deferred (not GP-S35B):
 UPROPERTY(EditAnywhere, Category = "GP|Grid")
 int32 ClearanceCells = 0;            // exclusion radius from other structures
 

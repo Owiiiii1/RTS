@@ -1,144 +1,100 @@
-# Cursor Work Report — GP-S34W Match Win/Lose MVP
+# Cursor Work Report — GP-S35B Multi-Building Data Architecture
 
 ## Status
-**GP-S34W_FINALIZATION_READY_FOR_MERGE**
+**GP-S35B_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**
 
 ## Branch
-`feature/gp-s34w-match-win-lose`  
-Base `main` SHA: `7873d2826130bc711486b7a8c0a55322685e8d9d`  
-Prior remote feature head: `1828d5722da611cc940370a81f603388ac6f3bcb`  
-Final feature head SHA: `b0a94f113e27fd9a6ed798b84bbbcc59f32954fc`
+`feature/gp-s35b-multi-building-data`  
+Base `main` SHA: `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`  
+Feature head SHA: *(filled in SHA-record commit)*
 
-## Operator FINAL PASS
+## Pre-slice temporary architecture found
+- One `UGP_OrbitalDeliverySettings.BuildingOrbitalPurchaseCost`
+- One `BuildingPayloadClass` (operator `DefaultGame.ini` → authored Logistics Hub BP)
+- `EGP_OrbitalBuildingType { None, LogisticsHub }` as catalog key
+- `UGP_OrbitalBuildingInventoryComponent::ReadyLogisticsHubCount` (single int)
+- Purchase/Deploy RPCs and TEMP HUD assumed one Logistics Hub READY counter
 
-### Match start / timer
-**PASS.**
+## BuildingDefinition schema implemented (`UGP_BuildingDefinition : UPrimaryDataAsset`)
+- Primary type `GPBuildingDefinition`; identity = `(Type, GetFName())`
+- `DisplayName` (acquisition UI SoT)
+- soft `Icon` (`TSoftObjectPtr<UTexture2D>`)
+- `BuildingTags`
+- soft `SpawnedClass` (`TSoftClassPtr<AGP_BuildingBase>`)
+- `MaxHealth`
+- `FootprintCells` (`FIntPoint`, stored for future BuildGrid; unused by interim placement)
+- `ResolveLoadedSpawnedClass()` — already-loaded / `ResolveObject` only. No `LoadObject` / `ConstructorHelpers` / `/Game/` paths
 
-- Single-player PIE remains canonically `WaitingForPlayers` until explicit dev command.
-- `gp.Match.DebugStart` starts canonical match flow.
-- Timer initializes around 10:00 and counts down.
-- Standard 2-player PIE starts automatically without debug start.
-- Timer works correctly for both players.
+## OrbitalDropDefinition schema implemented (`UGP_OrbitalDropDefinition : UPrimaryDataAsset`)
+- Primary type `GPOrbitalDropDefinition`; identity = `(Type, GetFName())`
+- `DropTags`
+- `Cost` (OrbitalFerronite) — **only acquisition Cost SoT**
+- soft `BuildingDefinition` (`TSoftObjectPtr<UGP_BuildingDefinition>`)
+- `GetAcquisitionDisplayName()` resolves BuildingDefinition.DisplayName
+- Descent timing **not** moved (stays on settings)
 
-### Delivery quota
-**PASS.**
+## Stable identity choice
+READY / Purchase / Deploy / HUD rows use `FPrimaryAssetId` of `UGP_OrbitalDropDefinition` (replicable, not pointer identity). Native catalog names: `DA_GP_OrbitalDrop_LogisticsHub` / `DefensiveTurret` / `Wall` / `WallTurret`.
 
-Operator test:
+## READY inventory representation / replication
+`TArray<FGP_ReadyBuildingEntry>` (`DropDefinitionId`, `ReadyCount`), `COND_OwnerOnly`, `ReplicatedUsing=OnRep_ReadyEntries`. No TMap replication. Zero-count entries removed. Same id does not create a second bucket. `OnReadyChanged(FPrimaryAssetId, int32)` includes which definition changed. Client mutation not exposed.
 
-- set score to 4999
-- continued normal gameplay
-- Worker mined Ferronite
-- real container launch increased cumulative FerroniteScore above 5000
-- immediate VICTORY occurred
-- timer stopped
+APIs: `GetReadyCount` / `AuthorityAddReady` / `AuthorityTryConsumeReady` for `FPrimaryAssetId`, `UGP_OrbitalDropDefinition*`, and deprecated enum glue.
 
-This validates the actual production score-award path, not only a debug setter.
+## Purchase flow
+`AuthorityPurchaseBuilding(World, PS, DropDef)`:
+Finished gate → valid DropDef + loaded BuildingDefinition → MainBase → Cost from DropDef → Orbital check → `GE_GP_SpendOrbital` once → READY[DropDef]++. No READY if spend fails. Cost is never read from BuildingDefinition.
 
-### Annihilation
-**PASS** in 2-player PIE.
+## Deploy flow
+`AuthorityDeployBuilding(World, PS, DropDef, Transform)`:
+Finished gate → READY[DropDef] > 0 → interim placement (finite transform, MainBase radius, overlap) → payload class from BuildingDefinition (Hub settings fallback) → spawn DropPod → consume READY exactly once → pod spawns `SpawnedClass` with team. No second Orbital spend. Ghost cancel does not consume. Duplicate deploy → `NoReadyInventory`.
 
-- one MainBase killed
-- owner received DEFEAT
-- opponent received VICTORY
-- result replicated correctly to both windows
-- immediate match finish
+## Logistics Hub compatibility
+Native Hub DropDef + BuildingDef identities exist. +5 MaxUnits remains **native** on `AGP_LogisticsHub` (live/operational only; removed on destroy). Not migrated to `EffectsOnPlacement`. Enum Purchase/Deploy still maps `LogisticsHub` → native Hub DropDef.
 
-### Timer-score fallback
-**PASS** in 2-player PIE.
+## DefaultGame.ini / authored BP compatibility
+`DefaultGame.ini` **not modified / not committed**.  
+`BuildingOrbitalPurchaseCost` is synced onto the native Hub DropDef.Cost on catalog access.  
+Hub `SpawnedClass` stays empty so payload resolves through `Settings->ResolveBuildingPayloadClass()` (authored `BP_GP_LogisticsHUB` if configured, else native `AGP_LogisticsHub`). This preserves operator-authored Hub visuals and S32R payload-class mutation tests.
 
-- one player given higher FerroniteScore
-- match time forced to 0
-- higher-score player received VICTORY
-- other player received DEFEAT
-- reason Timer Score
+**Later authoring (not required for this candidate):** content DAs `DA_GP_Building_*` + `DA_GP_OrbitalDrop_*` under `/Game/GrimProtocol/DataAssets/`. Do not fabricate `.uasset` files in git.
 
-## Architecture summary
-- `AGP_GameMode` is the only winner authority (`FinishMatch` exact-once).
-- `AGP_GameState` replicates match facts / `FGP_MatchResult` (`TArray<FGP_MatchTeamScore>` snapshot, not `TMap`).
-- Quota evaluation is event-driven from FerroniteScore GAS change (`AGP_PlayerState` ASC → `NotifyFerroniteScoreChanged`). No win-condition polling Tick (`PrimaryActorTick.bCanEverTick = false`).
-- Timer uses the existing 1 Hz `FTimerManager` countdown.
-- Quota uses **FerroniteScore**, not OrbitalFerronite.
-- Result is immutable after `Finished`; later score/death cannot replace it. Final score snapshot stays frozen.
-- World teardown / `bIsTearingDown` does not count as annihilation.
-- `bAnnihilationCountsAsWin=false` does not finish (Spectating deferred; match continues).
-- `ExpectedHumanPlayers` remains **2**. No production single-player auto-start. No AI.
-
-## Quota / timer / annihilation
-- Delivery quota: first playable team with `FerroniteScore >= 5000` wins immediately (`GP.Match.WinReason.DeliveryQuota`).
-- Hard cap 600s. Ladder: FerroniteScore → OrbitalFerronite → CurrentUnits → stored MatchSeed (`GP.Match.WinReason.TimerScore`). No Draw for a valid 2-team match.
-- MainBase death only triggers annihilation (`GP.Match.WinReason.Annihilation`). Logistics Hub / unit death does not.
-
-## Debug-start single-PIE seam
-`gp.Match.DebugStart` — DEVELOPMENT-ONLY / non-Shipping console command (same `FAutoConsoleCommandWithWorldAndArgs` pattern as the other match debug commands). Authority only. If `WaitingForPlayers`, calls canonical `StartMatchFlow()`. Playing: idempotent no-op. Finished: reject. Does **not** change `ExpectedHumanPlayers`. Does **not** fake a second player.
-
-## Deterministic tie-break
-Seed stored at match start. Finish uses `HashCombine(MatchSeed, TeamId)`, then lowest TeamId on hash collision. No RNG at comparison time.
-
-## Replicated MatchResult
-`FGP_MatchResult` on GameState: WinnerTeamId, WinnerReason, MatchDuration, FinalScores array. Compatibility `GetWinnerTeamId()` / `GetWinReasonTag()` preserved.
-
-## Post-finish gates
-Finished rejects new orbital unit order, building Purchase, building Deploy, Launch Container. Movement / combat / camera remain as currently documented (not frozen).
+## Old enum / settings migration
+- `EGP_OrbitalBuildingType` documented deprecated; retained as glue. New path does not depend on extending the enum.
+- Settings cost/payload marked `DeprecatedProperty`; still the Hub config bridge.
 
 ## TEMP HUD
-Merged layout preserved:
+Layout of match HUD / resource bar / container / unit procurement unchanged. Building section: existing Logistics Hub row kept; extra native catalog rows (name, cost, READY, Purchase, Deploy when payload class resolves). Turret/Wall/Wall Turret Deploy stays disabled until a SpawnedClass exists.
 
-- top-right: Orbital + UNITS
-- bottom-right: procurement
-- bottom-left: base/container
-- bottom-center: Launch Container
-- top-center: timer + SCORE/quota
+## BuildGrid boundary
+Not implemented: grid actor, snapping, occupancy, rotation footprints, clearance, wall drag/mount, FoW placement. Interim free placement preserved. `FootprintCells` is on BuildingDefinition for later.
 
-Finished: VICTORY / DEFEAT, correct reason, Winner TeamId. No UI redesign.
-
-## Deferred (not implemented now)
-OpponentDisconnect, Spectating, SWARM, polished end-of-match UI, automatic lobby/menu return, pause semantics, production CommonUI redesign, AI opponent, further balance changes.
+## Deferred defensive building gameplay
+No `AGP_DefensiveTurret` / `AGP_Wall` / `AGP_WallTurret` gameplay. Catalog identities + contract stubs only.
 
 ## Tests (all Failures=0)
-| Test | Result |
-| --- | --- |
-| gp.Match.RunWinLoseContractTest | Failures=0 |
-| gp.Resource.RunContainerLaunchContractTest | Failures=0 |
-| gp.Resource.RunContainerLaunchHUDContractTest | Failures=0 |
-| gp.Resource.RunUnitCapLogisticsHubContractTest | Failures=0 |
-| gp.Resource.RunOrbitalUnitDropContractTest | Failures=0 |
-| gp.Building.RunOrbitalBuildingDropContractTest | Failures=0 |
-| gp.Resource.RunS28RegressionSuite | Failures=0 |
-| gp.Combat.RunSalvageWalkerContractTest | Failures=0 |
-| gp.Combat.RunLOSFireGateContractTest | Failures=0 |
-| gp.Combat.RunHealthBarContractTest | Failures=0 |
-| gp.Combat.RunAttackMoveContractTest | Failures=0 |
-| gp.Combat.RunAutoAcquireContractTest | Failures=0 |
-| gp.Movement.RunRTSMovementReconciliationContractTest | Failures=0 |
+- `gp.Building.RunMultiBuildingDataContractTest: Complete Failures=0`
+- `gp.Building.RunOrbitalBuildingDropContractTest: Complete Failures=0`
+- `gp.Resource.RunUnitCapLogisticsHubContractTest: Complete Failures=0`
+- `GP Resource.RunOrbitalUnitDropContractTest: Complete Failures=0`
+- `gp.Match.RunWinLoseContractTest: Complete Failures=0`
+- `GP Resource.RunContainerLaunchContractTest: Complete Failures=0`
+- `GP Resource.RunContainerLaunchHUDContractTest: Complete Failures=0`
+- `GP-S28 RegressionSuite Complete Failures=0`
+- `gp.Movement.RunRTSMovementReconciliationContractTest: Complete Failures=0`
 
-Canonical movement / AttackMove / AutoAcquire names used as present in repository (listed above).
+## GPEditor / UHT
+`GPEditor Win64 Development` + UHT **PASS**. GP Development / Shipping not run.
 
-## Builds
-- GPEditor Win64 Development + UHT **PASS**
-- GP Win64 Development **PASS**
-- GP Win64 Shipping **PASS**
+## Exact changed files
+See SHA-record / `git show --name-only` on the feature branch. Operator-local `DefaultEngine.ini`, `DefaultGame.ini`, maps, GrimProtocol Blueprint/Materials, VFX packs, `Tools/`, and AutoAcquire CRLF noise were **not** committed.
 
-## Shipping debug-command verification
-Source: all five match debug commands live under `#if !UE_BUILD_SHIPPING` (`GPMatchWinLoseContractTest.cpp` + `AGP_GameMode::DebugStartMatchFlow`). They are console commands, not gameplay RPCs.
+## Operator validation (do not self-approve)
+1. Logistics Hub Purchase → READY → ghost → Deploy → DropPod → live Hub → +5 still works.
+2. Building panel shows multiple catalog rows.
+3. Purchasing one type changes only that type's READY.
+4. Deployed Hub still uses authored/current payload via the settings bridge.
 
-Binary scan:
-
-- Development `GP.exe`: UTF-16 **present** for `gp.Match.DebugStart`, `DebugSetFerroniteScore`, `DebugSetMatchTimeRemaining`, `DebugKillMainBase`, `DebugSetMatchSeed`.
-- Shipping `GP-Win64-Shipping.exe`: ASCII and UTF-16 **absent** for all five (and for `gp.Match.RunWinLoseContractTest`).
-
-`ExpectedHumanPlayers` remains **2**.
-
-## Finalization C++
-**No.** Docs-only finalization. No gameplay changes.
-
-## Exact files changed during finalization
-- `Docs/Development/Cursor_Work_Report.md`
-- `Docs/Development/Claude_Tasks/GP-S34W_Match_Win_Lose.md`
-- `Docs/Development/Claude_Tasks/README.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/DOCUMENTATION_INDEX.md`
-
-## Explicit
 **NOT MERGED.**

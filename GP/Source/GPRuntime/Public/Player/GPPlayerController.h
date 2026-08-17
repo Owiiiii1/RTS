@@ -69,21 +69,27 @@ public:
 	/** Authority helper used by Server RPC and non-shipping contracts. */
 	bool AuthorityTryRequestUnitDrop(const FGP_UnitDropManifest& Manifest);
 
-	/** Local TEMP HUD Building Purchase intent (GP-S32R). */
+	/** Local TEMP HUD Building Purchase intent (GP-S35B). Enum overload is compatibility glue. */
+	void RequestBuildingPurchase(FPrimaryAssetId DropDefinitionId);
 	void RequestBuildingPurchase(EGP_OrbitalBuildingType BuildingType);
 
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestBuildingPurchase(EGP_OrbitalBuildingType BuildingType);
+	void Server_RequestBuildingPurchase(FPrimaryAssetId DropDefinitionId);
 
+	bool AuthorityTryPurchaseBuilding(FPrimaryAssetId DropDefinitionId);
 	bool AuthorityTryPurchaseBuilding(EGP_OrbitalBuildingType BuildingType);
 
 	/** Local deploy intent — placement transform from ghost confirm. */
+	void RequestBuildingDeploy(FPrimaryAssetId DropDefinitionId, const FTransform& WorldTransform);
 	void RequestBuildingDeploy(EGP_OrbitalBuildingType BuildingType, const FTransform& WorldTransform);
 
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestBuildingDeploy(EGP_OrbitalBuildingType BuildingType, const FTransform& WorldTransform);
+	void Server_RequestBuildingDeploy(FPrimaryAssetId DropDefinitionId, const FTransform& WorldTransform);
 
+	bool AuthorityTryDeployBuilding(FPrimaryAssetId DropDefinitionId, const FTransform& WorldTransform);
 	bool AuthorityTryDeployBuilding(EGP_OrbitalBuildingType BuildingType, const FTransform& WorldTransform);
+
+	void EnterBuildingPlacementMode(FPrimaryAssetId DropDefinitionId);
 
 	UFUNCTION(BlueprintCallable, Category = "GP|Orbital|Building")
 	void EnterBuildingPlacementMode(EGP_OrbitalBuildingType BuildingType);
@@ -231,7 +237,7 @@ private:
 		int32 NewWinnerTeamId,
 		FGameplayTag OldWinReasonTag,
 		FGameplayTag NewWinReasonTag);
-	void HandleBuildingReadyChanged(EGP_OrbitalBuildingType BuildingType, int32 NewReadyCount);
+	void HandleBuildingReadyChanged(FPrimaryAssetId DropDefinitionId, int32 NewReadyCount);
 	void HandleResolvedMainBaseChanged(int32 TeamId, AGP_MainBase* PreviousMainBase, AGP_MainBase* NewMainBase);
 	void HandlePlayerTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
 	UFUNCTION()
@@ -370,7 +376,7 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<AGP_BuildingPlacementGhost> BuildingPlacementGhost;
 
-	EGP_OrbitalBuildingType ActiveBuildingPlacementType = EGP_OrbitalBuildingType::None;
+	FPrimaryAssetId ActiveBuildingPlacementDropId;
 	bool bBuildingPlacementActive = false;
 	bool bBuildingPlacementRMBWasDown = false;
 	bool bBuildingPlacementLMBWasDown = false;

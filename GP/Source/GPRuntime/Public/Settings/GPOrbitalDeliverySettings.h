@@ -15,8 +15,9 @@ class AGP_SalvageWalker;
  * Project Settings → Game → GP Orbital Delivery (GP-S31R).
  * TEMP operator-test tuning — not final balance. Config=Game → DefaultGame.ini.
  *
- * Capacity / costs / descent stay here (gameplay SoT). Authored payload + DropPod classes
- * are soft refs — no hardcoded /Game paths in C++. Future UGP_DropPodDefinition optional.
+ * Capacity / costs / descent stay here for unit drops. Building purchase cost / payload class
+ * are deprecated SoT as of GP-S35B (UGP_OrbitalDropDefinition / UGP_BuildingDefinition).
+ * Authored BuildingPayloadClass remains a Logistics Hub compatibility bridge.
  */
 UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "GP Orbital Delivery"))
 class GPRUNTIME_API UGP_OrbitalDeliverySettings : public UDeveloperSettings
@@ -90,15 +91,19 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "0.0"))
 	float UnitDropCleanupDelaySeconds = 0.35f;
 
-	/** TEMP Orbital purchase cost for Logistics Hub (deploy consumes READY — no second spend). */
-	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Cost", meta = (ClampMin = "0.0"))
+	/** TEMP Orbital purchase cost for Logistics Hub. Deprecated SoT — GP-S35B uses UGP_OrbitalDropDefinition.Cost.
+	 * Retained as operator DefaultGame.ini compatibility bridge for the native Logistics Hub catalog entry. */
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Cost", meta = (ClampMin = "0.0", DeprecatedProperty,
+		DeprecationMessage = "Canonical cost is UGP_OrbitalDropDefinition.Cost. Kept as Logistics Hub compatibility bridge."))
 	float BuildingOrbitalPurchaseCost = 100.0f;
 
 	/**
 	 * Authored building payload BP (must derive from AGP_BuildingBase). Empty → native AGP_LogisticsHub.
-	 * Owner assigns e.g. BP_LogisticsHub in Project Settings — no C++ /Game path.
+	 * Deprecated SoT — canonical class is UGP_BuildingDefinition.SpawnedClass.
+	 * Retained as operator DefaultGame.ini compatibility bridge for Logistics Hub.
 	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Payload", meta = (AllowAbstract = "false"))
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Payload", meta = (AllowAbstract = "false", DeprecatedProperty,
+		DeprecationMessage = "Canonical payload is UGP_BuildingDefinition.SpawnedClass. Kept as Logistics Hub compatibility bridge."))
 	TSoftClassPtr<AGP_BuildingBase> BuildingPayloadClass;
 
 	/** Building DropPod descent telegraph (GDD 2–3 s). */

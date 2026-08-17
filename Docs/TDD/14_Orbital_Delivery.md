@@ -33,17 +33,17 @@ TEMP/Order UI (manifest)
 
 BUILDING FLOW
 ─────────────
-Order UI Purchase(BuildingDef)
-  → Validate Orbital + catalog
-  → GE_SpendOrbital(Cost) once
-  → ReadyCount[BuildingDef]++
+Order UI Purchase(DropDef)   // UGP_OrbitalDropDefinition / FPrimaryAssetId
+  → Validate catalog + associated BuildingDefinition
+  → GE_SpendOrbital(DropDef.Cost) once
+  → READY[DropDefId]++
 
 Deploy mode (ghost)
-  → Server_RequestBuildingDeploy(BuildingDef, Loc, Rot)
-  → Validate READY count + placement (grid/FoW when available)
-  → ReadyCount-- exactly once
+  → Server_RequestBuildingDeploy(DropDef, Loc, Rot)
+  → Validate READY[DropDefId] + placement (interim: finite transform, MainBase radius, overlap)
+  → READY[DropDefId]-- exactly once
   → Spawn AGP_DropPod → Landing = Loc
-  → OnLanding: spawn one building
+  → OnLanding: spawn BuildingDefinition.SpawnedClass
   (NO second Orbital spend)
 ```
 
@@ -103,9 +103,11 @@ Multi-unit: deterministic server offsets around landing point; stable ordering; 
 
 **Unit manifest:** list of (UnitDropDef or UnitType, Count) with derived total cost/slots.
 
-**Building inventory:** map/array of (BuildingDropDef, ReadyCount) — owner-visible; server decrements on accepted deploy.
+**Building inventory:** replicated array of `{DropDefinitionId (FPrimaryAssetId), ReadyCount}` — owner-only; server decrements the matching DropDef on accepted deploy. Not keyed by `EGP_OrbitalBuildingType` (deprecated glue only).
 
-**Building DropDef:** OrbitalPurchaseCost, footprint fields, soft building class — purchase cost only (deploy free of Orbital).
+**Building DropDef (`UGP_OrbitalDropDefinition`):** `Cost` (OrbitalFerronite) + `DropTags` + soft `BuildingDefinition`. Purchase cost only (deploy free of Orbital). Does **not** own spawned class or footprint.
+
+**Building Definition (`UGP_BuildingDefinition`):** intrinsic `SpawnedClass`, `FootprintCells`, `MaxHealth`, identity. Future BuildGrid reads `FootprintCells` from here.
 
 Single-payload DropDef for buildings; multi-payload carried as **manifest on the order**, not N separate pods unless future design says otherwise. MVP: **one pod per confirmed unit order**; **one pod per building deploy**.
 
@@ -120,16 +122,17 @@ Single-payload DropDef for buildings; multi-payload carried as **manifest on the
 
 ### Building Purchase
 
-1. Catalog valid; Orbital >= purchase cost.
-2. Spend once → ReadyCount++.
+1. DropDef valid; associated BuildingDefinition loaded; Orbital >= `DropDef.Cost`.
+2. Spend once from DropDef.Cost → READY[DropDefId]++.
+3. Cost is never read from BuildingDefinition.
 
 ### Building Deploy
 
-1. ReadyCount > 0 for type.
-2. Placement valid (grid/FoW/blockers when systems exist; interim policy documented per slice).
-3. Decrement ReadyCount once → spawn pod at Loc.
+1. READY[requested DropDefId] > 0.
+2. Placement valid (grid/FoW/blockers when systems exist; **GP-S35B interim:** finite transform, MainBase radius, overlap — no BuildGrid).
+3. Decrement READY[DropDefId] once after pod spawn → spawn pod at Loc → payload class from BuildingDefinition.SpawnedClass (Logistics Hub may fall back to deprecated settings `BuildingPayloadClass` / native `AGP_LogisticsHub`).
 4. Cancel placement: no inventory change, no spend.
-5. **GP-S33C:** Logistics Hub `UGP_GE_UnitCap_Plus5` applies when the **payload building is live/operational**, not at Purchase READY, ghost, or while the DropPod is descending. Editor-placed owned live Hubs also grant the bonus once. Operator FINAL PASS complete on the feature branch; **NOT MERGED**.
+5. **GP-S33C / GP-S35B:** Logistics Hub `UGP_GE_UnitCap_Plus5` applies when the **payload building is live/operational**, not at Purchase READY, ghost, or while the DropPod is descending. Native Hub actor logic — not DA `EffectsOnPlacement`. Editor-placed owned live Hubs also grant the bonus once.
 
 ## Order UI (target / TEMP)
 

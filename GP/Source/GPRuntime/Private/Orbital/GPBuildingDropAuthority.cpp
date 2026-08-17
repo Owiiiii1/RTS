@@ -5,7 +5,7 @@
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPPlayerAttributeSet.h"
 #include "Buildings/GPBuildingBase.h"
-#include "Buildings/GPLogisticsHub.h"
+#include "Buildings/GPBuildingDefinition.h"
 #include "Buildings/GPMainBase.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/BoxComponent.h"
@@ -13,8 +13,10 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Game/GPGameState.h"
+#include "Orbital/GPBuildingDropCatalog.h"
 #include "Orbital/GPDropPod.h"
 #include "Orbital/GPOrbitalBuildingInventoryComponent.h"
+#include "Orbital/GPOrbitalDropDefinition.h"
 #include "Player/GPPlayerState.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 
@@ -23,6 +25,15 @@ namespace GPBuildingDropAuthorityPrivate
 	static UGP_OrbitalBuildingInventoryComponent* GetInventory(AGP_PlayerState* PS)
 	{
 		return IsValid(PS) ? PS->FindComponentByClass<UGP_OrbitalBuildingInventoryComponent>() : nullptr;
+	}
+
+	static UGP_OrbitalDropDefinition* ResolveLegacyDrop(EGP_OrbitalBuildingType BuildingType)
+	{
+		if (BuildingType != EGP_OrbitalBuildingType::LogisticsHub)
+		{
+			return nullptr;
+		}
+		return UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDrop();
 	}
 
 	static bool GetPlacementCapsuleExtent(UClass* BuildingClass, float& OutRadius, float& OutHalfHeight)
@@ -63,43 +74,22 @@ namespace GPBuildingDropAuthorityPrivate
 
 		return false;
 	}
+}
 
-	static UClass* ResolvePayloadClassForType(EGP_OrbitalBuildingType BuildingType)
-	{
-		const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-		switch (BuildingType)
-		{
-		case EGP_OrbitalBuildingType::LogisticsHub:
-			return Settings != nullptr
-				? *Settings->ResolveBuildingPayloadClass()
-				: AGP_LogisticsHub::StaticClass();
-		default:
-			return nullptr;
-		}
-	}
+float GPBuildingDropAuthority::GetPurchaseCost(const UGP_OrbitalDropDefinition* DropDefinition)
+{
+	return UGP_BuildingDropCatalog::Get().GetPurchaseCost(DropDefinition);
 }
 
 float GPBuildingDropAuthority::GetPurchaseCostForType(EGP_OrbitalBuildingType BuildingType)
 {
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	if (Settings == nullptr)
-	{
-		return 0.0f;
-	}
-
-	switch (BuildingType)
-	{
-	case EGP_OrbitalBuildingType::LogisticsHub:
-		return FMath::Max(0.0f, Settings->BuildingOrbitalPurchaseCost);
-	default:
-		return 0.0f;
-	}
+	return GetPurchaseCost(GPBuildingDropAuthorityPrivate::ResolveLegacyDrop(BuildingType));
 }
 
 bool GPBuildingDropAuthority::ValidateInterimPlacement(
 	UWorld* World,
 	AGP_PlayerState* RequestingPlayerState,
-	EGP_OrbitalBuildingType BuildingType,
+	const UGP_OrbitalDropDefinition* DropDefinition,
 	const FTransform& WorldTransform,
 	EGP_BuildingDropRejectReason& OutReject)
 {
@@ -111,9 +101,23 @@ bool GPBuildingDropAuthority::ValidateInterimPlacement(
 		return false;
 	}
 
-	if (BuildingType == EGP_OrbitalBuildingType::None)
+	if (!IsValid(DropDefinition))
 	{
-		OutReject = EGP_BuildingDropRejectReason::InvalidType;
+		OutReject = EGP_BuildingDropRejectReason::InvalidDefinition;
+		return false;
+	}
+
+	if (DropDefinition->ResolveLoadedBuildingDefinition() == nullptr)
+	{
+		OutReject = EGP_BuildingDropRejectReason::MissingBuildingDefinition;
+		return false;
+	}
+
+	const TSubclassOf<AGP_BuildingBase> PayloadClass =
+		UGP_BuildingDropCatalog::Get().ResolvePayloadClass(DropDefinition);
+	if (PayloadClass == nullptr)
+	{
+		OutReject = EGP_BuildingDropRejectReason::MissingSpawnedClass;
 		return false;
 	}
 
@@ -151,23 +155,15 @@ bool GPBuildingDropAuthority::ValidateInterimPlacement(
 		return false;
 	}
 
-	UClass* PayloadClass = GPBuildingDropAuthorityPrivate::ResolvePayloadClassForType(BuildingType);
-	if (PayloadClass == nullptr)
-	{
-		OutReject = EGP_BuildingDropRejectReason::InvalidType;
-		return false;
-	}
-
 	float PlaceRadius = 80.0f;
 	float PlaceHalfHeight = 120.0f;
-	GPBuildingDropAuthorityPrivate::GetPlacementCapsuleExtent(PayloadClass, PlaceRadius, PlaceHalfHeight);
+	GPBuildingDropAuthorityPrivate::GetPlacementCapsuleExtent(*PayloadClass, PlaceRadius, PlaceHalfHeight);
 	const float Margin = Settings != nullptr
 		? FMath::Max(0.0f, Settings->BuildingPlacementOverlapMarginCm)
 		: 25.0f;
 
-	// INTERIM_MVP_PLACEMENT_VALIDATION:
+	// INTERIM_MVP_PLACEMENT_VALIDATION (BuildGrid deferred):
 	// Building capsules intentionally Ignore ECC_Pawn (Visibility-only selection).
-	// Do not rely on physics OverlapMulti — iterate buildings and use capsule extents.
 	for (TActorIterator<AGP_BuildingBase> It(World); It; ++It)
 	{
 		AGP_BuildingBase* OtherBuilding = *It;
@@ -200,10 +196,25 @@ bool GPBuildingDropAuthority::ValidateInterimPlacement(
 	return true;
 }
 
+bool GPBuildingDropAuthority::ValidateInterimPlacement(
+	UWorld* World,
+	AGP_PlayerState* RequestingPlayerState,
+	EGP_OrbitalBuildingType BuildingType,
+	const FTransform& WorldTransform,
+	EGP_BuildingDropRejectReason& OutReject)
+{
+	return ValidateInterimPlacement(
+		World,
+		RequestingPlayerState,
+		GPBuildingDropAuthorityPrivate::ResolveLegacyDrop(BuildingType),
+		WorldTransform,
+		OutReject);
+}
+
 GPBuildingDropAuthority::FPurchaseResult GPBuildingDropAuthority::AuthorityPurchaseBuilding(
 	UWorld* World,
 	AGP_PlayerState* RequestingPlayerState,
-	EGP_OrbitalBuildingType BuildingType)
+	const UGP_OrbitalDropDefinition* DropDefinition)
 {
 	FPurchaseResult Result;
 
@@ -225,9 +236,22 @@ GPBuildingDropAuthority::FPurchaseResult GPBuildingDropAuthority::AuthorityPurch
 		return Result;
 	}
 
-	if (BuildingType == EGP_OrbitalBuildingType::None)
+	if (!IsValid(DropDefinition))
 	{
-		Result.RejectReason = EGP_BuildingDropRejectReason::InvalidType;
+		Result.RejectReason = EGP_BuildingDropRejectReason::InvalidDefinition;
+		return Result;
+	}
+
+	Result.DropDefinitionId = DropDefinition->GetPrimaryAssetId();
+	if (!Result.DropDefinitionId.IsValid())
+	{
+		Result.RejectReason = EGP_BuildingDropRejectReason::InvalidDefinition;
+		return Result;
+	}
+
+	if (DropDefinition->ResolveLoadedBuildingDefinition() == nullptr)
+	{
+		Result.RejectReason = EGP_BuildingDropRejectReason::MissingBuildingDefinition;
 		return Result;
 	}
 
@@ -253,10 +277,10 @@ GPBuildingDropAuthority::FPurchaseResult GPBuildingDropAuthority::AuthorityPurch
 		return Result;
 	}
 
-	Result.OrbitalCost = GetPurchaseCostForType(BuildingType);
+	Result.OrbitalCost = GetPurchaseCost(DropDefinition);
 	if (Result.OrbitalCost <= KINDA_SMALL_NUMBER)
 	{
-		Result.RejectReason = EGP_BuildingDropRejectReason::InvalidType;
+		Result.RejectReason = EGP_BuildingDropRejectReason::InvalidDefinition;
 		return Result;
 	}
 
@@ -296,21 +320,39 @@ GPBuildingDropAuthority::FPurchaseResult GPBuildingDropAuthority::AuthorityPurch
 		return Result;
 	}
 
-	if (!Inventory->AuthorityAddReady(BuildingType, 1))
+	if (!Inventory->AuthorityAddReady(DropDefinition, 1))
 	{
-		Result.RejectReason = EGP_BuildingDropRejectReason::InvalidType;
+		Result.RejectReason = EGP_BuildingDropRejectReason::InvalidDefinition;
 		return Result;
 	}
 
 	Result.bAccepted = true;
-	Result.ReadyAfter = Inventory->GetReadyCount(BuildingType);
+	Result.ReadyAfter = Inventory->GetReadyCount(DropDefinition);
 	return Result;
+}
+
+GPBuildingDropAuthority::FPurchaseResult GPBuildingDropAuthority::AuthorityPurchaseBuilding(
+	UWorld* World,
+	AGP_PlayerState* RequestingPlayerState,
+	EGP_OrbitalBuildingType BuildingType)
+{
+	if (BuildingType == EGP_OrbitalBuildingType::None)
+	{
+		FPurchaseResult Result;
+		Result.RejectReason = EGP_BuildingDropRejectReason::InvalidType;
+		return Result;
+	}
+
+	return AuthorityPurchaseBuilding(
+		World,
+		RequestingPlayerState,
+		GPBuildingDropAuthorityPrivate::ResolveLegacyDrop(BuildingType));
 }
 
 GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployBuilding(
 	UWorld* World,
 	AGP_PlayerState* RequestingPlayerState,
-	EGP_OrbitalBuildingType BuildingType,
+	const UGP_OrbitalDropDefinition* DropDefinition,
 	const FTransform& WorldTransform)
 {
 	FDeployResult Result;
@@ -333,6 +375,14 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		return Result;
 	}
 
+	if (!IsValid(DropDefinition))
+	{
+		Result.RejectReason = EGP_BuildingDropRejectReason::InvalidDefinition;
+		return Result;
+	}
+
+	Result.DropDefinitionId = DropDefinition->GetPrimaryAssetId();
+
 	UGP_OrbitalBuildingInventoryComponent* Inventory =
 		GPBuildingDropAuthorityPrivate::GetInventory(RequestingPlayerState);
 	if (Inventory == nullptr)
@@ -341,16 +391,23 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		return Result;
 	}
 
-	if (Inventory->GetReadyCount(BuildingType) <= 0)
+	if (Inventory->GetReadyCount(DropDefinition) <= 0)
 	{
 		Result.RejectReason = EGP_BuildingDropRejectReason::NoReadyInventory;
 		return Result;
 	}
 
 	EGP_BuildingDropRejectReason PlacementReject = EGP_BuildingDropRejectReason::None;
-	if (!ValidateInterimPlacement(World, RequestingPlayerState, BuildingType, WorldTransform, PlacementReject))
+	if (!ValidateInterimPlacement(World, RequestingPlayerState, DropDefinition, WorldTransform, PlacementReject))
 	{
 		Result.RejectReason = PlacementReject;
+		return Result;
+	}
+
+	Result.PayloadClass = UGP_BuildingDropCatalog::Get().ResolvePayloadClass(DropDefinition);
+	if (Result.PayloadClass == nullptr)
+	{
+		Result.RejectReason = EGP_BuildingDropRejectReason::MissingSpawnedClass;
 		return Result;
 	}
 
@@ -383,7 +440,7 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		return Result;
 	}
 
-	if (!Inventory->AuthorityTryConsumeReady(BuildingType, 1))
+	if (!Inventory->AuthorityTryConsumeReady(DropDefinition, 1))
 	{
 		Pod->Destroy();
 		Result.RejectReason = EGP_BuildingDropRejectReason::NoReadyInventory;
@@ -393,7 +450,8 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 	Pod->AuthorityInitBuildingDrop(
 		RequestingPlayerState,
 		TeamId,
-		BuildingType,
+		Result.DropDefinitionId,
+		Result.PayloadClass,
 		LandingLoc,
 		LandingRot,
 		Settings->BuildingDropDescentDurationSeconds,
@@ -402,7 +460,20 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		Settings->BuildingDropCleanupDelaySeconds);
 
 	Result.bAccepted = true;
-	Result.ReadyAfter = Inventory->GetReadyCount(BuildingType);
+	Result.ReadyAfter = Inventory->GetReadyCount(DropDefinition);
 	Result.SpawnedPod = Pod;
 	return Result;
+}
+
+GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployBuilding(
+	UWorld* World,
+	AGP_PlayerState* RequestingPlayerState,
+	EGP_OrbitalBuildingType BuildingType,
+	const FTransform& WorldTransform)
+{
+	return AuthorityDeployBuilding(
+		World,
+		RequestingPlayerState,
+		GPBuildingDropAuthorityPrivate::ResolveLegacyDrop(BuildingType),
+		WorldTransform);
 }

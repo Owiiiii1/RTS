@@ -5,10 +5,10 @@
 #include "CoreMinimal.h"
 #include "GPOrbitalBuildingType.generated.h"
 
-/** MVP orbital building catalog entry (GP-S32R). */
+/** MVP orbital building catalog entry (GP-S32R). Deprecated identity — GP-S35B uses FPrimaryAssetId. */
 UENUM(BlueprintType)
 enum class EGP_OrbitalBuildingType : uint8
 {
 	None = 0,
-	LogisticsHub
+	LogisticsHub UMETA(DisplayName = "Logistics Hub (Deprecated)")
 };

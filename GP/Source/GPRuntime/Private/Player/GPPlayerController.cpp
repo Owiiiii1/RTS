@@ -32,8 +32,10 @@
 #include "Game/GPGameState.h"
 #include "Orbital/GPUnitDropAuthority.h"
 #include "Orbital/GPBuildingDropAuthority.h"
+#include "Orbital/GPBuildingDropCatalog.h"
 #include "Orbital/GPBuildingPlacementGhost.h"
 #include "Orbital/GPOrbitalBuildingInventoryComponent.h"
+#include "Orbital/GPOrbitalDropDefinition.h"
 #include "Orbital/GPDropPod.h"
 #include "Resources/GPStorageComponent.h"
 #include "Tags/GPGameplayTags.h"
@@ -1079,27 +1081,36 @@ void AGP_PlayerController::Client_NotifyUnitDropRejected_Implementation(EGP_Unit
 	}
 }
 
-void AGP_PlayerController::RequestBuildingPurchase(EGP_OrbitalBuildingType BuildingType)
+void AGP_PlayerController::RequestBuildingPurchase(FPrimaryAssetId DropDefinitionId)
 {
 	if (!IsLocalController())
 	{
 		return;
 	}
-	Server_RequestBuildingPurchase(BuildingType);
+	Server_RequestBuildingPurchase(DropDefinitionId);
 }
 
-bool AGP_PlayerController::Server_RequestBuildingPurchase_Validate(EGP_OrbitalBuildingType BuildingType)
+void AGP_PlayerController::RequestBuildingPurchase(EGP_OrbitalBuildingType BuildingType)
 {
-	(void)BuildingType;
+	if (BuildingType != EGP_OrbitalBuildingType::LogisticsHub)
+	{
+		return;
+	}
+	RequestBuildingPurchase(UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDropId());
+}
+
+bool AGP_PlayerController::Server_RequestBuildingPurchase_Validate(FPrimaryAssetId DropDefinitionId)
+{
+	(void)DropDefinitionId;
 	return true;
 }
 
-void AGP_PlayerController::Server_RequestBuildingPurchase_Implementation(EGP_OrbitalBuildingType BuildingType)
+void AGP_PlayerController::Server_RequestBuildingPurchase_Implementation(FPrimaryAssetId DropDefinitionId)
 {
-	AuthorityTryPurchaseBuilding(BuildingType);
+	AuthorityTryPurchaseBuilding(DropDefinitionId);
 }
 
-bool AGP_PlayerController::AuthorityTryPurchaseBuilding(EGP_OrbitalBuildingType BuildingType)
+bool AGP_PlayerController::AuthorityTryPurchaseBuilding(FPrimaryAssetId DropDefinitionId)
 {
 	if (!HasAuthority())
 	{
@@ -1112,47 +1123,67 @@ bool AGP_PlayerController::AuthorityTryPurchaseBuilding(EGP_OrbitalBuildingType 
 		return false;
 	}
 
+	UGP_OrbitalDropDefinition* DropDef = UGP_BuildingDropCatalog::Get().FindDropDefinition(DropDefinitionId);
 	const GPBuildingDropAuthority::FPurchaseResult Result =
-		GPBuildingDropAuthority::AuthorityPurchaseBuilding(GetWorld(), PS, BuildingType);
+		GPBuildingDropAuthority::AuthorityPurchaseBuilding(GetWorld(), PS, DropDef);
 	UE_LOG(LogTemp, Log,
-		TEXT("GP BuildingPurchase Result: PC=%s Team=%d Accepted=%s Reason=%d Cost=%.3f Ready=%d"),
+		TEXT("GP BuildingPurchase Result: PC=%s Team=%d Accepted=%s Reason=%d Cost=%.3f Ready=%d Drop=%s"),
 		*GetName(),
 		PS->GetTeamId(),
 		Result.bAccepted ? TEXT("true") : TEXT("false"),
 		static_cast<int32>(Result.RejectReason),
 		Result.OrbitalCost,
-		Result.ReadyAfter);
+		Result.ReadyAfter,
+		*DropDefinitionId.ToString());
 	return Result.bAccepted;
 }
 
-void AGP_PlayerController::RequestBuildingDeploy(EGP_OrbitalBuildingType BuildingType, const FTransform& WorldTransform)
+bool AGP_PlayerController::AuthorityTryPurchaseBuilding(EGP_OrbitalBuildingType BuildingType)
+{
+	if (BuildingType != EGP_OrbitalBuildingType::LogisticsHub)
+	{
+		return false;
+	}
+	return AuthorityTryPurchaseBuilding(UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDropId());
+}
+
+void AGP_PlayerController::RequestBuildingDeploy(FPrimaryAssetId DropDefinitionId, const FTransform& WorldTransform)
 {
 	if (!IsLocalController())
 	{
 		return;
 	}
-	Server_RequestBuildingDeploy(BuildingType, WorldTransform);
+	Server_RequestBuildingDeploy(DropDefinitionId, WorldTransform);
+}
+
+void AGP_PlayerController::RequestBuildingDeploy(EGP_OrbitalBuildingType BuildingType, const FTransform& WorldTransform)
+{
+	if (BuildingType != EGP_OrbitalBuildingType::LogisticsHub)
+	{
+		return;
+	}
+	RequestBuildingDeploy(UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDropId(), WorldTransform);
 }
 
 bool AGP_PlayerController::Server_RequestBuildingDeploy_Validate(
-	EGP_OrbitalBuildingType BuildingType,
+	FPrimaryAssetId DropDefinitionId,
 	const FTransform& WorldTransform)
 {
-	(void)BuildingType;
+	(void)DropDefinitionId;
 	const FVector Loc = WorldTransform.GetLocation();
 	return !Loc.ContainsNaN()
 		&& FMath::IsFinite(Loc.X) && FMath::IsFinite(Loc.Y) && FMath::IsFinite(Loc.Z);
 }
 
 void AGP_PlayerController::Server_RequestBuildingDeploy_Implementation(
-	EGP_OrbitalBuildingType BuildingType,
+	FPrimaryAssetId DropDefinitionId,
 	const FTransform& WorldTransform)
 {
-	AuthorityTryDeployBuilding(BuildingType, WorldTransform);
+	AuthorityTryDeployBuilding(DropDefinitionId, WorldTransform);
 }
 
 bool AGP_PlayerController::AuthorityTryDeployBuilding(
-	EGP_OrbitalBuildingType BuildingType,
+	FPrimaryAssetId DropDefinitionId,
 	const FTransform& WorldTransform)
 {
 	if (!HasAuthority())
@@ -1170,28 +1201,43 @@ bool AGP_PlayerController::AuthorityTryDeployBuilding(
 		? PS->GetPlayerAttributeSet()->GetOrbitalFerronite()
 		: 0.0f;
 
+	UGP_OrbitalDropDefinition* DropDef = UGP_BuildingDropCatalog::Get().FindDropDefinition(DropDefinitionId);
 	const GPBuildingDropAuthority::FDeployResult Result =
-		GPBuildingDropAuthority::AuthorityDeployBuilding(GetWorld(), PS, BuildingType, WorldTransform);
+		GPBuildingDropAuthority::AuthorityDeployBuilding(GetWorld(), PS, DropDef, WorldTransform);
 
 	const float OrbitalAfter = PS->GetPlayerAttributeSet() != nullptr
 		? PS->GetPlayerAttributeSet()->GetOrbitalFerronite()
 		: 0.0f;
 
 	UE_LOG(LogTemp, Log,
-		TEXT("GP BuildingDeploy Result: PC=%s Team=%d Accepted=%s Reason=%d Ready=%d Pod=%s OrbitalUnchanged=%s"),
+		TEXT("GP BuildingDeploy Result: PC=%s Team=%d Accepted=%s Reason=%d Ready=%d Pod=%s OrbitalUnchanged=%s Drop=%s"),
 		*GetName(),
 		PS->GetTeamId(),
 		Result.bAccepted ? TEXT("true") : TEXT("false"),
 		static_cast<int32>(Result.RejectReason),
 		Result.ReadyAfter,
 		*GetNameSafe(Result.SpawnedPod.Get()),
-		FMath::IsNearlyEqual(OrbitalBefore, OrbitalAfter, 0.05f) ? TEXT("true") : TEXT("false"));
+		FMath::IsNearlyEqual(OrbitalBefore, OrbitalAfter, 0.05f) ? TEXT("true") : TEXT("false"),
+		*DropDefinitionId.ToString());
 	return Result.bAccepted;
 }
 
-void AGP_PlayerController::EnterBuildingPlacementMode(EGP_OrbitalBuildingType BuildingType)
+bool AGP_PlayerController::AuthorityTryDeployBuilding(
+	EGP_OrbitalBuildingType BuildingType,
+	const FTransform& WorldTransform)
 {
-	if (!IsLocalController() || BuildingType == EGP_OrbitalBuildingType::None)
+	if (BuildingType != EGP_OrbitalBuildingType::LogisticsHub)
+	{
+		return false;
+	}
+	return AuthorityTryDeployBuilding(
+		UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDropId(),
+		WorldTransform);
+}
+
+void AGP_PlayerController::EnterBuildingPlacementMode(FPrimaryAssetId DropDefinitionId)
+{
+	if (!IsLocalController() || !DropDefinitionId.IsValid())
 	{
 		return;
 	}
@@ -1199,14 +1245,14 @@ void AGP_PlayerController::EnterBuildingPlacementMode(EGP_OrbitalBuildingType Bu
 	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
 	UGP_OrbitalBuildingInventoryComponent* Inventory =
 		PS != nullptr ? PS->GetOrbitalBuildingInventoryComponent() : nullptr;
-	if (Inventory == nullptr || Inventory->GetReadyCount(BuildingType) <= 0)
+	if (Inventory == nullptr || Inventory->GetReadyCount(DropDefinitionId) <= 0)
 	{
 		return;
 	}
 
 	ClearSelectionForBuildingPlacementEnter();
 
-	ActiveBuildingPlacementType = BuildingType;
+	ActiveBuildingPlacementDropId = DropDefinitionId;
 	bBuildingPlacementActive = true;
 	bBuildingPlacementRMBWasDown = IsInputKeyDown(EKeys::RightMouseButton);
 	bBuildingPlacementLMBWasDown = IsInputKeyDown(EKeys::LeftMouseButton);
@@ -1231,6 +1277,15 @@ void AGP_PlayerController::EnterBuildingPlacementMode(EGP_OrbitalBuildingType Bu
 		BuildingPlacementGhost->SetGhostVisible(true);
 		UpdateBuildingPlacementGhost();
 	}
+}
+
+void AGP_PlayerController::EnterBuildingPlacementMode(EGP_OrbitalBuildingType BuildingType)
+{
+	if (BuildingType != EGP_OrbitalBuildingType::LogisticsHub)
+	{
+		return;
+	}
+	EnterBuildingPlacementMode(UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDropId());
 }
 
 void AGP_PlayerController::ClearSelectionForBuildingPlacementEnter()
@@ -1316,7 +1371,7 @@ void AGP_PlayerController::CancelBuildingPlacement()
 	}
 
 	bBuildingPlacementActive = false;
-	ActiveBuildingPlacementType = EGP_OrbitalBuildingType::None;
+	ActiveBuildingPlacementDropId = FPrimaryAssetId();
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
 	DestroyBuildingPlacementGhost();
@@ -1537,13 +1592,13 @@ void AGP_PlayerController::ConfirmBuildingPlacement()
 		return;
 	}
 
-	const EGP_OrbitalBuildingType Type = ActiveBuildingPlacementType;
+	const FPrimaryAssetId DropId = ActiveBuildingPlacementDropId;
 	const FTransform DeployTransform(GroundRot, GroundLoc);
 	CancelBuildingPlacement();
 	// Prevent the confirm release / held LMB from becoming a selection click.
 	bBuildingPlacementSuppressConfirmUntilLMBRelease = true;
 	bBuildingPlacementLMBWasDown = true;
-	RequestBuildingDeploy(Type, DeployTransform);
+	RequestBuildingDeploy(DropId, DeployTransform);
 }
 
 bool AGP_PlayerController::TraceGroundUnderCursor(FVector& OutGroundLocation, FRotator& OutGroundRotation) const
@@ -1665,25 +1720,46 @@ void AGP_PlayerController::SyncBuildingReadyHUDFromInventory()
 	}
 
 	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	UGP_OrbitalBuildingInventoryComponent* Inventory =
+		PS != nullptr ? PS->GetOrbitalBuildingInventoryComponent() : nullptr;
+
+	TArray<UGP_OrbitalDropDefinition*> Drops;
+	UGP_BuildingDropCatalog::Get().GetOperatorVisibleDrops(Drops);
+
+	TArray<FGP_BuildingHudCatalogRow> Rows;
+	Rows.Reserve(Drops.Num());
 	int32 ReadyLogisticsHub = 0;
-	if (PS != nullptr)
+	const FPrimaryAssetId HubId = UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDropId();
+	for (UGP_OrbitalDropDefinition* Drop : Drops)
 	{
-		if (UGP_OrbitalBuildingInventoryComponent* Inventory = PS->GetOrbitalBuildingInventoryComponent())
+		if (!IsValid(Drop))
 		{
-			ReadyLogisticsHub = Inventory->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub);
+			continue;
+		}
+
+		FGP_BuildingHudCatalogRow Row;
+		Row.DropDefinitionId = Drop->GetPrimaryAssetId();
+		Row.DisplayName = Drop->GetAcquisitionDisplayName().ToString();
+		Row.Cost = UGP_BuildingDropCatalog::Get().GetPurchaseCost(Drop);
+		Row.ReadyCount = Inventory != nullptr ? Inventory->GetReadyCount(Drop) : 0;
+		Row.bCanDeploy = Row.ReadyCount > 0
+			&& UGP_BuildingDropCatalog::Get().ResolvePayloadClass(Drop) != nullptr;
+		Rows.Add(Row);
+		if (Row.DropDefinitionId == HubId)
+		{
+			ReadyLogisticsHub = Row.ReadyCount;
 		}
 	}
+
+	PlanetaryFerroniteHUD->SetBuildingCatalogDisplay(Rows);
 	PlanetaryFerroniteHUD->SetBuildingReadyDisplay(ReadyLogisticsHub);
 }
 
-void AGP_PlayerController::HandleBuildingReadyChanged(EGP_OrbitalBuildingType BuildingType, int32 NewReadyCount)
+void AGP_PlayerController::HandleBuildingReadyChanged(FPrimaryAssetId DropDefinitionId, int32 NewReadyCount)
 {
-	(void)BuildingType;
-	EnsurePlanetaryFerroniteHUD();
-	if (PlanetaryFerroniteHUD != nullptr)
-	{
-		PlanetaryFerroniteHUD->SetBuildingReadyDisplay(NewReadyCount);
-	}
+	(void)DropDefinitionId;
+	(void)NewReadyCount;
+	SyncBuildingReadyHUDFromInventory();
 }
 
 bool AGP_PlayerController::Server_RequestLaunchReadyContainer_Validate()

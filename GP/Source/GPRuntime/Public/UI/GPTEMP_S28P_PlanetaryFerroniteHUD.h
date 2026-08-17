@@ -12,6 +12,32 @@ class UTextBlock;
 class UCanvasPanel;
 class UVerticalBox;
 class UHorizontalBox;
+class UGP_TEMP_S28P_PlanetaryFerroniteHUD;
+
+struct FGP_BuildingHudCatalogRow
+{
+	FPrimaryAssetId DropDefinitionId;
+	FString DisplayName;
+	float Cost = 0.0f;
+	int32 ReadyCount = 0;
+	bool bCanDeploy = false;
+};
+
+UCLASS()
+class UGP_TEMP_BuildingCatalogRowBinder : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	TWeakObjectPtr<UGP_TEMP_S28P_PlanetaryFerroniteHUD> OwnerHUD;
+	FPrimaryAssetId DropDefinitionId;
+
+	UFUNCTION()
+	void HandlePurchaseClicked();
+
+	UFUNCTION()
+	void HandleDeployClicked();
+};
 
 /**
  * TEMP_S28P_HUD — Base storage + Orbital + Launch + Unit Drop (GP-S28P4 / GP-S30 / GP-S31R).
@@ -81,6 +107,9 @@ public:
 	void HandleDeployLogisticsHubClicked();
 
 	void SetBuildingReadyDisplay(int32 ReadyLogisticsHubCount);
+	void SetBuildingCatalogDisplay(const TArray<FGP_BuildingHudCatalogRow>& Rows);
+	void RequestBuildingPurchaseById(FPrimaryAssetId DropDefinitionId);
+	void RequestBuildingDeployById(FPrimaryAssetId DropDefinitionId);
 
 #if !UE_BUILD_SHIPPING
 	FString GetBaseLineTextForContract() const;
@@ -247,6 +276,16 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> DeployLogisticsHubLabel;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UVerticalBox> BuildingExtraRowsBox;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UGP_TEMP_BuildingCatalogRowBinder>> ExtraRowBinders;
+
+	TArray<FGP_BuildingHudCatalogRow> BuildingCatalogRows;
+
+	void RebuildExtraBuildingRows();
 
 	bool bHasResolvedBase = false;
 	float DisplayStored = 0.0f;

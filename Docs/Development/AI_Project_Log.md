@@ -1,5 +1,19 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-17 — GP-S35B Multi-Building Data Architecture (implementation candidate)
+
+Status: **GP-S35B_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s35b-multi-building-data` (base verified `main` @ `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`)
+- `UGP_BuildingDefinition` = intrinsic building facts; `UGP_OrbitalDropDefinition` = acquisition/delivery; Cost only on DropDef
+- READY keyed by `FPrimaryAssetId` of DropDef (`FGP_ReadyBuildingEntry` owner-only array)
+- Native catalog identities: Logistics Hub / Defensive Turret / Wall / Wall Turret; only Hub keeps full gameplay
+- Hub +5 MaxUnits stays native on `AGP_LogisticsHub`; BuildGrid deferred (`FootprintCells` stored only)
+- Settings `BuildingOrbitalPurchaseCost` / `BuildingPayloadClass` deprecated but kept as DefaultGame.ini Hub bridge (ini not committed)
+- Contract `gp.Building.RunMultiBuildingDataContractTest` + listed regressions Failures=0; GPEditor Win64 Development + UHT **PASS**
+- **NOT MERGED** — await operator PIE validation. Do not self-approve
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-17 — GP-S34W Match Win/Lose MVP (finalization)
 
 Status: **GP-S34W_FINALIZATION_READY_FOR_MERGE**

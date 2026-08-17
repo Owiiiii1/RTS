@@ -80,9 +80,9 @@ public:
 
 | Asset Type | Prefix | Owner Module | Purpose |
 | --- | --- | --- | --- |
-| Orbital Drop Definition | `DA_GP_OrbitalDrop_*` | `GPRuntime` | **Acquisition surface.** Drop cost (OrbitalFerronite), drop classification tags, descent timing, soft payload class, footprint, validation flags. Per [`14_Orbital_Delivery`](14_Orbital_Delivery.md). |
+| Orbital Drop Definition | `DA_GP_OrbitalDrop_*` | `GPRuntime` | **Acquisition surface.** `Cost` (OrbitalFerronite) + `DropTags`. Building drops soft-ref `UGP_BuildingDefinition` (class / footprint live there). Unit drops still conceptual until a unit-catalog slice. Per [`14_Orbital_Delivery`](14_Orbital_Delivery.md). |
 | Unit Definition | `DA_GP_Unit_*` | `GPRuntime` | Unit identity, tags, base stats, allowed commands, granted abilities, visual mesh references. No local-produce cost. |
-| Building Definition | `DA_GP_Building_*` | `GPRuntime` | Building identity, unit cap contribution, components config, footprint. No local-build cost. |
+| Building Definition | `DA_GP_Building_*` | `GPRuntime` | Building identity, tags, soft `SpawnedClass`, `MaxHealth`, `FootprintCells`. **No acquisition cost.** |
 | Resource Definition | `DA_GP_Resource_*` | `GPRuntime` | Resource type metadata, score conversion, SWARM threat-per-stored-unit, visual tint. |
 | Session Config | `DA_GP_Session_*` | `GPRuntime` | Match-level tuning: delivery quota, match duration, win flags, SWARM threat→wave curves. |
 | Faction Definition | `DA_GP_Faction_*` | `GPRuntime` | Starting units/buildings, visual team identity, allowed orbital drops, faction tags. |
@@ -98,14 +98,25 @@ Per [`../GDD/02_Core_Gameplay_Loop`](../GDD/02_Core_Gameplay_Loop.md) Data Asset
 
 ### Orbital Drops (Acquisition Catalog)
 
-Per [`14_Orbital_Delivery`](14_Orbital_Delivery.md). Each `DA_GP_OrbitalDrop_*` is the **single source of acquisition cost** for its payload. Schema fields per `UGP_OrbitalDropDefinition`: `Cost` (OrbitalFerronite), `DropTags` (`GP.Drop.Type.*`), `DescentDuration`, `PayloadClass` (soft), `FootprintCells`, validation flags (`bRequiresActiveVisibility`, `MinDistanceFromMainBase`, `bMountsOnWall`).
+Per [`14_Orbital_Delivery`](14_Orbital_Delivery.md). Each `DA_GP_OrbitalDrop_*` is the **single source of acquisition cost** for its payload.
 
-- `DA_GP_OrbitalDrop_Worker` — `DropTags: GP.Drop.Type.Unit`; `Cost`: TBD; `PayloadClass` → Worker; `FootprintCells`: 1×1.
-- `DA_GP_OrbitalDrop_SalvageWalker` — `DropTags: GP.Drop.Type.Unit`; `Cost`: TBD; `PayloadClass` → Salvage Walker; `FootprintCells`: 1×1.
-- `DA_GP_OrbitalDrop_LogisticsHub` — `DropTags: GP.Drop.Type.Building`; `Cost`: TBD; `FootprintCells`: 4×4.
-- `DA_GP_OrbitalDrop_DefensiveTurret` — `DropTags: GP.Drop.Type.Building`; `Cost`: TBD; `FootprintCells`: 4×4.
-- `DA_GP_OrbitalDrop_Wall` — `DropTags: GP.Drop.Type.Wall`; `Cost`: TBD (per-segment, drag-build); `FootprintCells`: 2×2.
-- `DA_GP_OrbitalDrop_WallTurret` — `DropTags: GP.Drop.Type.WallTurret` payload classified `GP.Drop.Type.Building`; `bMountsOnWall`: true; `Cost`: TBD; `FootprintCells`: 2×2.
+**Building-drop ownership (GP-S35B, resolved):**
+
+| Asset | Owns |
+| --- | --- |
+| `UGP_BuildingDefinition` | Intrinsic payload: `DisplayName`, `Icon`, `BuildingTags`, `SpawnedClass`, `MaxHealth`, `FootprintCells` |
+| `UGP_OrbitalDropDefinition` | Acquisition/delivery: `Cost`, `DropTags`, soft `BuildingDefinition` |
+
+Do **not** duplicate `SpawnedClass` / `FootprintCells` / `MaxHealth` onto the DropDef as a second SoT. Descent timing stays on `UGP_OrbitalDeliverySettings` until a dedicated delivery-DA slice moves it. Interim placement flags (MainBase radius, overlap) stay on settings.
+
+Building catalog names (content, later): `DA_GP_Building_LogisticsHub` / `DefensiveTurret` / `Wall` / `WallTurret` and matching `DA_GP_OrbitalDrop_*`. GP-S35B ships a native bootstrap catalog with those identities; authored `.uasset` files are not required for architecture validation.
+
+- `DA_GP_OrbitalDrop_Worker` — `DropTags: GP.Drop.Type.Unit`; `Cost`: TBD; unit payload still settings/native until unit DropDef slice.
+- `DA_GP_OrbitalDrop_SalvageWalker` — `DropTags: GP.Drop.Type.Unit`; `Cost`: TBD.
+- `DA_GP_OrbitalDrop_LogisticsHub` — `DropTags: GP.Drop.Type.Building`; `Cost` from DropDef (operator Hub bridge may sync deprecated settings cost); BuildingDefinition `FootprintCells`: 4×4.
+- `DA_GP_OrbitalDrop_DefensiveTurret` — `DropTags: GP.Drop.Type.Building`; identity only in GP-S35B (no turret combat).
+- `DA_GP_OrbitalDrop_Wall` — `DropTags: GP.Drop.Type.Wall`; identity only (no wall gameplay / drag-build).
+- `DA_GP_OrbitalDrop_WallTurret` — payload classified `GP.Drop.Type.Building`; identity only (no wall mounting).
 
 `GP.Drop.Type.Module` — reserved post-MVP; no active `DA_GP_OrbitalDrop_*` ships in MVP.
 

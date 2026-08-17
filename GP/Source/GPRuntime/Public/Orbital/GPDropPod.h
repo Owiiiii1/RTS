@@ -4,13 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Orbital/GPOrbitalBuildingType.h"
 #include "Orbital/GPUnitDropManifest.h"
 #include "GPDropPod.generated.h"
 
 class USceneComponent;
 class UStaticMeshComponent;
 class AGP_PlayerState;
+class AGP_BuildingBase;
 
 UENUM(BlueprintType)
 enum class EGP_DropPodPayloadKind : uint8
@@ -63,7 +63,8 @@ public:
 	void AuthorityInitBuildingDrop(
 		AGP_PlayerState* RequestingPlayerState,
 		int32 TeamId,
-		EGP_OrbitalBuildingType BuildingType,
+		FPrimaryAssetId DropDefinitionId,
+		TSubclassOf<AGP_BuildingBase> PayloadClass,
 		const FVector& LandingWorldLocation,
 		const FRotator& LandingWorldRotation,
 		float DescentDurationSeconds,
@@ -159,7 +160,8 @@ private:
 	void AuthorityReleaseLeftoverUnitReservation();
 
 	FGP_UnitDropManifest PendingManifest;
-	EGP_OrbitalBuildingType PendingBuildingType = EGP_OrbitalBuildingType::None;
+	FPrimaryAssetId PendingDropDefinitionId;
+	TSubclassOf<AGP_BuildingBase> PendingBuildingPayloadClass;
 	TWeakObjectPtr<AGP_PlayerState> RequestingPlayerStateWeak;
 	float DescentDurationSeconds = 2.5f;
 	float SpawnSpacingCm = 180.0f;

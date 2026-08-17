@@ -7,10 +7,29 @@
 #include "Orbital/GPOrbitalBuildingType.h"
 #include "GPOrbitalBuildingInventoryComponent.generated.h"
 
-DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGP_OrbitalBuildingReadyChanged, EGP_OrbitalBuildingType, int32);
+class UGP_OrbitalDropDefinition;
+
+USTRUCT(BlueprintType)
+struct GPRUNTIME_API FGP_ReadyBuildingEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FPrimaryAssetId DropDefinitionId;
+
+	UPROPERTY()
+	int32 ReadyCount = 0;
+
+	bool operator==(const FGP_ReadyBuildingEntry& Other) const
+	{
+		return DropDefinitionId == Other.DropDefinitionId && ReadyCount == Other.ReadyCount;
+	}
+};
+
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGP_OrbitalBuildingReadyChanged, FPrimaryAssetId, int32);
 
 /**
- * Owner-only READY inventory for orbital building deploy (GP-S32R).
+ * Owner-only READY inventory keyed by stable OrbitalDropDefinition identity (GP-S35B).
  * Purchase increments; deploy consumes after pod spawn succeeds.
  */
 UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))
@@ -24,23 +43,36 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION(BlueprintPure, Category = "GP|Orbital|Building")
+	int32 GetReadyCount(FPrimaryAssetId DropDefinitionId) const;
+
+	int32 GetReadyCount(const UGP_OrbitalDropDefinition* DropDefinition) const;
+
+	/** Deprecated compatibility: maps LogisticsHub to the native catalog DropDef id. */
 	int32 GetReadyCount(EGP_OrbitalBuildingType BuildingType) const;
 
-	/** Authority-only. Increments READY for supported type. */
+	bool AuthorityAddReady(FPrimaryAssetId DropDefinitionId, int32 Amount = 1);
+	bool AuthorityAddReady(const UGP_OrbitalDropDefinition* DropDefinition, int32 Amount = 1);
 	bool AuthorityAddReady(EGP_OrbitalBuildingType BuildingType, int32 Amount = 1);
 
-	/** Authority-only. Decrements READY when Amount available. */
+	bool AuthorityTryConsumeReady(FPrimaryAssetId DropDefinitionId, int32 Amount = 1);
+	bool AuthorityTryConsumeReady(const UGP_OrbitalDropDefinition* DropDefinition, int32 Amount = 1);
 	bool AuthorityTryConsumeReady(EGP_OrbitalBuildingType BuildingType, int32 Amount = 1);
+
+	const TArray<FGP_ReadyBuildingEntry>& GetReadyEntries() const { return ReadyEntries; }
 
 	FOnGP_OrbitalBuildingReadyChanged OnReadyChanged;
 
 protected:
 	UFUNCTION()
-	void OnRep_ReadyLogisticsHubCount(int32 OldCount);
+	void OnRep_ReadyEntries();
 
 private:
-	void BroadcastReadyChanged(EGP_OrbitalBuildingType BuildingType, int32 NewCount);
+	int32 FindEntryIndex(const FPrimaryAssetId& DropDefinitionId) const;
+	void BroadcastReadyChanged(const FPrimaryAssetId& DropDefinitionId, int32 NewCount);
+	static FPrimaryAssetId ResolveLegacyTypeId(EGP_OrbitalBuildingType BuildingType);
 
-	UPROPERTY(ReplicatedUsing = OnRep_ReadyLogisticsHubCount)
-	int32 ReadyLogisticsHubCount = 0;
+	UPROPERTY(ReplicatedUsing = OnRep_ReadyEntries)
+	TArray<FGP_ReadyBuildingEntry> ReadyEntries;
+
+	TArray<FGP_ReadyBuildingEntry> LastReplicatedEntries;
 };

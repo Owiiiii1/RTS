@@ -573,8 +573,10 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				&& FMath::IsNearlyEqual(Authored.LocalCenterOffsetCm.Y, -40.0f),
 				TEXT("Bounds_LocalXYOffsetPreserved"));
 
-			const FVector FootprintHint = BoundsStub->GetActorLocation()
-				+ FVector(Authored.LocalCenterOffsetCm.X, Authored.LocalCenterOffsetCm.Y, 0.0f);
+			const FVector FootprintHint = UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
+				BoundsStub->GetActorLocation(),
+				BoundsStub->GetActorRotation(),
+				Authored.LocalCenterOffsetCm);
 			FIntPoint AuthoredOrigin = FIntPoint::ZeroValue;
 			FVector AuthoredCenter = FVector::ZeroVector;
 			Grid->ResolveSnappedPlacement(FootprintHint, Authored.SizeCells, AuthoredOrigin, AuthoredCenter);
@@ -584,7 +586,7 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				TEXT("Bounds_SpawnedRegistersResolvedCells"));
 
 			const FVector RebuiltActor = Grid->MakeActorLocationFromFootprintCenter(
-				FootprintHint, Authored.LocalCenterOffsetCm);
+				FootprintHint, Authored.LocalCenterOffsetCm, BoundsStub->GetActorRotation());
 			Expect(FVector::Dist2D(RebuiltActor, BoundsStub->GetActorLocation()) <= 1.0f,
 				TEXT("Bounds_ActorPivotPreservedVsFootprint"));
 
@@ -738,7 +740,10 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				FIntPoint ExpectedOrigin = FIntPoint::ZeroValue;
 				FVector ExpectedCenter = FVector::ZeroVector;
 				Grid->ResolveSnappedPlacement(
-					OffsetBaseTM.GetLocation() + FVector(200.0f, -100.0f, 0.0f),
+					UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
+						OffsetBaseTM.GetLocation(),
+						OffsetBaseTM.Rotator(),
+						FVector2D(200.0f, -100.0f)),
 					FIntPoint(5, 5),
 					ExpectedOrigin,
 					ExpectedCenter);
@@ -782,6 +787,148 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			else if (IsValid(StaleBase))
 			{
 				StaleBase->Destroy();
+			}
+
+			const FVector2D Offset400X(400.0f, 0.0f);
+			Expect(UGP_BuildGridSubsystem::TransformFootprintLocalOffsetToWorld(
+				Offset400X, FRotator::ZeroRotator).Equals(FVector(400.0f, 0.0f, 0.0f), 0.5f),
+				TEXT("Offset_Yaw0LocalXToWorldX"));
+			Expect(UGP_BuildGridSubsystem::TransformFootprintLocalOffsetToWorld(
+				Offset400X, FRotator(0.0f, 90.0f, 0.0f)).Equals(FVector(0.0f, 400.0f, 0.0f), 0.5f),
+				TEXT("Offset_Yaw90LocalXToWorldY"));
+			Expect(UGP_BuildGridSubsystem::TransformFootprintLocalOffsetToWorld(
+				Offset400X, FRotator(0.0f, 180.0f, 0.0f)).Equals(FVector(-400.0f, 0.0f, 0.0f), 0.5f),
+				TEXT("Offset_Yaw180LocalXToWorldNegX"));
+
+			auto SpawnOffsetMainBase = [&](const FVector& Loc, const FRotator& Rot, const FVector& ActorScale,
+				const TCHAR* SpawnLabel) -> AGP_MainBase*
+			{
+				const FTransform TM(Rot, Loc);
+				AGP_MainBase* Base = World->SpawnActorDeferred<AGP_MainBase>(
+					AGP_MainBase::StaticClass(),
+					TM,
+					nullptr,
+					nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (!Expect(IsValid(Base) && Base->GetPlacementFootprintBounds() != nullptr, SpawnLabel))
+				{
+					return nullptr;
+				}
+				UBoxComponent* Box = Base->GetPlacementFootprintBounds();
+				Box->SetBoxExtent(FVector(500.0f, 500.0f, 20.0f));
+				Box->SetRelativeScale3D(FVector::OneVector);
+				Box->SetRelativeLocation(FVector(400.0f, 0.0f, 0.0f));
+				Base->SetActorScale3D(ActorScale);
+				Base->FinishSpawning(TM);
+				return Base;
+			};
+
+			auto ExpectShiftedOccupancy = [&](AGP_MainBase* Base, const FVector& ExpectedWorldOffset, const TCHAR* LabelPrefix)
+			{
+				if (!IsValid(Base))
+				{
+					return;
+				}
+				const FVector WorldOffset = UGP_BuildGridSubsystem::TransformFootprintLocalOffsetToWorld(
+					FVector2D(400.0f, 0.0f), Base->GetActorRotation());
+				Expect(WorldOffset.Equals(ExpectedWorldOffset, 0.5f),
+					*FString::Printf(TEXT("%s_WorldOffset"), LabelPrefix));
+				const FVector WorldCenter = UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
+					Base->GetActorLocation(), Base->GetActorRotation(), FVector2D(400.0f, 0.0f));
+				FIntPoint ExpectedOrigin = FIntPoint::ZeroValue;
+				FVector ExpectedCenter = FVector::ZeroVector;
+				Grid->ResolveSnappedPlacement(WorldCenter, FIntPoint(5, 5), ExpectedOrigin, ExpectedCenter);
+				Expect(Base->GetGridFootprintSize() == FIntPoint(5, 5),
+					*FString::Printf(TEXT("%s_AxisAlignedSize5x5"), LabelPrefix));
+				Expect(Base->GetGridOriginCell() == ExpectedOrigin,
+					*FString::Printf(TEXT("%s_OriginMatchesWorldCenter"), LabelPrefix));
+				Expect(GPBuildGridContractDebug::AllCellsOccupied(Grid, ExpectedOrigin, FIntPoint(5, 5)),
+					*FString::Printf(TEXT("%s_AllCellsOccupied"), LabelPrefix));
+
+				FVector AabbMin = FVector::ZeroVector;
+				FVector AabbMax = FVector::ZeroVector;
+				Grid->GetFootprintWorldAABB(ExpectedOrigin, FIntPoint(5, 5), 0.0f, AabbMin, AabbMax);
+				Expect(FMath::IsNearlyEqual(AabbMax.X - AabbMin.X, 1000.0f)
+					&& FMath::IsNearlyEqual(AabbMax.Y - AabbMin.Y, 1000.0f),
+					*FString::Printf(TEXT("%s_WorldAABBAxisAligned"), LabelPrefix));
+
+				FIntPoint UnshiftedOrigin = FIntPoint::ZeroValue;
+				FVector UnshiftedCenter = FVector::ZeroVector;
+				Grid->ResolveSnappedPlacement(Base->GetActorLocation(), FIntPoint(5, 5), UnshiftedOrigin, UnshiftedCenter);
+				FIntPoint OppositeUnshifted = UnshiftedOrigin;
+				if (ExpectedWorldOffset.X < -50.0f)
+				{
+					OppositeUnshifted.X = UnshiftedOrigin.X + 4;
+				}
+				if (ExpectedWorldOffset.Y < -50.0f)
+				{
+					OppositeUnshifted.Y = UnshiftedOrigin.Y + 4;
+				}
+				if (UnshiftedOrigin != ExpectedOrigin)
+				{
+					Expect(!Grid->IsCellOccupied(OppositeUnshifted),
+						*FString::Printf(TEXT("%s_OldCapsuleCellFreed"), LabelPrefix));
+				}
+
+				EGP_GridRejectReason OverlapReason = EGP_GridRejectReason::Free;
+				Expect(!Grid->CanPlaceFootprint(
+					FIntPoint(ExpectedOrigin.X + 4, ExpectedOrigin.Y - 3),
+					FIntPoint(4, 4),
+					OverlapReason,
+					nullptr)
+					&& OverlapReason == EGP_GridRejectReason::CellOccupied,
+					*FString::Printf(TEXT("%s_HubOverlapEdgeRejected"), LabelPrefix));
+
+				EGP_GridRejectReason AdjacentReason = EGP_GridRejectReason::CellOccupied;
+				Expect(Grid->CanPlaceFootprint(
+					FIntPoint(ExpectedOrigin.X + 5, ExpectedOrigin.Y),
+					FIntPoint(4, 4),
+					AdjacentReason,
+					nullptr)
+					&& AdjacentReason == EGP_GridRejectReason::Free,
+					*FString::Printf(TEXT("%s_HubAdjacentValid"), LabelPrefix));
+			};
+
+			if (AGP_MainBase* Yaw0 = SpawnOffsetMainBase(
+				FVector(-80000.0f, 12000.0f, 100.0f),
+				FRotator::ZeroRotator,
+				FVector::OneVector,
+				TEXT("Offset_SpawnYaw0")))
+			{
+				ExpectShiftedOccupancy(Yaw0, FVector(400.0f, 0.0f, 0.0f), TEXT("Offset_Yaw0"));
+				Yaw0->Destroy();
+			}
+			if (AGP_MainBase* Yaw90 = SpawnOffsetMainBase(
+				FVector(-81000.0f, 12200.0f, 100.0f),
+				FRotator(0.0f, 90.0f, 0.0f),
+				FVector::OneVector,
+				TEXT("Offset_SpawnYaw90")))
+			{
+				ExpectShiftedOccupancy(Yaw90, FVector(0.0f, 400.0f, 0.0f), TEXT("Offset_Yaw90"));
+				Yaw90->Destroy();
+			}
+			if (AGP_MainBase* Yaw180 = SpawnOffsetMainBase(
+				FVector(-82000.0f, 12400.0f, 100.0f),
+				FRotator(0.0f, 180.0f, 0.0f),
+				FVector::OneVector,
+				TEXT("Offset_SpawnYaw180")))
+			{
+				ExpectShiftedOccupancy(Yaw180, FVector(-400.0f, 0.0f, 0.0f), TEXT("Offset_Yaw180"));
+				Yaw180->Destroy();
+			}
+			if (AGP_MainBase* Scaled = SpawnOffsetMainBase(
+				FVector(-83000.0f, 12600.0f, 100.0f),
+				FRotator::ZeroRotator,
+				FVector(2.0f, 2.0f, 2.0f),
+				TEXT("Offset_SpawnActorScale")))
+			{
+				Expect(Scaled->GetGridFootprintSize() == FIntPoint(5, 5), TEXT("Offset_ActorScaleDoesNotInflateSize"));
+				const FVector ScaledWorldOffset = UGP_BuildGridSubsystem::TransformFootprintLocalOffsetToWorld(
+					FVector2D(400.0f, 0.0f), Scaled->GetActorRotation());
+				Expect(ScaledWorldOffset.Equals(FVector(400.0f, 0.0f, 0.0f), 0.5f),
+					TEXT("Offset_ActorScaleDoesNotMultiplyOffset"));
+				ExpectShiftedOccupancy(Scaled, FVector(400.0f, 0.0f, 0.0f), TEXT("Offset_ActorScale"));
+				Scaled->Destroy();
 			}
 		}
 

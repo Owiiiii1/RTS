@@ -1770,7 +1770,7 @@ void AGP_PlayerController::UpdateBuildingPlacementGhost()
 			Preview.SnappedGround = Snapped;
 			Preview.LocalCenterOffsetCm = Resolved.LocalCenterOffsetCm;
 			Preview.SnappedActorLocation = Grid->MakeActorLocationFromFootprintCenter(
-				Snapped, Resolved.LocalCenterOffsetCm);
+				Snapped, Resolved.LocalCenterOffsetCm, FRotator::ZeroRotator);
 			GhostLoc = Preview.SnappedActorLocation;
 		}
 	}

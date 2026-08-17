@@ -20,7 +20,7 @@ struct GPRUNTIME_API FGP_ResolvedBuildingFootprint
 	UPROPERTY()
 	FIntPoint SizeCells = FIntPoint::ZeroValue;
 
-	/** Authored box RelativeLocation XY vs actor pivot (cm). Zero when using DA/class fallback. */
+	/** Authored box RelativeLocation XY vs actor/root (cm), not world. Zero when using DA/class fallback. */
 	UPROPERTY()
 	FVector2D LocalCenterOffsetCm = FVector2D::ZeroVector;
 
@@ -145,9 +145,24 @@ public:
 		const AGP_BuildingBase* Building,
 		const UGP_BuildingDefinition* BuildingDef = nullptr) const;
 
+	/**
+	 * Rotate authored local XY offset by actor/root rotation. Does not apply actor/world scale.
+	 * Uses FTransform::TransformVectorNoScale on a rotation-only transform (scale = 1).
+	 */
+	static FVector TransformFootprintLocalOffsetToWorld(
+		FVector2D LocalCenterOffsetCm,
+		FRotator ActorRotation);
+
+	/** ActorLocation + rotation-only world offset. Footprint size stays world-axis-aligned. */
+	static FVector MakeWorldFootprintCenter(
+		const FVector& ActorLocation,
+		FRotator ActorRotation,
+		FVector2D LocalCenterOffsetCm);
+
 	FVector MakeActorLocationFromFootprintCenter(
 		const FVector& FootprintCenterWorld,
-		FVector2D LocalCenterOffsetCm) const;
+		FVector2D LocalCenterOffsetCm,
+		FRotator ActorRotation = FRotator::ZeroRotator) const;
 
 	/** Semantic deploy/preview ground Z at XY. Not first-hit Visibility/WorldStatic. */
 	float ResolveDeployGroundZ(const FVector& HintLocation, AActor* ExtraIgnoreActor = nullptr) const;

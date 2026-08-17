@@ -337,7 +337,8 @@ bool GPBuildingDropAuthority::EvaluateLocalPlacementPreview(
 		{
 			OutPreview.SnappedActorLocation = Grid->MakeActorLocationFromFootprintCenter(
 				OutPreview.SnappedGround,
-				Resolved.LocalCenterOffsetCm);
+				Resolved.LocalCenterOffsetCm,
+				WorldTransform.Rotator());
 		}
 	}
 	if (Grid == nullptr || !Grid->IsValidFootprintSize(OutPreview.FootprintSize))
@@ -696,10 +697,11 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 	const int32 TeamId = RequestingPlayerState->GetTeamId();
 	const UGP_BuildingDefinition* BuildingDef = DropDefinition->ResolveLoadedBuildingDefinition();
 	const FGP_ResolvedBuildingFootprint Resolved = Grid->ResolveBuildingFootprint(Result.PayloadClass, BuildingDef);
+	const FRotator LandingRot = FRotator::ZeroRotator;
 	const FVector LandingLoc = Grid->MakeActorLocationFromFootprintCenter(
 		SnappedGround,
-		Resolved.LocalCenterOffsetCm);
-	const FRotator LandingRot = FRotator::ZeroRotator;
+		Resolved.LocalCenterOffsetCm,
+		LandingRot);
 	const float Altitude = Settings->BuildingDropSpawnAltitudeCm;
 	const FVector StartLoc = LandingLoc + FVector(0.0f, 0.0f, Altitude);
 

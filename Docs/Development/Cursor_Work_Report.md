@@ -1,6 +1,6 @@
 # Cursor Work Report
 
-Status: **GP-S36G_PREPLACED_OCCUPANCY_AUTHORING_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S36G_FOOTPRINT_OFFSET_TRANSFORM_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**  
 **NOT FINALIZED.**
@@ -12,60 +12,51 @@ Status: **GP-S36G_PREPLACED_OCCUPANCY_AUTHORING_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`6c61b972993d6b85274ca93b58e8752e136267e5`
+`PENDING_IMPLEMENTATION`
 
-## Operator question and canonical answer
-Does `PlacementFootprintBounds` apply only while placing a building, or also to occupied/blocking area after construction?
+## Operator symptom
+Size authoring works. MainBase `PlacementFootprintBounds` can be shifted in Blueprint relative to Capsule/root, but PIE occupied/red cells stay centered as if the authored offset were ignored.
 
-**Same footprint is both.** One resolved size/offset is preview, server validation, reservation, spawned occupancy, and pre-placed occupancy. There is no separate placement size vs blocking size.
+## Factual raw-local-as-world bug
+`TryRegisterWithBuildGrid` did:
 
-## Actual root cause
-`TryRegisterWithBuildGrid` already called `ResolveActorFootprint` and registered `SizeCells`. The mismatch was the **source** of those bounds.
+`ActorLocation + (Resolved.LocalCenterOffsetCm.X, Y, 0)`
 
-Traced on the operator map during contract PIE:
+`LocalCenterOffsetCm` is `PlacementFootprintBounds->GetRelativeLocation()` — component-local / root-relative, not world. Raw world-axis addition is wrong whenever the building/root has rotation, and does not represent the authored box center.
 
-- Level actor `BP_GP_MainBase_C_2` registered **4×2** with offset **(133.5, 0)** — not native 5×5.
-- That instance had serialized inherited BoxExtent / Scale / RelativeLocation from an earlier Blueprint state.
-- Unreal treats those serialized values as instance data. Later Blueprint viewport edits update the **class CDO**, not the stale level-instance snapshot.
-- Old resolver preferred any usable **instance** box. Enlarging the MainBase Blueprint therefore changed the visible CDO box and did **not** grow registered occupancy.
+## Exact local→world transform rule
+Shared helpers on `UGP_BuildGridSubsystem`:
 
-Hub authoring appeared to work because orbital Hub uses `ResolveBuildingFootprint(payload CDO)` for preview / reservation / DropPod `ConfigureGridPlacement`. Pre-placed MainBase used the instance path.
+- `TransformFootprintLocalOffsetToWorld(LocalXY, ActorRotation)`
+- `MakeWorldFootprintCenter(ActorLocation, ActorRotation, LocalXY)`
+- `MakeActorLocationFromFootprintCenter(Center, LocalXY, ActorRotation)` (inverse)
 
-## Instance / CDO behavior found
-- Blueprint CDO = building design data (what the operator edits in the MainBase BP).
-- Level instances of `BP_GP_MainBase` keep a serialized copy of inherited component transforms. Those copies masquerade as explicit instance overrides after the BP changes.
-- Native default heuristic alone is insufficient: the live instance was **not** 500×500 / offset 0; it was a previous authored snapshot (4×2 + X=133.5).
-- Runtime-spawned / deferred-spawn actors (tests, DropPod payload) are not net-startup; their instance box is live authoring.
+Implementation: `FTransform(Rotation, 0, Scale=1).TransformVectorNoScale(Local)`.
 
-## Exact source policy after fix
-`PlacementFootprintBounds` remains the single occupied-ground footprint.
+World footprint center = live `ActorLocation` + that world offset. Then snap the center to BuildGrid (200 cm).
 
-`ResolveActorFootprint`:
+Used by pre-placed registration, preview actor-location reconstruction, and DropPod landing.
 
-1. **Net-startup (pre-placed) building:** use **class CDO** bounds (Blueprint design). Do not trust the level-instance snapshot.
-2. **Runtime-spawned instance** that still matches the **native** default (MainBase 500×500 offset 0, Hub 400×400, generic 100×100) while the class CDO does not: use class CDO (stale native snapshot).
-3. **Otherwise runtime instance** wins (explicit deferred-spawn / test authoring, including offset).
-4. If bounds are unusable: DA `FootprintCells`, then class fallback.
+## Rotation handling
+Footprint **size** stays world-axis-aligned (no rotated cells).
 
-DropPod `ConfigureGridPlacement` still pins spawned Hub reservation/occupancy. Preview and server still share `ResolveBuildingFootprint`.
+Footprint **center offset** follows actor/root orientation:
 
-Offset: CDO RelativeLocation XY is used for pre-placed registration; runtime instance offset is preserved when instance authoring wins.
+- local +400 X, yaw 0 → world +400 X
+- local +400 X, yaw 90 → world +400 Y
+- local +400 X, yaw 180 → world −400 X
 
-## MainBase pre-placed registration path
-`BeginPlay` → `TryRegisterWithBuildGrid` → `ResolveActorFootprint` (class CDO for net-startup) → snap origin from actor location + CDO offset → `RegisterFootprint`. Non-Shipping log + `GetBuildGridOccupancyDebugString()` report actor name, resolved size/offset, origin, registered size.
+## Actor scale policy
+Same as size: actor/world scale does **not** inflate cells and does **not** multiply the center offset. Rotation only; scale forced to 1 on the helper transform.
+
+## Grid quantization
+CellSize remains 200 cm. Occupancy is snapped to cells. Offsets that stay inside the same snap bucket can resolve to the same origin. Shifts of ≥ one cell (tests use 400 cm) move registered cells.
+
+## CDO + live actor transform
+Unchanged source policy: net-startup/pre-placed SIZE and local OFFSET come from Blueprint class CDO. That CDO local XY is then transformed by the **live** actor location/rotation.
 
 ## Tests
-`gp.Building.RunBuildGridContractTest` extended:
-
-- A pre-placed/runtime MainBase authored 700×600 → 7×6, not fallback 5×5
-- B MainBase scale 1.4 / 1.2 on 500×500 → 7×6
-- C RelativeLocation (200, -100) shifts origin
-- D all 42 cells occupied
-- E adjacent outside cells free
-- F Hub 4×4 overlapping one edge cell → `CellOccupied` (deploy maps to `GridOccupied`)
-- G Hub beside authored footprint valid
-- H spawned Hub occupancy/reservation unchanged (contract isolates `BuildingPayloadClass` to native Hub so operator BP scale cannot desync 4×4)
-- Stale native instance + authored CDO → class 7×6
+`gp.Building.RunBuildGridContractTest` covers A–L (yaw 0/90/180, axis-aligned AABB, actor scale does not change size or offset, origin from transformed center, occupancy, freed opposite cells, Hub edge reject / adjacent free). Spawned Hub preview/reservation/occupancy unchanged.
 
 All listed regressions Failures=0.
 
@@ -74,24 +65,20 @@ GPEditor Win64 Development + UHT **PASS**.
 GP Win64 Development / Shipping **not run**.
 
 ## Exact changed files
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
-- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
 - `GP/Source/GPRuntime/Public/Buildings/Grid/GPBuildGridSubsystem.h`
 - `GP/Source/GPRuntime/Private/Buildings/Grid/GPBuildGridSubsystem.cpp`
-- `GP/Source/GPRuntime/Public/Orbital/GPBuildGridContractTest.h`
+- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropAuthority.cpp`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
 - `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
 - `Docs/Development/Cursor_Work_Report.md`
 
-Map / operator BP / config were not edited.
-
 ## Operator retest
-1. In MainBase Blueprint enlarge `PlacementFootprintBounds` noticeably.
-2. Save BP.
-3. PIE.
-4. Purchase Hub → Deploy.
-5. Move Hub preview near MainBase edge.
+1. MainBase BP: shift `PlacementFootprintBounds` ≥ 300–400 cm to one side.
+2. Save.
+3. PIE → Purchase Hub → Deploy preview around MainBase.
 
-Expected: red occupied cells follow the Blueprint box (class CDO), including shrink. No `.umap` reset required.
+Expected: red cells shift toward the authored box; opposite side frees; 200 cm grid; authored size unchanged.
 
 **NOT MERGED.**  
 **NOT FINALIZED.**

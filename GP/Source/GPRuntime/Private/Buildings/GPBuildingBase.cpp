@@ -212,8 +212,10 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 	{
 		FIntPoint Origin = FIntPoint::ZeroValue;
 		FVector Snapped = FVector::ZeroVector;
-		const FVector FootprintCenterHint = GetActorLocation()
-			+ FVector(Resolved.LocalCenterOffsetCm.X, Resolved.LocalCenterOffsetCm.Y, 0.0f);
+		const FVector FootprintCenterHint = UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
+			GetActorLocation(),
+			GetActorRotation(),
+			Resolved.LocalCenterOffsetCm);
 		Grid->ResolveSnappedPlacement(FootprintCenterHint, Footprint, Origin, Snapped);
 		GridOriginCell = Origin;
 		GridFootprintSize = Footprint;
@@ -231,19 +233,34 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 	}
 
 #if !UE_BUILD_SHIPPING
+	const FVector WorldOffset = UGP_BuildGridSubsystem::TransformFootprintLocalOffsetToWorld(
+		Resolved.LocalCenterOffsetCm,
+		GetActorRotation());
+	const FVector WorldCenter = UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
+		GetActorLocation(),
+		GetActorRotation(),
+		Resolved.LocalCenterOffsetCm);
 	UE_LOG(
 		LogGPBuildGridRegister,
 		Log,
-		TEXT("BuildGrid occupancy %s resolved=%dx%d offset=(%.1f,%.1f) origin=%d,%d registered=%dx%d configured=%s fromBounds=%s"),
+		TEXT("BuildGrid occupancy %s actor=(%.1f,%.1f,%.1f) yaw=%.1f localOffset=(%.1f,%.1f) worldOffset=(%.1f,%.1f) worldCenter=(%.1f,%.1f) origin=%d,%d registered=%dx%d resolved=%dx%d configured=%s fromBounds=%s"),
 		*GetName(),
-		Resolved.SizeCells.X,
-		Resolved.SizeCells.Y,
+		GetActorLocation().X,
+		GetActorLocation().Y,
+		GetActorLocation().Z,
+		GetActorRotation().Yaw,
 		Resolved.LocalCenterOffsetCm.X,
 		Resolved.LocalCenterOffsetCm.Y,
+		WorldOffset.X,
+		WorldOffset.Y,
+		WorldCenter.X,
+		WorldCenter.Y,
 		GridOriginCell.X,
 		GridOriginCell.Y,
 		GridFootprintSize.X,
 		GridFootprintSize.Y,
+		Resolved.SizeCells.X,
+		Resolved.SizeCells.Y,
 		bGridPlacementConfigured ? TEXT("1") : TEXT("0"),
 		Resolved.bFromAuthoredBounds ? TEXT("1") : TEXT("0"));
 #endif
@@ -264,17 +281,31 @@ FString AGP_BuildingBase::GetBuildGridOccupancyDebugString() const
 		}
 	}
 
+	const FVector WorldOffset = UGP_BuildGridSubsystem::TransformFootprintLocalOffsetToWorld(
+		Offset,
+		GetActorRotation());
+	const FVector WorldCenter = UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
+		GetActorLocation(),
+		GetActorRotation(),
+		Offset);
 	return FString::Printf(
-		TEXT("%s resolved=%dx%d offset=(%.1f,%.1f) origin=%d,%d registered=%dx%d"),
+		TEXT("%s actor=(%.1f,%.1f) yaw=%.1f local=(%.1f,%.1f) worldOffset=(%.1f,%.1f) worldCenter=(%.1f,%.1f) origin=%d,%d registered=%dx%d resolved=%dx%d"),
 		*GetName(),
-		ResolvedSize.X,
-		ResolvedSize.Y,
+		GetActorLocation().X,
+		GetActorLocation().Y,
+		GetActorRotation().Yaw,
 		Offset.X,
 		Offset.Y,
+		WorldOffset.X,
+		WorldOffset.Y,
+		WorldCenter.X,
+		WorldCenter.Y,
 		GridOriginCell.X,
 		GridOriginCell.Y,
 		GridFootprintSize.X,
-		GridFootprintSize.Y);
+		GridFootprintSize.Y,
+		ResolvedSize.X,
+		ResolvedSize.Y);
 }
 #endif
 

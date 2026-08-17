@@ -355,11 +355,29 @@ FGP_ResolvedBuildingFootprint UGP_BuildGridSubsystem::ResolveActorFootprint(
 	return ResolveBuildingFootprint(nullptr, BuildingDef);
 }
 
+FVector UGP_BuildGridSubsystem::TransformFootprintLocalOffsetToWorld(
+	FVector2D LocalCenterOffsetCm,
+	FRotator ActorRotation)
+{
+	const FVector Local(LocalCenterOffsetCm.X, LocalCenterOffsetCm.Y, 0.0f);
+	const FTransform RotationOnly(ActorRotation, FVector::ZeroVector, FVector::OneVector);
+	return RotationOnly.TransformVectorNoScale(Local);
+}
+
+FVector UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
+	const FVector& ActorLocation,
+	FRotator ActorRotation,
+	FVector2D LocalCenterOffsetCm)
+{
+	return ActorLocation + TransformFootprintLocalOffsetToWorld(LocalCenterOffsetCm, ActorRotation);
+}
+
 FVector UGP_BuildGridSubsystem::MakeActorLocationFromFootprintCenter(
 	const FVector& FootprintCenterWorld,
-	FVector2D LocalCenterOffsetCm) const
+	FVector2D LocalCenterOffsetCm,
+	FRotator ActorRotation) const
 {
-	return FootprintCenterWorld - FVector(LocalCenterOffsetCm.X, LocalCenterOffsetCm.Y, 0.0f);
+	return FootprintCenterWorld - TransformFootprintLocalOffsetToWorld(LocalCenterOffsetCm, ActorRotation);
 }
 
 float UGP_BuildGridSubsystem::ResolveDeployGroundZ(const FVector& HintLocation, AActor* ExtraIgnoreActor) const

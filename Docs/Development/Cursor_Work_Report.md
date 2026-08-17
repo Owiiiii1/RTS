@@ -12,7 +12,7 @@ Status: **GP-S36G_FOOTPRINT_AXIS_ALIGNMENT_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`PENDING_IMPLEMENTATION`
+`853e3337bd74d9fce81c1a16302d41a5d5d510a9`
 
 ## Operator X/Y swap
 After parent-scale isolation, size was almost correct, but a strongly rectangular visible `PlacementFootprintBounds` looked swapped versus the forbidden BuildGrid region.

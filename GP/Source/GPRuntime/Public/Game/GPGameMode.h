@@ -46,12 +46,15 @@ public:
 	float GetMatchDurationSeconds() const { return MatchDurationSeconds; }
 	float GetDeliveryQuotaFerroniteScore() const { return DeliveryQuotaFerroniteScore; }
 	bool GetAnnihilationCountsAsWin() const { return bAnnihilationCountsAsWin; }
+	int32 GetExpectedHumanPlayers() const { return ExpectedHumanPlayers; }
 
 #if !UE_BUILD_SHIPPING
 	void DebugSetMatchSeed(int32 InMatchSeed);
 	void DebugSetDeliveryQuotaFerroniteScore(float InQuota);
 	void DebugSetAnnihilationCountsAsWin(bool bInAnnihilationCountsAsWin);
 	void DebugResetMatchFlowToWaiting();
+	/** Explicit operator start from WaitingForPlayers. Does not change ExpectedHumanPlayers. */
+	void DebugStartMatchFlow();
 #endif
 
 protected:

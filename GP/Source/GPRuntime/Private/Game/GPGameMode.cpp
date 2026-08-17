@@ -871,4 +871,52 @@ void AGP_GameMode::DebugResetMatchFlowToWaiting()
 		PublishMatchConfigToGameState();
 	}
 }
+
+void AGP_GameMode::DebugStartMatchFlow()
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("GP Match Debug: DebugStart denied without authority."));
+		return;
+	}
+
+	AGP_GameState* GPGameState = GetGPGameState();
+	if (GPGameState == nullptr)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("GP Match Debug: DebugStart missing AGP_GameState."));
+		return;
+	}
+
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	const FGameplayTag CurrentState = GPGameState->GetMatchStateTag();
+	if (CurrentState == GPTags.Match_State_Playing)
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("GP Match Debug: DebugStart no-op — already Playing (ExpectedHumanPlayers=%d unchanged)."),
+			ExpectedHumanPlayers);
+		return;
+	}
+
+	if (CurrentState == GPTags.Match_State_Finished)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP Match Debug: DebugStart rejected — match is Finished (WinnerTeamId=%d). ExpectedHumanPlayers=%d unchanged."),
+			GPGameState->GetWinnerTeamId(),
+			ExpectedHumanPlayers);
+		return;
+	}
+
+	if (CurrentState != GPTags.Match_State_WaitingForPlayers)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP Match Debug: DebugStart rejected — MatchState=%s (only WaitingForPlayers can debug-start)."),
+			*CurrentState.ToString());
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("GP Match Debug: DebugStart invoking StartMatchFlow from WaitingForPlayers (ExpectedHumanPlayers=%d unchanged; not a production auto-start)."),
+		ExpectedHumanPlayers);
+	StartMatchFlow();
+}
 #endif

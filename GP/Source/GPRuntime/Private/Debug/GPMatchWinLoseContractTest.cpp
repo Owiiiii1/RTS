@@ -356,6 +356,25 @@ namespace GPMatchWinLoseDebug
 			TEXT("GP Match Debug: DebugSetMatchSeed Seed=%d (authority-only, non-shipping)."), Seed);
 	}
 
+	static void DebugStart(const TArray<FString>& Args, UWorld* World)
+	{
+		(void)Args;
+		if (World == nullptr || World->GetNetMode() == NM_Client)
+		{
+			UE_LOG(LogGPMatchWinLose, Warning, TEXT("GP Match DebugStart denied (client or missing world)."));
+			return;
+		}
+
+		AGP_GameMode* GM = GetAuthGM(World);
+		if (GM == nullptr || !GM->HasAuthority())
+		{
+			UE_LOG(LogGPMatchWinLose, Warning, TEXT("GP Match DebugStart: missing authority GameMode."));
+			return;
+		}
+
+		GM->DebugStartMatchFlow();
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs GWinLoseContract(
 		TEXT("gp.Match.RunWinLoseContractTest"),
 		TEXT("Authority: GP-S34W match win/lose contract."),
@@ -380,6 +399,11 @@ namespace GPMatchWinLoseDebug
 		TEXT("gp.Match.DebugSetMatchSeed"),
 		TEXT("DEVELOPMENT ONLY. Authority: overwrite MatchSeed used by final tie-break."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&DebugSetMatchSeed));
+
+	static FAutoConsoleCommandWithWorldAndArgs GDebugStart(
+		TEXT("gp.Match.DebugStart"),
+		TEXT("DEVELOPMENT ONLY. Authority: StartMatchFlow from WaitingForPlayers without changing ExpectedHumanPlayers."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&DebugStart));
 }
 
 void UGP_MatchWinLoseContractTestRunner::BeginDestroy()
@@ -623,13 +647,45 @@ void UGP_MatchWinLoseContractTestRunner::AdvanceStage()
 
 	switch (StageIndex)
 	{
-	case 0: // A canonical defaults
+	case 0: // A canonical defaults + DebugStart seam
 	{
 		Expect(FMath::IsNearlyEqual(GM->GetMatchDurationSeconds(), 600.0f), TEXT("A_Duration600"));
 		Expect(FMath::IsNearlyEqual(GM->GetDeliveryQuotaFerroniteScore(), 5000.0f), TEXT("A_Quota5000"));
 		Expect(GM->GetAnnihilationCountsAsWin(), TEXT("A_AnnihilationTrue"));
+		Expect(GM->GetExpectedHumanPlayers() == 2, TEXT("A_ExpectedHumanPlayers2"));
 		Expect(FMath::IsNearlyEqual(GS->GetDeliveryQuotaFerroniteScore(), 5000.0f), TEXT("A_GSQuota5000"));
 		Expect(GS->GetAnnihilationCountsAsWin(), TEXT("A_GSAnnihilationTrue"));
+
+		GM->DebugResetMatchFlowToWaiting();
+		Expect(GS->GetMatchStateTag() == Tags.Match_State_WaitingForPlayers, TEXT("P_WaitingWithoutDebugStart"));
+		Expect(FMath::IsNearlyEqual(GS->GetMatchTimeRemaining(), 0.0f), TEXT("P_WaitingTimerZero"));
+		Expect(GM->GetExpectedHumanPlayers() == 2, TEXT("P_ExpectedHumanPlayersUnchangedWhileWaiting"));
+
+		GM->DebugStartMatchFlow();
+		Expect(GPMatchWinLoseDebug::IsPlaying(GS), TEXT("P_DebugStartWaitingToPlaying"));
+		Expect(FMath::IsNearlyEqual(GS->GetMatchTimeRemaining(), 600.0f), TEXT("P_DebugStartTimer600"));
+		Expect(GS->GetWinnerTeamId() == -1 && !GS->GetWinReasonTag().IsValid(), TEXT("P_DebugStartResultClear"));
+		Expect(GM->GetExpectedHumanPlayers() == 2, TEXT("P_ExpectedHumanPlayersStill2AfterStart"));
+
+		GS->SetMatchTimeRemaining(500.0f);
+		GM->DebugStartMatchFlow();
+		Expect(GPMatchWinLoseDebug::IsPlaying(GS), TEXT("P_RepeatDebugStartStillPlaying"));
+		Expect(FMath::IsNearlyEqual(GS->GetMatchTimeRemaining(), 500.0f), TEXT("P_RepeatDebugStartDoesNotResetTimer"));
+		Expect(GS->GetWinnerTeamId() == -1, TEXT("P_RepeatDebugStartDoesNotResetResult"));
+
+		GM->FinishMatch(1, Tags.Match_WinReason_TimerScore);
+		Expect(GPMatchWinLoseDebug::IsFinished(GS), TEXT("P_FinishedForDebugStartReject"));
+		const int32 FinishedWinner = GS->GetWinnerTeamId();
+		const FGameplayTag FinishedReason = GS->GetWinReasonTag();
+		const float FinishedRemaining = GS->GetMatchTimeRemaining();
+		GM->DebugStartMatchFlow();
+		Expect(GPMatchWinLoseDebug::IsFinished(GS), TEXT("P_DebugStartCannotRestartFinished"));
+		Expect(GS->GetWinnerTeamId() == FinishedWinner, TEXT("P_FinishedWinnerStable"));
+		Expect(GS->GetWinReasonTag() == FinishedReason, TEXT("P_FinishedReasonStable"));
+		Expect(FMath::IsNearlyEqual(GS->GetMatchTimeRemaining(), FinishedRemaining), TEXT("P_FinishedTimerStable"));
+		Expect(GM->GetExpectedHumanPlayers() == 2, TEXT("P_ExpectedHumanPlayersStill2AfterFinished"));
+
+		GM->DebugResetMatchFlowToWaiting();
 		++StageIndex;
 		ScheduleNext(0.05f);
 		break;

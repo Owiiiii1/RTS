@@ -63,11 +63,11 @@ Existing corner layout **unchanged**. Added top-center `MatchInfoPanel`:
 ## Operator validation (do not self-approve)
 Development-only, authority, non-shipping, logged, not RPCs:
 
-1. PIE listen-server on `L_PrototypeArena`. Confirm top-center `10:00   SCORE 0 / 5000` after match start (or `Waiting` until 2 humans — use `StartMatchFlow` via 2-player PIE, or debug).
+1. PIE listen-server on `L_PrototypeArena` (one human stays `WaitingForPlayers` — this is canonical). Run `gp.Match.DebugStart`. Confirm top-center `10:00   SCORE 0 / 5000` and countdown. `ExpectedHumanPlayers` remains 2.
 2. `gp.Match.DebugSetFerroniteScore 5000` → immediate VICTORY for local team, reason Delivery Quota. Second score write must not change winner.
-3. Restart PIE. `gp.Match.DebugSetFerroniteScore 100` on one team, give the other more score, `gp.Match.DebugSetMatchTimeRemaining 0` → Timer Score, higher FerroniteScore wins.
+3. Restart PIE. `gp.Match.DebugStart`. `gp.Match.DebugSetFerroniteScore 100` on one team, give the other more score, `gp.Match.DebugSetMatchTimeRemaining 0` → Timer Score, higher FerroniteScore wins.
 4. Kill a playable MainBase (`gp.Match.DebugKillMainBase` or combat). Opponent wins Annihilation. Killing a Worker / Logistics Hub must not finish.
-5. After Finished: Launch Container, Unit Drop Confirm, Purchase/Deploy Logistics Hub must reject. Map still viewable.
+5. After Finished: Launch Container, Unit Drop Confirm, Purchase/Deploy Logistics Hub must reject. Map still viewable. `gp.Match.DebugStart` must not restart the finished match.
 
 ## Stop condition
 Operator PIE FINAL PASS, then human merge. Agent must **not** merge.

@@ -12,7 +12,7 @@ Status: **GP-S36G_ORIENTED_FOOTPRINT_OCCUPANCY_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`PENDING_IMPLEMENTATION`
+`97debf278a642c2cabe819dca2ad9d76383b792a`
 
 ## Operator failure after axis-alignment
 `SetAbsolute(false, true, true)` plus forced `RelativeRotation = 0` kept the cyan box world-axis-aligned. Rotating the level MainBase left the footprint behind. That is wrong for gameplay authoring.

@@ -86,6 +86,13 @@ public:
 	bool HasWidgetTreeRootForContract() const;
 	bool HasStatusPanelForContract() const;
 	bool HasLaunchButtonWidgetForContract() const;
+	bool HasResourceBarForContract() const;
+	bool IsResourceBarTopRightAnchoredForContract() const;
+	bool AreOrbitalAndUnitsOnResourceBarForContract() const;
+	bool IsStatusPanelBottomLeftAnchoredForContract() const;
+	bool IsProcurementGroupBottomRightAnchoredForContract() const;
+	bool IsLaunchButtonBottomCenterAnchoredForContract() const;
+	bool HasNoDuplicateOrbitalOrUnitsWidgetsForContract() const;
 	float GetDisplayedOrbitalForContract() const { return DisplayOrbital; }
 	FString GetUnitsLineTextForContract() const;
 	int32 GetDisplayedCurrentUnitsForContract() const { return DisplayCurrentUnits; }
@@ -125,6 +132,12 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UCanvasPanel> RootCanvas;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UHorizontalBox> ResourceBar;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UVerticalBox> ProcurementPanel;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UVerticalBox> StatusPanel;

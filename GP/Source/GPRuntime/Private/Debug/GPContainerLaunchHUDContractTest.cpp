@@ -316,7 +316,14 @@ void UGP_ContainerLaunchHUDContractTestRunner::AdvanceStage()
 		Expect(SlateWidget != SNullWidget::NullWidget, TEXT("A_SlateNotNullWidget"));
 		Expect(HUD->HasWidgetTreeRootForContract(), TEXT("A_RootWidgetAfterTakeWidget"));
 		Expect(HUD->HasStatusPanelForContract(), TEXT("A_StatusPanelAfterTakeWidget"));
+		Expect(HUD->HasResourceBarForContract(), TEXT("A_ResourceBarAfterTakeWidget"));
+		Expect(HUD->IsResourceBarTopRightAnchoredForContract(), TEXT("A_ResourceBarTopRight"));
+		Expect(HUD->AreOrbitalAndUnitsOnResourceBarForContract(), TEXT("A_OrbitalUnitsOnResourceBar"));
+		Expect(HUD->IsStatusPanelBottomLeftAnchoredForContract(), TEXT("A_StatusPanelBottomLeft"));
+		Expect(HUD->IsProcurementGroupBottomRightAnchoredForContract(), TEXT("A_ProcurementBottomRight"));
 		Expect(HUD->HasLaunchButtonWidgetForContract(), TEXT("A_LaunchButtonInTreeAfterTakeWidget"));
+		Expect(HUD->IsLaunchButtonBottomCenterAnchoredForContract(), TEXT("A_LaunchButtonBottomCenter"));
+		Expect(HUD->HasNoDuplicateOrbitalOrUnitsWidgetsForContract(), TEXT("A_NoDuplicateOrbitalUnits"));
 		Expect(HUD->HasInteractiveLaunchButtonForContract(), TEXT("A_LaunchButtonVisible"));
 
 		HUD->AddToViewport(1);

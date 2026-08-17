@@ -90,6 +90,24 @@ namespace GPTempS28PHUDPrivate
 		Row->AddChildToHorizontalBox(OutPlus);
 		return Row;
 	}
+
+	static void AnchorPoint(
+		UCanvasPanelSlot* Slot,
+		float AnchorX,
+		float AnchorY,
+		float AlignX,
+		float AlignY,
+		const FVector2D& Position)
+	{
+		if (Slot == nullptr)
+		{
+			return;
+		}
+		Slot->SetAnchors(FAnchors(AnchorX, AnchorY, AnchorX, AnchorY));
+		Slot->SetAlignment(FVector2D(AlignX, AlignY));
+		Slot->SetAutoSize(true);
+		Slot->SetPosition(Position);
+	}
 }
 
 TSharedRef<SWidget> UGP_TEMP_S28P_PlanetaryFerroniteHUD::RebuildWidget()
@@ -215,11 +233,14 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 	if (bTreeBuilt
 		&& RootCanvas != nullptr
 		&& WidgetTree->RootWidget == RootCanvas
+		&& ResourceBar != nullptr
 		&& StatusPanel != nullptr
 		&& BaseLineText != nullptr
 		&& ContainerLinesBox != nullptr
 		&& OrbitalLineText != nullptr
+		&& UnitsLineText != nullptr
 		&& LaunchButton != nullptr
+		&& ProcurementPanel != nullptr
 		&& UnitDropPanel != nullptr
 		&& ConfirmDropButton != nullptr
 		&& BuildingPanel != nullptr
@@ -236,14 +257,35 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 	WidgetTree->RootWidget = RootCanvas;
 	RootCanvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
+	ResourceBar = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("ResourceBar"));
+	ResourceBar->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (UCanvasPanelSlot* ResourceSlot = RootCanvas->AddChildToCanvas(ResourceBar))
+	{
+		GPTempS28PHUDPrivate::AnchorPoint(ResourceSlot, 1.0f, 0.0f, 1.0f, 0.0f, FVector2D(-24.0f, 24.0f));
+	}
+
+	OrbitalLineText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("OrbitalLineText"));
+	GPTempS28PHUDPrivate::StyleStatusText(OrbitalLineText);
+	OrbitalLineText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(18));
+	if (UHorizontalBoxSlot* OrbitalSlot = ResourceBar->AddChildToHorizontalBox(OrbitalLineText))
+	{
+		OrbitalSlot->SetPadding(FMargin(0.0f, 0.0f, 16.0f, 0.0f));
+		OrbitalSlot->SetVerticalAlignment(VAlign_Center);
+	}
+
+	UnitsLineText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("UnitsLineText"));
+	GPTempS28PHUDPrivate::StyleStatusText(UnitsLineText);
+	UnitsLineText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(18));
+	if (UHorizontalBoxSlot* UnitsSlot = ResourceBar->AddChildToHorizontalBox(UnitsLineText))
+	{
+		UnitsSlot->SetVerticalAlignment(VAlign_Center);
+	}
+
 	StatusPanel = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("StatusPanel"));
 	StatusPanel->SetVisibility(ESlateVisibility::HitTestInvisible);
 	if (UCanvasPanelSlot* StatusSlot = RootCanvas->AddChildToCanvas(StatusPanel))
 	{
-		StatusSlot->SetAnchors(FAnchors(0.0f, 0.0f, 0.0f, 0.0f));
-		StatusSlot->SetAlignment(FVector2D(0.0f, 0.0f));
-		StatusSlot->SetAutoSize(true);
-		StatusSlot->SetOffsets(FMargin(24.0f, 24.0f, 0.0f, 0.0f));
+		GPTempS28PHUDPrivate::AnchorPoint(StatusSlot, 0.0f, 1.0f, 0.0f, 1.0f, FVector2D(24.0f, -24.0f));
 	}
 
 	BaseLineText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BaseLineText"));
@@ -259,19 +301,6 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 	if (UVerticalBoxSlot* ContainersSlot = StatusPanel->AddChildToVerticalBox(ContainerLinesBox))
 	{
 		ContainersSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
-	}
-
-	OrbitalLineText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("OrbitalLineText"));
-	GPTempS28PHUDPrivate::StyleStatusText(OrbitalLineText);
-	OrbitalLineText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(18));
-	StatusPanel->AddChildToVerticalBox(OrbitalLineText);
-
-	UnitsLineText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("UnitsLineText"));
-	GPTempS28PHUDPrivate::StyleStatusText(UnitsLineText);
-	UnitsLineText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(18));
-	if (UVerticalBoxSlot* UnitsSlot = StatusPanel->AddChildToVerticalBox(UnitsLineText))
-	{
-		UnitsSlot->SetPadding(FMargin(0.0f, 2.0f, 0.0f, 0.0f));
 	}
 
 	LaunchButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("LaunchButton"));
@@ -293,14 +322,19 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 		ButtonSlot->SetPosition(FVector2D(0.0f, -28.0f));
 	}
 
+	ProcurementPanel = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ProcurementPanel"));
+	ProcurementPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (UCanvasPanelSlot* ProcurementSlot = RootCanvas->AddChildToCanvas(ProcurementPanel))
+	{
+		GPTempS28PHUDPrivate::AnchorPoint(ProcurementSlot, 1.0f, 1.0f, 1.0f, 1.0f, FVector2D(-24.0f, -24.0f));
+	}
+
 	UnitDropPanel = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("UnitDropPanel"));
 	UnitDropPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	if (UCanvasPanelSlot* DropSlot = RootCanvas->AddChildToCanvas(UnitDropPanel))
+	if (UVerticalBoxSlot* DropGroupSlot = ProcurementPanel->AddChildToVerticalBox(UnitDropPanel))
 	{
-		DropSlot->SetAnchors(FAnchors(1.0f, 0.0f, 1.0f, 0.0f));
-		DropSlot->SetAlignment(FVector2D(1.0f, 0.0f));
-		DropSlot->SetAutoSize(true);
-		DropSlot->SetOffsets(FMargin(0.0f, 24.0f, 24.0f, 0.0f));
+		DropGroupSlot->SetHorizontalAlignment(HAlign_Right);
+		DropGroupSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
 	}
 
 	UnitDropTitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("UnitDropTitle"));
@@ -382,12 +416,9 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 
 	BuildingPanel = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BuildingPanel"));
 	BuildingPanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	if (UCanvasPanelSlot* BuildingSlot = RootCanvas->AddChildToCanvas(BuildingPanel))
+	if (UVerticalBoxSlot* BuildingGroupSlot = ProcurementPanel->AddChildToVerticalBox(BuildingPanel))
 	{
-		BuildingSlot->SetAnchors(FAnchors(1.0f, 0.0f, 1.0f, 0.0f));
-		BuildingSlot->SetAlignment(FVector2D(1.0f, 0.0f));
-		BuildingSlot->SetAutoSize(true);
-		BuildingSlot->SetOffsets(FMargin(0.0f, 280.0f, 24.0f, 0.0f));
+		BuildingGroupSlot->SetHorizontalAlignment(HAlign_Right);
 	}
 
 	BuildingTitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildingTitle"));
@@ -842,8 +873,11 @@ bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasStatusPanelForContract() const
 	return StatusPanel != nullptr
 		&& BaseLineText != nullptr
 		&& ContainerLinesBox != nullptr
-		&& OrbitalLineText != nullptr
-		&& GetWidgetFromName(TEXT("StatusPanel")) == StatusPanel;
+		&& GetWidgetFromName(TEXT("StatusPanel")) == StatusPanel
+		&& BaseLineText->GetParent() == StatusPanel
+		&& ContainerLinesBox->GetParent() == StatusPanel
+		&& (OrbitalLineText == nullptr || OrbitalLineText->GetParent() != StatusPanel)
+		&& (UnitsLineText == nullptr || UnitsLineText->GetParent() != StatusPanel);
 }
 
 bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasLaunchButtonWidgetForContract() const
@@ -854,5 +888,77 @@ bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasLaunchButtonWidgetForContract() con
 bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::IsConfirmDropEnabledForContract() const
 {
 	return ConfirmDropButton != nullptr && ConfirmDropButton->GetIsEnabled();
+}
+
+namespace GPTempS28PHUDContractPrivate
+{
+	static bool IsPointAnchored(
+		const UWidget* Widget,
+		float AnchorX,
+		float AnchorY,
+		float AlignX,
+		float AlignY)
+	{
+		const UCanvasPanelSlot* Slot = Widget != nullptr ? Cast<UCanvasPanelSlot>(Widget->Slot) : nullptr;
+		if (Slot == nullptr)
+		{
+			return false;
+		}
+		const FAnchors A = Slot->GetAnchors();
+		const FVector2D Align = Slot->GetAlignment();
+		return FMath::IsNearlyEqual(A.Minimum.X, AnchorX)
+			&& FMath::IsNearlyEqual(A.Minimum.Y, AnchorY)
+			&& FMath::IsNearlyEqual(A.Maximum.X, AnchorX)
+			&& FMath::IsNearlyEqual(A.Maximum.Y, AnchorY)
+			&& FMath::IsNearlyEqual(Align.X, AlignX)
+			&& FMath::IsNearlyEqual(Align.Y, AlignY);
+	}
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasResourceBarForContract() const
+{
+	return ResourceBar != nullptr && GetWidgetFromName(TEXT("ResourceBar")) == ResourceBar;
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::IsResourceBarTopRightAnchoredForContract() const
+{
+	return GPTempS28PHUDContractPrivate::IsPointAnchored(ResourceBar, 1.0f, 0.0f, 1.0f, 0.0f);
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::AreOrbitalAndUnitsOnResourceBarForContract() const
+{
+	return OrbitalLineText != nullptr
+		&& UnitsLineText != nullptr
+		&& ResourceBar != nullptr
+		&& OrbitalLineText->GetParent() == ResourceBar
+		&& UnitsLineText->GetParent() == ResourceBar;
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::IsStatusPanelBottomLeftAnchoredForContract() const
+{
+	return GPTempS28PHUDContractPrivate::IsPointAnchored(StatusPanel, 0.0f, 1.0f, 0.0f, 1.0f);
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::IsProcurementGroupBottomRightAnchoredForContract() const
+{
+	return ProcurementPanel != nullptr
+		&& UnitDropPanel != nullptr
+		&& BuildingPanel != nullptr
+		&& UnitDropPanel->GetParent() == ProcurementPanel
+		&& BuildingPanel->GetParent() == ProcurementPanel
+		&& GPTempS28PHUDContractPrivate::IsPointAnchored(ProcurementPanel, 1.0f, 1.0f, 1.0f, 1.0f);
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::IsLaunchButtonBottomCenterAnchoredForContract() const
+{
+	return GPTempS28PHUDContractPrivate::IsPointAnchored(LaunchButton, 0.5f, 1.0f, 0.5f, 1.0f);
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::HasNoDuplicateOrbitalOrUnitsWidgetsForContract() const
+{
+	return AreOrbitalAndUnitsOnResourceBarForContract()
+		&& GetWidgetFromName(TEXT("OrbitalLineText")) == OrbitalLineText
+		&& GetWidgetFromName(TEXT("UnitsLineText")) == UnitsLineText
+		&& GetWidgetFromName(TEXT("ResourceBar")) == ResourceBar;
 }
 #endif

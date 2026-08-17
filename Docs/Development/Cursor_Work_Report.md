@@ -12,7 +12,7 @@ Status: **GP-S36G_FOOTPRINT_OFFSET_TRANSFORM_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`PENDING_IMPLEMENTATION`
+`bbf23fdcd56995ba5b49baf4f92c8fae88b25e13`
 
 ## Operator symptom
 Size authoring works. MainBase `PlacementFootprintBounds` can be shifted in Blueprint relative to Capsule/root, but PIE occupied/red cells stay centered as if the authored offset were ignored.

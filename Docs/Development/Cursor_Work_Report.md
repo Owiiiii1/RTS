@@ -1,6 +1,6 @@
 # Cursor Work Report
 
-Status: **GP-S36G_PREVIEW_POLISH_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S36G_AUTHORABLE_FOOTPRINT_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**  
 **NOT FINALIZED.**
@@ -12,52 +12,92 @@ Status: **GP-S36G_PREVIEW_POLISH_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`3e4e7aae3d0d1a5793979f9e3c8c1afdf453298e`
+*(filled in SHA-record commit)*
 
 ## Operator feedback items
-1. Footprint preview felt much larger than the visible building.
-2. Partial overlap painted the entire footprint red.
-3. Preview was contour-only; wanted filled cells, denser center, building ghost when valid.
-4. Status text did not face the camera.
-5. Hovering a placed building lifted preview onto its top surface.
+1. Filled cells still showed per-cell contour lines and an outer AABB border. Wanted fills only; separation from inset/gap and center vs edge opacity.
+2. Ground-Z stayed on terrain for MainBase/buildings, but still climbed onto map boundary walls, Ferronite/resource geometry, and other WorldStatic/WorldDynamic actors.
+3. Canonical 4×4 DataAsset footprint does not match authored visible building size. Operator wants a Blueprint-resizable boundary zone on the building class.
 
-Server/grid mechanics previously PASS and were not changed (CellSize, occupancy, reservation, READY, Purchase, Deploy, DropPod, Hub +5, match flow, server authority).
+Server/grid mechanics were not changed (CellSize 200, snap math, occupancy, reservation, READY, Purchase, Deploy, DropPod timing, Hub +5, Walls, FoW, match flow). Server remains authority.
 
-## Footprint data: A or B
-**B — footprint data is visually correct-but-larger.**
+## No-border preview
+`AGP_BuildingPlacementGhost` now draws **filled cells only** via `ULineBatchComponent::DrawSolidBox`.
 
-Canonical SoT remains `UGP_BuildingDefinition.FootprintCells`. Native Logistics Hub catalog value is **4×4** (800×800 cm), matching TDD/GDD BuildGrid spec. Native Hub collision/presentation is much smaller (capsule radius 80 cm, nav obstacle ~140 cm). The occupied area was **not** shrunk to match the mesh. Preview now shows occupied cells as filled area **plus** a payload-shaped building ghost at real spawned scale.
+Removed:
+- all per-cell contour `DrawLine` outlines
+- outer footprint AABB border
 
-## Exact preview architecture
-Asset-independent (no `.uasset`, no `/Game/...` materials):
+Kept:
+- per-cell fill colors (invalid red, free green/non-red)
+- ~12 cm physical gap (6 cm inset per tile)
+- center/inner ring denser and taller; outer ring lighter/more transparent
+- building ghost when valid (payload CDO meshes, not scaled to the grid)
+- camera-facing status text over the footprint center
 
-- Per-cell **filled quads** via `ULineBatchComponent::DrawSolidBox` in world space (Flush each update, lifetime 0). Inner cells taller/denser; edge cells thinner/lighter.
-- Per-cell outlines + outer AABB border in matching green/red.
-- `UTextRenderComponent` status label, billboarded toward the local player camera each preview update.
-- Building ghost: copy `UStaticMeshComponent`s from payload CDO when present (authored BP mesh). If the CDO has no mesh (native Hub), Engine Cylinder scaled to the capsule is used. Shown only when placement is valid; hidden when invalid.
-- Legacy Engine Cube slab remains a hidden unused component (`GhostMesh` never rendered).
+`GetPreviewGridLineCount()` / `GetPreviewLineWorldCount()` remain 0 while preview is active.
 
-## Per-cell classification model
-Presentation-only `EGP_PlacementPreviewCellState`: `Free`, `Occupied`, `OutOfRange`, `NotNavigable`, `WorldBlocked`.
+## PlacementFootprintBounds
+Added on `AGP_BuildingBase`:
 
-Priority: Occupied > OutOfRange > NotNavigable > WorldBlocked > Free.
+`UBoxComponent* PlacementFootprintBounds`  
+Category: `GP|BuildGrid`
 
-Whole placement is invalid if any cell is invalid. Text uses the dominant reason (`BLOCKED: OCCUPIED` / `OUT OF RANGE` / `NOT NAVIGABLE` / `WORLD` / `VALID`). Occupancy uses server `IsCellOccupied` when present plus replicated building/DropPod footprints. Radius uses `UGP_OrbitalDeliverySettings::BuildingMaxDeployRadiusFromMainBaseCm`. Nav/world reuse existing 1×1 subsystem helpers. Server `ValidateBuildingPlacement` is unchanged.
+- visible in editor, hidden in game
+- no collision, no overlap events, does not affect navigation
+- Blueprint children can edit RelativeLocation and BoxExtent
+- **not** collision, nav obstacle, selection, or combat bounds
+- default XY extent `0,0` means unauthored (Z = 20 for the component)
 
-Invalid local LMB still does not send deploy RPC.
+Operator path: open Logistics Hub BP → `PlacementFootprintBounds` → resize/move XY → save BP → PIE. No DataAsset edit required.
 
-## Ghost behavior
-Valid: building ghost visible, centered on snapped footprint, footprint fill remains.  
-Invalid: building ghost hidden; mixed cells keep free cells non-red.
+## Bounds → cells
+CellSize remains 200 cm. Axis-aligned only; no rotation in this slice.
 
-## Ground-Z fix
-Cursor placement trace ignores `AGP_BuildingBase`, `AGP_DropPod`, placement ghost, and pawns. After XY hit, `ResolvePreviewGroundZ` does a vertical WorldStatic/WorldDynamic/Visibility trace with the same ignore list so preview stays on deploy ground, not building tops.
+- WidthCm = 2 * BoxExtent.X
+- HeightCm = 2 * BoxExtent.Y
+- CellsX = max(1, ceil(WidthCm / 200))
+- CellsY = max(1, ceil(HeightCm / 200))
 
-## Camera-facing text
-Each preview update: `GetPlayerViewPoint` → `StatusText` world rotation along (Camera − Text). Text stays at snapped footprint center, Z +160 cm.
+Examples: 200×200 → 1×1; 400×400 → 2×2; 550×380 → 3×2; 800×800 → 4×4; 300×300 → 2×2.
+
+## Footprint precedence
+Shared resolver: `UGP_BuildGridSubsystem` + `FGP_ResolvedBuildingFootprint` `{ SizeCells, LocalCenterOffsetCm, bFromAuthoredBounds }`.
+
+1. Payload CDO / instance `PlacementFootprintBounds` when XY extent ≥ 1 cm
+2. `UGP_BuildingDefinition.FootprintCells` when both axes > 0 (compatibility / default fallback)
+
+`FootprintCells` is **not** deleted. Native actors, tests, unauthored Blueprints, and definitions without bounds still use it.
+
+If a BuildingDefinition is present but `FootprintCells` is invalid, class fallback is not applied (keeps InvalidFootprint deploy rejection).
+
+Pre-placed buildings: authored bounds if usable; else existing class fallback (MainBase 5×5, Logistics Hub 4×4, generic 1×1). Map assets were not edited in this task.
+
+## Local offset + snap
+`PlacementFootprintBounds` RelativeLocation XY is preserved as `LocalCenterOffsetCm`.
+
+Cursor/grid still places the occupied cells (footprint center). Actor pivot is:
+
+`ActorLocation = FootprintCenter − (Offset.X, Offset.Y, 0)`
+
+Client confirm still sends footprint-center transform. Server reconstructs the same actor location. Ghost uses actor pivot; grid fill uses occupied cells. Ghost is not scaled to the grid.
+
+## Client/server shared resolver
+One resolver is used by PlayerController, DropAuthority, DropPod landing (actor location), and BuildingBase pre-placed registration. Math is not duplicated.
+
+On accepted deploy, origin cell + footprint size come from that resolve and are passed through DropPod `ConfigureGridPlacement`. Spawned building registers the same cells as preview/server validation.
+
+## Semantic ground-Z
+`UGP_BuildGridSubsystem::ResolveDeployGroundZ` (wrapped by `GPBuildingDropAuthority::ResolvePreviewGroundZ`):
+
+1. NavMesh `ProjectPointToNavigation` at snapped XY (accepted only if Dist2D ≤ CellSize)
+2. Else multi-hit WorldStatic/WorldDynamic (then WorldStatic / Visibility): keep hits with ImpactNormal.Z ≥ 0.65; pick the **lowest** Z within 4000 cm of the highest such hit
+3. Fallback Hint.Z
+
+Not first-hit Visibility/WorldStatic. No growing class-specific ignore lists. Preview height only — WorldBlocked/grid validation still rejects environment overlap. Server deploy uses the same ground Z after snap.
 
 ## Tests (all Failures=0)
-- `gp.Building.RunBuildGridContractTest` — mixed-validity cell states (not monolithic), building ghost show/hide, ground Z ignores elevated building over a WorldStatic slab, label mapping, cancel clears
+- `gp.Building.RunBuildGridContractTest` — A no-border preview; B bounds→cells; C authored overrides DA; D no bounds → DA; E local XY offset; F client/server identical footprint + actor transform; G spawned registers same cells; H preplaced MainBase 5×5 fallback; I/J ground resolver stays terrain under elevated static / resource / wall-like geometry; K environment overlap still invalid; L READY exact-once unchanged
 - `gp.Building.RunMultiBuildingDataContractTest`
 - `gp.Building.RunOrbitalBuildingDropContractTest`
 - `gp.Resource.RunUnitCapLogisticsHubContractTest`
@@ -71,17 +111,12 @@ Each preview update: `GetPlayerViewPoint` → `StatusText` world rotation along 
 GPEditor Win64 Development + UHT **PASS**.  
 GP Win64 Development / Shipping **not run**.
 
-## Next operator visual retest
-1. Purchase Hub → Deploy.
-2. Free area: filled footprint, green, building ghost visible, `VALID`.
-3. Partial overlap: only blocked cells red, free cells non-red, reason text.
-4. Over MainBase / placed Hub: preview on ground, blocked cells red, `BLOCKED: OCCUPIED`.
-5. Outside radius: invalid feedback, `BLOCKED: OUT OF RANGE`.
-6. Text faces camera.
-7. RMB/Esc: preview disappears.
-8. Stop PIE / close Editor: no crash.
-
-## Exact files changed during this preview polish
+## Exact changed files
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
+- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
+- `GP/Source/GPRuntime/Public/Buildings/Grid/GPBuildGridSubsystem.h`
+- `GP/Source/GPRuntime/Private/Buildings/Grid/GPBuildGridSubsystem.cpp`
 - `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropAuthority.h`
 - `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropAuthority.cpp`
 - `GP/Source/GPRuntime/Public/Orbital/GPBuildingPlacementGhost.h`
@@ -90,8 +125,16 @@ GP Win64 Development / Shipping **not run**.
 - `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
 - `Docs/Development/Cursor_Work_Report.md`
 
-Not committed (operator-local): `DefaultEngine.ini`, `DefaultGame.ini`, `L_PrototypeArena.umap`, `BP_ResourceNode_AuthoredExample.uasset`, Blueprint/Materials/VFX packs, `Tools/`, AutoAcquire CRLF noise.
+Not committed (operator-local): `GP/Config/DefaultEngine.ini`, `GP/Config/DefaultGame.ini`, `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`, `GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`, `GP/Content/GrimProtocol/Blueprint/`, `GP/Content/GrimProtocol/Materials/`, `GP/Content/Basic_VFX/`, `GP/Content/Mixed_Magic_VFX_Pack/`, `GP/Content/RocketThrusterExhaustFX/`, `Tools/`.
 
-## Explicit
+## Next operator visual retest
+1. Open authored Logistics Hub Blueprint.
+2. Find `PlacementFootprintBounds`, resize/move XY, save BP.
+3. PIE → Purchase Hub → Deploy.
+4. Preview tiles match authored box; no cell/outer borders; center denser, edges softer.
+5. Building ghost sits on the real pivot relative to those tiles.
+6. Spawned Hub occupies the same cells.
+7. Hover MainBase / Hub / Ferronite / boundary wall / elevated static: preview stays on terrain. Placement over blockers remains invalid.
+
 **NOT MERGED.**  
 **NOT FINALIZED.**

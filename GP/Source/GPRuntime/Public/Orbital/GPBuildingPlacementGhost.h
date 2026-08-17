@@ -16,7 +16,7 @@ class AGP_BuildingBase;
 
 /**
  * Local-only placement preview (GP-S36G).
- * Primary footprint visual is per-cell fill + outlines. Cube slab is never shown.
+ * Primary footprint visual is per-cell filled quads only (no contour lines). Cube slab is never shown.
  */
 UCLASS(NotPlaceable)
 class GPRUNTIME_API AGP_BuildingPlacementGhost : public AActor
@@ -31,6 +31,7 @@ public:
 	void SetGhostVisible(bool bVisible);
 	void UpdateGhostTransform(const FTransform& WorldTransform);
 	void SetFootprintCells(FIntPoint FootprintCells);
+	void SetFootprintLocalOffset(FVector2D LocalCenterOffsetCm);
 	void SetPreviewValid(bool bValid);
 	void SetBuildingGhostClass(TSubclassOf<AGP_BuildingBase> PayloadClass);
 
@@ -45,6 +46,8 @@ public:
 	void ClearGridPreview();
 
 	FVector2D GetPreviewOuterExtentXY() const { return PreviewOuterExtentXY; }
+	FVector GetPreviewFillWorldMin() const { return PreviewFillWorldMin; }
+	FVector GetPreviewFillWorldMax() const { return PreviewFillWorldMax; }
 	int32 GetPreviewCellCount() const { return PreviewCellCount; }
 	int32 GetPreviewGridLineCount() const { return PreviewGridLineCount; }
 	FString GetPreviewStatusLabel() const { return PreviewStatusLabel; }
@@ -74,7 +77,10 @@ protected:
 	TArray<TObjectPtr<UStaticMeshComponent>> BuildingGhostMeshes;
 
 	FIntPoint ActiveFootprintCells = FIntPoint(1, 1);
+	FVector2D FootprintLocalOffsetCm = FVector2D::ZeroVector;
 	FVector2D PreviewOuterExtentXY = FVector2D::ZeroVector;
+	FVector PreviewFillWorldMin = FVector::ZeroVector;
+	FVector PreviewFillWorldMax = FVector::ZeroVector;
 	int32 PreviewCellCount = 0;
 	int32 PreviewGridLineCount = 0;
 	FString PreviewStatusLabel;

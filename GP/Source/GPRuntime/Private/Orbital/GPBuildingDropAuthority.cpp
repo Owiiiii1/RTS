@@ -97,18 +97,26 @@ bool GPBuildingDropAuthority::ValidateBuildingPlacement(
 		return false;
 	}
 
-	const FIntPoint Footprint = BuildingDef->FootprintCells;
-	if (Footprint.X <= 0 || Footprint.Y <= 0)
-	{
-		OutReject = EGP_BuildingDropRejectReason::InvalidFootprint;
-		return false;
-	}
-
 	const TSubclassOf<AGP_BuildingBase> PayloadClass =
 		UGP_BuildingDropCatalog::Get().ResolvePayloadClass(DropDefinition);
 	if (PayloadClass == nullptr)
 	{
 		OutReject = EGP_BuildingDropRejectReason::MissingSpawnedClass;
+		return false;
+	}
+
+	UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>();
+	if (Grid == nullptr)
+	{
+		OutReject = EGP_BuildingDropRejectReason::SpawnFailed;
+		return false;
+	}
+
+	const FGP_ResolvedBuildingFootprint Resolved = Grid->ResolveBuildingFootprint(PayloadClass, BuildingDef);
+	const FIntPoint Footprint = Resolved.SizeCells;
+	if (!Grid->IsValidFootprintSize(Footprint))
+	{
+		OutReject = EGP_BuildingDropRejectReason::InvalidFootprint;
 		return false;
 	}
 
@@ -135,13 +143,6 @@ bool GPBuildingDropAuthority::ValidateBuildingPlacement(
 		return false;
 	}
 
-	UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>();
-	if (Grid == nullptr)
-	{
-		OutReject = EGP_BuildingDropRejectReason::SpawnFailed;
-		return false;
-	}
-
 	FIntPoint OriginCell = FIntPoint::ZeroValue;
 	FVector SnappedGround = FVector::ZeroVector;
 	if (!Grid->ResolveSnappedPlacement(Loc, Footprint, OriginCell, SnappedGround))
@@ -149,6 +150,8 @@ bool GPBuildingDropAuthority::ValidateBuildingPlacement(
 		OutReject = EGP_BuildingDropRejectReason::InvalidTransform;
 		return false;
 	}
+
+	SnappedGround.Z = Grid->ResolveDeployGroundZ(SnappedGround);
 
 	if (OutOriginCell != nullptr)
 	{
@@ -261,46 +264,6 @@ namespace GPBuildingDropAuthorityPrivate
 		return false;
 	}
 
-	static void AddPreviewGroundIgnoreActors(UWorld* World, FCollisionQueryParams& QueryParams, AActor* ExtraIgnore)
-	{
-		if (IsValid(ExtraIgnore))
-		{
-			QueryParams.AddIgnoredActor(ExtraIgnore);
-		}
-		if (World == nullptr)
-		{
-			return;
-		}
-		for (TActorIterator<AGP_BuildingBase> It(World); It; ++It)
-		{
-			if (IsValid(*It))
-			{
-				QueryParams.AddIgnoredActor(*It);
-			}
-		}
-		for (TActorIterator<AGP_DropPod> It(World); It; ++It)
-		{
-			if (IsValid(*It))
-			{
-				QueryParams.AddIgnoredActor(*It);
-			}
-		}
-		for (TActorIterator<AGP_BuildingPlacementGhost> It(World); It; ++It)
-		{
-			if (IsValid(*It))
-			{
-				QueryParams.AddIgnoredActor(*It);
-			}
-		}
-		for (TActorIterator<APawn> It(World); It; ++It)
-		{
-			if (IsValid(*It))
-			{
-				QueryParams.AddIgnoredActor(*It);
-			}
-		}
-	}
-
 	static EGP_PlacementPreviewCellState ClassifyPreviewCell(
 		UWorld* World,
 		UGP_BuildGridSubsystem* Grid,
@@ -359,6 +322,24 @@ bool GPBuildingDropAuthority::EvaluateLocalPlacementPreview(
 	}
 
 	UGP_BuildGridSubsystem* Grid = World != nullptr ? World->GetSubsystem<UGP_BuildGridSubsystem>() : nullptr;
+	const UGP_BuildingDefinition* BuildingDef = IsValid(DropDefinition)
+		? DropDefinition->ResolveLoadedBuildingDefinition()
+		: nullptr;
+	const TSubclassOf<AGP_BuildingBase> PayloadClass = IsValid(DropDefinition)
+		? UGP_BuildingDropCatalog::Get().ResolvePayloadClass(DropDefinition)
+		: nullptr;
+	if (Grid != nullptr)
+	{
+		const FGP_ResolvedBuildingFootprint Resolved = Grid->ResolveBuildingFootprint(PayloadClass, BuildingDef);
+		OutPreview.LocalCenterOffsetCm = Resolved.LocalCenterOffsetCm;
+		OutPreview.bUsedAuthoredFootprintBounds = Resolved.bFromAuthoredBounds;
+		if (Grid->IsValidFootprintSize(OutPreview.FootprintSize))
+		{
+			OutPreview.SnappedActorLocation = Grid->MakeActorLocationFromFootprintCenter(
+				OutPreview.SnappedGround,
+				Resolved.LocalCenterOffsetCm);
+		}
+	}
 	if (Grid == nullptr || !Grid->IsValidFootprintSize(OutPreview.FootprintSize))
 	{
 		return OutPreview.bValid;
@@ -448,27 +429,9 @@ float GPBuildingDropAuthority::ResolvePreviewGroundZ(
 	{
 		return HintLocation.Z;
 	}
-
-	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(GPPlacementPreviewGroundZ), false);
-	GPBuildingDropAuthorityPrivate::AddPreviewGroundIgnoreActors(World, QueryParams, ExtraIgnoreActor);
-
-	const FVector TraceStart(HintLocation.X, HintLocation.Y, HintLocation.Z + 4000.0f);
-	const FVector TraceEnd(HintLocation.X, HintLocation.Y, HintLocation.Z - 8000.0f);
-	FHitResult Hit;
-	FCollisionObjectQueryParams ObjectParams;
-	ObjectParams.AddObjectTypesToQuery(ECC_WorldStatic);
-	ObjectParams.AddObjectTypesToQuery(ECC_WorldDynamic);
-	if (World->LineTraceSingleByObjectType(Hit, TraceStart, TraceEnd, ObjectParams, QueryParams))
+	if (UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>())
 	{
-		return Hit.ImpactPoint.Z;
-	}
-	if (World->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
-	{
-		return Hit.ImpactPoint.Z;
-	}
-	if (World->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
-	{
-		return Hit.ImpactPoint.Z;
+		return Grid->ResolveDeployGroundZ(HintLocation, ExtraIgnoreActor);
 	}
 	return HintLocation.Z;
 }
@@ -731,7 +694,11 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 	}
 
 	const int32 TeamId = RequestingPlayerState->GetTeamId();
-	const FVector LandingLoc = SnappedGround;
+	const UGP_BuildingDefinition* BuildingDef = DropDefinition->ResolveLoadedBuildingDefinition();
+	const FGP_ResolvedBuildingFootprint Resolved = Grid->ResolveBuildingFootprint(Result.PayloadClass, BuildingDef);
+	const FVector LandingLoc = Grid->MakeActorLocationFromFootprintCenter(
+		SnappedGround,
+		Resolved.LocalCenterOffsetCm);
 	const FRotator LandingRot = FRotator::ZeroRotator;
 	const float Altitude = Settings->BuildingDropSpawnAltitudeCm;
 	const FVector StartLoc = LandingLoc + FVector(0.0f, 0.0f, Altitude);
@@ -783,7 +750,9 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 	Result.SpawnedPod = Pod;
 	Result.OriginCell = OriginCell;
 	Result.FootprintSize = FootprintSize;
-	Result.SnappedLocation = LandingLoc;
+	Result.SnappedLocation = SnappedGround;
+	Result.SnappedActorLocation = LandingLoc;
+	Result.LocalCenterOffsetCm = Resolved.LocalCenterOffsetCm;
 	Result.ReservationId = ReservationId;
 	return Result;
 }

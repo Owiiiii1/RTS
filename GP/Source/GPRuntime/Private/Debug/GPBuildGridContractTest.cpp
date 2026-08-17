@@ -26,6 +26,7 @@
 #include "Orbital/GPOrbitalBuildingInventoryComponent.h"
 #include "Orbital/GPOrbitalDropDefinition.h"
 #include "Player/GPPlayerState.h"
+#include "Resources/GPResourceNode.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
@@ -404,6 +405,65 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		Expect(!Grid->DoFootprintsOverlap(FIntPoint(0, 0), FIntPoint(4, 4), FIntPoint(4, 0), FIntPoint(4, 4)),
 			TEXT("Preview_AdjacentNoOverlap"));
 
+		Expect(Grid->ConvertAuthoredBoundsToFootprintCells(FVector(100.0f, 100.0f, 20.0f)) == FIntPoint(1, 1),
+			TEXT("Bounds_200x200_1x1"));
+		Expect(Grid->ConvertAuthoredBoundsToFootprintCells(FVector(200.0f, 200.0f, 20.0f)) == FIntPoint(2, 2),
+			TEXT("Bounds_400x400_2x2"));
+		Expect(Grid->ConvertAuthoredBoundsToFootprintCells(FVector(275.0f, 190.0f, 20.0f)) == FIntPoint(3, 2),
+			TEXT("Bounds_550x380_3x2"));
+		Expect(Grid->ConvertAuthoredBoundsToFootprintCells(FVector(0.25f, 0.25f, 20.0f)) == FIntPoint(1, 1),
+			TEXT("Bounds_Minimum1x1"));
+
+		UGP_BuildingDefinition* DaFallback = NewObject<UGP_BuildingDefinition>(
+			this, FName(TEXT("DA_GP_Building_FootprintFallback")), RF_Transient);
+		DaFallback->FootprintCells = FIntPoint(4, 4);
+		const FGP_ResolvedBuildingFootprint ClassFallback =
+			Grid->ResolveBuildingFootprint(AGP_BuildGridContractStub::StaticClass(), DaFallback);
+		Expect(ClassFallback.SizeCells == FIntPoint(4, 4) && !ClassFallback.bFromAuthoredBounds,
+			TEXT("Bounds_NoAuthoredUsesDA"));
+
+		FActorSpawnParameters BoundsParams;
+		BoundsParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		BoundsParams.ObjectFlags |= RF_Transient;
+		const FTransform BoundsTM(FRotator::ZeroRotator, FVector(-71000.0f, 8500.0f, 100.0f));
+		AGP_BuildGridContractStub* BoundsStub = World->SpawnActorDeferred<AGP_BuildGridContractStub>(
+			AGP_BuildGridContractStub::StaticClass(),
+			BoundsTM,
+			nullptr,
+			nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Expect(IsValid(BoundsStub) && BoundsStub->GetPlacementFootprintBounds() != nullptr,
+			TEXT("Bounds_SpawnAuthoredStub")))
+		{
+			UBoxComponent* Box = BoundsStub->GetPlacementFootprintBounds();
+			Box->SetBoxExtent(FVector(275.0f, 190.0f, 20.0f));
+			Box->SetRelativeLocation(FVector(120.0f, -40.0f, 0.0f));
+			BoundsStub->FinishSpawning(BoundsTM);
+
+			const FGP_ResolvedBuildingFootprint Authored = Grid->ResolveActorFootprint(BoundsStub, DaFallback);
+			Expect(Authored.bFromAuthoredBounds && Authored.SizeCells == FIntPoint(3, 2),
+				TEXT("Bounds_AuthoredOverridesDA"));
+			Expect(FMath::IsNearlyEqual(Authored.LocalCenterOffsetCm.X, 120.0f)
+				&& FMath::IsNearlyEqual(Authored.LocalCenterOffsetCm.Y, -40.0f),
+				TEXT("Bounds_LocalXYOffsetPreserved"));
+
+			const FVector FootprintHint = BoundsStub->GetActorLocation()
+				+ FVector(Authored.LocalCenterOffsetCm.X, Authored.LocalCenterOffsetCm.Y, 0.0f);
+			FIntPoint AuthoredOrigin = FIntPoint::ZeroValue;
+			FVector AuthoredCenter = FVector::ZeroVector;
+			Grid->ResolveSnappedPlacement(FootprintHint, Authored.SizeCells, AuthoredOrigin, AuthoredCenter);
+			Expect(BoundsStub->GetGridFootprintSize() == FIntPoint(3, 2), TEXT("Bounds_PreplacedUsesAuthoredSize"));
+			Expect(BoundsStub->GetGridOriginCell() == AuthoredOrigin, TEXT("Bounds_PreplacedOriginFromOffset"));
+			Expect(GPBuildGridContractDebug::AllCellsOccupied(Grid, AuthoredOrigin, FIntPoint(3, 2)),
+				TEXT("Bounds_SpawnedRegistersResolvedCells"));
+
+			const FVector RebuiltActor = Grid->MakeActorLocationFromFootprintCenter(
+				FootprintHint, Authored.LocalCenterOffsetCm);
+			Expect(FVector::Dist2D(RebuiltActor, BoundsStub->GetActorLocation()) <= 1.0f,
+				TEXT("Bounds_ActorPivotPreservedVsFootprint"));
+			BoundsStub->Destroy();
+		}
+
 		Expect(FCString::Strcmp(
 			GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(true, EGP_BuildingDropRejectReason::None),
 			TEXT("VALID")) == 0, TEXT("Preview_LabelValid"));
@@ -444,7 +504,8 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				&& FMath::IsNearlyEqual(Ghost->GetPreviewOuterExtentXY().Y, 800.0f),
 				TEXT("Preview_GhostOuter800"));
 			Expect(Ghost->GetPreviewCellCount() == 16, TEXT("Preview_GhostCellCount16"));
-			Expect(Ghost->GetPreviewGridLineCount() >= 4, TEXT("Preview_GhostHasOuterLines"));
+			Expect(Ghost->GetPreviewGridLineCount() == 0, TEXT("Preview_NoGridLines"));
+			Expect(Ghost->GetPreviewLineWorldCount() == 0, TEXT("Preview_NoLineWorlds"));
 			Expect(Ghost->GetPreviewStatusLabel() == TEXT("VALID"), TEXT("Preview_GhostValidLabel"));
 			Expect(Ghost->HasActiveGridPreview(), TEXT("Preview_GhostActive"));
 			Expect(Ghost->IsGhostFillHidden(), TEXT("Preview_GhostFillHidden"));
@@ -479,43 +540,15 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			FVector ExpectedMin = FVector::ZeroVector;
 			FVector ExpectedMax = FVector::ZeroVector;
 			Grid->GetFootprintWorldAABB(OffsetOrigin, FIntPoint(4, 4), OffsetSnapped.Z, ExpectedMin, ExpectedMax);
-			const float LineZ = OffsetSnapped.Z + 24.0f;
-			FVector BorderStart = FVector::ZeroVector;
-			FVector BorderEnd = FVector::ZeroVector;
-			Expect(Ghost->GetPreviewLineWorldSegment(0, BorderStart, BorderEnd), TEXT("Preview_OffsetHasBorder"));
-			Expect(FMath::IsNearlyEqual(BorderStart.X, ExpectedMin.X)
-				&& FMath::IsNearlyEqual(BorderStart.Y, ExpectedMin.Y)
-				&& FMath::IsNearlyEqual(BorderEnd.X, ExpectedMax.X)
-				&& FMath::IsNearlyEqual(BorderEnd.Y, ExpectedMin.Y)
-				&& FMath::IsNearlyEqual(BorderStart.Z, LineZ),
-				TEXT("Preview_OffsetBorderMatchesAABB"));
+			Expect(Ghost->GetPreviewLineWorldCount() == 0 && Ghost->GetPreviewGridLineCount() == 0,
+				TEXT("Preview_OffsetHasNoBorders"));
+			Expect(Ghost->GetPreviewFillWorldMin().Equals(ExpectedMin, 1.0f)
+				&& Ghost->GetPreviewFillWorldMax().Equals(ExpectedMax, 1.0f),
+				TEXT("Preview_OffsetFillMatchesAABB"));
 
-			bool bAllOnFootprint = Ghost->GetPreviewLineWorldCount() >= 4;
-			bool bAnyNearOrigin = false;
-			for (int32 LineIdx = 0; LineIdx < Ghost->GetPreviewLineWorldCount(); ++LineIdx)
-			{
-				FVector Start = FVector::ZeroVector;
-				FVector End = FVector::ZeroVector;
-				if (!Ghost->GetPreviewLineWorldSegment(LineIdx, Start, End))
-				{
-					bAllOnFootprint = false;
-					break;
-				}
-				const float StartXY = FVector2D(Start.X, Start.Y).Size();
-				const float EndXY = FVector2D(End.X, End.Y).Size();
-				if (StartXY < 500.0f || EndXY < 500.0f)
-				{
-					bAnyNearOrigin = true;
-				}
-				if (Start.X < ExpectedMin.X - 1.0f || Start.X > ExpectedMax.X + 1.0f
-					|| Start.Y < ExpectedMin.Y - 1.0f || Start.Y > ExpectedMax.Y + 1.0f
-					|| End.X < ExpectedMin.X - 1.0f || End.X > ExpectedMax.X + 1.0f
-					|| End.Y < ExpectedMin.Y - 1.0f || End.Y > ExpectedMax.Y + 1.0f)
-				{
-					bAllOnFootprint = false;
-				}
-			}
-			Expect(bAllOnFootprint && !bAnyNearOrigin, TEXT("Preview_OffsetLinesFollowFootprint"));
+			const FVector FillCenter = 0.5f * (Ghost->GetPreviewFillWorldMin() + Ghost->GetPreviewFillWorldMax());
+			Expect(FVector::Dist2D(FillCenter, OffsetSnapped) < 1.0f, TEXT("Preview_OffsetFillCenteredOnSnap"));
+			Expect(FVector2D(FillCenter.X, FillCenter.Y).Size() > 500.0f, TEXT("Preview_OffsetFillNotAtOrigin"));
 			Expect(FMath::Abs(OffsetSnapped.X - 2000.0f) < 400.0f
 				&& FMath::Abs(OffsetSnapped.Y - 1200.0f) < 400.0f,
 				TEXT("Preview_OffsetNearRequested"));
@@ -651,12 +684,25 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		Expect(Buy1.bAccepted && Buy2.bAccepted, TEXT("M_PurchaseTwo"));
 		Expect(OwnerPS->GetOrbitalBuildingInventoryComponent()->GetReadyCount(HubDrop) == 2, TEXT("M_Ready2"));
 
+		GPBuildingDropAuthority::FPlacementPreview ClientPreview;
+		GPBuildingDropAuthority::EvaluateLocalPlacementPreview(
+			World,
+			OwnerPS,
+			HubDrop,
+			FTransform(FRotator::ZeroRotator, Unsnapped),
+			ClientPreview);
+
 		GPBuildingDropAuthority::FDeployResult First =
 			GPBuildingDropAuthority::AuthorityDeployBuilding(
 				World, OwnerPS, HubDrop, FTransform(FRotator::ZeroRotator, Unsnapped));
 		Expect(First.bAccepted, TEXT("M_FirstReservation"));
 		Expect(First.OriginCell == FirstHubOrigin, TEXT("P_ServerSnappedOrigin"));
 		Expect(FVector::Dist2D(First.SnappedLocation, SnappedExpected) <= 1.0f, TEXT("P_ServerSnappedLocation"));
+		Expect(ClientPreview.OriginCell == First.OriginCell
+			&& ClientPreview.FootprintSize == First.FootprintSize, TEXT("Preview_ClientServerFootprintMatch"));
+		Expect(FVector::Dist2D(ClientPreview.SnappedGround, First.SnappedLocation) <= 1.0f
+			&& FVector::Dist2D(ClientPreview.SnappedActorLocation, First.SnappedActorLocation) <= 1.0f,
+			TEXT("Preview_ClientServerActorTransformMatch"));
 		LastPodWeak = First.SpawnedPod;
 		Expect(Grid->IsReservationActive(First.ReservationId), TEXT("M_ReservationActive"));
 
@@ -769,6 +815,8 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				MixedPreview.RejectReason,
 				&MixedPreview.CellStates);
 			Expect(MixedGhost->GetPreviewInvalidCellCount() == MixedOccupied, TEXT("Preview_MixedInvalidCellCount"));
+			Expect(MixedGhost->GetPreviewGridLineCount() == 0 && MixedGhost->GetPreviewLineWorldCount() == 0,
+				TEXT("Preview_MixedNoBorders"));
 			Expect(!MixedGhost->IsBuildingGhostVisible(), TEXT("Preview_BuildingGhostHiddenWhenInvalid"));
 			Expect(MixedGhost->GetPreviewStatusLabel() == TEXT("BLOCKED: OCCUPIED"), TEXT("Preview_MixedStatusText"));
 			MixedGhost->ClearGridPreview();
@@ -782,6 +830,23 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		FActorSpawnParameters GroundParams;
 		GroundParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		GroundParams.ObjectFlags |= RF_Transient;
+		auto ConfigureWorldStaticCube = [CubeMesh](AStaticMeshActor* Actor, const FVector& Scale)
+		{
+			if (!IsValid(Actor) || Actor->GetStaticMeshComponent() == nullptr || CubeMesh == nullptr)
+			{
+				return;
+			}
+			UStaticMeshComponent* Mesh = Actor->GetStaticMeshComponent();
+			Mesh->SetMobility(EComponentMobility::Movable);
+			Mesh->SetStaticMesh(CubeMesh);
+			Actor->SetActorScale3D(Scale);
+			Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			Mesh->SetCollisionObjectType(ECC_WorldStatic);
+			Mesh->SetCollisionResponseToAllChannels(ECR_Block);
+			Mesh->SetGenerateOverlapEvents(false);
+			Mesh->UpdateBounds();
+		};
+
 		AStaticMeshActor* Floor = nullptr;
 		if (Expect(CubeMesh != nullptr, TEXT("Preview_GroundCubeMesh")))
 		{
@@ -793,16 +858,44 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		}
 		if (Expect(IsValid(Floor) && Floor->GetStaticMeshComponent() != nullptr, TEXT("Preview_SpawnGroundSlab")))
 		{
-			UStaticMeshComponent* FloorMesh = Floor->GetStaticMeshComponent();
-			FloorMesh->SetMobility(EComponentMobility::Movable);
-			FloorMesh->SetStaticMesh(CubeMesh);
-			Floor->SetActorScale3D(FVector(8.0f, 8.0f, 0.2f));
-			FloorMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-			FloorMesh->SetCollisionObjectType(ECC_WorldStatic);
-			FloorMesh->SetCollisionResponseToAllChannels(ECR_Block);
-			FloorMesh->SetGenerateOverlapEvents(false);
-			FloorMesh->UpdateBounds();
+			ConfigureWorldStaticCube(Floor, FVector(8.0f, 8.0f, 0.2f));
 		}
+
+		AStaticMeshActor* ElevatedProp = World->SpawnActor<AStaticMeshActor>(
+			AStaticMeshActor::StaticClass(),
+			FVector(GroundProbe.X, GroundProbe.Y, 420.0f),
+			FRotator::ZeroRotator,
+			GroundParams);
+		if (Expect(IsValid(ElevatedProp), TEXT("Preview_SpawnElevatedProp")))
+		{
+			ConfigureWorldStaticCube(ElevatedProp, FVector(1.5f, 1.5f, 1.5f));
+		}
+
+		AStaticMeshActor* Wall = World->SpawnActor<AStaticMeshActor>(
+			AStaticMeshActor::StaticClass(),
+			FVector(GroundProbe.X, GroundProbe.Y, 400.0f),
+			FRotator::ZeroRotator,
+			GroundParams);
+		if (Expect(IsValid(Wall), TEXT("Preview_SpawnBoundaryWall")))
+		{
+			ConfigureWorldStaticCube(Wall, FVector(0.25f, 4.0f, 8.0f));
+		}
+
+		AGP_ResourceNode* Resource = World->SpawnActor<AGP_ResourceNode>(
+			AGP_ResourceNode::StaticClass(),
+			FVector(GroundProbe.X, GroundProbe.Y, 280.0f),
+			FRotator::ZeroRotator,
+			GroundParams);
+		AStaticMeshActor* ResourceGeo = World->SpawnActor<AStaticMeshActor>(
+			AStaticMeshActor::StaticClass(),
+			FVector(GroundProbe.X, GroundProbe.Y, 260.0f),
+			FRotator::ZeroRotator,
+			GroundParams);
+		if (Expect(IsValid(ResourceGeo), TEXT("Preview_SpawnResourceGeometry")))
+		{
+			ConfigureWorldStaticCube(ResourceGeo, FVector(2.0f, 2.0f, 2.0f));
+		}
+
 		AGP_BuildGridContractStub* HighStub = World->SpawnActorDeferred<AGP_BuildGridContractStub>(
 			AGP_BuildGridContractStub::StaticClass(),
 			FTransform(FRotator::ZeroRotator, GroundProbe),
@@ -814,15 +907,60 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			HighStub->ConfigureGridPlacement(FIntPoint(-360, 55), FIntPoint(1, 1));
 			HighStub->FinishSpawning(FTransform(FRotator::ZeroRotator, GroundProbe));
 		}
-		const float ResolvedGroundZ = GPBuildingDropAuthority::ResolvePreviewGroundZ(World, GroundProbe, HighStub);
+		const float ResolvedGroundZ = GPBuildingDropAuthority::ResolvePreviewGroundZ(World, GroundProbe);
 		Expect(ResolvedGroundZ < 150.0f, TEXT("Preview_GroundZIgnoresBuildingSurface"));
+		Expect(ResolvedGroundZ < 150.0f, TEXT("Preview_GroundZStaysTerrain"));
+		Expect(ResolvedGroundZ < 150.0f, TEXT("Preview_GroundZIgnoresElevatedStatic"));
+		Expect(ResolvedGroundZ < 150.0f, TEXT("Preview_GroundZIgnoresBoundaryWall"));
+		Expect(ResolvedGroundZ < 150.0f, TEXT("Preview_GroundZIgnoresResourceGeometry"));
 		if (IsValid(HighStub))
 		{
 			HighStub->Destroy();
 		}
+		if (IsValid(ElevatedProp))
+		{
+			ElevatedProp->Destroy();
+		}
+		if (IsValid(Wall))
+		{
+			Wall->Destroy();
+		}
+		if (IsValid(Resource))
+		{
+			Resource->Destroy();
+		}
+		if (IsValid(ResourceGeo))
+		{
+			ResourceGeo->Destroy();
+		}
 		if (IsValid(Floor))
 		{
 			Floor->Destroy();
+		}
+
+		AStaticMeshActor* WorldBlocker = World->SpawnActor<AStaticMeshActor>(
+			AStaticMeshActor::StaticClass(),
+			AdjacentDeployLocation + FVector(0.0f, 0.0f, 80.0f),
+			FRotator::ZeroRotator,
+			GroundParams);
+		if (Expect(IsValid(WorldBlocker), TEXT("Preview_SpawnWorldBlocker")))
+		{
+			ConfigureWorldStaticCube(WorldBlocker, FVector(6.0f, 6.0f, 2.0f));
+		}
+		GPBuildingDropAuthority::FPlacementPreview WorldPreview;
+		GPBuildingDropAuthority::EvaluateLocalPlacementPreview(
+			World,
+			OwnerPS,
+			HubDrop,
+			FTransform(FRotator::ZeroRotator, AdjacentDeployLocation),
+			WorldPreview);
+		Expect(!WorldPreview.bValid, TEXT("Preview_WorldBlockedStillInvalid"));
+		Expect(WorldPreview.RejectReason == EGP_BuildingDropRejectReason::PlacementOverlap
+			|| WorldPreview.RejectReason == EGP_BuildingDropRejectReason::NotNavigable,
+			TEXT("Preview_EnvironmentOverlapRejected"));
+		if (IsValid(WorldBlocker))
+		{
+			WorldBlocker->Destroy();
 		}
 
 		GPBuildingDropAuthority::FPlacementPreview RangePreview;
@@ -974,6 +1112,7 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		{
 			Expect(Hub->GetGridFootprintSize() == FIntPoint(4, 4), TEXT("V_HubFootprint4x4"));
 			Expect(Hub->GetGridOriginCell() == FirstHubOrigin, TEXT("V_HubOriginCell"));
+			Expect(Hub->GetPlacementFootprintBounds() != nullptr, TEXT("Bounds_ComponentPresentOnHub"));
 			Expect(GPBuildGridContractDebug::AllCellsOccupied(Grid, Hub->GetGridOriginCell(), FIntPoint(4, 4)),
 				TEXT("O_BuildingOccupiesFootprint"));
 			Expect(FVector::Dist2D(Hub->GetActorLocation(), SnappedExpected) <= 8.0f, TEXT("P_LandingUsesSnappedXY"));

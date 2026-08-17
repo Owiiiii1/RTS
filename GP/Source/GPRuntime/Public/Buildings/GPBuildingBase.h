@@ -31,6 +31,9 @@ public:
 	UBoxComponent* GetNavigationObstacle() const { return NavigationObstacle; }
 
 	UFUNCTION(BlueprintPure, Category = "GP|BuildGrid")
+	UBoxComponent* GetPlacementFootprintBounds() const { return PlacementFootprintBounds; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|BuildGrid")
 	FIntPoint GetGridOriginCell() const { return GridOriginCell; }
 
 	UFUNCTION(BlueprintPure, Category = "GP|BuildGrid")
@@ -52,11 +55,22 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Navigation", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UBoxComponent> NavigationObstacle;
 
+	/**
+	 * Authorable BuildGrid placement footprint (GP-S36G).
+	 * Designer resizes/moves this box on a Blueprint child. Not collision, nav, selection, or combat.
+	 * Default XY extent 0 means "unauthored" — runtime then uses BuildingDefinition.FootprintCells.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|BuildGrid", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UBoxComponent> PlacementFootprintBounds;
+
 	/** Attach NavigationObstacle under the current root (Capsule on MainBase / LogisticsHub). */
 	void AttachNavigationObstacleToRoot();
 
 	/** Shared nav-obstacle collision / area setup (extent set by derived defaults or BP). */
 	void ConfigureNavigationObstacleDefaults();
+
+	void AttachPlacementFootprintBoundsToRoot();
+	void ConfigurePlacementFootprintBoundsDefaults();
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "GP|BuildGrid")
 	FIntPoint GridOriginCell = FIntPoint::ZeroValue;

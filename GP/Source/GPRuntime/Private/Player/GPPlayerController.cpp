@@ -1281,7 +1281,20 @@ void AGP_PlayerController::EnterBuildingPlacementMode(FPrimaryAssetId DropDefini
 		if (UGP_OrbitalDropDefinition* DropDef =
 				UGP_BuildingDropCatalog::Get().FindDropDefinition(DropDefinitionId))
 		{
-			if (const UGP_BuildingDefinition* BuildingDef = DropDef->ResolveLoadedBuildingDefinition())
+			if (UGP_BuildGridSubsystem* Grid = GetWorld() != nullptr
+				? GetWorld()->GetSubsystem<UGP_BuildGridSubsystem>()
+				: nullptr)
+			{
+				const UGP_BuildingDefinition* BuildingDef = DropDef->ResolveLoadedBuildingDefinition();
+				const FGP_ResolvedBuildingFootprint Resolved = Grid->ResolveBuildingFootprint(
+					UGP_BuildingDropCatalog::Get().ResolvePayloadClass(DropDef),
+					BuildingDef);
+				if (Resolved.IsValid())
+				{
+					Footprint = Resolved.SizeCells;
+				}
+			}
+			else if (const UGP_BuildingDefinition* BuildingDef = DropDef->ResolveLoadedBuildingDefinition())
 			{
 				Footprint = BuildingDef->FootprintCells;
 			}
@@ -1623,8 +1636,9 @@ void AGP_PlayerController::ConfirmBuildingPlacement()
 			: nullptr)
 		{
 			const FIntPoint Footprint = Preview.FootprintSize.X > 0 ? Preview.FootprintSize : FIntPoint(1, 1);
-			const FVector GhostLoc = Preview.FootprintSize.X > 0 ? Preview.SnappedGround : GroundLoc;
+			const FVector GhostLoc = Preview.FootprintSize.X > 0 ? Preview.SnappedActorLocation : GroundLoc;
 			BuildingPlacementGhost->SetFootprintCells(Footprint);
+			BuildingPlacementGhost->SetFootprintLocalOffset(Preview.LocalCenterOffsetCm);
 			BuildingPlacementGhost->SetBuildingGhostClass(
 				UGP_BuildingDropCatalog::Get().ResolvePayloadClass(DropDef));
 			BuildingPlacementGhost->UpdateGhostTransform(FTransform(FRotator::ZeroRotator, GhostLoc));
@@ -1632,7 +1646,7 @@ void AGP_PlayerController::ConfirmBuildingPlacement()
 				Grid,
 				Preview.OriginCell,
 				Footprint,
-				GhostLoc.Z,
+				Preview.SnappedGround.Z,
 				Preview.bValid,
 				Preview.RejectReason,
 				&Preview.CellStates);
@@ -1684,23 +1698,6 @@ bool AGP_PlayerController::TraceGroundUnderCursor(FVector& OutGroundLocation, FR
 	{
 		QueryParams.AddIgnoredActor(BuildingPlacementGhost);
 	}
-	if (UWorld* TraceWorld = World)
-	{
-		for (TActorIterator<AGP_BuildingBase> It(TraceWorld); It; ++It)
-		{
-			if (IsValid(*It))
-			{
-				QueryParams.AddIgnoredActor(*It);
-			}
-		}
-		for (TActorIterator<AGP_DropPod> It(TraceWorld); It; ++It)
-		{
-			if (IsValid(*It))
-			{
-				QueryParams.AddIgnoredActor(*It);
-			}
-		}
-	}
 
 	const FVector TraceEnd = WorldOrigin + (WorldDirection * SelectionTraceDistance);
 	FHitResult Hit;
@@ -1747,29 +1744,39 @@ void AGP_PlayerController::UpdateBuildingPlacementGhost()
 		Preview);
 
 	FIntPoint Footprint = Preview.FootprintSize.X > 0 ? Preview.FootprintSize : FIntPoint(1, 1);
-	FVector GhostLoc = Preview.FootprintSize.X > 0 ? Preview.SnappedGround : GroundLoc;
+	FVector GhostLoc = Preview.FootprintSize.X > 0 ? Preview.SnappedActorLocation : GroundLoc;
 	if (Preview.FootprintSize.X <= 0)
 	{
-		if (DropDef != nullptr)
-		{
-			if (const UGP_BuildingDefinition* BuildingDef = DropDef->ResolveLoadedBuildingDefinition())
-			{
-				Footprint = BuildingDef->FootprintCells;
-			}
-		}
 		if (UGP_BuildGridSubsystem* Grid = GetWorld() != nullptr
 			? GetWorld()->GetSubsystem<UGP_BuildGridSubsystem>()
 			: nullptr)
 		{
+			const UGP_BuildingDefinition* BuildingDef = DropDef != nullptr
+				? DropDef->ResolveLoadedBuildingDefinition()
+				: nullptr;
+			const FGP_ResolvedBuildingFootprint Resolved = Grid->ResolveBuildingFootprint(
+				UGP_BuildingDropCatalog::Get().ResolvePayloadClass(DropDef),
+				BuildingDef);
+			if (Resolved.IsValid())
+			{
+				Footprint = Resolved.SizeCells;
+			}
 			FIntPoint Origin = FIntPoint::ZeroValue;
-			Grid->ResolveSnappedPlacement(GroundLoc, Footprint, Origin, GhostLoc);
+			FVector Snapped = FVector::ZeroVector;
+			Grid->ResolveSnappedPlacement(GroundLoc, Footprint, Origin, Snapped);
+			Snapped.Z = Grid->ResolveDeployGroundZ(Snapped, BuildingPlacementGhost);
 			Preview.OriginCell = Origin;
 			Preview.FootprintSize = Footprint;
-			Preview.SnappedGround = GhostLoc;
+			Preview.SnappedGround = Snapped;
+			Preview.LocalCenterOffsetCm = Resolved.LocalCenterOffsetCm;
+			Preview.SnappedActorLocation = Grid->MakeActorLocationFromFootprintCenter(
+				Snapped, Resolved.LocalCenterOffsetCm);
+			GhostLoc = Preview.SnappedActorLocation;
 		}
 	}
 
 	BuildingPlacementGhost->SetFootprintCells(Footprint);
+	BuildingPlacementGhost->SetFootprintLocalOffset(Preview.LocalCenterOffsetCm);
 	BuildingPlacementGhost->SetBuildingGhostClass(
 		UGP_BuildingDropCatalog::Get().ResolvePayloadClass(DropDef));
 	BuildingPlacementGhost->UpdateGhostTransform(FTransform(FRotator::ZeroRotator, GhostLoc));
@@ -1781,7 +1788,7 @@ void AGP_PlayerController::UpdateBuildingPlacementGhost()
 			Grid,
 			Preview.OriginCell,
 			Footprint,
-			GhostLoc.Z,
+			Preview.SnappedGround.Z,
 			Preview.bValid,
 			Preview.RejectReason,
 			&Preview.CellStates);

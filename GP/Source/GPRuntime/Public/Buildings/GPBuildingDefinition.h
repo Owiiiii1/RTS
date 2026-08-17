@@ -38,7 +38,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Vitals", meta = (ClampMin = "1.0"))
 	float MaxHealth = 500.0f;
 
-	/** Intrinsic grid footprint consumed by GP-S36G BuildGrid. */
+	/**
+	 * Compatibility/default BuildGrid footprint (cells).
+	 * Runtime precedence:
+	 * 1) payload CDO PlacementFootprintBounds when authored (XY extent >= 1 cm)
+	 * 2) this field, when both axes > 0
+	 * Do not delete. Native actors, tests, and unauthored Blueprints still use this fallback.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|BuildGrid")
 	FIntPoint FootprintCells = FIntPoint(1, 1);
 

@@ -71,7 +71,11 @@ namespace GPBuildingDropAuthority
 		TSubclassOf<::AGP_BuildingBase> PayloadClass;
 		FIntPoint OriginCell = FIntPoint::ZeroValue;
 		FIntPoint FootprintSize = FIntPoint::ZeroValue;
+		/** Footprint-center world (XY snap). Dist2D tests and client confirm use this. */
 		FVector SnappedLocation = FVector::ZeroVector;
+		/** Actor pivot after authored PlacementFootprintBounds offset. Pod landing uses this. */
+		FVector SnappedActorLocation = FVector::ZeroVector;
+		FVector2D LocalCenterOffsetCm = FVector2D::ZeroVector;
 		FGuid ReservationId;
 	};
 
@@ -82,6 +86,9 @@ namespace GPBuildingDropAuthority
 		FIntPoint OriginCell = FIntPoint::ZeroValue;
 		FIntPoint FootprintSize = FIntPoint::ZeroValue;
 		FVector SnappedGround = FVector::ZeroVector;
+		FVector SnappedActorLocation = FVector::ZeroVector;
+		FVector2D LocalCenterOffsetCm = FVector2D::ZeroVector;
+		bool bUsedAuthoredFootprintBounds = false;
 		TArray<EGP_PlacementPreviewCellState> CellStates;
 	};
 
@@ -117,7 +124,7 @@ namespace GPBuildingDropAuthority
 		bool bValid,
 		EGP_BuildingDropRejectReason RejectReason);
 
-	/** Vertical ground Z for preview; ignores buildings / pods / placement ghost. */
+	/** Vertical deploy/preview ground Z. Shared semantic resolver (nav / upward-ground traces). */
 	float ResolvePreviewGroundZ(
 		UWorld* World,
 		const FVector& HintLocation,

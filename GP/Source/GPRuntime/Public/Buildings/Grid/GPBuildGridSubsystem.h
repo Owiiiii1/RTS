@@ -7,6 +7,28 @@
 #include "GPBuildGridSubsystem.generated.h"
 
 class AActor;
+class AGP_BuildingBase;
+class UBoxComponent;
+class UGP_BuildingDefinition;
+
+/** Shared runtime footprint after bounds/DA/class fallback resolution (GP-S36G). */
+USTRUCT()
+struct GPRUNTIME_API FGP_ResolvedBuildingFootprint
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FIntPoint SizeCells = FIntPoint::ZeroValue;
+
+	/** Authored box RelativeLocation XY vs actor pivot (cm). Zero when using DA/class fallback. */
+	UPROPERTY()
+	FVector2D LocalCenterOffsetCm = FVector2D::ZeroVector;
+
+	UPROPERTY()
+	bool bFromAuthoredBounds = false;
+
+	bool IsValid() const { return SizeCells.X > 0 && SizeCells.Y > 0; }
+};
 
 UENUM(BlueprintType)
 enum class EGP_GridRejectReason : uint8
@@ -80,6 +102,33 @@ public:
 
 	bool IsValidFootprintSize(FIntPoint FootprintSize) const;
 
+	/** XY box extent → cell count. WidthCm = 2*Extent.X. Ceil, minimum 1×1. CellSize 200. */
+	FIntPoint ConvertAuthoredBoundsToFootprintCells(FVector BoxExtent) const;
+
+	static bool ArePlacementFootprintBoundsUsable(const UBoxComponent* Bounds);
+
+	/**
+	 * Preferred: payload CDO/instance PlacementFootprintBounds when XY extent >= 1 cm.
+	 * Fallback: BuildingDefinition.FootprintCells when both axes > 0.
+	 * If a BuildingDefinition is present but FootprintCells is invalid, do not class-fallback
+	 * (keeps InvalidFootprint deploy rejection).
+	 * If no definition: MainBase 5×5, LogisticsHub 4×4, else 1×1.
+	 */
+	FGP_ResolvedBuildingFootprint ResolveBuildingFootprint(
+		TSubclassOf<AGP_BuildingBase> PayloadClass,
+		const UGP_BuildingDefinition* BuildingDef) const;
+
+	FGP_ResolvedBuildingFootprint ResolveActorFootprint(
+		const AGP_BuildingBase* Building,
+		const UGP_BuildingDefinition* BuildingDef = nullptr) const;
+
+	FVector MakeActorLocationFromFootprintCenter(
+		const FVector& FootprintCenterWorld,
+		FVector2D LocalCenterOffsetCm) const;
+
+	/** Semantic deploy/preview ground Z at XY. Not first-hit Visibility/WorldStatic. */
+	float ResolveDeployGroundZ(const FVector& HintLocation, AActor* ExtraIgnoreActor = nullptr) const;
+
 	bool IsCellOccupied(FIntPoint Cell, AActor* IgnoreActor = nullptr) const;
 	AActor* GetActorAtCell(FIntPoint Cell) const;
 
@@ -118,6 +167,10 @@ private:
 	int32 WorldToCell1D(float WorldCoord) const;
 	int32 SnapOrigin1D(float WorldCoord, int32 Size) const;
 	bool IsRecordIgnored(const FGP_GridCellRecord& Record, AActor* IgnoreActor, const FGuid& IgnoreReservationId) const;
+	bool TryResolveFromPlacementBounds(const UBoxComponent* Bounds, FGP_ResolvedBuildingFootprint& OutResolved) const;
+	FGP_ResolvedBuildingFootprint ResolveDefinitionOrClassFallback(
+		TSubclassOf<AGP_BuildingBase> PayloadClass,
+		const UGP_BuildingDefinition* BuildingDef) const;
 
 	float CellSize = DefaultCellSizeCm;
 	FVector2D GridOriginXY = FVector2D::ZeroVector;

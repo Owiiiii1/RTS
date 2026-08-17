@@ -3,9 +3,15 @@
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
 
 #include "Buildings/GPBuildingBase.h"
+#include "Buildings/GPBuildingDefinition.h"
+#include "Buildings/GPLogisticsHub.h"
+#include "Buildings/GPMainBase.h"
 #include "CollisionQueryParams.h"
+#include "Components/BoxComponent.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "Misc/Optional.h"
 #include "GameFramework/Pawn.h"
 #include "NavigationSystem.h"
 #include "Orbital/GPBuildingPlacementGhost.h"
@@ -164,6 +170,225 @@ bool UGP_BuildGridSubsystem::ResolveSnappedPlacement(
 bool UGP_BuildGridSubsystem::IsValidFootprintSize(FIntPoint FootprintSize) const
 {
 	return FootprintSize.X > 0 && FootprintSize.Y > 0;
+}
+
+FIntPoint UGP_BuildGridSubsystem::ConvertAuthoredBoundsToFootprintCells(FVector BoxExtent) const
+{
+	const float Size = FMath::Max(1.0f, CellSize);
+	const float WidthCm = 2.0f * FMath::Abs(BoxExtent.X);
+	const float HeightCm = 2.0f * FMath::Abs(BoxExtent.Y);
+	return FIntPoint(
+		FMath::Max(1, FMath::CeilToInt(WidthCm / Size)),
+		FMath::Max(1, FMath::CeilToInt(HeightCm / Size)));
+}
+
+bool UGP_BuildGridSubsystem::ArePlacementFootprintBoundsUsable(const UBoxComponent* Bounds)
+{
+	if (Bounds == nullptr)
+	{
+		return false;
+	}
+	const FVector Extent = Bounds->GetUnscaledBoxExtent();
+	return Extent.X >= 1.0f && Extent.Y >= 1.0f;
+}
+
+bool UGP_BuildGridSubsystem::TryResolveFromPlacementBounds(
+	const UBoxComponent* Bounds,
+	FGP_ResolvedBuildingFootprint& OutResolved) const
+{
+	OutResolved = FGP_ResolvedBuildingFootprint();
+	if (!ArePlacementFootprintBoundsUsable(Bounds))
+	{
+		return false;
+	}
+
+	const FVector Extent = Bounds->GetUnscaledBoxExtent();
+	const FVector Relative = Bounds->GetRelativeLocation();
+	OutResolved.SizeCells = ConvertAuthoredBoundsToFootprintCells(Extent);
+	OutResolved.LocalCenterOffsetCm = FVector2D(Relative.X, Relative.Y);
+	OutResolved.bFromAuthoredBounds = true;
+	return OutResolved.IsValid();
+}
+
+FGP_ResolvedBuildingFootprint UGP_BuildGridSubsystem::ResolveDefinitionOrClassFallback(
+	TSubclassOf<AGP_BuildingBase> PayloadClass,
+	const UGP_BuildingDefinition* BuildingDef) const
+{
+	FGP_ResolvedBuildingFootprint Result;
+	if (BuildingDef != nullptr)
+	{
+		if (BuildingDef->FootprintCells.X > 0 && BuildingDef->FootprintCells.Y > 0)
+		{
+			Result.SizeCells = BuildingDef->FootprintCells;
+			return Result;
+		}
+		// Definition present but invalid: do not class-fallback (InvalidFootprint contract).
+		return Result;
+	}
+
+	if (PayloadClass == nullptr)
+	{
+		return Result;
+	}
+	if (PayloadClass->IsChildOf(AGP_MainBase::StaticClass()))
+	{
+		Result.SizeCells = FIntPoint(5, 5);
+		return Result;
+	}
+	if (PayloadClass->IsChildOf(AGP_LogisticsHub::StaticClass()))
+	{
+		Result.SizeCells = FIntPoint(4, 4);
+		return Result;
+	}
+	Result.SizeCells = FIntPoint(1, 1);
+	return Result;
+}
+
+FGP_ResolvedBuildingFootprint UGP_BuildGridSubsystem::ResolveBuildingFootprint(
+	TSubclassOf<AGP_BuildingBase> PayloadClass,
+	const UGP_BuildingDefinition* BuildingDef) const
+{
+	if (PayloadClass != nullptr)
+	{
+		if (const AGP_BuildingBase* CDO = PayloadClass->GetDefaultObject<AGP_BuildingBase>())
+		{
+			FGP_ResolvedBuildingFootprint FromBounds;
+			if (TryResolveFromPlacementBounds(CDO->GetPlacementFootprintBounds(), FromBounds))
+			{
+				return FromBounds;
+			}
+		}
+	}
+	return ResolveDefinitionOrClassFallback(PayloadClass, BuildingDef);
+}
+
+FGP_ResolvedBuildingFootprint UGP_BuildGridSubsystem::ResolveActorFootprint(
+	const AGP_BuildingBase* Building,
+	const UGP_BuildingDefinition* BuildingDef) const
+{
+	if (IsValid(Building))
+	{
+		FGP_ResolvedBuildingFootprint FromInstance;
+		if (TryResolveFromPlacementBounds(Building->GetPlacementFootprintBounds(), FromInstance))
+		{
+			return FromInstance;
+		}
+		return ResolveBuildingFootprint(Building->GetClass(), BuildingDef);
+	}
+	return ResolveBuildingFootprint(nullptr, BuildingDef);
+}
+
+FVector UGP_BuildGridSubsystem::MakeActorLocationFromFootprintCenter(
+	const FVector& FootprintCenterWorld,
+	FVector2D LocalCenterOffsetCm) const
+{
+	return FootprintCenterWorld - FVector(LocalCenterOffsetCm.X, LocalCenterOffsetCm.Y, 0.0f);
+}
+
+float UGP_BuildGridSubsystem::ResolveDeployGroundZ(const FVector& HintLocation, AActor* ExtraIgnoreActor) const
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return HintLocation.Z;
+	}
+
+	if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+	{
+		FNavLocation NavLoc;
+		const FVector Query(HintLocation.X, HintLocation.Y, HintLocation.Z);
+		const FVector Extent(CellSize, CellSize, 5000.0f);
+		if (NavSys->ProjectPointToNavigation(Query, NavLoc, Extent))
+		{
+			if (FVector::Dist2D(NavLoc.Location, Query) <= CellSize + KINDA_SMALL_NUMBER)
+			{
+				return NavLoc.Location.Z;
+			}
+		}
+	}
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(GPBuildGridDeployGroundZ), false);
+	if (IsValid(ExtraIgnoreActor))
+	{
+		QueryParams.AddIgnoredActor(ExtraIgnoreActor);
+	}
+	for (TActorIterator<AGP_BuildingPlacementGhost> It(World); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			QueryParams.AddIgnoredActor(*It);
+		}
+	}
+
+	const FVector TraceStart(HintLocation.X, HintLocation.Y, HintLocation.Z + 8000.0f);
+	const FVector TraceEnd(HintLocation.X, HintLocation.Y, HintLocation.Z - 8000.0f);
+
+	auto PickGroundFromHits = [](const TArray<FHitResult>& Hits) -> TOptional<float>
+	{
+		constexpr float UpwardDot = 0.65f;
+		constexpr float ContinuityBandCm = 4000.0f;
+		float Highest = -TNumericLimits<float>::Max();
+		TArray<float, TInlineAllocator<16>> UpwardZ;
+		for (const FHitResult& Hit : Hits)
+		{
+			if (!Hit.bBlockingHit)
+			{
+				continue;
+			}
+			if (Hit.ImpactNormal.Z < UpwardDot)
+			{
+				continue;
+			}
+			UpwardZ.Add(Hit.ImpactPoint.Z);
+			Highest = FMath::Max(Highest, Hit.ImpactPoint.Z);
+		}
+		if (UpwardZ.Num() == 0)
+		{
+			return TOptional<float>();
+		}
+		float Lowest = Highest;
+		for (const float Z : UpwardZ)
+		{
+			if (Z >= Highest - ContinuityBandCm)
+			{
+				Lowest = FMath::Min(Lowest, Z);
+			}
+		}
+		return Lowest;
+	};
+
+	FCollisionObjectQueryParams ObjectParams;
+	ObjectParams.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+
+	TArray<FHitResult> Hits;
+	if (World->LineTraceMultiByObjectType(Hits, TraceStart, TraceEnd, ObjectParams, QueryParams))
+	{
+		if (const TOptional<float> GroundZ = PickGroundFromHits(Hits))
+		{
+			return GroundZ.GetValue();
+		}
+	}
+
+	Hits.Reset();
+	if (World->LineTraceMultiByChannel(Hits, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
+	{
+		if (const TOptional<float> GroundZ = PickGroundFromHits(Hits))
+		{
+			return GroundZ.GetValue();
+		}
+	}
+
+	Hits.Reset();
+	if (World->LineTraceMultiByChannel(Hits, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
+	{
+		if (const TOptional<float> GroundZ = PickGroundFromHits(Hits))
+		{
+			return GroundZ.GetValue();
+		}
+	}
+
+	return HintLocation.Z;
 }
 
 bool UGP_BuildGridSubsystem::IsRecordIgnored(

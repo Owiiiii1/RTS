@@ -14,11 +14,6 @@
 #include "GameFramework/PlayerController.h"
 #include "UObject/ConstructorHelpers.h"
 
-namespace
-{
-	constexpr float GPPlacementGridLineHeightCm = 24.0f;
-}
-
 AGP_BuildingPlacementGhost::AGP_BuildingPlacementGhost()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -99,6 +94,11 @@ void AGP_BuildingPlacementGhost::SetFootprintCells(FIntPoint FootprintCells)
 {
 	ActiveFootprintCells = FIntPoint(FMath::Max(1, FootprintCells.X), FMath::Max(1, FootprintCells.Y));
 	HideLegacyCubeFill();
+}
+
+void AGP_BuildingPlacementGhost::SetFootprintLocalOffset(FVector2D LocalCenterOffsetCm)
+{
+	FootprintLocalOffsetCm = LocalCenterOffsetCm;
 }
 
 void AGP_BuildingPlacementGhost::SetPreviewValid(bool bValid)
@@ -281,8 +281,9 @@ void AGP_BuildingPlacementGhost::UpdateGridPreview(
 	FVector Min = FVector::ZeroVector;
 	FVector Max = FVector::ZeroVector;
 	Grid->GetFootprintWorldAABB(OriginCell, FootprintSize, GroundZ, Min, Max);
+	PreviewFillWorldMin = Min;
+	PreviewFillWorldMax = Max;
 	const float CellSize = Grid->GetCellSize();
-	const float LineZ = GroundZ + GPPlacementGridLineHeightCm;
 	const int32 Width = FootprintSize.X;
 	const int32 Height = FootprintSize.Y;
 	PreviewCellCount = Width * Height;
@@ -304,27 +305,13 @@ void AGP_BuildingPlacementGhost::UpdateGridPreview(
 		}
 	}
 
-	auto DrawSeg = [&](const FVector& A, const FVector& B, const FColor& Color, float Thickness)
-	{
-		GridLineBatch->DrawLine(A, B, Color, SDPG_World, Thickness, 0.0f);
-		PreviewLineWorldStarts.Add(A);
-		PreviewLineWorldEnds.Add(B);
-		++PreviewGridLineCount;
-	};
-
-	const FColor OuterColor = bValid ? FColor(32, 220, 72) : FColor(230, 36, 32);
-	DrawSeg(FVector(Min.X, Min.Y, LineZ), FVector(Max.X, Min.Y, LineZ), OuterColor, 6.0f);
-	DrawSeg(FVector(Max.X, Min.Y, LineZ), FVector(Max.X, Max.Y, LineZ), OuterColor, 6.0f);
-	DrawSeg(FVector(Max.X, Max.Y, LineZ), FVector(Min.X, Max.Y, LineZ), OuterColor, 6.0f);
-	DrawSeg(FVector(Min.X, Max.Y, LineZ), FVector(Min.X, Min.Y, LineZ), OuterColor, 6.0f);
-
 	auto ColorForState = [](EGP_PlacementPreviewCellState State, bool bInner) -> FColor
 	{
 		if (State != EGP_PlacementPreviewCellState::Free)
 		{
-			return FColor(230, 36, 32, bInner ? 200 : 150);
+			return FColor(230, 36, 32, bInner ? 210 : 150);
 		}
-		return bInner ? FColor(20, 210, 70, 170) : FColor(70, 220, 110, 70);
+		return bInner ? FColor(16, 210, 64, 200) : FColor(70, 220, 110, 85);
 	};
 
 	int32 CellIndex = 0;
@@ -338,8 +325,8 @@ void AGP_BuildingPlacementGhost::UpdateGridPreview(
 			const int32 BorderDist = FMath::Min3(X, Y, FMath::Min(Width - 1 - X, Height - 1 - Y));
 			const bool bInner = BorderDist > 0;
 			const FColor FillColor = ColorForState(State, bInner);
-			const float Half = CellSize * 0.5f - 3.0f;
-			const float BoxHeight = bInner ? 12.0f : 5.0f;
+			const float Half = CellSize * 0.5f - 6.0f;
+			const float BoxHeight = bInner ? 16.0f : 6.0f;
 			const FVector CellMinWorld(Min.X + static_cast<float>(X) * CellSize, Min.Y + static_cast<float>(Y) * CellSize, GroundZ);
 			const FVector Center(
 				CellMinWorld.X + CellSize * 0.5f,
@@ -347,32 +334,23 @@ void AGP_BuildingPlacementGhost::UpdateGridPreview(
 				GroundZ + 2.0f);
 			const FBox LocalBox(FVector(-Half, -Half, 0.0f), FVector(Half, Half, BoxHeight));
 			GridLineBatch->DrawSolidBox(LocalBox, FTransform(FRotator::ZeroRotator, Center), FillColor, SDPG_World, 0.0f);
-
-			const float OutlineZ = GroundZ + BoxHeight + 4.0f;
-			const FVector C0(CellMinWorld.X, CellMinWorld.Y, OutlineZ);
-			const FVector C1(CellMinWorld.X + CellSize, CellMinWorld.Y, OutlineZ);
-			const FVector C2(CellMinWorld.X + CellSize, CellMinWorld.Y + CellSize, OutlineZ);
-			const FVector C3(CellMinWorld.X, CellMinWorld.Y + CellSize, OutlineZ);
-			const FColor LineColor(FillColor.R, FillColor.G, FillColor.B, 255);
-			DrawSeg(C0, C1, LineColor, bInner ? 2.5f : 2.0f);
-			DrawSeg(C1, C2, LineColor, bInner ? 2.5f : 2.0f);
-			DrawSeg(C2, C3, LineColor, bInner ? 2.5f : 2.0f);
-			DrawSeg(C3, C0, LineColor, bInner ? 2.5f : 2.0f);
 		}
 	}
 
+	PreviewGridLineCount = 0;
 	PreviewOuterExtentXY = FVector2D(Max.X - Min.X, Max.Y - Min.Y);
 	PreviewStatusLabel = GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(bValid, RejectReason);
 	bGridPreviewActive = true;
 	SetBuildingGhostHidden(!bValid);
 
+	const FColor StatusColor = bValid ? FColor(32, 220, 72) : FColor(230, 36, 32);
 	if (StatusText != nullptr)
 	{
 		StatusText->SetText(FText::FromString(PreviewStatusLabel));
-		StatusText->SetTextRenderColor(OuterColor);
+		StatusText->SetTextRenderColor(StatusColor);
 		StatusText->SetHiddenInGame(false);
 		StatusText->SetVisibility(true);
-		StatusText->SetRelativeLocation(FVector(0.0f, 0.0f, 160.0f));
+		StatusText->SetRelativeLocation(FVector(FootprintLocalOffsetCm.X, FootprintLocalOffsetCm.Y, 160.0f));
 		FaceStatusTextToCamera();
 	}
 }
@@ -391,6 +369,8 @@ void AGP_BuildingPlacementGhost::ClearGridPreview()
 	}
 	SetBuildingGhostHidden(true);
 	PreviewOuterExtentXY = FVector2D::ZeroVector;
+	PreviewFillWorldMin = FVector::ZeroVector;
+	PreviewFillWorldMax = FVector::ZeroVector;
 	PreviewCellCount = 0;
 	PreviewGridLineCount = 0;
 	PreviewStatusLabel.Reset();

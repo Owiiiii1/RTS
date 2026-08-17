@@ -19,6 +19,9 @@ AGP_BuildingBase::AGP_BuildingBase()
 	ConfigureNavigationObstacleDefaults();
 	// Attachment deferred until derived classes set Capsule root (PostInitializeComponents).
 
+	PlacementFootprintBounds = CreateDefaultSubobject<UBoxComponent>(TEXT("PlacementFootprintBounds"));
+	ConfigurePlacementFootprintBoundsDefaults();
+
 	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
 	CapabilityTags.Reset();
 	if (GPTags.Capability_Selectable.IsValid())
@@ -59,6 +62,48 @@ void AGP_BuildingBase::ConfigureNavigationObstacleDefaults()
 	NavigationObstacle->SetAreaClassOverride(UNavArea_Null::StaticClass());
 }
 
+void AGP_BuildingBase::ConfigurePlacementFootprintBoundsDefaults()
+{
+	if (!PlacementFootprintBounds)
+	{
+		return;
+	}
+
+	// XY 0,0 = unauthored. Runtime then uses BuildingDefinition.FootprintCells.
+	PlacementFootprintBounds->SetBoxExtent(FVector(0.0f, 0.0f, 20.0f));
+	PlacementFootprintBounds->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	PlacementFootprintBounds->SetCollisionObjectType(ECC_WorldStatic);
+	PlacementFootprintBounds->SetCollisionResponseToAllChannels(ECR_Ignore);
+	PlacementFootprintBounds->SetGenerateOverlapEvents(false);
+	PlacementFootprintBounds->SetSimulatePhysics(false);
+	PlacementFootprintBounds->SetHiddenInGame(true);
+	PlacementFootprintBounds->SetVisibility(true);
+	PlacementFootprintBounds->SetCanEverAffectNavigation(false);
+	PlacementFootprintBounds->bDynamicObstacle = false;
+	PlacementFootprintBounds->SetAreaClassOverride(nullptr);
+	PlacementFootprintBounds->ShapeColor = FColor(0, 180, 255);
+	PlacementFootprintBounds->SetLineThickness(2.0f);
+}
+
+void AGP_BuildingBase::AttachPlacementFootprintBoundsToRoot()
+{
+	if (!PlacementFootprintBounds)
+	{
+		return;
+	}
+
+	USceneComponent* Root = GetRootComponent();
+	if (Root == nullptr)
+	{
+		return;
+	}
+
+	if (PlacementFootprintBounds->GetAttachParent() != Root)
+	{
+		PlacementFootprintBounds->SetupAttachment(Root);
+	}
+}
+
 void AGP_BuildingBase::AttachNavigationObstacleToRoot()
 {
 	if (!NavigationObstacle)
@@ -82,6 +127,7 @@ void AGP_BuildingBase::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 	AttachNavigationObstacleToRoot();
+	AttachPlacementFootprintBoundsToRoot();
 }
 
 void AGP_BuildingBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -145,7 +191,8 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 		return;
 	}
 
-	const FIntPoint Footprint = ResolveFallbackFootprintSize();
+	const FGP_ResolvedBuildingFootprint Resolved = Grid->ResolveActorFootprint(this, nullptr);
+	const FIntPoint Footprint = Resolved.IsValid() ? Resolved.SizeCells : ResolveFallbackFootprintSize();
 	if (Footprint.X <= 0 || Footprint.Y <= 0)
 	{
 		return;
@@ -155,7 +202,9 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 	{
 		FIntPoint Origin = FIntPoint::ZeroValue;
 		FVector Snapped = FVector::ZeroVector;
-		Grid->ResolveSnappedPlacement(GetActorLocation(), Footprint, Origin, Snapped);
+		const FVector FootprintCenterHint = GetActorLocation()
+			+ FVector(Resolved.LocalCenterOffsetCm.X, Resolved.LocalCenterOffsetCm.Y, 0.0f);
+		Grid->ResolveSnappedPlacement(FootprintCenterHint, Footprint, Origin, Snapped);
 		GridOriginCell = Origin;
 		GridFootprintSize = Footprint;
 		bGridPlacementConfigured = true;

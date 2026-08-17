@@ -127,6 +127,46 @@ namespace GPMultiBuildingDataDebug
 		return Count;
 	}
 
+	static int32 CountNativeCatalogDrops()
+	{
+		TArray<UGP_OrbitalDropDefinition*> Drops;
+		UGP_BuildingDropCatalog::Get().GetOperatorVisibleDrops(Drops);
+		int32 Valid = 0;
+		for (UGP_OrbitalDropDefinition* Drop : Drops)
+		{
+			if (IsValid(Drop) && Drop->GetPrimaryAssetId().IsValid()
+				&& IsValid(Drop->ResolveLoadedBuildingDefinition()))
+			{
+				++Valid;
+			}
+		}
+		return Valid;
+	}
+
+	static bool NativeCatalogHasExpectedIdentities()
+	{
+		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+		const FName ExpectedDrops[] = {
+			FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub")),
+			FName(TEXT("DA_GP_OrbitalDrop_DefensiveTurret")),
+			FName(TEXT("DA_GP_OrbitalDrop_Wall")),
+			FName(TEXT("DA_GP_OrbitalDrop_WallTurret"))
+		};
+		for (const FName& DropName : ExpectedDrops)
+		{
+			const FPrimaryAssetId Id(
+				FPrimaryAssetType(UGP_OrbitalDropDefinition::PrimaryAssetTypeName()),
+				DropName);
+			UGP_OrbitalDropDefinition* Drop = Catalog.FindDropDefinition(Id);
+			if (!IsValid(Drop) || Drop->GetPrimaryAssetId() != Id
+				|| !IsValid(Drop->ResolveLoadedBuildingDefinition()))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	static int32 RoundMaxUnits(const AGP_PlayerState* PS)
 	{
 		if (PS == nullptr || PS->GetPlayerAttributeSet() == nullptr)
@@ -357,6 +397,21 @@ void UGP_MultiBuildingDataContractTestRunner::AdvanceStage()
 			Settings->BuildingDropSpawnAltitudeCm = 400.0f;
 			bSettingsMutated = true;
 		}
+
+		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+		Expect(IsValid(&Catalog), TEXT("Catalog_Create"));
+		const FPrimaryAssetId HubIdBefore = Catalog.GetLegacyLogisticsHubDropId();
+		UGP_OrbitalDropDefinition* HubDropBefore = Catalog.GetLegacyLogisticsHubDrop();
+		Expect(IsValid(HubDropBefore) && HubIdBefore.IsValid(), TEXT("Catalog_NativeAliveWhileOwned"));
+		Expect(GPMultiBuildingDataDebug::CountNativeCatalogDrops() >= 4, TEXT("Catalog_FourNativeDrops"));
+		Expect(GPMultiBuildingDataDebug::NativeCatalogHasExpectedIdentities(), TEXT("Catalog_ExpectedIdentities"));
+
+		UGP_BuildingDropCatalog::ShutdownCatalog();
+		UGP_BuildingDropCatalog::ShutdownCatalog();
+		UGP_BuildingDropCatalog& Recreated = UGP_BuildingDropCatalog::Get();
+		Expect(IsValid(&Recreated), TEXT("Catalog_RecreateAfterShutdown"));
+		Expect(GPMultiBuildingDataDebug::NativeCatalogHasExpectedIdentities(), TEXT("Catalog_IdentitiesAfterRecreate"));
+		Expect(Recreated.GetLegacyLogisticsHubDropId() == HubIdBefore, TEXT("Catalog_StableHubIdAfterRecreate"));
 
 		UGP_BuildingDefinition* BuildingA = GPMultiBuildingDataDebug::MakeBuildingDef(
 			this,

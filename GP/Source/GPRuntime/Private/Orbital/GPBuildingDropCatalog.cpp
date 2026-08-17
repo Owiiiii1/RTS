@@ -5,6 +5,7 @@
 #include "Buildings/GPBuildingDefinition.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Engine/AssetManager.h"
+#include "Misc/CoreDelegates.h"
 #include "Orbital/GPOrbitalDropDefinition.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "Tags/GPGameplayTags.h"
@@ -13,19 +14,27 @@
 namespace GPBuildingDropCatalogPrivate
 {
 	static TStrongObjectPtr<UGP_BuildingDropCatalog> GCatalog;
+	static FDelegateHandle EnginePreExitHandle;
+
+	static constexpr TCHAR CatalogObjectName[] = TEXT("GP_BuildingDropCatalog");
 }
 
 UGP_BuildingDropCatalog& UGP_BuildingDropCatalog::Get()
 {
 	if (!GPBuildingDropCatalogPrivate::GCatalog.IsValid())
 	{
-		UGP_BuildingDropCatalog* Created = NewObject<UGP_BuildingDropCatalog>(
+		UGP_BuildingDropCatalog* CatalogObj = FindObject<UGP_BuildingDropCatalog>(
 			GetTransientPackage(),
-			TEXT("GP_BuildingDropCatalog"),
-			RF_Transient);
-		Created->AddToRoot();
-		GPBuildingDropCatalogPrivate::GCatalog.Reset(Created);
-		Created->EnsureNativeCatalog();
+			GPBuildingDropCatalogPrivate::CatalogObjectName);
+		if (!IsValid(CatalogObj))
+		{
+			CatalogObj = NewObject<UGP_BuildingDropCatalog>(
+				GetTransientPackage(),
+				GPBuildingDropCatalogPrivate::CatalogObjectName,
+				RF_Transient);
+		}
+		GPBuildingDropCatalogPrivate::GCatalog.Reset(CatalogObj);
+		CatalogObj->EnsureNativeCatalog();
 	}
 
 	UGP_BuildingDropCatalog& Catalog = *GPBuildingDropCatalogPrivate::GCatalog.Get();
@@ -35,11 +44,27 @@ UGP_BuildingDropCatalog& UGP_BuildingDropCatalog::Get()
 
 void UGP_BuildingDropCatalog::ShutdownCatalog()
 {
-	if (GPBuildingDropCatalogPrivate::GCatalog.IsValid())
-	{
-		GPBuildingDropCatalogPrivate::GCatalog->RemoveFromRoot();
-	}
 	GPBuildingDropCatalogPrivate::GCatalog.Reset();
+}
+
+void UGP_BuildingDropCatalog::BindEngineLifecycle()
+{
+	if (GPBuildingDropCatalogPrivate::EnginePreExitHandle.IsValid())
+	{
+		return;
+	}
+
+	GPBuildingDropCatalogPrivate::EnginePreExitHandle =
+		FCoreDelegates::OnEnginePreExit.AddStatic(&UGP_BuildingDropCatalog::ShutdownCatalog);
+}
+
+void UGP_BuildingDropCatalog::UnbindEngineLifecycle()
+{
+	if (GPBuildingDropCatalogPrivate::EnginePreExitHandle.IsValid())
+	{
+		FCoreDelegates::OnEnginePreExit.Remove(GPBuildingDropCatalogPrivate::EnginePreExitHandle);
+		GPBuildingDropCatalogPrivate::EnginePreExitHandle.Reset();
+	}
 }
 
 void UGP_BuildingDropCatalog::EnsureNativeCatalog()

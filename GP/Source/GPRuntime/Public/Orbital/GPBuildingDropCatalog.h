@@ -15,6 +15,9 @@ class UGP_OrbitalDropDefinition;
  * Runtime building acquisition catalog (GP-S35B).
  * Not a GameInstance subsystem. Native bootstrap + optional registered test definitions.
  * Does not own faction/session preload.
+ *
+ * Lifetime: static TStrongObjectPtr is the only owner. Native definitions are UPROPERTY
+ * children of this object. No AddToRoot. Released on EnginePreExit while UObject is valid.
  */
 UCLASS()
 class GPRUNTIME_API UGP_BuildingDropCatalog : public UObject
@@ -23,7 +26,10 @@ class GPRUNTIME_API UGP_BuildingDropCatalog : public UObject
 
 public:
 	static UGP_BuildingDropCatalog& Get();
+	/** Idempotent. Safe if never created. Later Get() recreates a fresh native catalog. */
 	static void ShutdownCatalog();
+	static void BindEngineLifecycle();
+	static void UnbindEngineLifecycle();
 
 	void EnsureNativeCatalog();
 

@@ -8,10 +8,12 @@
 
 void FGPRuntimeModule::StartupModule()
 {
+	UGP_BuildingDropCatalog::BindEngineLifecycle();
 }
 
 void FGPRuntimeModule::ShutdownModule()
 {
+	UGP_BuildingDropCatalog::UnbindEngineLifecycle();
 	UGP_BuildingDropCatalog::ShutdownCatalog();
 }
 

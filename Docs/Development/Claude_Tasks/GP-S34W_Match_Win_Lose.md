@@ -10,7 +10,8 @@ Post-GP-S33C (Unit Cap + Logistics Hub + TEMP HUD layout are on verified `main` 
 
 ## Branch
 `feature/gp-s34w-match-win-lose`  
-Base: `main` @ `7873d2826130bc711486b7a8c0a55322685e8d9d`
+Base: `main` @ `7873d2826130bc711486b7a8c0a55322685e8d9d`  
+Implementation: `3a1bc381309e77757aed519bae9fe66957d056fd`
 
 ## Goal
 Authoritative match finish for Delivery Quota, timer score ladder, and MainBase annihilation. Exactly one winner when two valid playable teams exist. No Draw. No client-side victory logic.

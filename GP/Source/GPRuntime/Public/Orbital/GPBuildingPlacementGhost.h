@@ -9,14 +9,14 @@
 
 class USceneComponent;
 class UStaticMeshComponent;
-class UMaterialInstanceDynamic;
 class ULineBatchComponent;
 class UTextRenderComponent;
 class UGP_BuildGridSubsystem;
+class AGP_BuildingBase;
 
 /**
- * Local-only placement ghost (GP-S32R / GP-S36G visual feedback).
- * Primary validity feedback is line batch + text, not material parameters.
+ * Local-only placement preview (GP-S36G).
+ * Primary footprint visual is per-cell fill + outlines. Cube slab is never shown.
  */
 UCLASS(NotPlaceable)
 class GPRUNTIME_API AGP_BuildingPlacementGhost : public AActor
@@ -32,6 +32,7 @@ public:
 	void UpdateGhostTransform(const FTransform& WorldTransform);
 	void SetFootprintCells(FIntPoint FootprintCells);
 	void SetPreviewValid(bool bValid);
+	void SetBuildingGhostClass(TSubclassOf<AGP_BuildingBase> PayloadClass);
 
 	void UpdateGridPreview(
 		const UGP_BuildGridSubsystem* Grid,
@@ -39,7 +40,8 @@ public:
 		FIntPoint FootprintSize,
 		float GroundZ,
 		bool bValid,
-		EGP_BuildingDropRejectReason RejectReason);
+		EGP_BuildingDropRejectReason RejectReason,
+		const TArray<EGP_PlacementPreviewCellState>* CellStates = nullptr);
 	void ClearGridPreview();
 
 	FVector2D GetPreviewOuterExtentXY() const { return PreviewOuterExtentXY; }
@@ -48,6 +50,10 @@ public:
 	FString GetPreviewStatusLabel() const { return PreviewStatusLabel; }
 	bool HasActiveGridPreview() const { return bGridPreviewActive; }
 	bool IsGhostFillHidden() const;
+	bool IsBuildingGhostVisible() const { return bBuildingGhostVisible; }
+	float GetPreviewGroundZ() const { return PreviewGroundZ; }
+	int32 GetPreviewInvalidCellCount() const;
+	EGP_PlacementPreviewCellState GetPreviewCellState(int32 Index) const;
 	int32 GetPreviewLineWorldCount() const { return PreviewLineWorldStarts.Num(); }
 	bool GetPreviewLineWorldSegment(int32 Index, FVector& OutStart, FVector& OutEnd) const;
 
@@ -65,7 +71,7 @@ protected:
 	TObjectPtr<UTextRenderComponent> StatusText;
 
 	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> GhostMaterial;
+	TArray<TObjectPtr<UStaticMeshComponent>> BuildingGhostMeshes;
 
 	FIntPoint ActiveFootprintCells = FIntPoint(1, 1);
 	FVector2D PreviewOuterExtentXY = FVector2D::ZeroVector;
@@ -73,6 +79,18 @@ protected:
 	int32 PreviewGridLineCount = 0;
 	FString PreviewStatusLabel;
 	bool bGridPreviewActive = false;
+	bool bBuildingGhostVisible = false;
+	float PreviewGroundZ = 0.0f;
 	TArray<FVector> PreviewLineWorldStarts;
 	TArray<FVector> PreviewLineWorldEnds;
+	TArray<EGP_PlacementPreviewCellState> PreviewCellStates;
+	TSubclassOf<AGP_BuildingBase> ActivePayloadClass;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMesh> FallbackCylinderMesh;
+
+	void HideLegacyCubeFill();
+	void RebuildBuildingGhostMeshes();
+	void SetBuildingGhostHidden(bool bHideMeshes);
+	void FaceStatusTextToCamera();
 };

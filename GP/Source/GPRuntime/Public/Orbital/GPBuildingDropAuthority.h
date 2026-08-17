@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Orbital/GPOrbitalBuildingType.h"
 
+class AActor;
 class AGP_BuildingBase;
 class AGP_DropPod;
 class AGP_PlayerState;
@@ -32,6 +33,16 @@ enum class EGP_BuildingDropRejectReason : uint8
 	GridOccupied,
 	InvalidFootprint,
 	NotNavigable
+};
+
+UENUM(BlueprintType)
+enum class EGP_PlacementPreviewCellState : uint8
+{
+	Free = 0,
+	Occupied,
+	OutOfRange,
+	NotNavigable,
+	WorldBlocked
 };
 
 /**
@@ -71,6 +82,7 @@ namespace GPBuildingDropAuthority
 		FIntPoint OriginCell = FIntPoint::ZeroValue;
 		FIntPoint FootprintSize = FIntPoint::ZeroValue;
 		FVector SnappedGround = FVector::ZeroVector;
+		TArray<EGP_PlacementPreviewCellState> CellStates;
 	};
 
 	float GetPurchaseCost(const UGP_OrbitalDropDefinition* DropDefinition);
@@ -104,6 +116,12 @@ namespace GPBuildingDropAuthority
 	const TCHAR* GetPlacementPreviewStatusLabel(
 		bool bValid,
 		EGP_BuildingDropRejectReason RejectReason);
+
+	/** Vertical ground Z for preview; ignores buildings / pods / placement ghost. */
+	float ResolvePreviewGroundZ(
+		UWorld* World,
+		const FVector& HintLocation,
+		AActor* ExtraIgnoreActor = nullptr);
 
 	FPurchaseResult AuthorityPurchaseBuilding(
 		UWorld* World,

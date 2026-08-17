@@ -29,6 +29,7 @@
 #include "UI/GPMarqueeSelectionWidget.h"
 #include "UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h"
 #include "Buildings/GPBuildingDefinition.h"
+#include "Buildings/GPBuildingBase.h"
 #include "Buildings/GPMainBase.h"
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Game/GPGameState.h"
@@ -1624,6 +1625,8 @@ void AGP_PlayerController::ConfirmBuildingPlacement()
 			const FIntPoint Footprint = Preview.FootprintSize.X > 0 ? Preview.FootprintSize : FIntPoint(1, 1);
 			const FVector GhostLoc = Preview.FootprintSize.X > 0 ? Preview.SnappedGround : GroundLoc;
 			BuildingPlacementGhost->SetFootprintCells(Footprint);
+			BuildingPlacementGhost->SetBuildingGhostClass(
+				UGP_BuildingDropCatalog::Get().ResolvePayloadClass(DropDef));
 			BuildingPlacementGhost->UpdateGhostTransform(FTransform(FRotator::ZeroRotator, GhostLoc));
 			BuildingPlacementGhost->UpdateGridPreview(
 				Grid,
@@ -1631,7 +1634,8 @@ void AGP_PlayerController::ConfirmBuildingPlacement()
 				Footprint,
 				GhostLoc.Z,
 				Preview.bValid,
-				Preview.RejectReason);
+				Preview.RejectReason,
+				&Preview.CellStates);
 		}
 	}
 
@@ -1680,6 +1684,23 @@ bool AGP_PlayerController::TraceGroundUnderCursor(FVector& OutGroundLocation, FR
 	{
 		QueryParams.AddIgnoredActor(BuildingPlacementGhost);
 	}
+	if (UWorld* TraceWorld = World)
+	{
+		for (TActorIterator<AGP_BuildingBase> It(TraceWorld); It; ++It)
+		{
+			if (IsValid(*It))
+			{
+				QueryParams.AddIgnoredActor(*It);
+			}
+		}
+		for (TActorIterator<AGP_DropPod> It(TraceWorld); It; ++It)
+		{
+			if (IsValid(*It))
+			{
+				QueryParams.AddIgnoredActor(*It);
+			}
+		}
+	}
 
 	const FVector TraceEnd = WorldOrigin + (WorldDirection * SelectionTraceDistance);
 	FHitResult Hit;
@@ -1694,6 +1715,8 @@ bool AGP_PlayerController::TraceGroundUnderCursor(FVector& OutGroundLocation, FR
 	}
 
 	OutGroundLocation = Hit.ImpactPoint;
+	OutGroundLocation.Z = GPBuildingDropAuthority::ResolvePreviewGroundZ(
+		World, OutGroundLocation, BuildingPlacementGhost);
 	OutGroundRotation = FRotator(0.0f, GetControlRotation().Yaw, 0.0f);
 	return true;
 }
@@ -1747,6 +1770,8 @@ void AGP_PlayerController::UpdateBuildingPlacementGhost()
 	}
 
 	BuildingPlacementGhost->SetFootprintCells(Footprint);
+	BuildingPlacementGhost->SetBuildingGhostClass(
+		UGP_BuildingDropCatalog::Get().ResolvePayloadClass(DropDef));
 	BuildingPlacementGhost->UpdateGhostTransform(FTransform(FRotator::ZeroRotator, GhostLoc));
 	if (UGP_BuildGridSubsystem* Grid = GetWorld() != nullptr
 		? GetWorld()->GetSubsystem<UGP_BuildGridSubsystem>()
@@ -1758,7 +1783,8 @@ void AGP_PlayerController::UpdateBuildingPlacementGhost()
 			Footprint,
 			GhostLoc.Z,
 			Preview.bValid,
-			Preview.RejectReason);
+			Preview.RejectReason,
+			&Preview.CellStates);
 	}
 }
 

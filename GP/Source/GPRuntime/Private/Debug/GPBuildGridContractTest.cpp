@@ -13,6 +13,8 @@
 #include "Components/BoxComponent.h"
 #include "Debug/GPContractTestCoordinator.h"
 #include "Effects/GPGE_AddOrbital.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Game/GPGameState.h"
@@ -442,10 +444,19 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				&& FMath::IsNearlyEqual(Ghost->GetPreviewOuterExtentXY().Y, 800.0f),
 				TEXT("Preview_GhostOuter800"));
 			Expect(Ghost->GetPreviewCellCount() == 16, TEXT("Preview_GhostCellCount16"));
-			Expect(Ghost->GetPreviewGridLineCount() == 10, TEXT("Preview_GhostDivisionLines"));
+			Expect(Ghost->GetPreviewGridLineCount() >= 4, TEXT("Preview_GhostHasOuterLines"));
 			Expect(Ghost->GetPreviewStatusLabel() == TEXT("VALID"), TEXT("Preview_GhostValidLabel"));
 			Expect(Ghost->HasActiveGridPreview(), TEXT("Preview_GhostActive"));
 			Expect(Ghost->IsGhostFillHidden(), TEXT("Preview_GhostFillHidden"));
+			Ghost->SetBuildingGhostClass(AGP_LogisticsHub::StaticClass());
+			Ghost->UpdateGridPreview(
+				Grid,
+				FIntPoint(0, 0),
+				FIntPoint(4, 4),
+				0.0f,
+				true,
+				EGP_BuildingDropRejectReason::None);
+			Expect(Ghost->IsBuildingGhostVisible(), TEXT("Preview_BuildingGhostShownWhenValid"));
 			Ghost->ClearGridPreview();
 			Expect(!Ghost->HasActiveGridPreview() && Ghost->GetPreviewGridLineCount() == 0
 				&& Ghost->GetPreviewStatusLabel().IsEmpty()
@@ -479,7 +490,7 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				&& FMath::IsNearlyEqual(BorderStart.Z, LineZ),
 				TEXT("Preview_OffsetBorderMatchesAABB"));
 
-			bool bAllOnFootprint = Ghost->GetPreviewLineWorldCount() == 10;
+			bool bAllOnFootprint = Ghost->GetPreviewLineWorldCount() >= 4;
 			bool bAnyNearOrigin = false;
 			for (int32 LineIdx = 0; LineIdx < Ghost->GetPreviewLineWorldCount(); ++LineIdx)
 			{
@@ -706,6 +717,113 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		Expect(FCString::Strcmp(
 			GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(OccupiedPreview.bValid, OccupiedPreview.RejectReason),
 			TEXT("BLOCKED: OCCUPIED")) == 0, TEXT("Preview_LocalOccupiedLabel"));
+
+		const FIntPoint MixedOrigin(
+			Base->GetGridOriginCell().X + 3,
+			Base->GetGridOriginCell().Y);
+		const FVector MixedCenter = Grid->GetFootprintCenterWorld(
+			MixedOrigin, FIntPoint(4, 4), Base->GetActorLocation().Z);
+		GPBuildingDropAuthority::FPlacementPreview MixedPreview;
+		GPBuildingDropAuthority::EvaluateLocalPlacementPreview(
+			World,
+			OwnerPS,
+			HubDrop,
+			FTransform(FRotator::ZeroRotator, MixedCenter),
+			MixedPreview);
+		int32 MixedOccupied = 0;
+		int32 MixedFree = 0;
+		for (const EGP_PlacementPreviewCellState State : MixedPreview.CellStates)
+		{
+			if (State == EGP_PlacementPreviewCellState::Occupied)
+			{
+				++MixedOccupied;
+			}
+			else if (State == EGP_PlacementPreviewCellState::Free)
+			{
+				++MixedFree;
+			}
+		}
+		Expect(MixedPreview.CellStates.Num() == 16, TEXT("Preview_MixedCellCount16"));
+		Expect(MixedOccupied > 0 && MixedFree > 0, TEXT("Preview_MixedValidityNotMonolithic"));
+		Expect(!MixedPreview.bValid
+			&& MixedPreview.RejectReason == EGP_BuildingDropRejectReason::GridOccupied,
+			TEXT("Preview_MixedOccupiedReason"));
+
+		FActorSpawnParameters MixedGhostParams;
+		MixedGhostParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		MixedGhostParams.ObjectFlags |= RF_Transient;
+		AGP_BuildingPlacementGhost* MixedGhost = World->SpawnActor<AGP_BuildingPlacementGhost>(
+			AGP_BuildingPlacementGhost::StaticClass(),
+			MixedCenter,
+			FRotator::ZeroRotator,
+			MixedGhostParams);
+		if (Expect(IsValid(MixedGhost), TEXT("Preview_MixedGhostSpawn")))
+		{
+			MixedGhost->SetBuildingGhostClass(AGP_LogisticsHub::StaticClass());
+			MixedGhost->UpdateGridPreview(
+				Grid,
+				MixedPreview.OriginCell,
+				MixedPreview.FootprintSize,
+				MixedPreview.SnappedGround.Z,
+				MixedPreview.bValid,
+				MixedPreview.RejectReason,
+				&MixedPreview.CellStates);
+			Expect(MixedGhost->GetPreviewInvalidCellCount() == MixedOccupied, TEXT("Preview_MixedInvalidCellCount"));
+			Expect(!MixedGhost->IsBuildingGhostVisible(), TEXT("Preview_BuildingGhostHiddenWhenInvalid"));
+			Expect(MixedGhost->GetPreviewStatusLabel() == TEXT("BLOCKED: OCCUPIED"), TEXT("Preview_MixedStatusText"));
+			MixedGhost->ClearGridPreview();
+			Expect(!MixedGhost->HasActiveGridPreview() && MixedGhost->GetPreviewInvalidCellCount() == 0,
+				TEXT("Preview_MixedCancelClears"));
+			MixedGhost->Destroy();
+		}
+
+		const FVector GroundProbe( -72000.0f, 11000.0f, 450.0f);
+		UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		FActorSpawnParameters GroundParams;
+		GroundParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		GroundParams.ObjectFlags |= RF_Transient;
+		AStaticMeshActor* Floor = nullptr;
+		if (Expect(CubeMesh != nullptr, TEXT("Preview_GroundCubeMesh")))
+		{
+			Floor = World->SpawnActor<AStaticMeshActor>(
+				AStaticMeshActor::StaticClass(),
+				FVector(GroundProbe.X, GroundProbe.Y, 50.0f),
+				FRotator::ZeroRotator,
+				GroundParams);
+		}
+		if (Expect(IsValid(Floor) && Floor->GetStaticMeshComponent() != nullptr, TEXT("Preview_SpawnGroundSlab")))
+		{
+			UStaticMeshComponent* FloorMesh = Floor->GetStaticMeshComponent();
+			FloorMesh->SetMobility(EComponentMobility::Movable);
+			FloorMesh->SetStaticMesh(CubeMesh);
+			Floor->SetActorScale3D(FVector(8.0f, 8.0f, 0.2f));
+			FloorMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			FloorMesh->SetCollisionObjectType(ECC_WorldStatic);
+			FloorMesh->SetCollisionResponseToAllChannels(ECR_Block);
+			FloorMesh->SetGenerateOverlapEvents(false);
+			FloorMesh->UpdateBounds();
+		}
+		AGP_BuildGridContractStub* HighStub = World->SpawnActorDeferred<AGP_BuildGridContractStub>(
+			AGP_BuildGridContractStub::StaticClass(),
+			FTransform(FRotator::ZeroRotator, GroundProbe),
+			nullptr,
+			nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (Expect(IsValid(HighStub), TEXT("Preview_SpawnElevatedStub")))
+		{
+			HighStub->ConfigureGridPlacement(FIntPoint(-360, 55), FIntPoint(1, 1));
+			HighStub->FinishSpawning(FTransform(FRotator::ZeroRotator, GroundProbe));
+		}
+		const float ResolvedGroundZ = GPBuildingDropAuthority::ResolvePreviewGroundZ(World, GroundProbe, HighStub);
+		Expect(ResolvedGroundZ < 150.0f, TEXT("Preview_GroundZIgnoresBuildingSurface"));
+		if (IsValid(HighStub))
+		{
+			HighStub->Destroy();
+		}
+		if (IsValid(Floor))
+		{
+			Floor->Destroy();
+		}
 
 		GPBuildingDropAuthority::FPlacementPreview RangePreview;
 		GPBuildingDropAuthority::EvaluateLocalPlacementPreview(

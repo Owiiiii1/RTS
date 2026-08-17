@@ -9,10 +9,13 @@
 #include "Buildings/GPMainBase.h"
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Effects/GPGE_SpendOrbital.h"
+#include "CollisionQueryParams.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Game/GPGameState.h"
+#include "GameFramework/Pawn.h"
 #include "Orbital/GPBuildingDropCatalog.h"
+#include "Orbital/GPBuildingPlacementGhost.h"
 #include "Orbital/GPDropPod.h"
 #include "Orbital/GPOrbitalBuildingInventoryComponent.h"
 #include "Orbital/GPOrbitalDropDefinition.h"
@@ -210,16 +213,24 @@ bool GPBuildingDropAuthority::ValidateBuildingPlacement(
 
 namespace GPBuildingDropAuthorityPrivate
 {
-	static bool DoesReplicatedOccupantOverlapFootprint(
+	static bool DoesReplicatedOccupantOverlapCell(
 		UWorld* World,
 		UGP_BuildGridSubsystem* Grid,
-		FIntPoint OriginCell,
-		FIntPoint FootprintSize)
+		FIntPoint Cell)
 	{
 		if (World == nullptr || Grid == nullptr)
 		{
 			return false;
 		}
+
+		auto Occupies = [Grid, Cell](FIntPoint Origin, FIntPoint Size) -> bool
+		{
+			if (Size.X <= 0 || Size.Y <= 0)
+			{
+				return false;
+			}
+			return Grid->DoFootprintsOverlap(Cell, FIntPoint(1, 1), Origin, Size);
+		};
 
 		for (TActorIterator<AGP_BuildingBase> It(World); It; ++It)
 		{
@@ -228,12 +239,7 @@ namespace GPBuildingDropAuthorityPrivate
 			{
 				continue;
 			}
-			const FIntPoint OtherSize = Building->GetGridFootprintSize();
-			if (OtherSize.X <= 0 || OtherSize.Y <= 0)
-			{
-				continue;
-			}
-			if (Grid->DoFootprintsOverlap(OriginCell, FootprintSize, Building->GetGridOriginCell(), OtherSize))
+			if (Occupies(Building->GetGridOriginCell(), Building->GetGridFootprintSize()))
 			{
 				return true;
 			}
@@ -246,18 +252,85 @@ namespace GPBuildingDropAuthorityPrivate
 			{
 				continue;
 			}
-			const FIntPoint OtherSize = Pod->GetBuildingGridFootprintSize();
-			if (OtherSize.X <= 0 || OtherSize.Y <= 0)
-			{
-				continue;
-			}
-			if (Grid->DoFootprintsOverlap(OriginCell, FootprintSize, Pod->GetBuildingGridOriginCell(), OtherSize))
+			if (Occupies(Pod->GetBuildingGridOriginCell(), Pod->GetBuildingGridFootprintSize()))
 			{
 				return true;
 			}
 		}
 
 		return false;
+	}
+
+	static void AddPreviewGroundIgnoreActors(UWorld* World, FCollisionQueryParams& QueryParams, AActor* ExtraIgnore)
+	{
+		if (IsValid(ExtraIgnore))
+		{
+			QueryParams.AddIgnoredActor(ExtraIgnore);
+		}
+		if (World == nullptr)
+		{
+			return;
+		}
+		for (TActorIterator<AGP_BuildingBase> It(World); It; ++It)
+		{
+			if (IsValid(*It))
+			{
+				QueryParams.AddIgnoredActor(*It);
+			}
+		}
+		for (TActorIterator<AGP_DropPod> It(World); It; ++It)
+		{
+			if (IsValid(*It))
+			{
+				QueryParams.AddIgnoredActor(*It);
+			}
+		}
+		for (TActorIterator<AGP_BuildingPlacementGhost> It(World); It; ++It)
+		{
+			if (IsValid(*It))
+			{
+				QueryParams.AddIgnoredActor(*It);
+			}
+		}
+		for (TActorIterator<APawn> It(World); It; ++It)
+		{
+			if (IsValid(*It))
+			{
+				QueryParams.AddIgnoredActor(*It);
+			}
+		}
+	}
+
+	static EGP_PlacementPreviewCellState ClassifyPreviewCell(
+		UWorld* World,
+		UGP_BuildGridSubsystem* Grid,
+		FIntPoint Cell,
+		float GroundZ,
+		const FVector& MainBaseLocation,
+		float MaxRadius,
+		bool bHasMainBase)
+	{
+		if (Grid->IsCellOccupied(Cell) || DoesReplicatedOccupantOverlapCell(World, Grid, Cell))
+		{
+			return EGP_PlacementPreviewCellState::Occupied;
+		}
+		if (bHasMainBase)
+		{
+			const FVector CellWorld = Grid->CellToWorld(Cell, GroundZ);
+			if (FVector::Dist2D(CellWorld, MainBaseLocation) > MaxRadius + KINDA_SMALL_NUMBER)
+			{
+				return EGP_PlacementPreviewCellState::OutOfRange;
+			}
+		}
+		if (!Grid->IsFootprintNavigable(Cell, FIntPoint(1, 1), GroundZ))
+		{
+			return EGP_PlacementPreviewCellState::NotNavigable;
+		}
+		if (Grid->IsFootprintEnvironmentBlocked(Cell, FIntPoint(1, 1), GroundZ))
+		{
+			return EGP_PlacementPreviewCellState::WorldBlocked;
+		}
+		return EGP_PlacementPreviewCellState::Free;
 	}
 }
 
@@ -270,35 +343,134 @@ bool GPBuildingDropAuthority::EvaluateLocalPlacementPreview(
 {
 	OutPreview = FPlacementPreview();
 	EGP_BuildingDropRejectReason Reject = EGP_BuildingDropRejectReason::None;
-	if (!ValidateBuildingPlacement(
-			World,
-			RequestingPlayerState,
-			DropDefinition,
-			WorldTransform,
-			Reject,
-			&OutPreview.OriginCell,
-			&OutPreview.FootprintSize,
-			&OutPreview.SnappedGround))
+	const bool bValidatePassed = ValidateBuildingPlacement(
+		World,
+		RequestingPlayerState,
+		DropDefinition,
+		WorldTransform,
+		Reject,
+		&OutPreview.OriginCell,
+		&OutPreview.FootprintSize,
+		&OutPreview.SnappedGround);
+	if (!bValidatePassed)
 	{
 		OutPreview.bValid = false;
 		OutPreview.RejectReason = Reject;
+	}
+
+	UGP_BuildGridSubsystem* Grid = World != nullptr ? World->GetSubsystem<UGP_BuildGridSubsystem>() : nullptr;
+	if (Grid == nullptr || !Grid->IsValidFootprintSize(OutPreview.FootprintSize))
+	{
+		return OutPreview.bValid;
+	}
+
+	FVector MainBaseLocation = FVector::ZeroVector;
+	bool bHasMainBase = false;
+	float MaxRadius = 5000.0f;
+	if (IsValid(RequestingPlayerState) && World != nullptr)
+	{
+		if (AGP_GameState* GS = World->GetGameState<AGP_GameState>())
+		{
+			if (AGP_MainBase* MainBase = GS->FindMainBaseForTeam(RequestingPlayerState->GetTeamId()))
+			{
+				MainBaseLocation = MainBase->GetActorLocation();
+				bHasMainBase = true;
+			}
+		}
+		if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
+		{
+			MaxRadius = FMath::Max(100.0f, Settings->BuildingMaxDeployRadiusFromMainBaseCm);
+		}
+	}
+
+	TArray<FIntPoint> Cells;
+	Grid->EnumerateFootprintCells(OutPreview.OriginCell, OutPreview.FootprintSize, Cells);
+	OutPreview.CellStates.Reserve(Cells.Num());
+	bool bAnyOccupied = false;
+	bool bAnyOutOfRange = false;
+	bool bAnyNotNavigable = false;
+	bool bAnyWorld = false;
+	for (const FIntPoint& Cell : Cells)
+	{
+		const EGP_PlacementPreviewCellState State = GPBuildingDropAuthorityPrivate::ClassifyPreviewCell(
+			World,
+			Grid,
+			Cell,
+			OutPreview.SnappedGround.Z,
+			MainBaseLocation,
+			MaxRadius,
+			bHasMainBase);
+		OutPreview.CellStates.Add(State);
+		bAnyOccupied |= (State == EGP_PlacementPreviewCellState::Occupied);
+		bAnyOutOfRange |= (State == EGP_PlacementPreviewCellState::OutOfRange);
+		bAnyNotNavigable |= (State == EGP_PlacementPreviewCellState::NotNavigable);
+		bAnyWorld |= (State == EGP_PlacementPreviewCellState::WorldBlocked);
+	}
+
+	if (bAnyOccupied || bAnyOutOfRange || bAnyNotNavigable || bAnyWorld)
+	{
+		OutPreview.bValid = false;
+		if (bAnyOccupied)
+		{
+			OutPreview.RejectReason = EGP_BuildingDropRejectReason::GridOccupied;
+		}
+		else if (bAnyOutOfRange)
+		{
+			OutPreview.RejectReason = EGP_BuildingDropRejectReason::OutOfDeployRadius;
+		}
+		else if (bAnyNotNavigable)
+		{
+			OutPreview.RejectReason = EGP_BuildingDropRejectReason::NotNavigable;
+		}
+		else
+		{
+			OutPreview.RejectReason = EGP_BuildingDropRejectReason::PlacementOverlap;
+		}
 		return false;
 	}
 
-	if (UGP_BuildGridSubsystem* Grid = World != nullptr ? World->GetSubsystem<UGP_BuildGridSubsystem>() : nullptr)
+	if (!bValidatePassed)
 	{
-		if (GPBuildingDropAuthorityPrivate::DoesReplicatedOccupantOverlapFootprint(
-				World, Grid, OutPreview.OriginCell, OutPreview.FootprintSize))
-		{
-			OutPreview.bValid = false;
-			OutPreview.RejectReason = EGP_BuildingDropRejectReason::GridOccupied;
-			return false;
-		}
+		return false;
 	}
 
 	OutPreview.bValid = true;
 	OutPreview.RejectReason = EGP_BuildingDropRejectReason::None;
 	return true;
+}
+
+float GPBuildingDropAuthority::ResolvePreviewGroundZ(
+	UWorld* World,
+	const FVector& HintLocation,
+	AActor* ExtraIgnoreActor)
+{
+	if (World == nullptr)
+	{
+		return HintLocation.Z;
+	}
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(GPPlacementPreviewGroundZ), false);
+	GPBuildingDropAuthorityPrivate::AddPreviewGroundIgnoreActors(World, QueryParams, ExtraIgnoreActor);
+
+	const FVector TraceStart(HintLocation.X, HintLocation.Y, HintLocation.Z + 4000.0f);
+	const FVector TraceEnd(HintLocation.X, HintLocation.Y, HintLocation.Z - 8000.0f);
+	FHitResult Hit;
+	FCollisionObjectQueryParams ObjectParams;
+	ObjectParams.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+	if (World->LineTraceSingleByObjectType(Hit, TraceStart, TraceEnd, ObjectParams, QueryParams))
+	{
+		return Hit.ImpactPoint.Z;
+	}
+	if (World->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
+	{
+		return Hit.ImpactPoint.Z;
+	}
+	if (World->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
+	{
+		return Hit.ImpactPoint.Z;
+	}
+	return HintLocation.Z;
 }
 
 const TCHAR* GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(

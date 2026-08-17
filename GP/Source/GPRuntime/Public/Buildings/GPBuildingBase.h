@@ -53,7 +53,8 @@ public:
 protected:
 	/**
 	 * Authored navigation footprint (GP-S33M).
-	 * BP children edit Relative Location / Rotation / Box Extent independently of capsule/mesh.
+	 * Native inherited component: pointer is not replaceable (VisibleAnywhere / BlueprintReadOnly).
+	 * BoxExtent / RelativeTransform are editable on Blueprint children via bEditableWhenInherited.
 	 * Dynamic NavArea_Null obstacle — not selection, combat, Visibility, or Pawn blocking.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Navigation", meta = (AllowPrivateAccess = "true"))
@@ -61,7 +62,8 @@ protected:
 
 	/**
 	 * Authorable BuildGrid placement footprint (GP-S36G).
-	 * Designer resizes/moves this box on a Blueprint child. Not collision, nav, selection, or combat.
+	 * Native inherited component: pointer is not replaceable (VisibleAnywhere / BlueprintReadOnly).
+	 * Blueprint children edit this component's BoxExtent / RelativeTransform; they cannot swap the subobject.
 	 * Default XY extent 0 means "unauthored" — runtime then uses BuildingDefinition.FootprintCells.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|BuildGrid", meta = (AllowPrivateAccess = "true"))

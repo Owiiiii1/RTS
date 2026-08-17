@@ -1,6 +1,6 @@
 # Cursor Work Report
 
-Status: **GP-S36G_ATTACHMENT_LIFECYCLE_FIX_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S36G_FOOTPRINT_BP_AUTHORING_FIX_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**  
 **NOT FINALIZED.**
@@ -12,56 +12,58 @@ Status: **GP-S36G_ATTACHMENT_LIFECYCLE_FIX_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`6f73980d247e0b096c46d2832ddb82332790ef17`
+*(filled in SHA-record commit)*
 
-## Operator ensure
-PIE handled ensure:
+## Operator symptom
+`PlacementFootprintBounds` appears in the Logistics Hub Blueprint Components tree but is effectively read-only as an inherited native component. Operator cannot edit Box Extent / Relative Transform.
 
-`Ensure condition failed: !bRegistered`  
-`SceneComponent.cpp` line 2246
+## Factual Unreal cause
+Blueprint Details treats a native inherited component as editable only when the **archetype** reports `IsEditableWhenInherited()`.
 
-`SetupAttachment should only be used to initialize AttachParent and AttachSocketName for a future AttachToComponent. Once a component is registered you must use AttachToComponent.`
+UE 5.8 (`ActorComponent.h` / `ActorComponent.cpp`):
 
-Failing component: `BP_GP_MainBase_C_0.PlacementFootprintBounds`  
-Failing call: `AGP_BuildingBase::AttachPlacementFootprintBoundsToRoot()` → `SetupAttachment(Root)` from `PostInitializeComponents()`.
+- Public bit `UActorComponent::bEditableWhenInherited` (no setter API; Engine itself assigns the field, e.g. PackedLevelActor).
+- Constructor default is `true`, but Blueprint inspector gates on `GetArchetype()->IsEditableWhenInherited()`.
+- For native instances, `IsEditableWhenInherited()` also requires the owning actor UPROPERTY to carry `CPF_Edit` (`FComponentEditorUtils::GetPropertyForEditableNativeComponent`).
+- `CanEditChange` on a BP child refuses edits when the parent component archetype has `bEditableWhenInherited == false`.
 
-## Root cause
-`PlacementFootprintBounds` is a constructor default subobject. Attachment was deferred until derived classes set Capsule/root. `PostInitializeComponents()` runs **after** component registration, so `SetupAttachment()` is lifecycle-invalid.
+The native subobject was never explicitly marked authorable, so inherited Hub BP templates could not edit BoxExtent / RelativeTransform.
 
-`NavigationObstacle` used the same deferred `SetupAttachment` pattern. It usually skipped the ensure because MainBase/Hub constructors already attached it (parent == root). The latent bug remained.
+## Exact editable-when-inherited fix
+In `ConfigurePlacementFootprintBoundsDefaults()` / `ConfigureNavigationObstacleDefaults()`:
 
-## Old invalid lifecycle
 ```
-CreateDefaultSubobject (ctor)
-→ derived SetRootComponent
-→ RegisterAllComponents
-→ PostInitializeComponents
-→ SetupAttachment(Root)   // ensure if already registered
+PlacementFootprintBounds->bEditableWhenInherited = true;
+NavigationObstacle->bEditableWhenInherited = true;
 ```
 
-## New attachment rule
-Shared private helper `AttachDeferredComponentToRoot`:
+Verified against installed UE 5.8 headers: property is public `uint8 bEditableWhenInherited:1`; no `SetEditableWhenInherited` exists. Same assignment style as Engine.
 
-- if component parent is already Root → do nothing
-- else if component is registered → `AttachToComponent(Root, KeepRelativeTransform)`
-- else → `SetupAttachment(Root)`
+## UPROPERTY decision
+Kept:
 
-Applied to both `PlacementFootprintBounds` and `NavigationObstacle`. No detach/re-register. No component recreation.
+`VisibleAnywhere, BlueprintReadOnly, Category=..., meta=(AllowPrivateAccess="true")`
 
-## PlacementFootprintBounds preservation
-Registered attach uses `FAttachmentTransformRules::KeepRelativeTransform`. RelativeLocation, RelativeRotation, and BoxExtent (including Blueprint overrides) are not reset in `PostInitializeComponents`.
+This is the standard native component pattern (`ACharacter::CapsuleComponent`):
+
+- `VisibleAnywhere` → `CPF_Edit` so the native component is discoverable as authorable, **without** making the pointer replaceable.
+- `BlueprintReadOnly` / no `EditAnywhere` on the `TObjectPtr` → Blueprint cannot swap the subobject.
+- Component-owned properties (`BoxExtent`, RelativeTransform) remain `EditAnywhere` on `UBoxComponent` itself.
+
+Do **not** use `EditAnywhere` on the component pointer.
 
 ## NavigationObstacle
-Same helper only. QueryOnly, NavArea_Null, dynamic obstacle, BP-authored transform/extent unchanged. No gameplay change.
+Same `bEditableWhenInherited = true` flag. Already documented as BP-authorable (RelativeLocation / Rotation / BoxExtent). Collision/nav/gameplay defaults unchanged.
 
-## Contract coverage
+## CDO persistence test
 `gp.Building.RunBuildGridContractTest`:
 
-- Deferred MainBase: constructor `SetupAttachment` already parents NavigationObstacle (pre-registration path)
-- `FinishSpawning` / `SpawnActor`: PlacementFootprintBounds registered and parented to final root (registered `AttachToComponent` path)
-- Authored/test RelativeLocation and non-default BoxExtent survive attachment
-- Repeated `AttachDeferredSceneComponentsToRoot()` is idempotent
-- Live contract MainBase spawn also asserts both boxes parented to root
+- CDO `bEditableWhenInherited` + `IsEditableWhenInherited()` for PlacementFootprintBounds and NavigationObstacle
+- Mutate stub CDO BoxExtent 200/200 + RelativeLocation (100, -30), resolve, restore CDO
+- Resolver: 2×2 cells, LocalCenterOffsetCm preserved, authored bounds override DA 4×4
+- Spawned instance also reports `IsEditableWhenInherited()`
+
+Full Blueprint editor click-edit remains operator validation (contract runs `-game`).
 
 ## Tests (all Failures=0)
 - `gp.Building.RunBuildGridContractTest`
@@ -84,14 +86,15 @@ GP Win64 Development / Shipping **not run**.
 - `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
 - `Docs/Development/Cursor_Work_Report.md`
 
-BuildGrid conversion, precedence, offset, snap, ground-Z, occupancy, reservation, READY, Purchase, Deploy, DropPod, preview fills, Hub +5 were not modified.
+BuildGrid conversion, fallback, offset, snap, occupancy, reservation, ground-Z, READY/Purchase/Deploy, DropPod, preview, Hub +5 were not modified.
 
 ## Operator retest
-1. Launch Editor / PIE.
-2. MainBase initializes with no `!bRegistered` / `SetupAttachment should only be used...` ensure.
-3. Open authored Logistics Hub BP — `PlacementFootprintBounds` still present and editable.
-4. Set Box Extent X/Y = 200, save BP.
-5. PIE → Hub Deploy preview should become 2×2.
+1. Restart/recompile Editor.
+2. Open authored Logistics Hub Blueprint.
+3. Select `PlacementFootprintBounds`.
+4. Box Extent fields editable.
+5. Set X=200, Y=200; move Relative Location X e.g. +100; Save BP.
+6. After that: PIE → Purchase Hub → Deploy; preview should be 2×2 with offset.
 
 **NOT MERGED.**  
 **NOT FINALIZED.**

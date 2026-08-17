@@ -422,6 +422,38 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		Expect(ClassFallback.SizeCells == FIntPoint(4, 4) && !ClassFallback.bFromAuthoredBounds,
 			TEXT("Bounds_NoAuthoredUsesDA"));
 
+		{
+			const AGP_BuildGridContractStub* StubCDO = GetDefault<AGP_BuildGridContractStub>();
+			const UBoxComponent* CDOBounds = StubCDO != nullptr ? StubCDO->GetPlacementFootprintBounds() : nullptr;
+			const UBoxComponent* CDONav = StubCDO != nullptr ? StubCDO->GetNavigationObstacle() : nullptr;
+			Expect(CDOBounds != nullptr && CDOBounds->bEditableWhenInherited
+				&& CDOBounds->IsEditableWhenInherited(),
+				TEXT("Authoring_BoundsEditableWhenInherited"));
+			Expect(CDONav != nullptr && CDONav->bEditableWhenInherited
+				&& CDONav->IsEditableWhenInherited(),
+				TEXT("Authoring_NavEditableWhenInherited"));
+		}
+
+		AGP_BuildGridContractStub* MutableStubCDO = GetMutableDefault<AGP_BuildGridContractStub>();
+		UBoxComponent* MutableCDOBounds =
+			MutableStubCDO != nullptr ? MutableStubCDO->GetPlacementFootprintBounds() : nullptr;
+		FGP_ResolvedBuildingFootprint CdoResolved;
+		if (Expect(MutableCDOBounds != nullptr, TEXT("Authoring_MutableCDOBounds")))
+		{
+			const FVector SavedExtent = MutableCDOBounds->GetUnscaledBoxExtent();
+			const FVector SavedRel = MutableCDOBounds->GetRelativeLocation();
+			MutableCDOBounds->SetBoxExtent(FVector(200.0f, 200.0f, 20.0f));
+			MutableCDOBounds->SetRelativeLocation(FVector(100.0f, -30.0f, 0.0f));
+			CdoResolved = Grid->ResolveBuildingFootprint(AGP_BuildGridContractStub::StaticClass(), DaFallback);
+			MutableCDOBounds->SetBoxExtent(SavedExtent);
+			MutableCDOBounds->SetRelativeLocation(SavedRel);
+		}
+		Expect(CdoResolved.bFromAuthoredBounds && CdoResolved.SizeCells == FIntPoint(2, 2),
+			TEXT("Authoring_CDOExtent200Is2x2"));
+		Expect(FMath::IsNearlyEqual(CdoResolved.LocalCenterOffsetCm.X, 100.0f)
+			&& FMath::IsNearlyEqual(CdoResolved.LocalCenterOffsetCm.Y, -30.0f),
+			TEXT("Authoring_CDORelativeLocationOffset"));
+
 		FActorSpawnParameters BoundsParams;
 		BoundsParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		BoundsParams.ObjectFlags |= RF_Transient;
@@ -436,6 +468,7 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			TEXT("Bounds_SpawnAuthoredStub")))
 		{
 			UBoxComponent* Box = BoundsStub->GetPlacementFootprintBounds();
+			Expect(Box->IsEditableWhenInherited(), TEXT("Authoring_InstanceEditableWhenInherited"));
 			Box->SetBoxExtent(FVector(275.0f, 190.0f, 20.0f));
 			Box->SetRelativeLocation(FVector(120.0f, -40.0f, 0.0f));
 			BoundsStub->FinishSpawning(BoundsTM);

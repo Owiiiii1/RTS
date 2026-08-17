@@ -61,6 +61,7 @@ void AGP_BuildingBase::ConfigureNavigationObstacleDefaults()
 	NavigationObstacle->SetCanEverAffectNavigation(true);
 	NavigationObstacle->bDynamicObstacle = true;
 	NavigationObstacle->SetAreaClassOverride(UNavArea_Null::StaticClass());
+	NavigationObstacle->bEditableWhenInherited = true;
 }
 
 void AGP_BuildingBase::ConfigurePlacementFootprintBoundsDefaults()
@@ -84,6 +85,7 @@ void AGP_BuildingBase::ConfigurePlacementFootprintBoundsDefaults()
 	PlacementFootprintBounds->SetAreaClassOverride(nullptr);
 	PlacementFootprintBounds->ShapeColor = FColor(0, 180, 255);
 	PlacementFootprintBounds->SetLineThickness(2.0f);
+	PlacementFootprintBounds->bEditableWhenInherited = true;
 }
 
 void AGP_BuildingBase::AttachDeferredComponentToRoot(USceneComponent* Component)

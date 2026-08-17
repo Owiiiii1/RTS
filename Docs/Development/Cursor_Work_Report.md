@@ -8,7 +8,7 @@
 ## Branch
 `feature/temp-hud-layout-reconciliation`  
 Base `main` SHA: `d442e7808e8bc6fa2a91bcf6bcbf73436d44617d`  
-Feature head SHA: recorded after the layout commit.
+Feature head SHA: `434435102103ed84c8adec1c5b168fbea1df1de4`
 
 ## Factual previous layout
 Programmatic TEMP HUD (`UGP_TEMP_S28P_PlanetaryFerroniteHUD`) used:

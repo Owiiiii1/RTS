@@ -2,6 +2,7 @@
 
 #include "Settings/GPOrbitalDeliverySettings.h"
 
+#include "Buildings/GPDefensiveTurret.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Orbital/GPDropPod.h"
 #include "Units/GPSalvageWalker.h"
@@ -126,5 +127,34 @@ bool UGP_OrbitalDeliverySettings::IsBuildingPayloadClassConfigInvalid() const
 	bool bHadSoft = false;
 	bool bInvalid = false;
 	GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(BuildingPayloadClass, bHadSoft, bInvalid);
+	return bHadSoft && bInvalid;
+}
+
+TSubclassOf<AGP_BuildingBase> UGP_OrbitalDeliverySettings::ResolveDefensiveTurretPayloadClass(bool* bOutUsedAuthored) const
+{
+	bool bHadSoft = false;
+	bool bInvalid = false;
+	UClass* Loaded = GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(DefensiveTurretPayloadClass, bHadSoft, bInvalid);
+	if (Loaded != nullptr && !Loaded->IsChildOf(AGP_DefensiveTurret::StaticClass()))
+	{
+		Loaded = nullptr;
+		bInvalid = true;
+	}
+	if (bOutUsedAuthored != nullptr)
+	{
+		*bOutUsedAuthored = Loaded != nullptr;
+	}
+	return Loaded != nullptr ? Loaded : AGP_DefensiveTurret::StaticClass();
+}
+
+bool UGP_OrbitalDeliverySettings::IsDefensiveTurretPayloadClassConfigInvalid() const
+{
+	bool bHadSoft = false;
+	bool bInvalid = false;
+	UClass* Loaded = GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(DefensiveTurretPayloadClass, bHadSoft, bInvalid);
+	if (Loaded != nullptr && !Loaded->IsChildOf(AGP_DefensiveTurret::StaticClass()))
+	{
+		return true;
+	}
 	return bHadSoft && bInvalid;
 }

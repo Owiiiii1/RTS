@@ -34,24 +34,24 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S35B on main tip** `6f258a1069fd92a45f99faf7c877c941528beb2a` |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S36G on main tip** `9ace159714b5eca0f79e4985fc2496d34cbb7cc3` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S35B Multi-Building Data Architecture** on `main` (tip `6f258a1069fd92a45f99faf7c877c941528beb2a`) |
+| Last closed / merged stage | **GP-S36G BuildGrid MVP** on `main` (tip `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S36G_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s36g-buildgrid-mvp` (**NOT MERGED**) |
+| Current stage | **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s37t-defensive-turret-mvp` (**NOT MERGED**) |
 
 ---
 
 ## Current NEXT Task
 
-**Closed:** GP-S35B Multi-Building Data Architecture — **DONE / MERGED** on `main` @ `6f258a1069fd92a45f99faf7c877c941528beb2a`.
+**Closed:** GP-S36G BuildGrid MVP — **DONE / MERGED** on `main` @ `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`.
 
-**Prior closed:** GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
+**Prior closed:** GP-S35B / GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S36G_BuildGrid_MVP.md`](Claude_Tasks/GP-S36G_BuildGrid_MVP.md) — **GP-S36G_FINALIZATION_READY_FOR_MERGE**. Do **not** merge from the agent. Await human merge.
+**Current:** [`Claude_Tasks/GP-S37T_Defensive_Turret_MVP.md`](Claude_Tasks/GP-S37T_Defensive_Turret_MVP.md) — **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. Do **not** merge from the agent. Await operator PIE validation.
 
-**Do not** start Wall gameplay / turret combat / FoW / Order Menu / Spectating / disconnect victory without explicit assignment.
+**Do not** start Wall gameplay / FoW / Order Menu / Spectating / disconnect victory without explicit assignment.
 
 **Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 
@@ -70,7 +70,8 @@
 11. TEMP HUD layout reconciliation — **DONE / MERGED** @ `7873d282…`
 12. **GP-S34W** — Match Win/Lose MVP — **DONE / MERGED** @ `3b5cdb8…`
 13. **GP-S35B** — Multi-Building Data Architecture — **DONE / MERGED** @ `6f258a1…`
-14. **GP-S36G** — BuildGrid MVP — **FINALIZATION_READY_FOR_MERGE** (NOT MERGED)
+14. **GP-S36G** — BuildGrid MVP — **DONE / MERGED** @ `9ace159…`
+15. **GP-S37T** — Defensive Turret MVP — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (NOT MERGED)
 
 ---
 
@@ -154,4 +155,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S35B are on verified `main` tip `6f258a1069fd92a45f99faf7c877c941528beb2a`. Current stage: **GP-S36G_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s36g-buildgrid-mvp`. See [`Claude_Tasks/GP-S36G_BuildGrid_MVP.md`](Claude_Tasks/GP-S36G_BuildGrid_MVP.md). **NOT MERGED.**
+SETUP-001, DOCS-001, GP-S01…GP-S36G are on verified `main` tip `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`. Current stage: **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s37t-defensive-turret-mvp`. See [`Claude_Tasks/GP-S37T_Defensive_Turret_MVP.md`](Claude_Tasks/GP-S37T_Defensive_Turret_MVP.md). **NOT MERGED.**

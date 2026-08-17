@@ -106,6 +106,13 @@ public:
 		DeprecationMessage = "Canonical payload is UGP_BuildingDefinition.SpawnedClass. Kept as Logistics Hub compatibility bridge."))
 	TSoftClassPtr<AGP_BuildingBase> BuildingPayloadClass;
 
+	/**
+	 * Authored Defensive Turret BP (must derive from AGP_DefensiveTurret). Empty → native class.
+	 * Canonical payload is still UGP_BuildingDefinition.SpawnedClass; this is the Hub-style override seam.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Payload", meta = (AllowAbstract = "false"))
+	TSoftClassPtr<AGP_BuildingBase> DefensiveTurretPayloadClass;
+
 	/** Building DropPod descent telegraph (GDD 2–3 s). */
 	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|DropPod", meta = (ClampMin = "0.05"))
 	float BuildingDropDescentDurationSeconds = 2.5f;
@@ -142,6 +149,9 @@ public:
 	/** Resolve building payload: soft class if valid subclass, else native AGP_LogisticsHub. */
 	TSubclassOf<AGP_BuildingBase> ResolveBuildingPayloadClass(bool* bOutUsedAuthored = nullptr) const;
 
+	/** Resolve Defensive Turret payload: authored subclass if valid, else native AGP_DefensiveTurret. */
+	TSubclassOf<AGP_BuildingBase> ResolveDefensiveTurretPayloadClass(bool* bOutUsedAuthored = nullptr) const;
+
 	/** Building pods reuse UnitDropPodClass / native AGP_DropPod fallback (GP-S32R). */
 	TSubclassOf<AGP_DropPod> ResolveBuildingDropPodClass(bool* bOutUsedAuthored = nullptr) const
 	{
@@ -153,4 +163,5 @@ public:
 	bool IsSalvageWalkerPayloadClassConfigInvalid() const;
 	bool IsUnitDropPodClassConfigInvalid() const;
 	bool IsBuildingPayloadClassConfigInvalid() const;
+	bool IsDefensiveTurretPayloadClassConfigInvalid() const;
 };

@@ -4,6 +4,7 @@
 
 #include "CollisionQueryParams.h"
 #include "Components/MeshComponent.h"
+#include "Components/SceneComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -15,6 +16,30 @@ namespace GPCombatLOS
 {
 	namespace Private
 	{
+		static USceneComponent* FindCombatOriginAnchor(const AActor* Actor)
+		{
+			if (Actor == nullptr)
+			{
+				return nullptr;
+			}
+
+			TArray<USceneComponent*> SceneComps;
+			Actor->GetComponents<USceneComponent>(SceneComps);
+			for (USceneComponent* Comp : SceneComps)
+			{
+				if (Comp == nullptr)
+				{
+					continue;
+				}
+				const FName CompName = Comp->GetFName();
+				if (CompName == TEXT("CombatOrigin") || CompName == TEXT("MuzzleAnchor"))
+				{
+					return Comp;
+				}
+			}
+			return nullptr;
+		}
+
 		static bool TryGetSocketLocation(const AActor* Actor, FName SocketName, FVector& OutLocation)
 		{
 			if (Actor == nullptr || SocketName.IsNone())
@@ -131,6 +156,10 @@ namespace GPCombatLOS
 		Points.Eye = Top;
 		Points.Chest = Center;
 		Points.Feet = Feet;
+		if (USceneComponent* Anchor = Private::FindCombatOriginAnchor(Attacker))
+		{
+			Points.Eye = Anchor->GetComponentLocation();
+		}
 		Private::TryGetSocketLocation(Attacker, TEXT("AttackOrigin_Eye"), Points.Eye);
 		Private::TryGetSocketLocation(Attacker, TEXT("AttackOrigin_Chest"), Points.Chest);
 		Private::TryGetSocketLocation(Attacker, TEXT("AttackOrigin_Feet"), Points.Feet);

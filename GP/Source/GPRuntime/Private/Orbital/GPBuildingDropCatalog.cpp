@@ -3,6 +3,7 @@
 #include "Orbital/GPBuildingDropCatalog.h"
 
 #include "Buildings/GPBuildingDefinition.h"
+#include "Buildings/GPDefensiveTurret.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Engine/AssetManager.h"
 #include "Misc/CoreDelegates.h"
@@ -86,8 +87,9 @@ void UGP_BuildingDropCatalog::EnsureNativeCatalog()
 		FName(TEXT("DA_GP_Building_DefensiveTurret")),
 		NSLOCTEXT("GPBuildingDropCatalog", "Turret", "Defensive Turret"),
 		Tags.Building_Type_DefensiveTurret,
-		FIntPoint(4, 4),
+		FIntPoint(2, 2),
 		400.0f);
+	TurretBuilding->SpawnedClass = AGP_DefensiveTurret::StaticClass();
 	UGP_BuildingDefinition* WallBuilding = CreateNativeBuilding(
 		FName(TEXT("DA_GP_Building_Wall")),
 		NSLOCTEXT("GPBuildingDropCatalog", "Wall", "Wall"),
@@ -300,12 +302,36 @@ TSubclassOf<AGP_BuildingBase> UGP_BuildingDropCatalog::ResolvePayloadClass(
 		return nullptr;
 	}
 
-	if (const UGP_BuildingDefinition* Building = DropDefinition->ResolveLoadedBuildingDefinition())
+	const UGP_BuildingDefinition* Building = DropDefinition->ResolveLoadedBuildingDefinition();
+	const FGPGameplayTags& Tags = FGPGameplayTags::Get();
+	const bool bDefensiveTurretDrop = IsValid(Building)
+		&& Tags.Building_Type_DefensiveTurret.IsValid()
+		&& Building->BuildingTags.HasTag(Tags.Building_Type_DefensiveTurret);
+
+	if (bDefensiveTurretDrop)
+	{
+		if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
+		{
+			bool bUsedAuthored = false;
+			const TSubclassOf<AGP_BuildingBase> Authored = Settings->ResolveDefensiveTurretPayloadClass(&bUsedAuthored);
+			if (bUsedAuthored)
+			{
+				return Authored;
+			}
+		}
+	}
+
+	if (IsValid(Building))
 	{
 		if (TSubclassOf<AGP_BuildingBase> Loaded = Building->ResolveLoadedSpawnedClass())
 		{
 			return Loaded;
 		}
+	}
+
+	if (bDefensiveTurretDrop)
+	{
+		return TSubclassOf<AGP_BuildingBase>(AGP_DefensiveTurret::StaticClass());
 	}
 
 	if (DropDefinition == LegacyLogisticsHubDrop)

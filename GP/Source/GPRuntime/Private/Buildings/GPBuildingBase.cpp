@@ -2,6 +2,7 @@
 
 #include "Buildings/GPBuildingBase.h"
 
+#include "Buildings/GPDefensiveTurret.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Buildings/GPMainBase.h"
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
@@ -247,6 +248,10 @@ FIntPoint AGP_BuildingBase::ResolveFallbackFootprintSize() const
 	if (IsA(AGP_LogisticsHub::StaticClass()))
 	{
 		return FIntPoint(4, 4);
+	}
+	if (IsA(AGP_DefensiveTurret::StaticClass()))
+	{
+		return FIntPoint(2, 2);
 	}
 	return FIntPoint(1, 1);
 }

@@ -4,6 +4,7 @@
 
 #include "Buildings/GPBuildingBase.h"
 #include "Buildings/GPBuildingDefinition.h"
+#include "Buildings/GPDefensiveTurret.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Buildings/GPMainBase.h"
 #include "CollisionQueryParams.h"
@@ -417,6 +418,10 @@ FVector UGP_BuildGridSubsystem::GetNativeDefaultPlacementHalfExtentCm(TSubclassO
 	if (PayloadClass != nullptr && PayloadClass->IsChildOf(AGP_LogisticsHub::StaticClass()))
 	{
 		return FVector(400.0f, 400.0f, 20.0f);
+	}
+	if (PayloadClass != nullptr && PayloadClass->IsChildOf(AGP_DefensiveTurret::StaticClass()))
+	{
+		return FVector(200.0f, 200.0f, 20.0f);
 	}
 	return FVector(100.0f, 100.0f, 20.0f);
 }

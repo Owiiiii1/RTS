@@ -568,8 +568,13 @@ bool UGP_UnitCommandComponent::IsCombatCapableForAutoAcquire(const AGP_UnitBase*
 		return false;
 	}
 	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
-	return GPTags.Unit_Type_SalvageWalker.IsValid()
-		&& Unit->HasCapabilityTag(GPTags.Unit_Type_SalvageWalker);
+	if (GPTags.Unit_Type_SalvageWalker.IsValid()
+		&& Unit->HasCapabilityTag(GPTags.Unit_Type_SalvageWalker))
+	{
+		return true;
+	}
+	return GPTags.Building_Type_DefensiveTurret.IsValid()
+		&& Unit->HasCapabilityTag(GPTags.Building_Type_DefensiveTurret);
 }
 
 bool UGP_UnitCommandComponent::IsEligibleForCombatAutoAcquire() const
@@ -633,7 +638,14 @@ bool UGP_UnitCommandComponent::IsEligibleForAttackMoveAcquire() const
 	}
 
 	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
-	if (OwnerUnit == nullptr || OwnerUnit->IsDead() || !IsCombatCapableForAutoAcquire(OwnerUnit))
+	if (OwnerUnit == nullptr || OwnerUnit->IsDead())
+	{
+		return false;
+	}
+
+	const FGPGameplayTags& AttackMoveTags = FGPGameplayTags::Get();
+	if (!AttackMoveTags.Unit_Type_SalvageWalker.IsValid()
+		|| !OwnerUnit->HasCapabilityTag(AttackMoveTags.Unit_Type_SalvageWalker))
 	{
 		return false;
 	}
@@ -5423,6 +5435,22 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
 		return;
+	}
+
+	if (Cast<AGP_BuildingBase>(Owner) != nullptr)
+	{
+		const FGPGameplayTags& BuildingCommandTags = FGPGameplayTags::Get();
+		if (Command.CommandTag == BuildingCommandTags.Command_Move
+			|| Command.CommandTag == BuildingCommandTags.Command_AttackMove)
+		{
+			UE_LOG(LogGPUnitCommandState, Log,
+				TEXT("GP UnitCommandState RejectedStationary: Unit=%s Tag=%s Role=%s NetMode=%s"),
+				*GetNameSafe(Owner),
+				*Command.CommandTag.ToString(),
+				GPUnitCommandStatePrivate::RoleToString(Role),
+				GPUnitCommandStatePrivate::NetModeToString(NetMode));
+			return;
+		}
 	}
 
 	const FGPGameplayTags& IncomingTags = FGPGameplayTags::Get();

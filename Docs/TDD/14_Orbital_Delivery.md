@@ -182,7 +182,7 @@ Shared rocket: vertical descent, exhaust while moving, impact smoke, clear, payl
 
 ## Out of this TDD’s first impl slice
 
-Full FoW, Logistics Hub/Turret/Wall **gameplay actors**, production Order Menu polish — layered on the same DropPod pipeline in later slices. GP-S36G added BuildGrid occupancy + snap only.
+Full FoW, Wall gameplay, production Order Menu polish — layered on the same DropPod pipeline in later slices. GP-S36G added BuildGrid occupancy + snap. GP-S37T added deployable `AGP_DefensiveTurret` (yaw-0 rectangular reservation, native 2×2).
 
 ## References
 

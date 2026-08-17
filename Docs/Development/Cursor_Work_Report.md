@@ -1,149 +1,118 @@
 # Cursor Work Report
 
-Status: **GP-S36G_FINALIZATION_READY_FOR_MERGE**
+Status: **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-**NOT MERGED.**
+**NOT MERGED.**  
+**NOT FINALIZED.**
 
 ## Branch
-`feature/gp-s36g-buildgrid-mvp`
+`feature/gp-s37t-defensive-turret-mvp`
 
 ## Base main SHA
-`6f258a1069fd92a45f99faf7c877c941528beb2a`
+`9ace159714b5eca0f79e4985fc2496d34cbb7cc3`
 
-## Exact final feature head SHA
-`e76cc5e106eb6783547de6a0dfbb185171798b24`
+## Feature head SHA
+`PENDING_IMPLEMENTATION_COMMIT`
 
-## Operator PASS summary
-Operator confirmed the final PASS. Recorded acceptance:
+## Factual existing combat architecture
+There is **no `UGP_CombatComponent`**. Production combat lives on `UGP_UnitCommandComponent` (every `AGP_UnitBase`):
 
-- 200 cm BuildGrid snap works
-- landed Hub overlap rejects, READY preserved
-- adjacent free Hub placement succeeds
-- in-flight DropPod reservation blocks overlap
-- MainBase occupancy blocks placement
-- destroy Hub releases cells
-- editor shutdown / close without attachment ensure
-- per-cell filled placement preview works
-- invalid/free coloring works
-- building ghost works
-- camera-facing status text works
-- PlacementFootprintBounds editable in Blueprint
-- BoxExtent / own RelativeScale affect footprint
-- RelativeLocation offset works
-- parent/root scale does not distort gameplay footprint
-- pre-placed MainBase uses live visible footprint
-- footprint tied to building root/Capsule by position + rotation
-- rotated MainBase footprint follows actor rotation
-- arbitrary yaw oriented footprint occupies corresponding BuildGrid cells
-- forbidden cells visually match authored footprint
-- spawned/orbital Hub yaw-0 path did not regress
-- ground preview stays on terrain with obstacles
-- cancel/shutdown regression PASS
+- Idle AutoAcquire is a repeating timer (default 0.35s), not a permanent Actor Tick
+- Attack FSM: Idle → Approaching → Ready → `AttemptAttackHit`
+- Damage: `ApplyDamageFromUnit` → `UGP_GE_Damage_Basic` → `UGP_UnitAttributeSet::Health`
+- LOS: `GPCombatLOS::HasLineOfSight` (ECC_Visibility, 3-pair traces)
+- Presentation: `UGP_CombatPresentationComponent` multicast after a successful hit
+- Only `AGP_SalvageWalker` was combat-capable for AutoAcquire
+- AutoAcquire targets: enemy `AGP_UnitBase`, buildings excluded
+- AttackMove is a separate modal path for Salvage Walker only
 
-## Final BuildGrid architecture
-`UGP_BuildGridSubsystem` is the server occupancy SoT. Cell size is **200 cm**. Grid origin XY is world `(0,0)`. Occupancy is `FGuid → explicit cell set` plus `cell → occupant`. Subsystem is not replicated.
+## How the turret reuses it
+`AGP_DefensiveTurret` is thin `AGP_BuildingBase` glue. It keeps the same command component, GAS attributes, LOS helper, and damage GE. Idle AutoAcquire runs as a permanent defensive scan (no AttackMove imitation).
 
-Pre-placed occupancy:
+## Minimal reconciliation
+- `IsCombatCapableForAutoAcquire`: Salvage Walker **or** `GP.Building.Type.DefensiveTurret`
+- `IsEligibleForAttackMoveAcquire`: remains Salvage Walker only
+- `HandleCommand` rejects Move / AttackMove on `AGP_BuildingBase`
+- Stationary Attack already entered Ready when in range; out-of-range without movement still finishes the attack (existing `MovementRejected` path). Turret sight = fire range so it only acquires in-range targets
+- `GPCombatLOS` prefers native/authored `CombatOrigin` / `MuzzleAnchor` for the Eye origin; bounds fallback remains
 
-- `ResolveOccupiedCellsFromBounds`
-- explicit deterministic `TArray<FIntPoint>`
-- OBB-vs-grid-cell pure math SAT
-- `RegisterCells`
-- exact unregister by OccupantId
+## Exact data ownership for range / damage / cooldown
+| Stat | Owner |
+| --- | --- |
+| AttackRange, Damage, AttackCooldown, MaxHealth | `AGP_UnitBase` Default* → `InitializeCombatAttributesIfNeeded` → `UGP_UnitAttributeSet` (same as Salvage Walker) |
+| AutoAcquire sight | `UGP_UnitCommandComponent::AutoAcquireSightRangeCm` (turret CDO 600) |
+| Catalog MaxHealth 400 | `UGP_BuildingDefinition` identity metadata; mirrored on turret `DefaultMaxHealth` |
 
-`GridOriginCell` / `GridFootprintSize` are the occupied-set AABB for rotated buildings (legacy/debug). They are **not** the authoritative occupancy SoT.
+No `if Turret then Damage=20` in fire code. No weapon-field dump on `UGP_BuildingDefinition`.
 
-Yaw-0 orbital placement keeps the existing rectangular reservation / `ConfigureGridPlacement` path. No orbital rotation UI in GP-S36G.
+Turret CDO MVP: range 600, damage 20, cooldown 1.0, MaxHealth/Health 400.
 
-Do not revert to hidden CDO occupancy, world-zero footprint rotation, manual X/Y swap, parent-scale multiplication, or free-form pre-grid placement.
+## Class / tag architecture
+- `AGP_DefensiveTurret : AGP_BuildingBase`
+- Tags: Selectable, Inspectable, `Selection.Type.Building`, `GP.Unit.Type.Building`, `GP.Building.Type.DefensiveTurret` (existing native tag, reused)
+- No movable capability. Native `CombatOrigin` scene anchor (BP-editable)
 
-## Final PlacementFootprintBounds semantics
-Live gameplay source on `AGP_BuildingBase`:
+## Health / death path
+Existing `AGP_BuildingBase` → `AGP_UnitBase` ASC / `UGP_UnitAttributeSet`. Death uses `HandleGASDeath` / building EndPlay. EndPlay unregisters BuildGrid occupancy.
 
-- location inherits parent
-- rotation inherits parent
-- parent/root scale ignored (`SetAbsolute(false, false, true)`)
-- own `BoxExtent` / `RelativeLocation` / `RelativeRotation` / `RelativeScale3D` are design data
+## Auto-acquire / LOS
+Server timer scan. Same target validation as Salvage Walker AutoAcquire. LOS via `GPCombatLOS`. Target loss / reacquire uses the existing Attack finish + next scan.
 
-CDO→live copies those four authored values so pre-placed instances match the visible box. Occupancy always reads the live component when usable.
+## BuildingDefinition / DropDefinition
+- `DA_GP_Building_DefensiveTurret`: DisplayName Defensive Turret, tags, `SpawnedClass = AGP_DefensiveTurret`, MaxHealth 400, FootprintCells 2×2
+- `DA_GP_OrbitalDrop_DefensiveTurret`: Cost 150, linked building def
+- Authored override seam: settings `DefensiveTurretPayloadClass` (empty → native). Canonical class remains `SpawnedClass`
 
-## Oriented occupancy algorithm and edge policy
-Shared `ResolveOccupiedCellsFromBounds`:
+## Purchase / READY / Deploy
+Unchanged GP-S35B/S36G authority: spend Orbital once on Purchase, READY+1; Deploy consumes READY once, no second spend; reject/cancel preserve READY.
 
-- center = `Bounds->GetComponentLocation()`
-- yaw = `Bounds->GetComponentRotation().Yaw`
-- half = `|UnscaledBoxExtent × RelativeScale3D|`
-- CellSize 200
+## BuildGrid footprint
+Native `PlacementFootprintBounds` half-extent 200×200×20 → 2×2 (400×400 cm). Orbital spawn yaw 0, rectangular reservation. BP may retune bounds. NavigationObstacle uses existing BuildingBase semantics.
 
-Yaw ~0° / 180° (±0.5°): snapped `SizeCells` rectangle — same cells as `RegisterFootprint`.
-
-Any other yaw: world AABB of the OBB → candidate cells → 2D SAT (world X/Y + OBB axes). A cell is occupied when projected overlap exceeds `OccupancyOverlapEpsilonCm = 1.0`. Exact edge touch does not occupy. No physics queries. No SizeCells X/Y swap. Cells sorted Y then X.
-
-## Reservation / spawned yaw-0 compatibility
-Accepted Deploy reserves the snapped rectangular footprint, binds the `FGuid` to the DropPod, and promotes that reservation to the spawned building. Spawned/orbital Hub remains yaw 0. `ConfigureGridPlacement` + `RegisterFootprint` rectangle wrapper are retained. Destroy / EndPlay / skipped payload unregisters the exact stored cell set.
-
-## Exact test commands and Failures=0
-
+## Tests
 | Command | Result |
 | --- | --- |
+| `gp.Building.RunDefensiveTurretContractTest` | Complete Failures=0 |
 | `gp.Building.RunBuildGridContractTest` | Complete Failures=0 |
 | `gp.Building.RunMultiBuildingDataContractTest` | Complete Failures=0 |
 | `gp.Building.RunOrbitalBuildingDropContractTest` | Complete Failures=0 |
+| `gp.Combat.RunAutoAcquireContractTest` | Complete Failures=0 |
+| `gp.Combat.RunAttackMoveContractTest` | Complete Failures=0 |
+| `gp.Combat.RunLOSFireGateContractTest` | Complete Failures=0 |
 | `gp.Resource.RunUnitCapLogisticsHubContractTest` | Complete Failures=0 |
 | `gp.Resource.RunOrbitalUnitDropContractTest` | Complete Failures=0 |
-| `gp.Movement.RunRTSMovementReconciliationContractTest` | Complete Failures=0 |
+| `gp.Resource.RunContainerLaunchContractTest` | Complete Failures=0 |
 | `gp.Match.RunWinLoseContractTest` | Complete Failures=0 |
 | `gp.Resource.RunS28RegressionSuite` | GP-S28 RegressionSuite Complete Failures=0 |
-| `gp.Combat.RunAttackMoveContractTest` | Complete Failures=0 |
-| `gp.Combat.RunAutoAcquireContractTest` | Complete Failures=0 (available) |
-| `gp.Resource.RunContainerLaunchContractTest` | Complete Failures=0 (available orbital/container launch) |
-| `gp.Resource.RunContainerLaunchHUDContractTest` | Complete Failures=0 (available) |
 
-All: **Failures=0**. No named command was silently skipped.
+All: **Failures=0**.
 
 ## Builds
-- GPEditor Win64 Development including UHT **PASS**
-- GP Win64 Development **PASS**
-- GP Win64 Shipping **PASS**
+GPEditor Win64 Development including UHT **PASS**.  
+GP Win64 Development / Shipping **not run** (candidate phase).
 
 ## Exact changed files
-Relative to base main `6f258a1069fd92a45f99faf7c877c941528beb2a`:
-
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Claude_Tasks/GP-S36G_BuildGrid_MVP.md`
+- `Docs/Development/Claude_Tasks/GP-S37T_Defensive_Turret_MVP.md`
 - `Docs/Development/Claude_Tasks/README.md`
 - `Docs/Development/Cursor_Work_Report.md`
 - `Docs/Development/DOCUMENTATION_INDEX.md`
 - `Docs/TDD/06_Building_Architecture.md`
 - `Docs/TDD/14_Orbital_Delivery.md`
 - `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/GPLogisticsHub.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/GPMainBase.cpp`
+- `GP/Source/GPRuntime/Private/Buildings/GPDefensiveTurret.cpp`
 - `GP/Source/GPRuntime/Private/Buildings/Grid/GPBuildGridSubsystem.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPOrbitalBuildingDropContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropAuthority.cpp`
-- `GP/Source/GPRuntime/Private/Orbital/GPBuildingPlacementGhost.cpp`
-- `GP/Source/GPRuntime/Private/Orbital/GPDropPod.cpp`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
-- `GP/Source/GPRuntime/Public/Buildings/Grid/GPBuildGridSubsystem.h`
-- `GP/Source/GPRuntime/Public/Orbital/GPBuildGridContractTest.h`
-- `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropAuthority.h`
-- `GP/Source/GPRuntime/Public/Orbital/GPBuildingPlacementGhost.h`
-- `GP/Source/GPRuntime/Public/Orbital/GPDropPod.h`
+- `GP/Source/GPRuntime/Private/Combat/GPCombatLOS.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPDefensiveTurretContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropCatalog.cpp`
+- `GP/Source/GPRuntime/Private/Settings/GPOrbitalDeliverySettings.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `GP/Source/GPRuntime/Public/Buildings/GPDefensiveTurret.h`
+- `GP/Source/GPRuntime/Public/Buildings/GPDefensiveTurretContractTest.h`
+- `GP/Source/GPRuntime/Public/Settings/GPOrbitalDeliverySettings.h`
 
-## Protected operator assets
-Confirmed **not** committed:
+## Protected files untouched
+Confirmed **not** committed: `DefaultEngine.ini`, `DefaultGame.ini`, `L_PrototypeArena.umap`, `BP_ResourceNode_AuthoredExample.uasset`, untracked operator asset folders, AutoAcquire CRLF noise.
 
-- `GP/Config/DefaultEngine.ini`
-- `GP/Config/DefaultGame.ini`
-- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
-- `GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`
-- untracked operator folders (`Basic_VFX`, `GrimProtocol/Blueprint`, `Materials`, `Mixed_Magic_VFX_Pack`, `RocketThrusterExhaustFX`, `Tools`)
-- local AutoAcquire CRLF noise
-
-No map / Blueprint / config / binary assets were added by this slice.
-
-**NOT MERGED.**
+**NOT MERGED.**  
+**NOT FINALIZED.**

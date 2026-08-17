@@ -207,6 +207,37 @@ bool UGP_BuildGridSubsystem::ArePlacementFootprintBoundsUsable(const UBoxCompone
 	return HalfExtent.X >= 1.0f && HalfExtent.Y >= 1.0f;
 }
 
+FVector UGP_BuildGridSubsystem::GetNativeDefaultPlacementHalfExtentCm(TSubclassOf<AGP_BuildingBase> PayloadClass)
+{
+	if (PayloadClass != nullptr && PayloadClass->IsChildOf(AGP_MainBase::StaticClass()))
+	{
+		return FVector(500.0f, 500.0f, 20.0f);
+	}
+	if (PayloadClass != nullptr && PayloadClass->IsChildOf(AGP_LogisticsHub::StaticClass()))
+	{
+		return FVector(400.0f, 400.0f, 20.0f);
+	}
+	return FVector(100.0f, 100.0f, 20.0f);
+}
+
+bool UGP_BuildGridSubsystem::LooksLikeNativeDefaultPlacementBounds(
+	TSubclassOf<AGP_BuildingBase> PayloadClass,
+	const UBoxComponent* Bounds)
+{
+	if (Bounds == nullptr)
+	{
+		return false;
+	}
+
+	const FVector HalfExtent = GetAuthoredPlacementHalfExtentCm(Bounds);
+	const FVector NativeHalf = GetNativeDefaultPlacementHalfExtentCm(PayloadClass);
+	const FVector Relative = Bounds->GetRelativeLocation();
+	return FMath::IsNearlyEqual(HalfExtent.X, NativeHalf.X, 0.5f)
+		&& FMath::IsNearlyEqual(HalfExtent.Y, NativeHalf.Y, 0.5f)
+		&& FMath::IsNearlyEqual(Relative.X, 0.0f, 0.5f)
+		&& FMath::IsNearlyEqual(Relative.Y, 0.0f, 0.5f);
+}
+
 bool UGP_BuildGridSubsystem::TryResolveFromPlacementBounds(
 	const UBoxComponent* Bounds,
 	FGP_ResolvedBuildingFootprint& OutResolved) const
@@ -286,12 +317,40 @@ FGP_ResolvedBuildingFootprint UGP_BuildGridSubsystem::ResolveActorFootprint(
 {
 	if (IsValid(Building))
 	{
+		const TSubclassOf<AGP_BuildingBase> PayloadClass = Building->GetClass();
+		const AGP_BuildingBase* ClassCDO = PayloadClass != nullptr
+			? PayloadClass->GetDefaultObject<AGP_BuildingBase>()
+			: nullptr;
 		FGP_ResolvedBuildingFootprint FromInstance;
-		if (TryResolveFromPlacementBounds(Building->GetPlacementFootprintBounds(), FromInstance))
+		const bool bInstanceOk = TryResolveFromPlacementBounds(
+			Building->GetPlacementFootprintBounds(), FromInstance);
+
+		FGP_ResolvedBuildingFootprint FromClass;
+		const bool bClassOk = ClassCDO != nullptr
+			&& TryResolveFromPlacementBounds(ClassCDO->GetPlacementFootprintBounds(), FromClass);
+
+		// Pre-placed level actors serialize inherited BoxExtent/Scale/Offset onto the instance.
+		// Those snapshots masquerade as overrides and do not update when the Blueprint CDO changes.
+		// Occupancy for net-startup buildings therefore uses class/CDO design data.
+		if (Building->IsNetStartupActor() && bClassOk)
+		{
+			return FromClass;
+		}
+
+		// Runtime-spawned instance that still matches the native default, while the class CDO
+		// does not, is a stale native snapshot (same masquerade as a level instance).
+		if (bInstanceOk
+			&& LooksLikeNativeDefaultPlacementBounds(PayloadClass, Building->GetPlacementFootprintBounds())
+			&& bClassOk
+			&& !LooksLikeNativeDefaultPlacementBounds(PayloadClass, ClassCDO->GetPlacementFootprintBounds()))
+		{
+			return FromClass;
+		}
+		if (bInstanceOk)
 		{
 			return FromInstance;
 		}
-		return ResolveBuildingFootprint(Building->GetClass(), BuildingDef);
+		return ResolveBuildingFootprint(PayloadClass, BuildingDef);
 	}
 	return ResolveBuildingFootprint(nullptr, BuildingDef);
 }

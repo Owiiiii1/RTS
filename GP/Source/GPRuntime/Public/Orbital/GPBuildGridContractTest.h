@@ -57,6 +57,7 @@ private:
 	float SavedBuildingDescent = 2.5f;
 	float SavedBuildingCleanup = 0.5f;
 	float SavedBuildingAltitude = 2500.0f;
+	TSoftClassPtr<AGP_BuildingBase> SavedBuildingPayload;
 	bool bSettingsMutated = false;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;

@@ -50,6 +50,11 @@ public:
 
 	FIntPoint ResolveFallbackFootprintSize() const;
 
+#if !UE_BUILD_SHIPPING
+	/** Actor name, resolved cells/offset, origin, registered size. */
+	FString GetBuildGridOccupancyDebugString() const;
+#endif
+
 protected:
 	/**
 	 * Authored navigation footprint (GP-S33M).
@@ -64,6 +69,7 @@ protected:
 	 * Authorable BuildGrid placement footprint (GP-S36G).
 	 * Native inherited component: pointer is not replaceable (VisibleAnywhere / BlueprintReadOnly).
 	 * Blueprint children edit this component's BoxExtent / RelativeScale3D / RelativeLocation.
+	 * This is the occupied ground footprint: placement validation and blocking occupancy use it.
 	 * Native default is a visible 1×1 (200×200 cm) volume; derived classes override extent.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|BuildGrid", meta = (AllowPrivateAccess = "true"))

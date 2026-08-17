@@ -114,8 +114,24 @@ public:
 
 	static bool ArePlacementFootprintBoundsUsable(const UBoxComponent* Bounds);
 
+	/** Native archetype XY half-extent (cm): MainBase 500, Hub 400, generic 100. */
+	static FVector GetNativeDefaultPlacementHalfExtentCm(TSubclassOf<AGP_BuildingBase> PayloadClass);
+
+	/**
+	 * True when authored XY half-extent and RelativeLocation match the native class default.
+	 * Used to detect stale level-instance snapshots of native 5×5 / 4×4 / 1×1.
+	 */
+	static bool LooksLikeNativeDefaultPlacementBounds(
+		TSubclassOf<AGP_BuildingBase> PayloadClass,
+		const UBoxComponent* Bounds);
+
 	/**
 	 * Preferred: payload CDO/instance PlacementFootprintBounds when effective XY half-extent >= 1 cm.
+	 * Actor resolve:
+	 * - Pre-placed (net-startup) buildings use the class CDO. Level instances often serialize
+	 *   stale inherited extent/scale/offset that will not follow later Blueprint edits.
+	 * - Runtime-spawned instances win, unless they still match the native default while the
+	 *   class CDO does not (stale native snapshot).
 	 * Fallback: BuildingDefinition.FootprintCells when both axes > 0.
 	 * If a BuildingDefinition is present but FootprintCells is invalid, do not class-fallback
 	 * (keeps InvalidFootprint deploy rejection).

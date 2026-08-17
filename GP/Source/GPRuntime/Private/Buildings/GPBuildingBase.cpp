@@ -11,6 +11,8 @@
 #include "Net/UnrealNetwork.h"
 #include "Tags/GPGameplayTags.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogGPBuildGridRegister, Log, All);
+
 AGP_BuildingBase::AGP_BuildingBase()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -227,7 +229,54 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 	{
 		bGridRegistered = true;
 	}
+
+#if !UE_BUILD_SHIPPING
+	UE_LOG(
+		LogGPBuildGridRegister,
+		Log,
+		TEXT("BuildGrid occupancy %s resolved=%dx%d offset=(%.1f,%.1f) origin=%d,%d registered=%dx%d configured=%s fromBounds=%s"),
+		*GetName(),
+		Resolved.SizeCells.X,
+		Resolved.SizeCells.Y,
+		Resolved.LocalCenterOffsetCm.X,
+		Resolved.LocalCenterOffsetCm.Y,
+		GridOriginCell.X,
+		GridOriginCell.Y,
+		GridFootprintSize.X,
+		GridFootprintSize.Y,
+		bGridPlacementConfigured ? TEXT("1") : TEXT("0"),
+		Resolved.bFromAuthoredBounds ? TEXT("1") : TEXT("0"));
+#endif
 }
+
+#if !UE_BUILD_SHIPPING
+FString AGP_BuildingBase::GetBuildGridOccupancyDebugString() const
+{
+	FVector2D Offset = FVector2D::ZeroVector;
+	FIntPoint ResolvedSize = FIntPoint::ZeroValue;
+	if (const UWorld* World = GetWorld())
+	{
+		if (const UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>())
+		{
+			const FGP_ResolvedBuildingFootprint Resolved = Grid->ResolveActorFootprint(this, nullptr);
+			ResolvedSize = Resolved.SizeCells;
+			Offset = Resolved.LocalCenterOffsetCm;
+		}
+	}
+
+	return FString::Printf(
+		TEXT("%s resolved=%dx%d offset=(%.1f,%.1f) origin=%d,%d registered=%dx%d"),
+		*GetName(),
+		ResolvedSize.X,
+		ResolvedSize.Y,
+		Offset.X,
+		Offset.Y,
+		GridOriginCell.X,
+		GridOriginCell.Y,
+		GridFootprintSize.X,
+		GridFootprintSize.Y);
+}
+#endif
 
 void AGP_BuildingBase::TryUnregisterFromBuildGrid()
 {

@@ -1,6 +1,6 @@
 # Cursor Work Report
 
-Status: **GP-S36G_FOOTPRINT_VIEWPORT_AUTHORING_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S36G_PREPLACED_OCCUPANCY_AUTHORING_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**  
 **NOT FINALIZED.**
@@ -12,89 +12,62 @@ Status: **GP-S36G_FOOTPRINT_VIEWPORT_AUTHORING_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`edae361cfcac625519c0e606111958ad8bfb561d`
+`PENDING_IMPLEMENTATION`
 
-## Screenshot-observed zero XY extent
-Operator screenshot: `PlacementFootprintBounds` is selectable, `Editable when Inherited` is enabled, but Box Extent is **X=0, Y=0, Z=20**. Viewport Scale gizmo draws a dotted scale vector and **no visible footprint box**.
+## Operator question and canonical answer
+Does `PlacementFootprintBounds` apply only while placing a building, or also to occupied/blocking area after construction?
 
-This is expected mathematically: zero XY extent × any relative scale remains zero, so the box has no volume to draw.
+**Same footprint is both.** One resolved size/offset is preview, server validation, reservation, spawned occupancy, and pre-placed occupancy. There is no separate placement size vs blocking size.
 
-## Old resolver ignored RelativeScale3D
-`UGP_BuildGridSubsystem::TryResolveFromPlacementBounds` used `Bounds->GetUnscaledBoxExtent()` only. Viewport Scale therefore could not change BuildGrid cells even if the box were visible.
+## Actual root cause
+`TryRegisterWithBuildGrid` already called `ResolveActorFootprint` and registered `SizeCells`. The mismatch was the **source** of those bounds.
 
-## Effective extent formula
-Component-local authored half-extent (not actor/world scale):
+Traced on the operator map during contract PIE:
 
-```
-EffectiveHalfExtentX = abs(UnscaledBoxExtent.X * RelativeScale3D.X)
-EffectiveHalfExtentY = abs(UnscaledBoxExtent.Y * RelativeScale3D.Y)
-WidthCm  = 2 * EffectiveHalfExtentX
-HeightCm = 2 * EffectiveHalfExtentY
-Cells    = ceil(Size / 200), minimum 1×1
-```
+- Level actor `BP_GP_MainBase_C_2` registered **4×2** with offset **(133.5, 0)** — not native 5×5.
+- That instance had serialized inherited BoxExtent / Scale / RelativeLocation from an earlier Blueprint state.
+- Unreal treats those serialized values as instance data. Later Blueprint viewport edits update the **class CDO**, not the stale level-instance snapshot.
+- Old resolver preferred any usable **instance** box. Enlarging the MainBase Blueprint therefore changed the visible CDO box and did **not** grow registered occupancy.
 
-API: `UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm`.
+Hub authoring appeared to work because orbital Hub uses `ResolveBuildingFootprint(payload CDO)` for preview / reservation / DropPod `ConfigureGridPlacement`. Pre-placed MainBase used the instance path.
 
-Explicitly **not** `UBoxComponent::GetScaledBoxExtent()` — that multiplies by `GetComponentTransform().GetScale3D()` and would include actor / parent / map instance scale.
+## Instance / CDO behavior found
+- Blueprint CDO = building design data (what the operator edits in the MainBase BP).
+- Level instances of `BP_GP_MainBase` keep a serialized copy of inherited component transforms. Those copies masquerade as explicit instance overrides after the BP changes.
+- Native default heuristic alone is insufficient: the live instance was **not** 500×500 / offset 0; it was a previous authored snapshot (4×2 + X=133.5).
+- Runtime-spawned / deferred-spawn actors (tests, DropPod payload) are not net-startup; their instance box is live authoring.
 
-RelativeRotation is ignored (GP-S36G axis-aligned). RelativeLocation XY is the footprint center offset and is **not** multiplied by component scale.
+## Exact source policy after fix
+`PlacementFootprintBounds` remains the single occupied-ground footprint.
 
-Scale is preserved (not forced back to 1). Resolver uses BoxExtent × RelativeScale3D together.
+`ResolveActorFootprint`:
 
-## Native default extents (visible authoring volumes)
-Zero XY is no longer the normal unauthored state.
+1. **Net-startup (pre-placed) building:** use **class CDO** bounds (Blueprint design). Do not trust the level-instance snapshot.
+2. **Runtime-spawned instance** that still matches the **native** default (MainBase 500×500 offset 0, Hub 400×400, generic 100×100) while the class CDO does not: use class CDO (stale native snapshot).
+3. **Otherwise runtime instance** wins (explicit deferred-spawn / test authoring, including offset).
+4. If bounds are unusable: DA `FootprintCells`, then class fallback.
 
-| Class | Cells | Total cm | BoxExtent XY | Z viz |
-| --- | --- | --- | --- | --- |
-| Generic `AGP_BuildingBase` | 1×1 | 200×200 | 100,100 | 20 |
-| `AGP_LogisticsHub` | 4×4 | 800×800 | 400,400 | 20 |
-| `AGP_MainBase` | 5×5 | 1000×1000 | 500,500 | 20 |
+DropPod `ConfigureGridPlacement` still pins spawned Hub reservation/occupancy. Preview and server still share `ResolveBuildingFootprint`.
 
-Derived constructors call `SetBoxExtent` on the existing subobject after root setup. Component is not recreated. `PostInitializeComponents` / `BeginPlay` do not reset Blueprint overrides. Native values are archetype defaults only; Blueprint-authored BoxExtent / RelativeScale3D / RelativeLocation win.
+Offset: CDO RelativeLocation XY is used for pre-placed registration; runtime instance offset is preserved when instance authoring wins.
 
-## BP Scale gizmo behavior
-Operator may Scale the component in the Blueprint viewport.
-
-Hub baseline examples (BoxExtent 400,400):
-
-- Scale 1,1 → 800×800 → 4×4
-- Scale 0.5,0.5 → 400×400 → 2×2
-- Scale 0.75,0.5 → 600×400 → 3×2
-- Scale 1.25,0.75 → 1000×600 → 5×3
-
-Building ghost mesh scale is independent of the footprint component. Only occupied grid area changes.
-
-## Offset
-`RelativeLocation` XY still defines footprint center vs actor pivot. Not scaled. Rotation unsupported / ignored.
-
-## DA fallback
-`UGP_BuildingDefinition.FootprintCells` kept. Usable `PlacementFootprintBounds` (effective XY half-extent ≥ 1 cm) resolve first. Classes without usable bounds still use DA. Current effective defaults match old fallback (MainBase 5×5, Hub 4×4, generic 1×1) so unedited gameplay footprints do not regress.
+## MainBase pre-placed registration path
+`BeginPlay` → `TryRegisterWithBuildGrid` → `ResolveActorFootprint` (class CDO for net-startup) → snap origin from actor location + CDO offset → `RegisterFootprint`. Non-Shipping log + `GetBuildGridOccupancyDebugString()` report actor name, resolved size/offset, origin, registered size.
 
 ## Tests
 `gp.Building.RunBuildGridContractTest` extended:
 
-- A native visible extents: generic 100,100 → 1×1; Hub 400,400 → 4×4; MainBase 500,500 → 5×5
-- B RelativeScale cells (Hub 400,400): 1,1 → 4×4; 0.5,0.5 → 2×2; 0.75,0.5 → 3×2; 1.25,0.75 → 5×3
-- C RelativeLocation offset independent of scale
-- D CDO/seam resolver reads scale
-- E preview and server resolve identical footprint
-- F spawned building registers identical cells (including scaled 2×2)
-- G DA fallback when bounds unusable
-- H `bEditableWhenInherited` remains true
-- Actor world scale does not inflate footprint
-- Ghost mesh scale independent of footprint scale
+- A pre-placed/runtime MainBase authored 700×600 → 7×6, not fallback 5×5
+- B MainBase scale 1.4 / 1.2 on 500×500 → 7×6
+- C RelativeLocation (200, -100) shifts origin
+- D all 42 cells occupied
+- E adjacent outside cells free
+- F Hub 4×4 overlapping one edge cell → `CellOccupied` (deploy maps to `GridOccupied`)
+- G Hub beside authored footprint valid
+- H spawned Hub occupancy/reservation unchanged (contract isolates `BuildingPayloadClass` to native Hub so operator BP scale cannot desync 4×4)
+- Stale native instance + authored CDO → class 7×6
 
-All listed regressions Failures=0:
-
-- `gp.Building.RunBuildGridContractTest`
-- `gp.Building.RunMultiBuildingDataContractTest`
-- `gp.Building.RunOrbitalBuildingDropContractTest`
-- `gp.Resource.RunUnitCapLogisticsHubContractTest`
-- `gp.Resource.RunOrbitalUnitDropContractTest`
-- `gp.Movement.RunRTSMovementReconciliationContractTest`
-- `gp.Match.RunWinLoseContractTest`
-- `gp.Resource.RunS28RegressionSuite`
-- `gp.Combat.RunAttackMoveContractTest`
+All listed regressions Failures=0.
 
 ## Builds
 GPEditor Win64 Development + UHT **PASS**.  
@@ -103,24 +76,22 @@ GP Win64 Development / Shipping **not run**.
 ## Exact changed files
 - `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
 - `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/GPLogisticsHub.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/GPMainBase.cpp`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
 - `GP/Source/GPRuntime/Public/Buildings/Grid/GPBuildGridSubsystem.h`
 - `GP/Source/GPRuntime/Private/Buildings/Grid/GPBuildGridSubsystem.cpp`
+- `GP/Source/GPRuntime/Public/Orbital/GPBuildGridContractTest.h`
 - `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
 - `Docs/Development/Cursor_Work_Report.md`
 
-Occupancy semantics, reservation, READY, Purchase, DropPod timing, Hub +5, CellSize, snap, and ground-Z were not changed.
+Map / operator BP / config were not edited.
 
 ## Operator retest
-1. Restart/recompile Editor.
-2. Open `BP_GP_LogisticsHub`.
-3. `PlacementFootprintBounds` should be a visible **800×800** box (not a zero-size dotted vector).
-4. Select it; Scale gizmo X/Y; Translate gizmo. No need to type Box Extent first.
-5. PIE: Purchase Hub → Deploy. Preview tiles follow effective bounds (e.g. scale 0.5,0.5 → 2×2). Building ghost mesh stays at normal building scale.
+1. In MainBase Blueprint enlarge `PlacementFootprintBounds` noticeably.
+2. Save BP.
+3. PIE.
+4. Purchase Hub → Deploy.
+5. Move Hub preview near MainBase edge.
 
-If a Blueprint already serialized Box Extent 0,0 as an override, that authored override still wins until the operator resets/edits it.
+Expected: red occupied cells follow the Blueprint box (class CDO), including shrink. No `.umap` reset required.
 
 **NOT MERGED.**  
 **NOT FINALIZED.**

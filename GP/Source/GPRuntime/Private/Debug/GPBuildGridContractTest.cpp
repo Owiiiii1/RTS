@@ -224,6 +224,7 @@ void UGP_BuildGridContractTestRunner::RestoreSettings()
 		Settings->BuildingDropDescentDurationSeconds = SavedBuildingDescent;
 		Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
 		Settings->BuildingDropSpawnAltitudeCm = SavedBuildingAltitude;
+		Settings->BuildingPayloadClass = SavedBuildingPayload;
 	}
 	bSettingsMutated = false;
 }
@@ -641,6 +642,149 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			}
 		}
 
+		{
+			FActorSpawnParameters AuthoredBaseParams;
+			AuthoredBaseParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			AuthoredBaseParams.ObjectFlags |= RF_Transient;
+			const FTransform AuthoredTM(FRotator::ZeroRotator, FVector(-75000.0f, 11000.0f, 100.0f));
+			AGP_MainBase* AuthoredBase = World->SpawnActorDeferred<AGP_MainBase>(
+				AGP_MainBase::StaticClass(),
+				AuthoredTM,
+				nullptr,
+				nullptr,
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (Expect(IsValid(AuthoredBase) && AuthoredBase->GetPlacementFootprintBounds() != nullptr,
+				TEXT("Preplaced_SpawnAuthoredMainBase")))
+			{
+				UBoxComponent* Box = AuthoredBase->GetPlacementFootprintBounds();
+				Box->SetBoxExtent(FVector(700.0f, 600.0f, 20.0f));
+				Box->SetRelativeScale3D(FVector::OneVector);
+				Box->SetRelativeLocation(FVector::ZeroVector);
+				AuthoredBase->FinishSpawning(AuthoredTM);
+
+				const FGP_ResolvedBuildingFootprint AuthoredResolved = Grid->ResolveActorFootprint(AuthoredBase, nullptr);
+				Expect(AuthoredResolved.SizeCells == FIntPoint(7, 6) && AuthoredBase->GetGridFootprintSize() == FIntPoint(7, 6),
+					TEXT("Preplaced_MainBaseAuthoredRegisters7x6"));
+				Expect(!AuthoredBase->GetBuildGridOccupancyDebugString().IsEmpty(), TEXT("Preplaced_OccupancyDebugString"));
+				Expect(GPBuildGridContractDebug::AllCellsOccupied(
+					Grid, AuthoredBase->GetGridOriginCell(), FIntPoint(7, 6)),
+					TEXT("Preplaced_All42CellsOccupied"));
+
+				const FIntPoint AuthoredOrigin = AuthoredBase->GetGridOriginCell();
+				Expect(GPBuildGridContractDebug::AllCellsFree(
+					Grid, FIntPoint(AuthoredOrigin.X + 7, AuthoredOrigin.Y), FIntPoint(1, 6)),
+					TEXT("Preplaced_AdjacentOutsideRemainsFree"));
+
+				EGP_GridRejectReason OverlapReason = EGP_GridRejectReason::Free;
+				Expect(!Grid->CanPlaceFootprint(
+					FIntPoint(AuthoredOrigin.X + 6, AuthoredOrigin.Y - 3),
+					FIntPoint(4, 4),
+					OverlapReason,
+					nullptr)
+					&& OverlapReason == EGP_GridRejectReason::CellOccupied,
+					TEXT("Preplaced_HubOverlapEdgeRejected"));
+
+				EGP_GridRejectReason AdjacentReason = EGP_GridRejectReason::CellOccupied;
+				Expect(Grid->CanPlaceFootprint(
+					FIntPoint(AuthoredOrigin.X + 7, AuthoredOrigin.Y),
+					FIntPoint(4, 4),
+					AdjacentReason,
+					nullptr)
+					&& AdjacentReason == EGP_GridRejectReason::Free,
+					TEXT("Preplaced_HubBesideAuthoredValid"));
+				AuthoredBase->Destroy();
+			}
+
+			const FTransform ScaleBaseTM(FRotator::ZeroRotator, FVector(-76000.0f, 11200.0f, 100.0f));
+			AGP_MainBase* ScaleBase = World->SpawnActorDeferred<AGP_MainBase>(
+				AGP_MainBase::StaticClass(),
+				ScaleBaseTM,
+				nullptr,
+				nullptr,
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (Expect(IsValid(ScaleBase) && ScaleBase->GetPlacementFootprintBounds() != nullptr,
+				TEXT("Preplaced_SpawnScaledMainBase")))
+			{
+				UBoxComponent* Box = ScaleBase->GetPlacementFootprintBounds();
+				Box->SetBoxExtent(FVector(500.0f, 500.0f, 20.0f));
+				Box->SetRelativeScale3D(FVector(1.4f, 1.2f, 1.0f));
+				Box->SetRelativeLocation(FVector::ZeroVector);
+				ScaleBase->FinishSpawning(ScaleBaseTM);
+				Expect(ScaleBase->GetGridFootprintSize() == FIntPoint(7, 6),
+					TEXT("Preplaced_MainBaseScaleRegisters7x6"));
+				ScaleBase->Destroy();
+			}
+
+			const FTransform OffsetBaseTM(FRotator::ZeroRotator, FVector(-77000.0f, 11400.0f, 100.0f));
+			AGP_MainBase* OffsetBase = World->SpawnActorDeferred<AGP_MainBase>(
+				AGP_MainBase::StaticClass(),
+				OffsetBaseTM,
+				nullptr,
+				nullptr,
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (Expect(IsValid(OffsetBase) && OffsetBase->GetPlacementFootprintBounds() != nullptr,
+				TEXT("Preplaced_SpawnOffsetMainBase")))
+			{
+				UBoxComponent* Box = OffsetBase->GetPlacementFootprintBounds();
+				Box->SetBoxExtent(FVector(500.0f, 500.0f, 20.0f));
+				Box->SetRelativeScale3D(FVector::OneVector);
+				Box->SetRelativeLocation(FVector(200.0f, -100.0f, 0.0f));
+				OffsetBase->FinishSpawning(OffsetBaseTM);
+
+				const FGP_ResolvedBuildingFootprint OffsetResolved = Grid->ResolveActorFootprint(OffsetBase, nullptr);
+				Expect(FMath::IsNearlyEqual(OffsetResolved.LocalCenterOffsetCm.X, 200.0f)
+					&& FMath::IsNearlyEqual(OffsetResolved.LocalCenterOffsetCm.Y, -100.0f),
+					TEXT("Preplaced_MainBaseOffsetPreserved"));
+				FIntPoint ExpectedOrigin = FIntPoint::ZeroValue;
+				FVector ExpectedCenter = FVector::ZeroVector;
+				Grid->ResolveSnappedPlacement(
+					OffsetBaseTM.GetLocation() + FVector(200.0f, -100.0f, 0.0f),
+					FIntPoint(5, 5),
+					ExpectedOrigin,
+					ExpectedCenter);
+				Expect(OffsetBase->GetGridOriginCell() == ExpectedOrigin
+					&& OffsetBase->GetGridFootprintSize() == FIntPoint(5, 5),
+					TEXT("Preplaced_MainBaseOffsetShiftsOrigin"));
+				OffsetBase->Destroy();
+			}
+
+			AGP_MainBase* MutableMainCDO = GetMutableDefault<AGP_MainBase>();
+			UBoxComponent* MutableMainBounds =
+				MutableMainCDO != nullptr ? MutableMainCDO->GetPlacementFootprintBounds() : nullptr;
+			const FTransform StaleTM(FRotator::ZeroRotator, FVector(-78000.0f, 11600.0f, 100.0f));
+			AGP_MainBase* StaleBase = World->SpawnActorDeferred<AGP_MainBase>(
+				AGP_MainBase::StaticClass(),
+				StaleTM,
+				nullptr,
+				nullptr,
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (Expect(IsValid(StaleBase) && StaleBase->GetPlacementFootprintBounds() != nullptr
+				&& MutableMainBounds != nullptr,
+				TEXT("Preplaced_SpawnStaleNativeSnapshot")))
+			{
+				GPBuildGridContractDebug::FScopedBoxAuthoring RestoreMainCDO(MutableMainBounds);
+				MutableMainBounds->SetBoxExtent(FVector(700.0f, 600.0f, 20.0f));
+				MutableMainBounds->SetRelativeScale3D(FVector::OneVector);
+				MutableMainBounds->SetRelativeLocation(FVector::ZeroVector);
+
+				UBoxComponent* InstanceBox = StaleBase->GetPlacementFootprintBounds();
+				InstanceBox->SetBoxExtent(FVector(500.0f, 500.0f, 20.0f));
+				InstanceBox->SetRelativeScale3D(FVector::OneVector);
+				InstanceBox->SetRelativeLocation(FVector::ZeroVector);
+				Expect(UGP_BuildGridSubsystem::LooksLikeNativeDefaultPlacementBounds(
+					AGP_MainBase::StaticClass(), InstanceBox),
+					TEXT("Preplaced_InstanceLooksNativeDefault"));
+				StaleBase->FinishSpawning(StaleTM);
+				Expect(StaleBase->GetGridFootprintSize() == FIntPoint(7, 6),
+					TEXT("Preplaced_StaleNativeInstanceUsesClassCDO"));
+				StaleBase->Destroy();
+			}
+			else if (IsValid(StaleBase))
+			{
+				StaleBase->Destroy();
+			}
+		}
+
 		FActorSpawnParameters AttachParams;
 		AttachParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		AttachParams.ObjectFlags |= RF_Transient;
@@ -909,10 +1053,12 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			SavedBuildingCleanup = Settings->BuildingDropCleanupDelaySeconds;
 			SavedBuildingAltitude = Settings->BuildingDropSpawnAltitudeCm;
 			SavedBuildingDeployDelay = Settings->BuildingDropPayloadDeployDelaySeconds;
+			SavedBuildingPayload = Settings->BuildingPayloadClass;
 			Settings->BuildingDropDescentDurationSeconds = 0.45f;
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
 			Settings->BuildingDropSpawnAltitudeCm = 400.0f;
 			Settings->BuildingDropPayloadDeployDelaySeconds = 0.35f;
+			Settings->BuildingPayloadClass.Reset();
 			bSettingsMutated = true;
 		}
 

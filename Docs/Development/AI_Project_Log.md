@@ -1,8 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-17 — GP-S34W Match Win/Lose MVP (finalization)
+
+Status: **GP-S34W_FINALIZATION_READY_FOR_MERGE**
+
+- Branch: `feature/gp-s34w-match-win-lose` (base `main` @ `7873d2826130bc711486b7a8c0a55322685e8d9d`, prior remote `1828d5722da611cc940370a81f603388ac6f3bcb`)
+- Operator FINAL PASS: single-PIE Waiting until `gp.Match.DebugStart`; 2-player auto-start; quota via real container launch; annihilation replicated; timer-score fallback
+- Final regressions Failures=0; GPEditor+UHT / GP Win64 Development / GP Win64 Shipping **PASS**
+- Shipping: five `gp.Match.Debug*` commands absent from `GP-Win64-Shipping.exe`; present in Development `GP.exe`
+- Finalization C++: **none** (docs only). `ExpectedHumanPlayers` remains 2
+- **NOT MERGED.** Await human merge. Do not start Spectating / disconnect victory / AI
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-17 — GP-S34W Match Win/Lose MVP (implementation candidate)
 
-Status: **GP-S34W_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S34W_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (superseded by finalization)
 
 - Branch: `feature/gp-s34w-match-win-lose` (base `main` @ `7873d2826130bc711486b7a8c0a55322685e8d9d`, implementation `3a1bc381309e77757aed519bae9fe66957d056fd`, SHA-record `35a501d1d8e733dd9e8e85b06f879566e6538a1f`)
 - Quota / timer ladder / MainBase annihilation; FerroniteScore is victory score; no Draw; FinishMatch exact-once

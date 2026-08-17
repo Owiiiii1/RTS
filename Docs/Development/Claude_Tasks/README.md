@@ -6,9 +6,9 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-17 (GP-S34W implementation). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-17 (GP-S34W finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Match win/lose MVP. **Current: GP-S34W_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**.
+**Поточна фаза:** Match win/lose MVP. **Current: GP-S34W_FINALIZATION_READY_FOR_MERGE**.
 
 **Status snapshot:**
 
@@ -16,9 +16,9 @@
 |---|---|
 | GP-S01 … GP-S33C + TEMP HUD layout | **DONE / on `main` tip** `7873d282…` |
 | Roadmap reconciliation | **DONE / MERGED** |
-| **GP-S34W** Match Win/Lose MVP | **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** — [`GP-S34W_Match_Win_Lose.md`](GP-S34W_Match_Win_Lose.md) — **NOT MERGED** |
+| **GP-S34W** Match Win/Lose MVP | **FINALIZATION_READY_FOR_MERGE** — [`GP-S34W_Match_Win_Lose.md`](GP-S34W_Match_Win_Lose.md) — **NOT MERGED** |
 
-**NEXT action для агента:** do **not** merge. Await operator PIE validation. Do **not** start BuildingDefinition / BuildGrid / Spectating / disconnect victory.
+**NEXT action для агента:** do **not** merge. Await human merge. Do **not** start BuildingDefinition / BuildGrid / Spectating / disconnect victory / AI opponent.
 
 ### Drift Warning
 

@@ -39,7 +39,7 @@
 | Last closed / merged stage | **TEMP HUD layout reconciliation** on `main` (tip `7873d2826130bc711486b7a8c0a55322685e8d9d`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S34W_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s34w-match-win-lose` (**NOT MERGED**) |
+| Current stage | **GP-S34W_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s34w-match-win-lose` (**NOT MERGED**) |
 
 ---
 
@@ -49,7 +49,7 @@
 
 **Prior closed:** GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S34W_Match_Win_Lose.md`](Claude_Tasks/GP-S34W_Match_Win_Lose.md) — **GP-S34W_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. Do **not** merge from the agent. Await operator PIE validation.
+**Current:** [`Claude_Tasks/GP-S34W_Match_Win_Lose.md`](Claude_Tasks/GP-S34W_Match_Win_Lose.md) — **GP-S34W_FINALIZATION_READY_FOR_MERGE**. Do **not** merge from the agent. Await human merge.
 
 **Do not** start BuildingDefinition / BuildGrid / FoW / Order Menu / Spectating / disconnect victory without explicit assignment.
 
@@ -68,7 +68,7 @@
 9. **GP-S33M** — RTS Movement Reconciliation — **DONE / MERGED** @ `e40d545b…`
 10. **GP-S33C** — Unit Cap + Logistics Hub Capacity — **DONE / MERGED** on `main`
 11. TEMP HUD layout reconciliation — **DONE / MERGED** @ `7873d282…`
-12. **GP-S34W** — Match Win/Lose MVP — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (NOT MERGED)
+12. **GP-S34W** — Match Win/Lose MVP — **FINALIZATION_READY_FOR_MERGE** (NOT MERGED)
 
 ---
 
@@ -152,4 +152,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S33C and TEMP HUD layout are on `main` baseline tip `7873d2826130bc711486b7a8c0a55322685e8d9d`. Current stage: **GP-S34W_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s34w-match-win-lose`. See [`Claude_Tasks/GP-S34W_Match_Win_Lose.md`](Claude_Tasks/GP-S34W_Match_Win_Lose.md). **NOT MERGED.**
+SETUP-001, DOCS-001, GP-S01…GP-S33C and TEMP HUD layout are on `main` baseline tip `7873d2826130bc711486b7a8c0a55322685e8d9d`. Current stage: **GP-S34W_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s34w-match-win-lose`. See [`Claude_Tasks/GP-S34W_Match_Win_Lose.md`](Claude_Tasks/GP-S34W_Match_Win_Lose.md). **NOT MERGED.**

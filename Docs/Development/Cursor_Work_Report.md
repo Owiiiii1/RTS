@@ -10,7 +10,7 @@ Do not claim `main` contains GP-S33C.
 ## Branch
 `feature/gp-s33c-unit-cap-logistics-hub`  
 Base `main` SHA: `e40d545b89c27e2d9738082009fb691a5c8e5a2a`  
-Final feature head SHA: recorded in the SHA-record commit on this branch after this finalization commit.
+Final feature head SHA: `8a2c08611f2a8d5a3373be0031d94a20b6cf9bf3`
 
 ## Operator FINAL PASS
 Operator validation FINAL PASS confirmed:

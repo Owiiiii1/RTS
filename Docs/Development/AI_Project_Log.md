@@ -4,7 +4,7 @@
 
 Status: **GP-S33C_FINALIZATION_READY_FOR_MERGE**
 
-- Branch: `feature/gp-s33c-unit-cap-logistics-hub` (base `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`)
+- Branch: `feature/gp-s33c-unit-cap-logistics-hub` (base `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`, finalization `8a2c08611f2a8d5a3373be0031d94a20b6cf9bf3`)
 - Operator FINAL PASS: UNITS 2/5 → 5/5, reject without Orbital spend, death frees slot, live Hub 5→10, destroy lowers Max, over-cap allowed without kill/clamp
 - Final regressions Failures=0; GPEditor+UHT / GP Win64 Development / GP Win64 Shipping **PASS**
 - Finalization C++: movement contract isolation only (`A_ArrivedOrProgress` vs map-authored units at arena origin). Cap/Hub gameplay unchanged

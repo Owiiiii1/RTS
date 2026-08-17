@@ -11,6 +11,7 @@
 #include "Buildings/GPMainBase.h"
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Components/BoxComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Debug/GPContractTestCoordinator.h"
 #include "Effects/GPGE_AddOrbital.h"
 #include "Engine/StaticMesh.h"
@@ -38,6 +39,44 @@ namespace GPBuildGridContractDebug
 {
 	static TWeakObjectPtr<UGP_BuildGridContractTestRunner> GActiveRunner;
 	constexpr int32 ContractTeam = 93;
+
+	struct FScopedBoxAuthoring
+	{
+		UBoxComponent* Box = nullptr;
+		FVector Extent = FVector::ZeroVector;
+		FVector Location = FVector::ZeroVector;
+		FVector Scale = FVector::OneVector;
+
+		explicit FScopedBoxAuthoring(UBoxComponent* InBox)
+			: Box(InBox)
+		{
+			if (Box != nullptr)
+			{
+				Extent = Box->GetUnscaledBoxExtent();
+				Location = Box->GetRelativeLocation();
+				Scale = Box->GetRelativeScale3D();
+			}
+		}
+
+		~FScopedBoxAuthoring()
+		{
+			if (Box != nullptr)
+			{
+				Box->SetBoxExtent(Extent);
+				Box->SetRelativeLocation(Location);
+				Box->SetRelativeScale3D(Scale);
+			}
+		}
+
+		void DisableUsableBounds()
+		{
+			if (Box != nullptr)
+			{
+				Box->SetBoxExtent(FVector(0.0f, 0.0f, 20.0f));
+				Box->SetRelativeScale3D(FVector::OneVector);
+			}
+		}
+	};
 
 	static AGP_PlayerState* SpawnTeamPlayerState(UWorld* World, AGameStateBase* GameState, int32 TeamId)
 	{
@@ -417,42 +456,95 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		UGP_BuildingDefinition* DaFallback = NewObject<UGP_BuildingDefinition>(
 			this, FName(TEXT("DA_GP_Building_FootprintFallback")), RF_Transient);
 		DaFallback->FootprintCells = FIntPoint(4, 4);
-		const FGP_ResolvedBuildingFootprint ClassFallback =
-			Grid->ResolveBuildingFootprint(AGP_BuildGridContractStub::StaticClass(), DaFallback);
-		Expect(ClassFallback.SizeCells == FIntPoint(4, 4) && !ClassFallback.bFromAuthoredBounds,
-			TEXT("Bounds_NoAuthoredUsesDA"));
 
 		{
 			const AGP_BuildGridContractStub* StubCDO = GetDefault<AGP_BuildGridContractStub>();
 			const UBoxComponent* CDOBounds = StubCDO != nullptr ? StubCDO->GetPlacementFootprintBounds() : nullptr;
 			const UBoxComponent* CDONav = StubCDO != nullptr ? StubCDO->GetNavigationObstacle() : nullptr;
+			Expect(CDOBounds != nullptr && CDOBounds->GetUnscaledBoxExtent().Equals(FVector(100.0f, 100.0f, 20.0f), 0.1f),
+				TEXT("Bounds_NativeGenericExtent100"));
 			Expect(CDOBounds != nullptr && CDOBounds->bEditableWhenInherited
 				&& CDOBounds->IsEditableWhenInherited(),
 				TEXT("Authoring_BoundsEditableWhenInherited"));
 			Expect(CDONav != nullptr && CDONav->bEditableWhenInherited
 				&& CDONav->IsEditableWhenInherited(),
 				TEXT("Authoring_NavEditableWhenInherited"));
+			const FGP_ResolvedBuildingFootprint NativeGeneric =
+				Grid->ResolveBuildingFootprint(AGP_BuildGridContractStub::StaticClass(), nullptr);
+			Expect(NativeGeneric.bFromAuthoredBounds && NativeGeneric.SizeCells == FIntPoint(1, 1),
+				TEXT("Bounds_NativeGeneric1x1"));
+			const FGP_ResolvedBuildingFootprint NativeGenericVsDa =
+				Grid->ResolveBuildingFootprint(AGP_BuildGridContractStub::StaticClass(), DaFallback);
+			Expect(NativeGenericVsDa.bFromAuthoredBounds && NativeGenericVsDa.SizeCells == FIntPoint(1, 1),
+				TEXT("Bounds_NativeGenericOverridesDA"));
+		}
+
+		{
+			const AGP_LogisticsHub* HubCDO = GetDefault<AGP_LogisticsHub>();
+			const UBoxComponent* HubBounds = HubCDO != nullptr ? HubCDO->GetPlacementFootprintBounds() : nullptr;
+			Expect(HubBounds != nullptr && HubBounds->GetUnscaledBoxExtent().Equals(FVector(400.0f, 400.0f, 20.0f), 0.1f),
+				TEXT("Bounds_NativeHubExtent400"));
+			const FGP_ResolvedBuildingFootprint NativeHub =
+				Grid->ResolveBuildingFootprint(AGP_LogisticsHub::StaticClass(), nullptr);
+			const FGP_ResolvedBuildingFootprint NativeHubVsDa =
+				Grid->ResolveBuildingFootprint(AGP_LogisticsHub::StaticClass(), DaFallback);
+			Expect(NativeHub.bFromAuthoredBounds && NativeHub.SizeCells == FIntPoint(4, 4),
+				TEXT("Bounds_NativeHub4x4"));
+			Expect(NativeHubVsDa.SizeCells == NativeHub.SizeCells && NativeHubVsDa.bFromAuthoredBounds,
+				TEXT("Preview_ServerNativeHubFootprintMatch"));
+		}
+
+		{
+			const AGP_MainBase* BaseCDO = GetDefault<AGP_MainBase>();
+			const UBoxComponent* BaseBounds = BaseCDO != nullptr ? BaseCDO->GetPlacementFootprintBounds() : nullptr;
+			Expect(BaseBounds != nullptr && BaseBounds->GetUnscaledBoxExtent().Equals(FVector(500.0f, 500.0f, 20.0f), 0.1f),
+				TEXT("Bounds_NativeMainBaseExtent500"));
+			const FGP_ResolvedBuildingFootprint NativeBase =
+				Grid->ResolveBuildingFootprint(AGP_MainBase::StaticClass(), nullptr);
+			Expect(NativeBase.bFromAuthoredBounds && NativeBase.SizeCells == FIntPoint(5, 5),
+				TEXT("Bounds_NativeMainBase5x5"));
 		}
 
 		AGP_BuildGridContractStub* MutableStubCDO = GetMutableDefault<AGP_BuildGridContractStub>();
 		UBoxComponent* MutableCDOBounds =
 			MutableStubCDO != nullptr ? MutableStubCDO->GetPlacementFootprintBounds() : nullptr;
 		FGP_ResolvedBuildingFootprint CdoResolved;
+		FGP_ResolvedBuildingFootprint CdoScaled;
+		FGP_ResolvedBuildingFootprint DaWhenUnusable;
 		if (Expect(MutableCDOBounds != nullptr, TEXT("Authoring_MutableCDOBounds")))
 		{
-			const FVector SavedExtent = MutableCDOBounds->GetUnscaledBoxExtent();
-			const FVector SavedRel = MutableCDOBounds->GetRelativeLocation();
-			MutableCDOBounds->SetBoxExtent(FVector(200.0f, 200.0f, 20.0f));
-			MutableCDOBounds->SetRelativeLocation(FVector(100.0f, -30.0f, 0.0f));
-			CdoResolved = Grid->ResolveBuildingFootprint(AGP_BuildGridContractStub::StaticClass(), DaFallback);
-			MutableCDOBounds->SetBoxExtent(SavedExtent);
-			MutableCDOBounds->SetRelativeLocation(SavedRel);
+			{
+				GPBuildGridContractDebug::FScopedBoxAuthoring Restore(MutableCDOBounds);
+				MutableCDOBounds->SetBoxExtent(FVector(200.0f, 200.0f, 20.0f));
+				MutableCDOBounds->SetRelativeLocation(FVector(100.0f, -30.0f, 0.0f));
+				MutableCDOBounds->SetRelativeScale3D(FVector::OneVector);
+				CdoResolved = Grid->ResolveBuildingFootprint(AGP_BuildGridContractStub::StaticClass(), DaFallback);
+			}
+			{
+				GPBuildGridContractDebug::FScopedBoxAuthoring Restore(MutableCDOBounds);
+				MutableCDOBounds->SetBoxExtent(FVector(400.0f, 400.0f, 20.0f));
+				MutableCDOBounds->SetRelativeLocation(FVector(80.0f, 0.0f, 0.0f));
+				MutableCDOBounds->SetRelativeScale3D(FVector(0.5f, 0.5f, 1.0f));
+				CdoScaled = Grid->ResolveBuildingFootprint(AGP_BuildGridContractStub::StaticClass(), DaFallback);
+			}
+			{
+				GPBuildGridContractDebug::FScopedBoxAuthoring Restore(MutableCDOBounds);
+				Restore.DisableUsableBounds();
+				DaWhenUnusable = Grid->ResolveBuildingFootprint(AGP_BuildGridContractStub::StaticClass(), DaFallback);
+			}
 		}
 		Expect(CdoResolved.bFromAuthoredBounds && CdoResolved.SizeCells == FIntPoint(2, 2),
 			TEXT("Authoring_CDOExtent200Is2x2"));
 		Expect(FMath::IsNearlyEqual(CdoResolved.LocalCenterOffsetCm.X, 100.0f)
 			&& FMath::IsNearlyEqual(CdoResolved.LocalCenterOffsetCm.Y, -30.0f),
 			TEXT("Authoring_CDORelativeLocationOffset"));
+		Expect(CdoScaled.bFromAuthoredBounds && CdoScaled.SizeCells == FIntPoint(2, 2),
+			TEXT("Authoring_CDOScaleReadsAs2x2"));
+		Expect(FMath::IsNearlyEqual(CdoScaled.LocalCenterOffsetCm.X, 80.0f)
+			&& FMath::IsNearlyEqual(CdoScaled.LocalCenterOffsetCm.Y, 0.0f),
+			TEXT("Authoring_CDOOffsetIndependentOfScale"));
+		Expect(DaWhenUnusable.SizeCells == FIntPoint(4, 4) && !DaWhenUnusable.bFromAuthoredBounds,
+			TEXT("Bounds_NoUsableBoundsUsesDA"));
 
 		FActorSpawnParameters BoundsParams;
 		BoundsParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -494,7 +586,59 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				FootprintHint, Authored.LocalCenterOffsetCm);
 			Expect(FVector::Dist2D(RebuiltActor, BoundsStub->GetActorLocation()) <= 1.0f,
 				TEXT("Bounds_ActorPivotPreservedVsFootprint"));
+
+			Box->SetBoxExtent(FVector(400.0f, 400.0f, 20.0f));
+			Box->SetRelativeLocation(FVector(50.0f, 25.0f, 0.0f));
+			Box->SetRelativeScale3D(FVector::OneVector);
+			Expect(Grid->ResolveActorFootprint(BoundsStub, DaFallback).SizeCells == FIntPoint(4, 4),
+				TEXT("Bounds_HubBaselineScale1Is4x4"));
+			Box->SetRelativeScale3D(FVector(0.5f, 0.5f, 1.0f));
+			const FGP_ResolvedBuildingFootprint ScaledHalf = Grid->ResolveActorFootprint(BoundsStub, DaFallback);
+			Expect(ScaledHalf.bFromAuthoredBounds && ScaledHalf.SizeCells == FIntPoint(2, 2),
+				TEXT("Bounds_HubScaleHalfIs2x2"));
+			Expect(FMath::IsNearlyEqual(ScaledHalf.LocalCenterOffsetCm.X, 50.0f)
+				&& FMath::IsNearlyEqual(ScaledHalf.LocalCenterOffsetCm.Y, 25.0f),
+				TEXT("Bounds_OffsetIndependentOfScale"));
+			Box->SetRelativeScale3D(FVector(0.75f, 0.5f, 1.0f));
+			Expect(Grid->ResolveActorFootprint(BoundsStub, DaFallback).SizeCells == FIntPoint(3, 2),
+				TEXT("Bounds_HubScale075x05Is3x2"));
+			Box->SetRelativeScale3D(FVector(1.25f, 0.75f, 1.0f));
+			Expect(Grid->ResolveActorFootprint(BoundsStub, DaFallback).SizeCells == FIntPoint(5, 3),
+				TEXT("Bounds_HubScale125x075Is5x3"));
+
+			Box->SetBoxExtent(FVector(100.0f, 100.0f, 20.0f));
+			Box->SetRelativeScale3D(FVector::OneVector);
+			BoundsStub->SetActorScale3D(FVector(2.0f, 2.0f, 2.0f));
+			Expect(Grid->ResolveActorFootprint(BoundsStub, DaFallback).SizeCells == FIntPoint(1, 1),
+				TEXT("Bounds_ActorScaleDoesNotInflateFootprint"));
+			BoundsStub->SetActorScale3D(FVector::OneVector);
 			BoundsStub->Destroy();
+		}
+
+		{
+			FActorSpawnParameters ScaleSpawnParams;
+			ScaleSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			ScaleSpawnParams.ObjectFlags |= RF_Transient;
+			const FTransform ScaleTM(FRotator::ZeroRotator, FVector(-72000.0f, 8700.0f, 100.0f));
+			AGP_BuildGridContractStub* ScaleStub = World->SpawnActorDeferred<AGP_BuildGridContractStub>(
+				AGP_BuildGridContractStub::StaticClass(),
+				ScaleTM,
+				nullptr,
+				nullptr,
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (Expect(IsValid(ScaleStub) && ScaleStub->GetPlacementFootprintBounds() != nullptr,
+				TEXT("Bounds_SpawnScaledStub")))
+			{
+				UBoxComponent* Box = ScaleStub->GetPlacementFootprintBounds();
+				Box->SetBoxExtent(FVector(400.0f, 400.0f, 20.0f));
+				Box->SetRelativeScale3D(FVector(0.5f, 0.5f, 1.0f));
+				ScaleStub->FinishSpawning(ScaleTM);
+				Expect(ScaleStub->GetGridFootprintSize() == FIntPoint(2, 2), TEXT("Bounds_SpawnedScaleRegisters2x2"));
+				Expect(GPBuildGridContractDebug::AllCellsOccupied(
+					Grid, ScaleStub->GetGridOriginCell(), FIntPoint(2, 2)),
+					TEXT("Bounds_SpawnedScaleOccupiesResolvedCells"));
+				ScaleStub->Destroy();
+			}
 		}
 
 		FActorSpawnParameters AttachParams;
@@ -621,6 +765,40 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				true,
 				EGP_BuildingDropRejectReason::None);
 			Expect(Ghost->IsBuildingGhostVisible(), TEXT("Preview_BuildingGhostShownWhenValid"));
+			{
+				AGP_LogisticsHub* HubCDO = GetMutableDefault<AGP_LogisticsHub>();
+				UBoxComponent* HubBox = HubCDO != nullptr ? HubCDO->GetPlacementFootprintBounds() : nullptr;
+				GPBuildGridContractDebug::FScopedBoxAuthoring RestoreHub(HubBox);
+				if (HubBox != nullptr)
+				{
+					HubBox->SetRelativeScale3D(FVector(2.0f, 2.0f, 1.0f));
+				}
+				Ghost->SetBuildingGhostClass(nullptr);
+				Ghost->SetBuildingGhostClass(AGP_LogisticsHub::StaticClass());
+				TArray<UStaticMeshComponent*> GhostMeshes;
+				Ghost->GetComponents<UStaticMeshComponent>(GhostMeshes);
+				bool bFootprintScaleLeakedOntoGhost = false;
+				for (const UStaticMeshComponent* Mesh : GhostMeshes)
+				{
+					if (Mesh != nullptr && Mesh->GetRelativeScale3D().Equals(FVector(2.0f, 2.0f, 1.0f), 0.01f))
+					{
+						bFootprintScaleLeakedOntoGhost = true;
+						break;
+					}
+				}
+				Expect(!bFootprintScaleLeakedOntoGhost, TEXT("Preview_GhostMeshScaleIndependentOfFootprint"));
+			}
+			Ghost->UpdateGridPreview(
+				Grid,
+				FIntPoint(0, 0),
+				FIntPoint(2, 2),
+				0.0f,
+				true,
+				EGP_BuildingDropRejectReason::None);
+			Expect(FMath::IsNearlyEqual(Ghost->GetPreviewOuterExtentXY().X, 400.0f)
+				&& FMath::IsNearlyEqual(Ghost->GetPreviewOuterExtentXY().Y, 400.0f)
+				&& Ghost->GetPreviewCellCount() == 4,
+				TEXT("Preview_Scaled2x2Outer400"));
 			Ghost->ClearGridPreview();
 			Expect(!Ghost->HasActiveGridPreview() && Ghost->GetPreviewGridLineCount() == 0
 				&& Ghost->GetPreviewStatusLabel().IsEmpty()
@@ -1100,6 +1278,11 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		UGP_BuildingDropCatalog::Get().RegisterDropDefinition(BadDrop);
 		InvalidFootprintDropWeak = BadDrop;
 		Expect(Inventory->AuthorityAddReady(BadDrop, 1), TEXT("R_AddInvalidReady"));
+		AGP_BuildGridContractStub* InvalidStubCDO = GetMutableDefault<AGP_BuildGridContractStub>();
+		UBoxComponent* InvalidStubBounds =
+			InvalidStubCDO != nullptr ? InvalidStubCDO->GetPlacementFootprintBounds() : nullptr;
+		GPBuildGridContractDebug::FScopedBoxAuthoring RestoreInvalidStub(InvalidStubBounds);
+		RestoreInvalidStub.DisableUsableBounds();
 		GPBuildingDropAuthority::FDeployResult InvalidFp =
 			GPBuildingDropAuthority::AuthorityDeployBuilding(
 				World, OwnerPS, BadDrop, FTransform(FRotator::ZeroRotator, ValidDeployLocation));

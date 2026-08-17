@@ -1,6 +1,6 @@
 # Cursor Work Report
 
-Status: **GP-S36G_FOOTPRINT_BP_AUTHORING_FIX_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S36G_FOOTPRINT_VIEWPORT_AUTHORING_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**  
 **NOT FINALIZED.**
@@ -12,60 +12,80 @@ Status: **GP-S36G_FOOTPRINT_BP_AUTHORING_FIX_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`f393fda3a9fe9a2e03df0490b23fafc75fb32850`
+`PENDING_IMPLEMENTATION`
 
-## Operator symptom
-`PlacementFootprintBounds` appears in the Logistics Hub Blueprint Components tree but is effectively read-only as an inherited native component. Operator cannot edit Box Extent / Relative Transform.
+## Screenshot-observed zero XY extent
+Operator screenshot: `PlacementFootprintBounds` is selectable, `Editable when Inherited` is enabled, but Box Extent is **X=0, Y=0, Z=20**. Viewport Scale gizmo draws a dotted scale vector and **no visible footprint box**.
 
-## Factual Unreal cause
-Blueprint Details treats a native inherited component as editable only when the **archetype** reports `IsEditableWhenInherited()`.
+This is expected mathematically: zero XY extent × any relative scale remains zero, so the box has no volume to draw.
 
-UE 5.8 (`ActorComponent.h` / `ActorComponent.cpp`):
+## Old resolver ignored RelativeScale3D
+`UGP_BuildGridSubsystem::TryResolveFromPlacementBounds` used `Bounds->GetUnscaledBoxExtent()` only. Viewport Scale therefore could not change BuildGrid cells even if the box were visible.
 
-- Public bit `UActorComponent::bEditableWhenInherited` (no setter API; Engine itself assigns the field, e.g. PackedLevelActor).
-- Constructor default is `true`, but Blueprint inspector gates on `GetArchetype()->IsEditableWhenInherited()`.
-- For native instances, `IsEditableWhenInherited()` also requires the owning actor UPROPERTY to carry `CPF_Edit` (`FComponentEditorUtils::GetPropertyForEditableNativeComponent`).
-- `CanEditChange` on a BP child refuses edits when the parent component archetype has `bEditableWhenInherited == false`.
-
-The native subobject was never explicitly marked authorable, so inherited Hub BP templates could not edit BoxExtent / RelativeTransform.
-
-## Exact editable-when-inherited fix
-In `ConfigurePlacementFootprintBoundsDefaults()` / `ConfigureNavigationObstacleDefaults()`:
+## Effective extent formula
+Component-local authored half-extent (not actor/world scale):
 
 ```
-PlacementFootprintBounds->bEditableWhenInherited = true;
-NavigationObstacle->bEditableWhenInherited = true;
+EffectiveHalfExtentX = abs(UnscaledBoxExtent.X * RelativeScale3D.X)
+EffectiveHalfExtentY = abs(UnscaledBoxExtent.Y * RelativeScale3D.Y)
+WidthCm  = 2 * EffectiveHalfExtentX
+HeightCm = 2 * EffectiveHalfExtentY
+Cells    = ceil(Size / 200), minimum 1×1
 ```
 
-Verified against installed UE 5.8 headers: property is public `uint8 bEditableWhenInherited:1`; no `SetEditableWhenInherited` exists. Same assignment style as Engine.
+API: `UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm`.
 
-## UPROPERTY decision
-Kept:
+Explicitly **not** `UBoxComponent::GetScaledBoxExtent()` — that multiplies by `GetComponentTransform().GetScale3D()` and would include actor / parent / map instance scale.
 
-`VisibleAnywhere, BlueprintReadOnly, Category=..., meta=(AllowPrivateAccess="true")`
+RelativeRotation is ignored (GP-S36G axis-aligned). RelativeLocation XY is the footprint center offset and is **not** multiplied by component scale.
 
-This is the standard native component pattern (`ACharacter::CapsuleComponent`):
+Scale is preserved (not forced back to 1). Resolver uses BoxExtent × RelativeScale3D together.
 
-- `VisibleAnywhere` → `CPF_Edit` so the native component is discoverable as authorable, **without** making the pointer replaceable.
-- `BlueprintReadOnly` / no `EditAnywhere` on the `TObjectPtr` → Blueprint cannot swap the subobject.
-- Component-owned properties (`BoxExtent`, RelativeTransform) remain `EditAnywhere` on `UBoxComponent` itself.
+## Native default extents (visible authoring volumes)
+Zero XY is no longer the normal unauthored state.
 
-Do **not** use `EditAnywhere` on the component pointer.
+| Class | Cells | Total cm | BoxExtent XY | Z viz |
+| --- | --- | --- | --- | --- |
+| Generic `AGP_BuildingBase` | 1×1 | 200×200 | 100,100 | 20 |
+| `AGP_LogisticsHub` | 4×4 | 800×800 | 400,400 | 20 |
+| `AGP_MainBase` | 5×5 | 1000×1000 | 500,500 | 20 |
 
-## NavigationObstacle
-Same `bEditableWhenInherited = true` flag. Already documented as BP-authorable (RelativeLocation / Rotation / BoxExtent). Collision/nav/gameplay defaults unchanged.
+Derived constructors call `SetBoxExtent` on the existing subobject after root setup. Component is not recreated. `PostInitializeComponents` / `BeginPlay` do not reset Blueprint overrides. Native values are archetype defaults only; Blueprint-authored BoxExtent / RelativeScale3D / RelativeLocation win.
 
-## CDO persistence test
-`gp.Building.RunBuildGridContractTest`:
+## BP Scale gizmo behavior
+Operator may Scale the component in the Blueprint viewport.
 
-- CDO `bEditableWhenInherited` + `IsEditableWhenInherited()` for PlacementFootprintBounds and NavigationObstacle
-- Mutate stub CDO BoxExtent 200/200 + RelativeLocation (100, -30), resolve, restore CDO
-- Resolver: 2×2 cells, LocalCenterOffsetCm preserved, authored bounds override DA 4×4
-- Spawned instance also reports `IsEditableWhenInherited()`
+Hub baseline examples (BoxExtent 400,400):
 
-Full Blueprint editor click-edit remains operator validation (contract runs `-game`).
+- Scale 1,1 → 800×800 → 4×4
+- Scale 0.5,0.5 → 400×400 → 2×2
+- Scale 0.75,0.5 → 600×400 → 3×2
+- Scale 1.25,0.75 → 1000×600 → 5×3
 
-## Tests (all Failures=0)
+Building ghost mesh scale is independent of the footprint component. Only occupied grid area changes.
+
+## Offset
+`RelativeLocation` XY still defines footprint center vs actor pivot. Not scaled. Rotation unsupported / ignored.
+
+## DA fallback
+`UGP_BuildingDefinition.FootprintCells` kept. Usable `PlacementFootprintBounds` (effective XY half-extent ≥ 1 cm) resolve first. Classes without usable bounds still use DA. Current effective defaults match old fallback (MainBase 5×5, Hub 4×4, generic 1×1) so unedited gameplay footprints do not regress.
+
+## Tests
+`gp.Building.RunBuildGridContractTest` extended:
+
+- A native visible extents: generic 100,100 → 1×1; Hub 400,400 → 4×4; MainBase 500,500 → 5×5
+- B RelativeScale cells (Hub 400,400): 1,1 → 4×4; 0.5,0.5 → 2×2; 0.75,0.5 → 3×2; 1.25,0.75 → 5×3
+- C RelativeLocation offset independent of scale
+- D CDO/seam resolver reads scale
+- E preview and server resolve identical footprint
+- F spawned building registers identical cells (including scaled 2×2)
+- G DA fallback when bounds unusable
+- H `bEditableWhenInherited` remains true
+- Actor world scale does not inflate footprint
+- Ghost mesh scale independent of footprint scale
+
+All listed regressions Failures=0:
+
 - `gp.Building.RunBuildGridContractTest`
 - `gp.Building.RunMultiBuildingDataContractTest`
 - `gp.Building.RunOrbitalBuildingDropContractTest`
@@ -83,18 +103,24 @@ GP Win64 Development / Shipping **not run**.
 ## Exact changed files
 - `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
 - `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
+- `GP/Source/GPRuntime/Private/Buildings/GPLogisticsHub.cpp`
+- `GP/Source/GPRuntime/Private/Buildings/GPMainBase.cpp`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
+- `GP/Source/GPRuntime/Public/Buildings/Grid/GPBuildGridSubsystem.h`
+- `GP/Source/GPRuntime/Private/Buildings/Grid/GPBuildGridSubsystem.cpp`
 - `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
 - `Docs/Development/Cursor_Work_Report.md`
 
-BuildGrid conversion, fallback, offset, snap, occupancy, reservation, ground-Z, READY/Purchase/Deploy, DropPod, preview, Hub +5 were not modified.
+Occupancy semantics, reservation, READY, Purchase, DropPod timing, Hub +5, CellSize, snap, and ground-Z were not changed.
 
 ## Operator retest
 1. Restart/recompile Editor.
-2. Open authored Logistics Hub Blueprint.
-3. Select `PlacementFootprintBounds`.
-4. Box Extent fields editable.
-5. Set X=200, Y=200; move Relative Location X e.g. +100; Save BP.
-6. After that: PIE → Purchase Hub → Deploy; preview should be 2×2 with offset.
+2. Open `BP_GP_LogisticsHub`.
+3. `PlacementFootprintBounds` should be a visible **800×800** box (not a zero-size dotted vector).
+4. Select it; Scale gizmo X/Y; Translate gizmo. No need to type Box Extent first.
+5. PIE: Purchase Hub → Deploy. Preview tiles follow effective bounds (e.g. scale 0.5,0.5 → 2×2). Building ghost mesh stays at normal building scale.
+
+If a Blueprint already serialized Box Extent 0,0 as an override, that authored override still wins until the operator resets/edits it.
 
 **NOT MERGED.**  
 **NOT FINALIZED.**

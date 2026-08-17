@@ -182,14 +182,29 @@ FIntPoint UGP_BuildGridSubsystem::ConvertAuthoredBoundsToFootprintCells(FVector 
 		FMath::Max(1, FMath::CeilToInt(HeightCm / Size)));
 }
 
+FVector UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(const UBoxComponent* Bounds)
+{
+	if (Bounds == nullptr)
+	{
+		return FVector::ZeroVector;
+	}
+
+	const FVector Unscaled = Bounds->GetUnscaledBoxExtent();
+	const FVector RelScale = Bounds->GetRelativeScale3D();
+	return FVector(
+		FMath::Abs(Unscaled.X * RelScale.X),
+		FMath::Abs(Unscaled.Y * RelScale.Y),
+		FMath::Abs(Unscaled.Z * RelScale.Z));
+}
+
 bool UGP_BuildGridSubsystem::ArePlacementFootprintBoundsUsable(const UBoxComponent* Bounds)
 {
 	if (Bounds == nullptr)
 	{
 		return false;
 	}
-	const FVector Extent = Bounds->GetUnscaledBoxExtent();
-	return Extent.X >= 1.0f && Extent.Y >= 1.0f;
+	const FVector HalfExtent = GetAuthoredPlacementHalfExtentCm(Bounds);
+	return HalfExtent.X >= 1.0f && HalfExtent.Y >= 1.0f;
 }
 
 bool UGP_BuildGridSubsystem::TryResolveFromPlacementBounds(
@@ -202,9 +217,12 @@ bool UGP_BuildGridSubsystem::TryResolveFromPlacementBounds(
 		return false;
 	}
 
-	const FVector Extent = Bounds->GetUnscaledBoxExtent();
+	// Axis-aligned GP-S36G: RelativeRotation is ignored. Do not rotate footprints.
+	// Half-extent uses UnscaledBoxExtent * RelativeScale3D only — not GetScaledBoxExtent(),
+	// which multiplies by component world scale (actor / parent / map instance).
+	const FVector HalfExtent = GetAuthoredPlacementHalfExtentCm(Bounds);
 	const FVector Relative = Bounds->GetRelativeLocation();
-	OutResolved.SizeCells = ConvertAuthoredBoundsToFootprintCells(Extent);
+	OutResolved.SizeCells = ConvertAuthoredBoundsToFootprintCells(HalfExtent);
 	OutResolved.LocalCenterOffsetCm = FVector2D(Relative.X, Relative.Y);
 	OutResolved.bFromAuthoredBounds = true;
 	return OutResolved.IsValid();

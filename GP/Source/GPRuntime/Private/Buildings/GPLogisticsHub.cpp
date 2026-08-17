@@ -31,6 +31,11 @@ AGP_LogisticsHub::AGP_LogisticsHub()
 		// Rough LogisticsHub footprint — BP may retune freely.
 		NavigationObstacle->SetBoxExtent(FVector(140.0f, 140.0f, 120.0f));
 	}
+	if (PlacementFootprintBounds)
+	{
+		// Native 4×4 BuildGrid (800×800 cm). BP children may retune extent/scale.
+		PlacementFootprintBounds->SetBoxExtent(FVector(400.0f, 400.0f, 20.0f));
+	}
 
 	PresentationRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PresentationRoot"));
 	PresentationRoot->SetupAttachment(CapsuleComponent);

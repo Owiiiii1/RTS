@@ -34,6 +34,11 @@ AGP_MainBase::AGP_MainBase()
 		// Rough MainBase footprint (~capsule 80r / 120hh) — BP may retune freely.
 		NavigationObstacle->SetBoxExtent(FVector(160.0f, 160.0f, 130.0f));
 	}
+	if (PlacementFootprintBounds)
+	{
+		// Native 5×5 BuildGrid (1000×1000 cm). BP children may retune extent/scale.
+		PlacementFootprintBounds->SetBoxExtent(FVector(500.0f, 500.0f, 20.0f));
+	}
 
 	PresentationRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PresentationRoot"));
 	PresentationRoot->SetupAttachment(CapsuleComponent);

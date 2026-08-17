@@ -102,13 +102,20 @@ public:
 
 	bool IsValidFootprintSize(FIntPoint FootprintSize) const;
 
-	/** XY box extent → cell count. WidthCm = 2*Extent.X. Ceil, minimum 1×1. CellSize 200. */
+	/** XY half-extent → cell count. WidthCm = 2*Extent.X. Ceil, minimum 1×1. CellSize 200. */
 	FIntPoint ConvertAuthoredBoundsToFootprintCells(FVector BoxExtent) const;
+
+	/**
+	 * Component-local authored half-extent (cm): |UnscaledBoxExtent * RelativeScale3D|.
+	 * Does not use GetScaledBoxExtent() / component world scale (those include actor/parent scale).
+	 * RelativeRotation is ignored (BuildGrid is axis-aligned).
+	 */
+	static FVector GetAuthoredPlacementHalfExtentCm(const UBoxComponent* Bounds);
 
 	static bool ArePlacementFootprintBoundsUsable(const UBoxComponent* Bounds);
 
 	/**
-	 * Preferred: payload CDO/instance PlacementFootprintBounds when XY extent >= 1 cm.
+	 * Preferred: payload CDO/instance PlacementFootprintBounds when effective XY half-extent >= 1 cm.
 	 * Fallback: BuildingDefinition.FootprintCells when both axes > 0.
 	 * If a BuildingDefinition is present but FootprintCells is invalid, do not class-fallback
 	 * (keeps InvalidFootprint deploy rejection).

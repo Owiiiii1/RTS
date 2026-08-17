@@ -71,8 +71,8 @@ void AGP_BuildingBase::ConfigurePlacementFootprintBoundsDefaults()
 		return;
 	}
 
-	// XY 0,0 = unauthored. Runtime then uses BuildingDefinition.FootprintCells.
-	PlacementFootprintBounds->SetBoxExtent(FVector(0.0f, 0.0f, 20.0f));
+	// Visible native default: generic 1×1 (200×200 cm). Derived classes override XY.
+	PlacementFootprintBounds->SetBoxExtent(FVector(100.0f, 100.0f, 20.0f));
 	PlacementFootprintBounds->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	PlacementFootprintBounds->SetCollisionObjectType(ECC_WorldStatic);
 	PlacementFootprintBounds->SetCollisionResponseToAllChannels(ECR_Ignore);

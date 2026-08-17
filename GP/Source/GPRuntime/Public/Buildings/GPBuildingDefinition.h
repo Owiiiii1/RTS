@@ -41,9 +41,10 @@ public:
 	/**
 	 * Compatibility/default BuildGrid footprint (cells).
 	 * Runtime precedence:
-	 * 1) payload CDO PlacementFootprintBounds when authored (XY extent >= 1 cm)
+	 * 1) payload CDO PlacementFootprintBounds when effective authored XY half-extent >= 1 cm
+	 *    (UnscaledBoxExtent * RelativeScale3D; actor/world scale ignored)
 	 * 2) this field, when both axes > 0
-	 * Do not delete. Native actors, tests, and unauthored Blueprints still use this fallback.
+	 * Do not delete. Tests and classes without usable bounds still use this fallback.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|BuildGrid")
 	FIntPoint FootprintCells = FIntPoint(1, 1);

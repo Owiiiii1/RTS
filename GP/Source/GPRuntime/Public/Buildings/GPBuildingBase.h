@@ -63,8 +63,8 @@ protected:
 	/**
 	 * Authorable BuildGrid placement footprint (GP-S36G).
 	 * Native inherited component: pointer is not replaceable (VisibleAnywhere / BlueprintReadOnly).
-	 * Blueprint children edit this component's BoxExtent / RelativeTransform; they cannot swap the subobject.
-	 * Default XY extent 0 means "unauthored" — runtime then uses BuildingDefinition.FootprintCells.
+	 * Blueprint children edit this component's BoxExtent / RelativeScale3D / RelativeLocation.
+	 * Native default is a visible 1×1 (200×200 cm) volume; derived classes override extent.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|BuildGrid", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UBoxComponent> PlacementFootprintBounds;

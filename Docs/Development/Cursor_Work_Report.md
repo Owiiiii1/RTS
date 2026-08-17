@@ -12,7 +12,7 @@ Status: **GP-S36G_PREVIEW_POLISH_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-*(filled in SHA-record commit)*
+`3e4e7aae3d0d1a5793979f9e3c8c1afdf453298e`
 
 ## Operator feedback items
 1. Footprint preview felt much larger than the visible building.

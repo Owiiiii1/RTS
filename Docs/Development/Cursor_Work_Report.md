@@ -12,7 +12,7 @@ Status: **GP-S36G_FOOTPRINT_BP_AUTHORING_FIX_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-*(filled in SHA-record commit)*
+`f393fda3a9fe9a2e03df0490b23fafc75fb32850`
 
 ## Operator symptom
 `PlacementFootprintBounds` appears in the Logistics Hub Blueprint Components tree but is effectively read-only as an inherited native component. Operator cannot edit Box Extent / Relative Transform.

@@ -8,7 +8,8 @@
 ## Branch
 `feature/gp-s35b-multi-building-data`  
 Base `main` SHA: `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`  
-Feature head SHA: *(filled in SHA-record commit)*
+Implementation SHA: `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d`  
+Feature head SHA: `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d`
 
 ## Pre-slice temporary architecture found
 - One `UGP_OrbitalDeliverySettings.BuildingOrbitalPurchaseCost`
@@ -89,7 +90,39 @@ No `AGP_DefensiveTurret` / `AGP_Wall` / `AGP_WallTurret` gameplay. Catalog ident
 `GPEditor Win64 Development` + UHT **PASS**. GP Development / Shipping not run.
 
 ## Exact changed files
-See SHA-record / `git show --name-only` on the feature branch. Operator-local `DefaultEngine.ini`, `DefaultGame.ini`, maps, GrimProtocol Blueprint/Materials, VFX packs, `Tools/`, and AutoAcquire CRLF noise were **not** committed.
+Implementation commit `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d` (29 files):
+
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Claude_Tasks/GP-S35B_Multi_Building_Data.md`
+- `Docs/Development/Claude_Tasks/README.md`
+- `Docs/Development/Cursor_Work_Report.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/TDD/06_Building_Architecture.md`
+- `Docs/TDD/10_Data_Assets.md`
+- `Docs/TDD/14_Orbital_Delivery.md`
+- `GP/Source/GPRuntime/Private/Buildings/GPBuildingDefinition.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPMultiBuildingDataContractTest.cpp`
+- `GP/Source/GPRuntime/Private/GPRuntime.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropAuthority.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropCatalog.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPDropPod.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPOrbitalBuildingInventoryComponent.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPOrbitalDropDefinition.cpp`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropAuthority.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropCatalog.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPDropPod.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPMultiBuildingDataContractTest.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalBuildingInventoryComponent.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalBuildingType.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalDropDefinition.h`
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Public/Settings/GPOrbitalDeliverySettings.h`
+- `GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h`
+
+Operator-local `DefaultEngine.ini`, `DefaultGame.ini`, maps, GrimProtocol Blueprint/Materials, VFX packs, `Tools/`, and AutoAcquire CRLF noise were **not** committed.
 
 ## Operator validation (do not self-approve)
 1. Logistics Hub Purchase → READY → ghost → Deploy → DropPod → live Hub → +5 still works.

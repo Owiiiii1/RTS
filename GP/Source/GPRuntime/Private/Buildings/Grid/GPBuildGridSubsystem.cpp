@@ -248,9 +248,9 @@ bool UGP_BuildGridSubsystem::TryResolveFromPlacementBounds(
 		return false;
 	}
 
-	// Axis-aligned GP-S36G: RelativeRotation is ignored. Do not rotate footprints.
-	// Half-extent uses UnscaledBoxExtent * RelativeScale3D only — not GetScaledBoxExtent(),
-	// which multiplies by component world scale (actor / parent / map instance).
+	// Axis-aligned GP-S36G: size X/Y map to world X/Y. RelativeRotation is forced to zero
+	// on the live component and is not a gameplay source. Half-extent is
+	// UnscaledBoxExtent * RelativeScale3D — not actor/root scale.
 	const FVector HalfExtent = GetAuthoredPlacementHalfExtentCm(Bounds);
 	const FVector Relative = Bounds->GetRelativeLocation();
 	OutResolved.SizeCells = ConvertAuthoredBoundsToFootprintCells(HalfExtent);

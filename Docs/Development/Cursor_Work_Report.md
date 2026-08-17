@@ -1,6 +1,6 @@
 # Cursor Work Report
 
-Status: **GP-S36G_FOOTPRINT_PARENT_SCALE_ISOLATION_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S36G_FOOTPRINT_AXIS_ALIGNMENT_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**  
 **NOT FINALIZED.**
@@ -12,61 +12,47 @@ Status: **GP-S36G_FOOTPRINT_PARENT_SCALE_ISOLATION_READY_FOR_OPERATOR_VALIDATION
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`105c03df43718318358eaa5330ee3e7268c91ae1`
+`PENDING_IMPLEMENTATION`
 
-## Operator X-only multiplicative mismatch
-After live-source reconciliation, center/offset and Y were acceptable, but forbidden **X** stayed several times smaller than the visible `PlacementFootprintBounds`. Enlarging the box kept the same X factor. The forbidden region stayed centered inside the visible box. That is a scale-space mismatch, not snap/source divergence.
+## Operator X/Y swap
+After parent-scale isolation, size was almost correct, but a strongly rectangular visible `PlacementFootprintBounds` looked swapped versus the forbidden BuildGrid region.
 
-## Factual traced scales (contract + registration log)
-Native `AGP_MainBase` CDO: actor `(1,1,1)`, capsule relative `(1,1,1)`, bounds relative `(1,1,1)`, unscaled `(500,500)`.
+## Factual rotation-inheritance cause
+Previous policy was `SetAbsolute(false, false, true)`: location and **rotation** inherited the parent. The visible box rotated with MainBase (~91.7° on the level instance). BuildGrid size still maps local X→world X and local Y→world Y with no footprint rotation. At ~90° the visible local X axis lay along world Y while occupancy stayed world-axis-aligned.
 
-Operator `BP_GP_MainBase` CDO:
-- actor `(1.000, 1.000, 1.000)`
-- capsule relative `(2.352, 2.352, 2.352)`
-- bounds relative `(0.885, 0.377, 3.995)`
-- unscaled `(500, 500)`
-- authored half `(442.3, 188.6)`
+Level `BP_GP_MainBase_C_2` after this patch: `actorYaw=91.7`, `boundsWorldYaw=0.0`, `authoredHalf=visualHalf=(856.1,486.8)`, registered `9×5`, `absRot=1`.
 
-Level instance `BP_GP_MainBase_C_2`:
-- actor / capsule world `(2.352, 2.352, 2.352)`
-- bounds relative still `(0.885, 0.377, 3.995)`
-- before isolation, visible XY half ≈ authored × **2.352**
-- runtime used authored only → X (and Y) visually larger than occupied cells by that factor
+## Final axis-aligned semantics
+- SIZE AXES = world X/Y
+- BOX ROTATION = world zero
+- CENTER OFFSET = actor-local XY rotated by actor yaw
+- actor/root scale ignored for footprint dimensions
+- Rotated footprints are **not** supported in GP-S36G (deferred)
 
-X looked worse because the authored bounds scale is already non-uniform (`0.885` vs `0.377`) and the operator widened X. The parent multiplier itself is uniform.
+## Exact SetAbsolute policy
+Verified UE 5.8 `USceneComponent::SetAbsolute(bAbsLoc, bAbsRot, bAbsScale)`:
 
-## Root cause
-`PlacementFootprintBounds` is attached to Capsule/root, so viewport visualization inherited actor/root scale. `GetAuthoredPlacementHalfExtentCm()` uses only `UnscaledBoxExtent × RelativeScale3D`. Parent scale `2.352` inflated the visible box and not BuildGrid.
+`PlacementFootprintBounds->SetAbsolute(false, true, true);`
 
-## Exact UE 5.8 API
-Verified in `USceneComponent`:
+Location stays parent-relative (`Rel * Parent` still applies actor yaw to the authored offset). Rotation and scale are absolute.
 
-- `SetAbsolute(bool bNewAbsoluteLocation, bool bNewAbsoluteRotation, bool bNewAbsoluteScale)`
-- `CalcNewComponentToWorld_GeneralCase`: when `IsUsingAbsoluteScale()`, `CopyScale3D(NewRelativeTransform)` — world scale = `RelativeScale3D`, not parent × relative
-- Location and rotation stay parent-relative
+## RelativeRotation
+Forced to `ZeroRotator` on construction / PostLoad / PostInitialize / BeginPlay / CDO→live sync. Authored component rotation is not a gameplay or visualization source. Details-panel hide was not added (not straightforward on the inherited native transform).
 
-Call used:
+## Center-offset behavior
+`GetLivePlacementFootprintCenterWorld` remains `GetComponentLocation()`. After absolute rotation, inherited location still transforms by actor yaw. Proven: local +400 X, yaw 0 → +400 world X; yaw 90 → +400 world Y. Visual center equals that intended center. Box axes stay world-zero while the center moves.
 
-`PlacementFootprintBounds->SetAbsolute(false, false, true);`
+## Yaw 0/90 rectangular tests
+Effective 2000×800 (half 1000×400): yaw 0 / 90 / 180 / 270 all keep visual world half `1000×400` and grid `10×4` (not `4×10`). World X/Y Hub edge reject/accept on a yaw-90 `10×4`. Parent scale `2.352` does not change size. Own RelativeScale still authors size.
 
-Applied in constructor defaults, `OnConstruction`, `PostLoad`, `PostInitializeComponents`, `BeginPlay`, and after CDO→live sync.
-
-## Why runtime does NOT adopt actor scale
-Footprint size is gameplay design data. Mesh/capsule presentation scale must not change occupied cells. Multiplying cells by actor/world scale would couple occupancy to art scale.
-
-## Own component scale
-Absolute scale does **not** lock size to 1. Operator-authored `RelativeScale3D` remains the visible and gameplay size. Example: parent `(3,1,1)` + own `(2,1,1)` + extent `500` → authored `1000×500` → `10×5`. Parent X=3 does not make visible X=6000.
-
-## Center / offset
-`GetLivePlacementFootprintCenterWorld` is still `Bounds->GetComponentLocation()`. Absolute scale replaces only scale; relative location, yaw, and live center are unchanged.
-
-## NavigationObstacle
-Unchanged. It may follow actor/root presentation scale; this task isolates only `PlacementFootprintBounds`.
+## Parent scale
+Unchanged: absolute scale keeps own `RelativeScale3D`. Actor/root `2.352` does not inflate cells.
 
 ## Tests
-`gp.Building.RunBuildGridContractTest` Failures=0: parent `(3,1,1)` → `5×5` not `15×5`; own scale `(2,1,1)` → `10×5`; parent `(0.5,2,1)` still `5×5`; visual half == authored; live center unchanged; yaw/offset; huge `10×8`; actor scale 1; Hub path unchanged; level MainBase visual matches authored.
+`gp.Building.RunBuildGridContractTest` Failures=0.
 
-All listed regressions Failures=0.
+All listed regressions Failures=0:
+`RunMultiBuildingDataContractTest`, `RunOrbitalBuildingDropContractTest`, `RunUnitCapLogisticsHubContractTest`, `RunOrbitalUnitDropContractTest`, `RunRTSMovementReconciliationContractTest`, `RunWinLoseContractTest`, `RunS28RegressionSuite`, `RunAttackMoveContractTest`.
 
 ## Builds
 GPEditor Win64 Development + UHT **PASS**.  
@@ -76,13 +62,9 @@ GP Win64 Development / Shipping **not run**.
 - `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
 - `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
 - `GP/Source/GPRuntime/Public/Buildings/Grid/GPBuildGridSubsystem.h`
+- `GP/Source/GPRuntime/Private/Buildings/Grid/GPBuildGridSubsystem.cpp`
 - `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
 - `Docs/Development/Cursor_Work_Report.md`
-
-## Operator retest
-1. MainBase BP: very wide X, reasonable Y. Save/compile.
-2. Level instance visible box must match that BP size (no parent-scale stretch).
-3. PIE → Hub Deploy: forbidden X/Y match that visible box modulo 200 cm. No stable ×2/×3 X gap. Center/offset unchanged.
 
 **NOT MERGED.**  
 **NOT FINALIZED.**

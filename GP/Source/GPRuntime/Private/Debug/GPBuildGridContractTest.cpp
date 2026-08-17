@@ -91,6 +91,16 @@ namespace GPBuildGridContractDebug
 			&& FMath::IsNearlyEqual(Authored.Y, FMath::Abs(Visual.Y), Tolerance);
 	}
 
+	static bool BoxAxesWorldAligned(const UBoxComponent* Bounds, float YawTolerance = 0.5f)
+	{
+		if (Bounds == nullptr || !Bounds->IsUsingAbsoluteRotation())
+		{
+			return false;
+		}
+		return FMath::IsNearlyEqual(FRotator::NormalizeAxis(Bounds->GetRelativeRotation().Yaw), 0.0f, YawTolerance)
+			&& FMath::IsNearlyEqual(FRotator::NormalizeAxis(Bounds->GetComponentRotation().Yaw), 0.0f, YawTolerance);
+	}
+
 	static AGP_PlayerState* SpawnTeamPlayerState(UWorld* World, AGameStateBase* GameState, int32 TeamId)
 	{
 		FActorSpawnParameters Params;
@@ -524,6 +534,7 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				&& NativeCapsule->GetRelativeScale3D().Equals(FVector::OneVector, 0.01f),
 				TEXT("ScaleTrace_NativeCapsuleRelScale1"));
 			Expect(BaseBounds->IsUsingAbsoluteScale()
+				&& BaseBounds->IsUsingAbsoluteRotation()
 				&& BaseBounds->GetRelativeScale3D().Equals(FVector::OneVector, 0.01f),
 				TEXT("ScaleTrace_NativeBoundsAbsoluteOwnScale1"));
 			UE_LOG(
@@ -1102,7 +1113,9 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			{
 				UBoxComponent* Box = ParentX3->GetPlacementFootprintBounds();
 				const FVector Authored = UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(Box);
-				Expect(Box->IsUsingAbsoluteScale(), TEXT("ScaleIso_A_AbsoluteScale"));
+				Expect(Box->IsUsingAbsoluteScale() && Box->IsUsingAbsoluteRotation(),
+					TEXT("ScaleIso_A_AbsoluteScale"));
+				Expect(GPBuildGridContractDebug::BoxAxesWorldAligned(Box), TEXT("ScaleIso_A_WorldAlignedAxes"));
 				Expect(Authored.Equals(FVector(500.0f, 500.0f, 20.0f), 0.5f), TEXT("ScaleIso_A_Authored500"));
 				Expect(ParentX3->GetGridFootprintSize() == FIntPoint(5, 5)
 					&& Grid->ResolveActorFootprint(ParentX3, nullptr).SizeCells == FIntPoint(5, 5),
@@ -1203,6 +1216,10 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				const FVector LiveCenter = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(Box);
 				Expect(FVector::Dist2D(LiveCenter, Box->GetComponentLocation()) <= 0.1f,
 					TEXT("ScaleIso_E_LiveCenterIsComponentLocation"));
+				Expect(GPBuildGridContractDebug::BoxAxesWorldAligned(Box),
+					TEXT("ScaleIso_F_BoxAxesWorldAlignedAtYaw90"));
+				Expect(YawOffset->GetGridFootprintSize() == FIntPoint(5, 5),
+					TEXT("ScaleIso_F_YawDoesNotSwapSquareSize"));
 				FIntPoint SnapOrigin = FIntPoint::ZeroValue;
 				FVector SnapCenter = FVector::ZeroVector;
 				Grid->ResolveSnappedPlacement(LiveCenter, FIntPoint(5, 5), SnapOrigin, SnapCenter);
@@ -1210,6 +1227,190 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 					&& YawOffset->GetGridFootprintSize() == FIntPoint(5, 5),
 					TEXT("ScaleIso_F_YawOffsetOccupancyFollowsLiveCenter"));
 				YawOffset->Destroy();
+			}
+
+			auto SpawnRect10x4 = [&](const FVector& Loc, const FRotator& Rot, const FVector& ActorScale,
+				const FVector& OwnScale, const FVector& RelLoc, const TCHAR* SpawnLabel) -> AGP_MainBase*
+			{
+				return SpawnParentScaleMainBase(
+					Loc,
+					Rot,
+					ActorScale,
+					FVector(1000.0f, 400.0f, 20.0f),
+					OwnScale,
+					RelLoc,
+					SpawnLabel);
+			};
+
+			auto ExpectRect10x4WorldAligned = [&](AGP_MainBase* Base, const TCHAR* Prefix)
+			{
+				if (!IsValid(Base) || Base->GetPlacementFootprintBounds() == nullptr)
+				{
+					return;
+				}
+				UBoxComponent* Box = Base->GetPlacementFootprintBounds();
+				const FVector Authored = UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(Box);
+				const FVector Visual = Box->GetScaledBoxExtent();
+				Expect(Authored.Equals(FVector(1000.0f, 400.0f, 20.0f), 0.5f),
+					*FString::Printf(TEXT("%s_Authored1000x400"), Prefix));
+				Expect(FMath::IsNearlyEqual(FMath::Abs(Visual.X), 1000.0f, 0.5f)
+					&& FMath::IsNearlyEqual(FMath::Abs(Visual.Y), 400.0f, 0.5f),
+					*FString::Printf(TEXT("%s_VisualWorldHalf1000x400"), Prefix));
+				Expect(Base->GetGridFootprintSize() == FIntPoint(10, 4)
+					&& Grid->ResolveActorFootprint(Base, nullptr).SizeCells == FIntPoint(10, 4),
+					*FString::Printf(TEXT("%s_Grid10x4Not4x10"), Prefix));
+				Expect(GPBuildGridContractDebug::BoxAxesWorldAligned(Box),
+					*FString::Printf(TEXT("%s_WorldAlignedAxes"), Prefix));
+				Expect(GPBuildGridContractDebug::VisualHalfMatchesAuthored(Box),
+					*FString::Printf(TEXT("%s_VisualMatchesAuthored"), Prefix));
+			};
+
+			if (AGP_MainBase* Rect0 = SpawnRect10x4(
+				FVector(-92000.0f, 14600.0f, 100.0f),
+				FRotator::ZeroRotator,
+				FVector::OneVector,
+				FVector::OneVector,
+				FVector::ZeroVector,
+				TEXT("Axis_SpawnYaw0")))
+			{
+				ExpectRect10x4WorldAligned(Rect0, TEXT("Axis_A_Yaw0"));
+				Rect0->Destroy();
+			}
+			if (AGP_MainBase* Rect90 = SpawnRect10x4(
+				FVector(-93000.0f, 14800.0f, 100.0f),
+				FRotator(0.0f, 90.0f, 0.0f),
+				FVector::OneVector,
+				FVector::OneVector,
+				FVector::ZeroVector,
+				TEXT("Axis_SpawnYaw90")))
+			{
+				ExpectRect10x4WorldAligned(Rect90, TEXT("Axis_B_Yaw90"));
+				Rect90->Destroy();
+			}
+			if (AGP_MainBase* Rect180 = SpawnRect10x4(
+				FVector(-94000.0f, 15000.0f, 100.0f),
+				FRotator(0.0f, 180.0f, 0.0f),
+				FVector::OneVector,
+				FVector::OneVector,
+				FVector::ZeroVector,
+				TEXT("Axis_SpawnYaw180")))
+			{
+				ExpectRect10x4WorldAligned(Rect180, TEXT("Axis_C_Yaw180"));
+				Rect180->Destroy();
+			}
+			if (AGP_MainBase* Rect270 = SpawnRect10x4(
+				FVector(-95000.0f, 15200.0f, 100.0f),
+				FRotator(0.0f, 270.0f, 0.0f),
+				FVector::OneVector,
+				FVector::OneVector,
+				FVector::ZeroVector,
+				TEXT("Axis_SpawnYaw270")))
+			{
+				ExpectRect10x4WorldAligned(Rect270, TEXT("Axis_C_Yaw270"));
+				Rect270->Destroy();
+			}
+
+			if (AGP_MainBase* Off0 = SpawnRect10x4(
+				FVector(-96000.0f, 15400.0f, 100.0f),
+				FRotator::ZeroRotator,
+				FVector::OneVector,
+				FVector::OneVector,
+				FVector(400.0f, 0.0f, 0.0f),
+				TEXT("Axis_SpawnOffsetYaw0")))
+			{
+				UBoxComponent* Box = Off0->GetPlacementFootprintBounds();
+				const FVector LiveCenter = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(Box);
+				const FVector Intended = UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
+					Off0->GetActorLocation(), Off0->GetActorRotation(), FVector2D(400.0f, 0.0f));
+				Expect(FVector::Dist2D(LiveCenter, Off0->GetActorLocation() + FVector(400.0f, 0.0f, 0.0f)) <= 1.0f,
+					TEXT("Axis_D_Yaw0OffsetPlus400WorldX"));
+				Expect(FVector::Dist2D(LiveCenter, Intended) <= 1.0f
+					&& FVector::Dist2D(LiveCenter, Box->GetComponentLocation()) <= 1.0f,
+					TEXT("Axis_D_VisualCenterMatchesIntendedYaw0"));
+				Expect(GPBuildGridContractDebug::BoxAxesWorldAligned(Box), TEXT("Axis_E_Yaw0AxesWorld"));
+				Expect(Off0->GetGridFootprintSize() == FIntPoint(10, 4), TEXT("Axis_D_Yaw0Still10x4"));
+				Off0->Destroy();
+			}
+			if (AGP_MainBase* Off90 = SpawnRect10x4(
+				FVector(-97000.0f, 15600.0f, 100.0f),
+				FRotator(0.0f, 90.0f, 0.0f),
+				FVector::OneVector,
+				FVector::OneVector,
+				FVector(400.0f, 0.0f, 0.0f),
+				TEXT("Axis_SpawnOffsetYaw90")))
+			{
+				UBoxComponent* Box = Off90->GetPlacementFootprintBounds();
+				const FVector LiveCenter = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(Box);
+				const FVector Intended = UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
+					Off90->GetActorLocation(), Off90->GetActorRotation(), FVector2D(400.0f, 0.0f));
+				Expect(FVector::Dist2D(LiveCenter, Off90->GetActorLocation() + FVector(0.0f, 400.0f, 0.0f)) <= 1.0f,
+					TEXT("Axis_D_Yaw90OffsetPlus400WorldY"));
+				Expect(FVector::Dist2D(LiveCenter, Intended) <= 1.0f
+					&& FVector::Dist2D(LiveCenter, Box->GetComponentLocation()) <= 1.0f,
+					TEXT("Axis_D_VisualCenterMatchesIntendedYaw90"));
+				Expect(GPBuildGridContractDebug::BoxAxesWorldAligned(Box), TEXT("Axis_E_Yaw90AxesWorldCenterRotates"));
+				Expect(Off90->GetGridFootprintSize() == FIntPoint(10, 4), TEXT("Axis_D_Yaw90Still10x4"));
+				Off90->Destroy();
+			}
+
+			if (AGP_MainBase* RectScaled = SpawnRect10x4(
+				FVector(-98000.0f, 15800.0f, 100.0f),
+				FRotator(0.0f, 90.0f, 0.0f),
+				FVector(2.352f, 2.352f, 2.352f),
+				FVector::OneVector,
+				FVector::ZeroVector,
+				TEXT("Axis_SpawnParent2352")))
+			{
+				ExpectRect10x4WorldAligned(RectScaled, TEXT("Axis_F_ParentScale2352"));
+				RectScaled->Destroy();
+			}
+			if (AGP_MainBase* RectOwnScale = SpawnParentScaleMainBase(
+				FVector(-99000.0f, 16000.0f, 100.0f),
+				FRotator(0.0f, 90.0f, 0.0f),
+				FVector(2.352f, 2.352f, 2.352f),
+				FVector(500.0f, 400.0f, 20.0f),
+				FVector(2.0f, 1.0f, 1.0f),
+				FVector::ZeroVector,
+				TEXT("Axis_SpawnOwnScale2x1")))
+			{
+				UBoxComponent* Box = RectOwnScale->GetPlacementFootprintBounds();
+				const FVector Authored = UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(Box);
+				Expect(Authored.Equals(FVector(1000.0f, 400.0f, 20.0f), 0.5f), TEXT("Axis_G_OwnScale1000x400"));
+				Expect(RectOwnScale->GetGridFootprintSize() == FIntPoint(10, 4), TEXT("Axis_G_OwnScaleGrid10x4"));
+				Expect(GPBuildGridContractDebug::BoxAxesWorldAligned(Box), TEXT("Axis_G_WorldAligned"));
+				RectOwnScale->Destroy();
+			}
+
+			if (AGP_MainBase* EdgeBase = SpawnRect10x4(
+				FVector(-100000.0f, 16200.0f, 100.0f),
+				FRotator(0.0f, 90.0f, 0.0f),
+				FVector::OneVector,
+				FVector::OneVector,
+				FVector::ZeroVector,
+				TEXT("Axis_SpawnEdge10x4")))
+			{
+				ExpectRect10x4WorldAligned(EdgeBase, TEXT("Axis_I_Rect"));
+				const FIntPoint EdgeOrigin = EdgeBase->GetGridOriginCell();
+				Expect(GPBuildGridContractDebug::AllCellsOccupied(Grid, EdgeOrigin, FIntPoint(10, 4)),
+					TEXT("Axis_I_All10x4Occupied"));
+
+				EGP_GridRejectReason XOverlap = EGP_GridRejectReason::Free;
+				Expect(!Grid->CanPlaceFootprint(FIntPoint(EdgeOrigin.X + 9, EdgeOrigin.Y), FIntPoint(4, 4), XOverlap)
+					&& XOverlap == EGP_GridRejectReason::CellOccupied,
+					TEXT("Axis_I_WorldXEdgeRejects"));
+				EGP_GridRejectReason XOutside = EGP_GridRejectReason::CellOccupied;
+				Expect(Grid->CanPlaceFootprint(FIntPoint(EdgeOrigin.X + 10, EdgeOrigin.Y), FIntPoint(4, 4), XOutside)
+					&& XOutside == EGP_GridRejectReason::Free,
+					TEXT("Axis_I_WorldXOutsideValid"));
+				EGP_GridRejectReason YOverlap = EGP_GridRejectReason::Free;
+				Expect(!Grid->CanPlaceFootprint(FIntPoint(EdgeOrigin.X, EdgeOrigin.Y + 3), FIntPoint(4, 4), YOverlap)
+					&& YOverlap == EGP_GridRejectReason::CellOccupied,
+					TEXT("Axis_I_WorldYEdgeRejects"));
+				EGP_GridRejectReason YOutside = EGP_GridRejectReason::CellOccupied;
+				Expect(Grid->CanPlaceFootprint(FIntPoint(EdgeOrigin.X, EdgeOrigin.Y + 4), FIntPoint(4, 4), YOutside)
+					&& YOutside == EGP_GridRejectReason::Free,
+					TEXT("Axis_I_WorldYOutsideValid"));
+				EdgeBase->Destroy();
 			}
 
 			if (UClass* BpMainClass = LoadClass<AGP_MainBase>(
@@ -1253,7 +1454,10 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 						BpBounds != nullptr && BpBounds->IsUsingAbsoluteScale() ? 1 : 0);
 					if (BpBounds != nullptr)
 					{
-						Expect(BpBounds->IsUsingAbsoluteScale(), TEXT("ScaleIso_BpCdoAbsoluteScale"));
+						Expect(BpBounds->IsUsingAbsoluteScale() && BpBounds->IsUsingAbsoluteRotation(),
+							TEXT("ScaleIso_BpCdoAbsoluteScale"));
+						Expect(GPBuildGridContractDebug::BoxAxesWorldAligned(BpBounds),
+							TEXT("Axis_BpCdoWorldAligned"));
 					}
 				}
 			}
@@ -1296,9 +1500,16 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 					LevelBounds != nullptr && LevelBounds->IsUsingAbsoluteScale() ? 1 : 0);
 				if (LevelBounds != nullptr)
 				{
-					Expect(LevelBounds->IsUsingAbsoluteScale(), TEXT("ScaleIso_LevelMainBaseAbsoluteScale"));
+					Expect(LevelBounds->IsUsingAbsoluteScale() && LevelBounds->IsUsingAbsoluteRotation(),
+						TEXT("ScaleIso_LevelMainBaseAbsoluteScale"));
+					Expect(GPBuildGridContractDebug::BoxAxesWorldAligned(LevelBounds),
+						TEXT("Axis_H_LevelMainBaseWorldAligned"));
 					Expect(GPBuildGridContractDebug::VisualHalfMatchesAuthored(LevelBounds, 1.0f),
 						TEXT("ScaleIso_LevelMainBaseVisualMatchesAuthored"));
+					const FIntPoint FromVisual = Grid->ConvertAuthoredBoundsToFootprintCells(
+						UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(LevelBounds));
+					Expect(LevelBase->GetGridFootprintSize() == FromVisual,
+						TEXT("Axis_H_LevelVisibleBoundsMatchRegisteredSize"));
 				}
 			}
 		}

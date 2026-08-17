@@ -106,10 +106,9 @@ public:
 	FIntPoint ConvertAuthoredBoundsToFootprintCells(FVector BoxExtent) const;
 
 	/**
-	 * Component-local authored half-extent (cm): |UnscaledBoxExtent * RelativeScale3D|.
-	 * Does not use actor/root/world scale. PlacementFootprintBounds uses absolute scale so the
-	 * visible box matches this authored size; GetScaledBoxExtent() is not the gameplay source.
-	 * RelativeRotation is ignored (BuildGrid is axis-aligned).
+	 * Authored half-extent (cm): |UnscaledBoxExtent * RelativeScale3D|.
+	 * World-axis-aligned: X is world X, Y is world Y. Actor/root scale is ignored.
+	 * Box rotation is forced world-zero; RelativeRotation does not affect size.
 	 */
 	static FVector GetAuthoredPlacementHalfExtentCm(const UBoxComponent* Bounds);
 
@@ -158,7 +157,11 @@ public:
 		FRotator ActorRotation,
 		FVector2D LocalCenterOffsetCm);
 
-	/** Visible live box center (GetComponentLocation). Occupancy snaps this XY. */
+	/**
+	 * Visible live box center (GetComponentLocation). Occupancy snaps this XY.
+	 * After world-axis policy, location stays parent-relative so actor yaw still rotates
+	 * the authored local offset; box axes stay world-zero.
+	 */
 	static FVector GetLivePlacementFootprintCenterWorld(const UBoxComponent* Bounds);
 
 	FVector MakeActorLocationFromFootprintCenter(

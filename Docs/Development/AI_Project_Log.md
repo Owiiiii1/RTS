@@ -4,7 +4,7 @@
 
 Status: **GP-S36G_VISUAL_FEEDBACK_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s36g-buildgrid-mvp` (prior remote head `5c05cd68034eb44ef9d38ce5708f73449693e854`)
+- Branch: `feature/gp-s36g-buildgrid-mvp` (prior remote head `5c05cd68034eb44ef9d38ce5708f73449693e854`, visual implementation `702676743c4f3ba29a9f94f680bbee6861fd77a9`)
 - Operator logic A–H already **PASS**. Mechanics unchanged. This is **not** finalization.
 - Primary validity UX: local `ULineBatchComponent` footprint/cell lines + `UTextRenderComponent` (`VALID` / `BLOCKED: …`). Engine Cube MID `"Color"` is optional only — not assumed to exist, not primary.
 - Client preview predicts; server remains authoritative. Invalid local LMB does not send deploy RPC. In-flight reservation preview uses replicated DropPod OriginCell+FootprintSize (not full grid replication).

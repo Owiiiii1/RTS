@@ -12,7 +12,7 @@ Status: **GP-S36G_FOOTPRINT_VIEWPORT_AUTHORING_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`PENDING_IMPLEMENTATION`
+`edae361cfcac625519c0e606111958ad8bfb561d`
 
 ## Screenshot-observed zero XY extent
 Operator screenshot: `PlacementFootprintBounds` is selectable, `Editable when Inherited` is enabled, but Box Extent is **X=0, Y=0, Z=20**. Viewport Scale gizmo draws a dotted scale vector and **no visible footprint box**.

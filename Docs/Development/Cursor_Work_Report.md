@@ -11,7 +11,7 @@ Base `main` SHA: `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`
 Prior remote feature head: `3afc126468b873eaca2b61b506aef811564cb446`  
 Implementation SHA: `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d`  
 Shutdown-fix SHA: `a0bdeff0c04016190ac0c3e510b9cad577277438`  
-Final feature head SHA: *(filled in SHA-record commit)*
+Final feature head SHA: `60a986281d1f5dfa42a16cad177a84cb670308e6`
 
 ## Operator FINAL PASS
 

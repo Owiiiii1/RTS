@@ -13,7 +13,8 @@ Post-GP-S34W (Match Win/Lose MVP is on verified `main` @ `3b5cdb8afff9f10b28ee63
 Base: `main` @ `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`  
 Prior remote feature head: `3afc126468b873eaca2b61b506aef811564cb446`  
 Implementation: `1444f1d358bcb9e2eda0fcd17098691ddcb5bc8d`  
-Shutdown fix: `a0bdeff0c04016190ac0c3e510b9cad577277438`
+Shutdown fix: `a0bdeff0c04016190ac0c3e510b9cad577277438`  
+Finalization: `60a986281d1f5dfa42a16cad177a84cb670308e6`
 
 ## Goal
 Replace the single-building temporary architecture (`BuildingOrbitalPurchaseCost` + `BuildingPayloadClass` + `EGP_OrbitalBuildingType { LogisticsHub }` + `ReadyLogisticsHubCount`) with a data-driven multi-type acquisition model. Architecture only. Logistics Hub gameplay must survive unchanged. No turret combat, Wall gameplay, wall mounting, BuildGrid, or drag-building.

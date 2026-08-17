@@ -11,7 +11,7 @@ Status: **GP-S36G_FINALIZATION_READY_FOR_MERGE**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Exact final feature head SHA
-`PENDING_FINALIZATION_COMMIT`
+`e76cc5e106eb6783547de6a0dfbb185171798b24`
 
 ## Operator PASS summary
 Operator confirmed the final PASS. Recorded acceptance:

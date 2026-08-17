@@ -10,7 +10,8 @@ Post-GP-S35B (Multi-Building Data Architecture is on verified `main` @ `6f258a10
 
 ## Branch
 `feature/gp-s36g-buildgrid-mvp`  
-Base: `main` @ `6f258a1069fd92a45f99faf7c877c941528beb2a`
+Base: `main` @ `6f258a1069fd92a45f99faf7c877c941528beb2a`  
+Finalization: `e76cc5e106eb6783547de6a0dfbb185171798b24`
 
 ## Goal
 Replace GP-S32R/GP-S35B interim free-form building placement with canonical BuildGrid occupancy + snap. Orbital Purchase → READY → Deploy → DropPod semantics stay unchanged. This is a grid/placement architecture slice, **not** Wall gameplay.

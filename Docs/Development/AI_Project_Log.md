@@ -4,7 +4,7 @@
 
 Status: **GP-S36G_FINALIZATION_READY_FOR_MERGE**
 
-- Branch: `feature/gp-s36g-buildgrid-mvp` (base verified `main` @ `6f258a1069fd92a45f99faf7c877c941528beb2a`)
+- Branch: `feature/gp-s36g-buildgrid-mvp` (base verified `main` @ `6f258a1069fd92a45f99faf7c877c941528beb2a`, finalization `e76cc5e106eb6783547de6a0dfbb185171798b24`)
 - Operator final PASS: 200 cm snap; landed/in-flight/MainBase occupancy; READY preserved on reject; destroy releases cells; authorable live `PlacementFootprintBounds`; parent scale ignored; oriented occupancy follows building position+rotation; yaw-0 orbital Hub path retained; preview/cancel/shutdown PASS
 - Final canon: live bounds are occupancy source; `ResolveOccupiedCellsFromBounds` + SAT cell set; `GridOriginCell`/`GridFootprintSize` are occupied-set AABB only; orbital reservations stay rectangular yaw 0; no orbital rotation UI
 - Contracts Failures=0 including BuildGrid, MultiBuilding, OrbitalBuilding, UnitCap Hub, OrbitalUnit, RTS movement, Win/Lose, S28 suite, AttackMove, AutoAcquire, ContainerLaunch + HUD

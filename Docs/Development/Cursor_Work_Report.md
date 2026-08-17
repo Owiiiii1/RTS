@@ -9,8 +9,8 @@
 `feature/gp-s35b-multi-building-data`  
 Base `main` SHA: `3b5cdb8afff9f10b28ee6338d6aa5d2344e68a1e`  
 Prior remote feature head: `0bc66c83f6a3ee6e84f9d1c83912927daaeb979c`  
-Implementation SHA (this fix): *(filled in SHA-record)*  
-Feature head SHA: *(filled in SHA-record)*
+Implementation SHA (this fix): `a0bdeff0c04016190ac0c3e510b9cad577277438`  
+Feature head SHA: `a0bdeff0c04016190ac0c3e510b9cad577277438`
 
 ## Operator blocker
 Full Unreal Editor close crashed:

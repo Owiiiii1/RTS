@@ -9,7 +9,7 @@
 `feature/gp-s34w-match-win-lose`  
 Base `main` SHA: `7873d2826130bc711486b7a8c0a55322685e8d9d`  
 Prior remote feature head: `5883ccca6995e266e982519e927a726ccc78dc61`  
-Feature head SHA: recorded after this commit on the branch tip.
+Feature head SHA: `52408918129c3e1aa3253452602a5d70406e1836`
 
 ## Operator failure
 In normal single-player PIE the TEMP HUD showed timer `00:00` and did not count down.

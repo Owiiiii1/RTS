@@ -740,10 +740,8 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				FIntPoint ExpectedOrigin = FIntPoint::ZeroValue;
 				FVector ExpectedCenter = FVector::ZeroVector;
 				Grid->ResolveSnappedPlacement(
-					UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
-						OffsetBaseTM.GetLocation(),
-						OffsetBaseTM.Rotator(),
-						FVector2D(200.0f, -100.0f)),
+					UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(
+						OffsetBase->GetPlacementFootprintBounds()),
 					FIntPoint(5, 5),
 					ExpectedOrigin,
 					ExpectedCenter);
@@ -779,14 +777,111 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				Expect(UGP_BuildGridSubsystem::LooksLikeNativeDefaultPlacementBounds(
 					AGP_MainBase::StaticClass(), InstanceBox),
 					TEXT("Preplaced_InstanceLooksNativeDefault"));
+				const FGP_ResolvedBuildingFootprint BeforeSync =
+					Grid->ResolveActorFootprint(StaleBase, nullptr);
+				Expect(BeforeSync.bFromAuthoredBounds && BeforeSync.SizeCells == FIntPoint(5, 5),
+					TEXT("Live_StaleInstanceResolvesFromLiveNotCDO"));
+				StaleBase->ApplyClassDesignToLivePlacementFootprintBounds();
+				Expect(InstanceBox->GetUnscaledBoxExtent().Equals(FVector(700.0f, 600.0f, 20.0f), 0.1f),
+					TEXT("Live_SyncCopiesDesignExtent"));
 				StaleBase->FinishSpawning(StaleTM);
 				Expect(StaleBase->GetGridFootprintSize() == FIntPoint(7, 6),
-					TEXT("Preplaced_StaleNativeInstanceUsesClassCDO"));
+					TEXT("Live_AfterSyncRegistersDesignSize"));
 				StaleBase->Destroy();
 			}
 			else if (IsValid(StaleBase))
 			{
 				StaleBase->Destroy();
+			}
+
+			{
+				AGP_MainBase* DesignCDO = GetMutableDefault<AGP_MainBase>();
+				UBoxComponent* DesignBounds =
+					DesignCDO != nullptr ? DesignCDO->GetPlacementFootprintBounds() : nullptr;
+				const FTransform LiveTM(FRotator::ZeroRotator, FVector(-84000.0f, 13000.0f, 100.0f));
+				AGP_MainBase* LiveBase = World->SpawnActorDeferred<AGP_MainBase>(
+					AGP_MainBase::StaticClass(),
+					LiveTM,
+					nullptr,
+					nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (Expect(IsValid(LiveBase) && LiveBase->GetPlacementFootprintBounds() != nullptr
+					&& DesignBounds != nullptr,
+					TEXT("Live_SpawnDesignSyncMainBase")))
+				{
+					GPBuildGridContractDebug::FScopedBoxAuthoring RestoreDesign(DesignBounds);
+					DesignBounds->SetBoxExtent(FVector(1000.0f, 800.0f, 20.0f));
+					DesignBounds->SetRelativeScale3D(FVector::OneVector);
+					DesignBounds->SetRelativeLocation(FVector(600.0f, 0.0f, 0.0f));
+
+					UBoxComponent* LiveBox = LiveBase->GetPlacementFootprintBounds();
+					LiveBox->SetBoxExtent(FVector(200.0f, 200.0f, 20.0f));
+					LiveBox->SetRelativeScale3D(FVector(0.5f, 0.5f, 1.0f));
+					LiveBox->SetRelativeLocation(FVector(133.5f, 0.0f, 0.0f));
+					Expect(Grid->ResolveActorFootprint(LiveBase, nullptr).SizeCells == FIntPoint(1, 1),
+						TEXT("Live_StaleSnapshotResolvesFromLive"));
+
+					LiveBase->ApplyClassDesignToLivePlacementFootprintBounds();
+					const FVector LiveHalf = UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(LiveBox);
+					Expect(LiveHalf.Equals(FVector(1000.0f, 800.0f, 20.0f), 0.5f)
+						&& LiveBox->GetRelativeLocation().Equals(FVector(600.0f, 0.0f, 0.0f), 0.1f),
+						TEXT("Live_SyncMatchesDesignExtentAndOffset"));
+
+					LiveBase->FinishSpawning(LiveTM);
+					const FGP_ResolvedBuildingFootprint AfterSync = Grid->ResolveActorFootprint(LiveBase, nullptr);
+					Expect(AfterSync.bFromAuthoredBounds && AfterSync.SizeCells == FIntPoint(10, 8),
+						TEXT("Live_ResolveUsesLiveComponent"));
+					Expect(LiveBase->GetGridFootprintSize() == FIntPoint(10, 8),
+						TEXT("Live_Registers10x8AroundVisibleBox"));
+
+					const FVector LiveCenter = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(LiveBox);
+					FIntPoint SnapOrigin = FIntPoint::ZeroValue;
+					FVector SnapCenter = FVector::ZeroVector;
+					Grid->ResolveSnappedPlacement(LiveCenter, FIntPoint(10, 8), SnapOrigin, SnapCenter);
+					Expect(LiveBase->GetGridOriginCell() == SnapOrigin, TEXT("Live_OriginFromLiveCenter"));
+					Expect(FVector::Dist2D(LiveCenter, LiveTM.GetLocation() + FVector(600.0f, 0.0f, 0.0f)) <= 1.0f,
+						TEXT("Live_WorldCenterMatchesDesignOffset"));
+					Expect(GPBuildGridContractDebug::AllCellsOccupied(
+						Grid, LiveBase->GetGridOriginCell(), FIntPoint(10, 8)),
+						TEXT("Live_All10x8Occupied"));
+
+					DesignBounds->SetBoxExtent(FVector(100.0f, 100.0f, 20.0f));
+					Expect(Grid->ResolveActorFootprint(LiveBase, nullptr).SizeCells == FIntPoint(10, 8),
+						TEXT("Live_HiddenCDOChangeDoesNotBypassLive"));
+					LiveBase->Destroy();
+				}
+				else if (IsValid(LiveBase))
+				{
+					LiveBase->Destroy();
+				}
+
+				const FTransform YawLiveTM(FRotator(0.0f, 90.0f, 0.0f), FVector(-85000.0f, 13200.0f, 100.0f));
+				AGP_MainBase* YawLive = World->SpawnActorDeferred<AGP_MainBase>(
+					AGP_MainBase::StaticClass(),
+					YawLiveTM,
+					nullptr,
+					nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (Expect(IsValid(YawLive) && YawLive->GetPlacementFootprintBounds() != nullptr,
+					TEXT("Live_SpawnYaw90Offset")))
+				{
+					UBoxComponent* Box = YawLive->GetPlacementFootprintBounds();
+					Box->SetBoxExtent(FVector(500.0f, 500.0f, 20.0f));
+					Box->SetRelativeScale3D(FVector::OneVector);
+					Box->SetRelativeLocation(FVector(600.0f, 0.0f, 0.0f));
+					YawLive->FinishSpawning(YawLiveTM);
+					const FVector LiveCenter = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(
+						YawLive->GetPlacementFootprintBounds());
+					Expect(FVector::Dist2D(LiveCenter, YawLiveTM.GetLocation() + FVector(0.0f, 600.0f, 0.0f)) <= 1.0f,
+						TEXT("Live_Yaw90CenterFollowsVisibleBox"));
+					FIntPoint SnapOrigin = FIntPoint::ZeroValue;
+					FVector SnapCenter = FVector::ZeroVector;
+					Grid->ResolveSnappedPlacement(LiveCenter, FIntPoint(5, 5), SnapOrigin, SnapCenter);
+					Expect(YawLive->GetGridOriginCell() == SnapOrigin
+						&& YawLive->GetGridFootprintSize() == FIntPoint(5, 5),
+						TEXT("Live_Yaw90OccupiedCenterMatchesLiveBox"));
+					YawLive->Destroy();
+				}
 			}
 
 			const FVector2D Offset400X(400.0f, 0.0f);
@@ -833,8 +928,8 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 					FVector2D(400.0f, 0.0f), Base->GetActorRotation());
 				Expect(WorldOffset.Equals(ExpectedWorldOffset, 0.5f),
 					*FString::Printf(TEXT("%s_WorldOffset"), LabelPrefix));
-				const FVector WorldCenter = UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
-					Base->GetActorLocation(), Base->GetActorRotation(), FVector2D(400.0f, 0.0f));
+				const FVector WorldCenter = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(
+					Base->GetPlacementFootprintBounds());
 				FIntPoint ExpectedOrigin = FIntPoint::ZeroValue;
 				FVector ExpectedCenter = FVector::ZeroVector;
 				Grid->ResolveSnappedPlacement(WorldCenter, FIntPoint(5, 5), ExpectedOrigin, ExpectedCenter);

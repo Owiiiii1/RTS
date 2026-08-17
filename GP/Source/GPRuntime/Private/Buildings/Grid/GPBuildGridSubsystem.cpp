@@ -317,40 +317,12 @@ FGP_ResolvedBuildingFootprint UGP_BuildGridSubsystem::ResolveActorFootprint(
 {
 	if (IsValid(Building))
 	{
-		const TSubclassOf<AGP_BuildingBase> PayloadClass = Building->GetClass();
-		const AGP_BuildingBase* ClassCDO = PayloadClass != nullptr
-			? PayloadClass->GetDefaultObject<AGP_BuildingBase>()
-			: nullptr;
 		FGP_ResolvedBuildingFootprint FromInstance;
-		const bool bInstanceOk = TryResolveFromPlacementBounds(
-			Building->GetPlacementFootprintBounds(), FromInstance);
-
-		FGP_ResolvedBuildingFootprint FromClass;
-		const bool bClassOk = ClassCDO != nullptr
-			&& TryResolveFromPlacementBounds(ClassCDO->GetPlacementFootprintBounds(), FromClass);
-
-		// Pre-placed level actors serialize inherited BoxExtent/Scale/Offset onto the instance.
-		// Those snapshots masquerade as overrides and do not update when the Blueprint CDO changes.
-		// Occupancy for net-startup buildings therefore uses class/CDO design data.
-		if (Building->IsNetStartupActor() && bClassOk)
-		{
-			return FromClass;
-		}
-
-		// Runtime-spawned instance that still matches the native default, while the class CDO
-		// does not, is a stale native snapshot (same masquerade as a level instance).
-		if (bInstanceOk
-			&& LooksLikeNativeDefaultPlacementBounds(PayloadClass, Building->GetPlacementFootprintBounds())
-			&& bClassOk
-			&& !LooksLikeNativeDefaultPlacementBounds(PayloadClass, ClassCDO->GetPlacementFootprintBounds()))
-		{
-			return FromClass;
-		}
-		if (bInstanceOk)
+		if (TryResolveFromPlacementBounds(Building->GetPlacementFootprintBounds(), FromInstance))
 		{
 			return FromInstance;
 		}
-		return ResolveBuildingFootprint(PayloadClass, BuildingDef);
+		return ResolveBuildingFootprint(Building->GetClass(), BuildingDef);
 	}
 	return ResolveBuildingFootprint(nullptr, BuildingDef);
 }
@@ -370,6 +342,15 @@ FVector UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
 	FVector2D LocalCenterOffsetCm)
 {
 	return ActorLocation + TransformFootprintLocalOffsetToWorld(LocalCenterOffsetCm, ActorRotation);
+}
+
+FVector UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(const UBoxComponent* Bounds)
+{
+	if (Bounds == nullptr)
+	{
+		return FVector::ZeroVector;
+	}
+	return Bounds->GetComponentLocation();
 }
 
 FVector UGP_BuildGridSubsystem::MakeActorLocationFromFootprintCenter(

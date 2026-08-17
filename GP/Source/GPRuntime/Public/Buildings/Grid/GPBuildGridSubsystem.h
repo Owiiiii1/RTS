@@ -127,11 +127,9 @@ public:
 
 	/**
 	 * Preferred: payload CDO/instance PlacementFootprintBounds when effective XY half-extent >= 1 cm.
-	 * Actor resolve:
-	 * - Pre-placed (net-startup) buildings use the class CDO. Level instances often serialize
-	 *   stale inherited extent/scale/offset that will not follow later Blueprint edits.
-	 * - Runtime-spawned instances win, unless they still match the native default while the
-	 *   class CDO does not (stale native snapshot).
+	 * Actor resolve always prefers the LIVE PlacementFootprintBounds when usable.
+	 * Class CDO is design data used to synchronize pre-placed live components, not a hidden
+	 * occupancy source that can differ from the visible box.
 	 * Fallback: BuildingDefinition.FootprintCells when both axes > 0.
 	 * If a BuildingDefinition is present but FootprintCells is invalid, do not class-fallback
 	 * (keeps InvalidFootprint deploy rejection).
@@ -158,6 +156,9 @@ public:
 		const FVector& ActorLocation,
 		FRotator ActorRotation,
 		FVector2D LocalCenterOffsetCm);
+
+	/** Visible live box center (GetComponentLocation). Occupancy snaps this XY. */
+	static FVector GetLivePlacementFootprintCenterWorld(const UBoxComponent* Bounds);
 
 	FVector MakeActorLocationFromFootprintCenter(
 		const FVector& FootprintCenterWorld,

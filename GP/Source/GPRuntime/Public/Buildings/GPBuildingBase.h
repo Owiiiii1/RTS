@@ -24,6 +24,8 @@ public:
 	AGP_BuildingBase();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void PostLoad() override;
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void PostInitializeComponents() override;
@@ -48,6 +50,13 @@ public:
 	/** Authority/deferred-spawn: set canonical grid facts before BeginPlay when possible. */
 	void ConfigureGridPlacement(FIntPoint OriginCell, FIntPoint FootprintSize);
 
+	/**
+	 * GP-S36G: PlacementFootprintBounds is Blueprint-class design data, not per-level-instance.
+	 * Copies BoxExtent / RelativeLocation / RelativeRotation / RelativeScale3D from the class CDO
+	 * onto this live component. Production calls this only for net-startup actors.
+	 */
+	void ApplyClassDesignToLivePlacementFootprintBounds();
+
 	FIntPoint ResolveFallbackFootprintSize() const;
 
 #if !UE_BUILD_SHIPPING
@@ -69,7 +78,8 @@ protected:
 	 * Authorable BuildGrid placement footprint (GP-S36G).
 	 * Native inherited component: pointer is not replaceable (VisibleAnywhere / BlueprintReadOnly).
 	 * Blueprint children edit this component's BoxExtent / RelativeScale3D / RelativeLocation.
-	 * This is the occupied ground footprint: placement validation and blocking occupancy use it.
+	 * This live component is the single occupied-ground source after init (no hidden CDO path).
+	 * Pre-placed instances are synchronized from the class CDO so stale level snapshots cannot diverge.
 	 * Native default is a visible 1×1 (200×200 cm) volume; derived classes override extent.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|BuildGrid", meta = (AllowPrivateAccess = "true"))
@@ -92,6 +102,7 @@ protected:
 
 	void TryRegisterWithBuildGrid();
 	void TryUnregisterFromBuildGrid();
+	void TryApplyClassDesignToLivePlacementFootprintBounds();
 
 private:
 	void AttachDeferredComponentToRoot(USceneComponent* Component);

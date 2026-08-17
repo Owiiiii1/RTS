@@ -134,10 +134,54 @@ void AGP_BuildingBase::AttachDeferredSceneComponentsToRoot()
 	AttachPlacementFootprintBoundsToRoot();
 }
 
+void AGP_BuildingBase::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+	AttachDeferredSceneComponentsToRoot();
+	TryApplyClassDesignToLivePlacementFootprintBounds();
+}
+
+void AGP_BuildingBase::PostLoad()
+{
+	Super::PostLoad();
+	TryApplyClassDesignToLivePlacementFootprintBounds();
+}
+
 void AGP_BuildingBase::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 	AttachDeferredSceneComponentsToRoot();
+	TryApplyClassDesignToLivePlacementFootprintBounds();
+}
+
+void AGP_BuildingBase::ApplyClassDesignToLivePlacementFootprintBounds()
+{
+	if (PlacementFootprintBounds == nullptr || HasAnyFlags(RF_ClassDefaultObject))
+	{
+		return;
+	}
+
+	const AGP_BuildingBase* ClassCDO = GetClass() != nullptr
+		? GetClass()->GetDefaultObject<AGP_BuildingBase>()
+		: nullptr;
+	const UBoxComponent* Design = ClassCDO != nullptr ? ClassCDO->GetPlacementFootprintBounds() : nullptr;
+	if (Design == nullptr || Design == PlacementFootprintBounds)
+	{
+		return;
+	}
+
+	PlacementFootprintBounds->SetBoxExtent(Design->GetUnscaledBoxExtent());
+	PlacementFootprintBounds->SetRelativeLocation(Design->GetRelativeLocation());
+	PlacementFootprintBounds->SetRelativeRotation(Design->GetRelativeRotation());
+	PlacementFootprintBounds->SetRelativeScale3D(Design->GetRelativeScale3D());
+}
+
+void AGP_BuildingBase::TryApplyClassDesignToLivePlacementFootprintBounds()
+{
+	if (IsNetStartupActor())
+	{
+		ApplyClassDesignToLivePlacementFootprintBounds();
+	}
 }
 
 void AGP_BuildingBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -150,6 +194,7 @@ void AGP_BuildingBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 void AGP_BuildingBase::BeginPlay()
 {
 	Super::BeginPlay();
+	TryApplyClassDesignToLivePlacementFootprintBounds();
 	TryRegisterWithBuildGrid();
 }
 
@@ -212,10 +257,8 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 	{
 		FIntPoint Origin = FIntPoint::ZeroValue;
 		FVector Snapped = FVector::ZeroVector;
-		const FVector FootprintCenterHint = UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
-			GetActorLocation(),
-			GetActorRotation(),
-			Resolved.LocalCenterOffsetCm);
+		const FVector FootprintCenterHint = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(
+			GetPlacementFootprintBounds());
 		Grid->ResolveSnappedPlacement(FootprintCenterHint, Footprint, Origin, Snapped);
 		GridOriginCell = Origin;
 		GridFootprintSize = Footprint;
@@ -233,35 +276,29 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 	}
 
 #if !UE_BUILD_SHIPPING
-	const FVector WorldOffset = UGP_BuildGridSubsystem::TransformFootprintLocalOffsetToWorld(
-		Resolved.LocalCenterOffsetCm,
-		GetActorRotation());
-	const FVector WorldCenter = UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
-		GetActorLocation(),
-		GetActorRotation(),
-		Resolved.LocalCenterOffsetCm);
+	const UBoxComponent* LiveBounds = GetPlacementFootprintBounds();
+	const FVector LiveCenter = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(LiveBounds);
+	const FVector LiveHalf = UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(LiveBounds);
+	const FVector LiveRel = LiveBounds != nullptr ? LiveBounds->GetRelativeLocation() : FVector::ZeroVector;
 	UE_LOG(
 		LogGPBuildGridRegister,
 		Log,
-		TEXT("BuildGrid occupancy %s actor=(%.1f,%.1f,%.1f) yaw=%.1f localOffset=(%.1f,%.1f) worldOffset=(%.1f,%.1f) worldCenter=(%.1f,%.1f) origin=%d,%d registered=%dx%d resolved=%dx%d configured=%s fromBounds=%s"),
+		TEXT("BuildGrid occupancy %s liveCenter=(%.1f,%.1f,%.1f) liveHalf=(%.1f,%.1f) liveRel=(%.1f,%.1f) yaw=%.1f resolved=%dx%d origin=%d,%d registered=%dx%d fromLive=%s"),
 		*GetName(),
-		GetActorLocation().X,
-		GetActorLocation().Y,
-		GetActorLocation().Z,
+		LiveCenter.X,
+		LiveCenter.Y,
+		LiveCenter.Z,
+		LiveHalf.X,
+		LiveHalf.Y,
+		LiveRel.X,
+		LiveRel.Y,
 		GetActorRotation().Yaw,
-		Resolved.LocalCenterOffsetCm.X,
-		Resolved.LocalCenterOffsetCm.Y,
-		WorldOffset.X,
-		WorldOffset.Y,
-		WorldCenter.X,
-		WorldCenter.Y,
+		Resolved.SizeCells.X,
+		Resolved.SizeCells.Y,
 		GridOriginCell.X,
 		GridOriginCell.Y,
 		GridFootprintSize.X,
 		GridFootprintSize.Y,
-		Resolved.SizeCells.X,
-		Resolved.SizeCells.Y,
-		bGridPlacementConfigured ? TEXT("1") : TEXT("0"),
 		Resolved.bFromAuthoredBounds ? TEXT("1") : TEXT("0"));
 #endif
 }
@@ -281,25 +318,16 @@ FString AGP_BuildingBase::GetBuildGridOccupancyDebugString() const
 		}
 	}
 
-	const FVector WorldOffset = UGP_BuildGridSubsystem::TransformFootprintLocalOffsetToWorld(
-		Offset,
-		GetActorRotation());
-	const FVector WorldCenter = UGP_BuildGridSubsystem::MakeWorldFootprintCenter(
-		GetActorLocation(),
-		GetActorRotation(),
-		Offset);
+	const FVector LiveCenter = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(
+		GetPlacementFootprintBounds());
 	return FString::Printf(
-		TEXT("%s actor=(%.1f,%.1f) yaw=%.1f local=(%.1f,%.1f) worldOffset=(%.1f,%.1f) worldCenter=(%.1f,%.1f) origin=%d,%d registered=%dx%d resolved=%dx%d"),
+		TEXT("%s liveCenter=(%.1f,%.1f) yaw=%.1f local=(%.1f,%.1f) origin=%d,%d registered=%dx%d resolved=%dx%d"),
 		*GetName(),
-		GetActorLocation().X,
-		GetActorLocation().Y,
+		LiveCenter.X,
+		LiveCenter.Y,
 		GetActorRotation().Yaw,
 		Offset.X,
 		Offset.Y,
-		WorldOffset.X,
-		WorldOffset.Y,
-		WorldCenter.X,
-		WorldCenter.Y,
 		GridOriginCell.X,
 		GridOriginCell.Y,
 		GridFootprintSize.X,

@@ -1,6 +1,6 @@
 # Cursor Work Report
 
-Status: **GP-S36G_FOOTPRINT_OFFSET_TRANSFORM_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S36G_LIVE_FOOTPRINT_SOURCE_RECONCILIATION_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**  
 **NOT FINALIZED.**
@@ -12,51 +12,46 @@ Status: **GP-S36G_FOOTPRINT_OFFSET_TRANSFORM_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`bbf23fdcd56995ba5b49baf4f92c8fae88b25e13`
+`PENDING_IMPLEMENTATION`
 
-## Operator symptom
-Size authoring works. MainBase `PlacementFootprintBounds` can be shifted in Blueprint relative to Capsule/root, but PIE occupied/red cells stay centered as if the authored offset were ignored.
+## Operator evidence (not rounding)
+Operator enlarged MainBase `PlacementFootprintBounds` massively — several times the visible building — and the forbidden construction area appeared in a completely different place. That is a source/transform divergence, not 200 cm snap quantization.
 
-## Factual raw-local-as-world bug
-`TryRegisterWithBuildGrid` did:
+## Prior CDO-vs-visible-instance design mistake
+`ResolveActorFootprint` returned the Blueprint **class CDO** for `IsNetStartupActor()`. The editor/PIE drew the **live level-instance** box. Those could differ. A designer must never see one footprint while runtime registers another.
 
-`ActorLocation + (Resolved.LocalCenterOffsetCm.X, Y, 0)`
+## Stale inherited snapshot root cause
+Level actors serialize inherited BoxExtent / Scale / Offset. Example previously traced: `BP_GP_MainBase_C_2` kept 4×2 + offset 133.5 after the BP class changed. That is a synchronization problem. Solving it by hiding occupancy on the CDO created the visible mismatch.
 
-`LocalCenterOffsetCm` is `PlacementFootprintBounds->GetRelativeLocation()` — component-local / root-relative, not world. Raw world-axis addition is wrong whenever the building/root has rotation, and does not represent the authored box center.
+## Final authoring policy (GP-S36G)
+`PlacementFootprintBounds` is authored on the **Blueprint class**, not per-level-instance.
 
-## Exact local→world transform rule
-Shared helpers on `UGP_BuildGridSubsystem`:
+Reliable UE “explicit instance override vs stale inherit” distinction is not used as the primary design for this native inherited component.
 
-- `TransformFootprintLocalOffsetToWorld(LocalXY, ActorRotation)`
-- `MakeWorldFootprintCenter(ActorLocation, ActorRotation, LocalXY)`
-- `MakeActorLocationFromFootprintCenter(Center, LocalXY, ActorRotation)` (inverse)
+On Construction / PostLoad / PostInitializeComponents / BeginPlay, **net-startup** buildings copy from class CDO onto the live component:
 
-Implementation: `FTransform(Rotation, 0, Scale=1).TransformVectorNoScale(Local)`.
+- BoxExtent
+- RelativeLocation
+- RelativeRotation
+- RelativeScale3D
 
-World footprint center = live `ActorLocation` + that world offset. Then snap the center to BuildGrid (200 cm).
+Runtime-spawned / deferred actors are not synced, so DropPod and contract instance authoring stay intact.
 
-Used by pre-placed registration, preview actor-location reconstruction, and DropPod landing.
+## Synchronization lifecycle
+- `OnConstruction` — editor reconstruction / BP compile
+- `PostLoad` — level load (in-memory; `.umap` is not written by this task)
+- `PostInitializeComponents` / `BeginPlay` — before BuildGrid registration
 
-## Rotation handling
-Footprint **size** stays world-axis-aligned (no rotated cells).
+No Tick. No programmatic map edit.
 
-Footprint **center offset** follows actor/root orientation:
+## Live component as single gameplay source
+After sync, `ResolveActorFootprint` always uses the **live** component when usable. The hidden `IsNetStartupActor() → FromClass` path and the native-default CDO bypass are **removed**. Class CDO is design data for synchronization only.
 
-- local +400 X, yaw 0 → world +400 X
-- local +400 X, yaw 90 → world +400 Y
-- local +400 X, yaw 180 → world −400 X
-
-## Actor scale policy
-Same as size: actor/world scale does **not** inflate cells and does **not** multiply the center offset. Rotation only; scale forced to 1 on the helper transform.
-
-## Grid quantization
-CellSize remains 200 cm. Occupancy is snapped to cells. Offsets that stay inside the same snap bucket can resolve to the same origin. Shifts of ≥ one cell (tests use 400 cm) move registered cells.
-
-## CDO + live actor transform
-Unchanged source policy: net-startup/pre-placed SIZE and local OFFSET come from Blueprint class CDO. That CDO local XY is then transformed by the **live** actor location/rotation.
+## Live component world center rule
+Pre-placed / unconfigured registration snaps `Bounds->GetComponentLocation()` XY — the visible box center. Size remains `UnscaledBoxExtent × RelativeScale3D` (no actor/world scale). Cells = ceil(total / 200). Preview / DropPod still use shared offset helpers (yaw 0 in GP-S36G).
 
 ## Tests
-`gp.Building.RunBuildGridContractTest` covers A–L (yaw 0/90/180, axis-aligned AABB, actor scale does not change size or offset, origin from transformed center, occupancy, freed opposite cells, Hub edge reject / adjacent free). Spawned Hub preview/reservation/occupancy unchanged.
+`gp.Building.RunBuildGridContractTest`: stale live vs CDO; sync copies design; resolve is FromInstance; CDO change after sync does not bypass live; 10×8 occupancy around live box; +600 offset; yaw 90 live center coincides; Hub path unchanged.
 
 All listed regressions Failures=0.
 
@@ -65,20 +60,17 @@ GPEditor Win64 Development + UHT **PASS**.
 GP Win64 Development / Shipping **not run**.
 
 ## Exact changed files
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
+- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
 - `GP/Source/GPRuntime/Public/Buildings/Grid/GPBuildGridSubsystem.h`
 - `GP/Source/GPRuntime/Private/Buildings/Grid/GPBuildGridSubsystem.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
-- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropAuthority.cpp`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
 - `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
 - `Docs/Development/Cursor_Work_Report.md`
 
 ## Operator retest
-1. MainBase BP: shift `PlacementFootprintBounds` ≥ 300–400 cm to one side.
-2. Save.
-3. PIE → Purchase Hub → Deploy preview around MainBase.
-
-Expected: red cells shift toward the authored box; opposite side frees; 200 cm grid; authored size unchanged.
+1. MainBase BP: huge, strongly offset `PlacementFootprintBounds`. Save/compile.
+2. Open level: pre-placed inherited box must show that BP design.
+3. PIE → Hub Deploy: red/forbidden area is the same region as that visible box (quantized to 200 cm).
 
 **NOT MERGED.**  
 **NOT FINALIZED.**

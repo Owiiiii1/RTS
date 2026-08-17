@@ -12,7 +12,7 @@ Status: **GP-S36G_FOOTPRINT_PARENT_SCALE_ISOLATION_READY_FOR_OPERATOR_VALIDATION
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`PENDING_IMPLEMENTATION`
+`105c03df43718318358eaa5330ee3e7268c91ae1`
 
 ## Operator X-only multiplicative mismatch
 After live-source reconciliation, center/offset and Y were acceptable, but forbidden **X** stayed several times smaller than the visible `PlacementFootprintBounds`. Enlarging the box kept the same X factor. The forbidden region stayed centered inside the visible box. That is a scale-space mismatch, not snap/source divergence.

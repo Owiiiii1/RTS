@@ -12,7 +12,7 @@ Status: **GP-S36G_ATTACHMENT_LIFECYCLE_FIX_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-*(filled in SHA-record commit)*
+`6f73980d247e0b096c46d2832ddb82332790ef17`
 
 ## Operator ensure
 PIE handled ensure:

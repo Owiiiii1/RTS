@@ -89,10 +89,10 @@ void AGP_BuildingBase::ConfigurePlacementFootprintBoundsDefaults()
 	PlacementFootprintBounds->ShapeColor = FColor(0, 180, 255);
 	PlacementFootprintBounds->SetLineThickness(2.0f);
 	PlacementFootprintBounds->bEditableWhenInherited = true;
-	ApplyPlacementFootprintWorldAxisPolicy();
+	ApplyPlacementFootprintParentScaleIsolation();
 }
 
-void AGP_BuildingBase::ApplyPlacementFootprintWorldAxisPolicy()
+void AGP_BuildingBase::ApplyPlacementFootprintParentScaleIsolation()
 {
 	if (PlacementFootprintBounds == nullptr)
 	{
@@ -100,12 +100,8 @@ void AGP_BuildingBase::ApplyPlacementFootprintWorldAxisPolicy()
 	}
 
 	// Verified UE 5.8 USceneComponent::SetAbsolute(bAbsLoc, bAbsRot, bAbsScale):
-	// CalcNewComponentToWorld_GeneralCase copies RelativeRotation / RelativeScale3D into
-	// world rotation/scale when those axes are absolute. Location stays parent-relative,
-	// so Rel * Parent still applies actor yaw to the authored local offset.
-	// GP-S36G: no rotated footprints — force world-zero box axes. Rotation support deferred.
-	PlacementFootprintBounds->SetRelativeRotation(FRotator::ZeroRotator);
-	PlacementFootprintBounds->SetAbsolute(false, true, true);
+	// inherit location/rotation; RelativeScale3D is world scale (no parent multiply).
+	PlacementFootprintBounds->SetAbsolute(false, false, true);
 }
 
 void AGP_BuildingBase::AttachDeferredComponentToRoot(USceneComponent* Component)
@@ -156,14 +152,14 @@ void AGP_BuildingBase::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 	AttachDeferredSceneComponentsToRoot();
-	ApplyPlacementFootprintWorldAxisPolicy();
+	ApplyPlacementFootprintParentScaleIsolation();
 	TryApplyClassDesignToLivePlacementFootprintBounds();
 }
 
 void AGP_BuildingBase::PostLoad()
 {
 	Super::PostLoad();
-	ApplyPlacementFootprintWorldAxisPolicy();
+	ApplyPlacementFootprintParentScaleIsolation();
 	TryApplyClassDesignToLivePlacementFootprintBounds();
 }
 
@@ -171,7 +167,7 @@ void AGP_BuildingBase::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 	AttachDeferredSceneComponentsToRoot();
-	ApplyPlacementFootprintWorldAxisPolicy();
+	ApplyPlacementFootprintParentScaleIsolation();
 	TryApplyClassDesignToLivePlacementFootprintBounds();
 }
 
@@ -193,8 +189,9 @@ void AGP_BuildingBase::ApplyClassDesignToLivePlacementFootprintBounds()
 
 	PlacementFootprintBounds->SetBoxExtent(Design->GetUnscaledBoxExtent());
 	PlacementFootprintBounds->SetRelativeLocation(Design->GetRelativeLocation());
+	PlacementFootprintBounds->SetRelativeRotation(Design->GetRelativeRotation());
 	PlacementFootprintBounds->SetRelativeScale3D(Design->GetRelativeScale3D());
-	ApplyPlacementFootprintWorldAxisPolicy();
+	ApplyPlacementFootprintParentScaleIsolation();
 }
 
 void AGP_BuildingBase::TryApplyClassDesignToLivePlacementFootprintBounds()
@@ -215,7 +212,7 @@ void AGP_BuildingBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 void AGP_BuildingBase::BeginPlay()
 {
 	Super::BeginPlay();
-	ApplyPlacementFootprintWorldAxisPolicy();
+	ApplyPlacementFootprintParentScaleIsolation();
 	TryApplyClassDesignToLivePlacementFootprintBounds();
 	TryRegisterWithBuildGrid();
 }
@@ -275,7 +272,16 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 		return;
 	}
 
-	if (!bGridPlacementConfigured)
+	TArray<FIntPoint> OrientedCells;
+	int32 CandidateCellCount = 0;
+	const bool bUseOrientedCells = !bGridPlacementConfigured
+		&& Grid->ResolveOccupiedCellsFromBounds(GetPlacementFootprintBounds(), OrientedCells, &CandidateCellCount)
+		&& OrientedCells.Num() > 0;
+	if (bUseOrientedCells)
+	{
+		UGP_BuildGridSubsystem::MakeOccupiedCellsAabb(OrientedCells, GridOriginCell, GridFootprintSize);
+	}
+	else if (!bGridPlacementConfigured)
 	{
 		FIntPoint Origin = FIntPoint::ZeroValue;
 		FVector Snapped = FVector::ZeroVector;
@@ -292,7 +298,10 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 		GridOccupantId = FGuid::NewGuid();
 	}
 
-	if (Grid->RegisterFootprint(this, GridOriginCell, GridFootprintSize, GridOccupantId))
+	const bool bRegistered = bUseOrientedCells
+		? Grid->RegisterCells(this, OrientedCells, GridOccupantId)
+		: Grid->RegisterFootprint(this, GridOriginCell, GridFootprintSize, GridOccupantId);
+	if (bRegistered)
 	{
 		bGridRegistered = true;
 	}
@@ -315,7 +324,7 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 	UE_LOG(
 		LogGPBuildGridRegister,
 		Log,
-		TEXT("BuildGrid occupancy %s liveCenter=(%.1f,%.1f,%.1f) liveRel=(%.1f,%.1f) actorYaw=%.1f boundsRelYaw=%.1f boundsWorldYaw=%.1f actorScale=(%.3f,%.3f,%.3f) rootWorldScale=(%.3f,%.3f,%.3f) boundsRelScale=(%.3f,%.3f,%.3f) boundsCompScale=(%.3f,%.3f,%.3f) unscaled=(%.1f,%.1f) authoredHalf=(%.1f,%.1f) visualHalf=(%.1f,%.1f) resolved=%dx%d origin=%d,%d registered=%dx%d fromLive=%s absRot=%s absScale=%s"),
+		TEXT("BuildGrid occupancy %s liveCenter=(%.1f,%.1f,%.1f) liveRel=(%.1f,%.1f) actorYaw=%.1f boundsRelYaw=%.1f boundsWorldYaw=%.1f actorScale=(%.3f,%.3f,%.3f) rootWorldScale=(%.3f,%.3f,%.3f) boundsRelScale=(%.3f,%.3f,%.3f) boundsCompScale=(%.3f,%.3f,%.3f) unscaled=(%.1f,%.1f) authoredHalf=(%.1f,%.1f) visualHalf=(%.1f,%.1f) resolved=%dx%d origin=%d,%d aabb=%dx%d occupied=%d candidates=%d fromLive=%s absRot=%s absScale=%s"),
 		*GetName(),
 		LiveCenter.X,
 		LiveCenter.Y,
@@ -349,6 +358,8 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 		GridOriginCell.Y,
 		GridFootprintSize.X,
 		GridFootprintSize.Y,
+		bUseOrientedCells ? OrientedCells.Num() : (GridFootprintSize.X * GridFootprintSize.Y),
+		CandidateCellCount,
 		Resolved.bFromAuthoredBounds ? TEXT("1") : TEXT("0"),
 		LiveBounds != nullptr && LiveBounds->IsUsingAbsoluteRotation() ? TEXT("1") : TEXT("0"),
 		LiveBounds != nullptr && LiveBounds->IsUsingAbsoluteScale() ? TEXT("1") : TEXT("0"));

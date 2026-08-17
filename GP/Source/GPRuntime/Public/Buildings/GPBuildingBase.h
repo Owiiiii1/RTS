@@ -52,18 +52,17 @@ public:
 
 	/**
 	 * GP-S36G: PlacementFootprintBounds is Blueprint-class design data, not per-level-instance.
-	 * Copies BoxExtent / RelativeLocation / RelativeScale3D from the class CDO onto this live
-	 * component and re-applies world-axis policy. RelativeRotation is forced to zero (rotated
-	 * footprints are deferred). Production calls this only for net-startup actors.
+	 * Copies BoxExtent / RelativeLocation / RelativeRotation / RelativeScale3D from the class CDO
+	 * onto this live component and re-applies scale-only isolation. Production calls this only
+	 * for net-startup actors.
 	 */
 	void ApplyClassDesignToLivePlacementFootprintBounds();
 
 	/**
-	 * UE 5.8: SetAbsolute(false, true, true) — inherit parent location; world-zero rotation;
-	 * RelativeScale3D is the component world scale (no actor/root scale). Rotated footprints
-	 * are not supported in GP-S36G.
+	 * UE 5.8: SetAbsolute(false, false, true) — inherit parent location and rotation;
+	 * RelativeScale3D is the component world scale (no actor/root scale).
 	 */
-	void ApplyPlacementFootprintWorldAxisPolicy();
+	void ApplyPlacementFootprintParentScaleIsolation();
 
 	FIntPoint ResolveFallbackFootprintSize() const;
 
@@ -89,8 +88,8 @@ protected:
 	 * This live component is the single occupied-ground source after init (no hidden CDO path).
 	 * Pre-placed instances are synchronized from the class CDO so stale level snapshots cannot diverge.
 	 * Parent/actor scale is isolated (absolute scale); own authored RelativeScale3D remains the size.
-	 * Box rotation is world-zero (absolute rotation). Size axes are world X/Y. Center offset is
-	 * actor-local XY rotated by actor yaw. Native default is a visible 1×1 (200×200 cm) volume.
+	 * Location and rotation follow Capsule/root. Occupancy is the oriented cell set of this box.
+	 * GridOriginCell / GridFootprintSize are the occupied-cell AABB (debug/legacy), not the SoT.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|BuildGrid", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UBoxComponent> PlacementFootprintBounds;

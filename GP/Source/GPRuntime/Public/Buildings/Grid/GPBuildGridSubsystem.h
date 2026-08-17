@@ -107,10 +107,30 @@ public:
 
 	/**
 	 * Authored half-extent (cm): |UnscaledBoxExtent * RelativeScale3D|.
-	 * World-axis-aligned: X is world X, Y is world Y. Actor/root scale is ignored.
-	 * Box rotation is forced world-zero; RelativeRotation does not affect size.
+	 * Actor/root scale is ignored. These halves are the oriented box extents (local X/Y).
 	 */
 	static FVector GetAuthoredPlacementHalfExtentCm(const UBoxComponent* Bounds);
+
+	/**
+	 * Occupied cells of a live PlacementFootprintBounds.
+	 * Center = GetComponentLocation(). Orientation = component yaw.
+	 * Half-extent = authored (no parent scale). CellSize 200.
+	 * Yaw ~0/180 uses the snapped SizeCells rectangle (identical to RegisterFootprint).
+	 * Any other yaw uses OBB-vs-cell coverage (no SizeCells X/Y swap).
+	 * A cell is occupied when OBB/AABB overlap exceeds OccupancyOverlapEpsilonCm.
+	 */
+	bool ResolveOccupiedCellsFromBounds(
+		const UBoxComponent* Bounds,
+		TArray<FIntPoint>& OutCells,
+		int32* OutCandidateCount = nullptr) const;
+
+	/** Min-cell origin + inclusive size of an occupied set. Zero if empty. */
+	static void MakeOccupiedCellsAabb(
+		const TArray<FIntPoint>& Cells,
+		FIntPoint& OutOrigin,
+		FIntPoint& OutSize);
+
+	bool GetOccupantCells(const FGuid& OccupantId, TArray<FIntPoint>& OutCells) const;
 
 	static bool ArePlacementFootprintBoundsUsable(const UBoxComponent* Bounds);
 
@@ -157,11 +177,7 @@ public:
 		FRotator ActorRotation,
 		FVector2D LocalCenterOffsetCm);
 
-	/**
-	 * Visible live box center (GetComponentLocation). Occupancy snaps this XY.
-	 * After world-axis policy, location stays parent-relative so actor yaw still rotates
-	 * the authored local offset; box axes stay world-zero.
-	 */
+	/** Visible live box center (GetComponentLocation). */
 	static FVector GetLivePlacementFootprintCenterWorld(const UBoxComponent* Bounds);
 
 	FVector MakeActorLocationFromFootprintCenter(
@@ -183,6 +199,7 @@ public:
 		const FGuid& IgnoreReservationId = FGuid());
 
 	bool RegisterFootprint(AActor* Building, FIntPoint OriginCell, FIntPoint FootprintSize, FGuid OccupantId);
+	bool RegisterCells(AActor* Occupant, const TArray<FIntPoint>& Cells, FGuid OccupantId);
 	void UnregisterFootprint(AActor* Building);
 	void UnregisterOccupant(const FGuid& OccupantId);
 
@@ -205,11 +222,26 @@ public:
 	void SweepStaleOccupants();
 
 	static constexpr float DefaultCellSizeCm = 200.0f;
+	/** OBB/cell overlap must exceed this (cm) to occupy. Exact edge touch does not. */
+	static constexpr float OccupancyOverlapEpsilonCm = 1.0f;
+	/** Yaw 0/180 fast-path: snapped rectangle equals prior Origin+Size occupancy. */
+	static constexpr float AxisAlignedYawToleranceDeg = 0.5f;
 
 private:
 	int32 WorldToCell1D(float WorldCoord) const;
 	int32 SnapOrigin1D(float WorldCoord, int32 Size) const;
 	bool IsRecordIgnored(const FGP_GridCellRecord& Record, AActor* IgnoreActor, const FGuid& IgnoreReservationId) const;
+	bool CanPlaceCells(
+		const TArray<FIntPoint>& Cells,
+		EGP_GridRejectReason& OutReason,
+		AActor* IgnoreActor = nullptr,
+		const FGuid& IgnoreReservationId = FGuid()) const;
+	void SortOccupiedCells(TArray<FIntPoint>& Cells) const;
+	bool DoesOrientedFootprintOverlapCell(
+		const FVector2D& CenterXY,
+		const FVector2D& AuthoredHalfXY,
+		float YawDegrees,
+		FIntPoint Cell) const;
 	bool TryResolveFromPlacementBounds(const UBoxComponent* Bounds, FGP_ResolvedBuildingFootprint& OutResolved) const;
 	FGP_ResolvedBuildingFootprint ResolveDefinitionOrClassFallback(
 		TSubclassOf<AGP_BuildingBase> PayloadClass,

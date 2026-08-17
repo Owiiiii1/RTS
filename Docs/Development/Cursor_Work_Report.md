@@ -1,6 +1,6 @@
 # Cursor Work Report
 
-Status: **GP-S36G_FOOTPRINT_AXIS_ALIGNMENT_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S36G_ORIENTED_FOOTPRINT_OCCUPANCY_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**  
 **NOT FINALIZED.**
@@ -12,47 +12,56 @@ Status: **GP-S36G_FOOTPRINT_AXIS_ALIGNMENT_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`853e3337bd74d9fce81c1a16302d41a5d5d510a9`
+`PENDING_IMPLEMENTATION`
 
-## Operator X/Y swap
-After parent-scale isolation, size was almost correct, but a strongly rectangular visible `PlacementFootprintBounds` looked swapped versus the forbidden BuildGrid region.
+## Operator failure after axis-alignment
+`SetAbsolute(false, true, true)` plus forced `RelativeRotation = 0` kept the cyan box world-axis-aligned. Rotating the level MainBase left the footprint behind. That is wrong for gameplay authoring.
 
-## Factual rotation-inheritance cause
-Previous policy was `SetAbsolute(false, false, true)`: location and **rotation** inherited the parent. The visible box rotated with MainBase (~91.7° on the level instance). BuildGrid size still maps local X→world X and local Y→world Y with no footprint rotation. At ~90° the visible local X axis lay along world Y while occupancy stayed world-axis-aligned.
+## Why absolute rotation was wrong
+BuildGrid occupancy can be an oriented cell set. The visible box must stay attached to Capsule/root (location **and** rotation). Forcing world-zero rotation only hid orientation instead of occupying the rotated footprint.
 
-Level `BP_GP_MainBase_C_2` after this patch: `actorYaw=91.7`, `boundsWorldYaw=0.0`, `authoredHalf=visualHalf=(856.1,486.8)`, registered `9×5`, `absRot=1`.
+## Final component attachment
+`PlacementFootprintBounds->SetAbsolute(false, false, true);`
 
-## Final axis-aligned semantics
-- SIZE AXES = world X/Y
-- BOX ROTATION = world zero
-- CENTER OFFSET = actor-local XY rotated by actor yaw
-- actor/root scale ignored for footprint dimensions
-- Rotated footprints are **not** supported in GP-S36G (deferred)
+- location follows building
+- rotation follows building
+- parent/root scale does not change gameplay size
+- own BoxExtent / RelativeLocation / RelativeRotation / RelativeScale3D are design data
+- CDO→live copies all four; RelativeRotation is **not** zeroed
 
-## Exact SetAbsolute policy
-Verified UE 5.8 `USceneComponent::SetAbsolute(bAbsLoc, bAbsRot, bAbsScale)`:
+## Scale-only isolation
+`bounds component world scale == own RelativeScale3D`, not parent × own. Operator Capsule/root ~2.352 does not enlarge cells.
 
-`PlacementFootprintBounds->SetAbsolute(false, true, true);`
+## Oriented cell-set occupancy
+Authoritative occupancy is `TArray<FIntPoint>` per `OccupantId`.
 
-Location stays parent-relative (`Rel * Parent` still applies actor yaw to the authored offset). Rotation and scale are absolute.
+- `RegisterCells` stores that set
+- `RegisterFootprint` remains a rectangle wrapper (`EnumerateFootprintCells` → `RegisterCells`)
+- `UnregisterOccupant` removes exactly those cells
 
-## RelativeRotation
-Forced to `ZeroRotator` on construction / PostLoad / PostInitialize / BeginPlay / CDO→live sync. Authored component rotation is not a gameplay or visualization source. Details-panel hide was not added (not straightforward on the inherited native transform).
+Pre-placed / unconfigured buildings: `ResolveOccupiedCellsFromBounds` → `RegisterCells`.  
+`GridOriginCell` / `GridFootprintSize` are the occupied-set AABB (legacy/debug), **not** the SoT for rotated actors.
 
-## Center-offset behavior
-`GetLivePlacementFootprintCenterWorld` remains `GetComponentLocation()`. After absolute rotation, inherited location still transforms by actor yaw. Proven: local +400 X, yaw 0 → +400 world X; yaw 90 → +400 world Y. Visual center equals that intended center. Box axes stay world-zero while the center moves.
+Yaw-0 orbital deploys still use `ConfigureGridPlacement` + rectangular reserve/register.
 
-## Yaw 0/90 rectangular tests
-Effective 2000×800 (half 1000×400): yaw 0 / 90 / 180 / 270 all keep visual world half `1000×400` and grid `10×4` (not `4×10`). World X/Y Hub edge reject/accept on a yaw-90 `10×4`. Parent scale `2.352` does not change size. Own RelativeScale still authors size.
+## OBB / cell policy
+Shared `ResolveOccupiedCellsFromBounds`:
 
-## Parent scale
-Unchanged: absolute scale keeps own `RelativeScale3D`. Actor/root `2.352` does not inflate cells.
+- center = `Bounds->GetComponentLocation()`
+- yaw = `Bounds->GetComponentRotation().Yaw`
+- half = `|UnscaledBoxExtent × RelativeScale3D|`
+- CellSize 200
+
+Yaw ~0° / 180° (±0.5°): snapped `SizeCells` rectangle — same cells as the old Origin+Size path.
+
+Any other yaw: world AABB of the OBB → candidate cells → 2D SAT (world X/Y + OBB axes). A cell is occupied when projected overlap exceeds `OccupancyOverlapEpsilonCm = 1.0`. Exact edge touch does not occupy. No physics queries. No SizeCells X/Y swap.
 
 ## Tests
+Yaw 0 = old 10×4. Yaw 90 / 270 = tall oriented coverage, not an unswapped 10×4. Yaw 91.7: footprint yaw follows actor. Yaw 45: stair-step. Rotate-then-resolve changes cells. Offset follows live center. Parent 2.352 does not inflate. Own scale still authors size. Hub overlap of an occupied rotated cell rejects. Destroy releases all oriented cells. Spawned yaw-0 Hub path unchanged.
+
 `gp.Building.RunBuildGridContractTest` Failures=0.
 
-All listed regressions Failures=0:
-`RunMultiBuildingDataContractTest`, `RunOrbitalBuildingDropContractTest`, `RunUnitCapLogisticsHubContractTest`, `RunOrbitalUnitDropContractTest`, `RunRTSMovementReconciliationContractTest`, `RunWinLoseContractTest`, `RunS28RegressionSuite`, `RunAttackMoveContractTest`.
+All listed regressions Failures=0.
 
 ## Builds
 GPEditor Win64 Development + UHT **PASS**.  

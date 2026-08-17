@@ -207,6 +207,207 @@ bool UGP_BuildGridSubsystem::ArePlacementFootprintBoundsUsable(const UBoxCompone
 	return HalfExtent.X >= 1.0f && HalfExtent.Y >= 1.0f;
 }
 
+void UGP_BuildGridSubsystem::SortOccupiedCells(TArray<FIntPoint>& Cells) const
+{
+	Cells.Sort([](const FIntPoint& A, const FIntPoint& B)
+	{
+		return (A.Y < B.Y) || (A.Y == B.Y && A.X < B.X);
+	});
+}
+
+void UGP_BuildGridSubsystem::MakeOccupiedCellsAabb(
+	const TArray<FIntPoint>& Cells,
+	FIntPoint& OutOrigin,
+	FIntPoint& OutSize)
+{
+	if (Cells.Num() == 0)
+	{
+		OutOrigin = FIntPoint::ZeroValue;
+		OutSize = FIntPoint::ZeroValue;
+		return;
+	}
+
+	int32 MinX = Cells[0].X;
+	int32 MaxX = Cells[0].X;
+	int32 MinY = Cells[0].Y;
+	int32 MaxY = Cells[0].Y;
+	for (const FIntPoint& Cell : Cells)
+	{
+		MinX = FMath::Min(MinX, Cell.X);
+		MaxX = FMath::Max(MaxX, Cell.X);
+		MinY = FMath::Min(MinY, Cell.Y);
+		MaxY = FMath::Max(MaxY, Cell.Y);
+	}
+	OutOrigin = FIntPoint(MinX, MinY);
+	OutSize = FIntPoint(MaxX - MinX + 1, MaxY - MinY + 1);
+}
+
+bool UGP_BuildGridSubsystem::GetOccupantCells(const FGuid& OccupantId, TArray<FIntPoint>& OutCells) const
+{
+	OutCells.Reset();
+	if (const TArray<FIntPoint>* Cells = OccupantCells.Find(OccupantId))
+	{
+		OutCells = *Cells;
+		return OutCells.Num() > 0;
+	}
+	return false;
+}
+
+namespace GPBuildGridOrientedPrivate
+{
+	static bool IntervalsOverlapMoreThan(float MinA, float MaxA, float MinB, float MaxB, float Epsilon)
+	{
+		return FMath::Min(MaxA, MaxB) - FMath::Max(MinA, MinB) > Epsilon;
+	}
+
+	static void ProjectAabb(const FVector2D& MinXY, const FVector2D& MaxXY, const FVector2D& Axis, float& OutMin, float& OutMax)
+	{
+		const FVector2D Corners[4] = {
+			FVector2D(MinXY.X, MinXY.Y),
+			FVector2D(MaxXY.X, MinXY.Y),
+			FVector2D(MaxXY.X, MaxXY.Y),
+			FVector2D(MinXY.X, MaxXY.Y)
+		};
+		OutMin = FVector2D::DotProduct(Corners[0], Axis);
+		OutMax = OutMin;
+		for (int32 Index = 1; Index < 4; ++Index)
+		{
+			const float Proj = FVector2D::DotProduct(Corners[Index], Axis);
+			OutMin = FMath::Min(OutMin, Proj);
+			OutMax = FMath::Max(OutMax, Proj);
+		}
+	}
+
+	static void ProjectObb(
+		const FVector2D& Center,
+		const FVector2D& AxisX,
+		const FVector2D& AxisY,
+		const FVector2D& Half,
+		const FVector2D& Axis,
+		float& OutMin,
+		float& OutMax)
+	{
+		const float Radius = FMath::Abs(FVector2D::DotProduct(AxisX, Axis)) * Half.X
+			+ FMath::Abs(FVector2D::DotProduct(AxisY, Axis)) * Half.Y;
+		const float Mid = FVector2D::DotProduct(Center, Axis);
+		OutMin = Mid - Radius;
+		OutMax = Mid + Radius;
+	}
+}
+
+bool UGP_BuildGridSubsystem::DoesOrientedFootprintOverlapCell(
+	const FVector2D& CenterXY,
+	const FVector2D& AuthoredHalfXY,
+	float YawDegrees,
+	FIntPoint Cell) const
+{
+	const FVector CellCenter = CellToWorld(Cell, 0.0f);
+	const float HalfCell = CellSize * 0.5f;
+	const FVector2D CellMin(CellCenter.X - HalfCell, CellCenter.Y - HalfCell);
+	const FVector2D CellMax(CellCenter.X + HalfCell, CellCenter.Y + HalfCell);
+
+	const float YawRad = FMath::DegreesToRadians(YawDegrees);
+	const float CosYaw = FMath::Cos(YawRad);
+	const float SinYaw = FMath::Sin(YawRad);
+	const FVector2D AxisX(CosYaw, SinYaw);
+	const FVector2D AxisY(-SinYaw, CosYaw);
+	const FVector2D WorldX(1.0f, 0.0f);
+	const FVector2D WorldY(0.0f, 1.0f);
+	const FVector2D Axes[4] = { WorldX, WorldY, AxisX, AxisY };
+
+	for (const FVector2D& Axis : Axes)
+	{
+		float ObbMin = 0.0f;
+		float ObbMax = 0.0f;
+		float CellMinP = 0.0f;
+		float CellMaxP = 0.0f;
+		GPBuildGridOrientedPrivate::ProjectObb(CenterXY, AxisX, AxisY, AuthoredHalfXY, Axis, ObbMin, ObbMax);
+		GPBuildGridOrientedPrivate::ProjectAabb(CellMin, CellMax, Axis, CellMinP, CellMaxP);
+		if (!GPBuildGridOrientedPrivate::IntervalsOverlapMoreThan(
+			ObbMin, ObbMax, CellMinP, CellMaxP, OccupancyOverlapEpsilonCm))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool UGP_BuildGridSubsystem::ResolveOccupiedCellsFromBounds(
+	const UBoxComponent* Bounds,
+	TArray<FIntPoint>& OutCells,
+	int32* OutCandidateCount) const
+{
+	OutCells.Reset();
+	if (OutCandidateCount != nullptr)
+	{
+		*OutCandidateCount = 0;
+	}
+	if (!ArePlacementFootprintBoundsUsable(Bounds))
+	{
+		return false;
+	}
+
+	const FVector Center = GetLivePlacementFootprintCenterWorld(Bounds);
+	const FVector Half = GetAuthoredPlacementHalfExtentCm(Bounds);
+	const float Yaw = Bounds->GetComponentRotation().Yaw;
+	const FVector2D HalfXY(Half.X, Half.Y);
+	const FVector2D CenterXY(Center.X, Center.Y);
+	const float NormYaw = FRotator::NormalizeAxis(Yaw);
+	const bool bYaw0or180 = FMath::Abs(NormYaw) <= AxisAlignedYawToleranceDeg
+		|| FMath::Abs(FMath::Abs(NormYaw) - 180.0f) <= AxisAlignedYawToleranceDeg;
+
+	if (bYaw0or180)
+	{
+		const FIntPoint Size = ConvertAuthoredBoundsToFootprintCells(Half);
+		if (!IsValidFootprintSize(Size))
+		{
+			return false;
+		}
+		const FIntPoint Origin = SnapOriginCell(Center, Size);
+		EnumerateFootprintCells(Origin, Size, OutCells);
+		SortOccupiedCells(OutCells);
+		if (OutCandidateCount != nullptr)
+		{
+			*OutCandidateCount = OutCells.Num();
+		}
+		return OutCells.Num() > 0;
+	}
+
+	const float YawRad = FMath::DegreesToRadians(Yaw);
+	const float CosYaw = FMath::Cos(YawRad);
+	const float SinYaw = FMath::Sin(YawRad);
+	const float AabbHalfX = FMath::Abs(CosYaw) * HalfXY.X + FMath::Abs(SinYaw) * HalfXY.Y;
+	const float AabbHalfY = FMath::Abs(SinYaw) * HalfXY.X + FMath::Abs(CosYaw) * HalfXY.Y;
+	const FVector AabbMin(Center.X - AabbHalfX, Center.Y - AabbHalfY, 0.0f);
+	const FVector AabbMax(Center.X + AabbHalfX, Center.Y + AabbHalfY, 0.0f);
+	const FIntPoint MinCell = WorldToCell(AabbMin);
+	const FIntPoint MaxCell = WorldToCell(AabbMax);
+	const int32 MinX = FMath::Min(MinCell.X, MaxCell.X) - 1;
+	const int32 MaxX = FMath::Max(MinCell.X, MaxCell.X) + 1;
+	const int32 MinY = FMath::Min(MinCell.Y, MaxCell.Y) - 1;
+	const int32 MaxY = FMath::Max(MinCell.Y, MaxCell.Y) + 1;
+
+	const int32 CandidateCount = FMath::Max(0, (MaxX - MinX + 1) * (MaxY - MinY + 1));
+	if (OutCandidateCount != nullptr)
+	{
+		*OutCandidateCount = CandidateCount;
+	}
+	OutCells.Reserve(FMath::Max(1, CandidateCount));
+	for (int32 Y = MinY; Y <= MaxY; ++Y)
+	{
+		for (int32 X = MinX; X <= MaxX; ++X)
+		{
+			const FIntPoint Cell(X, Y);
+			if (DoesOrientedFootprintOverlapCell(CenterXY, HalfXY, Yaw, Cell))
+			{
+				OutCells.Add(Cell);
+			}
+		}
+	}
+	SortOccupiedCells(OutCells);
+	return OutCells.Num() > 0;
+}
+
 FVector UGP_BuildGridSubsystem::GetNativeDefaultPlacementHalfExtentCm(TSubclassOf<AGP_BuildingBase> PayloadClass)
 {
 	if (PayloadClass != nullptr && PayloadClass->IsChildOf(AGP_MainBase::StaticClass()))
@@ -248,9 +449,8 @@ bool UGP_BuildGridSubsystem::TryResolveFromPlacementBounds(
 		return false;
 	}
 
-	// Axis-aligned GP-S36G: size X/Y map to world X/Y. RelativeRotation is forced to zero
-	// on the live component and is not a gameplay source. Half-extent is
-	// UnscaledBoxExtent * RelativeScale3D — not actor/root scale.
+	// SizeCells remain the authored local quantization. Occupancy for live rotated
+	// actors uses ResolveOccupiedCellsFromBounds (oriented cell set).
 	const FVector HalfExtent = GetAuthoredPlacementHalfExtentCm(Bounds);
 	const FVector Relative = Bounds->GetRelativeLocation();
 	OutResolved.SizeCells = ConvertAuthoredBoundsToFootprintCells(HalfExtent);
@@ -528,6 +728,22 @@ bool UGP_BuildGridSubsystem::CanPlaceFootprint(
 
 	TArray<FIntPoint> Cells;
 	EnumerateFootprintCells(OriginCell, FootprintSize, Cells);
+	return CanPlaceCells(Cells, OutReason, IgnoreActor, IgnoreReservationId);
+}
+
+bool UGP_BuildGridSubsystem::CanPlaceCells(
+	const TArray<FIntPoint>& Cells,
+	EGP_GridRejectReason& OutReason,
+	AActor* IgnoreActor,
+	const FGuid& IgnoreReservationId) const
+{
+	OutReason = EGP_GridRejectReason::Free;
+	if (Cells.Num() == 0)
+	{
+		OutReason = EGP_GridRejectReason::InvalidFootprint;
+		return false;
+	}
+
 	for (const FIntPoint& Cell : Cells)
 	{
 		const FGP_GridCellRecord* Record = CellOccupancy.Find(Cell);
@@ -555,26 +771,41 @@ bool UGP_BuildGridSubsystem::RegisterFootprint(
 	FIntPoint FootprintSize,
 	FGuid OccupantId)
 {
-	if (!IsValid(Building) || !OccupantId.IsValid() || !IsValidFootprintSize(FootprintSize))
+	if (!IsValidFootprintSize(FootprintSize))
+	{
+		return false;
+	}
+
+	TArray<FIntPoint> Cells;
+	EnumerateFootprintCells(OriginCell, FootprintSize, Cells);
+	return RegisterCells(Building, Cells, OccupantId);
+}
+
+bool UGP_BuildGridSubsystem::RegisterCells(
+	AActor* Occupant,
+	const TArray<FIntPoint>& Cells,
+	FGuid OccupantId)
+{
+	if (!IsValid(Occupant) || !OccupantId.IsValid() || Cells.Num() == 0)
 	{
 		return false;
 	}
 
 	SweepStaleOccupants();
 
-	TArray<FIntPoint> Cells;
-	EnumerateFootprintCells(OriginCell, FootprintSize, Cells);
+	TArray<FIntPoint> Sorted = Cells;
+	SortOccupiedCells(Sorted);
 
 	if (const TArray<FIntPoint>* Existing = OccupantCells.Find(OccupantId))
 	{
-		if (*Existing == Cells)
+		if (*Existing == Sorted)
 		{
-			OccupantActors.Add(OccupantId, Building);
-			for (const FIntPoint& Cell : Cells)
+			OccupantActors.Add(OccupantId, Occupant);
+			for (const FIntPoint& Cell : Sorted)
 			{
 				FGP_GridCellRecord& Record = CellOccupancy.FindOrAdd(Cell);
 				Record.OccupantId = OccupantId;
-				Record.OccupantActor = Building;
+				Record.OccupantActor = Occupant;
 				Record.bIsReservation = false;
 			}
 			ReservationIds.Remove(OccupantId);
@@ -584,19 +815,19 @@ bool UGP_BuildGridSubsystem::RegisterFootprint(
 	}
 
 	EGP_GridRejectReason Reason = EGP_GridRejectReason::Free;
-	if (!CanPlaceFootprint(OriginCell, FootprintSize, Reason, Building, OccupantId))
+	if (!CanPlaceCells(Sorted, Reason, Occupant, OccupantId))
 	{
 		return false;
 	}
 
-	OccupantCells.Add(OccupantId, Cells);
-	OccupantActors.Add(OccupantId, Building);
+	OccupantCells.Add(OccupantId, Sorted);
+	OccupantActors.Add(OccupantId, Occupant);
 	ReservationIds.Remove(OccupantId);
-	for (const FIntPoint& Cell : Cells)
+	for (const FIntPoint& Cell : Sorted)
 	{
 		FGP_GridCellRecord Record;
 		Record.OccupantId = OccupantId;
-		Record.OccupantActor = Building;
+		Record.OccupantActor = Occupant;
 		Record.bIsReservation = false;
 		CellOccupancy.Add(Cell, Record);
 	}

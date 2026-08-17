@@ -5,9 +5,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameplayTagContainer.h"
+#include "Game/GPMatchResult.h"
 #include "GPGameMode.generated.h"
 
 class AGP_GameState;
+class AGP_MainBase;
+class AGP_PlayerState;
 
 /**
  * Server-only match flow orchestrator.
@@ -34,9 +37,32 @@ public:
 
 	void FinishMatch(int32 InWinnerTeamId, FGameplayTag InWinReasonTag);
 
+	/** Event-driven quota path: FerroniteScore GAS write on a playable PlayerState. */
+	void NotifyFerroniteScoreChanged(AGP_PlayerState* SourcePlayerState);
+
+	/** Authoritative MainBase death → optional annihilation finish. */
+	void NotifyMainBaseDied(AGP_MainBase* DeadMainBase);
+
+	float GetMatchDurationSeconds() const { return MatchDurationSeconds; }
+	float GetDeliveryQuotaFerroniteScore() const { return DeliveryQuotaFerroniteScore; }
+	bool GetAnnihilationCountsAsWin() const { return bAnnihilationCountsAsWin; }
+
+#if !UE_BUILD_SHIPPING
+	void DebugSetMatchSeed(int32 InMatchSeed);
+	void DebugSetDeliveryQuotaFerroniteScore(float InQuota);
+	void DebugSetAnnihilationCountsAsWin(bool bInAnnihilationCountsAsWin);
+	void DebugResetMatchFlowToWaiting();
+#endif
+
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Match", meta = (ClampMin = "0.0"))
 	float MatchDurationSeconds = 600.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Match", meta = (ClampMin = "0.0"))
+	float DeliveryQuotaFerroniteScore = 5000.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Match")
+	bool bAnnihilationCountsAsWin = true;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Match", meta = (ClampMin = "1"))
 	int32 ExpectedHumanPlayers = 2;
@@ -53,6 +79,14 @@ protected:
 private:
 	/** Server-only monotonic allocator for playable TeamIds (starts at 1). Not replicated. */
 	void AssignPlayableTeamId(APlayerController* NewPlayer);
+
+	void PublishMatchConfigToGameState();
+	void InitializeMatchSeed();
+	void EvaluateQuotaVictory();
+	void GatherPlayablePlayerStates(TArray<AGP_PlayerState*>& OutPlayerStates) const;
+	void CaptureFinalScores(TArray<FGP_MatchTeamScore>& OutScores) const;
+	float ComputeElapsedMatchSeconds() const;
+	int32 ResolveWinnerTeamIdAmongPlayable() const;
 
 	FTimerHandle MatchCountdownHandle;
 	bool bTimeoutEvaluationTriggered = false;

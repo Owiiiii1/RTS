@@ -80,6 +80,12 @@ namespace GPUnitDropAuthority
 			return Result;
 		}
 
+		if (!AGP_GameState::AreEconomicOrdersAllowedInWorld(World))
+		{
+			Result.RejectReason = EGP_UnitDropRejectReason::MatchFinished;
+			return Result;
+		}
+
 		if (!IsValid(RequestingPlayerState))
 		{
 			Result.RejectReason = EGP_UnitDropRejectReason::SpendFailed;

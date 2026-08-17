@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "GameplayTagContainer.h"
 #include "GPTEMP_S28P_PlanetaryFerroniteHUD.generated.h"
 
 class UButton;
@@ -46,6 +47,11 @@ public:
 
 	/** TEMP feedback when a unit order is rejected for cap (or local manifest would exceed). */
 	void SetUnitCapReachedFeedback(bool bReached);
+
+	/** TEMP match status from replicated GameState + local PlayerState FerroniteScore. No client win calc. */
+	void SetMatchPlayingDisplay(float TimeRemainingSeconds, float FerroniteScore, float DeliveryQuota);
+	void SetMatchFinishedDisplay(bool bLocalVictory, FGameplayTag WinReason, int32 WinnerTeamId);
+	void ClearMatchFinishedDisplay();
 
 	/** UI affordance only — server revalidates launch. */
 	void SetLaunchButtonEnabled(bool bEnabled);
@@ -97,6 +103,11 @@ public:
 	FString GetUnitsLineTextForContract() const;
 	int32 GetDisplayedCurrentUnitsForContract() const { return DisplayCurrentUnits; }
 	int32 GetDisplayedMaxUnitsForContract() const { return DisplayMaxUnits; }
+	FString GetMatchStatusTextForContract() const;
+	FString GetMatchResultTitleForContract() const;
+	FString GetMatchResultReasonForContract() const;
+	int32 GetDisplayedWinnerTeamIdForContract() const { return DisplayWinnerTeamId; }
+	bool IsMatchResultVisibleForContract() const;
 	float GetDisplayedStoredForContract() const { return DisplayStored; }
 	float GetDisplayedCapacityForContract() const { return DisplayCapacity; }
 	bool HasResolvedBaseForContract() const { return bHasResolvedBase; }
@@ -120,6 +131,8 @@ private:
 	void RefreshStatusText();
 	void RefreshOrbitalText();
 	void RefreshUnitCapText();
+	void RefreshMatchStatusText();
+	void RefreshMatchResultText();
 	void RefreshUnitDropPanel();
 	void RefreshBuildingPanel();
 	void AdjustWorkerCount(int32 Delta);
@@ -156,6 +169,21 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> UnitsLineText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UVerticalBox> MatchInfoPanel;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> MatchStatusText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> MatchResultTitleText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> MatchResultReasonText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> MatchResultWinnerText;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> UnitCapFeedbackText;
@@ -227,6 +255,13 @@ private:
 	float DisplayOrbital = 0.0f;
 	int32 DisplayCurrentUnits = 0;
 	int32 DisplayMaxUnits = 0;
+	float DisplayMatchTimeRemaining = 0.0f;
+	float DisplayFerroniteScore = 0.0f;
+	float DisplayDeliveryQuota = 5000.0f;
+	bool bMatchFinishedDisplay = false;
+	bool bLocalVictoryDisplay = false;
+	FGameplayTag DisplayWinReason;
+	int32 DisplayWinnerTeamId = -1;
 	bool bUnitCapReachedFeedback = false;
 	bool bLaunchEnabled = false;
 	bool bTreeBuilt = false;

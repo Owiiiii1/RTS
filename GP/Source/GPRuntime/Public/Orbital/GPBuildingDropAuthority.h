@@ -22,7 +22,8 @@ enum class EGP_BuildingDropRejectReason : uint8
 	OutOfDeployRadius,
 	PlacementOverlap,
 	SpawnFailed,
-	MissingPlayerState
+	MissingPlayerState,
+	MatchFinished
 };
 
 /**

@@ -16,6 +16,7 @@
 #include "Player/GPPlayerController.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "Styling/CoreStyle.h"
+#include "Tags/GPGameplayTags.h"
 
 namespace GPTempS28PHUDPrivate
 {
@@ -239,6 +240,8 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 		&& ContainerLinesBox != nullptr
 		&& OrbitalLineText != nullptr
 		&& UnitsLineText != nullptr
+		&& MatchInfoPanel != nullptr
+		&& MatchStatusText != nullptr
 		&& LaunchButton != nullptr
 		&& ProcurementPanel != nullptr
 		&& UnitDropPanel != nullptr
@@ -279,6 +282,54 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 	if (UHorizontalBoxSlot* UnitsSlot = ResourceBar->AddChildToHorizontalBox(UnitsLineText))
 	{
 		UnitsSlot->SetVerticalAlignment(VAlign_Center);
+	}
+
+	MatchInfoPanel = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("MatchInfoPanel"));
+	MatchInfoPanel->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (UCanvasPanelSlot* MatchSlot = RootCanvas->AddChildToCanvas(MatchInfoPanel))
+	{
+		GPTempS28PHUDPrivate::AnchorPoint(MatchSlot, 0.5f, 0.0f, 0.5f, 0.0f, FVector2D(0.0f, 24.0f));
+	}
+
+	MatchStatusText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("MatchStatusText"));
+	GPTempS28PHUDPrivate::StyleStatusText(MatchStatusText);
+	MatchStatusText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(18));
+	MatchStatusText->SetJustification(ETextJustify::Center);
+	if (UVerticalBoxSlot* StatusLineSlot = MatchInfoPanel->AddChildToVerticalBox(MatchStatusText))
+	{
+		StatusLineSlot->SetHorizontalAlignment(HAlign_Center);
+		StatusLineSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 4.0f));
+	}
+
+	MatchResultTitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("MatchResultTitleText"));
+	GPTempS28PHUDPrivate::StyleStatusText(MatchResultTitleText);
+	MatchResultTitleText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(28));
+	MatchResultTitleText->SetJustification(ETextJustify::Center);
+	MatchResultTitleText->SetVisibility(ESlateVisibility::Collapsed);
+	if (UVerticalBoxSlot* ResultTitleSlot = MatchInfoPanel->AddChildToVerticalBox(MatchResultTitleText))
+	{
+		ResultTitleSlot->SetHorizontalAlignment(HAlign_Center);
+		ResultTitleSlot->SetPadding(FMargin(0.0f, 8.0f, 0.0f, 2.0f));
+	}
+
+	MatchResultReasonText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("MatchResultReasonText"));
+	GPTempS28PHUDPrivate::StyleStatusText(MatchResultReasonText);
+	MatchResultReasonText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(16));
+	MatchResultReasonText->SetJustification(ETextJustify::Center);
+	MatchResultReasonText->SetVisibility(ESlateVisibility::Collapsed);
+	if (UVerticalBoxSlot* ResultReasonSlot = MatchInfoPanel->AddChildToVerticalBox(MatchResultReasonText))
+	{
+		ResultReasonSlot->SetHorizontalAlignment(HAlign_Center);
+	}
+
+	MatchResultWinnerText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("MatchResultWinnerText"));
+	GPTempS28PHUDPrivate::StyleStatusText(MatchResultWinnerText);
+	MatchResultWinnerText->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(14));
+	MatchResultWinnerText->SetJustification(ETextJustify::Center);
+	MatchResultWinnerText->SetVisibility(ESlateVisibility::Collapsed);
+	if (UVerticalBoxSlot* ResultWinnerSlot = MatchInfoPanel->AddChildToVerticalBox(MatchResultWinnerText))
+	{
+		ResultWinnerSlot->SetHorizontalAlignment(HAlign_Center);
 	}
 
 	StatusPanel = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("StatusPanel"));
@@ -558,6 +609,74 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshUnitCapText()
 	RefreshUnitDropPanel();
 }
 
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshMatchStatusText()
+{
+	if (MatchStatusText == nullptr)
+	{
+		return;
+	}
+
+	const int32 TotalSeconds = FMath::Max(0, FMath::RoundToInt(DisplayMatchTimeRemaining));
+	const int32 Minutes = TotalSeconds / 60;
+	const int32 Seconds = TotalSeconds % 60;
+	MatchStatusText->SetText(FText::FromString(FString::Printf(
+		TEXT("%02d:%02d   SCORE %d / %d"),
+		Minutes,
+		Seconds,
+		FMath::RoundToInt(DisplayFerroniteScore),
+		FMath::RoundToInt(DisplayDeliveryQuota))));
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshMatchResultText()
+{
+	const ESlateVisibility ResultVis = bMatchFinishedDisplay
+		? ESlateVisibility::HitTestInvisible
+		: ESlateVisibility::Collapsed;
+
+	if (MatchResultTitleText != nullptr)
+	{
+		MatchResultTitleText->SetVisibility(ResultVis);
+		MatchResultTitleText->SetText(FText::FromString(
+			bLocalVictoryDisplay ? TEXT("VICTORY") : TEXT("DEFEAT")));
+		MatchResultTitleText->SetColorAndOpacity(FSlateColor(
+			bLocalVictoryDisplay
+				? FLinearColor(0.45f, 0.95f, 0.45f)
+				: FLinearColor(0.95f, 0.35f, 0.3f)));
+	}
+
+	if (MatchResultReasonText != nullptr)
+	{
+		MatchResultReasonText->SetVisibility(ResultVis);
+		FString ReasonLabel = DisplayWinReason.ToString();
+		const FGPGameplayTags& Tags = FGPGameplayTags::Get();
+		if (DisplayWinReason == Tags.Match_WinReason_DeliveryQuota)
+		{
+			ReasonLabel = TEXT("Delivery Quota");
+		}
+		else if (DisplayWinReason == Tags.Match_WinReason_TimerScore)
+		{
+			ReasonLabel = TEXT("Timer Score");
+		}
+		else if (DisplayWinReason == Tags.Match_WinReason_Annihilation)
+		{
+			ReasonLabel = TEXT("Annihilation");
+		}
+		else if (DisplayWinReason == Tags.Match_WinReason_OpponentDisconnect)
+		{
+			ReasonLabel = TEXT("Opponent Disconnect");
+		}
+		MatchResultReasonText->SetText(FText::FromString(ReasonLabel));
+	}
+
+	if (MatchResultWinnerText != nullptr)
+	{
+		MatchResultWinnerText->SetVisibility(ResultVis);
+		MatchResultWinnerText->SetText(FText::FromString(FString::Printf(
+			TEXT("Winner Team %d"),
+			DisplayWinnerTeamId)));
+	}
+}
+
 int32 UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetPodCapacity() const
 {
 	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
@@ -740,6 +859,38 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetUnitCapDisplay(int32 CurrentUnits, 
 	RefreshUnitCapText();
 }
 
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetMatchPlayingDisplay(
+	float TimeRemainingSeconds,
+	float FerroniteScore,
+	float DeliveryQuota)
+{
+	DisplayMatchTimeRemaining = FMath::IsFinite(TimeRemainingSeconds) ? FMath::Max(0.0f, TimeRemainingSeconds) : 0.0f;
+	DisplayFerroniteScore = FMath::IsFinite(FerroniteScore) ? FMath::Max(0.0f, FerroniteScore) : 0.0f;
+	DisplayDeliveryQuota = FMath::IsFinite(DeliveryQuota) ? FMath::Max(0.0f, DeliveryQuota) : 0.0f;
+	RefreshMatchStatusText();
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetMatchFinishedDisplay(
+	bool bLocalVictory,
+	FGameplayTag WinReason,
+	int32 WinnerTeamId)
+{
+	bMatchFinishedDisplay = true;
+	bLocalVictoryDisplay = bLocalVictory;
+	DisplayWinReason = WinReason;
+	DisplayWinnerTeamId = WinnerTeamId;
+	RefreshMatchResultText();
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::ClearMatchFinishedDisplay()
+{
+	bMatchFinishedDisplay = false;
+	bLocalVictoryDisplay = false;
+	DisplayWinReason = FGameplayTag();
+	DisplayWinnerTeamId = -1;
+	RefreshMatchResultText();
+}
+
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetUnitCapReachedFeedback(bool bReached)
 {
 	bUnitCapReachedFeedback = bReached;
@@ -836,6 +987,27 @@ FString UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetOrbitalLineTextForContract() con
 FString UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetUnitsLineTextForContract() const
 {
 	return UnitsLineText != nullptr ? UnitsLineText->GetText().ToString() : FString();
+}
+
+FString UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetMatchStatusTextForContract() const
+{
+	return MatchStatusText != nullptr ? MatchStatusText->GetText().ToString() : FString();
+}
+
+FString UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetMatchResultTitleForContract() const
+{
+	return MatchResultTitleText != nullptr ? MatchResultTitleText->GetText().ToString() : FString();
+}
+
+FString UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetMatchResultReasonForContract() const
+{
+	return MatchResultReasonText != nullptr ? MatchResultReasonText->GetText().ToString() : FString();
+}
+
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::IsMatchResultVisibleForContract() const
+{
+	return MatchResultTitleText != nullptr
+		&& MatchResultTitleText->GetVisibility() != ESlateVisibility::Collapsed;
 }
 
 int32 UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetContainerLineCountForContract() const

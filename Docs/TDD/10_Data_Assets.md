@@ -136,7 +136,8 @@ Per [`14_Orbital_Delivery`](14_Orbital_Delivery.md). Each `DA_GP_OrbitalDrop_*` 
 
 ### Session
 
-- `DA_GP_Session_Default` — match-level tuning and win configuration.
+- `DA_GP_Session_Default` — match-level tuning and win configuration (not authored yet).
+  - GP-S34W hosts the same defaults on `AGP_GameMode` (`EditDefaultsOnly`) and replicates them on `AGP_GameState`: `DeliveryQuotaFerroniteScore` 5000, `bAnnihilationCountsAsWin` true, `MatchDurationSeconds` 600, plus a server `MatchSeed` for the final tie-break.
   - `DeliveryQuotaFerroniteScore`: 5000 (placeholder; primary win condition — first to `FerroniteScore >= quota` wins).
   - `bAnnihilationCountsAsWin`: true.
   - `MatchDurationSeconds`: 600 (timer; on expiry highest `FerroniteScore` wins — `GP.Match.WinReason.TimerScore`).

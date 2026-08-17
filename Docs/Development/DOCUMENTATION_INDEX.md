@@ -34,30 +34,24 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S33M on main tip** `e40d545b89c27e2d9738082009fb691a5c8e5a2a` |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S33C + TEMP HUD layout on main tip** `7873d2826130bc711486b7a8c0a55322685e8d9d` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S33M** RTS Movement Reconciliation on `main` (tip `e40d545b89c27e2d9738082009fb691a5c8e5a2a`) |
+| Last closed / merged stage | **TEMP HUD layout reconciliation** on `main` (tip `7873d2826130bc711486b7a8c0a55322685e8d9d`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S33C_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s33c-unit-cap-logistics-hub` (**NOT MERGED**) |
+| Current stage | **GP-S34W_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s34w-match-win-lose` (**NOT MERGED**) |
 
 ---
 
 ## Current NEXT Task
 
-**Closed:** GP-S33M RTS Movement Reconciliation — **DONE / MERGED** on `main` @ `e40d545b89c27e2d9738082009fb691a5c8e5a2a`.
+**Closed:** TEMP HUD layout reconciliation — **DONE / MERGED** on `main` @ `7873d2826130bc711486b7a8c0a55322685e8d9d`.
 
-**Prior closed:** GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
+**Prior closed:** GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md`](Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md) — **GP-S33C_FINALIZATION_READY_FOR_MERGE**. Operator FINAL PASS complete. Do **not** merge from the agent. Do **not** claim `main` contains GP-S33C. Do **not** start Match Win/Lose.
+**Current:** [`Claude_Tasks/GP-S34W_Match_Win_Lose.md`](Claude_Tasks/GP-S34W_Match_Win_Lose.md) — **GP-S34W_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. Do **not** merge from the agent. Await operator PIE validation.
 
-Approved planning order after human merge (not started):
-1. Match win flow
-2. BuildingDefinition / BuildGrid
-
-**After merge:** do **not** auto-assign next slice without explicit assignment.
-
-**Do not** start BuildingDefinition / BuildGrid / FoW / Order Menu without explicit assignment.
+**Do not** start BuildingDefinition / BuildGrid / FoW / Order Menu / Spectating / disconnect victory without explicit assignment.
 
 **Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 
@@ -72,7 +66,9 @@ Approved planning order after human merge (not started):
 7. **GP-S30R** — Combat Auto-Acquire — **DONE / MERGED**
 8. **GP-S32A** — Attack-Move Reconciliation — **DONE / MERGED** @ `0df44684…`
 9. **GP-S33M** — RTS Movement Reconciliation — **DONE / MERGED** @ `e40d545b…`
-10. **GP-S33C** — Unit Cap + Logistics Hub Capacity — **FINALIZATION_READY_FOR_MERGE** (NOT MERGED; not on `main`)
+10. **GP-S33C** — Unit Cap + Logistics Hub Capacity — **DONE / MERGED** on `main`
+11. TEMP HUD layout reconciliation — **DONE / MERGED** @ `7873d282…`
+12. **GP-S34W** — Match Win/Lose MVP — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (NOT MERGED)
 
 ---
 
@@ -156,4 +152,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S33M are on `main` baseline tip `e40d545b89c27e2d9738082009fb691a5c8e5a2a`. Current stage: **GP-S33C_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s33c-unit-cap-logistics-hub`. See [`Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md`](Claude_Tasks/GP-S33C_Unit_Cap_Logistics_Hub.md). Operator FINAL PASS complete. **NOT MERGED.** Do not start Match Win/Lose.
+SETUP-001, DOCS-001, GP-S01…GP-S33C and TEMP HUD layout are on `main` baseline tip `7873d2826130bc711486b7a8c0a55322685e8d9d`. Current stage: **GP-S34W_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s34w-match-win-lose`. See [`Claude_Tasks/GP-S34W_Match_Win_Lose.md`](Claude_Tasks/GP-S34W_Match_Win_Lose.md). **NOT MERGED.**

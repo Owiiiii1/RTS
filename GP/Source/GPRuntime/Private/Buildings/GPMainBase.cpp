@@ -5,6 +5,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SceneComponent.h"
+#include "Game/GPGameMode.h"
 #include "Game/GPGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Resources/GPStorageComponent.h"
@@ -73,6 +74,27 @@ void AGP_MainBase::BeginPlay()
 	Super::BeginPlay();
 	// Register only when TeamId is already playable (deferred spawn sets TeamId before FinishSpawning).
 	RefreshMainBaseRegistration();
+}
+
+void AGP_MainBase::NotifyAuthorityDeath()
+{
+	Super::NotifyAuthorityDeath();
+
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (World == nullptr || World->bIsTearingDown)
+	{
+		return;
+	}
+
+	if (AGP_GameMode* GameMode = World->GetAuthGameMode<AGP_GameMode>())
+	{
+		GameMode->NotifyMainBaseDied(this);
+	}
 }
 
 void AGP_MainBase::EndPlay(const EEndPlayReason::Type EndPlayReason)

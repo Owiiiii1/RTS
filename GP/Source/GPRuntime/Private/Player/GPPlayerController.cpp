@@ -2277,8 +2277,23 @@ void AGP_PlayerController::ClearPlanetaryFerroniteHUDBindings()
 		{
 			GS->OnResolvedMainBaseChanged.Remove(ResolvedMainBaseChangedHandle);
 		}
+		if (MatchTimeRemainingChangedHandle.IsValid())
+		{
+			GS->OnMatchTimeRemainingChanged.Remove(MatchTimeRemainingChangedHandle);
+		}
+		if (MatchStateTagChangedHandle.IsValid())
+		{
+			GS->OnMatchStateTagChanged.Remove(MatchStateTagChangedHandle);
+		}
+		if (MatchResultChangedHandle.IsValid())
+		{
+			GS->OnMatchResultChanged.Remove(MatchResultChangedHandle);
+		}
 	}
 	ResolvedMainBaseChangedHandle.Reset();
+	MatchTimeRemainingChangedHandle.Reset();
+	MatchStateTagChangedHandle.Reset();
+	MatchResultChangedHandle.Reset();
 	BoundPlanetaryGameState.Reset();
 
 	if (AGP_PlayerState* PS = BoundPlanetaryPlayerState.Get())
@@ -2361,6 +2376,10 @@ void AGP_PlayerController::SyncLaunchButtonFromStorage()
 	{
 		bEnabled = Storage->GetReadyCount() > 0 && !Storage->IsLaunchInFlight();
 	}
+	if (UWorld* World = GetWorld())
+	{
+		bEnabled = bEnabled && AGP_GameState::AreEconomicOrdersAllowedInWorld(World);
+	}
 	PlanetaryFerroniteHUD->SetLaunchButtonEnabled(bEnabled);
 }
 
@@ -2383,10 +2402,16 @@ void AGP_PlayerController::UnbindOrbitalFerroniteAttribute()
 			ASC->GetGameplayAttributeValueChangeDelegate(
 				UGP_PlayerAttributeSet::GetCurrentUnitsAttribute()).Remove(CurrentUnitsChangedHandle);
 		}
+		if (FerroniteScoreChangedHandle.IsValid())
+		{
+			ASC->GetGameplayAttributeValueChangeDelegate(
+				UGP_PlayerAttributeSet::GetFerroniteScoreAttribute()).Remove(FerroniteScoreChangedHandle);
+		}
 	}
 	OrbitalFerroniteChangedHandle.Reset();
 	MaxUnitsChangedHandle.Reset();
 	CurrentUnitsChangedHandle.Reset();
+	FerroniteScoreChangedHandle.Reset();
 	BoundOrbitalASC.Reset();
 }
 
@@ -2400,6 +2425,7 @@ void AGP_PlayerController::BindOrbitalFerroniteAttribute()
 	{
 		SyncOrbitalFerroniteHUDFromAttributes();
 		SyncUnitCapHUDFromAttributes();
+		SyncMatchHUDFromAuthority();
 		return;
 	}
 
@@ -2413,8 +2439,12 @@ void AGP_PlayerController::BindOrbitalFerroniteAttribute()
 	CurrentUnitsChangedHandle = ASC->GetGameplayAttributeValueChangeDelegate(
 		UGP_PlayerAttributeSet::GetCurrentUnitsAttribute()).AddUObject(
 		this, &AGP_PlayerController::HandleCurrentUnitsAttributeChanged);
+	FerroniteScoreChangedHandle = ASC->GetGameplayAttributeValueChangeDelegate(
+		UGP_PlayerAttributeSet::GetFerroniteScoreAttribute()).AddUObject(
+		this, &AGP_PlayerController::HandleFerroniteScoreAttributeChanged);
 	SyncOrbitalFerroniteHUDFromAttributes();
 	SyncUnitCapHUDFromAttributes();
+	SyncMatchHUDFromAuthority();
 }
 
 void AGP_PlayerController::SyncOrbitalFerroniteHUDFromAttributes()
@@ -2476,6 +2506,81 @@ void AGP_PlayerController::HandleCurrentUnitsAttributeChanged(const FOnAttribute
 {
 	(void)Data;
 	SyncUnitCapHUDFromAttributes();
+}
+
+void AGP_PlayerController::HandleFerroniteScoreAttributeChanged(const FOnAttributeChangeData& Data)
+{
+	(void)Data;
+	SyncMatchHUDFromAuthority();
+}
+
+void AGP_PlayerController::SyncMatchHUDFromAuthority()
+{
+	EnsurePlanetaryFerroniteHUD();
+	if (PlanetaryFerroniteHUD == nullptr)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	const AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+
+	float TimeRemaining = GS != nullptr ? GS->GetMatchTimeRemaining() : 0.0f;
+	float Quota = GS != nullptr ? GS->GetDeliveryQuotaFerroniteScore() : 5000.0f;
+	float Score = 0.0f;
+	if (PS != nullptr)
+	{
+		if (const UGP_PlayerAttributeSet* Attr = PS->GetPlayerAttributeSet())
+		{
+			Score = Attr->GetFerroniteScore();
+		}
+	}
+
+	PlanetaryFerroniteHUD->SetMatchPlayingDisplay(TimeRemaining, Score, Quota);
+
+	if (GS != nullptr && GS->IsMatchFinished())
+	{
+		const int32 LocalTeam = PS != nullptr ? PS->GetTeamId() : -1;
+		const int32 WinnerTeam = GS->GetWinnerTeamId();
+		PlanetaryFerroniteHUD->SetMatchFinishedDisplay(
+			LocalTeam >= 1 && LocalTeam == WinnerTeam,
+			GS->GetWinReasonTag(),
+			WinnerTeam);
+	}
+	else
+	{
+		PlanetaryFerroniteHUD->ClearMatchFinishedDisplay();
+	}
+
+	SyncLaunchButtonFromStorage();
+}
+
+void AGP_PlayerController::HandleMatchTimeRemainingChanged(float OldTime, float NewTime)
+{
+	(void)OldTime;
+	(void)NewTime;
+	SyncMatchHUDFromAuthority();
+}
+
+void AGP_PlayerController::HandleMatchStateTagChanged(FGameplayTag OldTag, FGameplayTag NewTag)
+{
+	(void)OldTag;
+	(void)NewTag;
+	SyncMatchHUDFromAuthority();
+}
+
+void AGP_PlayerController::HandleMatchResultChangedForHUD(
+	int32 OldWinnerTeamId,
+	int32 NewWinnerTeamId,
+	FGameplayTag OldWinReasonTag,
+	FGameplayTag NewWinReasonTag)
+{
+	(void)OldWinnerTeamId;
+	(void)NewWinnerTeamId;
+	(void)OldWinReasonTag;
+	(void)NewWinReasonTag;
+	SyncMatchHUDFromAuthority();
 }
 
 void AGP_PlayerController::HandleStorageChangedForHUD(
@@ -2549,13 +2654,34 @@ void AGP_PlayerController::RefreshPlanetaryFerroniteHUDBinding()
 			{
 				OldGS->OnResolvedMainBaseChanged.Remove(ResolvedMainBaseChangedHandle);
 			}
+			if (MatchTimeRemainingChangedHandle.IsValid())
+			{
+				OldGS->OnMatchTimeRemainingChanged.Remove(MatchTimeRemainingChangedHandle);
+			}
+			if (MatchStateTagChangedHandle.IsValid())
+			{
+				OldGS->OnMatchStateTagChanged.Remove(MatchStateTagChangedHandle);
+			}
+			if (MatchResultChangedHandle.IsValid())
+			{
+				OldGS->OnMatchResultChanged.Remove(MatchResultChangedHandle);
+			}
 		}
 		ResolvedMainBaseChangedHandle.Reset();
+		MatchTimeRemainingChangedHandle.Reset();
+		MatchStateTagChangedHandle.Reset();
+		MatchResultChangedHandle.Reset();
 		BoundPlanetaryGameState = GS;
 		if (IsValid(GS))
 		{
 			ResolvedMainBaseChangedHandle = GS->OnResolvedMainBaseChanged.AddUObject(
 				this, &AGP_PlayerController::HandleResolvedMainBaseChanged);
+			MatchTimeRemainingChangedHandle = GS->OnMatchTimeRemainingChanged.AddUObject(
+				this, &AGP_PlayerController::HandleMatchTimeRemainingChanged);
+			MatchStateTagChangedHandle = GS->OnMatchStateTagChanged.AddUObject(
+				this, &AGP_PlayerController::HandleMatchStateTagChanged);
+			MatchResultChangedHandle = GS->OnMatchResultChanged.AddUObject(
+				this, &AGP_PlayerController::HandleMatchResultChangedForHUD);
 		}
 	}
 
@@ -2568,6 +2694,7 @@ void AGP_PlayerController::RefreshPlanetaryFerroniteHUDBinding()
 	BindBuildingInventoryEvents();
 	SyncOrbitalFerroniteHUDFromAttributes();
 	SyncUnitCapHUDFromAttributes();
+	SyncMatchHUDFromAuthority();
 }
 
 void AGP_PlayerController::HideMarqueeWidget()

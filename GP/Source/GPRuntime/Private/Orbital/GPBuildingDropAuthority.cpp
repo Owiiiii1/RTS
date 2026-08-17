@@ -213,6 +213,12 @@ GPBuildingDropAuthority::FPurchaseResult GPBuildingDropAuthority::AuthorityPurch
 		return Result;
 	}
 
+	if (!AGP_GameState::AreEconomicOrdersAllowedInWorld(World))
+	{
+		Result.RejectReason = EGP_BuildingDropRejectReason::MatchFinished;
+		return Result;
+	}
+
 	if (!IsValid(RequestingPlayerState))
 	{
 		Result.RejectReason = EGP_BuildingDropRejectReason::MissingPlayerState;
@@ -312,6 +318,12 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 	if (World == nullptr || World->GetNetMode() == NM_Client)
 	{
 		Result.RejectReason = EGP_BuildingDropRejectReason::SpawnFailed;
+		return Result;
+	}
+
+	if (!AGP_GameState::AreEconomicOrdersAllowedInWorld(World))
+	{
+		Result.RejectReason = EGP_BuildingDropRejectReason::MatchFinished;
 		return Result;
 	}
 

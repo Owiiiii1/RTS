@@ -3,6 +3,7 @@
 #include "Game/GPGameState.h"
 
 #include "Buildings/GPMainBase.h"
+#include "Engine/World.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "Net/UnrealNetwork.h"
@@ -34,6 +35,10 @@ AGP_GameState::AGP_GameState()
 	FerroniteThreatValue = 0.0f;
 	WinnerTeamId = -1;
 	WinReasonTag = FGameplayTag();
+	DeliveryQuotaFerroniteScore = 5000.0f;
+	bAnnihilationCountsAsWin = true;
+	MatchSeed = 0;
+	MatchResult = FGP_MatchResult();
 }
 
 void AGP_GameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -46,6 +51,10 @@ void AGP_GameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, TeamFerroniteThreatValues, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, WinnerTeamId, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, WinReasonTag, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME(AGP_GameState, DeliveryQuotaFerroniteScore);
+	DOREPLIFETIME(AGP_GameState, bAnnihilationCountsAsWin);
+	DOREPLIFETIME(AGP_GameState, MatchSeed);
+	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, MatchResult, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, ReplicatedMainBases, COND_None, REPNOTIFY_Always);
 }
 
@@ -231,7 +240,80 @@ float AGP_GameState::AddFerroniteThreatValueForTeam(int32 InTeamId, float Delta)
 	return Next - Previous;
 }
 
+bool AGP_GameState::IsMatchFinished() const
+{
+	return MatchStateTag == FGPGameplayTags::Get().Match_State_Finished;
+}
+
+bool AGP_GameState::AreEconomicOrdersAllowed() const
+{
+	return !IsMatchFinished();
+}
+
+bool AGP_GameState::AreEconomicOrdersAllowedInWorld(const UWorld* World)
+{
+	if (World == nullptr)
+	{
+		return true;
+	}
+
+	const AGP_GameState* GPGameState = World->GetGameState<AGP_GameState>();
+	if (GPGameState == nullptr)
+	{
+		return true;
+	}
+
+	return GPGameState->AreEconomicOrdersAllowed();
+}
+
+void AGP_GameState::SetDeliveryQuotaFerroniteScore(float InQuota)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AGP_GameState::SetDeliveryQuotaFerroniteScore denied without authority."));
+		return;
+	}
+
+	if (!FMath::IsFinite(InQuota))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AGP_GameState::SetDeliveryQuotaFerroniteScore rejected non-finite quota."));
+		return;
+	}
+
+	DeliveryQuotaFerroniteScore = FMath::Max(0.0f, InQuota);
+}
+
+void AGP_GameState::SetAnnihilationCountsAsWin(bool bInAnnihilationCountsAsWin)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AGP_GameState::SetAnnihilationCountsAsWin denied without authority."));
+		return;
+	}
+
+	bAnnihilationCountsAsWin = bInAnnihilationCountsAsWin;
+}
+
+void AGP_GameState::SetMatchSeed(int32 InMatchSeed)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AGP_GameState::SetMatchSeed denied without authority."));
+		return;
+	}
+
+	MatchSeed = InMatchSeed;
+}
+
 void AGP_GameState::SetMatchResult(int32 InWinnerTeamId, FGameplayTag InWinReasonTag)
+{
+	FGP_MatchResult Result = MatchResult;
+	Result.WinnerTeamId = InWinnerTeamId;
+	Result.WinnerReason = InWinReasonTag;
+	SetMatchResult(Result);
+}
+
+void AGP_GameState::SetMatchResult(const FGP_MatchResult& InResult)
 {
 	if (!HasAuthority())
 	{
@@ -239,31 +321,43 @@ void AGP_GameState::SetMatchResult(int32 InWinnerTeamId, FGameplayTag InWinReaso
 		return;
 	}
 
-	if (InWinnerTeamId < -1)
+	if (IsMatchFinished())
+	{
+		UE_LOG(LogTemp, Verbose,
+			TEXT("AGP_GameState::SetMatchResult ignored — match already Finished (WinnerTeamId=%d)."),
+			WinnerTeamId);
+		return;
+	}
+
+	if (InResult.WinnerTeamId < -1)
 	{
 		UE_LOG(LogTemp, Warning,
 			TEXT("AGP_GameState::SetMatchResult rejected WinnerTeamId=%d (must be >= -1)."),
-			InWinnerTeamId);
+			InResult.WinnerTeamId);
 		return;
 	}
 
-	if (!IsWinReasonBranchTag(InWinReasonTag))
+	if (!IsWinReasonBranchTag(InResult.WinnerReason))
 	{
 		UE_LOG(LogTemp, Warning,
 			TEXT("AGP_GameState::SetMatchResult rejected invalid or non-GP.Match.WinReason tag '%s'."),
-			*InWinReasonTag.ToString());
+			*InResult.WinnerReason.ToString());
 		return;
 	}
 
-	if (WinnerTeamId == InWinnerTeamId && WinReasonTag == InWinReasonTag)
+	if (WinnerTeamId == InResult.WinnerTeamId
+		&& WinReasonTag == InResult.WinnerReason
+		&& MatchResult.MatchDuration == InResult.MatchDuration
+		&& MatchResult.FinalScores.Num() == InResult.FinalScores.Num())
 	{
 		return;
 	}
 
 	const int32 OldWinner = WinnerTeamId;
 	const FGameplayTag OldReason = WinReasonTag;
-	WinnerTeamId = InWinnerTeamId;
-	WinReasonTag = InWinReasonTag;
+	MatchResult = InResult;
+	WinnerTeamId = InResult.WinnerTeamId;
+	WinReasonTag = InResult.WinnerReason;
 	BroadcastMatchResultChanged(OldWinner, WinnerTeamId, OldReason, WinReasonTag);
 }
 
@@ -275,8 +369,9 @@ void AGP_GameState::ClearMatchResult()
 		return;
 	}
 
-	if (WinnerTeamId == -1 && !WinReasonTag.IsValid())
+	if (WinnerTeamId == -1 && !WinReasonTag.IsValid() && !MatchResult.HasWinner() && MatchResult.FinalScores.Num() == 0)
 	{
+		MatchResult = FGP_MatchResult();
 		return;
 	}
 
@@ -284,6 +379,7 @@ void AGP_GameState::ClearMatchResult()
 	const FGameplayTag OldReason = WinReasonTag;
 	WinnerTeamId = -1;
 	WinReasonTag = FGameplayTag();
+	MatchResult = FGP_MatchResult();
 	BroadcastMatchResultChanged(OldWinner, WinnerTeamId, OldReason, WinReasonTag);
 }
 
@@ -985,4 +1081,13 @@ void AGP_GameState::OnRep_WinReasonTag(FGameplayTag OldWinReasonTag)
 {
 	// Field-level refresh: Winner old/new both current (may already be updated or not).
 	BroadcastMatchResultChanged(WinnerTeamId, WinnerTeamId, OldWinReasonTag, WinReasonTag);
+}
+
+void AGP_GameState::OnRep_MatchResult(const FGP_MatchResult& OldMatchResult)
+{
+	BroadcastMatchResultChanged(
+		OldMatchResult.WinnerTeamId,
+		MatchResult.WinnerTeamId,
+		OldMatchResult.WinnerReason,
+		MatchResult.WinnerReason);
 }

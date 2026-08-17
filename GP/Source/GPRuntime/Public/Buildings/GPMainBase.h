@@ -27,6 +27,7 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId) override;
+	virtual void NotifyAuthorityDeath() override;
 
 	/** Authority refresh: register only when TeamId is playable (>=1). */
 	void RefreshMainBaseRegistration();

@@ -33,7 +33,8 @@ enum class EGP_ContainerLaunchRejectReason : uint8
 	InvalidConfig UMETA(DisplayName = "Invalid Config"),
 	MissingGameState UMETA(DisplayName = "Missing GameState"),
 	AlreadyLaunching UMETA(DisplayName = "Already Launching"),
-	LaunchInFlight UMETA(DisplayName = "Launch In Flight")
+	LaunchInFlight UMETA(DisplayName = "Launch In Flight"),
+	MatchFinished UMETA(DisplayName = "Match Finished")
 };
 
 USTRUCT(BlueprintType)

@@ -50,7 +50,7 @@ Concrete abilities у Content (`/Game/GrimProtocol/Abilities/GA_GP_Repair`, `GA_
 | Class | Base | Replication | Purpose |
 | --- | --- | --- | --- |
 | `AGP_GameMode` | `AGameModeBase` | Server only | Lobby start, ServerTravel, PostLogin, OnUnitDied, MatchAssetLoader gate, EndMatch. |
-| `AGP_GameState` | `AGameStateBase` | All | MatchState (tag), MatchTimeRemaining, FerroniteThreatValue (raw Planetary Ferronite currently stored in MainBase containers — fluctuating stock), WinnerTeamId, WinReason tag. |
+| `AGP_GameState` | `AGameStateBase` | All | MatchState (tag), MatchTimeRemaining, FerroniteThreatValue, DeliveryQuotaFerroniteScore, bAnnihilationCountsAsWin, MatchSeed, `FGP_MatchResult` (WinnerTeamId, WinnerReason, MatchDuration, FinalScores array) plus compatibility WinnerTeamId / WinReasonTag getters. |
 | `AGP_LobbyState` | `AInfo` | All | Players[], bAllReady. Lifecycle: spawn before lobby map travel. |
 | `AGP_PlayerController` | `APlayerController` | OwnerOnly state | Input orchestrator, hosts SelectionComponent + CommandComponent + PlayerUIComponent. Owns VM adapters. |
 | `AGP_AIController` | `AAIController` (decided per ADR-0008) | Server-only | Singleplayer opponent. Has a normal `AGP_PlayerState` with ASC. State machine (`Explore / Mine / Ship / Order / Defend`), decision tick 2-5 s, reads own `OrbitalFerronite` / `FerroniteScore` / map state. Does NOT use the client `Server_RequestCommand` RPC — invokes server-side command-execution helpers DIRECTLY. **MVP feature.** |
@@ -295,7 +295,7 @@ Multicast cap target ≤ 30/s server-wide per [`12_UI_Architecture` §Multiplaye
 | `UGP_UnitAttributeSet.*` | Mixed (per ASC mode) | Standard GAS replication. |
 | `UGP_StorageComponent.StoredVolume` | `COND_OwnerOnly` | Container fill (Planetary Ferronite); private. |
 | `UGP_CargoComponent.CurrentCargo` | `COND_None` | Cargo over-head indicator. |
-| `AGP_GameState.{MatchState, MatchTimeRemaining, FerroniteThreatValue, WinnerTeamId, WinReason}` | `COND_None` | Universal. |
+| `AGP_GameState.{MatchState, MatchTimeRemaining, FerroniteThreatValue, WinnerTeamId, WinReason, DeliveryQuotaFerroniteScore, bAnnihilationCountsAsWin, MatchSeed, MatchResult}` | `COND_None` | Universal. `MatchResult.FinalScores` is a replicated array snapshot taken at finish. |
 | `AGP_LobbyState.Players, bAllReady` | `COND_None` | Lobby. |
 | `AGP_DropPod.PayloadDefRef, DescentProgress01` | `COND_None` | Visible drop pod in flight. |
 | `AGP_FerroniteDeposit.CurrentCapacity, ActiveMiners.Num()` | `COND_None` | Visible. |
@@ -436,7 +436,7 @@ Slice 12 — Steam MVP (GP-0501A)
   GP-S64  Main Menu BP wiring.
 
 Slice 13 — Match End + Polish
-  GP-S65  Win condition wiring: primary first-to-DeliveryQuotaFerroniteScore (DA 5000) → GP.Match.WinReason.DeliveryQuota; fallback at 10:00 highest FerroniteScore → TimerScore; secondary MainBase destroyed → Annihilation (bAnnihilationCountsAsWin=true); tie-break FerroniteScore → OrbitalFerronite → CurrentUnits → seed. OrbitalFerronite is NEVER the victory score.
+  GP-S65  Win condition wiring (delivered early as **GP-S34W**): primary first-to-DeliveryQuotaFerroniteScore (placeholder 5000) → GP.Match.WinReason.DeliveryQuota; fallback at 10:00 highest FerroniteScore → TimerScore; secondary MainBase destroyed → Annihilation (bAnnihilationCountsAsWin=true); tie-break FerroniteScore → OrbitalFerronite → CurrentUnits → MatchSeed. OrbitalFerronite is NEVER the victory score. OpponentDisconnect / Spectating / polished end screen remain deferred.
   GP-S66  EndOfMatch activatable screen.
   GP-S67  Stress test: 2-player + AI full match end-to-end.
 ```

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameplayTagContainer.h"
+#include "Game/GPMatchResult.h"
 #include "Resources/GPResourceNodeSearch.h"
 #include "GPGameState.generated.h"
 
@@ -72,7 +73,7 @@ struct FGP_TeamFerroniteThreat
 
 /**
  * Server-authoritative match flow state (storage + replication).
- * Does not own the match timer, win evaluation, or EndMatch — those belong to future AGP_GameMode.
+ * AGP_GameMode owns the timer and win evaluation; this class replicates match facts and the finished result.
  */
 UCLASS()
 class GPRUNTIME_API AGP_GameState : public AGameStateBase
@@ -115,6 +116,27 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Match")
 	FGameplayTag GetWinReasonTag() const { return WinReasonTag; }
 
+	UFUNCTION(BlueprintPure, Category = "GP|Match")
+	float GetDeliveryQuotaFerroniteScore() const { return DeliveryQuotaFerroniteScore; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|Match")
+	bool GetAnnihilationCountsAsWin() const { return bAnnihilationCountsAsWin; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|Match")
+	int32 GetMatchSeed() const { return MatchSeed; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|Match")
+	const FGP_MatchResult& GetMatchResult() const { return MatchResult; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|Match")
+	bool IsMatchFinished() const;
+
+	/** False only after MatchState == Finished. Waiting/Playing still accept economic orders. */
+	UFUNCTION(BlueprintPure, Category = "GP|Match")
+	bool AreEconomicOrdersAllowed() const;
+
+	static bool AreEconomicOrdersAllowedInWorld(const UWorld* World);
+
 	// --- Authority-only mutation (no RPCs) ---
 
 	void SetMatchStateTag(FGameplayTag NewStateTag);
@@ -130,7 +152,12 @@ public:
 	float AddFerroniteThreatValueForTeam(int32 InTeamId, float Delta);
 
 	void SetMatchResult(int32 InWinnerTeamId, FGameplayTag InWinReasonTag);
+	void SetMatchResult(const FGP_MatchResult& InResult);
 	void ClearMatchResult();
+
+	void SetDeliveryQuotaFerroniteScore(float InQuota);
+	void SetAnnihilationCountsAsWin(bool bInAnnihilationCountsAsWin);
+	void SetMatchSeed(int32 InMatchSeed);
 
 	/** Result of authority MainBase registry mutation (GP-S28). */
 	enum class EGP_MainBaseRegisterResult : uint8
@@ -249,6 +276,18 @@ protected:
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_WinReasonTag, Category = "GP|Match")
 	FGameplayTag WinReasonTag;
 
+	UPROPERTY(BlueprintReadOnly, Replicated, Category = "GP|Match")
+	float DeliveryQuotaFerroniteScore = 5000.0f;
+
+	UPROPERTY(BlueprintReadOnly, Replicated, Category = "GP|Match")
+	bool bAnnihilationCountsAsWin = true;
+
+	UPROPERTY(BlueprintReadOnly, Replicated, Category = "GP|Match")
+	int32 MatchSeed = 0;
+
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MatchResult, Category = "GP|Match")
+	FGP_MatchResult MatchResult;
+
 	/**
 	 * Replicated mirror of authority MainBase registry (one entry per playable team with a base).
 	 * Clients use FindMainBaseForTeamClientSafe — do not mutate directly.
@@ -273,6 +312,9 @@ protected:
 
 	UFUNCTION()
 	void OnRep_WinReasonTag(FGameplayTag OldWinReasonTag);
+
+	UFUNCTION()
+	void OnRep_MatchResult(const FGP_MatchResult& OldMatchResult);
 
 	UFUNCTION()
 	void OnRep_ReplicatedMainBases();

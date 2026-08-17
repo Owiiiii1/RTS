@@ -74,6 +74,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void ClientInitialize(AController* C) override;
 
 	UFUNCTION()
@@ -85,6 +86,9 @@ private:
 	void ApplyBaseUnitCapIfNeeded();
 	void AuthorityCatchUpExistingUnits();
 	void AuthorityAdjustCurrentUnits(int32 Delta);
+	void BindFerroniteScoreMatchNotify();
+	void UnbindFerroniteScoreMatchNotify();
+	void HandleFerroniteScoreChangedForMatch(const struct FOnAttributeChangeData& Data);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|AbilitySystem", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_AbilitySystemComponent> AbilitySystemComponent;
@@ -103,4 +107,5 @@ private:
 	int32 PendingOrbitalUnitCount = 0;
 
 	bool bBaseUnitCapApplied = false;
+	FDelegateHandle FerroniteScoreMatchHandle;
 };

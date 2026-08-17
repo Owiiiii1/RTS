@@ -238,13 +238,19 @@ bool UGP_StorageComponent::ValidateLaunchPreconditions(
 		return false;
 	}
 
+	UWorld* World = GetWorld();
+	if (!AGP_GameState::AreEconomicOrdersAllowedInWorld(World))
+	{
+		OutReason = EGP_ContainerLaunchRejectReason::MatchFinished;
+		return false;
+	}
+
 	if (IsLaunchInFlight())
 	{
 		OutReason = EGP_ContainerLaunchRejectReason::LaunchInFlight;
 		return false;
 	}
 
-	UWorld* World = GetWorld();
 	OutGameState = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
 	if (OutGameState == nullptr)
 	{

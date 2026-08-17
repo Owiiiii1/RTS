@@ -1,6 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-17 — GP-S34W Match Win/Lose MVP (implementation candidate)
+
+Status: **GP-S34W_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s34w-match-win-lose` (base `main` @ `7873d2826130bc711486b7a8c0a55322685e8d9d`)
+- Quota / timer ladder / MainBase annihilation; FerroniteScore is victory score; no Draw; FinishMatch exact-once
+- OpponentDisconnect, Spectating, polished end screen, lobby return, SWARM, pause **deferred**
+- Contract `gp.Match.RunWinLoseContractTest` + listed regressions Failures=0; GPEditor Win64 Development + UHT **PASS**
+- **NOT MERGED** — await operator PIE validation. Do not self-approve
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-17 — GP-S33C Unit Cap + Logistics Hub Capacity (finalization)
+
 
 Status: **GP-S33C_FINALIZATION_READY_FOR_MERGE**
 

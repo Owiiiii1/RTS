@@ -7,8 +7,10 @@
 #include "Effects/GPGE_UnitCap_Base5.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
+#include "Game/GPGameMode.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameplayEffectTypes.h"
 #include "Net/UnrealNetwork.h"
 #include "Orbital/GPOrbitalBuildingInventoryComponent.h"
 #include "Units/GPSalvageWalker.h"
@@ -103,6 +105,12 @@ void AGP_PlayerState::BeginPlay()
 	}
 }
 
+void AGP_PlayerState::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	UnbindFerroniteScoreMatchNotify();
+	Super::EndPlay(EndPlayReason);
+}
+
 void AGP_PlayerState::ClientInitialize(AController* C)
 {
 	Super::ClientInitialize(C);
@@ -124,11 +132,13 @@ void AGP_PlayerState::InitializeAbilitySystemActorInfo()
 	if (CurrentOwner == this && CurrentAvatar == this)
 	{
 		ApplyBaseUnitCapIfNeeded();
+		BindFerroniteScoreMatchNotify();
 		return;
 	}
 
 	AbilitySystemComponent->InitAbilityActorInfo(this, this);
 	ApplyBaseUnitCapIfNeeded();
+	BindFerroniteScoreMatchNotify();
 
 	UE_LOG(LogTemp, Verbose,
 		TEXT("AGP_PlayerState::InitializeAbilitySystemActorInfo: InitAbilityActorInfo(this, this) on %s."),
@@ -324,6 +334,48 @@ AGP_PlayerState* AGP_PlayerState::FindAuthoritativeForTeam(const UWorld* World, 
 	}
 
 	return Found;
+}
+
+void AGP_PlayerState::BindFerroniteScoreMatchNotify()
+{
+	if (!HasAuthority() || AbilitySystemComponent == nullptr || FerroniteScoreMatchHandle.IsValid())
+	{
+		return;
+	}
+
+	FerroniteScoreMatchHandle = AbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(
+		UGP_PlayerAttributeSet::GetFerroniteScoreAttribute()).AddUObject(
+		this, &AGP_PlayerState::HandleFerroniteScoreChangedForMatch);
+}
+
+void AGP_PlayerState::UnbindFerroniteScoreMatchNotify()
+{
+	if (AbilitySystemComponent != nullptr && FerroniteScoreMatchHandle.IsValid())
+	{
+		AbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(
+			UGP_PlayerAttributeSet::GetFerroniteScoreAttribute()).Remove(FerroniteScoreMatchHandle);
+	}
+	FerroniteScoreMatchHandle.Reset();
+}
+
+void AGP_PlayerState::HandleFerroniteScoreChangedForMatch(const FOnAttributeChangeData& Data)
+{
+	(void)Data;
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (World == nullptr || World->bIsTearingDown)
+	{
+		return;
+	}
+
+	if (AGP_GameMode* GameMode = World->GetAuthGameMode<AGP_GameMode>())
+	{
+		GameMode->NotifyFerroniteScoreChanged(this);
+	}
 }
 
 void AGP_PlayerState::AuthorityCatchUpExistingUnits()

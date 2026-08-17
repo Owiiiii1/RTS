@@ -11,15 +11,15 @@
 | Concern | Authority | Where |
 | --- | --- | --- |
 | Match state (`Loading → Playing → Finished`) | Server | `AGP_GameMode` writes, `AGP_GameState` replicates |
-| `MatchTimeRemaining` countdown (10-min hard cap) | Server | `AGP_GameMode::Tick` low-frequency (1 Hz), replicated via `AGP_GameState` |
+| `MatchTimeRemaining` countdown (10-min hard cap) | Server | `AGP_GameMode` 1 Hz `FTimerManager` (not Actor Tick), replicated via `AGP_GameState` |
 | Player faction / team | Server (assigned on join) | `AGP_PlayerState`, replicated |
 | Player OrbitalFerronite (spendable currency) | Server | `AGP_PlayerState.ASC` + `UGP_PlayerAttributeSet.OrbitalFerronite`, `COND_OwnerOnly` |
 | Player FerroniteScore (cumulative) | Server | `AGP_PlayerState.ASC` + `UGP_PlayerAttributeSet.FerroniteScore`, monotonically increasing, RepNotify |
 | `FerroniteThreatValue` (swarm pressure) | Server | `AGP_GameState.FerroniteThreatValue` — raw Ferronite stored at MainBase (up on container drop-off, down on launch), replicated. Drives wave intensity. Deprecates `SwarmAggressionLevel` / `AggressionPerUnit*` |
 | SWARM unit spawn / AI tick | Server | `AGP_GameMode` тригерить waves; SWARM units — server-only AIControlled. Multicast тільки cosmetic (death VFX) |
 | AI opponent decision tick (singleplayer) | Server (host) | `AGP_AIController : AAIController` low-frequency (2-5s), не client-side |
-| Score tie-break execution | Server | Runs on `MatchState = Finished`. Ladder: `FerroniteScore` → `OrbitalFerronite` → `CurrentUnits` → deterministic seed (per [`../GDD/08_Win_Lose_Conditions`](../GDD/08_Win_Lose_Conditions.md)) |
-| `MatchResult` struct write | Server | `AGP_GameState.MatchResult`, RepNotify тригерить client end-of-match UI |
+| Score tie-break execution | Server | `AGP_GameMode` evaluates while `Playing`, then `FinishMatch` writes `FGP_MatchResult` and sets `Finished`. Ladder: `FerroniteScore` → `OrbitalFerronite` → `CurrentUnits` → stored `MatchSeed` (no RNG at finish). |
+| `MatchResult` struct write | Server | `AGP_GameState.MatchResult` (`TArray<FGP_MatchTeamScore>` snapshot, not `TMap`) plus compatibility `WinnerTeamId` / `WinReasonTag`. |
 | Disconnect detection | Server | `AGP_PlayerState.bConnected = false`, replicated |
 | Unit/building spawn | Server | `AGP_GameMode` / GAS abilities |
 | Unit health | Server | `AGP_UnitBase.ASC` + `UGP_UnitAttributeSet` |

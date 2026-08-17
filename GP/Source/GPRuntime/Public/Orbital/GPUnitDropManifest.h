@@ -43,5 +43,6 @@ enum class EGP_UnitDropRejectReason : uint8
 	MissingDropZone,
 	UnitCapReached,
 	SpendFailed,
-	SpawnFailed
+	SpawnFailed,
+	MatchFinished
 };

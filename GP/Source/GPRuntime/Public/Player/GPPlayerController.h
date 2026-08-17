@@ -221,7 +221,16 @@ private:
 	void HandleOrbitalFerroniteAttributeChanged(const struct FOnAttributeChangeData& Data);
 	void HandleMaxUnitsAttributeChanged(const struct FOnAttributeChangeData& Data);
 	void HandleCurrentUnitsAttributeChanged(const struct FOnAttributeChangeData& Data);
+	void HandleFerroniteScoreAttributeChanged(const struct FOnAttributeChangeData& Data);
 	void SyncUnitCapHUDFromAttributes();
+	void SyncMatchHUDFromAuthority();
+	void HandleMatchTimeRemainingChanged(float OldTime, float NewTime);
+	void HandleMatchStateTagChanged(FGameplayTag OldTag, FGameplayTag NewTag);
+	void HandleMatchResultChangedForHUD(
+		int32 OldWinnerTeamId,
+		int32 NewWinnerTeamId,
+		FGameplayTag OldWinReasonTag,
+		FGameplayTag NewWinReasonTag);
 	void HandleBuildingReadyChanged(EGP_OrbitalBuildingType BuildingType, int32 NewReadyCount);
 	void HandleResolvedMainBaseChanged(int32 TeamId, AGP_MainBase* PreviousMainBase, AGP_MainBase* NewMainBase);
 	void HandlePlayerTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
@@ -350,7 +359,11 @@ private:
 	FDelegateHandle OrbitalFerroniteChangedHandle;
 	FDelegateHandle MaxUnitsChangedHandle;
 	FDelegateHandle CurrentUnitsChangedHandle;
+	FDelegateHandle FerroniteScoreChangedHandle;
 	FDelegateHandle BuildingReadyChangedHandle;
+	FDelegateHandle MatchTimeRemainingChangedHandle;
+	FDelegateHandle MatchStateTagChangedHandle;
+	FDelegateHandle MatchResultChangedHandle;
 	int32 BoundPlanetaryTeamId = -1;
 
 	/** Local-only building deploy ghost + mode (GP-S32R). */

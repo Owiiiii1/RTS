@@ -15,7 +15,7 @@ Status: **GP-S36G_VISUAL_FEEDBACK_FIX_READY_FOR_OPERATOR_VALIDATION**
 `1df431c` / previous visual-feedback SHA-record on the same branch.
 
 ## Feature head SHA
-*(filled in SHA-record commit)*
+`a4e83b097dfa9fecec991c62355b4f5e1bfa3443`
 
 ## Screenshot-observed failure
 Operator screenshot:

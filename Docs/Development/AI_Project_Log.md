@@ -4,7 +4,7 @@
 
 Status: **GP-S34W_FINALIZATION_READY_FOR_MERGE**
 
-- Branch: `feature/gp-s34w-match-win-lose` (base `main` @ `7873d2826130bc711486b7a8c0a55322685e8d9d`, prior remote `1828d5722da611cc940370a81f603388ac6f3bcb`)
+- Branch: `feature/gp-s34w-match-win-lose` (base `main` @ `7873d2826130bc711486b7a8c0a55322685e8d9d`, prior remote `1828d5722da611cc940370a81f603388ac6f3bcb`, finalization `b0a94f113e27fd9a6ed798b84bbbcc59f32954fc`)
 - Operator FINAL PASS: single-PIE Waiting until `gp.Match.DebugStart`; 2-player auto-start; quota via real container launch; annihilation replicated; timer-score fallback
 - Final regressions Failures=0; GPEditor+UHT / GP Win64 Development / GP Win64 Shipping **PASS**
 - Shipping: five `gp.Match.Debug*` commands absent from `GP-Win64-Shipping.exe`; present in Development `GP.exe`

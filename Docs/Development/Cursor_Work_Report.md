@@ -9,7 +9,7 @@
 `feature/gp-s34w-match-win-lose`  
 Base `main` SHA: `7873d2826130bc711486b7a8c0a55322685e8d9d`  
 Implementation SHA: `3a1bc381309e77757aed519bae9fe66957d056fd`  
-Feature head SHA: recorded by the SHA-record commit immediately after this documentation update.
+Feature head SHA: `35a501d1d8e733dd9e8e85b06f879566e6538a1f`
 
 ## Pre-slice gaps found
 - `AGP_GameMode::EvaluateAndFinishMatch()` was an intentional GP-S07 gap: timer expiry logged and left `Playing` at time 0 with no winner.

@@ -4,7 +4,7 @@
 
 Status: **GP-S34W_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s34w-match-win-lose` (base `main` @ `7873d2826130bc711486b7a8c0a55322685e8d9d`, implementation `3a1bc381309e77757aed519bae9fe66957d056fd`)
+- Branch: `feature/gp-s34w-match-win-lose` (base `main` @ `7873d2826130bc711486b7a8c0a55322685e8d9d`, implementation `3a1bc381309e77757aed519bae9fe66957d056fd`, SHA-record `35a501d1d8e733dd9e8e85b06f879566e6538a1f`)
 - Quota / timer ladder / MainBase annihilation; FerroniteScore is victory score; no Draw; FinishMatch exact-once
 - OpponentDisconnect, Spectating, polished end screen, lobby return, SWARM, pause **deferred**
 - Contract `gp.Match.RunWinLoseContractTest` + listed regressions Failures=0; GPEditor Win64 Development + UHT **PASS**

@@ -47,6 +47,9 @@ public:
 	int32 GetPreviewGridLineCount() const { return PreviewGridLineCount; }
 	FString GetPreviewStatusLabel() const { return PreviewStatusLabel; }
 	bool HasActiveGridPreview() const { return bGridPreviewActive; }
+	bool IsGhostFillHidden() const;
+	int32 GetPreviewLineWorldCount() const { return PreviewLineWorldStarts.Num(); }
+	bool GetPreviewLineWorldSegment(int32 Index, FVector& OutStart, FVector& OutEnd) const;
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Building|Ghost")
@@ -70,4 +73,6 @@ protected:
 	int32 PreviewGridLineCount = 0;
 	FString PreviewStatusLabel;
 	bool bGridPreviewActive = false;
+	TArray<FVector> PreviewLineWorldStarts;
+	TArray<FVector> PreviewLineWorldEnds;
 };

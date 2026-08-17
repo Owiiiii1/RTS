@@ -445,9 +445,73 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			Expect(Ghost->GetPreviewGridLineCount() == 10, TEXT("Preview_GhostDivisionLines"));
 			Expect(Ghost->GetPreviewStatusLabel() == TEXT("VALID"), TEXT("Preview_GhostValidLabel"));
 			Expect(Ghost->HasActiveGridPreview(), TEXT("Preview_GhostActive"));
+			Expect(Ghost->IsGhostFillHidden(), TEXT("Preview_GhostFillHidden"));
 			Ghost->ClearGridPreview();
 			Expect(!Ghost->HasActiveGridPreview() && Ghost->GetPreviewGridLineCount() == 0
-				&& Ghost->GetPreviewStatusLabel().IsEmpty(), TEXT("Preview_CancelClearsState"));
+				&& Ghost->GetPreviewStatusLabel().IsEmpty()
+				&& Ghost->GetPreviewLineWorldCount() == 0, TEXT("Preview_CancelClearsState"));
+
+			const FVector Requested(2000.0f, 1200.0f, 50.0f);
+			FIntPoint OffsetOrigin = FIntPoint::ZeroValue;
+			FVector OffsetSnapped = FVector::ZeroVector;
+			Expect(Grid->ResolveSnappedPlacement(Requested, FIntPoint(4, 4), OffsetOrigin, OffsetSnapped),
+				TEXT("Preview_OffsetSnap"));
+			Ghost->SetActorLocation(OffsetSnapped);
+			Ghost->UpdateGridPreview(
+				Grid,
+				OffsetOrigin,
+				FIntPoint(4, 4),
+				OffsetSnapped.Z,
+				true,
+				EGP_BuildingDropRejectReason::None);
+
+			FVector ExpectedMin = FVector::ZeroVector;
+			FVector ExpectedMax = FVector::ZeroVector;
+			Grid->GetFootprintWorldAABB(OffsetOrigin, FIntPoint(4, 4), OffsetSnapped.Z, ExpectedMin, ExpectedMax);
+			const float LineZ = OffsetSnapped.Z + 24.0f;
+			FVector BorderStart = FVector::ZeroVector;
+			FVector BorderEnd = FVector::ZeroVector;
+			Expect(Ghost->GetPreviewLineWorldSegment(0, BorderStart, BorderEnd), TEXT("Preview_OffsetHasBorder"));
+			Expect(FMath::IsNearlyEqual(BorderStart.X, ExpectedMin.X)
+				&& FMath::IsNearlyEqual(BorderStart.Y, ExpectedMin.Y)
+				&& FMath::IsNearlyEqual(BorderEnd.X, ExpectedMax.X)
+				&& FMath::IsNearlyEqual(BorderEnd.Y, ExpectedMin.Y)
+				&& FMath::IsNearlyEqual(BorderStart.Z, LineZ),
+				TEXT("Preview_OffsetBorderMatchesAABB"));
+
+			bool bAllOnFootprint = Ghost->GetPreviewLineWorldCount() == 10;
+			bool bAnyNearOrigin = false;
+			for (int32 LineIdx = 0; LineIdx < Ghost->GetPreviewLineWorldCount(); ++LineIdx)
+			{
+				FVector Start = FVector::ZeroVector;
+				FVector End = FVector::ZeroVector;
+				if (!Ghost->GetPreviewLineWorldSegment(LineIdx, Start, End))
+				{
+					bAllOnFootprint = false;
+					break;
+				}
+				const float StartXY = FVector2D(Start.X, Start.Y).Size();
+				const float EndXY = FVector2D(End.X, End.Y).Size();
+				if (StartXY < 500.0f || EndXY < 500.0f)
+				{
+					bAnyNearOrigin = true;
+				}
+				if (Start.X < ExpectedMin.X - 1.0f || Start.X > ExpectedMax.X + 1.0f
+					|| Start.Y < ExpectedMin.Y - 1.0f || Start.Y > ExpectedMax.Y + 1.0f
+					|| End.X < ExpectedMin.X - 1.0f || End.X > ExpectedMax.X + 1.0f
+					|| End.Y < ExpectedMin.Y - 1.0f || End.Y > ExpectedMax.Y + 1.0f)
+				{
+					bAllOnFootprint = false;
+				}
+			}
+			Expect(bAllOnFootprint && !bAnyNearOrigin, TEXT("Preview_OffsetLinesFollowFootprint"));
+			Expect(FMath::Abs(OffsetSnapped.X - 2000.0f) < 400.0f
+				&& FMath::Abs(OffsetSnapped.Y - 1200.0f) < 400.0f,
+				TEXT("Preview_OffsetNearRequested"));
+
+			Ghost->ClearGridPreview();
+			Expect(!Ghost->HasActiveGridPreview() && Ghost->GetPreviewLineWorldCount() == 0,
+				TEXT("Preview_OffsetCancelClears"));
 			Ghost->Destroy();
 		}
 

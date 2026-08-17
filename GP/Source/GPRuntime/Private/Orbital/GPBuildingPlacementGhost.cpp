@@ -7,9 +7,11 @@
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
-#include "Engine/StaticMesh.h"
-#include "Materials/MaterialInstanceDynamic.h"
-#include "UObject/ConstructorHelpers.h"
+
+namespace
+{
+	constexpr float GPPlacementGridLineHeightCm = 24.0f;
+}
 
 AGP_BuildingPlacementGhost::AGP_BuildingPlacementGhost()
 {
@@ -25,25 +27,8 @@ AGP_BuildingPlacementGhost::AGP_BuildingPlacementGhost()
 	GhostMesh->SetCastShadow(false);
 	GhostMesh->SetCanEverAffectNavigation(false);
 	GhostMesh->SetGenerateOverlapEvents(false);
-
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(
-		TEXT("/Engine/BasicShapes/Cube.Cube"));
-	if (CubeMesh.Succeeded())
-	{
-		GhostMesh->SetStaticMesh(CubeMesh.Object);
-		GhostMesh->SetRelativeScale3D(FVector(1.6f, 1.6f, 2.4f));
-	}
-
-	GhostMesh->SetTranslucentSortPriority(10);
-	if (UMaterialInterface* BaseMat = GhostMesh->GetMaterial(0))
-	{
-		if (UMaterialInstanceDynamic* Dyn = UMaterialInstanceDynamic::Create(BaseMat, this))
-		{
-			GhostMaterial = Dyn;
-			Dyn->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.2f, 0.85f, 0.35f, 0.45f));
-			GhostMesh->SetMaterial(0, Dyn);
-		}
-	}
+	GhostMesh->SetHiddenInGame(true);
+	GhostMesh->SetVisibility(false);
 
 	GridLineBatch = CreateDefaultSubobject<ULineBatchComponent>(TEXT("GridLineBatch"));
 	GridLineBatch->SetupAttachment(SceneRoot);
@@ -51,6 +36,8 @@ AGP_BuildingPlacementGhost::AGP_BuildingPlacementGhost()
 	GridLineBatch->SetCastShadow(false);
 	GridLineBatch->SetCanEverAffectNavigation(false);
 	GridLineBatch->SetGenerateOverlapEvents(false);
+	GridLineBatch->PrimaryComponentTick.bCanEverTick = false;
+	GridLineBatch->SetComponentTickEnabled(false);
 
 	StatusText = CreateDefaultSubobject<UTextRenderComponent>(TEXT("StatusText"));
 	StatusText->SetupAttachment(SceneRoot);
@@ -76,8 +63,8 @@ void AGP_BuildingPlacementGhost::SetGhostVisible(bool bVisible)
 {
 	if (GhostMesh != nullptr)
 	{
-		GhostMesh->SetHiddenInGame(!bVisible);
-		GhostMesh->SetVisibility(bVisible);
+		GhostMesh->SetHiddenInGame(true);
+		GhostMesh->SetVisibility(false);
 	}
 	if (!bVisible)
 	{
@@ -93,27 +80,34 @@ void AGP_BuildingPlacementGhost::UpdateGhostTransform(const FTransform& WorldTra
 void AGP_BuildingPlacementGhost::SetFootprintCells(FIntPoint FootprintCells)
 {
 	ActiveFootprintCells = FIntPoint(FMath::Max(1, FootprintCells.X), FMath::Max(1, FootprintCells.Y));
-	if (GhostMesh == nullptr)
+	if (GhostMesh != nullptr)
 	{
-		return;
+		GhostMesh->SetHiddenInGame(true);
+		GhostMesh->SetVisibility(false);
 	}
-
-	const float ScaleXY_X = static_cast<float>(ActiveFootprintCells.X) * 2.0f;
-	const float ScaleXY_Y = static_cast<float>(ActiveFootprintCells.Y) * 2.0f;
-	GhostMesh->SetRelativeScale3D(FVector(ScaleXY_X, ScaleXY_Y, 0.2f));
-	GhostMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 10.0f));
 }
 
 void AGP_BuildingPlacementGhost::SetPreviewValid(bool bValid)
 {
-	if (GhostMaterial == nullptr)
+	(void)bValid;
+}
+
+bool AGP_BuildingPlacementGhost::IsGhostFillHidden() const
+{
+	return GhostMesh == nullptr || GhostMesh->bHiddenInGame;
+}
+
+bool AGP_BuildingPlacementGhost::GetPreviewLineWorldSegment(int32 Index, FVector& OutStart, FVector& OutEnd) const
+{
+	if (!PreviewLineWorldStarts.IsValidIndex(Index) || !PreviewLineWorldEnds.IsValidIndex(Index))
 	{
-		return;
+		OutStart = FVector::ZeroVector;
+		OutEnd = FVector::ZeroVector;
+		return false;
 	}
-	const FLinearColor Color = bValid
-		? FLinearColor(0.2f, 0.85f, 0.35f, 0.45f)
-		: FLinearColor(0.9f, 0.15f, 0.12f, 0.5f);
-	GhostMaterial->SetVectorParameterValue(TEXT("Color"), Color);
+	OutStart = PreviewLineWorldStarts[Index];
+	OutEnd = PreviewLineWorldEnds[Index];
+	return true;
 }
 
 void AGP_BuildingPlacementGhost::UpdateGridPreview(
@@ -130,49 +124,49 @@ void AGP_BuildingPlacementGhost::UpdateGridPreview(
 		return;
 	}
 
+	if (GhostMesh != nullptr)
+	{
+		GhostMesh->SetHiddenInGame(true);
+		GhostMesh->SetVisibility(false);
+	}
+
 	FVector Min = FVector::ZeroVector;
 	FVector Max = FVector::ZeroVector;
 	Grid->GetFootprintWorldAABB(OriginCell, FootprintSize, GroundZ, Min, Max);
 	const float CellSize = Grid->GetCellSize();
-	const FVector ActorLoc = GetActorLocation();
-	const float LocalZ = 24.0f;
+	const float LineZ = GroundZ + GPPlacementGridLineHeightCm;
 	const FColor LineColor = bValid ? FColor(32, 220, 72) : FColor(230, 36, 32);
 	constexpr float BorderThickness = 6.0f;
 	constexpr float CellThickness = 3.0f;
-	constexpr float LineLife = 3600.0f;
 
-	auto ToLocal = [&](float WorldX, float WorldY)
-	{
-		return FVector(WorldX - ActorLoc.X, WorldY - ActorLoc.Y, LocalZ);
-	};
 	auto DrawSeg = [&](const FVector& A, const FVector& B, float Thickness)
 	{
-		GridLineBatch->DrawLine(A, B, LineColor, SDPG_World, Thickness, LineLife);
+		GridLineBatch->DrawLine(A, B, LineColor, SDPG_World, Thickness, 0.0f);
+		PreviewLineWorldStarts.Add(A);
+		PreviewLineWorldEnds.Add(B);
 		++PreviewGridLineCount;
 	};
 
-	DrawSeg(ToLocal(Min.X, Min.Y), ToLocal(Max.X, Min.Y), BorderThickness);
-	DrawSeg(ToLocal(Max.X, Min.Y), ToLocal(Max.X, Max.Y), BorderThickness);
-	DrawSeg(ToLocal(Max.X, Max.Y), ToLocal(Min.X, Max.Y), BorderThickness);
-	DrawSeg(ToLocal(Min.X, Max.Y), ToLocal(Min.X, Min.Y), BorderThickness);
+	DrawSeg(FVector(Min.X, Min.Y, LineZ), FVector(Max.X, Min.Y, LineZ), BorderThickness);
+	DrawSeg(FVector(Max.X, Min.Y, LineZ), FVector(Max.X, Max.Y, LineZ), BorderThickness);
+	DrawSeg(FVector(Max.X, Max.Y, LineZ), FVector(Min.X, Max.Y, LineZ), BorderThickness);
+	DrawSeg(FVector(Min.X, Max.Y, LineZ), FVector(Min.X, Min.Y, LineZ), BorderThickness);
 
 	for (int32 X = 1; X < FootprintSize.X; ++X)
 	{
 		const float WorldX = Min.X + static_cast<float>(X) * CellSize;
-		DrawSeg(ToLocal(WorldX, Min.Y), ToLocal(WorldX, Max.Y), CellThickness);
+		DrawSeg(FVector(WorldX, Min.Y, LineZ), FVector(WorldX, Max.Y, LineZ), CellThickness);
 	}
 	for (int32 Y = 1; Y < FootprintSize.Y; ++Y)
 	{
 		const float WorldY = Min.Y + static_cast<float>(Y) * CellSize;
-		DrawSeg(ToLocal(Min.X, WorldY), ToLocal(Max.X, WorldY), CellThickness);
+		DrawSeg(FVector(Min.X, WorldY, LineZ), FVector(Max.X, WorldY, LineZ), CellThickness);
 	}
 
 	PreviewOuterExtentXY = FVector2D(Max.X - Min.X, Max.Y - Min.Y);
 	PreviewCellCount = FootprintSize.X * FootprintSize.Y;
 	PreviewStatusLabel = GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(bValid, RejectReason);
 	bGridPreviewActive = true;
-
-	SetPreviewValid(bValid);
 
 	if (StatusText != nullptr)
 	{
@@ -200,4 +194,6 @@ void AGP_BuildingPlacementGhost::ClearGridPreview()
 	PreviewGridLineCount = 0;
 	PreviewStatusLabel.Reset();
 	bGridPreviewActive = false;
+	PreviewLineWorldStarts.Reset();
+	PreviewLineWorldEnds.Reset();
 }

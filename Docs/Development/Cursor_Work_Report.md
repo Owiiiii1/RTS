@@ -12,7 +12,7 @@ Status: **GP-S36G_LIVE_FOOTPRINT_SOURCE_RECONCILIATION_READY_FOR_OPERATOR_VALIDA
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-`PENDING_IMPLEMENTATION`
+`47dcb071931ea442afb92febe41041a23996f944`
 
 ## Operator evidence (not rounding)
 Operator enlarged MainBase `PlacementFootprintBounds` massively — several times the visible building — and the forbidden construction area appeared in a completely different place. That is a source/transform divergence, not 200 cm snap quantization.

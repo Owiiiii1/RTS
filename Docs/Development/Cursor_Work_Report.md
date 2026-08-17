@@ -11,7 +11,7 @@ Status: **GP-S36G_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 `6f258a1069fd92a45f99faf7c877c941528beb2a`
 
 ## Feature head SHA
-*(filled in SHA-record commit)*
+`0acd4930a43b11d7065b56fea75781dec3f12e2d`
 
 ## BuildGrid class / API
 `UGP_BuildGridSubsystem : UWorldSubsystem` in `GPRuntime` (`Buildings/Grid/`).

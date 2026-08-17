@@ -4,7 +4,7 @@
 
 Status: **GP-S36G_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s36g-buildgrid-mvp` (base verified `main` @ `6f258a1069fd92a45f99faf7c877c941528beb2a`)
+- Branch: `feature/gp-s36g-buildgrid-mvp` (base verified `main` @ `6f258a1069fd92a45f99faf7c877c941528beb2a`, implementation `0acd4930a43b11d7065b56fea75781dec3f12e2d`)
 - `UGP_BuildGridSubsystem`: 200 cm cells, origin XY `(0,0)`, server occupancy + in-flight DropPod reservations
 - Ghost/server share snap math; yaw 0; MainBase 5×5 fallback; Ferronite Deposit not on grid
 - ClearanceCells / Walls / FoW placement deferred

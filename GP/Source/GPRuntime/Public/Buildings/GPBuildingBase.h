@@ -53,9 +53,16 @@ public:
 	/**
 	 * GP-S36G: PlacementFootprintBounds is Blueprint-class design data, not per-level-instance.
 	 * Copies BoxExtent / RelativeLocation / RelativeRotation / RelativeScale3D from the class CDO
-	 * onto this live component. Production calls this only for net-startup actors.
+	 * onto this live component and re-applies parent-scale isolation. Production calls this only
+	 * for net-startup actors.
 	 */
 	void ApplyClassDesignToLivePlacementFootprintBounds();
+
+	/**
+	 * UE 5.8: SetAbsolute(false, false, true) — inherit parent location/rotation, keep
+	 * RelativeScale3D as the component world scale (do not multiply by actor/root scale).
+	 */
+	void ApplyPlacementFootprintParentScaleIsolation();
 
 	FIntPoint ResolveFallbackFootprintSize() const;
 
@@ -80,6 +87,7 @@ protected:
 	 * Blueprint children edit this component's BoxExtent / RelativeScale3D / RelativeLocation.
 	 * This live component is the single occupied-ground source after init (no hidden CDO path).
 	 * Pre-placed instances are synchronized from the class CDO so stale level snapshots cannot diverge.
+	 * Parent/actor scale is isolated (absolute scale); own authored RelativeScale3D remains the size.
 	 * Native default is a visible 1×1 (200×200 cm) volume; derived classes override extent.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|BuildGrid", meta = (AllowPrivateAccess = "true"))

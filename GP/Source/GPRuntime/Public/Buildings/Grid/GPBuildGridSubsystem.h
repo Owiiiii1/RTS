@@ -107,7 +107,8 @@ public:
 
 	/**
 	 * Component-local authored half-extent (cm): |UnscaledBoxExtent * RelativeScale3D|.
-	 * Does not use GetScaledBoxExtent() / component world scale (those include actor/parent scale).
+	 * Does not use actor/root/world scale. PlacementFootprintBounds uses absolute scale so the
+	 * visible box matches this authored size; GetScaledBoxExtent() is not the gameplay source.
 	 * RelativeRotation is ignored (BuildGrid is axis-aligned).
 	 */
 	static FVector GetAuthoredPlacementHalfExtentCm(const UBoxComponent* Bounds);

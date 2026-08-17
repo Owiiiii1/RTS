@@ -11,6 +11,7 @@
 #include "Buildings/GPMainBase.h"
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Debug/GPContractTestCoordinator.h"
 #include "Effects/GPGE_AddOrbital.h"
@@ -77,6 +78,18 @@ namespace GPBuildGridContractDebug
 			}
 		}
 	};
+
+	static bool VisualHalfMatchesAuthored(const UBoxComponent* Bounds, float Tolerance = 0.5f)
+	{
+		if (Bounds == nullptr)
+		{
+			return false;
+		}
+		const FVector Authored = UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(Bounds);
+		const FVector Visual = Bounds->GetScaledBoxExtent();
+		return FMath::IsNearlyEqual(Authored.X, FMath::Abs(Visual.X), Tolerance)
+			&& FMath::IsNearlyEqual(Authored.Y, FMath::Abs(Visual.Y), Tolerance);
+	}
 
 	static AGP_PlayerState* SpawnTeamPlayerState(UWorld* World, AGameStateBase* GameState, int32 TeamId)
 	{
@@ -504,6 +517,35 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 				Grid->ResolveBuildingFootprint(AGP_MainBase::StaticClass(), nullptr);
 			Expect(NativeBase.bFromAuthoredBounds && NativeBase.SizeCells == FIntPoint(5, 5),
 				TEXT("Bounds_NativeMainBase5x5"));
+			Expect(BaseCDO->GetActorScale3D().Equals(FVector::OneVector, 0.01f),
+				TEXT("ScaleTrace_NativeMainBaseActorScale1"));
+			const UCapsuleComponent* NativeCapsule = BaseCDO->GetCapsuleComponent();
+			Expect(NativeCapsule != nullptr
+				&& NativeCapsule->GetRelativeScale3D().Equals(FVector::OneVector, 0.01f),
+				TEXT("ScaleTrace_NativeCapsuleRelScale1"));
+			Expect(BaseBounds->IsUsingAbsoluteScale()
+				&& BaseBounds->GetRelativeScale3D().Equals(FVector::OneVector, 0.01f),
+				TEXT("ScaleTrace_NativeBoundsAbsoluteOwnScale1"));
+			UE_LOG(
+				LogGPBuildGridContract,
+				Log,
+				TEXT("ScaleTrace native MainBase CDO actor=(%.3f,%.3f,%.3f) capsuleRel=(%.3f,%.3f,%.3f) boundsRel=(%.3f,%.3f,%.3f) boundsComp=(%.3f,%.3f,%.3f) unscaled=(%.1f,%.1f) authoredHalf=(%.1f,%.1f)"),
+				BaseCDO->GetActorScale3D().X,
+				BaseCDO->GetActorScale3D().Y,
+				BaseCDO->GetActorScale3D().Z,
+				NativeCapsule != nullptr ? NativeCapsule->GetRelativeScale3D().X : 0.0f,
+				NativeCapsule != nullptr ? NativeCapsule->GetRelativeScale3D().Y : 0.0f,
+				NativeCapsule != nullptr ? NativeCapsule->GetRelativeScale3D().Z : 0.0f,
+				BaseBounds->GetRelativeScale3D().X,
+				BaseBounds->GetRelativeScale3D().Y,
+				BaseBounds->GetRelativeScale3D().Z,
+				BaseBounds->GetComponentScale().X,
+				BaseBounds->GetComponentScale().Y,
+				BaseBounds->GetComponentScale().Z,
+				BaseBounds->GetUnscaledBoxExtent().X,
+				BaseBounds->GetUnscaledBoxExtent().Y,
+				UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(BaseBounds).X,
+				UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(BaseBounds).Y);
 		}
 
 		AGP_BuildGridContractStub* MutableStubCDO = GetMutableDefault<AGP_BuildGridContractStub>();
@@ -1024,6 +1066,240 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 					TEXT("Offset_ActorScaleDoesNotMultiplyOffset"));
 				ExpectShiftedOccupancy(Scaled, FVector(400.0f, 0.0f, 0.0f), TEXT("Offset_ActorScale"));
 				Scaled->Destroy();
+			}
+
+			auto SpawnParentScaleMainBase = [&](const FVector& Loc, const FRotator& Rot, const FVector& ActorScale,
+				const FVector& Extent, const FVector& OwnScale, const FVector& RelLoc, const TCHAR* SpawnLabel) -> AGP_MainBase*
+			{
+				const FTransform TM(Rot, Loc);
+				AGP_MainBase* Base = World->SpawnActorDeferred<AGP_MainBase>(
+					AGP_MainBase::StaticClass(),
+					TM,
+					nullptr,
+					nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (!Expect(IsValid(Base) && Base->GetPlacementFootprintBounds() != nullptr, SpawnLabel))
+				{
+					return nullptr;
+				}
+				UBoxComponent* Box = Base->GetPlacementFootprintBounds();
+				Box->SetBoxExtent(Extent);
+				Box->SetRelativeScale3D(OwnScale);
+				Box->SetRelativeLocation(RelLoc);
+				Base->SetActorScale3D(ActorScale);
+				Base->FinishSpawning(TM);
+				return Base;
+			};
+
+			if (AGP_MainBase* ParentX3 = SpawnParentScaleMainBase(
+				FVector(-86000.0f, 13400.0f, 100.0f),
+				FRotator::ZeroRotator,
+				FVector(3.0f, 1.0f, 1.0f),
+				FVector(500.0f, 500.0f, 20.0f),
+				FVector::OneVector,
+				FVector::ZeroVector,
+				TEXT("ScaleIso_SpawnParentX3Own1")))
+			{
+				UBoxComponent* Box = ParentX3->GetPlacementFootprintBounds();
+				const FVector Authored = UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(Box);
+				Expect(Box->IsUsingAbsoluteScale(), TEXT("ScaleIso_A_AbsoluteScale"));
+				Expect(Authored.Equals(FVector(500.0f, 500.0f, 20.0f), 0.5f), TEXT("ScaleIso_A_Authored500"));
+				Expect(ParentX3->GetGridFootprintSize() == FIntPoint(5, 5)
+					&& Grid->ResolveActorFootprint(ParentX3, nullptr).SizeCells == FIntPoint(5, 5),
+					TEXT("ScaleIso_A_BuildGrid5x5Not15x5"));
+				Expect(Box->GetComponentScale().Equals(FVector::OneVector, 0.05f),
+					TEXT("ScaleIso_A_WorldScaleIgnoresParentX3"));
+				Expect(GPBuildGridContractDebug::VisualHalfMatchesAuthored(Box),
+					TEXT("ScaleIso_D_VisualMatchesAuthored_A"));
+				const FVector LiveCenter = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(Box);
+				Expect(FVector::Dist2D(LiveCenter, ParentX3->GetActorLocation()) <= 1.0f,
+					TEXT("ScaleIso_E_ZeroOffsetCenterUnchanged"));
+				Expect(GPBuildGridContractDebug::AllCellsOccupied(
+					Grid, ParentX3->GetGridOriginCell(), FIntPoint(5, 5)),
+					TEXT("ScaleIso_A_Occupies5x5"));
+				ParentX3->Destroy();
+			}
+
+			if (AGP_MainBase* ParentX3Own2 = SpawnParentScaleMainBase(
+				FVector(-87000.0f, 13600.0f, 100.0f),
+				FRotator::ZeroRotator,
+				FVector(3.0f, 1.0f, 1.0f),
+				FVector(500.0f, 500.0f, 20.0f),
+				FVector(2.0f, 1.0f, 1.0f),
+				FVector::ZeroVector,
+				TEXT("ScaleIso_SpawnParentX3Own2")))
+			{
+				UBoxComponent* Box = ParentX3Own2->GetPlacementFootprintBounds();
+				const FVector Authored = UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(Box);
+				Expect(Authored.Equals(FVector(1000.0f, 500.0f, 20.0f), 0.5f), TEXT("ScaleIso_B_Authored1000x500"));
+				Expect(ParentX3Own2->GetGridFootprintSize() == FIntPoint(10, 5),
+					TEXT("ScaleIso_B_BuildGrid10x5"));
+				Expect(Box->GetComponentScale().Equals(FVector(2.0f, 1.0f, 1.0f), 0.05f),
+					TEXT("ScaleIso_B_OwnScalePreserved"));
+				Expect(GPBuildGridContractDebug::VisualHalfMatchesAuthored(Box),
+					TEXT("ScaleIso_D_VisualMatchesAuthored_B"));
+				ParentX3Own2->Destroy();
+			}
+
+			if (AGP_MainBase* ParentNonUniform = SpawnParentScaleMainBase(
+				FVector(-88000.0f, 13800.0f, 100.0f),
+				FRotator::ZeroRotator,
+				FVector(0.5f, 2.0f, 1.0f),
+				FVector(500.0f, 500.0f, 20.0f),
+				FVector::OneVector,
+				FVector::ZeroVector,
+				TEXT("ScaleIso_SpawnParent05x2")))
+			{
+				Expect(ParentNonUniform->GetGridFootprintSize() == FIntPoint(5, 5),
+					TEXT("ScaleIso_C_Still5x5"));
+				Expect(GPBuildGridContractDebug::VisualHalfMatchesAuthored(
+					ParentNonUniform->GetPlacementFootprintBounds()),
+					TEXT("ScaleIso_D_VisualMatchesAuthored_C"));
+				ParentNonUniform->Destroy();
+			}
+
+			if (AGP_MainBase* Scale1 = SpawnParentScaleMainBase(
+				FVector(-90000.0f, 14200.0f, 100.0f),
+				FRotator::ZeroRotator,
+				FVector::OneVector,
+				FVector(500.0f, 500.0f, 20.0f),
+				FVector::OneVector,
+				FVector::ZeroVector,
+				TEXT("ScaleIso_SpawnActorScale1")))
+			{
+				Expect(Scale1->GetGridFootprintSize() == FIntPoint(5, 5), TEXT("ScaleIso_I_ActorScale1Still5x5"));
+				Expect(GPBuildGridContractDebug::VisualHalfMatchesAuthored(Scale1->GetPlacementFootprintBounds()),
+					TEXT("ScaleIso_I_VisualMatchesAuthored"));
+				Scale1->Destroy();
+			}
+
+			if (AGP_MainBase* HugeWide = SpawnParentScaleMainBase(
+				FVector(-89000.0f, 14000.0f, 100.0f),
+				FRotator::ZeroRotator,
+				FVector(3.0f, 1.0f, 1.0f),
+				FVector(1000.0f, 800.0f, 20.0f),
+				FVector::OneVector,
+				FVector::ZeroVector,
+				TEXT("ScaleIso_SpawnHuge10x8")))
+			{
+				Expect(HugeWide->GetGridFootprintSize() == FIntPoint(10, 8),
+					TEXT("ScaleIso_G_Huge10x8Not30x8"));
+				Expect(GPBuildGridContractDebug::AllCellsOccupied(
+					Grid, HugeWide->GetGridOriginCell(), FIntPoint(10, 8)),
+					TEXT("ScaleIso_G_All10x8Occupied"));
+				HugeWide->Destroy();
+			}
+
+			if (AGP_MainBase* YawOffset = SpawnParentScaleMainBase(
+				FVector(-91000.0f, 14400.0f, 100.0f),
+				FRotator(0.0f, 90.0f, 0.0f),
+				FVector(3.0f, 1.0f, 1.0f),
+				FVector(500.0f, 500.0f, 20.0f),
+				FVector::OneVector,
+				FVector(600.0f, 0.0f, 0.0f),
+				TEXT("ScaleIso_SpawnYaw90Offset")))
+			{
+				UBoxComponent* Box = YawOffset->GetPlacementFootprintBounds();
+				const FVector LiveCenter = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(Box);
+				Expect(FVector::Dist2D(LiveCenter, Box->GetComponentLocation()) <= 0.1f,
+					TEXT("ScaleIso_E_LiveCenterIsComponentLocation"));
+				FIntPoint SnapOrigin = FIntPoint::ZeroValue;
+				FVector SnapCenter = FVector::ZeroVector;
+				Grid->ResolveSnappedPlacement(LiveCenter, FIntPoint(5, 5), SnapOrigin, SnapCenter);
+				Expect(YawOffset->GetGridOriginCell() == SnapOrigin
+					&& YawOffset->GetGridFootprintSize() == FIntPoint(5, 5),
+					TEXT("ScaleIso_F_YawOffsetOccupancyFollowsLiveCenter"));
+				YawOffset->Destroy();
+			}
+
+			if (UClass* BpMainClass = LoadClass<AGP_MainBase>(
+				nullptr,
+				TEXT("/Game/GrimProtocol/Blueprint/Buildings/BP_GP_MainBase.BP_GP_MainBase_C")))
+			{
+				if (const AGP_MainBase* BpCDO = BpMainClass->GetDefaultObject<AGP_MainBase>())
+				{
+					const UBoxComponent* BpBounds = BpCDO->GetPlacementFootprintBounds();
+					const UCapsuleComponent* BpCapsule = BpCDO->GetCapsuleComponent();
+					const FVector BpActorScale = BpCDO->GetActorScale3D();
+					const FVector BpCapsuleRel = BpCapsule != nullptr ? BpCapsule->GetRelativeScale3D() : FVector::ZeroVector;
+					const FVector BpCapsuleWorld = BpCapsule != nullptr ? BpCapsule->GetComponentScale() : FVector::ZeroVector;
+					const FVector BpBoundsRel = BpBounds != nullptr ? BpBounds->GetRelativeScale3D() : FVector::ZeroVector;
+					const FVector BpBoundsComp = BpBounds != nullptr ? BpBounds->GetComponentScale() : FVector::ZeroVector;
+					const FVector BpUnscaled = BpBounds != nullptr ? BpBounds->GetUnscaledBoxExtent() : FVector::ZeroVector;
+					const FVector BpAuthored = UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(BpBounds);
+					UE_LOG(
+						LogGPBuildGridContract,
+						Log,
+						TEXT("ScaleTrace BP_GP_MainBase CDO actor=(%.3f,%.3f,%.3f) capsuleRel=(%.3f,%.3f,%.3f) capsuleWorld=(%.3f,%.3f,%.3f) boundsRel=(%.3f,%.3f,%.3f) boundsComp=(%.3f,%.3f,%.3f) unscaled=(%.1f,%.1f) authoredHalf=(%.1f,%.1f) absScale=%d"),
+						BpActorScale.X,
+						BpActorScale.Y,
+						BpActorScale.Z,
+						BpCapsuleRel.X,
+						BpCapsuleRel.Y,
+						BpCapsuleRel.Z,
+						BpCapsuleWorld.X,
+						BpCapsuleWorld.Y,
+						BpCapsuleWorld.Z,
+						BpBoundsRel.X,
+						BpBoundsRel.Y,
+						BpBoundsRel.Z,
+						BpBoundsComp.X,
+						BpBoundsComp.Y,
+						BpBoundsComp.Z,
+						BpUnscaled.X,
+						BpUnscaled.Y,
+						BpAuthored.X,
+						BpAuthored.Y,
+						BpBounds != nullptr && BpBounds->IsUsingAbsoluteScale() ? 1 : 0);
+					if (BpBounds != nullptr)
+					{
+						Expect(BpBounds->IsUsingAbsoluteScale(), TEXT("ScaleIso_BpCdoAbsoluteScale"));
+					}
+				}
+			}
+
+			for (TActorIterator<AGP_MainBase> It(World); It; ++It)
+			{
+				AGP_MainBase* LevelBase = *It;
+				if (!IsValid(LevelBase) || !LevelBase->IsNetStartupActor())
+				{
+					continue;
+				}
+				const UBoxComponent* LevelBounds = LevelBase->GetPlacementFootprintBounds();
+				const UCapsuleComponent* LevelCapsule = LevelBase->GetCapsuleComponent();
+				UE_LOG(
+					LogGPBuildGridContract,
+					Log,
+					TEXT("ScaleTrace level MainBase=%s actor=(%.3f,%.3f,%.3f) capsuleRel=(%.3f,%.3f,%.3f) capsuleWorld=(%.3f,%.3f,%.3f) boundsRel=(%.3f,%.3f,%.3f) boundsComp=(%.3f,%.3f,%.3f) unscaled=(%.1f,%.1f) authoredHalf=(%.1f,%.1f) registered=%dx%d absScale=%d"),
+					*LevelBase->GetName(),
+					LevelBase->GetActorScale3D().X,
+					LevelBase->GetActorScale3D().Y,
+					LevelBase->GetActorScale3D().Z,
+					LevelCapsule != nullptr ? LevelCapsule->GetRelativeScale3D().X : 0.0f,
+					LevelCapsule != nullptr ? LevelCapsule->GetRelativeScale3D().Y : 0.0f,
+					LevelCapsule != nullptr ? LevelCapsule->GetRelativeScale3D().Z : 0.0f,
+					LevelCapsule != nullptr ? LevelCapsule->GetComponentScale().X : 0.0f,
+					LevelCapsule != nullptr ? LevelCapsule->GetComponentScale().Y : 0.0f,
+					LevelCapsule != nullptr ? LevelCapsule->GetComponentScale().Z : 0.0f,
+					LevelBounds != nullptr ? LevelBounds->GetRelativeScale3D().X : 0.0f,
+					LevelBounds != nullptr ? LevelBounds->GetRelativeScale3D().Y : 0.0f,
+					LevelBounds != nullptr ? LevelBounds->GetRelativeScale3D().Z : 0.0f,
+					LevelBounds != nullptr ? LevelBounds->GetComponentScale().X : 0.0f,
+					LevelBounds != nullptr ? LevelBounds->GetComponentScale().Y : 0.0f,
+					LevelBounds != nullptr ? LevelBounds->GetComponentScale().Z : 0.0f,
+					LevelBounds != nullptr ? LevelBounds->GetUnscaledBoxExtent().X : 0.0f,
+					LevelBounds != nullptr ? LevelBounds->GetUnscaledBoxExtent().Y : 0.0f,
+					UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(LevelBounds).X,
+					UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(LevelBounds).Y,
+					LevelBase->GetGridFootprintSize().X,
+					LevelBase->GetGridFootprintSize().Y,
+					LevelBounds != nullptr && LevelBounds->IsUsingAbsoluteScale() ? 1 : 0);
+				if (LevelBounds != nullptr)
+				{
+					Expect(LevelBounds->IsUsingAbsoluteScale(), TEXT("ScaleIso_LevelMainBaseAbsoluteScale"));
+					Expect(GPBuildGridContractDebug::VisualHalfMatchesAuthored(LevelBounds, 1.0f),
+						TEXT("ScaleIso_LevelMainBaseVisualMatchesAuthored"));
+				}
 			}
 		}
 

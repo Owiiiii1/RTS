@@ -64,6 +64,7 @@ void AGP_BuildingBase::ConfigureNavigationObstacleDefaults()
 	NavigationObstacle->bDynamicObstacle = true;
 	NavigationObstacle->SetAreaClassOverride(UNavArea_Null::StaticClass());
 	NavigationObstacle->bEditableWhenInherited = true;
+	// Intentionally inherits actor/root scale: nav volume tracks presentation size.
 }
 
 void AGP_BuildingBase::ConfigurePlacementFootprintBoundsDefaults()
@@ -88,6 +89,22 @@ void AGP_BuildingBase::ConfigurePlacementFootprintBoundsDefaults()
 	PlacementFootprintBounds->ShapeColor = FColor(0, 180, 255);
 	PlacementFootprintBounds->SetLineThickness(2.0f);
 	PlacementFootprintBounds->bEditableWhenInherited = true;
+	ApplyPlacementFootprintParentScaleIsolation();
+}
+
+void AGP_BuildingBase::ApplyPlacementFootprintParentScaleIsolation()
+{
+	if (PlacementFootprintBounds == nullptr)
+	{
+		return;
+	}
+
+	// Verified UE 5.8 USceneComponent::SetAbsolute(bAbsLoc, bAbsRot, bAbsScale):
+	// CalcNewComponentToWorld_GeneralCase copies RelativeScale3D as world scale when
+	// bAbsoluteScale is true. Location and rotation stay parent-relative, so
+	// GetComponentLocation / yaw / offset registration are unchanged.
+	// Own authored RelativeScale3D remains the operator-scalable size (not locked to 1).
+	PlacementFootprintBounds->SetAbsolute(false, false, true);
 }
 
 void AGP_BuildingBase::AttachDeferredComponentToRoot(USceneComponent* Component)
@@ -138,12 +155,14 @@ void AGP_BuildingBase::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 	AttachDeferredSceneComponentsToRoot();
+	ApplyPlacementFootprintParentScaleIsolation();
 	TryApplyClassDesignToLivePlacementFootprintBounds();
 }
 
 void AGP_BuildingBase::PostLoad()
 {
 	Super::PostLoad();
+	ApplyPlacementFootprintParentScaleIsolation();
 	TryApplyClassDesignToLivePlacementFootprintBounds();
 }
 
@@ -151,6 +170,7 @@ void AGP_BuildingBase::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 	AttachDeferredSceneComponentsToRoot();
+	ApplyPlacementFootprintParentScaleIsolation();
 	TryApplyClassDesignToLivePlacementFootprintBounds();
 }
 
@@ -174,6 +194,7 @@ void AGP_BuildingBase::ApplyClassDesignToLivePlacementFootprintBounds()
 	PlacementFootprintBounds->SetRelativeLocation(Design->GetRelativeLocation());
 	PlacementFootprintBounds->SetRelativeRotation(Design->GetRelativeRotation());
 	PlacementFootprintBounds->SetRelativeScale3D(Design->GetRelativeScale3D());
+	ApplyPlacementFootprintParentScaleIsolation();
 }
 
 void AGP_BuildingBase::TryApplyClassDesignToLivePlacementFootprintBounds()
@@ -194,6 +215,7 @@ void AGP_BuildingBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 void AGP_BuildingBase::BeginPlay()
 {
 	Super::BeginPlay();
+	ApplyPlacementFootprintParentScaleIsolation();
 	TryApplyClassDesignToLivePlacementFootprintBounds();
 	TryRegisterWithBuildGrid();
 }
@@ -280,26 +302,48 @@ void AGP_BuildingBase::TryRegisterWithBuildGrid()
 	const FVector LiveCenter = UGP_BuildGridSubsystem::GetLivePlacementFootprintCenterWorld(LiveBounds);
 	const FVector LiveHalf = UGP_BuildGridSubsystem::GetAuthoredPlacementHalfExtentCm(LiveBounds);
 	const FVector LiveRel = LiveBounds != nullptr ? LiveBounds->GetRelativeLocation() : FVector::ZeroVector;
+	const FVector ActorScale = GetActorScale3D();
+	const FVector RootWorldScale = GetRootComponent() != nullptr
+		? GetRootComponent()->GetComponentScale()
+		: FVector::ZeroVector;
+	const FVector BoundsRelScale = LiveBounds != nullptr ? LiveBounds->GetRelativeScale3D() : FVector::ZeroVector;
+	const FVector BoundsCompScale = LiveBounds != nullptr ? LiveBounds->GetComponentScale() : FVector::ZeroVector;
+	const FVector Unscaled = LiveBounds != nullptr ? LiveBounds->GetUnscaledBoxExtent() : FVector::ZeroVector;
 	UE_LOG(
 		LogGPBuildGridRegister,
 		Log,
-		TEXT("BuildGrid occupancy %s liveCenter=(%.1f,%.1f,%.1f) liveHalf=(%.1f,%.1f) liveRel=(%.1f,%.1f) yaw=%.1f resolved=%dx%d origin=%d,%d registered=%dx%d fromLive=%s"),
+		TEXT("BuildGrid occupancy %s liveCenter=(%.1f,%.1f,%.1f) liveRel=(%.1f,%.1f) yaw=%.1f actorScale=(%.3f,%.3f,%.3f) rootWorldScale=(%.3f,%.3f,%.3f) boundsRelScale=(%.3f,%.3f,%.3f) boundsCompScale=(%.3f,%.3f,%.3f) unscaled=(%.1f,%.1f) authoredHalf=(%.1f,%.1f) resolved=%dx%d origin=%d,%d registered=%dx%d fromLive=%s absScale=%s"),
 		*GetName(),
 		LiveCenter.X,
 		LiveCenter.Y,
 		LiveCenter.Z,
-		LiveHalf.X,
-		LiveHalf.Y,
 		LiveRel.X,
 		LiveRel.Y,
 		GetActorRotation().Yaw,
+		ActorScale.X,
+		ActorScale.Y,
+		ActorScale.Z,
+		RootWorldScale.X,
+		RootWorldScale.Y,
+		RootWorldScale.Z,
+		BoundsRelScale.X,
+		BoundsRelScale.Y,
+		BoundsRelScale.Z,
+		BoundsCompScale.X,
+		BoundsCompScale.Y,
+		BoundsCompScale.Z,
+		Unscaled.X,
+		Unscaled.Y,
+		LiveHalf.X,
+		LiveHalf.Y,
 		Resolved.SizeCells.X,
 		Resolved.SizeCells.Y,
 		GridOriginCell.X,
 		GridOriginCell.Y,
 		GridFootprintSize.X,
 		GridFootprintSize.Y,
-		Resolved.bFromAuthoredBounds ? TEXT("1") : TEXT("0"));
+		Resolved.bFromAuthoredBounds ? TEXT("1") : TEXT("0"),
+		LiveBounds != nullptr && LiveBounds->IsUsingAbsoluteScale() ? TEXT("1") : TEXT("0"));
 #endif
 }
 

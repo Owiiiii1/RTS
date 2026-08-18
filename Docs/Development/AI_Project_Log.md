@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S41M Movement Shortest Yaw (implementation candidate)
+
+Status: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s41m-movement-shortest-yaw` (base `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`)
+- Root cause reproduced: `FMath::RInterpConstantTo` on `FRotator` does not wrap yaw (350→10 takes the long path)
+- Facing now uses `ComputeShortestYawStep` + `FindDeltaAngleDegrees` / `NormalizeAxis`
+- Path / serial / speed / steering unchanged
+- **NOT MERGED. NOT FINALIZED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-18 — GP-S40R Timed Retaliation Pursuit (finalization)
 
 Status: **IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE**

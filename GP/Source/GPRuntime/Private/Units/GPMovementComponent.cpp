@@ -874,9 +874,11 @@ void UGP_MovementComponent::TickComponent(
 		{
 			const FRotator CurrentRotation = Owner->GetActorRotation();
 			const float TargetYaw = FMath::RadiansToDegrees(FMath::Atan2(RotateDir.Y, RotateDir.X));
-			const FRotator TargetRotation(0.0f, TargetYaw, 0.0f);
-			const FRotator NewRotation = FMath::RInterpConstantTo(CurrentRotation, TargetRotation, DeltaTime, RotationSpeed);
-			Owner->SetActorRotation(FRotator(0.0f, NewRotation.Yaw, 0.0f));
+			const float NewYaw = ComputeShortestYawStep(
+				CurrentRotation.Yaw,
+				TargetYaw,
+				RotationSpeed * DeltaTime);
+			Owner->SetActorRotation(FRotator(0.0f, NewYaw, 0.0f));
 		}
 	}
 
@@ -894,6 +896,23 @@ void UGP_MovementComponent::TickComponent(
 FGP_OnMovementResult& UGP_MovementComponent::OnMovementResult()
 {
 	return MovementResultDelegate;
+}
+
+float UGP_MovementComponent::ComputeShortestYawStep(float CurrentYaw, float TargetYaw, float MaxAbsDeltaDegrees)
+{
+	if (!(MaxAbsDeltaDegrees > 0.0f) || !FMath::IsFinite(MaxAbsDeltaDegrees))
+	{
+		return FRotator::NormalizeAxis(CurrentYaw);
+	}
+
+	const float Delta = FMath::FindDeltaAngleDegrees(CurrentYaw, TargetYaw);
+	if (!FMath::IsFinite(Delta) || FMath::Abs(Delta) <= MaxAbsDeltaDegrees)
+	{
+		return FRotator::NormalizeAxis(TargetYaw);
+	}
+
+	const float AppliedDelta = FMath::Clamp(Delta, -MaxAbsDeltaDegrees, MaxAbsDeltaDegrees);
+	return FRotator::NormalizeAxis(CurrentYaw + AppliedDelta);
 }
 
 #if !UE_BUILD_SHIPPING

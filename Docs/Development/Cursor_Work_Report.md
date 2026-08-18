@@ -1,52 +1,50 @@
-# Cursor Work Report — GP-S40R Finalization
+# Cursor Work Report — GP-S41M Movement Shortest Yaw
 
 ## Status
-**GP-S40R_FINALIZATION_READY_FOR_MERGE**
+**GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-**NOT MERGED.**
+**NOT MERGED. NOT FINALIZED.**
 
 ## Branch / base / head
-- Branch: `feature/gp-s40r-timed-retaliation-pursuit`
-- Base: `origin/main` @ `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`
-- Head: `6c8c91120c64ad08b54f6d3d58e8c311a46fa351`
+- Branch: `feature/gp-s41m-movement-shortest-yaw`
+- Base: `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`
+- Head: recorded after commit
 
-## Operator
-**PASS.** Retaliation behavior confirmed correct.
+## Reproduced root cause
+`TickComponent` facing used `FMath::RInterpConstantTo` on `FRotator`. That interpolator subtracts yaw components without wrapping. Contract repro: `RInterpConstantTo(350° → 10°, dt=1/60, speed=360)` applies a negative ~6° step (long path).
 
-## Targeted regressions
-Headless `UnrealEditor-Cmd` `-game -NullRHI` on `/Game/GrimProtocol/Maps/L_PrototypeArena`:
+## Implementation
+`UGP_MovementComponent::ComputeShortestYawStep` using `FMath::FindDeltaAngleDegrees` + `FRotator::NormalizeAxis`. Tick facing calls it with `RotationSpeed * DeltaTime`. No new Tick. Path / serial / speed / steering unchanged.
 
+## Shortest-yaw invariant
+Applied delta is always in `[-180°, +180°]`, clamped to `[-MaxDelta, +MaxDelta]`. Remaining shortest delta within the step snaps to target.
+
+## Tests actually run
 | Command | Result |
 | --- | --- |
-| `gp.Combat.RunRetaliationPursuitContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Combat.RunLOSFireGateContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Combat.RunAutoAcquireContractTest` | `Complete Failures=0 Cancelled=false` |
+| `gp.Movement.RunShortestYawContractTest` | `Complete Failures=0 Cancelled=false` |
+| `gp.Movement.RunRTSMovementReconciliationContractTest` | `Complete Failures=0 Cancelled=false` |
 
-Full suite: **NOT RUN**.
+Combat / resource / economy: **NOT RUN**.
 
-## Final builds
-| Target | Result |
-| --- | --- |
-| `GPEditor Win64 Development` + UHT | **PASS** |
-| `GP Win64 Development` | **PASS** |
-| `GP Win64 Shipping` | **PASS** (after Shipping-only contract-runner stubs; no gameplay change) |
+## Candidate build
+`GPEditor Win64 Development` + UHT **PASS**.  
+`GP` Win64 Development / Shipping: **NOT RUN**.
 
-## Final audit
-- Notify only after successful hostile `ApplyDamageFromUnit` (living target)
-- Duration sole source: `UGP_UnitDefinition.RetaliationPursuitSeconds` via `GetRetaliationPursuitSeconds()`
-- Worker is not combat-capable → no autonomous combat retaliation
-- DefensiveTurret / buildings excluded from movement retaliation
-- Manual Held commands cancel/suppress retaliation
-- In-sight + blocked LOS keeps retaliation-owned pursuit
-- Clear LOS hands off once to existing Attack FSM
-- Timeout returns Idle; no Held Attack left behind
-- No second fire/damage path; Attack Ready LOS fire gate unchanged
-- No new permanent Tick (timeout + 0.20s evaluate timers only)
-- Protected operator assets / config / maps untouched
+## Changed files
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp`
+- `GP/Source/GPRuntime/Public/Movement/GPMovementShortestYawContractTest.h`
+- `GP/Source/GPRuntime/Private/Debug/GPMovementShortestYawContractTest.cpp`
+- `Docs/Development/Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`
+- `Docs/Development/Claude_Tasks/README.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
+- `Docs/TDD/05_Unit_Architecture.md`
 
-## Unrelated NEXT defect
-[`Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`](Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md)  
-Operator: Move facing may take the long yaw path (~350° when ~10° would suffice). Root cause **not** claimed. **Not fixed in GP-S40R.**
+## Protected assets
+Untouched / not committed.
 
 ## Merge
-**NOT MERGED.** Await human merge onto `main`.
+**NOT MERGED. NOT FINALIZED.** Await operator PIE.

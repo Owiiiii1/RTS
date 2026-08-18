@@ -118,6 +118,14 @@ public:
 
 	FGP_OnMovementResult& OnMovementResult();
 
+	/**
+	 * GP-S41M: one constant-speed shortest-yaw step.
+	 * Delta = FindDeltaAngleDegrees(Current, Target) in [-180, +180].
+	 * Applied delta is clamped to [-MaxAbsDeltaDegrees, +MaxAbsDeltaDegrees].
+	 * Remaining shortest delta within the step snaps to Target.
+	 */
+	static float ComputeShortestYawStep(float CurrentYaw, float TargetYaw, float MaxAbsDeltaDegrees);
+
 #if !UE_BUILD_SHIPPING
 	/** Synthetic terminal broadcast for stale-serial validation. Does not mutate movement state. */
 	void DebugBroadcastResult(

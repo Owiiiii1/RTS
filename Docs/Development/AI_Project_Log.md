@@ -4,7 +4,7 @@
 
 Status: **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s39e-economy-logistics-data` (base verified `origin/main` @ `f841cdee19c97a0dfaacb8fc0bdd27623c543329`)
+- Branch: `feature/gp-s39e-economy-logistics-data` (base verified `origin/main` @ `f841cdee19c97a0dfaacb8fc0bdd27623c543329`, implementation `8d001180fe4e7f1d24edc25b471f2b6e00877138`)
 - Designer SoT: UnitDefinition cargo; BuildingDefinition storage + UnitCapBonus; ResourceDefinition deposit defaults; new `UGP_OrbitalUnitDropDefinition` for unit purchase/timing; building drop defs own descent/deploy
 - Globals retained: pod capacity, altitude, spacing, cleanup, radius, overlap; container launch duration stays on ResourceGameplaySettings
 - Initial MaxUnits stays `UGP_GE_UnitCap_Base5`. Hub bonus is SetByCaller from BuildingDefinition.UnitCapBonus (5)

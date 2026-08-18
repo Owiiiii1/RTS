@@ -11,7 +11,7 @@ Status: **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 `f841cdee19c97a0dfaacb8fc0bdd27623c543329`
 
 ## Feature head SHA
-Pending implementation commit on this branch.
+`8d001180fe4e7f1d24edc25b471f2b6e00877138`
 
 ## Old ownership matrix (factual, audited on main)
 

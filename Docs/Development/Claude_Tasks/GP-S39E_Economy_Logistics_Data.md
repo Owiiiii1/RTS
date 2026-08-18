@@ -67,7 +67,7 @@ Verdict **PASS**.
 | Ferronite mining / conversion / threat | `UGP_ResourceDefinition` (unchanged) | — |
 | Deposit max / concurrent miners | `UGP_ResourceDefinition.DepositMaxAmount` / `MaxConcurrentMiners` | node fields if def unresolved; authored instance override if value ≠ native CDO |
 | Node `CurrentAmount` | runtime + `EditInstanceOnly` | starts at MaxAmount unless instance override |
-| Unit cost / slots / payload / descent / deploy | `UGP_OrbitalUnitDropDefinition` | settings deprecated fields as fallback |
+| Unit cost / slots / payload / descent / deploy | authored settings soft ref → `UGP_OrbitalUnitDropDefinition` | native bootstrap; deprecated settings only if the definition cannot provide a value |
 | Building cost | `UGP_OrbitalDropDefinition.Cost` (unchanged) | Hub settings cost bridge retained |
 | Building descent / deploy | `UGP_OrbitalDropDefinition` 2.5 / 2.0 | settings fallback |
 | Pod capacity, altitude, spacing, cleanup, radius, overlap | `UGP_OrbitalDeliverySettings` | global |
@@ -108,6 +108,10 @@ Native catalogs permit contracts without `.uasset` files.
 `gp.Economy.RunEconomyLogisticsDataContractTest` — cases A–R.
 
 Regressions listed in `Cursor_Work_Report.md`. All Failures=0.
+
+## Correction (before operator validation)
+
+Native unit-drop catalog originally shadowed authored `DA_GP_OrbitalUnitDrop_*`. Canonical path is now settings soft refs + async load. Pending authored refs reject `DefinitionNotReady`. Building acquisition received the same authored-ref seam so operator DAs can change Cost/timing.
 
 ## Follow-up naming
 

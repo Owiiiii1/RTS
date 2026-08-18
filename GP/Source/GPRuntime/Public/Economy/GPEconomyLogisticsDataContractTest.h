@@ -56,6 +56,10 @@ private:
 	TObjectPtr<class UGP_BuildingDefinition> StorageOverrideDef;
 	UPROPERTY()
 	TObjectPtr<class UGP_ResourceDefinition> FerroniteDef;
+	UPROPERTY()
+	TObjectPtr<class UGP_OrbitalUnitDropDefinition> AuthoredWorkerDropDef;
+	UPROPERTY()
+	TObjectPtr<class UGP_OrbitalDropDefinition> AuthoredHubDropDef;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

@@ -48,7 +48,13 @@ namespace GPUnitDropAuthority
 			return false;
 		}
 
-		const UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		if (!UnitDrops.AreManifestDefinitionsReady(Manifest))
+		{
+			OutReject = EGP_UnitDropRejectReason::DefinitionNotReady;
+			return false;
+		}
+
 		const int32 WorkerSlots = FMath::Max(1, UnitDrops.GetWorkerTransportSlotCost());
 		const int32 WalkerSlots = FMath::Max(1, UnitDrops.GetSalvageWalkerTransportSlotCost());
 		const int32 Capacity = FMath::Max(1, Settings->PodTransportSlotCapacity);

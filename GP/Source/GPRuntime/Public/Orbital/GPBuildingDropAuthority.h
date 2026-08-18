@@ -32,7 +32,8 @@ enum class EGP_BuildingDropRejectReason : uint8
 	MissingSpawnedClass,
 	GridOccupied,
 	InvalidFootprint,
-	NotNavigable
+	NotNavigable,
+	DefinitionNotReady
 };
 
 UENUM(BlueprintType)

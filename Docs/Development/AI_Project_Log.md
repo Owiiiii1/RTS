@@ -1,5 +1,15 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S39E authored acquisition definition path (correction)
+
+Status: **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s39e-economy-logistics-data`
+- Defect: native transient `UGP_OrbitalUnitDropCatalog` permanently shadowed operator-created unit drop DataAssets
+- Fix: settings soft refs + async load; pending orders reject `DefinitionNotReady`; same class of seam for building drop definitions
+- **NOT MERGED. NOT FINALIZED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-18 — GP-S39E Economy / Logistics Data Ownership (implementation candidate)
 
 Status: **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

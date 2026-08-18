@@ -10,6 +10,8 @@ class AGP_BuildingBase;
 class AGP_DropPod;
 class AGP_Worker;
 class AGP_SalvageWalker;
+class UGP_OrbitalDropDefinition;
+class UGP_OrbitalUnitDropDefinition;
 
 /**
  * Project Settings → Game → GP Orbital Delivery (GP-S31R).
@@ -32,6 +34,36 @@ public:
 	static const UGP_OrbitalDeliverySettings* Get();
 
 	/** Transport slots per unit DropPod (MVP tuning example 4). */
+	/**
+	 * Designer-selected canonical Worker acquisition DataAsset.
+	 * Empty = native bootstrap. Contains no balance values itself.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Definitions")
+	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> WorkerDropDefinition;
+
+	/**
+	 * Designer-selected canonical Salvage Walker acquisition DataAsset.
+	 * Empty = native bootstrap. Contains no balance values itself.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Definitions")
+	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> SalvageWalkerDropDefinition;
+
+	/**
+	 * Designer-selected canonical Logistics Hub acquisition DataAsset.
+	 * Empty = native bootstrap. Contains no balance values itself.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Definitions")
+	TSoftObjectPtr<UGP_OrbitalDropDefinition> LogisticsHubDropDefinition;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Definitions")
+	TSoftObjectPtr<UGP_OrbitalDropDefinition> DefensiveTurretDropDefinition;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Definitions")
+	TSoftObjectPtr<UGP_OrbitalDropDefinition> WallDropDefinition;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Definitions")
+	TSoftObjectPtr<UGP_OrbitalDropDefinition> WallTurretDropDefinition;
+
 	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Slots", meta = (ClampMin = "1"))
 	int32 PodTransportSlotCapacity = 4;
 

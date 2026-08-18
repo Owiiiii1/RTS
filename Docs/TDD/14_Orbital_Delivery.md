@@ -143,7 +143,18 @@ Single-payload DropDef for buildings; multi-payload carried as **manifest on the
 | Pod slot capacity, altitude, spacing, cleanup, radius, overlap | `UGP_OrbitalDeliverySettings` |
 | Manifest fields | still `WorkerCount` / `SalvageWalkerCount` (no UI rewrite) |
 
-`ComputeManifestCosts` and payload spawn resolve from unit drop definitions. Deprecated settings unit cost/slot/payload fields remain ini compatibility fallback.
+`ComputeManifestCosts` and payload spawn resolve from the **one canonical** unit drop definition per type.
+
+Authored production path (GP-S39E correction):
+
+1. Settings soft refs `WorkerDropDefinition` / `SalvageWalkerDropDefinition` (and building slot refs) select the DataAsset. They hold no balance values.
+2. Loaded authored definition is canonical for cost, slots, payload, UnitDefinition link, descent, and deploy.
+3. Empty ref → native bootstrap immediately.
+4. Valid unloaded ref → `RequestAsyncLoad`. Pending orders reject `DefinitionNotReady` (no spend / reserve / pod).
+5. Load failure → log + native bootstrap.
+6. Deprecated settings numerics/class apply only when the resolved definition cannot provide a valid value. Empty authored `PayloadClass` may still use the operator BP payload bridge.
+
+Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / turret / wall / wallturret soft refs. Native catalog must not permanently shadow an assigned authored drop.
 
 ## Order UI (target / TEMP)
 

@@ -10,6 +10,7 @@
 class AGP_BuildingBase;
 class UGP_BuildingDefinition;
 class UGP_OrbitalDropDefinition;
+struct FStreamableHandle;
 
 /**
  * Runtime building acquisition catalog (GP-S35B).
@@ -32,13 +33,17 @@ public:
 	static void UnbindEngineLifecycle();
 
 	void EnsureNativeCatalog();
+	void RefreshAuthoredBindings();
 
 	UGP_OrbitalDropDefinition* FindDropDefinition(const FPrimaryAssetId& DropDefinitionId) const;
 	UGP_BuildingDefinition* FindBuildingDefinition(const FPrimaryAssetId& BuildingDefinitionId) const;
 
-	UGP_OrbitalDropDefinition* GetLegacyLogisticsHubDrop() const { return LegacyLogisticsHubDrop; }
+	UGP_OrbitalDropDefinition* GetLegacyLogisticsHubDrop() const;
 	UGP_BuildingDefinition* GetMainBaseBuilding() const { return MainBaseBuilding; }
 	FPrimaryAssetId GetLegacyLogisticsHubDropId() const;
+
+	bool IsDropDefinitionPending(const UGP_OrbitalDropDefinition* DropDefinition) const;
+	bool IsDropDefinitionIdPending(const FPrimaryAssetId& DropDefinitionId) const;
 
 	void ResolveDeliveryTiming(
 		const UGP_OrbitalDropDefinition* DropDefinition,
@@ -58,7 +63,28 @@ public:
 	TSubclassOf<AGP_BuildingBase> ResolvePayloadClass(const UGP_OrbitalDropDefinition* DropDefinition) const;
 	float GetPurchaseCost(const UGP_OrbitalDropDefinition* DropDefinition) const;
 
+#if !UE_BUILD_SHIPPING
+	void DebugAssignLoadedAuthoredLogisticsHub(UGP_OrbitalDropDefinition* Definition);
+	void DebugClearAuthoredBuildingDropOverrides();
+#endif
+
 private:
+	enum class EBuildingAuthoredSlot : uint8
+	{
+		LogisticsHub = 0,
+		DefensiveTurret,
+		Wall,
+		WallTurret,
+		COUNT
+	};
+
+	enum class EAuthoredSlotState : uint8
+	{
+		Empty = 0,
+		Pending,
+		Ready,
+		Failed
+	};
 	UGP_BuildingDefinition* CreateNativeBuilding(
 		FName AssetName,
 		const FText& DisplayName,
@@ -89,5 +115,37 @@ private:
 	UPROPERTY()
 	TObjectPtr<UGP_BuildingDefinition> MainBaseBuilding;
 
+	UPROPERTY()
+	TArray<TObjectPtr<UGP_OrbitalDropDefinition>> NativeSlotDrops;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UGP_OrbitalDropDefinition>> AuthoredSlotDrops;
+
+	TArray<TSharedPtr<FStreamableHandle>> AuthoredLoadHandles;
+	TArray<FSoftObjectPath> AuthoredRequestedPaths;
+	TArray<EAuthoredSlotState> AuthoredStates;
+
+	void RefreshAuthoredSlot(EBuildingAuthoredSlot Slot);
+	void RequestAuthoredAsyncLoad(EBuildingAuthoredSlot Slot, const FSoftObjectPath& SoftPath);
+	void HandleAuthoredLoaded(EBuildingAuthoredSlot Slot);
+	void FinishAuthoredLoadResolve(EBuildingAuthoredSlot Slot);
+	void CancelAuthoredLoad(EBuildingAuthoredSlot Slot);
+	TSoftObjectPtr<UGP_OrbitalDropDefinition> GetAuthoredSoftRef(EBuildingAuthoredSlot Slot) const;
+	UGP_OrbitalDropDefinition* ResolveLoadedAuthored(const TSoftObjectPtr<UGP_OrbitalDropDefinition>& Soft) const;
+	UGP_OrbitalDropDefinition* CanonicalForSlot(EBuildingAuthoredSlot Slot) const;
+	EBuildingAuthoredSlot FindSlotForDrop(const UGP_OrbitalDropDefinition* DropDefinition) const;
+	EBuildingAuthoredSlot FindSlotForId(const FPrimaryAssetId& DropDefinitionId) const;
+	UGP_OrbitalDropDefinition* ResolveCanonicalDrop(const UGP_OrbitalDropDefinition* DropDefinition) const;
+
+	void HandleLogisticsHubLoaded() { HandleAuthoredLoaded(EBuildingAuthoredSlot::LogisticsHub); }
+	void HandleDefensiveTurretLoaded() { HandleAuthoredLoaded(EBuildingAuthoredSlot::DefensiveTurret); }
+	void HandleWallLoaded() { HandleAuthoredLoaded(EBuildingAuthoredSlot::Wall); }
+	void HandleWallTurretLoaded() { HandleAuthoredLoaded(EBuildingAuthoredSlot::WallTurret); }
+
 	bool bNativeCatalogReady = false;
+
+#if !UE_BUILD_SHIPPING
+	TArray<TSoftObjectPtr<UGP_OrbitalDropDefinition>> DebugSavedBuildingRefs;
+	bool bDebugSavedBuildingSettings = false;
+#endif
 };

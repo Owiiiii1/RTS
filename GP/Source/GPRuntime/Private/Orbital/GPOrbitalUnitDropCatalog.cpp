@@ -2,6 +2,8 @@
 
 #include "Orbital/GPOrbitalUnitDropCatalog.h"
 
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 #include "Misc/CoreDelegates.h"
 #include "Orbital/GPOrbitalUnitDropDefinition.h"
 #include "Orbital/GPUnitDropManifest.h"
@@ -12,11 +14,15 @@
 #include "Units/GPWorker.h"
 #include "UObject/StrongObjectPtr.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogGPOrbitalUnitDropCatalog, Log, All);
+
 namespace GPOrbitalUnitDropCatalogPrivate
 {
 	static TStrongObjectPtr<UGP_OrbitalUnitDropCatalog> GCatalog;
 	static FDelegateHandle EnginePreExitHandle;
 	static constexpr TCHAR CatalogObjectName[] = TEXT("GP_OrbitalUnitDropCatalog");
+	static constexpr TCHAR UnresolvedWorkerStub[] =
+		TEXT("/Game/GrimProtocol/Data/Orbital/DA_GP_OrbitalUnitDrop_UnresolvedSoftRefStub.DA_GP_OrbitalUnitDrop_UnresolvedSoftRefStub");
 }
 
 UGP_OrbitalUnitDropCatalog& UGP_OrbitalUnitDropCatalog::Get()
@@ -37,11 +43,18 @@ UGP_OrbitalUnitDropCatalog& UGP_OrbitalUnitDropCatalog::Get()
 		CatalogObj->EnsureNativeCatalog();
 	}
 
-	return *GPOrbitalUnitDropCatalogPrivate::GCatalog.Get();
+	UGP_OrbitalUnitDropCatalog& Catalog = *GPOrbitalUnitDropCatalogPrivate::GCatalog.Get();
+	Catalog.RefreshAuthoredBindings();
+	return Catalog;
 }
 
 void UGP_OrbitalUnitDropCatalog::ShutdownCatalog()
 {
+	if (GPOrbitalUnitDropCatalogPrivate::GCatalog.IsValid())
+	{
+		GPOrbitalUnitDropCatalogPrivate::GCatalog->CancelWorkerLoad();
+		GPOrbitalUnitDropCatalogPrivate::GCatalog->CancelWalkerLoad();
+	}
 	GPOrbitalUnitDropCatalogPrivate::GCatalog.Reset();
 }
 
@@ -74,23 +87,23 @@ void UGP_OrbitalUnitDropCatalog::EnsureNativeCatalog()
 
 	UGP_UnitDefinitionCatalog& Units = UGP_UnitDefinitionCatalog::Get();
 
-	WorkerDrop = CreateNativeDrop(
+	NativeWorkerDrop = CreateNativeDrop(
 		FName(TEXT("DA_GP_OrbitalUnitDrop_Worker")),
 		NSLOCTEXT("GPOrbitalUnitDropCatalog", "Worker", "Worker"));
-	WorkerDrop->UnitDefinition = Units.GetWorkerDefinition();
-	WorkerDrop->Cost = 25.0f;
-	WorkerDrop->TransportSlotCost = 1;
-	WorkerDrop->DeliveryDescentSeconds = 2.5f;
-	WorkerDrop->PayloadDeployDelaySeconds = 1.25f;
+	NativeWorkerDrop->UnitDefinition = Units.GetWorkerDefinition();
+	NativeWorkerDrop->Cost = 25.0f;
+	NativeWorkerDrop->TransportSlotCost = 1;
+	NativeWorkerDrop->DeliveryDescentSeconds = 2.5f;
+	NativeWorkerDrop->PayloadDeployDelaySeconds = 1.25f;
 
-	SalvageWalkerDrop = CreateNativeDrop(
+	NativeSalvageWalkerDrop = CreateNativeDrop(
 		FName(TEXT("DA_GP_OrbitalUnitDrop_SalvageWalker")),
 		NSLOCTEXT("GPOrbitalUnitDropCatalog", "SalvageWalker", "Salvage Walker"));
-	SalvageWalkerDrop->UnitDefinition = Units.GetSalvageWalkerDefinition();
-	SalvageWalkerDrop->Cost = 50.0f;
-	SalvageWalkerDrop->TransportSlotCost = 2;
-	SalvageWalkerDrop->DeliveryDescentSeconds = 2.5f;
-	SalvageWalkerDrop->PayloadDeployDelaySeconds = 1.25f;
+	NativeSalvageWalkerDrop->UnitDefinition = Units.GetSalvageWalkerDefinition();
+	NativeSalvageWalkerDrop->Cost = 50.0f;
+	NativeSalvageWalkerDrop->TransportSlotCost = 2;
+	NativeSalvageWalkerDrop->DeliveryDescentSeconds = 2.5f;
+	NativeSalvageWalkerDrop->PayloadDeployDelaySeconds = 1.25f;
 
 	bNativeCatalogReady = true;
 }
@@ -104,11 +117,343 @@ UGP_OrbitalUnitDropDefinition* UGP_OrbitalUnitDropCatalog::CreateNativeDrop(
 	return Drop;
 }
 
+UGP_OrbitalUnitDropDefinition* UGP_OrbitalUnitDropCatalog::ResolveLoadedAuthored(
+	const TSoftObjectPtr<UGP_OrbitalUnitDropDefinition>& Soft) const
+{
+	if (Soft.IsNull())
+	{
+		return nullptr;
+	}
+
+	UObject* Loaded = Soft.Get();
+	if (Loaded == nullptr)
+	{
+		Loaded = Soft.ToSoftObjectPath().ResolveObject();
+	}
+	return Cast<UGP_OrbitalUnitDropDefinition>(Loaded);
+}
+
+UGP_OrbitalUnitDropDefinition* UGP_OrbitalUnitDropCatalog::CanonicalOrNative(
+	EAuthoredSlotState State,
+	UGP_OrbitalUnitDropDefinition* Authored,
+	UGP_OrbitalUnitDropDefinition* Native) const
+{
+	if (State == EAuthoredSlotState::Pending)
+	{
+		return nullptr;
+	}
+	if (State == EAuthoredSlotState::Ready && IsValid(Authored))
+	{
+		return Authored;
+	}
+	return Native;
+}
+
+void UGP_OrbitalUnitDropCatalog::RefreshAuthoredBindings()
+{
+	EnsureNativeCatalog();
+	RefreshWorkerSlot();
+	RefreshWalkerSlot();
+}
+
+void UGP_OrbitalUnitDropCatalog::RefreshWorkerSlot()
+{
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	const TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> Soft =
+		Settings != nullptr ? Settings->WorkerDropDefinition : TSoftObjectPtr<UGP_OrbitalUnitDropDefinition>();
+
+	if (Soft.IsNull())
+	{
+		CancelWorkerLoad();
+		AuthoredWorkerDrop = nullptr;
+		WorkerRequestedPath.Reset();
+		WorkerState = EAuthoredSlotState::Empty;
+		return;
+	}
+
+	const FSoftObjectPath SoftPath = Soft.ToSoftObjectPath();
+
+#if !UE_BUILD_SHIPPING
+	if (bDebugForceUnresolvedWorker && WorkerState != EAuthoredSlotState::Ready)
+	{
+		if (WorkerState == EAuthoredSlotState::Pending && WorkerRequestedPath == SoftPath)
+		{
+			return;
+		}
+		RequestWorkerAsyncLoad(SoftPath);
+		return;
+	}
+#endif
+
+	if (UGP_OrbitalUnitDropDefinition* Loaded = ResolveLoadedAuthored(Soft))
+	{
+		CancelWorkerLoad();
+		AuthoredWorkerDrop = Loaded;
+		WorkerRequestedPath = SoftPath;
+		WorkerState = EAuthoredSlotState::Ready;
+		return;
+	}
+
+	if (WorkerState == EAuthoredSlotState::Pending && WorkerRequestedPath == SoftPath)
+	{
+		return;
+	}
+
+	RequestWorkerAsyncLoad(SoftPath);
+}
+
+void UGP_OrbitalUnitDropCatalog::RefreshWalkerSlot()
+{
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	const TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> Soft =
+		Settings != nullptr
+			? Settings->SalvageWalkerDropDefinition
+			: TSoftObjectPtr<UGP_OrbitalUnitDropDefinition>();
+
+	if (Soft.IsNull())
+	{
+		CancelWalkerLoad();
+		AuthoredSalvageWalkerDrop = nullptr;
+		WalkerRequestedPath.Reset();
+		WalkerState = EAuthoredSlotState::Empty;
+		return;
+	}
+
+	const FSoftObjectPath SoftPath = Soft.ToSoftObjectPath();
+	if (UGP_OrbitalUnitDropDefinition* Loaded = ResolveLoadedAuthored(Soft))
+	{
+		CancelWalkerLoad();
+		AuthoredSalvageWalkerDrop = Loaded;
+		WalkerRequestedPath = SoftPath;
+		WalkerState = EAuthoredSlotState::Ready;
+		return;
+	}
+
+	if (WalkerState == EAuthoredSlotState::Pending && WalkerRequestedPath == SoftPath)
+	{
+		return;
+	}
+
+	RequestWalkerAsyncLoad(SoftPath);
+}
+
+void UGP_OrbitalUnitDropCatalog::RequestWorkerAsyncLoad(const FSoftObjectPath& SoftPath)
+{
+	if (WorkerLoadHandle.IsValid() && WorkerRequestedPath == SoftPath)
+	{
+		return;
+	}
+
+	CancelWorkerLoad();
+	WorkerRequestedPath = SoftPath;
+	WorkerState = EAuthoredSlotState::Pending;
+	AuthoredWorkerDrop = nullptr;
+
+#if !UE_BUILD_SHIPPING
+	bDebugDidRequestAsyncWorkerLoad = true;
+#endif
+
+	WorkerLoadHandle = UAssetManager::GetStreamableManager().RequestAsyncLoad(
+		SoftPath,
+		FStreamableDelegate::CreateUObject(this, &UGP_OrbitalUnitDropCatalog::HandleWorkerLoaded));
+
+	if (!WorkerLoadHandle.IsValid())
+	{
+		UE_LOG(LogGPOrbitalUnitDropCatalog, Error,
+			TEXT("GP OrbitalUnitDropDefinitionLoadFailed: Slot=Worker Path=%s Reason=RequestAsyncLoadNullHandle"),
+			*SoftPath.ToString());
+#if !UE_BUILD_SHIPPING
+		bDebugWorkerLoadFailedLogged = true;
+		if (bDebugHoldWorkerCompletion)
+		{
+			return;
+		}
+#endif
+		WorkerState = EAuthoredSlotState::Failed;
+	}
+}
+
+void UGP_OrbitalUnitDropCatalog::RequestWalkerAsyncLoad(const FSoftObjectPath& SoftPath)
+{
+	if (WalkerLoadHandle.IsValid() && WalkerRequestedPath == SoftPath)
+	{
+		return;
+	}
+
+	CancelWalkerLoad();
+	WalkerRequestedPath = SoftPath;
+	WalkerState = EAuthoredSlotState::Pending;
+	AuthoredSalvageWalkerDrop = nullptr;
+
+	WalkerLoadHandle = UAssetManager::GetStreamableManager().RequestAsyncLoad(
+		SoftPath,
+		FStreamableDelegate::CreateUObject(this, &UGP_OrbitalUnitDropCatalog::HandleWalkerLoaded));
+
+	if (!WalkerLoadHandle.IsValid())
+	{
+		UE_LOG(LogGPOrbitalUnitDropCatalog, Error,
+			TEXT("GP OrbitalUnitDropDefinitionLoadFailed: Slot=SalvageWalker Path=%s Reason=RequestAsyncLoadNullHandle"),
+			*SoftPath.ToString());
+		WalkerState = EAuthoredSlotState::Failed;
+	}
+}
+
+void UGP_OrbitalUnitDropCatalog::HandleWorkerLoaded()
+{
+	if (!IsValid(this))
+	{
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	if (bDebugHoldWorkerCompletion)
+	{
+		return;
+	}
+#endif
+
+	FinishWorkerLoadResolve();
+}
+
+void UGP_OrbitalUnitDropCatalog::HandleWalkerLoaded()
+{
+	if (!IsValid(this))
+	{
+		return;
+	}
+
+	FinishWalkerLoadResolve();
+}
+
+void UGP_OrbitalUnitDropCatalog::FinishWorkerLoadResolve()
+{
+#if !UE_BUILD_SHIPPING
+	bDebugForceUnresolvedWorker = false;
+	if (DebugInjectedWorkerDrop != nullptr)
+	{
+		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+		{
+			Settings->WorkerDropDefinition = DebugInjectedWorkerDrop;
+		}
+		AuthoredWorkerDrop = DebugInjectedWorkerDrop;
+		WorkerState = EAuthoredSlotState::Ready;
+		WorkerLoadHandle.Reset();
+		return;
+	}
+#endif
+
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	const TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> Soft =
+		Settings != nullptr ? Settings->WorkerDropDefinition : TSoftObjectPtr<UGP_OrbitalUnitDropDefinition>();
+	UGP_OrbitalUnitDropDefinition* Loaded = ResolveLoadedAuthored(Soft);
+	if (Loaded == nullptr && !Soft.IsNull())
+	{
+		UE_LOG(LogGPOrbitalUnitDropCatalog, Error,
+			TEXT("GP OrbitalUnitDropDefinitionLoadFailed: Slot=Worker Path=%s Reason=ResolveFailedUsingNativeFallback"),
+			*Soft.ToSoftObjectPath().ToString());
+#if !UE_BUILD_SHIPPING
+		bDebugWorkerLoadFailedLogged = true;
+#endif
+		AuthoredWorkerDrop = nullptr;
+		WorkerState = EAuthoredSlotState::Failed;
+		WorkerLoadHandle.Reset();
+		return;
+	}
+
+	AuthoredWorkerDrop = Loaded;
+	WorkerState = IsValid(Loaded) ? EAuthoredSlotState::Ready : EAuthoredSlotState::Empty;
+	WorkerLoadHandle.Reset();
+}
+
+void UGP_OrbitalUnitDropCatalog::FinishWalkerLoadResolve()
+{
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	const TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> Soft =
+		Settings != nullptr
+			? Settings->SalvageWalkerDropDefinition
+			: TSoftObjectPtr<UGP_OrbitalUnitDropDefinition>();
+	UGP_OrbitalUnitDropDefinition* Loaded = ResolveLoadedAuthored(Soft);
+	if (Loaded == nullptr && !Soft.IsNull())
+	{
+		UE_LOG(LogGPOrbitalUnitDropCatalog, Error,
+			TEXT("GP OrbitalUnitDropDefinitionLoadFailed: Slot=SalvageWalker Path=%s Reason=ResolveFailedUsingNativeFallback"),
+			*Soft.ToSoftObjectPath().ToString());
+		AuthoredSalvageWalkerDrop = nullptr;
+		WalkerState = EAuthoredSlotState::Failed;
+		WalkerLoadHandle.Reset();
+		return;
+	}
+
+	AuthoredSalvageWalkerDrop = Loaded;
+	WalkerState = IsValid(Loaded) ? EAuthoredSlotState::Ready : EAuthoredSlotState::Empty;
+	WalkerLoadHandle.Reset();
+}
+
+void UGP_OrbitalUnitDropCatalog::CancelWorkerLoad()
+{
+	if (WorkerLoadHandle.IsValid())
+	{
+		if (WorkerLoadHandle->IsLoadingInProgress())
+		{
+			WorkerLoadHandle->CancelHandle();
+		}
+		WorkerLoadHandle.Reset();
+	}
+}
+
+void UGP_OrbitalUnitDropCatalog::CancelWalkerLoad()
+{
+	if (WalkerLoadHandle.IsValid())
+	{
+		if (WalkerLoadHandle->IsLoadingInProgress())
+		{
+			WalkerLoadHandle->CancelHandle();
+		}
+		WalkerLoadHandle.Reset();
+	}
+}
+
+UGP_OrbitalUnitDropDefinition* UGP_OrbitalUnitDropCatalog::GetWorkerDrop() const
+{
+	return CanonicalOrNative(WorkerState, AuthoredWorkerDrop, NativeWorkerDrop);
+}
+
+UGP_OrbitalUnitDropDefinition* UGP_OrbitalUnitDropCatalog::GetSalvageWalkerDrop() const
+{
+	return CanonicalOrNative(WalkerState, AuthoredSalvageWalkerDrop, NativeSalvageWalkerDrop);
+}
+
+bool UGP_OrbitalUnitDropCatalog::IsWorkerDropDefinitionPending() const
+{
+	return WorkerState == EAuthoredSlotState::Pending;
+}
+
+bool UGP_OrbitalUnitDropCatalog::IsSalvageWalkerDropDefinitionPending() const
+{
+	return WalkerState == EAuthoredSlotState::Pending;
+}
+
+bool UGP_OrbitalUnitDropCatalog::AreManifestDefinitionsReady(const FGP_UnitDropManifest& Manifest) const
+{
+	if (Manifest.WorkerCount > 0 && IsWorkerDropDefinitionPending())
+	{
+		return false;
+	}
+	if (Manifest.SalvageWalkerCount > 0 && IsSalvageWalkerDropDefinitionPending())
+	{
+		return false;
+	}
+	return true;
+}
+
 int32 UGP_OrbitalUnitDropCatalog::GetWorkerTransportSlotCost() const
 {
-	if (IsValid(WorkerDrop) && WorkerDrop->TransportSlotCost > 0)
+	if (const UGP_OrbitalUnitDropDefinition* Drop = GetWorkerDrop())
 	{
-		return WorkerDrop->TransportSlotCost;
+		if (Drop->TransportSlotCost > 0)
+		{
+			return Drop->TransportSlotCost;
+		}
 	}
 	if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
 	{
@@ -119,9 +464,12 @@ int32 UGP_OrbitalUnitDropCatalog::GetWorkerTransportSlotCost() const
 
 int32 UGP_OrbitalUnitDropCatalog::GetSalvageWalkerTransportSlotCost() const
 {
-	if (IsValid(SalvageWalkerDrop) && SalvageWalkerDrop->TransportSlotCost > 0)
+	if (const UGP_OrbitalUnitDropDefinition* Drop = GetSalvageWalkerDrop())
 	{
-		return SalvageWalkerDrop->TransportSlotCost;
+		if (Drop->TransportSlotCost > 0)
+		{
+			return Drop->TransportSlotCost;
+		}
 	}
 	if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
 	{
@@ -132,9 +480,9 @@ int32 UGP_OrbitalUnitDropCatalog::GetSalvageWalkerTransportSlotCost() const
 
 float UGP_OrbitalUnitDropCatalog::GetWorkerOrbitalDropCost() const
 {
-	if (IsValid(WorkerDrop))
+	if (const UGP_OrbitalUnitDropDefinition* Drop = GetWorkerDrop())
 	{
-		return FMath::Max(0.0f, WorkerDrop->Cost);
+		return FMath::Max(0.0f, Drop->Cost);
 	}
 	if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
 	{
@@ -145,9 +493,9 @@ float UGP_OrbitalUnitDropCatalog::GetWorkerOrbitalDropCost() const
 
 float UGP_OrbitalUnitDropCatalog::GetSalvageWalkerOrbitalDropCost() const
 {
-	if (IsValid(SalvageWalkerDrop))
+	if (const UGP_OrbitalUnitDropDefinition* Drop = GetSalvageWalkerDrop())
 	{
-		return FMath::Max(0.0f, SalvageWalkerDrop->Cost);
+		return FMath::Max(0.0f, Drop->Cost);
 	}
 	if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
 	{
@@ -158,9 +506,9 @@ float UGP_OrbitalUnitDropCatalog::GetSalvageWalkerOrbitalDropCost() const
 
 TSubclassOf<AGP_Worker> UGP_OrbitalUnitDropCatalog::ResolveWorkerPayloadClass() const
 {
-	if (IsValid(WorkerDrop))
+	if (const UGP_OrbitalUnitDropDefinition* Drop = GetWorkerDrop())
 	{
-		if (TSubclassOf<AGP_UnitBase> Loaded = WorkerDrop->ResolveLoadedPayloadClass())
+		if (TSubclassOf<AGP_UnitBase> Loaded = Drop->ResolveLoadedPayloadClass())
 		{
 			if (Loaded->IsChildOf(AGP_Worker::StaticClass()))
 			{
@@ -178,9 +526,9 @@ TSubclassOf<AGP_Worker> UGP_OrbitalUnitDropCatalog::ResolveWorkerPayloadClass() 
 
 TSubclassOf<AGP_SalvageWalker> UGP_OrbitalUnitDropCatalog::ResolveSalvageWalkerPayloadClass() const
 {
-	if (IsValid(SalvageWalkerDrop))
+	if (const UGP_OrbitalUnitDropDefinition* Drop = GetSalvageWalkerDrop())
 	{
-		if (TSubclassOf<AGP_UnitBase> Loaded = SalvageWalkerDrop->ResolveLoadedPayloadClass())
+		if (TSubclassOf<AGP_UnitBase> Loaded = Drop->ResolveLoadedPayloadClass())
 		{
 			if (Loaded->IsChildOf(AGP_SalvageWalker::StaticClass()))
 			{
@@ -206,39 +554,147 @@ void UGP_OrbitalUnitDropCatalog::ResolveManifestDeliveryTiming(
 	OutPayloadDeployDelaySeconds = Settings != nullptr ? Settings->UnitDropPayloadDeployDelaySeconds : 1.25f;
 
 	bool bUsedDefinition = false;
-	if (Manifest.WorkerCount > 0 && IsValid(WorkerDrop))
+	if (Manifest.WorkerCount > 0)
 	{
-		OutDescentSeconds = WorkerDrop->DeliveryDescentSeconds;
-		OutPayloadDeployDelaySeconds = WorkerDrop->PayloadDeployDelaySeconds;
-		bUsedDefinition = true;
-	}
-	if (Manifest.SalvageWalkerCount > 0 && IsValid(SalvageWalkerDrop))
-	{
-		if (bUsedDefinition)
+		if (const UGP_OrbitalUnitDropDefinition* Drop = GetWorkerDrop())
 		{
-			OutDescentSeconds = FMath::Max(OutDescentSeconds, SalvageWalkerDrop->DeliveryDescentSeconds);
-			OutPayloadDeployDelaySeconds = FMath::Max(
-				OutPayloadDeployDelaySeconds,
-				SalvageWalkerDrop->PayloadDeployDelaySeconds);
+			OutDescentSeconds = Drop->DeliveryDescentSeconds;
+			OutPayloadDeployDelaySeconds = Drop->PayloadDeployDelaySeconds;
+			bUsedDefinition = true;
 		}
-		else
+	}
+	if (Manifest.SalvageWalkerCount > 0)
+	{
+		if (const UGP_OrbitalUnitDropDefinition* Drop = GetSalvageWalkerDrop())
 		{
-			OutDescentSeconds = SalvageWalkerDrop->DeliveryDescentSeconds;
-			OutPayloadDeployDelaySeconds = SalvageWalkerDrop->PayloadDeployDelaySeconds;
+			if (bUsedDefinition)
+			{
+				OutDescentSeconds = FMath::Max(OutDescentSeconds, Drop->DeliveryDescentSeconds);
+				OutPayloadDeployDelaySeconds = FMath::Max(
+					OutPayloadDeployDelaySeconds,
+					Drop->PayloadDeployDelaySeconds);
+			}
+			else
+			{
+				OutDescentSeconds = Drop->DeliveryDescentSeconds;
+				OutPayloadDeployDelaySeconds = Drop->PayloadDeployDelaySeconds;
+			}
 		}
 	}
 }
 
 void UGP_OrbitalUnitDropCatalog::OverrideDeliveryTiming(float DescentSeconds, float PayloadDeployDelaySeconds)
 {
-	if (IsValid(WorkerDrop))
+	auto Apply = [DescentSeconds, PayloadDeployDelaySeconds](UGP_OrbitalUnitDropDefinition* Drop)
 	{
-		WorkerDrop->DeliveryDescentSeconds = DescentSeconds;
-		WorkerDrop->PayloadDeployDelaySeconds = PayloadDeployDelaySeconds;
+		if (IsValid(Drop))
+		{
+			Drop->DeliveryDescentSeconds = DescentSeconds;
+			Drop->PayloadDeployDelaySeconds = PayloadDeployDelaySeconds;
+		}
+	};
+
+	Apply(NativeWorkerDrop);
+	Apply(NativeSalvageWalkerDrop);
+	Apply(AuthoredWorkerDrop);
+	Apply(AuthoredSalvageWalkerDrop);
+}
+
+#if !UE_BUILD_SHIPPING
+void UGP_OrbitalUnitDropCatalog::DebugAssignLoadedAuthoredWorker(UGP_OrbitalUnitDropDefinition* Definition)
+{
+	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+	{
+		if (!bDebugSavedSettings)
+		{
+			DebugSavedWorkerSettingsRef = Settings->WorkerDropDefinition;
+			DebugSavedWalkerSettingsRef = Settings->SalvageWalkerDropDefinition;
+			bDebugSavedSettings = true;
+		}
+		Settings->WorkerDropDefinition = Definition;
 	}
-	if (IsValid(SalvageWalkerDrop))
+	bDebugForceUnresolvedWorker = false;
+	bDebugHoldWorkerCompletion = false;
+	DebugInjectedWorkerDrop = nullptr;
+	RefreshWorkerSlot();
+}
+
+void UGP_OrbitalUnitDropCatalog::DebugForceUnresolvedAuthoredWorkerLoad(
+	UGP_OrbitalUnitDropDefinition* InjectedDefinition,
+	bool bHoldCompletion)
+{
+	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 	{
-		SalvageWalkerDrop->DeliveryDescentSeconds = DescentSeconds;
-		SalvageWalkerDrop->PayloadDeployDelaySeconds = PayloadDeployDelaySeconds;
+		if (!bDebugSavedSettings)
+		{
+			DebugSavedWorkerSettingsRef = Settings->WorkerDropDefinition;
+			DebugSavedWalkerSettingsRef = Settings->SalvageWalkerDropDefinition;
+			bDebugSavedSettings = true;
+		}
+		Settings->WorkerDropDefinition = TSoftObjectPtr<UGP_OrbitalUnitDropDefinition>(
+			FSoftObjectPath(GPOrbitalUnitDropCatalogPrivate::UnresolvedWorkerStub));
+	}
+
+	bDebugForceUnresolvedWorker = true;
+	bDebugHoldWorkerCompletion = bHoldCompletion;
+	bDebugDidRequestAsyncWorkerLoad = false;
+	DebugInjectedWorkerDrop = InjectedDefinition;
+	CancelWorkerLoad();
+	AuthoredWorkerDrop = nullptr;
+	WorkerState = EAuthoredSlotState::Empty;
+	RefreshWorkerSlot();
+}
+
+void UGP_OrbitalUnitDropCatalog::DebugCompletePendingAuthoredWorkerLoad()
+{
+	if (WorkerState != EAuthoredSlotState::Pending)
+	{
+		return;
+	}
+	bDebugHoldWorkerCompletion = false;
+	FinishWorkerLoadResolve();
+}
+
+void UGP_OrbitalUnitDropCatalog::DebugForceAuthoredWorkerLoadFailure()
+{
+	DebugInjectedWorkerDrop = nullptr;
+	bDebugHoldWorkerCompletion = false;
+	if (WorkerState == EAuthoredSlotState::Pending)
+	{
+		FinishWorkerLoadResolve();
 	}
 }
+
+void UGP_OrbitalUnitDropCatalog::DebugClearAuthoredUnitDropOverrides()
+{
+	CancelWorkerLoad();
+	CancelWalkerLoad();
+	bDebugForceUnresolvedWorker = false;
+	bDebugHoldWorkerCompletion = false;
+	bDebugDidRequestAsyncWorkerLoad = false;
+	DebugInjectedWorkerDrop = nullptr;
+	AuthoredWorkerDrop = nullptr;
+	AuthoredSalvageWalkerDrop = nullptr;
+	WorkerState = EAuthoredSlotState::Empty;
+	WalkerState = EAuthoredSlotState::Empty;
+	WorkerRequestedPath.Reset();
+	WalkerRequestedPath.Reset();
+
+	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+	{
+		if (bDebugSavedSettings)
+		{
+			Settings->WorkerDropDefinition = DebugSavedWorkerSettingsRef;
+			Settings->SalvageWalkerDropDefinition = DebugSavedWalkerSettingsRef;
+		}
+		else
+		{
+			Settings->WorkerDropDefinition.Reset();
+			Settings->SalvageWalkerDropDefinition.Reset();
+		}
+	}
+	bDebugSavedSettings = false;
+	DebugSavedWorkerSettingsRef.Reset();
+	DebugSavedWalkerSettingsRef.Reset();
+}
+#endif

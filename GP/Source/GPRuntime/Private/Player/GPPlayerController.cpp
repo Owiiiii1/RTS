@@ -1126,7 +1126,18 @@ bool AGP_PlayerController::AuthorityTryPurchaseBuilding(FPrimaryAssetId DropDefi
 		return false;
 	}
 
-	UGP_OrbitalDropDefinition* DropDef = UGP_BuildingDropCatalog::Get().FindDropDefinition(DropDefinitionId);
+	UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+	if (Catalog.IsDropDefinitionIdPending(DropDefinitionId))
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("GP BuildingPurchase Result: PC=%s Team=%d Accepted=false Reason=DefinitionNotReady Drop=%s"),
+			*GetName(),
+			PS->GetTeamId(),
+			*DropDefinitionId.ToString());
+		return false;
+	}
+
+	UGP_OrbitalDropDefinition* DropDef = Catalog.FindDropDefinition(DropDefinitionId);
 	const GPBuildingDropAuthority::FPurchaseResult Result =
 		GPBuildingDropAuthority::AuthorityPurchaseBuilding(GetWorld(), PS, DropDef);
 	UE_LOG(LogTemp, Log,

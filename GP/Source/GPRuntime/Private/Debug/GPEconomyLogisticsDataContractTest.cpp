@@ -205,6 +205,8 @@ void UGP_EconomyLogisticsDataContractTestRunner::CleanupActors()
 	CargoOverrideDef = nullptr;
 	StorageOverrideDef = nullptr;
 	FerroniteDef = nullptr;
+	AuthoredWorkerDropDef = nullptr;
+	AuthoredHubDropDef = nullptr;
 }
 
 void UGP_EconomyLogisticsDataContractTestRunner::Finish()
@@ -218,6 +220,8 @@ void UGP_EconomyLogisticsDataContractTestRunner::Finish()
 	{
 		World->GetTimerManager().ClearTimer(StageTimerHandle);
 	}
+	UGP_OrbitalUnitDropCatalog::Get().DebugClearAuthoredUnitDropOverrides();
+	UGP_BuildingDropCatalog::Get().DebugClearAuthoredBuildingDropOverrides();
 	UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(2.5f, 1.25f);
 	UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(2.5f, 2.0f);
 	CleanupActors();
@@ -722,6 +726,151 @@ void UGP_EconomyLogisticsDataContractTestRunner::AdvanceStage()
 		Expect(Attr != nullptr && FMath::IsNearlyEqual(Attr->GetMaxUnits(), 10.0f),
 			TEXT("R_NoUnitCapRegression"));
 		UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(2.5f, 1.25f);
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 13:
+	{
+		AuthoredWorkerDropDef = NewObject<UGP_OrbitalUnitDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalUnitDrop_Worker_Authored")), RF_Transient);
+		AuthoredWorkerDropDef->Cost = 17.0f;
+		AuthoredWorkerDropDef->TransportSlotCost = 3;
+		AuthoredWorkerDropDef->DeliveryDescentSeconds = 4.25f;
+		AuthoredWorkerDropDef->PayloadDeployDelaySeconds = 0.75f;
+		AuthoredWorkerDropDef->UnitDefinition = UGP_UnitDefinitionCatalog::Get().GetWorkerDefinition();
+
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UnitDrops.DebugClearAuthoredUnitDropOverrides();
+		Expect(IsValid(UnitDrops.GetWorkerDrop())
+			&& FMath::IsNearlyEqual(UnitDrops.GetWorkerOrbitalDropCost(), 25.0f)
+			&& UnitDrops.GetWorkerTransportSlotCost() == 1, TEXT("A_EmptyAuthoredRefUsesNativeBootstrap"));
+
+		UnitDrops.DebugAssignLoadedAuthoredWorker(AuthoredWorkerDropDef);
+		FGP_UnitDropManifest OneWorker;
+		OneWorker.WorkerCount = 1;
+		float Descent = 0.0f;
+		float Deploy = 0.0f;
+		UnitDrops.ResolveManifestDeliveryTiming(OneWorker, Descent, Deploy);
+		int32 Slots = 0;
+		float Cost = 0.0f;
+		int32 Units = 0;
+		EGP_UnitDropRejectReason Reject = EGP_UnitDropRejectReason::None;
+		Expect(UnitDrops.GetWorkerDrop() == AuthoredWorkerDropDef
+			&& FMath::IsNearlyEqual(UnitDrops.GetWorkerOrbitalDropCost(), 17.0f)
+			&& UnitDrops.GetWorkerTransportSlotCost() == 3
+			&& FMath::IsNearlyEqual(Descent, 4.25f)
+			&& FMath::IsNearlyEqual(Deploy, 0.75f)
+			&& GPUnitDropAuthority::ComputeManifestCosts(OneWorker, Slots, Cost, Units, Reject)
+			&& Slots == 3 && FMath::IsNearlyEqual(Cost, 17.0f),
+			TEXT("B_LoadedAuthoredWorker17x3_4_25x0_75"));
+		Expect(IsValid(UnitDrops.GetNativeWorkerDrop())
+			&& FMath::IsNearlyEqual(UnitDrops.GetNativeWorkerDrop()->Cost, 25.0f)
+			&& UnitDrops.GetNativeWorkerDrop()->TransportSlotCost == 1, TEXT("B_NativeBootstrapUnchanged25"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 14:
+	{
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UnitDrops.DebugForceUnresolvedAuthoredWorkerLoad(AuthoredWorkerDropDef, true);
+		Expect(UnitDrops.DebugDidRequestAsyncAuthoredWorkerLoad()
+			&& UnitDrops.IsWorkerDropDefinitionPending()
+			&& UnitDrops.GetWorkerDrop() == nullptr, TEXT("C_UnresolvedSoftRefRequestsAsyncLoad"));
+
+		AGP_PlayerState* PS = OwnerPSWeak.Get();
+		const float OrbitalBefore = (IsValid(PS) && PS->GetPlayerAttributeSet() != nullptr)
+			? PS->GetPlayerAttributeSet()->GetOrbitalFerronite()
+			: -1.0f;
+		OrbitalBeforeSpend = OrbitalBefore;
+		FGP_UnitDropManifest OneWorker;
+		OneWorker.WorkerCount = 1;
+		int32 Slots = 0;
+		float Cost = 0.0f;
+		int32 Units = 0;
+		EGP_UnitDropRejectReason Reject = EGP_UnitDropRejectReason::None;
+		Expect(!GPUnitDropAuthority::ComputeManifestCosts(OneWorker, Slots, Cost, Units, Reject)
+			&& Reject == EGP_UnitDropRejectReason::DefinitionNotReady, TEXT("D_PendingRejectsComputeNativeFallback"));
+		const GPUnitDropAuthority::FEvalResult PendingResult =
+			GPUnitDropAuthority::AuthorityRequestUnitDrop(World, PS, OneWorker);
+		const float OrbitalAfter = (IsValid(PS) && PS->GetPlayerAttributeSet() != nullptr)
+			? PS->GetPlayerAttributeSet()->GetOrbitalFerronite()
+			: -2.0f;
+		Expect(!PendingResult.bAccepted
+			&& PendingResult.RejectReason == EGP_UnitDropRejectReason::DefinitionNotReady
+			&& !PendingResult.SpawnedPod.IsValid()
+			&& FMath::IsNearlyEqual(OrbitalAfter, OrbitalBefore),
+			TEXT("D_PendingDoesNotSpendReserveOrSpawn"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 15:
+	{
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UnitDrops.DebugCompletePendingAuthoredWorkerLoad();
+		FGP_UnitDropManifest OneWorker;
+		OneWorker.WorkerCount = 1;
+		float Descent = 0.0f;
+		float Deploy = 0.0f;
+		UnitDrops.ResolveManifestDeliveryTiming(OneWorker, Descent, Deploy);
+		Expect(!UnitDrops.IsWorkerDropDefinitionPending()
+			&& UnitDrops.GetWorkerDrop() == AuthoredWorkerDropDef
+			&& FMath::IsNearlyEqual(UnitDrops.GetWorkerOrbitalDropCost(), 17.0f)
+			&& UnitDrops.GetWorkerTransportSlotCost() == 3
+			&& FMath::IsNearlyEqual(Descent, 4.25f)
+			&& FMath::IsNearlyEqual(Deploy, 0.75f),
+			TEXT("E_CompletionSwitchesToAuthored17x3"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 16:
+	{
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UnitDrops.DebugForceUnresolvedAuthoredWorkerLoad(AuthoredWorkerDropDef, true);
+		UnitDrops.DebugForceAuthoredWorkerLoadFailure();
+		Expect(UnitDrops.DebugConsumeWorkerLoadFailedLog()
+			&& !UnitDrops.IsWorkerDropDefinitionPending()
+			&& UnitDrops.GetWorkerDrop() == UnitDrops.GetNativeWorkerDrop()
+			&& FMath::IsNearlyEqual(UnitDrops.GetWorkerOrbitalDropCost(), 25.0f)
+			&& UnitDrops.GetWorkerTransportSlotCost() == 1, TEXT("F_FailedLoadLogsAndNativeFallback"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 17:
+	{
+		UGP_BuildingDropCatalog& Buildings = UGP_BuildingDropCatalog::Get();
+		AuthoredHubDropDef = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_Authored")), RF_Transient);
+		AuthoredHubDropDef->Cost = 17.0f;
+		AuthoredHubDropDef->DeliveryDescentSeconds = 4.25f;
+		AuthoredHubDropDef->PayloadDeployDelaySeconds = 0.75f;
+		AuthoredHubDropDef->BuildingDefinition = Buildings.GetLegacyLogisticsHubDrop() != nullptr
+			? Buildings.GetLegacyLogisticsHubDrop()->ResolveLoadedBuildingDefinition()
+			: nullptr;
+		Buildings.DebugAssignLoadedAuthoredLogisticsHub(AuthoredHubDropDef);
+		float Descent = 0.0f;
+		float Deploy = 0.0f;
+		Buildings.ResolveDeliveryTiming(Buildings.GetLegacyLogisticsHubDrop(), Descent, Deploy);
+		Expect(Buildings.GetLegacyLogisticsHubDrop() == AuthoredHubDropDef
+			&& FMath::IsNearlyEqual(Buildings.GetPurchaseCost(AuthoredHubDropDef), 17.0f)
+			&& FMath::IsNearlyEqual(Descent, 4.25f)
+			&& FMath::IsNearlyEqual(Deploy, 0.75f),
+			TEXT("BuildingAuthoredHubCost17NotNative100"));
+		Buildings.DebugClearAuthoredBuildingDropOverrides();
+		Expect(FMath::IsNearlyEqual(Buildings.GetPurchaseCost(Buildings.GetLegacyLogisticsHubDrop()), 100.0f),
+			TEXT("BuildingEmptyRefRestoresNativeHub100"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 18:
+	{
+		UGP_OrbitalUnitDropCatalog::Get().DebugClearAuthoredUnitDropOverrides();
+		UGP_BuildingDropCatalog::Get().DebugClearAuthoredBuildingDropOverrides();
 		Finish();
 		break;
 	}

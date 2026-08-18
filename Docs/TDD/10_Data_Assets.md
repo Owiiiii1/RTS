@@ -109,7 +109,7 @@ Per [`14_Orbital_Delivery`](14_Orbital_Delivery.md). Each `DA_GP_OrbitalDrop_*` 
 | `UGP_UnitDefinition` | Canonical initial MaxHealth / combat / sight / facing / cargo (GP-S38D / GP-S39E). Runtime remains GAS. |
 | `UGP_OrbitalDropDefinition` | Building acquisition: `Cost`, `DropTags`, soft `BuildingDefinition`, descent / deploy delay |
 | `UGP_OrbitalUnitDropDefinition` | Unit acquisition: `Cost`, slots, payload, descent / deploy delay |
-| `UGP_OrbitalDeliverySettings` | Global only: pod capacity, pod class, altitude, spacing, cleanup, deploy radius, overlap |
+| `UGP_OrbitalDeliverySettings` | Global transport tunables + **soft refs only** to authored unit/building drop DataAssets. No balance values on those refs. |
 
 Do **not** duplicate `SpawnedClass` / `FootprintCells` / MaxHealth onto the DropDef as a second SoT. Canonical MaxHealth after GP-S38D is `UnitDefinition.MaxHealth`. Per-purchase delivery timing lives on drop definitions; settings remain fallback. Spawn altitude / cleanup / placement radius stay global.
 

@@ -492,6 +492,13 @@ GPBuildingDropAuthority::FPurchaseResult GPBuildingDropAuthority::AuthorityPurch
 		return Result;
 	}
 
+	UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+	if (Catalog.IsDropDefinitionPending(DropDefinition))
+	{
+		Result.RejectReason = EGP_BuildingDropRejectReason::DefinitionNotReady;
+		return Result;
+	}
+
 	Result.DropDefinitionId = DropDefinition->GetPrimaryAssetId();
 	if (!Result.DropDefinitionId.IsValid())
 	{

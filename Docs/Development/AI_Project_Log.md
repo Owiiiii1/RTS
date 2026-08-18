@@ -1,5 +1,15 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S37T AutoAcquire building-target correction
+
+Status: **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s37t-defensive-turret-mvp` (not merged, not finalized)
+- Candidate correction: Defensive Turret idle AutoAcquire may target valid enemy units **and** buildings. Legacy Salvage Walker idle/AttackMove remain unit-only.
+- Seam: `EGP_AutoAcquireMode` + `IsEligibleAutoAcquireTarget` on `UGP_UnitCommandComponent`. Still `ValidateAttackTarget`.
+- Turret + AutoAcquire + AttackMove contracts extended; listed regressions Failures=0; GPEditor Win64 Development + UHT **PASS**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-17 — GP-S37T Defensive Turret MVP (implementation candidate)
 
 Status: **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

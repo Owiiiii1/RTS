@@ -9,10 +9,12 @@
 #include "AttributeSets/GPUnitAttributeSet.h"
 #include "Buildings/GPDefensiveTurret.h"
 #include "Buildings/GPMainBase.h"
+#include "Orbital/GPBuildGridContractTest.h"
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Combat/GPCombatLOS.h"
 #include "Combat/GPDamageApplication.h"
 #include "Command/GPUnitCommand.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Debug/GPContractTestCoordinator.h"
 #include "Effects/GPGE_AddOrbital.h"
@@ -48,6 +50,10 @@ namespace GPDefensiveTurretContractDebug
 	static const FVector FarEnemyLoc(-50500.0f, 0.0f, 100.0f);
 	static const FVector NearEnemyLoc(-51600.0f, 200.0f, 100.0f);
 	static const FVector ReacquireLoc(-51620.0f, -180.0f, 100.0f);
+	static const FVector FriendlyBuildingLoc(-51650.0f, -220.0f, 100.0f);
+	static const FVector DeadBuildingLoc(-51600.0f, 280.0f, 100.0f);
+	static const FVector EnemyBuildingLoc(-51600.0f, 200.0f, 100.0f);
+	static const FVector ReacquireBuildingLoc(-51620.0f, -180.0f, 100.0f);
 	static const FVector MainBaseLoc(-50000.0f, 4000.0f, 100.0f);
 
 	static void ApplyCombatStats(AGP_UnitBase* Unit, float Health, float Damage, float Range, float Cooldown)
@@ -91,6 +97,35 @@ namespace GPDefensiveTurretContractDebug
 			}
 		}
 		return Turret;
+	}
+
+	static AGP_BuildingBase* SpawnBuildingStub(UWorld* World, const FVector& Loc, int32 TeamId)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.ObjectFlags |= RF_Transient;
+		AGP_BuildingBase* Building = World->SpawnActor<AGP_BuildGridContractStub>(
+			AGP_BuildGridContractStub::StaticClass(), Loc, FRotator::ZeroRotator, Params);
+		if (Building != nullptr)
+		{
+			Building->SetActorLocation(Loc);
+			Building->SetTeamId(TeamId);
+			ApplyCombatStats(Building, 200.0f, 0.0f, 0.0f, 1.0f);
+			if (USceneComponent* Root = Building->GetRootComponent())
+			{
+				UCapsuleComponent* Visibility = NewObject<UCapsuleComponent>(Building, TEXT("ContractVisibility"));
+				Visibility->InitCapsuleSize(60.0f, 100.0f);
+				Visibility->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+				Visibility->SetCollisionObjectType(ECC_WorldDynamic);
+				Visibility->SetCollisionResponseToAllChannels(ECR_Ignore);
+				Visibility->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+				Visibility->SetGenerateOverlapEvents(false);
+				Visibility->SetCanEverAffectNavigation(false);
+				Visibility->SetupAttachment(Root);
+				Visibility->RegisterComponent();
+			}
+		}
+		return Building;
 	}
 
 	static AGP_Worker* SpawnWorker(UWorld* World, const FVector& Loc, int32 TeamId)
@@ -323,6 +358,22 @@ void UGP_DefensiveTurretContractTestRunner::CleanupActors()
 		{
 			Worker->Destroy();
 		}
+		if (AGP_BuildingBase* Building = FriendlyBuildingWeak.Get())
+		{
+			Building->Destroy();
+		}
+		if (AGP_BuildingBase* Building = DeadEnemyBuildingWeak.Get())
+		{
+			Building->Destroy();
+		}
+		if (AGP_BuildingBase* Building = EnemyBuildingWeak.Get())
+		{
+			Building->Destroy();
+		}
+		if (AGP_BuildingBase* Building = ReacquireBuildingWeak.Get())
+		{
+			Building->Destroy();
+		}
 		if (AGP_DefensiveTurret* Turret = TurretWeak.Get())
 		{
 			Turret->Destroy();
@@ -345,6 +396,10 @@ void UGP_DefensiveTurretContractTestRunner::CleanupActors()
 	FarEnemyWeak.Reset();
 	NearEnemyWeak.Reset();
 	ReacquireEnemyWeak.Reset();
+	FriendlyBuildingWeak.Reset();
+	DeadEnemyBuildingWeak.Reset();
+	EnemyBuildingWeak.Reset();
+	ReacquireBuildingWeak.Reset();
 	BlockerWeak.Reset();
 	MainBaseWeak.Reset();
 	OwnerPSWeak.Reset();
@@ -638,18 +693,159 @@ void UGP_DefensiveTurretContractTestRunner::AdvanceStage()
 			&& GPCombatLOS::HasLineOfSight(World, Turret, Next);
 		const float NextHp = GPDefensiveTurretContractDebug::GetHealth(Next);
 		Expect(bClear && NextHp < ReacquireHpAtBlock - 0.5f, TEXT("L_LOSRestoredCanAttack"));
+
+		if (AGP_Worker* Worker = FriendlyWeak.Get())
+		{
+			Worker->Destroy();
+			FriendlyWeak.Reset();
+		}
+		if (AGP_Worker* Worker = FarEnemyWeak.Get())
+		{
+			Worker->Destroy();
+			FarEnemyWeak.Reset();
+		}
+		if (AGP_Worker* Worker = NearEnemyWeak.Get())
+		{
+			Worker->Destroy();
+			NearEnemyWeak.Reset();
+		}
+		if (IsValid(Next))
+		{
+			Next->Destroy();
+			ReacquireEnemyWeak.Reset();
+		}
+		if (UGP_UnitCommandComponent* Cmd = Turret != nullptr ? Turret->GetUnitCommandComponent() : nullptr)
+		{
+			FGP_UnitCommand StopCmd;
+			StopCmd.CommandTag = GPTags.Command_Stop;
+			Cmd->HandleCommand(StopCmd);
+		}
+
+		FriendlyBuildingWeak = GPDefensiveTurretContractDebug::SpawnBuildingStub(
+			World, GPDefensiveTurretContractDebug::FriendlyBuildingLoc, GPDefensiveTurretContractDebug::ContractTeam);
+		DeadEnemyBuildingWeak = GPDefensiveTurretContractDebug::SpawnBuildingStub(
+			World, GPDefensiveTurretContractDebug::DeadBuildingLoc, GPDefensiveTurretContractDebug::EnemyTeam);
+		if (AGP_BuildingBase* DeadBuilding = DeadEnemyBuildingWeak.Get())
+		{
+			GPDefensiveTurretContractDebug::KillUnit(DeadBuilding);
+		}
+		if (!Expect(IsValid(FriendlyBuildingWeak.Get())
+			&& IsValid(DeadEnemyBuildingWeak.Get())
+			&& DeadEnemyBuildingWeak->IsDead(),
+			TEXT("Building_SpawnFriendlyAndDead")))
+		{
+			Finish();
+			return;
+		}
+		++StageIndex;
+		ScheduleNext(0.5f);
+		break;
+	}
+	case 10:
+	{
+		AGP_DefensiveTurret* Turret = TurretWeak.Get();
+		UGP_UnitCommandComponent* Cmd = Turret != nullptr ? Turret->GetUnitCommandComponent() : nullptr;
+		AGP_BuildingBase* FriendlyBuilding = FriendlyBuildingWeak.Get();
+		AGP_BuildingBase* DeadBuilding = DeadEnemyBuildingWeak.Get();
+		Expect(Cmd != nullptr && !Cmd->IsAttackActive()
+			&& GPDefensiveTurretContractDebug::GetHealth(FriendlyBuilding) >= 199.0f,
+			TEXT("C_FriendlyBuildingNotAcquired"));
+		Expect(IsValid(DeadBuilding) && DeadBuilding->IsDead()
+			&& (Cmd == nullptr || Cmd->GetAttackTarget() != DeadBuilding),
+			TEXT("D_DeadEnemyBuildingNotAcquired"));
+
+		EnemyBuildingWeak = GPDefensiveTurretContractDebug::SpawnBuildingStub(
+			World, GPDefensiveTurretContractDebug::EnemyBuildingLoc, GPDefensiveTurretContractDebug::EnemyTeam);
+		if (!Expect(IsValid(EnemyBuildingWeak.Get())
+			&& FVector::Dist2D(EnemyBuildingWeak->GetActorLocation(), GPDefensiveTurretContractDebug::EnemyBuildingLoc) < 50.0f,
+			TEXT("B_SpawnEnemyBuilding")))
+		{
+			Finish();
+			return;
+		}
+		++StageIndex;
+		ScheduleNext(0.85f);
+		break;
+	}
+	case 11:
+	{
+		AGP_DefensiveTurret* Turret = TurretWeak.Get();
+		AGP_BuildingBase* EnemyBuilding = EnemyBuildingWeak.Get();
+		UGP_UnitCommandComponent* Cmd = Turret != nullptr ? Turret->GetUnitCommandComponent() : nullptr;
+		const float BuildingHp = GPDefensiveTurretContractDebug::GetHealth(EnemyBuilding);
+		const bool bLos = Turret != nullptr && EnemyBuilding != nullptr
+			&& GPCombatLOS::HasLineOfSight(World, Turret, EnemyBuilding);
+		if (!Expect(IsValid(EnemyBuilding) && Cmd != nullptr && Cmd->IsAttackActive()
+			&& Cmd->GetAttackTarget() == EnemyBuilding && bLos && BuildingHp < 200.0f,
+			TEXT("B_EnemyBuildingAcquiredAndDamaged")))
+		{
+			Finish();
+			return;
+		}
+		EnemyBuildingHpAtAcquire = BuildingHp;
+
+		const FVector BlockLoc = (GPDefensiveTurretContractDebug::TurretLoc + EnemyBuilding->GetActorLocation()) * 0.5f
+			+ FVector(0.0f, 0.0f, 80.0f);
+		BlockerWeak = GPDefensiveTurretContractDebug::SpawnVisibilityBlocker(World, BlockLoc);
+		if (!Expect(IsValid(BlockerWeak.Get()), TEXT("E_SpawnBuildingBlocker")))
+		{
+			Finish();
+			return;
+		}
+		++StageIndex;
+		ScheduleNext(1.15f);
+		break;
+	}
+	case 12:
+	{
+		AGP_DefensiveTurret* Turret = TurretWeak.Get();
+		AGP_BuildingBase* EnemyBuilding = EnemyBuildingWeak.Get();
+		const bool bBlocked = Turret != nullptr && EnemyBuilding != nullptr
+			&& !GPCombatLOS::HasLineOfSight(World, Turret, EnemyBuilding);
+		const float BuildingHp = GPDefensiveTurretContractDebug::GetHealth(EnemyBuilding);
+		Expect(bBlocked && FMath::IsNearlyEqual(BuildingHp, EnemyBuildingHpAtAcquire, 0.5f),
+			TEXT("E_LOSBlockedBuildingNoDamage"));
+		if (AActor* Blocker = BlockerWeak.Get())
+		{
+			Blocker->Destroy();
+			BlockerWeak.Reset();
+		}
+		if (IsValid(EnemyBuilding))
+		{
+			GPDefensiveTurretContractDebug::KillUnit(EnemyBuilding);
+		}
+		Expect(!IsValid(EnemyBuilding) || EnemyBuilding->IsDead(), TEXT("F_EnemyBuildingDied"));
+		ReacquireBuildingWeak = GPDefensiveTurretContractDebug::SpawnBuildingStub(
+			World, GPDefensiveTurretContractDebug::ReacquireBuildingLoc, GPDefensiveTurretContractDebug::EnemyTeam);
+		if (!Expect(IsValid(ReacquireBuildingWeak.Get()), TEXT("F_SpawnReacquireBuilding")))
+		{
+			Finish();
+			return;
+		}
+		++StageIndex;
+		ScheduleNext(0.85f);
+		break;
+	}
+	case 13:
+	{
+		AGP_DefensiveTurret* Turret = TurretWeak.Get();
+		AGP_BuildingBase* ReacquireBuilding = ReacquireBuildingWeak.Get();
+		UGP_UnitCommandComponent* Cmd = Turret != nullptr ? Turret->GetUnitCommandComponent() : nullptr;
+		const float BuildingHp = GPDefensiveTurretContractDebug::GetHealth(ReacquireBuilding);
+		Expect(IsValid(ReacquireBuilding) && Cmd != nullptr && Cmd->IsAttackActive()
+			&& Cmd->GetAttackTarget() == ReacquireBuilding && BuildingHp < 200.0f,
+			TEXT("F_ReacquiredBuildingAfterDeath"));
 		if (IsValid(Turret))
 		{
 			GPDefensiveTurretContractDebug::KillUnit(Turret);
 		}
-		UGP_UnitCommandComponent* Cmd = Turret != nullptr ? Turret->GetUnitCommandComponent() : nullptr;
 		Expect(IsValid(Turret) && Turret->IsDead() && (Cmd == nullptr || !Cmd->IsAttackActive()),
 			TEXT("M_TurretDeathStopsCombat"));
 		++StageIndex;
 		ScheduleNext(0.15f);
 		break;
 	}
-	case 10:
+	case 14:
 	{
 		AGP_DefensiveTurret* Turret = TurretWeak.Get();
 		UGP_BuildGridSubsystem* Grid = World->GetSubsystem<UGP_BuildGridSubsystem>();
@@ -678,7 +874,7 @@ void UGP_DefensiveTurretContractTestRunner::AdvanceStage()
 		ScheduleNext(0.05f);
 		break;
 	}
-	case 11:
+	case 15:
 	{
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
@@ -760,7 +956,7 @@ void UGP_DefensiveTurretContractTestRunner::AdvanceStage()
 		ScheduleNext(0.05f);
 		break;
 	}
-	case 12:
+	case 16:
 	{
 		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
 		UGP_OrbitalDropDefinition* TurretDrop = GPDefensiveTurretContractDebug::FindTurretDrop();
@@ -826,7 +1022,7 @@ void UGP_DefensiveTurretContractTestRunner::AdvanceStage()
 		ScheduleNext(0.35f);
 		break;
 	}
-	case 13:
+	case 17:
 	{
 		AGP_DefensiveTurret* Spawned = nullptr;
 		int32 Count = 0;

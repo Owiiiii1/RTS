@@ -6,6 +6,7 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPUnitAttributeSet.h"
+#include "Buildings/GPBuildingBase.h"
 #include "Command/GPCommandComponent.h"
 #include "Command/GPCommandRequest.h"
 #include "Command/GPStoredUnitCommand.h"
@@ -14,6 +15,7 @@
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
 #include "HAL/IConsoleManager.h"
+#include "Orbital/GPBuildGridContractTest.h"
 #include "Player/GPPlayerController.h"
 #include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
@@ -221,6 +223,11 @@ void UGP_CombatAttackMoveContractTestRunner::CleanupActors()
 	GPCombatAttackMoveDebug::DestroyWeakWorker(EnemyWeak);
 	GPCombatAttackMoveDebug::DestroyWeakWorker(EnemyAltWeak);
 	GPCombatAttackMoveDebug::DestroyWeakWorker(WorkerWeak);
+	if (AGP_BuildingBase* Building = BuildingTargetWeak.Get())
+	{
+		Building->Destroy();
+	}
+	BuildingTargetWeak.Reset();
 	if (AGP_PlayerController* PC = PCWeak.Get())
 	{
 		PC->Destroy();
@@ -942,6 +949,55 @@ void UGP_CombatAttackMoveContractTestRunner::AdvanceStage()
 				TEXT("gp.Combat.RunAttackMoveContractTest SKIP: K_InputMode (no local PC)"));
 		}
 
+		GPCombatAttackMoveDebug::DestroyWeakWorker(EnemyWeak);
+		GPCombatAttackMoveDebug::DestroyWeakWorker(EnemyAltWeak);
+		Walker->SetActorLocation(Origin);
+		GPCombatAttackMoveDebug::IssueCommand(Walker, GPTags.Command_Stop, nullptr, FVector::ZeroVector);
+
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.ObjectFlags |= RF_Transient;
+		AGP_BuildingBase* Building = World->SpawnActor<AGP_BuildGridContractStub>(
+			AGP_BuildGridContractStub::StaticClass(),
+			Origin + FVector(400.0f, 0.0f, 0.0f),
+			FRotator::ZeroRotator,
+			Params);
+		if (IsValid(Building))
+		{
+			Building->SetActorLocation(Origin + FVector(400.0f, 0.0f, 0.0f));
+			Building->SetTeamId(TeamB);
+			GPCombatAttackMoveDebug::ApplyCombatStats(Building, 200.0f, 0.0f, 0.0f, 1.0f);
+		}
+		BuildingTargetWeak = Building;
+		if (!Expect(IsValid(Building), TEXT("Legacy_SpawnAttackMoveBuilding")))
+		{
+			Finish();
+			return;
+		}
+
+		GPCombatAttackMoveDebug::IssueCommand(
+			Walker, GPTags.Command_AttackMove, nullptr, Origin + FVector(1600.0f, 0.0f, 0.0f));
+		++StageIndex;
+		ScheduleNext(0.8f);
+		break;
+	}
+	case 20: // Legacy S32A: AttackMove acquire still excludes buildings
+	{
+		AGP_SalvageWalker* Walker = WalkerWeak.Get();
+		AGP_BuildingBase* Building = BuildingTargetWeak.Get();
+		if (!Expect(IsValid(Walker) && IsValid(Building), TEXT("Legacy_AttackMoveBuildingAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		UGP_UnitCommandComponent* Cmd = Walker->GetUnitCommandComponent();
+		const UGP_UnitAttributeSet* Attrs = Building->GetUnitAttributeSet();
+		const float BuildingHp = Attrs != nullptr ? Attrs->GetHealth() : -1.0f;
+		Expect(Cmd != nullptr
+			&& Cmd->GetAttackTarget() != Building
+			&& BuildingHp >= 199.0f,
+			TEXT("Legacy_AttackMoveAcquireExcludesBuildings"));
 		Finish();
 		break;
 	}

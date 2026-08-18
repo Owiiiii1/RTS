@@ -577,6 +577,41 @@ bool UGP_UnitCommandComponent::IsCombatCapableForAutoAcquire(const AGP_UnitBase*
 		&& Unit->HasCapabilityTag(GPTags.Building_Type_DefensiveTurret);
 }
 
+EGP_AutoAcquireMode UGP_UnitCommandComponent::ResolveIdleAutoAcquireMode(const AGP_UnitBase* OwnerUnit) const
+{
+	if (OwnerUnit == nullptr)
+	{
+		return EGP_AutoAcquireMode::LegacyUnitIdle;
+	}
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	if (GPTags.Building_Type_DefensiveTurret.IsValid()
+		&& OwnerUnit->HasCapabilityTag(GPTags.Building_Type_DefensiveTurret))
+	{
+		return EGP_AutoAcquireMode::DefensiveTurretIdle;
+	}
+	return EGP_AutoAcquireMode::LegacyUnitIdle;
+}
+
+bool UGP_UnitCommandComponent::IsEligibleAutoAcquireTarget(
+	const AGP_UnitBase* OwnerUnit,
+	const AGP_UnitBase* Candidate,
+	EGP_AutoAcquireMode Mode) const
+{
+	if (OwnerUnit == nullptr || !IsValid(Candidate) || Candidate == OwnerUnit)
+	{
+		return false;
+	}
+
+	if (Candidate->IsA(AGP_BuildingBase::StaticClass()))
+	{
+		// Buildings are valid only for Defensive Turret idle AutoAcquire.
+		// Legacy Salvage Walker idle + AttackMove keep the S30R/S32A unit-only surface.
+		return Mode == EGP_AutoAcquireMode::DefensiveTurretIdle;
+	}
+
+	return true;
+}
+
 bool UGP_UnitCommandComponent::IsEligibleForCombatAutoAcquire() const
 {
 	AActor* Owner = GetOwner();
@@ -741,7 +776,9 @@ void UGP_UnitCommandComponent::StopCombatAutoAcquireTimer()
 	AutoAcquireTimerHandle.Invalidate();
 }
 
-AGP_UnitBase* UGP_UnitCommandComponent::FindNearestAutoAcquireTarget(float MaxRangeCm) const
+AGP_UnitBase* UGP_UnitCommandComponent::FindNearestAutoAcquireTarget(
+	float MaxRangeCm,
+	EGP_AutoAcquireMode Mode) const
 {
 	AActor* Owner = GetOwner();
 	UWorld* World = GetWorld();
@@ -759,13 +796,7 @@ AGP_UnitBase* UGP_UnitCommandComponent::FindNearestAutoAcquireTarget(float MaxRa
 	for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
 	{
 		AGP_UnitBase* Candidate = *It;
-		if (!IsValid(Candidate) || Candidate == OwnerUnit)
-		{
-			continue;
-		}
-
-		// MVP: auto-acquire combat/units only — exclude buildings.
-		if (Candidate->IsA(AGP_BuildingBase::StaticClass()))
+		if (!IsEligibleAutoAcquireTarget(OwnerUnit, Candidate, Mode))
 		{
 			continue;
 		}
@@ -1003,7 +1034,7 @@ void UGP_UnitCommandComponent::OnCombatAutoAcquireScan()
 	// GP-S32A: AttackMove travelling may acquire; pure Move stays suppressed via Idle eligibility.
 	if (IsEligibleForAttackMoveAcquire())
 	{
-		AGP_UnitBase* Target = FindNearestAutoAcquireTarget(Range);
+		AGP_UnitBase* Target = FindNearestAutoAcquireTarget(Range, EGP_AutoAcquireMode::AttackMove);
 		LastAutoAcquireCandidate = Target;
 		if (Target != nullptr)
 		{
@@ -1017,7 +1048,8 @@ void UGP_UnitCommandComponent::OnCombatAutoAcquireScan()
 		return;
 	}
 
-	AGP_UnitBase* Target = FindNearestAutoAcquireTarget(Range);
+	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(GetOwner());
+	AGP_UnitBase* Target = FindNearestAutoAcquireTarget(Range, ResolveIdleAutoAcquireMode(OwnerUnit));
 	LastAutoAcquireCandidate = Target;
 	if (Target != nullptr)
 	{

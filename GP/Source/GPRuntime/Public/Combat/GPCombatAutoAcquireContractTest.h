@@ -43,6 +43,7 @@ private:
 	TWeakObjectPtr<class AGP_Worker> FriendlyWeak;
 	TWeakObjectPtr<class AGP_Worker> SightEnemyWeak;
 	TWeakObjectPtr<class AGP_Worker> FacingEnemyWeak;
+	TWeakObjectPtr<class AGP_BuildingBase> BuildingTargetWeak;
 	float SavedScanInterval = 0.35f;
 	float SavedSightRange = 900.0f;
 	float SightEnemyHpAtAcquire = 0.0f;

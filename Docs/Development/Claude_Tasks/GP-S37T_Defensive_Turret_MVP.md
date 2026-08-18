@@ -33,7 +33,7 @@ Verdict: **PASS**.
 - Range/Damage/Cooldown/MaxHealth: `AGP_UnitBase` Default* → GAS `UGP_UnitAttributeSet` (same as Salvage Walker). Not hardcoded in fire code. `UGP_BuildingDefinition.MaxHealth` remains catalog metadata (400), mirrored on turret CDO.
 - AutoAcquire sight = 600 cm (equal fire range) so stationary Attack never needs approach.
 - Authored payload seam: `UGP_BuildingDefinition.SpawnedClass` + optional settings `DefensiveTurretPayloadClass`.
-- Target set: existing AutoAcquire filter (enemy units, not buildings).
+- Target set: Defensive Turret idle AutoAcquire may target valid enemy units and buildings. Legacy Salvage Walker idle/AttackMove remain unit-only.
 
 ## Scope
 Native `AGP_DefensiveTurret`, catalog SpawnedClass, BuildGrid 2×2, auto-acquire/LOS/damage, orbital Purchase/READY/Deploy, contract test, TEMP HUD enablement via payload resolve.
@@ -42,7 +42,7 @@ Native `AGP_DefensiveTurret`, catalog SpawnedClass, BuildGrid 2×2, auto-acquire
 Wall, wall-mounted turret, FoW/vision, rotation UI, manual targeting, upgrades, ammo, power, sell/demolish, generic weapon rewrite.
 
 ## Acceptance Criteria
-Operator can Purchase / READY / Deploy a Defensive Turret; spawned actor occupies 2×2; auto-attacks enemy units in range with LOS; friendly/out-of-range ignored; death releases grid.
+Operator can Purchase / READY / Deploy a Defensive Turret; spawned actor occupies 2×2; auto-attacks valid enemy units and buildings in range with LOS; friendly/out-of-range ignored; death releases grid.
 
 ## Validation
 `gp.Building.RunDefensiveTurretContractTest` plus listed regressions. GPEditor Win64 Development + UHT.

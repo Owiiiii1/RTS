@@ -43,6 +43,10 @@ private:
 	TWeakObjectPtr<class AGP_Worker> FarEnemyWeak;
 	TWeakObjectPtr<class AGP_Worker> NearEnemyWeak;
 	TWeakObjectPtr<class AGP_Worker> ReacquireEnemyWeak;
+	TWeakObjectPtr<class AGP_BuildingBase> FriendlyBuildingWeak;
+	TWeakObjectPtr<class AGP_BuildingBase> DeadEnemyBuildingWeak;
+	TWeakObjectPtr<class AGP_BuildingBase> EnemyBuildingWeak;
+	TWeakObjectPtr<class AGP_BuildingBase> ReacquireBuildingWeak;
 	TWeakObjectPtr<class AActor> BlockerWeak;
 	TWeakObjectPtr<class AGP_MainBase> MainBaseWeak;
 	TWeakObjectPtr<class AGP_PlayerState> OwnerPSWeak;
@@ -53,6 +57,8 @@ private:
 	float NearHpAfterFirstHit = 0.0f;
 	float NearHpAfterCooldownWindow = 0.0f;
 	float ReacquireHpAtBlock = 0.0f;
+	float EnemyBuildingHpAtAcquire = 0.0f;
+	float ReacquireBuildingHpAtAcquire = 0.0f;
 	float OrbitalBeforePurchase = 0.0f;
 	float OrbitalBeforeDeploy = 0.0f;
 	int32 ReadyAfterPurchase = 0;

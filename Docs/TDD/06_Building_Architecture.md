@@ -413,7 +413,7 @@ Reuses `AGP_BuildingBase` standard:
 - Source: orbital drop only (no local build path). Native 2×2 `PlacementFootprintBounds` (400×400 cm). Yaw-0 orbital reservation.
 - Auto-attack reuses production combat: `UGP_UnitCommandComponent` idle AutoAcquire timer + `GPCombatLOS` + `UGP_GE_Damage_Basic`. There is no `UGP_CombatComponent`.
 - Combat stats live on `AGP_UnitBase` Default* → `UGP_UnitAttributeSet` (same owner as Salvage Walker). MVP CDO: range 600, damage 20, cooldown 1.0, MaxHealth 400.
-- Target set: same AutoAcquire filter as Salvage Walker (enemy `AGP_UnitBase`, buildings excluded).
+- Target set: Defensive Turret idle AutoAcquire may target valid enemy units and buildings (`ValidateAttackTarget`). Legacy Salvage Walker idle/AttackMove still excludes buildings.
 - Stationary: no Move / Attack-Move. AttackMove eligibility remains Salvage Walker only.
 - Tags: `GP.Unit.Type.Building`, `GP.Building.Type.DefensiveTurret`, Selectable, Inspectable, `Selection.Type.Building`.
 - FoW vision (`GP.Capability.GrantsVision`), sell/demolish, Wall-mounted variant: **deferred**.

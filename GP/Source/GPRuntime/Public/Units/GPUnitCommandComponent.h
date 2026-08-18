@@ -79,6 +79,14 @@ enum class EGP_AttackRangeSource : uint8
 	Invalid
 };
 
+/** AutoAcquire candidate policy (GP-S37T). Not a generic targeting framework. */
+enum class EGP_AutoAcquireMode : uint8
+{
+	LegacyUnitIdle,
+	DefensiveTurretIdle,
+	AttackMove
+};
+
 /**
  * Server-authoritative held-command ownership on AGP_UnitBase (GP-S18–S25B).
  * GP-S21–S23: Held Move sync + serial-aware movement results.
@@ -496,7 +504,12 @@ private:
 	void StopCombatAutoAcquireTimer();
 	void OnCombatAutoAcquireScan();
 	bool IsCombatCapableForAutoAcquire(const AGP_UnitBase* Unit) const;
-	AGP_UnitBase* FindNearestAutoAcquireTarget(float MaxRangeCm) const;
+	EGP_AutoAcquireMode ResolveIdleAutoAcquireMode(const AGP_UnitBase* OwnerUnit) const;
+	bool IsEligibleAutoAcquireTarget(
+		const AGP_UnitBase* OwnerUnit,
+		const AGP_UnitBase* Candidate,
+		EGP_AutoAcquireMode Mode) const;
+	AGP_UnitBase* FindNearestAutoAcquireTarget(float MaxRangeCm, EGP_AutoAcquireMode Mode) const;
 	void TryIssueAutoAcquireAttack(AGP_UnitBase* Target);
 	void UpdateAttackFacingTowardTarget(float DeltaTime);
 

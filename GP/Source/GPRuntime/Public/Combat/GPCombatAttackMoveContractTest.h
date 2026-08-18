@@ -41,6 +41,7 @@ private:
 	TWeakObjectPtr<class AGP_Worker> EnemyWeak;
 	TWeakObjectPtr<class AGP_Worker> EnemyAltWeak;
 	TWeakObjectPtr<class AGP_Worker> WorkerWeak;
+	TWeakObjectPtr<class AGP_BuildingBase> BuildingTargetWeak;
 	TWeakObjectPtr<class AGP_PlayerController> PCWeak;
 	TWeakObjectPtr<class AGP_PlayerState> PSWeak;
 	FVector Origin = FVector::ZeroVector;

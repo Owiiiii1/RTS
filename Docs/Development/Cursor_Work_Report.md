@@ -12,73 +12,62 @@ Status: **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`
 
 ## Feature head SHA
-`7aa0565f9e10e9fe447fe9898835eba28ddc9b81`
+Pending this correction commit (recorded in the follow-up SHA commit).
 
-## Factual existing combat architecture
-There is **no `UGP_CombatComponent`**. Production combat lives on `UGP_UnitCommandComponent` (every `AGP_UnitBase`):
+## Correction
+This is a **candidate correction** after factual review. Not finalization.
 
-- Idle AutoAcquire is a repeating timer (default 0.35s), not a permanent Actor Tick
-- Attack FSM: Idle → Approaching → Ready → `AttemptAttackHit`
-- Damage: `ApplyDamageFromUnit` → `UGP_GE_Damage_Basic` → `UGP_UnitAttributeSet::Health`
-- LOS: `GPCombatLOS::HasLineOfSight` (ECC_Visibility, 3-pair traces)
-- Presentation: `UGP_CombatPresentationComponent` multicast after a successful hit
-- Only `AGP_SalvageWalker` was combat-capable for AutoAcquire
-- AutoAcquire targets: enemy `AGP_UnitBase`, buildings excluded
-- AttackMove is a separate modal path for Salvage Walker only
+### OLD (incorrect)
+AutoAcquire targets exclude buildings globally.
 
-## How the turret reuses it
-`AGP_DefensiveTurret` is thin `AGP_BuildingBase` glue. It keeps the same command component, GAS attributes, LOS helper, and damage GE. Idle AutoAcquire runs as a permanent defensive scan (no AttackMove imitation).
+### NEW (required)
+- Defensive Turret idle AutoAcquire can target valid enemy units **and** buildings.
+- Legacy Salvage Walker target semantics remain unchanged (idle + AttackMove still exclude buildings).
 
-## Minimal reconciliation
-- `IsCombatCapableForAutoAcquire`: Salvage Walker **or** `GP.Building.Type.DefensiveTurret`
-- `IsEligibleForAttackMoveAcquire`: remains Salvage Walker only
-- `HandleCommand` rejects Move / AttackMove on `AGP_BuildingBase`
-- Stationary Attack already entered Ready when in range; out-of-range without movement still finishes the attack (existing `MovementRejected` path). Turret sight = fire range so it only acquires in-range targets
-- `GPCombatLOS` prefers native/authored `CombatOrigin` / `MuzzleAnchor` for the Eye origin; bounds fallback remains
+## Exact target policy
+One small AutoAcquire eligibility seam on `UGP_UnitCommandComponent`. Not a generic targeting framework. No `if turret` in damage/fire code.
 
-## Exact data ownership for range / damage / cooldown
-| Stat | Owner |
-| --- | --- |
-| AttackRange, Damage, AttackCooldown, MaxHealth | `AGP_UnitBase` Default* → `InitializeCombatAttributesIfNeeded` → `UGP_UnitAttributeSet` (same as Salvage Walker) |
-| AutoAcquire sight | `UGP_UnitCommandComponent::AutoAcquireSightRangeCm` (turret CDO 600) |
-| Catalog MaxHealth 400 | `UGP_BuildingDefinition` identity metadata; mirrored on turret `DefaultMaxHealth` |
+`EGP_AutoAcquireMode`:
+| Mode | Owner | Building candidates |
+| --- | --- | --- |
+| `DefensiveTurretIdle` | tagged `GP.Building.Type.DefensiveTurret` | Allowed |
+| `LegacyUnitIdle` | Salvage Walker idle (S30R) | Excluded |
+| `AttackMove` | Salvage Walker AttackMove (S32A) | Excluded |
 
-No `if Turret then Damage=20` in fire code. No weapon-field dump on `UGP_BuildingDefinition`.
+`ResolveIdleAutoAcquireMode(Owner)` → DefensiveTurretIdle only when the owner has `GP.Building.Type.DefensiveTurret`; otherwise LegacyUnitIdle.
 
-Turret CDO MVP: range 600, damage 20, cooldown 1.0, MaxHealth/Health 400.
+`IsEligibleAutoAcquireTarget(Owner, Candidate, Mode)` is the only building-surface gate. Candidates still pass existing `ValidateAttackTarget()`:
+- same team rejected
+- dead rejected
+- self rejected
+- invalid rejected
 
-## Class / tag architecture
-- `AGP_DefensiveTurret : AGP_BuildingBase`
-- Tags: Selectable, Inspectable, `Selection.Type.Building`, `GP.Unit.Type.Building`, `GP.Building.Type.DefensiveTurret` (existing native tag, reused)
-- No movable capability. Native `CombatOrigin` scene anchor (BP-editable)
+LOS / range / cooldown / Attack cadence unchanged.
 
-## Health / death path
-Existing `AGP_BuildingBase` → `AGP_UnitBase` ASC / `UGP_UnitAttributeSet`. Death uses `HandleGASDeath` / building EndPlay. EndPlay unregisters BuildGrid occupancy.
+Inspected S30R/S32A docs and contracts first: Salvage Walker AutoAcquire is “nearest valid enemy **unit**”; neither contract previously required building targets. Canonical legacy surface stays unit-only.
 
-## Auto-acquire / LOS
-Server timer scan. Same target validation as Salvage Walker AutoAcquire. LOS via `GPCombatLOS`. Target loss / reacquire uses the existing Attack finish + next scan.
+## Building-target tests (`gp.Building.RunDefensiveTurretContractTest`)
+- A. Enemy mobile unit in range + LOS → acquired/damaged (existing G/I)
+- B. Enemy `AGP_BuildingBase` in range + LOS → acquired/damaged
+- C. Friendly building in range → not acquired / no damage
+- D. Dead enemy building → not acquired
+- E. Enemy building blocked by LOS → no damage
+- F. After current target dies, turret can reacquire a building target
 
-## BuildingDefinition / DropDefinition
-- `DA_GP_Building_DefensiveTurret`: DisplayName Defensive Turret, tags, `SpawnedClass = AGP_DefensiveTurret`, MaxHealth 400, FootprintCells 2×2
-- `DA_GP_OrbitalDrop_DefensiveTurret`: Cost 150, linked building def
-- Authored override seam: settings `DefensiveTurretPayloadClass` (empty → native). Canonical class remains `SpawnedClass`
-
-## Purchase / READY / Deploy
-Unchanged GP-S35B/S36G authority: spend Orbital once on Purchase, READY+1; Deploy consumes READY once, no second spend; reject/cancel preserve READY.
-
-## BuildGrid footprint
-Native `PlacementFootprintBounds` half-extent 200×200×20 → 2×2 (400×400 cm). Orbital spawn yaw 0, rectangular reservation. BP may retune bounds. NavigationObstacle uses existing BuildingBase semantics.
+## Legacy regression
+- `gp.Combat.RunAutoAcquireContractTest`: idle Salvage Walker does **not** acquire an in-range enemy building; HP unchanged
+- `gp.Combat.RunAttackMoveContractTest`: AttackMove acquire does **not** target an in-range enemy building; HP unchanged
 
 ## Tests
 | Command | Result |
 | --- | --- |
 | `gp.Building.RunDefensiveTurretContractTest` | Complete Failures=0 |
-| `gp.Building.RunBuildGridContractTest` | Complete Failures=0 |
-| `gp.Building.RunMultiBuildingDataContractTest` | Complete Failures=0 |
-| `gp.Building.RunOrbitalBuildingDropContractTest` | Complete Failures=0 |
 | `gp.Combat.RunAutoAcquireContractTest` | Complete Failures=0 |
 | `gp.Combat.RunAttackMoveContractTest` | Complete Failures=0 |
 | `gp.Combat.RunLOSFireGateContractTest` | Complete Failures=0 |
+| `gp.Building.RunBuildGridContractTest` | Complete Failures=0 |
+| `gp.Building.RunMultiBuildingDataContractTest` | Complete Failures=0 |
+| `gp.Building.RunOrbitalBuildingDropContractTest` | Complete Failures=0 |
 | `gp.Resource.RunUnitCapLogisticsHubContractTest` | Complete Failures=0 |
 | `gp.Resource.RunOrbitalUnitDropContractTest` | Complete Failures=0 |
 | `gp.Resource.RunContainerLaunchContractTest` | Complete Failures=0 |
@@ -91,28 +80,25 @@ All: **Failures=0**.
 GPEditor Win64 Development including UHT **PASS**.  
 GP Win64 Development / Shipping **not run** (candidate phase).
 
+## Unchanged
+Turret range/damage/cooldown/health, BuildGrid, Purchase/READY/Deploy, DropPod, CombatOrigin, LOS implementation, attack cadence, AttackMove behavior, movement, UI, data ownership.
+
 ## Exact changed files
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Claude_Tasks/GP-S37T_Defensive_Turret_MVP.md`
-- `Docs/Development/Claude_Tasks/README.md`
 - `Docs/Development/Cursor_Work_Report.md`
-- `Docs/Development/DOCUMENTATION_INDEX.md`
 - `Docs/TDD/06_Building_Architecture.md`
-- `Docs/TDD/14_Orbital_Delivery.md`
-- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/GPDefensiveTurret.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/Grid/GPBuildGridSubsystem.cpp`
-- `GP/Source/GPRuntime/Private/Combat/GPCombatLOS.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPCombatAttackMoveContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPCombatAutoAcquireContractTest.cpp`
 - `GP/Source/GPRuntime/Private/Debug/GPDefensiveTurretContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropCatalog.cpp`
-- `GP/Source/GPRuntime/Private/Settings/GPOrbitalDeliverySettings.cpp`
 - `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
-- `GP/Source/GPRuntime/Public/Buildings/GPDefensiveTurret.h`
 - `GP/Source/GPRuntime/Public/Buildings/GPDefensiveTurretContractTest.h`
-- `GP/Source/GPRuntime/Public/Settings/GPOrbitalDeliverySettings.h`
+- `GP/Source/GPRuntime/Public/Combat/GPCombatAttackMoveContractTest.h`
+- `GP/Source/GPRuntime/Public/Combat/GPCombatAutoAcquireContractTest.h`
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
 
 ## Protected files untouched
-Confirmed **not** committed: `DefaultEngine.ini`, `DefaultGame.ini`, `L_PrototypeArena.umap`, `BP_ResourceNode_AuthoredExample.uasset`, untracked operator asset folders, AutoAcquire CRLF noise.
+Confirmed **not** committed: `DefaultEngine.ini`, `DefaultGame.ini`, `L_PrototypeArena.umap`, `BP_ResourceNode_AuthoredExample.uasset`, untracked operator asset folders.
 
 **NOT MERGED.**  
 **NOT FINALIZED.**

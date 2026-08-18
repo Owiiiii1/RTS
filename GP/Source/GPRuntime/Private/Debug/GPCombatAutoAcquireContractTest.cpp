@@ -6,10 +6,12 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPUnitAttributeSet.h"
+#include "Buildings/GPBuildingBase.h"
 #include "Command/GPUnitCommand.h"
 #include "Debug/GPContractTestCoordinator.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
+#include "Orbital/GPBuildGridContractTest.h"
 #include "Tags/GPGameplayTags.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
@@ -181,12 +183,17 @@ void UGP_CombatAutoAcquireContractTestRunner::CleanupActors()
 	{
 		W->Destroy();
 	}
+	if (AGP_BuildingBase* Building = BuildingTargetWeak.Get())
+	{
+		Building->Destroy();
+	}
 	WalkerWeak.Reset();
 	NearEnemyWeak.Reset();
 	FarEnemyWeak.Reset();
 	FriendlyWeak.Reset();
 	SightEnemyWeak.Reset();
 	FacingEnemyWeak.Reset();
+	BuildingTargetWeak.Reset();
 }
 
 void UGP_CombatAutoAcquireContractTestRunner::Finish()
@@ -729,6 +736,69 @@ void UGP_CombatAutoAcquireContractTestRunner::AdvanceStage()
 		const float YawNow = Walker->GetActorRotation().Yaw;
 		const float Drift = FMath::Abs(FMath::FindDeltaAngleDegrees(YawNow, IdleYawBaseline));
 		Expect(Drift < 5.0f, TEXT("F_NoArbitraryFacingWhenIdle"));
+
+		if (AGP_Worker* Worker = NearEnemyWeak.Get())
+		{
+			Worker->Destroy();
+			NearEnemyWeak.Reset();
+		}
+		if (AGP_Worker* Worker = FarEnemyWeak.Get())
+		{
+			Worker->Destroy();
+			FarEnemyWeak.Reset();
+		}
+		if (AGP_Worker* Worker = SightEnemyWeak.Get())
+		{
+			Worker->Destroy();
+			SightEnemyWeak.Reset();
+		}
+		if (AGP_Worker* Worker = FacingEnemyWeak.Get())
+		{
+			Worker->Destroy();
+			FacingEnemyWeak.Reset();
+		}
+
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.ObjectFlags |= RF_Transient;
+		AGP_BuildingBase* Building = World->SpawnActor<AGP_BuildGridContractStub>(
+			AGP_BuildGridContractStub::StaticClass(),
+			Origin + FVector(300.0f, 0.0f, 0.0f),
+			FRotator::ZeroRotator,
+			Params);
+		if (IsValid(Building))
+		{
+			Building->SetActorLocation(Origin + FVector(300.0f, 0.0f, 0.0f));
+			Building->SetTeamId(TeamB);
+			GPCombatAutoAcquireDebug::ApplyCombatStats(Building, 200.0f, 0.0f, 0.0f, 1.0f);
+		}
+		BuildingTargetWeak = Building;
+		if (!Expect(IsValid(Building), TEXT("Legacy_SpawnBuildingTarget")))
+		{
+			Finish();
+			return;
+		}
+		++StageIndex;
+		ScheduleNext(0.8f);
+		break;
+	}
+	case 13: // Legacy S30R: idle AutoAcquire still excludes buildings
+	{
+		AGP_SalvageWalker* Walker = WalkerWeak.Get();
+		AGP_BuildingBase* Building = BuildingTargetWeak.Get();
+		if (!Expect(IsValid(Walker) && IsValid(Building), TEXT("Legacy_BuildingActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		UGP_UnitCommandComponent* Cmd = Walker->GetUnitCommandComponent();
+		const UGP_UnitAttributeSet* Attrs = Building->GetUnitAttributeSet();
+		const float BuildingHp = Attrs != nullptr ? Attrs->GetHealth() : -1.0f;
+		Expect(Cmd != nullptr && !Cmd->IsAttackActive()
+			&& Cmd->GetAttackTarget() != Building
+			&& BuildingHp >= 199.0f,
+			TEXT("Legacy_IdleAutoAcquireExcludesBuildings"));
 		Finish();
 		break;
 	}

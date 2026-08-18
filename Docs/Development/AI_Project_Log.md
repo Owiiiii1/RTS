@@ -7,6 +7,7 @@ Status: **GP-S40R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 - Factual review: `CanEngageRetaliationTarget` used sight range only
 - Correction: handoff also requires `GPCombatLOS::HasLineOfSight`
 - Blocked LOS keeps retaliation-owned pursuit; timeout returns Idle with no Held Attack
+- Tip: `fc57f0dd44dc7211c2e5e4905c04117207104d90`
 - **NOT MERGED. NOT FINALIZED.**
 
 ## 2026-08-18 — GP-S40R Timed Retaliation Pursuit (implementation candidate)

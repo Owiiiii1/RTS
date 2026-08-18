@@ -8,7 +8,7 @@
 ## Branch / base / head
 - Branch: `feature/gp-s40r-timed-retaliation-pursuit`
 - Base: `origin/main` @ `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`
-- Head: recorded after commit
+- Head: `fc57f0dd44dc7211c2e5e4905c04117207104d90`
 
 ## Defect (factual review)
 `CanEngageRetaliationTarget()` handed off on `Distance <= GetEffectiveAutoAcquireRange()` only. An in-sight attacker behind an obstacle became a Held Attack; if already inside AttackRange the existing fire gate then left the unit Ready with blocked fire instead of continuing pursuit.

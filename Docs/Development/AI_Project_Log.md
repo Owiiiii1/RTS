@@ -1,5 +1,19 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S38D Unit/Building Combat Data (finalization)
+
+Status: **GP-S38D_FINALIZATION_READY_FOR_MERGE**
+
+- Branch: `feature/gp-s38d-unit-building-combat-data` (base verified `origin/main` @ `c79b017a45b1560e025cedfe262b0afde3c9cb6a`)
+- Operator PASS: authored `UGP_UnitDefinition` assigned on `BP_SalvageWalker`; `MoveSpeedCmPerSecond = 100` applied in PIE (~100 cm/s vs legacy 250)
+- Canonical: `UGP_UnitDefinition` initializes GAS / command / movement. Runtime remains GAS + command + movement components. BuildingDef.MaxHealth compatibility-only. Orbital cost/slots stay acquisition-layer
+- Soft lifecycle: empty → immediate fallback; resident → apply now; unloaded valid ref → `RequestAsyncLoad`; failure → log + fallback. AutoAcquire gated until ready. EndPlay cancels pending handle. No `LoadSynchronous`
+- `RetaliationPursuitSeconds` data-only, baseline 5.0. **GP-S39R** not started
+- Operator DataAsset / BP not committed
+- Contracts Failures=0; GPEditor Win64 Development + UHT **PASS**; GP Win64 Development **PASS**; GP Win64 Shipping **PASS**
+- **NOT MERGED.** Await human merge. Do not start GP-S39R / Wall / FoW
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-18 — GP-S38D async soft-load correction (candidate)
 
 Status: **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

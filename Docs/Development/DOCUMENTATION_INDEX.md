@@ -39,7 +39,7 @@
 | Last closed / merged stage | **GP-S37T Defensive Turret MVP** on `main` (tip `c79b017a45b1560e025cedfe262b0afde3c9cb6a`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s38d-unit-building-combat-data` (**NOT MERGED / NOT FINALIZED**) |
+| Current stage | **GP-S38D_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s38d-unit-building-combat-data` (**NOT MERGED**) |
 
 ---
 
@@ -49,7 +49,7 @@
 
 **Prior closed:** GP-S36G / GP-S35B / GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S38D_Unit_Building_Combat_Data.md`](Claude_Tasks/GP-S38D_Unit_Building_Combat_Data.md) — **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. Do **not** merge. Await operator PIE.
+**Current:** [`Claude_Tasks/GP-S38D_Unit_Building_Combat_Data.md`](Claude_Tasks/GP-S38D_Unit_Building_Combat_Data.md) — **GP-S38D_FINALIZATION_READY_FOR_MERGE**. Do **not** merge. Await human merge.
 
 **Do not** start Wall gameplay / FoW / GP-S39R retaliation / Order Menu / Spectating without explicit assignment.
 
@@ -72,7 +72,7 @@
 13. **GP-S35B** — Multi-Building Data Architecture — **DONE / MERGED** @ `6f258a1…`
 14. **GP-S36G** — BuildGrid MVP — **DONE / MERGED** @ `9ace159…`
 15. **GP-S37T** — Defensive Turret MVP — **DONE / MERGED** @ `c79b017…`
-16. **GP-S38D** — Unit/Building Combat Data — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (NOT MERGED / NOT FINALIZED)
+16. **GP-S38D** — Unit/Building Combat Data — **FINALIZATION_READY_FOR_MERGE** (NOT MERGED)
 
 ---
 
@@ -156,4 +156,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S37T are on verified `main` tip `c79b017a45b1560e025cedfe262b0afde3c9cb6a`. Current stage: **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s38d-unit-building-combat-data`. See [`Claude_Tasks/GP-S38D_Unit_Building_Combat_Data.md`](Claude_Tasks/GP-S38D_Unit_Building_Combat_Data.md). **NOT MERGED. NOT FINALIZED.**
+SETUP-001, DOCS-001, GP-S01…GP-S37T are on verified `main` tip `c79b017a45b1560e025cedfe262b0afde3c9cb6a`. Current stage: **GP-S38D_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s38d-unit-building-combat-data`. See [`Claude_Tasks/GP-S38D_Unit_Building_Combat_Data.md`](Claude_Tasks/GP-S38D_Unit_Building_Combat_Data.md). **NOT MERGED.** Await human merge. Do not start GP-S39R.

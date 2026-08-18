@@ -1,9 +1,9 @@
 # GP-S38D — Unit/Building Combat Data
 
 ## Status
-**GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+**GP-S38D_FINALIZATION_READY_FOR_MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.**
 
 ## Slice Group
 Post-GP-S37T (Defensive Turret MVP is on verified `main` @ `c79b017a45b1560e025cedfe262b0afde3c9cb6a`)
@@ -129,7 +129,11 @@ Expected later authored assets:
 
 BP class defaults (`BP_GP_Worker` / `BP_GP_SalvageWalker` / `BP_GP_DefensiveTurret`) point at the matching UnitDefinition. BuildingDefinition may soft-ref the same UnitDefinition. This slice does **not** commit binary DataAssets.
 
-Operator PIE check: assign a temporary UnitDefinition, change AttackRange or MoveSpeed, confirm gameplay changes.
+## Operator PASS (final)
+
+Operator created a `UGP_UnitDefinition` Data Asset, assigned it on `BP_SalvageWalker` via `Unit Definition Asset`, set `MoveSpeedCmPerSecond = 100`, and confirmed in PIE that Salvage Walker moved at ~100 cm/s instead of legacy 250. Authored UnitDefinition loads and applies as the gameplay source.
+
+Operator DataAsset / BP assignment are **not** committed.
 
 ## Tests
 All Failures=0:
@@ -151,10 +155,11 @@ All Failures=0:
 
 ## Builds
 GPEditor Win64 Development + UHT **PASS**.  
-No GP Development / Shipping in this candidate.
+GP Win64 Development **PASS**.  
+GP Win64 Shipping **PASS**.
 
 ## Out of scope
 Retaliation behavior, damage reaction, pursuit timer, AI controller / BT, FoW, Wall / Wall Turret, upgrades, research modifiers, weapon inventory / ammo, generic weapon framework, runtime stat UI, balance pass, save/load, nav-algorithm dump into UnitDefinition, binary authored DA assets, `DefaultGame.ini` AssetManager scan.
 
 ## Stop Condition
-**NOT MERGED. NOT FINALIZED.** Await operator PIE. Do not start GP-S39R / Wall / FoW.
+**NOT MERGED.** Human merge only. Do not start GP-S39R / Wall / FoW.

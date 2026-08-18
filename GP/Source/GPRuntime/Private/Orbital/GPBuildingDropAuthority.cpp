@@ -638,6 +638,12 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		return Result;
 	}
 
+	if (UGP_BuildingDropCatalog::Get().IsDropDefinitionPending(DropDefinition))
+	{
+		Result.RejectReason = EGP_BuildingDropRejectReason::DefinitionNotReady;
+		return Result;
+	}
+
 	Result.DropDefinitionId = DropDefinition->GetPrimaryAssetId();
 
 	UGP_OrbitalBuildingInventoryComponent* Inventory =

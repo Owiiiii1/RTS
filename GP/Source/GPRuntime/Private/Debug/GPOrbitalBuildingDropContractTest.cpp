@@ -14,9 +14,11 @@
 #include "EngineUtils.h"
 #include "Game/GPGameState.h"
 #include "HAL/IConsoleManager.h"
+#include "Buildings/GPBuildingDefinition.h"
 #include "Orbital/GPBuildingDropAuthority.h"
 #include "Orbital/GPBuildingDropCatalog.h"
 #include "Orbital/GPBuildingGroundPlacement.h"
+#include "Orbital/GPOrbitalDropDefinition.h"
 #include "Orbital/GPOrbitalBuildingInventoryComponent.h"
 #include "Orbital/GPDropPod.h"
 #include "Orbital/GPUnitDropAuthority.h"
@@ -143,22 +145,22 @@ void UGP_OrbitalBuildingDropContractTestRunner::OnWorldCleanup(UWorld* World, bo
 
 void UGP_OrbitalBuildingDropContractTestRunner::RestoreSettings()
 {
-	if (!bSettingsMutated)
+	if (bSettingsMutated)
 	{
-		return;
+		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+		{
+			Settings->BuildingDropDescentDurationSeconds = SavedBuildingDescent;
+			Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
+			Settings->BuildingDropSpawnAltitudeCm = SavedBuildingAltitude;
+			Settings->BuildingDropPayloadDeployDelaySeconds = SavedBuildingDeployDelay;
+			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(2.5f, 2.0f);
+			Settings->BuildingOrbitalPurchaseCost = SavedBuildingPurchaseCost;
+			Settings->BuildingMaxDeployRadiusFromMainBaseCm = SavedBuildingMaxRadius;
+			Settings->BuildingPayloadClass = SavedBuildingPayload;
+		}
+		bSettingsMutated = false;
 	}
-	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
-	{
-		Settings->BuildingDropDescentDurationSeconds = SavedBuildingDescent;
-		Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
-		Settings->BuildingDropSpawnAltitudeCm = SavedBuildingAltitude;
-		Settings->BuildingDropPayloadDeployDelaySeconds = SavedBuildingDeployDelay;
-		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(2.5f, 2.0f);
-		Settings->BuildingOrbitalPurchaseCost = SavedBuildingPurchaseCost;
-		Settings->BuildingMaxDeployRadiusFromMainBaseCm = SavedBuildingMaxRadius;
-		Settings->BuildingPayloadClass = SavedBuildingPayload;
-	}
-	bSettingsMutated = false;
+	UGP_BuildingDropCatalog::Get().DebugEndContractIsolation();
 }
 
 void UGP_OrbitalBuildingDropContractTestRunner::CleanupActors()
@@ -282,6 +284,7 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 	{
 	case 0: // Setup + A/B rejects
 	{
+		UGP_BuildingDropCatalog::Get().DebugBeginContractIsolation();
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
 			SavedBuildingDescent = Settings->BuildingDropDescentDurationSeconds;
@@ -688,6 +691,258 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		{
 			Expect(false, TEXT("O_MissingDropZone"));
 		}
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 7: // Nested BuildingDefinition pending: no spend / no READY
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		if (!Expect(IsValid(OwnerPS), TEXT("Nested_OwnerAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+		UGP_BuildingDefinition* HubBuilding = Catalog.GetLegacyLogisticsHubDrop() != nullptr
+			? Catalog.GetLegacyLogisticsHubDrop()->ResolveLoadedBuildingDefinition()
+			: nullptr;
+		AuthoredHubDropDef = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_NestedPending")), RF_Transient);
+		AuthoredHubDropDef->Cost = 17.0f;
+		AuthoredHubDropDef->BuildingDefinition = HubBuilding;
+
+		Catalog.DebugForceUnresolvedNestedLogisticsHubBuildingLoad(AuthoredHubDropDef, HubBuilding, true);
+		Expect(Catalog.DebugDidRequestAsyncNestedBuildingLoad()
+			&& Catalog.IsDropDefinitionPending(AuthoredHubDropDef)
+			&& Catalog.GetLegacyLogisticsHubDrop() != AuthoredHubDropDef,
+			TEXT("Q_NestedPendingKeepsAuthoredNotReady"));
+
+		UGP_OrbitalBuildingInventoryComponent* Inventory = OwnerPS->GetOrbitalBuildingInventoryComponent();
+		const int32 ReadyBefore = Inventory != nullptr
+			? Inventory->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub)
+			: -1;
+		GPOrbitalBuildingDropDebug::GrantOrbital(OwnerPS, 50.0f);
+		OrbitalBeforePurchase = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+		GPBuildingDropAuthority::FPurchaseResult PendingBuy =
+			GPBuildingDropAuthority::AuthorityPurchaseBuilding(World, OwnerPS, AuthoredHubDropDef);
+		const float OrbitalAfter = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+		const int32 ReadyAfter = Inventory != nullptr
+			? Inventory->GetReadyCount(EGP_OrbitalBuildingType::LogisticsHub)
+			: -1;
+		Expect(!PendingBuy.bAccepted
+			&& PendingBuy.RejectReason == EGP_BuildingDropRejectReason::DefinitionNotReady
+			&& FMath::IsNearlyEqual(OrbitalAfter, OrbitalBeforePurchase, 0.05f)
+			&& ReadyAfter == ReadyBefore,
+			TEXT("Q_NestedPendingDefinitionNotReadyNoSpend"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 8: // Nested resolve → authored Ready, authored cost, READY +1
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+		Catalog.DebugCompletePendingNestedBuildingLoad();
+		Expect(!Catalog.IsDropDefinitionPending(AuthoredHubDropDef)
+			&& Catalog.GetLegacyLogisticsHubDrop() == AuthoredHubDropDef
+			&& FMath::IsNearlyEqual(Catalog.GetPurchaseCost(AuthoredHubDropDef), 17.0f)
+			&& AuthoredHubDropDef != nullptr
+			&& AuthoredHubDropDef->ResolveLoadedBuildingDefinition() != nullptr,
+			TEXT("R_NestedResolveMakesAuthoredReady"));
+
+		if (!Expect(IsValid(OwnerPS), TEXT("R_OwnerAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		UGP_OrbitalBuildingInventoryComponent* Inventory = OwnerPS->GetOrbitalBuildingInventoryComponent();
+		const int32 ReadyBefore = Inventory != nullptr
+			? Inventory->GetReadyCount(AuthoredHubDropDef)
+			: -1;
+		OrbitalBeforePurchase = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+		GPBuildingDropAuthority::FPurchaseResult Buy =
+			GPBuildingDropAuthority::AuthorityPurchaseBuilding(World, OwnerPS, AuthoredHubDropDef);
+		Expect(Buy.bAccepted
+			&& FMath::IsNearlyEqual(Buy.OrbitalCost, 17.0f, 0.05f)
+			&& Buy.ReadyAfter == ReadyBefore + 1
+			&& FMath::IsNearlyEqual(
+				OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
+				OrbitalBeforePurchase - 17.0f,
+				0.05f),
+			TEXT("R_AuthoredCost17ReadyOnce"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 9: // Cold-load top-level then nested
+	{
+		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+		UGP_BuildingDefinition* HubBuilding = AuthoredHubDropDef != nullptr
+			? AuthoredHubDropDef->ResolveLoadedBuildingDefinition()
+			: nullptr;
+		UGP_OrbitalDropDefinition* ColdDrop = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_Cold")), RF_Transient);
+		ColdDrop->Cost = 19.0f;
+		ColdDrop->BuildingDefinition = HubBuilding;
+		AuthoredHubDropDef = ColdDrop;
+
+		Catalog.DebugForceUnresolvedAuthoredLogisticsHubLoad(ColdDrop, true);
+		Expect(Catalog.DebugDidRequestAsyncAuthoredDropLoad()
+			&& Catalog.IsDropDefinitionPending(Catalog.GetLegacyLogisticsHubDrop()),
+			TEXT("S_ColdTopLevelPending"));
+
+		Catalog.DebugCompletePendingAuthoredLogisticsHubLoad();
+		Expect(!Catalog.IsDropDefinitionPending(ColdDrop)
+			&& Catalog.GetLegacyLogisticsHubDrop() == ColdDrop
+			&& ColdDrop->ResolveLoadedBuildingDefinition() == HubBuilding,
+			TEXT("S_ColdTopLevelResolveKeepsBuilding"));
+
+		Catalog.DebugForceUnresolvedNestedLogisticsHubBuildingLoad(ColdDrop, HubBuilding, true);
+		Expect(Catalog.DebugDidRequestAsyncNestedBuildingLoad()
+			&& Catalog.IsDropDefinitionPending(ColdDrop)
+			&& Catalog.GetLegacyLogisticsHubDrop() != ColdDrop,
+			TEXT("S_ColdNestedPendingAfterTopLevel"));
+
+		Catalog.DebugCompletePendingNestedBuildingLoad();
+		Expect(!Catalog.IsDropDefinitionPending(ColdDrop)
+			&& Catalog.GetLegacyLogisticsHubDrop() == ColdDrop
+			&& FMath::IsNearlyEqual(Catalog.GetPurchaseCost(ColdDrop), 19.0f)
+			&& ColdDrop->ResolveLoadedBuildingDefinition() == HubBuilding,
+			TEXT("S_ColdNestedResolveReady"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 10: // Null BuildingDefinition → explicit fallback; failed nested load
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+		UGP_OrbitalDropDefinition* NativeHub = nullptr;
+		{
+			Catalog.DebugClearAuthoredBuildingDropOverrides();
+			Catalog.DebugBeginContractIsolation();
+			NativeHub = Catalog.GetLegacyLogisticsHubDrop();
+		}
+
+		UGP_OrbitalDropDefinition* NullBuildingDrop = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_NullBuilding")), RF_Transient);
+		NullBuildingDrop->Cost = 21.0f;
+		NullBuildingDrop->BuildingDefinition.Reset();
+		Catalog.DebugAssignLoadedAuthoredLogisticsHub(NullBuildingDrop);
+		Expect(Catalog.DebugConsumeNullBuildingDefinitionLog()
+			&& !Catalog.IsDropDefinitionPending(NullBuildingDrop)
+			&& Catalog.GetLegacyLogisticsHubDrop() == NativeHub
+			&& FMath::IsNearlyEqual(Catalog.GetPurchaseCost(NativeHub), 100.0f),
+			TEXT("T_NullBuildingDefinitionNativeFallback"));
+
+		UGP_BuildingDefinition* HubBuilding = NativeHub != nullptr
+			? NativeHub->ResolveLoadedBuildingDefinition()
+			: nullptr;
+		UGP_OrbitalDropDefinition* FailedNestedDrop = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_FailedNested")), RF_Transient);
+		FailedNestedDrop->Cost = 23.0f;
+		FailedNestedDrop->BuildingDefinition = HubBuilding;
+		Catalog.DebugForceUnresolvedNestedLogisticsHubBuildingLoad(FailedNestedDrop, HubBuilding, true);
+		Expect(Catalog.IsDropDefinitionPending(FailedNestedDrop), TEXT("T_FailedNestedStartsPending"));
+		Catalog.DebugForceNestedBuildingLoadFailure();
+		Expect(Catalog.DebugConsumeNestedBuildingLoadFailedLog()
+			&& !Catalog.IsDropDefinitionPending(FailedNestedDrop)
+			&& Catalog.GetLegacyLogisticsHubDrop() == NativeHub,
+			TEXT("T_FailedNestedNativeFallbackNotStuckPending"));
+
+		if (IsValid(OwnerPS))
+		{
+			const float OrbitalBefore = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+			GPBuildingDropAuthority::FPurchaseResult FailedBuy =
+				GPBuildingDropAuthority::AuthorityPurchaseBuilding(World, OwnerPS, FailedNestedDrop);
+			Expect(!FailedBuy.bAccepted
+				&& FailedBuy.RejectReason == EGP_BuildingDropRejectReason::MissingBuildingDefinition
+				&& FMath::IsNearlyEqual(
+					OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
+					OrbitalBefore,
+					0.05f),
+				TEXT("T_FailedNestedPointerPurchaseNoSpend"));
+		}
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 11: // DefensiveTurret nested dependency + native bootstrap still immediate
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+		Catalog.DebugClearAuthoredBuildingDropOverrides();
+		Catalog.DebugBeginContractIsolation();
+
+		UGP_OrbitalDropDefinition* NativeTurret = Catalog.DebugGetCanonicalDefensiveTurretDrop();
+		Expect(IsValid(NativeTurret)
+			&& NativeTurret->ResolveLoadedBuildingDefinition() != nullptr
+			&& !Catalog.IsDropDefinitionPending(NativeTurret),
+			TEXT("U_NativeTurretImmediatelyUsable"));
+
+		UGP_BuildingDefinition* TurretBuilding = NativeTurret != nullptr
+			? NativeTurret->ResolveLoadedBuildingDefinition()
+			: nullptr;
+		AuthoredTurretDropDef = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_DefensiveTurret_Nested")), RF_Transient);
+		AuthoredTurretDropDef->Cost = 33.0f;
+		AuthoredTurretDropDef->BuildingDefinition = TurretBuilding;
+		Catalog.DebugForceUnresolvedNestedDefensiveTurretBuildingLoad(AuthoredTurretDropDef, TurretBuilding, true);
+		Expect(Catalog.IsDropDefinitionPending(AuthoredTurretDropDef)
+			&& Catalog.DebugGetCanonicalDefensiveTurretDrop() != AuthoredTurretDropDef,
+			TEXT("U_TurretNestedPending"));
+
+		if (IsValid(OwnerPS))
+		{
+			const float OrbitalBefore = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+			GPBuildingDropAuthority::FPurchaseResult PendingTurret =
+				GPBuildingDropAuthority::AuthorityPurchaseBuilding(World, OwnerPS, AuthoredTurretDropDef);
+			Expect(!PendingTurret.bAccepted
+				&& PendingTurret.RejectReason == EGP_BuildingDropRejectReason::DefinitionNotReady
+				&& FMath::IsNearlyEqual(
+					OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
+					OrbitalBefore,
+					0.05f),
+				TEXT("U_TurretNestedDefinitionNotReadyNoSpend"));
+		}
+
+		Catalog.DebugCompletePendingNestedBuildingLoad();
+		Expect(!Catalog.IsDropDefinitionPending(AuthoredTurretDropDef)
+			&& Catalog.DebugGetCanonicalDefensiveTurretDrop() == AuthoredTurretDropDef
+			&& FMath::IsNearlyEqual(Catalog.GetPurchaseCost(AuthoredTurretDropDef), 33.0f),
+			TEXT("U_TurretNestedResolveReady"));
+
+		if (IsValid(OwnerPS))
+		{
+			GPOrbitalBuildingDropDebug::GrantOrbital(OwnerPS, 50.0f);
+			const float OrbitalBefore = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+			GPBuildingDropAuthority::FPurchaseResult BuyTurret =
+				GPBuildingDropAuthority::AuthorityPurchaseBuilding(World, OwnerPS, AuthoredTurretDropDef);
+			Expect(BuyTurret.bAccepted
+				&& FMath::IsNearlyEqual(BuyTurret.OrbitalCost, 33.0f, 0.05f)
+				&& BuyTurret.ReadyAfter == 1
+				&& FMath::IsNearlyEqual(
+					OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
+					OrbitalBefore - 33.0f,
+					0.05f),
+				TEXT("U_TurretAuthoredPurchaseReadyOnce"));
+		}
+
+		Catalog.DebugClearAuthoredBuildingDropOverrides();
+		Catalog.DebugBeginContractIsolation();
+		Expect(IsValid(Catalog.GetLegacyLogisticsHubDrop())
+			&& Catalog.GetLegacyLogisticsHubDrop()->ResolveLoadedBuildingDefinition() != nullptr
+			&& !Catalog.IsDropDefinitionPending(Catalog.GetLegacyLogisticsHubDrop())
+			&& FMath::IsNearlyEqual(Catalog.GetPurchaseCost(Catalog.GetLegacyLogisticsHubDrop()), 100.0f),
+			TEXT("U_NativeHubBootstrapImmediatelyUsable"));
 
 		Finish();
 		break;

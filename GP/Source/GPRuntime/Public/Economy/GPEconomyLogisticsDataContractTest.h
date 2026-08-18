@@ -60,6 +60,8 @@ private:
 	TObjectPtr<class UGP_OrbitalUnitDropDefinition> AuthoredWorkerDropDef;
 	UPROPERTY()
 	TObjectPtr<class UGP_OrbitalDropDefinition> AuthoredHubDropDef;
+	UPROPERTY()
+	TObjectPtr<class UGP_OrbitalDropDefinition> AuthoredTurretDropDef;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

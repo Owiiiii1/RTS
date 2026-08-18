@@ -14,6 +14,7 @@
 #include "Engine/World.h"
 #include "Game/GPGameState.h"
 #include "HAL/IConsoleManager.h"
+#include "Orbital/GPBuildingDropAuthority.h"
 #include "Orbital/GPBuildingDropCatalog.h"
 #include "Orbital/GPDropPod.h"
 #include "Orbital/GPOrbitalDropDefinition.h"
@@ -207,6 +208,7 @@ void UGP_EconomyLogisticsDataContractTestRunner::CleanupActors()
 	FerroniteDef = nullptr;
 	AuthoredWorkerDropDef = nullptr;
 	AuthoredHubDropDef = nullptr;
+	AuthoredTurretDropDef = nullptr;
 }
 
 void UGP_EconomyLogisticsDataContractTestRunner::Finish()
@@ -868,6 +870,123 @@ void UGP_EconomyLogisticsDataContractTestRunner::AdvanceStage()
 		break;
 	}
 	case 18:
+	{
+		UGP_BuildingDropCatalog& Buildings = UGP_BuildingDropCatalog::Get();
+		UGP_BuildingDefinition* HubBuilding = Buildings.GetLegacyLogisticsHubDrop() != nullptr
+			? Buildings.GetLegacyLogisticsHubDrop()->ResolveLoadedBuildingDefinition()
+			: nullptr;
+		AuthoredHubDropDef = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_NestedPending")), RF_Transient);
+		AuthoredHubDropDef->Cost = 17.0f;
+		AuthoredHubDropDef->BuildingDefinition = HubBuilding;
+		Buildings.DebugForceUnresolvedNestedLogisticsHubBuildingLoad(AuthoredHubDropDef, HubBuilding, true);
+		Expect(Buildings.DebugDidRequestAsyncNestedBuildingLoad()
+			&& Buildings.IsDropDefinitionPending(AuthoredHubDropDef)
+			&& Buildings.GetLegacyLogisticsHubDrop() != AuthoredHubDropDef,
+			TEXT("NestedHub_PendingWhileBuildingUnloaded"));
+
+		AGP_PlayerState* PS = OwnerPSWeak.Get();
+		if (IsValid(PS) && PS->GetPlayerAttributeSet() != nullptr)
+		{
+			GPEconomyLogisticsContractDebug::GrantOrbital(PS, 50.0f);
+			const float OrbitalBefore = PS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+			const GPBuildingDropAuthority::FPurchaseResult Pending =
+				GPBuildingDropAuthority::AuthorityPurchaseBuilding(World, PS, AuthoredHubDropDef);
+			const float OrbitalAfter = PS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+			Expect(!Pending.bAccepted
+				&& Pending.RejectReason == EGP_BuildingDropRejectReason::DefinitionNotReady
+				&& FMath::IsNearlyEqual(OrbitalAfter, OrbitalBefore),
+				TEXT("NestedHub_PurchaseDefinitionNotReadyNoSpend"));
+		}
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 19:
+	{
+		UGP_BuildingDropCatalog& Buildings = UGP_BuildingDropCatalog::Get();
+		Buildings.DebugCompletePendingNestedBuildingLoad();
+		Expect(!Buildings.IsDropDefinitionPending(AuthoredHubDropDef)
+			&& Buildings.GetLegacyLogisticsHubDrop() == AuthoredHubDropDef
+			&& FMath::IsNearlyEqual(Buildings.GetPurchaseCost(AuthoredHubDropDef), 17.0f),
+			TEXT("NestedHub_ReadyUsesAuthoredCost17"));
+
+		AGP_PlayerState* PS = OwnerPSWeak.Get();
+		if (IsValid(PS) && PS->GetPlayerAttributeSet() != nullptr)
+		{
+			const float OrbitalBefore = PS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+			const GPBuildingDropAuthority::FPurchaseResult Buy =
+				GPBuildingDropAuthority::AuthorityPurchaseBuilding(World, PS, AuthoredHubDropDef);
+			Expect(Buy.bAccepted
+				&& FMath::IsNearlyEqual(Buy.OrbitalCost, 17.0f)
+				&& Buy.ReadyAfter == 1
+				&& FMath::IsNearlyEqual(PS->GetPlayerAttributeSet()->GetOrbitalFerronite(), OrbitalBefore - 17.0f),
+				TEXT("NestedHub_PurchaseAcceptedReadyOnce"));
+		}
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 20:
+	{
+		UGP_BuildingDropCatalog& Buildings = UGP_BuildingDropCatalog::Get();
+		UGP_BuildingDefinition* HubBuilding = AuthoredHubDropDef != nullptr
+			? AuthoredHubDropDef->ResolveLoadedBuildingDefinition()
+			: nullptr;
+		UGP_OrbitalDropDefinition* NullDrop = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_NullBuilding")), RF_Transient);
+		NullDrop->Cost = 21.0f;
+		Buildings.DebugAssignLoadedAuthoredLogisticsHub(NullDrop);
+		Expect(Buildings.DebugConsumeNullBuildingDefinitionLog()
+			&& Buildings.GetLegacyLogisticsHubDrop() != NullDrop
+			&& FMath::IsNearlyEqual(Buildings.GetPurchaseCost(Buildings.GetLegacyLogisticsHubDrop()), 100.0f),
+			TEXT("NestedHub_NullBuildingNativeFallback"));
+
+		UGP_OrbitalDropDefinition* FailedDrop = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_FailedNested")), RF_Transient);
+		FailedDrop->Cost = 23.0f;
+		FailedDrop->BuildingDefinition = HubBuilding;
+		Buildings.DebugForceUnresolvedNestedLogisticsHubBuildingLoad(FailedDrop, HubBuilding, true);
+		Buildings.DebugForceNestedBuildingLoadFailure();
+		Expect(Buildings.DebugConsumeNestedBuildingLoadFailedLog()
+			&& !Buildings.IsDropDefinitionPending(FailedDrop)
+			&& Buildings.GetLegacyLogisticsHubDrop() != FailedDrop,
+			TEXT("NestedHub_FailedNestedNativeFallback"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 21:
+	{
+		UGP_BuildingDropCatalog& Buildings = UGP_BuildingDropCatalog::Get();
+		Buildings.DebugClearAuthoredBuildingDropOverrides();
+		Buildings.DebugBeginContractIsolation();
+		UGP_OrbitalDropDefinition* NativeTurret = Buildings.DebugGetCanonicalDefensiveTurretDrop();
+		Expect(IsValid(NativeTurret)
+			&& NativeTurret->ResolveLoadedBuildingDefinition() != nullptr
+			&& !Buildings.IsDropDefinitionPending(NativeTurret),
+			TEXT("NestedTurret_NativeImmediatelyUsable"));
+
+		UGP_BuildingDefinition* TurretBuilding = NativeTurret != nullptr
+			? NativeTurret->ResolveLoadedBuildingDefinition()
+			: nullptr;
+		AuthoredTurretDropDef = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_DefensiveTurret_Nested")), RF_Transient);
+		AuthoredTurretDropDef->Cost = 33.0f;
+		AuthoredTurretDropDef->BuildingDefinition = TurretBuilding;
+		Buildings.DebugForceUnresolvedNestedDefensiveTurretBuildingLoad(AuthoredTurretDropDef, TurretBuilding, true);
+		Expect(Buildings.IsDropDefinitionPending(AuthoredTurretDropDef), TEXT("NestedTurret_Pending"));
+		Buildings.DebugCompletePendingNestedBuildingLoad();
+		Expect(!Buildings.IsDropDefinitionPending(AuthoredTurretDropDef)
+			&& Buildings.DebugGetCanonicalDefensiveTurretDrop() == AuthoredTurretDropDef
+			&& FMath::IsNearlyEqual(Buildings.GetPurchaseCost(AuthoredTurretDropDef), 33.0f),
+			TEXT("NestedTurret_ReadyAuthoredCost33"));
+		Buildings.DebugEndContractIsolation();
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 22:
 	{
 		UGP_OrbitalUnitDropCatalog::Get().DebugClearAuthoredUnitDropOverrides();
 		UGP_BuildingDropCatalog::Get().DebugClearAuthoredBuildingDropOverrides();

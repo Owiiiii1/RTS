@@ -57,6 +57,10 @@ private:
 	float SavedBuildingMaxRadius = 5000.0f;
 	TSoftClassPtr<AGP_BuildingBase> SavedBuildingPayload;
 	bool bSettingsMutated = false;
+	UPROPERTY()
+	TObjectPtr<class UGP_OrbitalDropDefinition> AuthoredHubDropDef;
+	UPROPERTY()
+	TObjectPtr<class UGP_OrbitalDropDefinition> AuthoredTurretDropDef;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

@@ -65,6 +65,24 @@ public:
 
 #if !UE_BUILD_SHIPPING
 	void DebugAssignLoadedAuthoredLogisticsHub(UGP_OrbitalDropDefinition* Definition);
+	void DebugAssignLoadedAuthoredDefensiveTurret(UGP_OrbitalDropDefinition* Definition);
+	void DebugForceUnresolvedAuthoredLogisticsHubLoad(UGP_OrbitalDropDefinition* InjectedDefinition, bool bHoldCompletion);
+	void DebugCompletePendingAuthoredLogisticsHubLoad();
+	void DebugForceUnresolvedNestedLogisticsHubBuildingLoad(
+		UGP_OrbitalDropDefinition* InjectedDrop,
+		UGP_BuildingDefinition* InjectedBuilding,
+		bool bHoldCompletion);
+	void DebugForceUnresolvedNestedDefensiveTurretBuildingLoad(
+		UGP_OrbitalDropDefinition* InjectedDrop,
+		UGP_BuildingDefinition* InjectedBuilding,
+		bool bHoldCompletion);
+	void DebugCompletePendingNestedBuildingLoad();
+	void DebugForceNestedBuildingLoadFailure();
+	bool DebugDidRequestAsyncAuthoredDropLoad() const { return bDebugDidRequestAsyncDropLoad; }
+	bool DebugDidRequestAsyncNestedBuildingLoad() const { return bDebugDidRequestAsyncNestedLoad; }
+	bool DebugConsumeNestedBuildingLoadFailedLog();
+	bool DebugConsumeNullBuildingDefinitionLog();
+	UGP_OrbitalDropDefinition* DebugGetCanonicalDefensiveTurretDrop() const;
 	void DebugClearAuthoredBuildingDropOverrides();
 	void DebugBeginContractIsolation();
 	void DebugEndContractIsolation();
@@ -125,14 +143,24 @@ private:
 	TArray<TObjectPtr<UGP_OrbitalDropDefinition>> AuthoredSlotDrops;
 
 	TArray<TSharedPtr<FStreamableHandle>> AuthoredLoadHandles;
+	TArray<TSharedPtr<FStreamableHandle>> AuthoredNestedLoadHandles;
 	TArray<FSoftObjectPath> AuthoredRequestedPaths;
+	TArray<FSoftObjectPath> AuthoredNestedRequestedPaths;
 	TArray<EAuthoredSlotState> AuthoredStates;
 
 	void RefreshAuthoredSlot(EBuildingAuthoredSlot Slot);
 	void RequestAuthoredAsyncLoad(EBuildingAuthoredSlot Slot, const FSoftObjectPath& SoftPath);
+	void RequestAuthoredNestedAsyncLoad(EBuildingAuthoredSlot Slot, const FSoftObjectPath& NestedPath);
 	void HandleAuthoredLoaded(EBuildingAuthoredSlot Slot);
+	void HandleAuthoredNestedLoaded(EBuildingAuthoredSlot Slot);
 	void FinishAuthoredLoadResolve(EBuildingAuthoredSlot Slot);
+	void FinishAuthoredNestedLoadResolve(EBuildingAuthoredSlot Slot);
+	void ApplyLoadedAuthoredDrop(EBuildingAuthoredSlot Slot, UGP_OrbitalDropDefinition* Loaded);
+	void MarkAuthoredSlotFailed(EBuildingAuthoredSlot Slot);
+	void CancelAuthoredTopLevelLoad(EBuildingAuthoredSlot Slot);
+	void CancelAuthoredNestedLoad(EBuildingAuthoredSlot Slot);
 	void CancelAuthoredLoad(EBuildingAuthoredSlot Slot);
+	bool IsCatalogCallbackSafe() const;
 	TSoftObjectPtr<UGP_OrbitalDropDefinition> GetAuthoredSoftRef(EBuildingAuthoredSlot Slot) const;
 	UGP_OrbitalDropDefinition* ResolveLoadedAuthored(const TSoftObjectPtr<UGP_OrbitalDropDefinition>& Soft) const;
 	UGP_OrbitalDropDefinition* CanonicalForSlot(EBuildingAuthoredSlot Slot) const;
@@ -144,13 +172,42 @@ private:
 	void HandleDefensiveTurretLoaded() { HandleAuthoredLoaded(EBuildingAuthoredSlot::DefensiveTurret); }
 	void HandleWallLoaded() { HandleAuthoredLoaded(EBuildingAuthoredSlot::Wall); }
 	void HandleWallTurretLoaded() { HandleAuthoredLoaded(EBuildingAuthoredSlot::WallTurret); }
+	void HandleLogisticsHubNestedLoaded() { HandleAuthoredNestedLoaded(EBuildingAuthoredSlot::LogisticsHub); }
+	void HandleDefensiveTurretNestedLoaded() { HandleAuthoredNestedLoaded(EBuildingAuthoredSlot::DefensiveTurret); }
+	void HandleWallNestedLoaded() { HandleAuthoredNestedLoaded(EBuildingAuthoredSlot::Wall); }
+	void HandleWallTurretNestedLoaded() { HandleAuthoredNestedLoaded(EBuildingAuthoredSlot::WallTurret); }
 
 	bool bNativeCatalogReady = false;
 
 #if !UE_BUILD_SHIPPING
+	void EnsureDebugSlotArrays();
+	void ResetDebugSlotFlags();
+	void SaveAuthoredSettingsIfNeeded();
+	void AssignAuthoredSettingsDrop(EBuildingAuthoredSlot Slot, UGP_OrbitalDropDefinition* Definition);
+	void DebugForceUnresolvedAuthoredLoad(
+		EBuildingAuthoredSlot Slot,
+		UGP_OrbitalDropDefinition* InjectedDefinition,
+		bool bHoldCompletion);
+	void DebugForceUnresolvedNestedBuildingLoad(
+		EBuildingAuthoredSlot Slot,
+		UGP_OrbitalDropDefinition* InjectedDrop,
+		UGP_BuildingDefinition* InjectedBuilding,
+		bool bHoldCompletion);
+	void DebugCompletePendingAuthoredLoad(EBuildingAuthoredSlot Slot);
+
 	TArray<TSoftObjectPtr<UGP_OrbitalDropDefinition>> DebugSavedBuildingRefs;
 	bool bDebugSavedBuildingSettings = false;
 	TArray<TSoftObjectPtr<UGP_OrbitalDropDefinition>> ContractSavedBuildingRefs;
 	bool bContractIsolationActive = false;
+	TArray<uint8> DebugForceUnresolvedDrop;
+	TArray<uint8> DebugHoldDropCompletion;
+	TArray<uint8> DebugForceUnresolvedNested;
+	TArray<uint8> DebugHoldNestedCompletion;
+	TArray<TObjectPtr<UGP_OrbitalDropDefinition>> DebugInjectedDrops;
+	TArray<TObjectPtr<UGP_BuildingDefinition>> DebugInjectedBuildings;
+	bool bDebugDidRequestAsyncDropLoad = false;
+	bool bDebugDidRequestAsyncNestedLoad = false;
+	bool bDebugNestedLoadFailedLogged = false;
+	bool bDebugNullBuildingLogged = false;
 #endif
 };

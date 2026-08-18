@@ -1055,4 +1055,31 @@ void UGP_DefensiveTurretContractTestRunner::AdvanceStage()
 	}
 }
 
+#else // UE_BUILD_SHIPPING
+
+void UGP_DefensiveTurretContractTestRunner::BeginDestroy()
+{
+	Super::BeginDestroy();
+}
+void UGP_DefensiveTurretContractTestRunner::Start(UWorld* InWorld) { (void)InWorld; }
+void UGP_DefensiveTurretContractTestRunner::ScheduleNext(float DelaySeconds) { (void)DelaySeconds; }
+void UGP_DefensiveTurretContractTestRunner::AdvanceStage() {}
+bool UGP_DefensiveTurretContractTestRunner::Expect(bool bOk, const TCHAR* Label)
+{
+	(void)bOk;
+	(void)Label;
+	return true;
+}
+void UGP_DefensiveTurretContractTestRunner::Abort(const TCHAR* Reason) { (void)Reason; }
+void UGP_DefensiveTurretContractTestRunner::Finish() { bFinished = true; }
+void UGP_DefensiveTurretContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	(void)World;
+	(void)bSessionEnded;
+	(void)bCleanupResources;
+}
+void UGP_DefensiveTurretContractTestRunner::UnbindWorldCleanup() {}
+void UGP_DefensiveTurretContractTestRunner::CleanupActors() {}
+void UGP_DefensiveTurretContractTestRunner::RestoreSettings() {}
+
 #endif

@@ -4,7 +4,10 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Buildings/GPDefensiveTurret.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "Units/GPUnitCommandComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPContractTest, Log, All);
 
@@ -70,6 +73,21 @@ namespace GPContractTestCoordinator
 		Private::GActive.OwnerTag = MakeOwnerTag(ContractKind, Private::GActive.ExecutionId);
 		Private::GActive.WorldWeak = World;
 		OutToken = Private::GActive;
+
+		// Operator-placed arena turrets must not fire during contracts (headless isolation).
+		for (TActorIterator<AGP_DefensiveTurret> It(World); It; ++It)
+		{
+			AGP_DefensiveTurret* Turret = *It;
+			if (!IsValid(Turret) || Turret->IsDead())
+			{
+				continue;
+			}
+			Turret->SetTeamId(-1);
+			if (UGP_UnitCommandComponent* Cmd = Turret->GetUnitCommandComponent())
+			{
+				Cmd->RefreshCombatAutoAcquireTimer();
+			}
+		}
 
 		UE_LOG(LogGPContractTest, Log,
 			TEXT("ContractTestStart: Name=%s ExecutionId=%llu TeamId=-1 OwnerTag=%s"),

@@ -1,51 +1,84 @@
 # GP-S37T — Defensive Turret MVP
 
 ## Status
-**GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+**GP-S37T_FINALIZATION_READY_FOR_MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.** Await human merge.
+
+## Slice Group
+Post-GP-S36G (BuildGrid is on verified `main` @ `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`)
+
+## Branch
+`feature/gp-s37t-defensive-turret-mvp`  
+Base: `origin/main` @ `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`  
+Implementation: `7aa0565f9e10e9fe447fe9898835eba28ddc9b81`  
+Building-target correction: `b88926acc6415abc8efe07729ac48837ce8a5fae`
 
 ## Goal
 Add the first functional combat building after Logistics Hub: Purchase → READY → Deploy → DropPod → operational `AGP_DefensiveTurret` that auto-acquires and damages enemies through the existing combat pipeline.
 
-## Inputs
-- Verified `origin/main` @ `9ace159714b5eca0f79e4985fc2496d34cbb7cc3` (includes GP-S36G)
-- Implementation: `7aa0565f9e10e9fe447fe9898835eba28ddc9b81`
-- GP-S35B native catalog row `DA_GP_OrbitalDrop_DefensiveTurret`
-- GP-S30R AutoAcquire / GP-S29R LOS / GP-S36G BuildGrid
+## Operator PASS (final)
 
-## Code Allowed
-Yes
+Operator confirmed the main gameplay path:
 
-## Pillar 8 MVP Gate
-1. Strengthen core loop? **YES** — OrbitalFerronite becomes perimeter defense.
-2. Meaningful decision? **YES** — static defense vs units/economy.
-3. Testable now? **YES** — combat + orbital + BuildGrid exist.
-4. Bounded? **YES** — one building, no walls/upgrades/FoW.
-5. Avoid speculative framework? **YES** — reuses `UGP_UnitCommandComponent`.
+- `BP_GP_DefensiveTurret` authored child created operator-side
+- Defensive Turret purchases
+- READY / Deploy work
+- DropPod lands the turret
+- authored BP payload works
+- turret appears on BuildGrid
+- turret auto-detects enemies
+- turret fires
+- damage applies
 
-Verdict: **PASS**.
+Contracts already proved: enemy building targets, friendly reject, LOS, cooldown, health/death, grid release, legacy Salvage Walker target surface unchanged.
 
-## Architecture decisions
-- Production combat owner is `UGP_UnitCommandComponent` on `AGP_UnitBase`. No second combat framework.
-- Turret is thin `AGP_BuildingBase` glue: identity, 2×2 footprint, combat Default* values, `CombatOrigin` anchor.
-- AutoAcquire eligibility: Salvage Walker **or** `GP.Building.Type.DefensiveTurret`. AttackMove stays Salvage Walker only.
-- Range/Damage/Cooldown/MaxHealth: `AGP_UnitBase` Default* → GAS `UGP_UnitAttributeSet` (same as Salvage Walker). Not hardcoded in fire code. `UGP_BuildingDefinition.MaxHealth` remains catalog metadata (400), mirrored on turret CDO.
-- AutoAcquire sight = 600 cm (equal fire range) so stationary Attack never needs approach.
-- Authored payload seam: `UGP_BuildingDefinition.SpawnedClass` + optional settings `DefensiveTurretPayloadClass`.
-- Target set: Defensive Turret idle AutoAcquire may target valid enemy units and buildings. Legacy Salvage Walker idle/AttackMove remain unit-only.
+## Final architecture
 
-## Scope
-Native `AGP_DefensiveTurret`, catalog SpawnedClass, BuildGrid 2×2, auto-acquire/LOS/damage, orbital Purchase/READY/Deploy, contract test, TEMP HUD enablement via payload resolve.
+- Production combat owner remains `UGP_UnitCommandComponent` on `AGP_UnitBase`. No `UGP_CombatComponent`. No second framework.
+- `AGP_DefensiveTurret` is thin `AGP_BuildingBase` glue: identity, native 2×2 footprint, Default* combat stats, `CombatOrigin`.
+- Idle AutoAcquire timer + `GPCombatLOS` + `UGP_GE_Damage_Basic`.
+- Target policy seam: `EGP_AutoAcquireMode` + `IsEligibleAutoAcquireTarget`. Defensive Turret idle may target valid enemy units **and** buildings. Salvage Walker idle + AttackMove stay unit-only.
+- Candidates still pass `ValidateAttackTarget` (same team / dead / self / invalid rejected).
+- AttackMove remains Salvage Walker only. Buildings reject Move / AttackMove.
+- Orbital Purchase / READY / Deploy / DropPod unchanged (GP-S35B/S36G).
+- BuildGrid occupancy uses existing live `PlacementFootprintBounds` (native 400×400 cm → 2×2). Death / EndPlay releases cells.
 
-## Out of Scope
-Wall, wall-mounted turret, FoW/vision, rotation UI, manual targeting, upgrades, ammo, power, sell/demolish, generic weapon rewrite.
+## Follow-up (record only — not implemented)
 
-## Acceptance Criteria
-Operator can Purchase / READY / Deploy a Defensive Turret; spawned actor occupies 2×2; auto-attacks valid enemy units and buildings in range with LOS; friendly/out-of-range ignored; death releases grid.
+### GP-S38D Unit/Building Combat Data
+Combat/stat tuning is currently fragmented:
 
-## Validation
-`gp.Building.RunDefensiveTurretContractTest` plus listed regressions. GPEditor Win64 Development + UHT.
+- `AGP_UnitBase` EditDefaultsOnly: `DefaultMaxHealth`, `DefaultHealth`, `DefaultDamage`, `DefaultArmor`, `DefaultDamageResistance`, `DefaultAttackCooldown`, `DefaultAttackRange`
+- `UGP_UnitCommandComponent`: `AutoAcquireScanIntervalSeconds`, `AutoAcquireSightRangeCm`, `AttackFacingRotationSpeedDegreesPerSecond`
+
+`AGP_UnitBase` already documents future UnitDefinition as the canonical source. Next architecture slice should give designers per-type combat/stat configuration instead of scattered BP/C++ defaults. **Do not implement in S37T.**
+
+### GP-S39R Timed Retaliation Pursuit
+Damage reaction / retaliation is missing. Factual seam: `AGP_UnitBase::ApplyDamageFromUnit(SourceUnit, ...)` already knows the authoritative attacker.
+
+Desired later behavior: a mobile combat unit hit by an unseen attacker may pursue/react for a configurable limited time (proposed baseline 5s). If the attacker becomes visible/valid, the normal Attack FSM continues. If the timeout expires without valid engagement, stop pursuit / return Idle. Manual player command overrides retaliation. No infinite pursuit. **Do not implement in S37T.**
+
+## Tests
+All Failures=0:
+
+- `gp.Building.RunDefensiveTurretContractTest`
+- `gp.Combat.RunAutoAcquireContractTest`
+- `gp.Combat.RunAttackMoveContractTest`
+- `gp.Combat.RunLOSFireGateContractTest`
+- `gp.Building.RunBuildGridContractTest`
+- `gp.Building.RunMultiBuildingDataContractTest`
+- `gp.Building.RunOrbitalBuildingDropContractTest`
+- `gp.Resource.RunUnitCapLogisticsHubContractTest`
+- `gp.Resource.RunOrbitalUnitDropContractTest`
+- `gp.Resource.RunContainerLaunchContractTest`
+- `gp.Match.RunWinLoseContractTest`
+- `gp.Resource.RunS28RegressionSuite`
+
+## Builds
+GPEditor Win64 Development + UHT **PASS**.  
+GP Win64 Development **PASS**.  
+GP Win64 Shipping **PASS**.
 
 ## Stop Condition
-Await operator PIE validation. **NOT MERGED.** Do not start Wall / FoW / turret upgrades.
+**NOT MERGED.** Human merge only. Do not start Wall / FoW / GP-S38D combat-data rewrite / GP-S39R retaliation without explicit assignment.

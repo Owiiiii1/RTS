@@ -417,6 +417,8 @@ Reuses `AGP_BuildingBase` standard:
 - Stationary: no Move / Attack-Move. AttackMove eligibility remains Salvage Walker only.
 - Tags: `GP.Unit.Type.Building`, `GP.Building.Type.DefensiveTurret`, Selectable, Inspectable, `Selection.Type.Building`.
 - FoW vision (`GP.Capability.GrantsVision`), sell/demolish, Wall-mounted variant: **deferred**.
+- Combat/stat designer source remains fragmented Default* + command-component sight fields (planned **GP-S38D**, not in S37T).
+- No damage retaliation / pursuit (planned **GP-S39R**, not in S37T).
 
 ## Storage Component (Containers)
 

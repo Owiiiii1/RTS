@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S37T Defensive Turret MVP (finalization)
+
+Status: **GP-S37T_FINALIZATION_READY_FOR_MERGE**
+
+- Branch: `feature/gp-s37t-defensive-turret-mvp` (base verified `origin/main` @ `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`)
+- Operator PASS: authored `BP_GP_DefensiveTurret` Purchase / READY / Deploy / DropPod / BuildGrid / auto-detect / fire / damage
+- Combat reuse: `UGP_UnitCommandComponent` idle AutoAcquire + `GPCombatLOS` + existing damage GE. Turret idle may target valid enemy units **and** buildings. Salvage Walker idle/AttackMove remain unit-only
+- Contract isolation: pre-placed arena turrets are neutralized for headless contracts (not committed)
+- Follow-up recorded only: **GP-S38D** Unit/Building Combat Data; **GP-S39R** Timed Retaliation Pursuit. Not implemented
+- Contracts Failures=0; GPEditor Win64 Development + UHT **PASS**; GP Win64 Development **PASS**; GP Win64 Shipping **PASS**
+- **NOT MERGED.** Await human merge. Do not start Wall / FoW / S38D / S39R
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-18 — GP-S37T AutoAcquire building-target correction
 
 Status: **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

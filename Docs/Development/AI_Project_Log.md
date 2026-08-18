@@ -4,7 +4,7 @@
 
 Status: **IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE**
 
-- Branch: `feature/gp-s41m-movement-shortest-yaw` (base `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`)
+- Branch: `feature/gp-s41m-movement-shortest-yaw` (base `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`; tip `3eff247cb155bd1faabb8466c50b1074a8315016`)
 - Operator PASS after NavMesh rebuild: no first-Move sideways leg; shortest yaw; behavior correct
 - Root causes: `RInterpConstantTo` long yaw wrap; mobile BP/SCS primitives carved static nav holes
 - Targeted contracts Failures=0; GPEditor+UHT / GP Development / GP Shipping **PASS**

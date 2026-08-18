@@ -8,7 +8,7 @@
 ## Branch / base / head
 - Branch: `feature/gp-s41m-movement-shortest-yaw`
 - Base: `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`
-- Head: recorded after commit
+- Head: `3eff247cb155bd1faabb8466c50b1074a8315016`
 
 ## Operator PASS
 Confirmed after operator rebuilt NavMesh:

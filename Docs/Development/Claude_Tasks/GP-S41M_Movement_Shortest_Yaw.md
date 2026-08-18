@@ -13,7 +13,7 @@ Post-GP-S40R movement facing defect
 ## Branch
 `feature/gp-s41m-movement-shortest-yaw`  
 Base: `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`  
-Implementation tip: recorded after finalization commit
+Implementation tip: `3eff247cb155bd1faabb8466c50b1074a8315016`
 
 ## Operator PASS
 After operator rebuilt NavMesh: first Move has no sideways excursion; facing uses shortest yaw; overall behavior is correct.

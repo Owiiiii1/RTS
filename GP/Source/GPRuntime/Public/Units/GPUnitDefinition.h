@@ -57,8 +57,8 @@ public:
 	float MoveSpeedCmPerSecond = 0.0f;
 
 	/**
-	 * DATA ONLY until GP-S40R. GP-S40R owns retaliation behavior.
-	 * 0 = retaliation pursuit disabled. >0 = max pursuit duration after reacting to attacker.
+	 * GP-S40R: max seconds a mobile combat unit may pursue its current retaliation attacker.
+	 * 0 = retaliation pursuit disabled. Canonical via AGP_UnitBase::GetRetaliationPursuitSeconds().
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Behavior|Retaliation", meta = (ClampMin = "0.0"))
 	float RetaliationPursuitSeconds = 5.0f;

@@ -431,7 +431,7 @@ Reuses `AGP_BuildingBase` standard:
 - Tags: `GP.Unit.Type.Building`, `GP.Building.Type.DefensiveTurret`, Selectable, Inspectable, `Selection.Type.Building`.
 - FoW vision (`GP.Capability.GrantsVision`), sell/demolish, Wall-mounted variant: **deferred**.
 - Combat/stat designer source is `UGP_UnitDefinition` (GP-S38D). Default* / command CDO remain empty-ref fallback.
-- No damage retaliation / pursuit (planned **GP-S40R**, not in this slice).
+- No damage retaliation / pursuit (**GP-S40R**: buildings / DefensiveTurret must not start movement retaliation; idle turret auto-acquire unchanged).
 
 ## Storage Component (Containers)
 

@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S40R Timed Retaliation Pursuit (implementation candidate)
+
+Status: **GP-S40R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s40r-timed-retaliation-pursuit` (base `origin/main` @ `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`)
+- After successful hostile damage, idle mobile combat units pursue/engage the attacker for `GetRetaliationPursuitSeconds()`
+- Latest attacker replaces only while retaliation owns behavior; manual Held commands always win
+- Worker / DefensiveTurret do not start movement retaliation
+- Risk-based contracts + GPEditor + UHT only
+- **NOT MERGED. NOT FINALIZED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-18 — Risk-Based Development Workflow (docs)
 
 Status: **RISK_BASED_WORKFLOW_DOCS_READY_FOR_REVIEW**

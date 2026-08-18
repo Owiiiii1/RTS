@@ -120,7 +120,7 @@ public:
     float MoveSpeedCmPerSecond = 0.f;   // 0 = do not write movement (buildings)
 
     UPROPERTY(EditAnywhere, Category = "GP|Behavior|Retaliation")
-    float RetaliationPursuitSeconds = 5.f; // DATA ONLY until GP-S40R; 0 = disabled
+    float RetaliationPursuitSeconds = 5.f; // GP-S40R duration; 0 = disabled
 
     UPROPERTY(EditAnywhere, Category = "GP|Logistics|Cargo")
     float CargoCapacity = 0.f; // Worker 50; 0 = no cargo

@@ -265,6 +265,7 @@ void UGP_UnitCommandComponent::BeginPlay()
 
 void UGP_UnitCommandComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	CancelRetaliation(TEXT("EndPlay"), true);
 	StopCombatAutoAcquireTimer();
 	LastAutoAcquireCandidate.Reset();
 
@@ -627,7 +628,7 @@ bool UGP_UnitCommandComponent::IsEligibleForCombatAutoAcquire() const
 		return false;
 	}
 
-	if (IsAttackActive())
+	if (IsAttackActive() || bRetaliationActive)
 	{
 		return false;
 	}
@@ -5339,6 +5340,11 @@ void UGP_UnitCommandComponent::HandleMovementResult(
 	EGP_MovementResult Result,
 	EGP_MovementResultReason Reason)
 {
+	if (TryConsumeRetaliationMovementResult(Serial, Result, Reason))
+	{
+		return;
+	}
+
 	if (TryConsumeAttackMovementResult(Serial, Result, Reason))
 	{
 		return;
@@ -5469,6 +5475,11 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 			GPUnitCommandStatePrivate::RoleToString(Role),
 			GPUnitCommandStatePrivate::NetModeToString(NetMode));
 		return;
+	}
+
+	if (!Command.bQueue && !bIssuingRetaliationEngageCommand)
+	{
+		CancelRetaliation(TEXT("ManualCommand"), true);
 	}
 
 	if (Cast<AGP_BuildingBase>(Owner) != nullptr)
@@ -5852,6 +5863,7 @@ void UGP_UnitCommandComponent::NotifyOwnerDied()
 		GPUnitCommandStatePrivate::NetModeToString(NetMode));
 
 	SetAttackTickEnabled(false);
+	CancelRetaliation(TEXT("OwnerDied"), false);
 	ResetAttackExecutor();
 	ResetMineExecutor();
 
@@ -5883,6 +5895,404 @@ uint32 UGP_UnitCommandComponent::AllocateCommandSerial()
 	}
 	return Allocated;
 }
+
+void UGP_UnitCommandComponent::NotifyHostileDamageReceived(AGP_UnitBase* SourceUnit)
+{
+	AActor* Owner = GetOwner();
+	AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
+	if (Owner == nullptr || !Owner->HasAuthority() || OwnerUnit == nullptr || OwnerUnit->IsDead())
+	{
+		return;
+	}
+
+	if (OwnerUnit->GetRetaliationPursuitSeconds() <= 0.0f)
+	{
+		return;
+	}
+
+	if (!IsRetaliationAttackerValid(SourceUnit))
+	{
+		return;
+	}
+
+	if (bRetaliationActive)
+	{
+		StartOrRefreshRetaliation(SourceUnit);
+		return;
+	}
+
+	if (!IsMobileCombatUnitForRetaliation(OwnerUnit) || HasCommandThatBlocksRetaliationStart())
+	{
+		return;
+	}
+
+	StartOrRefreshRetaliation(SourceUnit);
+}
+
+bool UGP_UnitCommandComponent::IsMobileCombatUnitForRetaliation(const AGP_UnitBase* Unit) const
+{
+	if (Unit == nullptr || Unit->IsA(AGP_BuildingBase::StaticClass()))
+	{
+		return false;
+	}
+
+	return IsCombatCapableForAutoAcquire(Unit);
+}
+
+bool UGP_UnitCommandComponent::HasCommandThatBlocksRetaliationStart() const
+{
+	if (IsAttackActive())
+	{
+		return true;
+	}
+	if (MineState != EGP_MineExecutionState::Idle || ActiveMineSerial != 0)
+	{
+		return true;
+	}
+	if (HaulState != EGP_HaulExecutionState::Idle || ActiveHaulSerial != 0)
+	{
+		return true;
+	}
+	if (!HeldCommand.IsSet())
+	{
+		return false;
+	}
+
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	const FGameplayTag& HeldTag = HeldCommand.GetValue().CommandTag;
+	return HeldTag == GPTags.Command_Move
+		|| HeldTag == GPTags.Command_Attack
+		|| HeldTag == GPTags.Command_AttackMove
+		|| HeldTag == GPTags.Command_Mine;
+}
+
+bool UGP_UnitCommandComponent::IsRetaliationAttackerValid(const AGP_UnitBase* Attacker) const
+{
+	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(GetOwner());
+	if (OwnerUnit == nullptr || Attacker == nullptr || !IsValid(Attacker) || Attacker == OwnerUnit)
+	{
+		return false;
+	}
+	if (Attacker->IsDead())
+	{
+		return false;
+	}
+
+	AGP_UnitBase* ValidTarget = nullptr;
+	EGP_AttackTerminalReason Reason = EGP_AttackTerminalReason::InvalidTarget;
+	return ValidateAttackTarget(const_cast<AGP_UnitBase*>(Attacker), ValidTarget, Reason) && ValidTarget != nullptr;
+}
+
+bool UGP_UnitCommandComponent::CanEngageRetaliationTarget(AGP_UnitBase* Attacker) const
+{
+	const AActor* Owner = GetOwner();
+	if (Owner == nullptr)
+	{
+		return false;
+	}
+
+	AGP_UnitBase* ValidTarget = nullptr;
+	EGP_AttackTerminalReason Reason = EGP_AttackTerminalReason::InvalidTarget;
+	if (!ValidateAttackTarget(Attacker, ValidTarget, Reason) || ValidTarget == nullptr)
+	{
+		return false;
+	}
+
+	float Distance = -1.0f;
+	if (!TryComputeAttackDistance2D(Owner, ValidTarget, Distance))
+	{
+		return false;
+	}
+
+	return Distance <= GetEffectiveAutoAcquireRange();
+}
+
+void UGP_UnitCommandComponent::StartOrRefreshRetaliation(AGP_UnitBase* Attacker)
+{
+	AActor* Owner = GetOwner();
+	AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
+	if (OwnerUnit == nullptr || !IsRetaliationAttackerValid(Attacker))
+	{
+		return;
+	}
+
+	const bool bSameAttacker = RetaliationTarget.Get() == Attacker;
+	RetaliationTarget = Attacker;
+	bRetaliationActive = true;
+	BindRetaliationAttackerDeath(Attacker);
+	ArmRetaliationTimeout(OwnerUnit->GetRetaliationPursuitSeconds());
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			RetaliationEvaluateHandle,
+			this,
+			&UGP_UnitCommandComponent::OnRetaliationEvaluate,
+			0.20f,
+			true);
+	}
+
+	if (CanEngageRetaliationTarget(Attacker))
+	{
+		TryEngageRetaliationTarget(Attacker);
+		return;
+	}
+
+	RequestRetaliationPursuitMove(Attacker, !bSameAttacker || RetaliationMovementSerial == 0);
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution RetaliationStart: Unit=%s Attacker=%s Same=%s Duration=%.2f"),
+		*GetNameSafe(Owner),
+		*GetNameSafe(Attacker),
+		bSameAttacker ? TEXT("true") : TEXT("false"),
+		OwnerUnit->GetRetaliationPursuitSeconds());
+}
+
+void UGP_UnitCommandComponent::CancelRetaliation(const TCHAR* Reason, bool bStopRetaliationMovement)
+{
+	if (!bRetaliationActive && RetaliationMovementSerial == 0 && !RetaliationTimeoutHandle.IsValid())
+	{
+		UnbindRetaliationAttackerDeath();
+		ClearRetaliationTimers();
+		RetaliationTarget.Reset();
+		return;
+	}
+
+	AActor* Owner = GetOwner();
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution RetaliationCancel: Unit=%s Attacker=%s Reason=%s"),
+		*GetNameSafe(Owner),
+		*GetNameSafe(RetaliationTarget.Get()),
+		Reason);
+
+	const uint32 SerialToStop = RetaliationMovementSerial;
+	bRetaliationActive = false;
+	RetaliationTarget.Reset();
+	UnbindRetaliationAttackerDeath();
+	ClearRetaliationTimers();
+	RetaliationMovementSerial = 0;
+	LastRetaliationDestination = FVector::ZeroVector;
+	LastRetaliationIssueTime = -1.0;
+
+	if (bStopRetaliationMovement && SerialToStop != 0)
+	{
+		if (UGP_MovementComponent* Movement = ResolveMovementComponent())
+		{
+			if (Movement->IsMoving() && Movement->GetActiveMoveSerial() == SerialToStop)
+			{
+				Movement->StopMove(EGP_MovementStopReason::Manual);
+			}
+		}
+	}
+}
+
+void UGP_UnitCommandComponent::BindRetaliationAttackerDeath(AGP_UnitBase* Attacker)
+{
+	if (BoundRetaliationAttacker.Get() == Attacker && RetaliationAttackerDiedHandle.IsValid())
+	{
+		return;
+	}
+
+	UnbindRetaliationAttackerDeath();
+	if (!IsValid(Attacker))
+	{
+		return;
+	}
+
+	RetaliationAttackerDiedHandle = Attacker->OnUnitDied().AddUObject(
+		this,
+		&UGP_UnitCommandComponent::HandleRetaliationAttackerDied);
+	BoundRetaliationAttacker = Attacker;
+}
+
+void UGP_UnitCommandComponent::UnbindRetaliationAttackerDeath()
+{
+	if (AGP_UnitBase* Bound = BoundRetaliationAttacker.Get())
+	{
+		if (RetaliationAttackerDiedHandle.IsValid())
+		{
+			Bound->OnUnitDied().Remove(RetaliationAttackerDiedHandle);
+		}
+	}
+	RetaliationAttackerDiedHandle.Reset();
+	BoundRetaliationAttacker.Reset();
+}
+
+void UGP_UnitCommandComponent::HandleRetaliationAttackerDied(AGP_UnitBase* DeadUnit)
+{
+	if (!bRetaliationActive)
+	{
+		return;
+	}
+	if (DeadUnit != nullptr && RetaliationTarget.Get() != nullptr && DeadUnit != RetaliationTarget.Get())
+	{
+		return;
+	}
+	CancelRetaliation(TEXT("AttackerDied"), true);
+}
+
+void UGP_UnitCommandComponent::ArmRetaliationTimeout(float DurationSeconds)
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+	World->GetTimerManager().ClearTimer(RetaliationTimeoutHandle);
+	World->GetTimerManager().SetTimer(
+		RetaliationTimeoutHandle,
+		this,
+		&UGP_UnitCommandComponent::OnRetaliationTimeout,
+		FMath::Max(0.05f, DurationSeconds),
+		false);
+}
+
+void UGP_UnitCommandComponent::ClearRetaliationTimers()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(RetaliationTimeoutHandle);
+		World->GetTimerManager().ClearTimer(RetaliationEvaluateHandle);
+	}
+	RetaliationTimeoutHandle.Invalidate();
+	RetaliationEvaluateHandle.Invalidate();
+}
+
+void UGP_UnitCommandComponent::OnRetaliationTimeout()
+{
+	CancelRetaliation(TEXT("Timeout"), true);
+}
+
+void UGP_UnitCommandComponent::OnRetaliationEvaluate()
+{
+	if (!bRetaliationActive)
+	{
+		ClearRetaliationTimers();
+		return;
+	}
+
+	AGP_UnitBase* Attacker = RetaliationTarget.Get();
+	if (!IsRetaliationAttackerValid(Attacker))
+	{
+		CancelRetaliation(TEXT("AttackerInvalid"), true);
+		return;
+	}
+
+	if (CanEngageRetaliationTarget(Attacker))
+	{
+		TryEngageRetaliationTarget(Attacker);
+		return;
+	}
+
+	RequestRetaliationPursuitMove(Attacker, false);
+}
+
+void UGP_UnitCommandComponent::RequestRetaliationPursuitMove(AGP_UnitBase* Attacker, bool bForceIssue)
+{
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !IsValid(Attacker))
+	{
+		return;
+	}
+
+	UGP_MovementComponent* Movement = ResolveMovementComponent();
+	if (Movement == nullptr)
+	{
+		CancelRetaliation(TEXT("MissingMovement"), false);
+		return;
+	}
+
+	const FVector Destination = MakeApproachDestination(Owner, Attacker);
+	const UWorld* World = Owner->GetWorld();
+	const double Now = World != nullptr ? World->GetTimeSeconds() : 0.0;
+	if (!bForceIssue)
+	{
+		const float DestDelta = FVector::Dist2D(Destination, LastRetaliationDestination);
+		const bool bIntervalOk = LastRetaliationIssueTime < 0.0
+			|| (Now - LastRetaliationIssueTime) >= static_cast<double>(AttackReissueInterval);
+		const bool bDistanceOk = DestDelta >= AttackReissueDistance;
+		if (!bIntervalOk || !bDistanceOk)
+		{
+			return;
+		}
+	}
+
+	if (RetaliationMovementSerial == 0)
+	{
+		RetaliationMovementSerial = AllocateCommandSerial();
+	}
+
+	const FGP_MovementRequestOutcome Outcome = Movement->RequestMove(Destination, RetaliationMovementSerial);
+	if (!Outcome.IsAccepted())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Warning,
+			TEXT("GP UnitCommandExecution RetaliationMoveRejected: Unit=%s Serial=%u Reason=%s"),
+			*GetNameSafe(Owner),
+			RetaliationMovementSerial,
+			GPUnitCommandStatePrivate::RejectReasonToString(Outcome.RejectReason));
+		return;
+	}
+
+	LastRetaliationMovementSerial = RetaliationMovementSerial;
+	LastRetaliationDestination = Destination;
+	LastRetaliationIssueTime = Now;
+}
+
+void UGP_UnitCommandComponent::TryEngageRetaliationTarget(AGP_UnitBase* Attacker)
+{
+	if (!IsValid(Attacker))
+	{
+		return;
+	}
+
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	FGP_UnitCommand AttackCommand;
+	AttackCommand.CommandTag = GPTags.Command_Attack;
+	AttackCommand.TargetActor = Attacker;
+	AttackCommand.TargetLocation = Attacker->GetActorLocation();
+	AttackCommand.bQueue = false;
+
+	CancelRetaliation(TEXT("EngageAttack"), true);
+	bIssuingRetaliationEngageCommand = true;
+	HandleCommand(AttackCommand);
+	bIssuingRetaliationEngageCommand = false;
+}
+
+bool UGP_UnitCommandComponent::TryConsumeRetaliationMovementResult(
+	uint32 Serial,
+	EGP_MovementResult Result,
+	EGP_MovementResultReason Reason)
+{
+	(void)Result;
+	(void)Reason;
+	if (Serial == 0)
+	{
+		return false;
+	}
+	if (Serial != RetaliationMovementSerial && Serial != LastRetaliationMovementSerial)
+	{
+		return false;
+	}
+
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution RetaliationMoveResult: Unit=%s Serial=%u Active=%s Result=%s"),
+		*GetNameSafe(GetOwner()),
+		Serial,
+		bRetaliationActive ? TEXT("true") : TEXT("false"),
+		GPUnitCommandStatePrivate::MovementResultToString(Result));
+	return true;
+}
+
+#if !UE_BUILD_SHIPPING
+float UGP_UnitCommandComponent::DebugGetRetaliationRemainingSeconds() const
+{
+	if (const UWorld* World = GetWorld())
+	{
+		return World->GetTimerManager().GetTimerRemaining(RetaliationTimeoutHandle);
+	}
+	return -1.0f;
+}
+#endif
 
 #if !UE_BUILD_SHIPPING
 namespace GPUnitCommandConsolePrivate

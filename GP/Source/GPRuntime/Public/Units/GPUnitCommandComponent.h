@@ -128,6 +128,15 @@ public:
 	 */
 	void NotifyOwnerDied();
 
+	/**
+	 * GP-S40R: after successful hostile ApplyDamageFromUnit.
+	 * Autonomous retaliation — not a player-visible Held command.
+	 */
+	void NotifyHostileDamageReceived(AGP_UnitBase* SourceUnit);
+
+	bool IsRetaliationActive() const { return bRetaliationActive; }
+	AGP_UnitBase* GetRetaliationTarget() const { return RetaliationTarget.Get(); }
+
 	EGP_AttackExecutionState GetAttackExecutionState() const;
 	uint32 GetActiveAttackSerial() const;
 	AGP_UnitBase* GetAttackTarget() const;
@@ -260,6 +269,10 @@ public:
 	int32 DebugGetApproachSkipCandidateMask() const { return DebugApproachSkipCandidateMask; }
 	int32 DebugGetLastApproachCandidateIndex() const { return DebugLastApproachCandidateIndex; }
 	int32 DebugGetLastApproachCandidateCount() const { return DebugLastApproachCandidateCount; }
+
+	uint32 DebugGetRetaliationMovementSerial() const { return RetaliationMovementSerial; }
+	uint32 DebugGetLastRetaliationMovementSerial() const { return LastRetaliationMovementSerial; }
+	float DebugGetRetaliationRemainingSeconds() const;
 #endif
 
 	/**
@@ -519,6 +532,27 @@ private:
 	bool ResumeAttackMoveTravelAfterEngagement();
 	bool IsHeldAttackMove(uint32 Serial) const;
 
+	/** GP-S40R: autonomous retaliation pursuit (not a Held player command). */
+	bool IsMobileCombatUnitForRetaliation(const AGP_UnitBase* Unit) const;
+	bool HasCommandThatBlocksRetaliationStart() const;
+	bool IsRetaliationAttackerValid(const AGP_UnitBase* Attacker) const;
+	bool CanEngageRetaliationTarget(AGP_UnitBase* Attacker) const;
+	void StartOrRefreshRetaliation(AGP_UnitBase* Attacker);
+	void CancelRetaliation(const TCHAR* Reason, bool bStopRetaliationMovement);
+	void BindRetaliationAttackerDeath(AGP_UnitBase* Attacker);
+	void UnbindRetaliationAttackerDeath();
+	void HandleRetaliationAttackerDied(AGP_UnitBase* DeadUnit);
+	void ArmRetaliationTimeout(float DurationSeconds);
+	void ClearRetaliationTimers();
+	void OnRetaliationTimeout();
+	void OnRetaliationEvaluate();
+	void RequestRetaliationPursuitMove(AGP_UnitBase* Attacker, bool bForceIssue);
+	void TryEngageRetaliationTarget(AGP_UnitBase* Attacker);
+	bool TryConsumeRetaliationMovementResult(
+		uint32 Serial,
+		EGP_MovementResult Result,
+		EGP_MovementResultReason Reason);
+
 	static const TCHAR* AttackStateToString(EGP_AttackExecutionState State);
 	static const TCHAR* AttackTerminalResultToString(EGP_AttackTerminalResult Result);
 	static const TCHAR* AttackTerminalReasonToString(EGP_AttackTerminalReason Reason);
@@ -537,6 +571,18 @@ private:
 
 	FTimerHandle AutoAcquireTimerHandle;
 	TWeakObjectPtr<AGP_UnitBase> LastAutoAcquireCandidate;
+
+	bool bRetaliationActive = false;
+	bool bIssuingRetaliationEngageCommand = false;
+	TWeakObjectPtr<AGP_UnitBase> RetaliationTarget;
+	FTimerHandle RetaliationTimeoutHandle;
+	FTimerHandle RetaliationEvaluateHandle;
+	FDelegateHandle RetaliationAttackerDiedHandle;
+	TWeakObjectPtr<AGP_UnitBase> BoundRetaliationAttacker;
+	uint32 RetaliationMovementSerial = 0;
+	uint32 LastRetaliationMovementSerial = 0;
+	FVector LastRetaliationDestination = FVector::ZeroVector;
+	double LastRetaliationIssueTime = -1.0;
 	double LastApproachIssueTime = -1.0;
 	bool bExpectRangeEntryStop = false;
 	bool bFinishingAttack = false;

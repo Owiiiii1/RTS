@@ -152,7 +152,7 @@ public:
 	bool IsUnitDefinitionLoadPending() const { return bUnitDefinitionLoadPending; }
 
 	/**
-	 * Data only until GP-S40R.
+	 * Canonical duration for GP-S40R retaliation pursuit. 0 disables.
 	 * After ready: definition value, or 5.0 fallback when empty-ref / load failure.
 	 * Pending/unready: documented baseline 5.0 (not 0).
 	 */
@@ -162,6 +162,8 @@ public:
 	static constexpr float FallbackRetaliationPursuitSeconds = 5.0f;
 
 #if !UE_BUILD_SHIPPING
+	/** Apply the same ResolvedRetaliationPursuitSeconds formula as definition completion. */
+	void DebugApplyRetaliationPursuitSecondsFromDefinition(const UGP_UnitDefinition* Definition);
 	/** Force the unresolved-soft RequestAsyncLoad path. Injected def is applied on completion. */
 	void DebugForceUnresolvedSoftDefinitionLoad(UGP_UnitDefinition* InjectedDefinition, bool bHoldCompletion);
 	bool DebugDidRequestAsyncUnitDefinitionLoad() const { return bDebugDidRequestAsyncUnitDefinitionLoad; }

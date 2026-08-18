@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S39E on main tip** `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d` |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S39E + risk-based workflow on main tip** `5ad69aa7abd39e181cd6ffafb11e4277adf3160a` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S39E Economy / Logistics Data Ownership** on `main` (tip `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d`) |
+| Last closed / merged stage | **GP-S39E Economy / Logistics Data Ownership** on `main` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **RISK_BASED_WORKFLOW_DOCS_READY_FOR_REVIEW** on `docs/risk-based-development-workflow` (**NOT MERGED**) |
+| Current stage | **GP-S40R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s40r-timed-retaliation-pursuit` (**NOT MERGED**) |
 
 ---
 
@@ -49,9 +49,9 @@
 
 **Prior closed:** GP-S38D / GP-S37T / GP-S36G / GP-S35B / GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Current:** [`Risk_Based_Development_Workflow.md`](Risk_Based_Development_Workflow.md) — **RISK_BASED_WORKFLOW_DOCS_READY_FOR_REVIEW**. Do **not** merge until review.
+**Current:** [`Claude_Tasks/GP-S40R_Timed_Retaliation_Pursuit.md`](Claude_Tasks/GP-S40R_Timed_Retaliation_Pursuit.md) — **GP-S40R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. Do **not** merge. Await operator validation.
 
-**Next planned gameplay slice:** **GP-S40R** Timed Retaliation Pursuit. Do **not** start Wall gameplay / FoW / Order Menu / Spectating without explicit assignment.
+**Do not** start Wall gameplay / FoW / Order Menu / Spectating without explicit assignment.
 
 **Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 
@@ -74,7 +74,7 @@
 15. **GP-S37T** — Defensive Turret MVP — **DONE / MERGED** @ `c79b017…`
 16. **GP-S38D** — Unit/Building Combat Data — **DONE / MERGED** @ `f841cdee…`
 17. **GP-S39E** — Economy / Logistics Data Ownership — **MERGED / VERIFIED / CLOSED** @ `75a0e5bd…`
-18. **GP-S40R** — Timed Retaliation Pursuit — **not started**
+18. **GP-S40R** — Timed Retaliation Pursuit — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (NOT MERGED)
 
 ---
 
@@ -159,4 +159,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S39E are on verified `main` tip `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d`. Current stage: **RISK_BASED_WORKFLOW_DOCS_READY_FOR_REVIEW** on `docs/risk-based-development-workflow`. See [`Risk_Based_Development_Workflow.md`](Risk_Based_Development_Workflow.md). **NOT MERGED.** Next planned slice: **GP-S40R** Timed Retaliation Pursuit.
+SETUP-001, DOCS-001, GP-S01…GP-S39E are on verified `main` tip `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`. Current stage: **GP-S40R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s40r-timed-retaliation-pursuit`. See [`Claude_Tasks/GP-S40R_Timed_Retaliation_Pursuit.md`](Claude_Tasks/GP-S40R_Timed_Retaliation_Pursuit.md). **NOT MERGED. NOT FINALIZED.** Await operator PIE.

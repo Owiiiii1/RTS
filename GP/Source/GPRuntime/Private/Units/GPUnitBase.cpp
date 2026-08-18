@@ -379,6 +379,15 @@ float AGP_UnitBase::GetRetaliationPursuitSeconds() const
 	return FMath::Max(0.0f, ResolvedRetaliationPursuitSeconds);
 }
 
+#if !UE_BUILD_SHIPPING
+void AGP_UnitBase::DebugApplyRetaliationPursuitSecondsFromDefinition(const UGP_UnitDefinition* Definition)
+{
+	ResolvedRetaliationPursuitSeconds = Definition != nullptr
+		? FMath::Max(0.0f, Definition->RetaliationPursuitSeconds)
+		: FallbackRetaliationPursuitSeconds;
+}
+#endif
+
 void AGP_UnitBase::BeginUnitDefinitionInitialization()
 {
 	if (bUnitDefinitionReady || bUnitDefinitionLoadAbandoned)
@@ -909,6 +918,11 @@ bool AGP_UnitBase::ApplyDamageFromUnit(AGP_UnitBase* SourceUnit, FGP_DamageAppli
 		IsDead() ? TEXT("true") : TEXT("false"),
 		GPUnitCommandPrivate::RoleToString(GetLocalRole()),
 		GPUnitCommandPrivate::NetModeToString(NetMode));
+
+	if (!IsDead() && UnitCommandComponent != nullptr)
+	{
+		UnitCommandComponent->NotifyHostileDamageReceived(SourceUnit);
+	}
 
 	return true;
 }

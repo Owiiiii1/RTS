@@ -32,6 +32,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Payload")
 	TSoftObjectPtr<UGP_BuildingDefinition> BuildingDefinition;
 
+	/** Pod falling / telegraph time. Perceived usable time ≈ Descent + PayloadDeployDelay. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Delivery", meta = (ClampMin = "0.05"))
+	float DeliveryDescentSeconds = 2.5f;
+
+	/** Delay after impact before payload appears. Not a third duplicate DeliveryTime. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Delivery", meta = (ClampMin = "0.0"))
+	float PayloadDeployDelaySeconds = 2.0f;
+
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
 
 	static const TCHAR* PrimaryAssetTypeName();

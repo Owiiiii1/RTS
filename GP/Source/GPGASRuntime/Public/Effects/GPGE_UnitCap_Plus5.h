@@ -7,8 +7,8 @@
 #include "GPGE_UnitCap_Plus5.generated.h"
 
 /**
- * Infinite C++ GE: Additive +5 MaxUnits (GP-S33C Logistics Hub bonus).
- * Native equivalent of GE_GP_UnitCap_Plus5. One active instance per living deployed Hub.
+ * Infinite C++ GE: Additive MaxUnits via SetByCaller (GP-S39E).
+ * Magnitude comes from UGP_BuildingDefinition.UnitCapBonus. Class name kept for compatibility.
  */
 UCLASS()
 class GPGASRUNTIME_API UGP_GE_UnitCap_Plus5 : public UGameplayEffect
@@ -17,4 +17,6 @@ class GPGASRUNTIME_API UGP_GE_UnitCap_Plus5 : public UGameplayEffect
 
 public:
 	UGP_GE_UnitCap_Plus5();
+
+	static FName GetMagnitudeDataName();
 };

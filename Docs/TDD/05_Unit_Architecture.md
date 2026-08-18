@@ -30,7 +30,7 @@ Player `MaxUnits` / `CurrentUnits` live on `UGP_PlayerAttributeSet` (OwnerOnly).
 - Register exactly once when the unit becomes live/owned; unregister exactly once on death (`HandleDeathInternal`) or EndPlay. Never negative.
 - Owner is `RequestingPlayerState` for orbital payload, or team lookup on GameState `PlayerArray` for preplaced units. Unresolved owner: warning, do not increment the wrong player.
 - Orbital orders reserve entity count on the PlayerState (`PendingOrbitalUnitCount`). Validate `Current + Pending + ManifestCount <= MaxUnits`. Failed/incomplete payload releases leftover reservation. Transport-slot cost is independent (Walker is 1 CurrentUnit, 2 slots).
-- Each living deployed `AGP_LogisticsHub` applies infinite `UGP_GE_UnitCap_Plus5` (+5 MaxUnits). Destroying a Hub removes that effect once. If Current > new Max, units stay alive; new orders reject `UnitCapReached` until attrition.
+- Each living deployed `AGP_LogisticsHub` applies infinite `UGP_GE_UnitCap_Plus5` with **SetByCaller** magnitude from `UGP_BuildingDefinition.UnitCapBonus` (Hub baseline +5). Empty BuildingDefinition keeps class fallback +5. Destroying a Hub removes that effect once. If Current > new Max, units stay alive; new orders reject `UnitCapReached` until attrition.
 
 ## AGP_UnitBase
 
@@ -85,9 +85,10 @@ Do **not** confuse with:
 
 | Asset | Owns |
 | --- | --- |
-| `UGP_UnitDefinition` | Intrinsic vitals / combat / sight / facing / MoveSpeed / RetaliationPursuitSeconds |
-| `UGP_BuildingDefinition` | Building identity / icon / tags / `SpawnedClass` / BuildGrid footprint + soft ref to UnitDefinition |
-| `UGP_OrbitalDropDefinition` / unit delivery | Acquisition cost, DropTags, transport slots, manifest |
+| `UGP_UnitDefinition` | Intrinsic vitals / combat / sight / facing / MoveSpeed / RetaliationPursuitSeconds **+ `CargoCapacity`** |
+| `UGP_BuildingDefinition` | Building identity / icon / tags / `SpawnedClass` / footprint + storage + `UnitCapBonus` + soft UnitDefinition |
+| `UGP_OrbitalUnitDropDefinition` | Unit purchase cost, transport slots, payload class, per-unit descent / deploy delay |
+| `UGP_OrbitalDropDefinition` | Building purchase cost, DropTags, building delivery timing |
 
 CapabilityTags stay on `AGP_UnitBase` (not migrated in S38D). Nav/repath/separation stay on `UGP_MovementComponent`.
 
@@ -119,11 +120,16 @@ public:
     float MoveSpeedCmPerSecond = 0.f;   // 0 = do not write movement (buildings)
 
     UPROPERTY(EditAnywhere, Category = "GP|Behavior|Retaliation")
-    float RetaliationPursuitSeconds = 5.f; // DATA ONLY until GP-S39R; 0 = disabled
+    float RetaliationPursuitSeconds = 5.f; // DATA ONLY until GP-S40R; 0 = disabled
+
+    UPROPERTY(EditAnywhere, Category = "GP|Logistics|Cargo")
+    float CargoCapacity = 0.f; // Worker 50; 0 = no cargo
 };
 ```
 
-`PrimaryAssetType` = `GPUnitDefinition`. Native bootstrap catalog (`UGP_UnitDefinitionCatalog`) provides Worker / Salvage Walker / Defensive Turret values matching current C++/CDO. Authored `DA_GP_Unit_*` assets are operator-side and not required for contracts.
+`PrimaryAssetType` = `GPUnitDefinition`. Native bootstrap catalog (`UGP_UnitDefinitionCatalog`) provides Worker / Salvage Walker / Defensive Turret / MainBase / LogisticsHub. Authored `DA_GP_Unit_*` assets are operator-side and not required for contracts.
+
+`UGP_CargoComponent` keeps runtime cargo state. Loaded `UnitDefinition.CargoCapacity` configures capacity; empty definition keeps the component fallback (50).
 
 `AGP_UnitBase::UnitDefinitionAsset` is a soft ref. Precedence: loaded definition → existing actor/component defaults.
 

@@ -71,6 +71,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Orbital", meta = (ClampMin = "0.0"))
 	float ThreatPerStoredUnit = 0.5f;
 
+	/**
+	 * Canonical Ferronite deposit size. ResourceNode.CurrentAmount is runtime state.
+	 * Node MaxAmount initializes from this unless an authored instance override exists.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Deposit", meta = (ClampMin = "0"))
+	int32 DepositMaxAmount = 5000;
+
+	/**
+	 * Soft-cap for concurrent active miners on a Ferronite deposit.
+	 * ResourceNode occupancy initializes from this unless an authored instance override exists.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Deposit", meta = (ClampMin = "1"))
+	int32 MaxConcurrentMiners = 4;
+
 	/** Optional presentation tint metadata (no material creation in S23R). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Resource|Presentation")
 	FLinearColor Tint = FLinearColor(0.15f, 0.75f, 0.85f, 1.0f);

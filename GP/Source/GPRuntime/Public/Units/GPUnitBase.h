@@ -152,7 +152,7 @@ public:
 	bool IsUnitDefinitionLoadPending() const { return bUnitDefinitionLoadPending; }
 
 	/**
-	 * Data only until GP-S39R.
+	 * Data only until GP-S40R.
 	 * After ready: definition value, or 5.0 fallback when empty-ref / load failure.
 	 * Pending/unready: documented baseline 5.0 (not 0).
 	 */

@@ -8,6 +8,7 @@
 #include "Game/GPGameMode.h"
 #include "Game/GPGameState.h"
 #include "Net/UnrealNetwork.h"
+#include "Buildings/GPBuildingDefinition.h"
 #include "Resources/GPStorageComponent.h"
 #include "Tags/GPGameplayTags.h"
 
@@ -79,6 +80,28 @@ void AGP_MainBase::BeginPlay()
 	Super::BeginPlay();
 	// Register only when TeamId is already playable (deferred spawn sets TeamId before FinishSpawning).
 	RefreshMainBaseRegistration();
+}
+
+void AGP_MainBase::NotifyBuildingDefinitionReady()
+{
+	ApplyStorageFromBuildingDefinition();
+}
+
+void AGP_MainBase::ApplyStorageFromBuildingDefinition()
+{
+	if (!IsValid(StorageComponent))
+	{
+		return;
+	}
+
+	float Capacity = 100.0f;
+	int32 Count = 5;
+	if (const UGP_BuildingDefinition* Def = ResolveLoadedBuildingDefinition())
+	{
+		Capacity = Def->ContainerCapacity;
+		Count = Def->ContainerCount;
+	}
+	StorageComponent->ConfigureFromDefinition(Capacity, Count);
 }
 
 void AGP_MainBase::NotifyAuthorityDeath()

@@ -28,6 +28,8 @@ public:
 	UGP_UnitDefinition* GetWorkerDefinition() const { return WorkerDefinition; }
 	UGP_UnitDefinition* GetSalvageWalkerDefinition() const { return SalvageWalkerDefinition; }
 	UGP_UnitDefinition* GetDefensiveTurretDefinition() const { return DefensiveTurretDefinition; }
+	UGP_UnitDefinition* GetMainBaseDefinition() const { return MainBaseDefinition; }
+	UGP_UnitDefinition* GetLogisticsHubDefinition() const { return LogisticsHubDefinition; }
 
 	UGP_UnitDefinition* FindDefinition(const FPrimaryAssetId& DefinitionId) const;
 
@@ -42,6 +44,12 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UGP_UnitDefinition> DefensiveTurretDefinition;
+
+	UPROPERTY()
+	TObjectPtr<UGP_UnitDefinition> MainBaseDefinition;
+
+	UPROPERTY()
+	TObjectPtr<UGP_UnitDefinition> LogisticsHubDefinition;
 
 	bool bNativeCatalogReady = false;
 };

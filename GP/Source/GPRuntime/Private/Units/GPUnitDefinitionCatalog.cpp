@@ -82,6 +82,7 @@ void UGP_UnitDefinitionCatalog::EnsureNativeCatalog()
 	WorkerDefinition->AttackFacingRotationSpeedDegreesPerSecond = 360.0f;
 	WorkerDefinition->MoveSpeedCmPerSecond = 600.0f;
 	WorkerDefinition->RetaliationPursuitSeconds = 5.0f;
+	WorkerDefinition->CargoCapacity = 50.0f;
 
 	SalvageWalkerDefinition = CreateNativeDefinition(
 		FName(TEXT("DA_GP_Unit_SalvageWalker")),
@@ -98,6 +99,7 @@ void UGP_UnitDefinitionCatalog::EnsureNativeCatalog()
 	SalvageWalkerDefinition->AttackFacingRotationSpeedDegreesPerSecond = 360.0f;
 	SalvageWalkerDefinition->MoveSpeedCmPerSecond = 250.0f;
 	SalvageWalkerDefinition->RetaliationPursuitSeconds = 5.0f;
+	SalvageWalkerDefinition->CargoCapacity = 0.0f;
 
 	DefensiveTurretDefinition = CreateNativeDefinition(
 		FName(TEXT("DA_GP_Unit_DefensiveTurret")),
@@ -114,6 +116,25 @@ void UGP_UnitDefinitionCatalog::EnsureNativeCatalog()
 	DefensiveTurretDefinition->AttackFacingRotationSpeedDegreesPerSecond = 360.0f;
 	DefensiveTurretDefinition->MoveSpeedCmPerSecond = 0.0f;
 	DefensiveTurretDefinition->RetaliationPursuitSeconds = 5.0f;
+	DefensiveTurretDefinition->CargoCapacity = 0.0f;
+
+	MainBaseDefinition = CreateNativeDefinition(
+		FName(TEXT("DA_GP_Unit_MainBase")),
+		NSLOCTEXT("GPUnitDefinitionCatalog", "MainBase", "Main Base"));
+	MainBaseDefinition->MaxHealth = 100.0f;
+	MainBaseDefinition->InitialHealth = 100.0f;
+	MainBaseDefinition->MoveSpeedCmPerSecond = 0.0f;
+	MainBaseDefinition->RetaliationPursuitSeconds = 5.0f;
+	MainBaseDefinition->CargoCapacity = 0.0f;
+
+	LogisticsHubDefinition = CreateNativeDefinition(
+		FName(TEXT("DA_GP_Unit_LogisticsHub")),
+		NSLOCTEXT("GPUnitDefinitionCatalog", "LogisticsHub", "Logistics Hub"));
+	LogisticsHubDefinition->MaxHealth = 500.0f;
+	LogisticsHubDefinition->InitialHealth = 500.0f;
+	LogisticsHubDefinition->MoveSpeedCmPerSecond = 0.0f;
+	LogisticsHubDefinition->RetaliationPursuitSeconds = 5.0f;
+	LogisticsHubDefinition->CargoCapacity = 0.0f;
 
 	bNativeCatalogReady = true;
 }
@@ -132,7 +153,13 @@ UGP_UnitDefinition* UGP_UnitDefinitionCatalog::FindDefinition(const FPrimaryAsse
 		return nullptr;
 	}
 
-	UGP_UnitDefinition* Candidates[] = { WorkerDefinition, SalvageWalkerDefinition, DefensiveTurretDefinition };
+	UGP_UnitDefinition* Candidates[] = {
+		WorkerDefinition,
+		SalvageWalkerDefinition,
+		DefensiveTurretDefinition,
+		MainBaseDefinition,
+		LogisticsHubDefinition
+	};
 	for (UGP_UnitDefinition* Def : Candidates)
 	{
 		if (IsValid(Def) && Def->GetPrimaryAssetId() == DefinitionId)

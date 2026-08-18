@@ -37,6 +37,8 @@ UGP_ResourceDefinition::UGP_ResourceDefinition()
 	ScoreConversionRate = 1.0f;
 	OrbitalConversionRate = 1.0f;
 	ThreatPerStoredUnit = 0.5f;
+	DepositMaxAmount = 5000;
+	MaxConcurrentMiners = 4;
 	Tint = FLinearColor(0.15f, 0.75f, 0.85f, 1.0f);
 }
 
@@ -133,6 +135,22 @@ bool UGP_ResourceDefinition::ValidateDefinition(TArray<FText>& OutErrors, TArray
 			"GPResourceDefinition",
 			"ErrThreat",
 			"ThreatPerStoredUnit must be finite and >= 0."));
+	}
+
+	if (DepositMaxAmount < 0)
+	{
+		OutErrors.Add(NSLOCTEXT(
+			"GPResourceDefinition",
+			"ErrDepositMax",
+			"DepositMaxAmount must be >= 0."));
+	}
+
+	if (MaxConcurrentMiners < 1)
+	{
+		OutErrors.Add(NSLOCTEXT(
+			"GPResourceDefinition",
+			"ErrMaxMiners",
+			"MaxConcurrentMiners must be >= 1."));
 	}
 
 	if (ResourceType == EGP_ResourceType::Ore

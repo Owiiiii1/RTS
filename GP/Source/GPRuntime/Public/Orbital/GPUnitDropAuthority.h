@@ -26,7 +26,7 @@ namespace GPUnitDropAuthority
 		TWeakObjectPtr<AGP_DropPod> SpawnedPod;
 	};
 
-	/** Compute slots/cost from settings (no mutation). */
+	/** Compute slots/cost from unit drop definitions, settings as fallback (no mutation). */
 	bool ComputeManifestCosts(
 		const FGP_UnitDropManifest& Manifest,
 		int32& OutSlotCost,

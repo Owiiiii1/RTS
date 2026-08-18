@@ -15,6 +15,7 @@
 #include "Game/GPGameState.h"
 #include "HAL/IConsoleManager.h"
 #include "Orbital/GPDropPod.h"
+#include "Orbital/GPOrbitalUnitDropCatalog.h"
 #include "Orbital/GPUnitDropAuthority.h"
 #include "Orbital/GPUnitDropManifest.h"
 #include "Orbital/GPUnitGroundPlacement.h"
@@ -152,6 +153,7 @@ void UGP_OrbitalUnitDropContractTestRunner::RestoreSettings()
 		Settings->UnitDropCleanupDelaySeconds = SavedCleanup;
 		Settings->UnitDropSpawnAltitudeCm = SavedAltitude;
 		Settings->UnitDropPayloadDeployDelaySeconds = SavedDeployDelay;
+		UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(2.5f, 1.25f);
 		Settings->WorkerPayloadClass = SavedWorkerPayload;
 		Settings->SalvageWalkerPayloadClass = SavedWalkerPayload;
 		Settings->UnitDropPodClass = SavedDropPodClass;
@@ -313,6 +315,9 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			Settings->UnitDropCleanupDelaySeconds = 0.05f;
 			Settings->UnitDropSpawnAltitudeCm = 400.0f;
 			Settings->UnitDropPayloadDeployDelaySeconds = 0.0f; // zero-delay path for core flow
+			UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(
+				Settings->UnitDropDescentDurationSeconds,
+				Settings->UnitDropPayloadDeployDelaySeconds);
 			// Native fallback path for core slot/cost/spend checks.
 			Settings->WorkerPayloadClass.Reset();
 			Settings->SalvageWalkerPayloadClass.Reset();
@@ -821,6 +826,9 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		{
 			Settings->UnitDropDescentDurationSeconds = 0.20f;
 			Settings->UnitDropPayloadDeployDelaySeconds = 0.40f;
+			UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(
+				Settings->UnitDropDescentDurationSeconds,
+				Settings->UnitDropPayloadDeployDelaySeconds);
 			Settings->UnitDropCleanupDelaySeconds = 0.10f;
 			Settings->WorkerPayloadClass.Reset();
 			Settings->UnitDropPodClass.Reset();

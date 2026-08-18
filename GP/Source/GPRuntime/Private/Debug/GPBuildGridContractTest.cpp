@@ -254,6 +254,7 @@ void UGP_BuildGridContractTestRunner::RestoreSettings()
 	{
 		Settings->BuildingDropPayloadDeployDelaySeconds = SavedBuildingDeployDelay;
 		Settings->BuildingDropDescentDurationSeconds = SavedBuildingDescent;
+		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(2.5f, 2.0f);
 		Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
 		Settings->BuildingDropSpawnAltitudeCm = SavedBuildingAltitude;
 		Settings->BuildingPayloadClass = SavedBuildingPayload;
@@ -1892,6 +1893,9 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
 			Settings->BuildingDropSpawnAltitudeCm = 400.0f;
 			Settings->BuildingDropPayloadDeployDelaySeconds = 0.35f;
+			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
+				Settings->BuildingDropDescentDurationSeconds,
+				Settings->BuildingDropPayloadDeployDelaySeconds);
 			Settings->BuildingPayloadClass.Reset();
 			bSettingsMutated = true;
 		}
@@ -2333,6 +2337,9 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			Settings->BuildingDropDescentDurationSeconds = 0.08f;
 			Settings->BuildingDropPayloadDeployDelaySeconds = 0.0f;
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
+			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
+				Settings->BuildingDropDescentDurationSeconds,
+				Settings->BuildingDropPayloadDeployDelaySeconds);
 		}
 
 		UGP_OrbitalBuildingInventoryComponent* Inventory = OwnerPS->GetOrbitalBuildingInventoryComponent();

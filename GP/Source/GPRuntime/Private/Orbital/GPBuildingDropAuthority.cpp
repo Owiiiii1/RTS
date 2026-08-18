@@ -732,6 +732,13 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		return Result;
 	}
 
+	float DescentSeconds = Settings->BuildingDropDescentDurationSeconds;
+	float DeployDelaySeconds = Settings->BuildingDropPayloadDeployDelaySeconds;
+	UGP_BuildingDropCatalog::Get().ResolveDeliveryTiming(
+		DropDefinition,
+		DescentSeconds,
+		DeployDelaySeconds);
+
 	Pod->AuthorityInitBuildingDrop(
 		RequestingPlayerState,
 		TeamId,
@@ -739,9 +746,9 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		Result.PayloadClass,
 		LandingLoc,
 		LandingRot,
-		Settings->BuildingDropDescentDurationSeconds,
+		DescentSeconds,
 		Settings->BuildingDropSpawnAltitudeCm,
-		Settings->BuildingDropPayloadDeployDelaySeconds,
+		DeployDelaySeconds,
 		Settings->BuildingDropCleanupDelaySeconds,
 		OriginCell,
 		FootprintSize,

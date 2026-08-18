@@ -28,6 +28,7 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId) override;
 	virtual void NotifyAuthorityDeath() override;
+	virtual void NotifyBuildingDefinitionReady() override;
 
 	/** Authority refresh: register only when TeamId is playable (>=1). */
 	void RefreshMainBaseRegistration();
@@ -106,5 +107,6 @@ protected:
 private:
 	void RegisterWithGameState();
 	void UnregisterFromGameState();
+	void ApplyStorageFromBuildingDefinition();
 	bool bRegisteredWithGameState = false;
 };

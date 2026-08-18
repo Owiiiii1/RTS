@@ -18,6 +18,8 @@
 #include "Game/GPGameState.h"
 #include "HAL/IConsoleManager.h"
 #include "Orbital/GPBuildingDropAuthority.h"
+#include "Orbital/GPBuildingDropCatalog.h"
+#include "Orbital/GPOrbitalUnitDropCatalog.h"
 #include "Orbital/GPDropPod.h"
 #include "Orbital/GPOrbitalBuildingInventoryComponent.h"
 #include "Orbital/GPUnitDropAuthority.h"
@@ -232,6 +234,8 @@ void UGP_UnitCapLogisticsHubContractTestRunner::RestoreSettings()
 		Settings->BuildingDropDescentDurationSeconds = SavedBuildingDescent;
 		Settings->BuildingDropPayloadDeployDelaySeconds = SavedBuildingDeployDelay;
 		Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
+		UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(2.5f, 1.25f);
+		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(2.5f, 2.0f);
 	}
 	bSettingsMutated = false;
 }
@@ -395,6 +399,12 @@ void UGP_UnitCapLogisticsHubContractTestRunner::AdvanceStage()
 			Settings->BuildingDropDescentDurationSeconds = 0.30f;
 			Settings->BuildingDropPayloadDeployDelaySeconds = 0.15f;
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
+			UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(
+				Settings->UnitDropDescentDurationSeconds,
+				Settings->UnitDropPayloadDeployDelaySeconds);
+			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
+				Settings->BuildingDropDescentDurationSeconds,
+				Settings->BuildingDropPayloadDeployDelaySeconds);
 			Settings->WorkerPayloadClass.Reset();
 			Settings->SalvageWalkerPayloadClass.Reset();
 			Settings->UnitDropPodClass.Reset();

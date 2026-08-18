@@ -4,6 +4,7 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPPlayerAttributeSet.h"
+#include "Buildings/GPBuildingBase.h"
 #include "Buildings/GPMainBase.h"
 #include "Effects/GPGE_AddOrbital.h"
 #include "Effects/GPGE_AddScore.h"
@@ -43,7 +44,19 @@ void UGP_StorageComponent::BeginPlay()
 	Super::BeginPlay();
 	if (GetOwner() != nullptr && GetOwner()->HasAuthority())
 	{
-		EnsureContainerArray();
+		if (const AGP_BuildingBase* Building = Cast<AGP_BuildingBase>(GetOwner()))
+		{
+			if (!Building->IsBuildingDefinitionReady())
+			{
+				ResolveResourceDefinition(false);
+				return;
+			}
+		}
+		if (!bStorageConfigured)
+		{
+			EnsureContainerArray();
+			bStorageConfigured = true;
+		}
 		ResolveResourceDefinition(false);
 	}
 }
@@ -604,9 +617,45 @@ bool UGP_StorageComponent::IsStorageFull() const
 	return GetTotalRemaining() <= KINDA_SMALL_NUMBER;
 }
 
+void UGP_StorageComponent::ConfigureFromDefinition(float InContainerCapacity, int32 InContainerCount)
+{
+	const float NewCapacity = FMath::Max(0.0f, InContainerCapacity);
+	const int32 NewCount = FMath::Max(0, InContainerCount);
+
+	if (bStorageConfigured && GetTotalStored() > KINDA_SMALL_NUMBER)
+	{
+		ContainerCapacity = NewCapacity;
+		ContainerCount = NewCount;
+		for (FGP_StorageContainer& Container : Containers)
+		{
+			if (!FMath::IsFinite(Container.CurrentAmount) || Container.CurrentAmount < 0.0f)
+			{
+				Container.CurrentAmount = 0.0f;
+			}
+			if (ContainerCapacity > 0.0f)
+			{
+				Container.CurrentAmount = FMath::Clamp(Container.CurrentAmount, 0.0f, ContainerCapacity);
+			}
+			RefreshContainerState(Container);
+		}
+		return;
+	}
+
+	ContainerCapacity = NewCapacity;
+	ContainerCount = NewCount;
+	EnsureContainerArray();
+	bStorageConfigured = true;
+}
+
 void UGP_StorageComponent::EnsureContainerArray()
 {
-	const int32 Desired = FMath::Max(1, ContainerCount);
+	if (ContainerCount <= 0 || ContainerCapacity <= 0.0f)
+	{
+		Containers.Reset();
+		return;
+	}
+
+	const int32 Desired = ContainerCount;
 	if (Containers.Num() != Desired)
 	{
 		Containers.SetNum(Desired);
@@ -675,6 +724,20 @@ FGP_StorageAddResult UGP_StorageComponent::AddPlanetaryFerronite(float Requested
 	}
 
 	if (!IsFinitePositive(RequestedAmount))
+	{
+		Result.bRejectedInvalidInput = true;
+		Result.Rejected = RequestedAmount;
+		return Result;
+	}
+
+	if (!bStorageConfigured)
+	{
+		Result.bRejectedInvalidInput = true;
+		Result.Rejected = RequestedAmount;
+		return Result;
+	}
+
+	if (ContainerCount <= 0 || !IsFinitePositive(ContainerCapacity))
 	{
 		Result.bRejectedInvalidInput = true;
 		Result.Rejected = RequestedAmount;

@@ -217,6 +217,9 @@ public:
 #if !UE_BUILD_SHIPPING
 	/** Contract helper: force CurrentAmount and optionally trip depletion transition. */
 	void DebugSetCurrentAmountForTest(int32 NewAmount, bool bAllowDepletionTransition);
+
+	/** Contract helper: authored instance override before BeginPlay apply. */
+	void DebugAuthorDepositOverrideForTest(int32 InMaxAmount, int32 InCurrentAmount, int32 InMaxConcurrentMiners);
 #endif
 
 protected:
@@ -229,6 +232,7 @@ protected:
 	void ClampCurrentAmountToMax();
 	void NormalizeAmountsOnConstruction();
 	void ApplyIdentityFromDefinition(const UGP_ResourceDefinition* Definition);
+	void ApplyDepositConfigFromDefinition(const UGP_ResourceDefinition* Definition);
 	void CleanupInvalidMiners();
 	void PromoteWaitingMiners(TArray<AActor*>& OutPromotedMiners);
 	void RefreshOccupancyCounts();
@@ -322,4 +326,5 @@ private:
 	int32 DepletionPreviousAmountCached = 0;
 	FTimerHandle DepletionDestroyTimerHandle;
 	bool bRegisteredWithGameState = false;
+	bool bDepositConfigApplied = false;
 };

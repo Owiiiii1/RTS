@@ -3,6 +3,7 @@
 #include "GPRuntime.h"
 #include "Modules/ModuleManager.h"
 #include "Orbital/GPBuildingDropCatalog.h"
+#include "Orbital/GPOrbitalUnitDropCatalog.h"
 #include "Units/GPUnitDefinitionCatalog.h"
 
 #define LOCTEXT_NAMESPACE "FGPRuntimeModule"
@@ -11,10 +12,13 @@ void FGPRuntimeModule::StartupModule()
 {
 	UGP_UnitDefinitionCatalog::BindEngineLifecycle();
 	UGP_BuildingDropCatalog::BindEngineLifecycle();
+	UGP_OrbitalUnitDropCatalog::BindEngineLifecycle();
 }
 
 void FGPRuntimeModule::ShutdownModule()
 {
+	UGP_OrbitalUnitDropCatalog::UnbindEngineLifecycle();
+	UGP_OrbitalUnitDropCatalog::ShutdownCatalog();
 	UGP_BuildingDropCatalog::UnbindEngineLifecycle();
 	UGP_BuildingDropCatalog::ShutdownCatalog();
 	UGP_UnitDefinitionCatalog::UnbindEngineLifecycle();

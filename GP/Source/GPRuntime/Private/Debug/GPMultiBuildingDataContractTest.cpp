@@ -106,6 +106,11 @@ namespace GPMultiBuildingDataDebug
 		UGP_OrbitalDropDefinition* Drop = NewObject<UGP_OrbitalDropDefinition>(Outer, Name, RF_Transient);
 		Drop->Cost = Cost;
 		Drop->BuildingDefinition = Building;
+		if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
+		{
+			Drop->DeliveryDescentSeconds = Settings->BuildingDropDescentDurationSeconds;
+			Drop->PayloadDeployDelaySeconds = Settings->BuildingDropPayloadDeployDelaySeconds;
+		}
 		UGP_BuildingDropCatalog::Get().RegisterDropDefinition(Drop);
 		return Drop;
 	}
@@ -250,6 +255,7 @@ void UGP_MultiBuildingDataContractTestRunner::RestoreSettings()
 	{
 		Settings->BuildingDropPayloadDeployDelaySeconds = SavedBuildingDeployDelay;
 		Settings->BuildingDropDescentDurationSeconds = SavedBuildingDescent;
+		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(2.5f, 2.0f);
 		Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
 		Settings->BuildingDropSpawnAltitudeCm = SavedBuildingAltitude;
 	}
@@ -393,6 +399,9 @@ void UGP_MultiBuildingDataContractTestRunner::AdvanceStage()
 			SavedBuildingAltitude = Settings->BuildingDropSpawnAltitudeCm;
 			Settings->BuildingDropPayloadDeployDelaySeconds = 0.0f;
 			Settings->BuildingDropDescentDurationSeconds = 0.2f;
+			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
+				Settings->BuildingDropDescentDurationSeconds,
+				Settings->BuildingDropPayloadDeployDelaySeconds);
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
 			Settings->BuildingDropSpawnAltitudeCm = 400.0f;
 			bSettingsMutated = true;

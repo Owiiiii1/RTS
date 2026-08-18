@@ -8,7 +8,7 @@
 AGP_UnitBase
   AGP_BuildingBase                   // static units; owns ASC + UnitAttributeSet
     AGP_MainBase        (Blueprint child)  // initial deployment; container storage + ship-to-orbit
-    AGP_LogisticsHub    (Blueprint child)  // orbital drop; +5 MaxUnits (GP-S33C); container cap deferred
+    AGP_LogisticsHub    (Blueprint child)  // orbital drop; UnitCapBonus from BuildingDefinition (Hub +5)
     AGP_DefensiveTurret (Blueprint child)  // orbital drop; auto-attack
     AGP_Wall            (Blueprint child)  // orbital drop (drag-build); see Wall System
     AGP_FerroniteDeposit (Blueprint child) // level-placed natural resource node
@@ -28,6 +28,8 @@ Building — це **stationary unit** з tag `GP.Unit.Type.Building`. Це до�
 
 There is **no** `UGP_ProductionComponent` and **no** `UGP_ConstructionComponent` on any building — these are removed by the Orbital Delivery pivot. Buildings are spawned complete by the drop pod; there is no `EGP_ConstructionState` lifecycle.
 
+**GP-S39E:** `AGP_BuildingBase::BuildingDefinitionAsset` is a soft ref with the same production-safe load semantics as `UnitDefinitionAsset` (empty → fallback; loaded → apply now; unloaded → `RequestAsyncLoad`; failure → explicit fallback). MainBase storage does not lock 100×5 while that load is pending.
+
 ### Replicated Properties
 
 Inherits from `AGP_UnitBase`. Plus:
@@ -42,9 +44,9 @@ Inherits from `AGP_UnitBase`. Plus:
 
 | Owner | Facts |
 | --- | --- |
-| `UGP_BuildingDefinition` | `DisplayName`, soft `Icon`, `BuildingTags`, soft `SpawnedClass`, `FootprintCells`, soft `UnitDefinition`. `MaxHealth` is compatibility fallback only. |
-| `UGP_UnitDefinition` | Canonical initial MaxHealth / combat / sight / facing (shared with units). Runtime remains GAS. |
-| `UGP_OrbitalDropDefinition` | Acquisition `Cost` (OrbitalFerronite), `DropTags`, soft ref to BuildingDefinition. READY key = this asset's `FPrimaryAssetId` |
+| `UGP_BuildingDefinition` | `DisplayName`, soft `Icon`, `BuildingTags`, soft `SpawnedClass`, `FootprintCells`, soft `UnitDefinition`, **`ContainerCapacity` / `ContainerCount`**, **`UnitCapBonus`**. `MaxHealth` is compatibility fallback only. |
+| `UGP_UnitDefinition` | Canonical initial MaxHealth / combat / sight / facing + unit cargo. Runtime remains GAS. |
+| `UGP_OrbitalDropDefinition` | Acquisition `Cost`, `DropTags`, soft BuildingDefinition, **`DeliveryDescentSeconds` / `PayloadDeployDelaySeconds`**. READY key = this asset's `FPrimaryAssetId` |
 
 Display-name SoT for HUD/acquisition rows: `BuildingDefinition.DisplayName` (DropDef resolves via `GetAcquisitionDisplayName()`). Do not put `Cost` on BuildingDefinition.
 
@@ -75,6 +77,13 @@ public:
 
     UPROPERTY(EditAnywhere, Category = "GP|BuildGrid")
     FIntPoint FootprintCells = FIntPoint(1, 1);       // consumed by GP-S36G BuildGrid
+
+    UPROPERTY(EditAnywhere, Category = "GP|Logistics|Storage")
+    float ContainerCapacity = 0.f;                    // MainBase 100; 0 + count 0 = no storage
+    int32 ContainerCount = 0;                         // MainBase 5
+
+    UPROPERTY(EditAnywhere, Category = "GP|Logistics|UnitCap")
+    int32 UnitCapBonus = 0;                           // Logistics Hub +5
 
     // Future: EffectsOnPlacement, GrantedAbilities, Mesh, ClearanceCells, wall-mount flags, sell fields
 };
@@ -382,7 +391,7 @@ Reuses `AGP_BuildingBase` standard:
 ### Validation Checklist (Stop Condition)
 
 - [x] Cap / container contribution not hardcoded — DA-driven (`UnitCapContribution`, `ContainerCapContribution`).
-- **GP-S33C factual:** native `UGP_GE_UnitCap_Plus5` Additive +5 is live (C++ GE, not BuildingDefinition DA). Container-cap bonus remains deferred (N TBD). Operator FINAL PASS complete on the feature branch; **NOT MERGED**.
+- **GP-S39E factual:** `UGP_GE_UnitCap_Plus5` is SetByCaller. Magnitude comes from `UGP_BuildingDefinition.UnitCapBonus` (Hub baseline 5). Initial MaxUnits stays `UGP_GE_UnitCap_Base5` on PlayerState. Container-cap bonus for Hub remains deferred (N TBD). MainBase storage 100×5 is BuildingDefinition-owned. MVP launch ReadyThreshold == ContainerCapacity.
 - [x] Arrives via orbital drop only — no `Server_BuildAt`, no construction component.
 - [x] UI shows cap increase — `MaxUnits` attribute change delegate → HUD ResourceReadout.
 - [x] Cap removal source-bound — `RemoveActiveGameplayEffectBySourceEffect` on destroy.
@@ -422,7 +431,7 @@ Reuses `AGP_BuildingBase` standard:
 - Tags: `GP.Unit.Type.Building`, `GP.Building.Type.DefensiveTurret`, Selectable, Inspectable, `Selection.Type.Building`.
 - FoW vision (`GP.Capability.GrantsVision`), sell/demolish, Wall-mounted variant: **deferred**.
 - Combat/stat designer source is `UGP_UnitDefinition` (GP-S38D). Default* / command CDO remain empty-ref fallback.
-- No damage retaliation / pursuit (planned **GP-S39R**, not in S37T).
+- No damage retaliation / pursuit (planned **GP-S40R**, not in this slice).
 
 ## Storage Component (Containers)
 

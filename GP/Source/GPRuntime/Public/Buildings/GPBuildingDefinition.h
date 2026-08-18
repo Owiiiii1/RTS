@@ -58,6 +58,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|BuildGrid")
 	FIntPoint FootprintCells = FIntPoint(1, 1);
 
+	/**
+	 * Ferronite container capacity. 0 capacity or 0 count = building has no storage.
+	 * MainBase baseline 100. Hub / turret / wall 0.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Logistics|Storage", meta = (ClampMin = "0.0"))
+	float ContainerCapacity = 0.0f;
+
+	/** Number of Ferronite containers. 0 with capacity 0 = no storage. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Logistics|Storage", meta = (ClampMin = "0"))
+	int32 ContainerCount = 0;
+
+	/**
+	 * Additive MaxUnits granted while this living building is deployed.
+	 * Logistics Hub baseline +5. Others 0. Applied via SetByCaller GE.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Logistics|UnitCap", meta = (ClampMin = "0"))
+	int32 UnitCapBonus = 0;
+
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
 
 	static const TCHAR* PrimaryAssetTypeName();

@@ -129,6 +129,7 @@ void AGP_ResourceNode::BeginPlay()
 		if (UGP_ResourceDefinition* Definition = ResolveResourceDefinition(false))
 		{
 			ApplyIdentityFromDefinition(Definition);
+			ApplyDepositConfigFromDefinition(Definition);
 		}
 		if (!bHasDepleted && !IsDepleted())
 		{
@@ -194,6 +195,39 @@ void AGP_ResourceNode::ApplyIdentityFromDefinition(const UGP_ResourceDefinition*
 	{
 		ResourceType = Definition->ResourceType;
 	}
+}
+
+void AGP_ResourceNode::ApplyDepositConfigFromDefinition(const UGP_ResourceDefinition* Definition)
+{
+	if (Definition == nullptr || bDepositConfigApplied)
+	{
+		return;
+	}
+
+	const AGP_ResourceNode* Baseline = AGP_ResourceNode::StaticClass()->GetDefaultObject<AGP_ResourceNode>();
+
+	const bool bMaxOverridden = Baseline != nullptr && MaxAmount != Baseline->MaxAmount;
+	const bool bMinersOverridden = Baseline != nullptr && MaxConcurrentMiners != Baseline->MaxConcurrentMiners;
+	const bool bCurrentOverridden = Baseline != nullptr && CurrentAmount != Baseline->CurrentAmount;
+
+	if (!bMaxOverridden)
+	{
+		MaxAmount = FMath::Max(0, Definition->DepositMaxAmount);
+	}
+	if (!bMinersOverridden)
+	{
+		MaxConcurrentMiners = FMath::Max(1, Definition->MaxConcurrentMiners);
+	}
+	if (!bCurrentOverridden)
+	{
+		CurrentAmount = MaxAmount;
+	}
+	else
+	{
+		ClampCurrentAmountToMax();
+	}
+
+	bDepositConfigApplied = true;
 }
 
 EGP_ResourceType AGP_ResourceNode::GetResourceType() const
@@ -694,6 +728,17 @@ void AGP_ResourceNode::DebugSetCurrentAmountForTest(int32 NewAmount, bool bAllow
 	{
 		HandleDepletionTransition(PreviousAmount);
 	}
+}
+
+void AGP_ResourceNode::DebugAuthorDepositOverrideForTest(
+	int32 InMaxAmount,
+	int32 InCurrentAmount,
+	int32 InMaxConcurrentMiners)
+{
+	MaxAmount = FMath::Max(0, InMaxAmount);
+	CurrentAmount = FMath::Max(0, InCurrentAmount);
+	MaxConcurrentMiners = FMath::Max(1, InMaxConcurrentMiners);
+	ClampCurrentAmountToMax();
 }
 #endif
 

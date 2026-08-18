@@ -1,5 +1,19 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S39E Economy / Logistics Data Ownership (implementation candidate)
+
+Status: **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s39e-economy-logistics-data` (base verified `origin/main` @ `f841cdee19c97a0dfaacb8fc0bdd27623c543329`)
+- Designer SoT: UnitDefinition cargo; BuildingDefinition storage + UnitCapBonus; ResourceDefinition deposit defaults; new `UGP_OrbitalUnitDropDefinition` for unit purchase/timing; building drop defs own descent/deploy
+- Globals retained: pod capacity, altitude, spacing, cleanup, radius, overlap; container launch duration stays on ResourceGameplaySettings
+- Initial MaxUnits stays `UGP_GE_UnitCap_Base5`. Hub bonus is SetByCaller from BuildingDefinition.UnitCapBonus (5)
+- No rebalance. No binary DataAssets. No GameBalance singleton
+- `gp.Economy.RunEconomyLogisticsDataContractTest` + listed regressions Failures=0; GPEditor Win64 Development + UHT **PASS**
+- Follow-up retaliation slice renamed **GP-S40R** Timed Retaliation Pursuit
+- **NOT MERGED. NOT FINALIZED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-18 — GP-S38D Unit/Building Combat Data (finalization)
 
 Status: **GP-S38D_FINALIZATION_READY_FOR_MERGE**

@@ -7,6 +7,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SceneComponent.h"
+#include "Buildings/GPBuildingDefinition.h"
 #include "Effects/GPGE_UnitCap_Plus5.h"
 #include "GameplayEffect.h"
 #include "Player/GPPlayerState.h"
@@ -76,6 +77,20 @@ void AGP_LogisticsHub::NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId)
 	TryApplyUnitCapBonus();
 }
 
+void AGP_LogisticsHub::NotifyBuildingDefinitionReady()
+{
+	TryApplyUnitCapBonus();
+}
+
+int32 AGP_LogisticsHub::ResolveUnitCapBonusMagnitude() const
+{
+	if (const UGP_BuildingDefinition* Def = ResolveLoadedBuildingDefinition())
+	{
+		return FMath::Max(0, Def->UnitCapBonus);
+	}
+	return 5;
+}
+
 void AGP_LogisticsHub::NotifyAuthorityDeath()
 {
 	RemoveUnitCapBonus();
@@ -101,6 +116,18 @@ void AGP_LogisticsHub::TryApplyUnitCapBonus()
 {
 	if (!HasAuthority() || bUnitCapBonusApplied || IsDead())
 	{
+		return;
+	}
+
+	if (IsBuildingDefinitionLoadPending())
+	{
+		return;
+	}
+
+	const int32 Bonus = ResolveUnitCapBonusMagnitude();
+	if (Bonus <= 0)
+	{
+		bUnitCapBonusApplied = true;
 		return;
 	}
 
@@ -140,6 +167,10 @@ void AGP_LogisticsHub::TryApplyUnitCapBonus()
 			*GetNameSafe(PS));
 		return;
 	}
+
+	Spec.Data->SetSetByCallerMagnitude(
+		UGP_GE_UnitCap_Plus5::GetMagnitudeDataName(),
+		static_cast<float>(Bonus));
 
 	UnitCapBonusHandle = ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
 	if (!UnitCapBonusHandle.IsValid())

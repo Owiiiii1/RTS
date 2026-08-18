@@ -38,6 +38,7 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId) override;
 	virtual void NotifyAuthorityDeath() override;
+	virtual void NotifyBuildingDefinitionReady() override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCapsuleComponent> CapsuleComponent;
@@ -48,6 +49,7 @@ protected:
 private:
 	void RemoveUnitCapBonus();
 	AGP_PlayerState* ResolveOwningPlayerStateForHubBonus() const;
+	int32 ResolveUnitCapBonusMagnitude() const;
 
 	FActiveGameplayEffectHandle UnitCapBonusHandle;
 	bool bUnitCapBonusApplied = false;

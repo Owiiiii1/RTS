@@ -20,6 +20,7 @@
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPMobileUnit.h"
 #include "Units/GPMovementComponent.h"
+#include "Resources/GPCargoComponent.h"
 #include "Units/GPUnitCommandComponent.h"
 #include "Units/GPUnitDefinition.h"
 
@@ -579,6 +580,11 @@ void AGP_UnitBase::ApplyUnitDefinitionComponentTuningIfNeeded()
 				Movement->MoveSpeed = Def->MoveSpeedCmPerSecond;
 			}
 		}
+	}
+
+	if (UGP_CargoComponent* Cargo = FindComponentByClass<UGP_CargoComponent>())
+	{
+		Cargo->ApplyCapacityFromDefinition(Def->CargoCapacity);
 	}
 }
 

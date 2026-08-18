@@ -12,6 +12,8 @@ namespace GPOrbitalDropDefinitionPrivate
 UGP_OrbitalDropDefinition::UGP_OrbitalDropDefinition()
 {
 	Cost = 0.0f;
+	DeliveryDescentSeconds = 2.5f;
+	PayloadDeployDelaySeconds = 2.0f;
 }
 
 const TCHAR* UGP_OrbitalDropDefinition::PrimaryAssetTypeName()

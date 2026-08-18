@@ -57,11 +57,19 @@ public:
 	float MoveSpeedCmPerSecond = 0.0f;
 
 	/**
-	 * DATA ONLY in GP-S38D. GP-S39R owns behavior.
+	 * DATA ONLY until GP-S40R. GP-S40R owns retaliation behavior.
 	 * 0 = retaliation pursuit disabled. >0 = max pursuit duration after reacting to attacker.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Behavior|Retaliation", meta = (ClampMin = "0.0"))
 	float RetaliationPursuitSeconds = 5.0f;
+
+	/**
+	 * Unit-owned cargo capacity. 0 = unit has no cargo / does not use cargo.
+	 * Worker baseline 50. Salvage Walker and buildings 0.
+	 * Runtime cargo state stays on UGP_CargoComponent.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Logistics|Cargo", meta = (ClampMin = "0.0"))
+	float CargoCapacity = 0.0f;
 
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
 

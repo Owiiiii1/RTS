@@ -2,12 +2,15 @@
 
 #include "Buildings/GPBuildingBase.h"
 
+#include "Buildings/GPBuildingDefinition.h"
 #include "Buildings/GPDefensiveTurret.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Buildings/GPMainBase.h"
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 #include "NavAreas/NavArea_Null.h"
 #include "Net/UnrealNetwork.h"
 #include "Tags/GPGameplayTags.h"
@@ -213,6 +216,7 @@ void AGP_BuildingBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 void AGP_BuildingBase::BeginPlay()
 {
 	Super::BeginPlay();
+	BeginBuildingDefinitionInitialization();
 	ApplyPlacementFootprintParentScaleIsolation();
 	TryApplyClassDesignToLivePlacementFootprintBounds();
 	TryRegisterWithBuildGrid();
@@ -220,9 +224,197 @@ void AGP_BuildingBase::BeginPlay()
 
 void AGP_BuildingBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	CancelPendingBuildingDefinitionLoad();
 	TryUnregisterFromBuildGrid();
 	Super::EndPlay(EndPlayReason);
 }
+
+const UGP_BuildingDefinition* AGP_BuildingBase::ResolveLoadedBuildingDefinition() const
+{
+	if (BuildingDefinitionAsset.IsNull())
+	{
+		return nullptr;
+	}
+
+#if !UE_BUILD_SHIPPING
+	if (bDebugForceUnresolvedSoftBuildingPath && !bBuildingDefinitionReady)
+	{
+		return nullptr;
+	}
+#endif
+
+	UObject* Loaded = BuildingDefinitionAsset.Get();
+	if (Loaded == nullptr)
+	{
+		Loaded = BuildingDefinitionAsset.ToSoftObjectPath().ResolveObject();
+	}
+	return Cast<UGP_BuildingDefinition>(Loaded);
+}
+
+void AGP_BuildingBase::BeginBuildingDefinitionInitialization()
+{
+	if (bBuildingDefinitionReady || bBuildingDefinitionLoadAbandoned)
+	{
+		return;
+	}
+
+	if (BuildingDefinitionAsset.IsNull())
+	{
+		CompleteBuildingDefinitionInitialization(nullptr);
+		return;
+	}
+
+	if (const UGP_BuildingDefinition* Loaded = ResolveLoadedBuildingDefinition())
+	{
+		CompleteBuildingDefinitionInitialization(Loaded);
+		return;
+	}
+
+	RequestAsyncBuildingDefinitionLoad();
+}
+
+void AGP_BuildingBase::RequestAsyncBuildingDefinitionLoad()
+{
+	if (BuildingDefinitionLoadHandle.IsValid() || bBuildingDefinitionReady)
+	{
+		return;
+	}
+
+	const FSoftObjectPath SoftPath = BuildingDefinitionAsset.ToSoftObjectPath();
+	bBuildingDefinitionLoadPending = true;
+
+#if !UE_BUILD_SHIPPING
+	bDebugDidRequestAsyncBuildingDefinitionLoad = true;
+#endif
+
+	BuildingDefinitionLoadHandle = UAssetManager::GetStreamableManager().RequestAsyncLoad(
+		SoftPath,
+		FStreamableDelegate::CreateUObject(this, &AGP_BuildingBase::HandleBuildingDefinitionLoaded));
+
+	if (!BuildingDefinitionLoadHandle.IsValid())
+	{
+		UE_LOG(LogGPBuildGridRegister, Error,
+			TEXT("GP BuildingDefinitionLoadFailed: Building=%s Path=%s Reason=RequestAsyncLoadNullHandle"),
+			*GetName(),
+			*SoftPath.ToString());
+#if !UE_BUILD_SHIPPING
+		if (bDebugHoldAsyncBuildingCompletion)
+		{
+			return;
+		}
+#endif
+		CompleteBuildingDefinitionInitialization(nullptr);
+	}
+}
+
+void AGP_BuildingBase::HandleBuildingDefinitionLoaded()
+{
+	if (bBuildingDefinitionLoadAbandoned || bBuildingDefinitionReady || !IsValid(this) || GetWorld() == nullptr)
+	{
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	if (bDebugHoldAsyncBuildingCompletion)
+	{
+		return;
+	}
+#endif
+
+	FinishBuildingDefinitionLoadResolve();
+}
+
+void AGP_BuildingBase::FinishBuildingDefinitionLoadResolve()
+{
+	if (bBuildingDefinitionLoadAbandoned || bBuildingDefinitionReady)
+	{
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	bDebugForceUnresolvedSoftBuildingPath = false;
+	if (DebugInjectedBuildingDefinition != nullptr)
+	{
+		BuildingDefinitionAsset = DebugInjectedBuildingDefinition;
+	}
+#endif
+
+	const UGP_BuildingDefinition* Def = ResolveLoadedBuildingDefinition();
+	if (Def == nullptr && !BuildingDefinitionAsset.IsNull())
+	{
+		UE_LOG(LogGPBuildGridRegister, Error,
+			TEXT("GP BuildingDefinitionLoadFailed: Building=%s Path=%s Reason=ResolveFailedUsingFallback"),
+			*GetName(),
+			*BuildingDefinitionAsset.ToSoftObjectPath().ToString());
+	}
+
+	CompleteBuildingDefinitionInitialization(Def);
+}
+
+void AGP_BuildingBase::CompleteBuildingDefinitionInitialization(const UGP_BuildingDefinition* DefinitionOrNull)
+{
+	if (bBuildingDefinitionReady)
+	{
+		return;
+	}
+
+	bBuildingDefinitionLoadPending = false;
+	bBuildingDefinitionReady = true;
+	BuildingDefinitionLoadHandle.Reset();
+	(void)DefinitionOrNull;
+	NotifyBuildingDefinitionReady();
+}
+
+void AGP_BuildingBase::CancelPendingBuildingDefinitionLoad()
+{
+	bBuildingDefinitionLoadAbandoned = true;
+	bBuildingDefinitionLoadPending = false;
+#if !UE_BUILD_SHIPPING
+	bDebugHoldAsyncBuildingCompletion = false;
+#endif
+	if (BuildingDefinitionLoadHandle.IsValid())
+	{
+		if (BuildingDefinitionLoadHandle->IsLoadingInProgress())
+		{
+			BuildingDefinitionLoadHandle->CancelHandle();
+		}
+		BuildingDefinitionLoadHandle.Reset();
+	}
+}
+
+void AGP_BuildingBase::NotifyBuildingDefinitionReady()
+{
+}
+
+#if !UE_BUILD_SHIPPING
+void AGP_BuildingBase::DebugForceUnresolvedSoftBuildingDefinitionLoad(
+	UGP_BuildingDefinition* InjectedDefinition,
+	bool bHoldCompletion)
+{
+	bDebugForceUnresolvedSoftBuildingPath = true;
+	bDebugHoldAsyncBuildingCompletion = bHoldCompletion;
+	DebugInjectedBuildingDefinition = InjectedDefinition;
+	if (InjectedDefinition != nullptr)
+	{
+		BuildingDefinitionAsset = InjectedDefinition;
+	}
+	else
+	{
+		BuildingDefinitionAsset = TSoftObjectPtr<UGP_BuildingDefinition>(FSoftObjectPath(
+			TEXT("/Game/GrimProtocol/Data/Buildings/DA_GP_Building_UnresolvedSoftRefStub.DA_GP_Building_UnresolvedSoftRefStub")));
+	}
+}
+
+void AGP_BuildingBase::DebugCompletePendingBuildingDefinitionLoad()
+{
+	if (bBuildingDefinitionReady || bBuildingDefinitionLoadAbandoned)
+	{
+		return;
+	}
+	bDebugHoldAsyncBuildingCompletion = false;
+	FinishBuildingDefinitionLoadResolve();
+}
+#endif
 
 void AGP_BuildingBase::ConfigureGridPlacement(FIntPoint OriginCell, FIntPoint FootprintSize)
 {

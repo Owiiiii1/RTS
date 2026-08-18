@@ -38,6 +38,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Cargo")
 	float GetCargoCapacity() const;
 
+	/** Authority-safe capacity apply from UnitDefinition. 0 is valid (no cargo). */
+	void ApplyCapacityFromDefinition(float NewCapacity);
+
 	UFUNCTION(BlueprintPure, Category = "GP|Cargo")
 	float GetCurrentCargoAmount() const;
 
@@ -110,8 +113,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Cargo|Definition")
 	TSoftObjectPtr<UGP_ResourceDefinition> ResourceDefinition;
 
-	/** Prototype default 50 from TDD CarryCapacity / MaxCargo. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Replicated, Category = "GP|Cargo", meta = (ClampMin = "0.01"))
+	/**
+	 * Compatibility fallback when UnitDefinition is empty. Canonical: UGP_UnitDefinition.CargoCapacity.
+	 * 0 = no cargo capacity.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Replicated, Category = "GP|Cargo", meta = (ClampMin = "0.0"))
 	float CargoCapacity = 50.0f;
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, ReplicatedUsing = OnRep_CurrentCargoAmount, Category = "GP|Cargo")

@@ -7,7 +7,9 @@
 #include "GPBuildingBase.generated.h"
 
 class UBoxComponent;
+class UGP_BuildingDefinition;
 class USceneComponent;
+struct FStreamableHandle;
 
 /**
  * Minimal static unit ancestor for buildings (GP-S28 adaptation ahead of full GP-S34).
@@ -71,6 +73,28 @@ public:
 	FString GetBuildGridOccupancyDebugString() const;
 #endif
 
+	/**
+	 * Designer-facing building identity / storage / unit-cap. Soft only — no LoadSynchronous.
+	 * Empty = immediate fallback. Loaded = apply now. Unloaded = async. Failure = fallback.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Definition")
+	TSoftObjectPtr<UGP_BuildingDefinition> BuildingDefinitionAsset;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Definition")
+	const UGP_BuildingDefinition* ResolveLoadedBuildingDefinition() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Definition")
+	bool IsBuildingDefinitionReady() const { return bBuildingDefinitionReady; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|Definition")
+	bool IsBuildingDefinitionLoadPending() const { return bBuildingDefinitionLoadPending; }
+
+#if !UE_BUILD_SHIPPING
+	void DebugForceUnresolvedSoftBuildingDefinitionLoad(UGP_BuildingDefinition* InjectedDefinition, bool bHoldCompletion);
+	bool DebugDidRequestAsyncBuildingDefinitionLoad() const { return bDebugDidRequestAsyncBuildingDefinitionLoad; }
+	void DebugCompletePendingBuildingDefinitionLoad();
+#endif
+
 protected:
 	/**
 	 * Authored navigation footprint (GP-S33M).
@@ -113,9 +137,31 @@ protected:
 	void TryUnregisterFromBuildGrid();
 	void TryApplyClassDesignToLivePlacementFootprintBounds();
 
+	void BeginBuildingDefinitionInitialization();
+	void RequestAsyncBuildingDefinitionLoad();
+	void HandleBuildingDefinitionLoaded();
+	void FinishBuildingDefinitionLoadResolve();
+	void CompleteBuildingDefinitionInitialization(const UGP_BuildingDefinition* DefinitionOrNull);
+	void CancelPendingBuildingDefinitionLoad();
+	virtual void NotifyBuildingDefinitionReady();
+
 private:
 	void AttachDeferredComponentToRoot(USceneComponent* Component);
 	FGuid GridOccupantId;
 	bool bGridPlacementConfigured = false;
 	bool bGridRegistered = false;
+
+	TSharedPtr<FStreamableHandle> BuildingDefinitionLoadHandle;
+	bool bBuildingDefinitionReady = false;
+	bool bBuildingDefinitionLoadPending = false;
+	bool bBuildingDefinitionLoadAbandoned = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGP_BuildingDefinition> DebugInjectedBuildingDefinition;
+
+#if !UE_BUILD_SHIPPING
+	bool bDebugForceUnresolvedSoftBuildingPath = false;
+	bool bDebugHoldAsyncBuildingCompletion = false;
+	bool bDebugDidRequestAsyncBuildingDefinitionLoad = false;
+#endif
 };

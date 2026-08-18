@@ -37,7 +37,15 @@ public:
 	UGP_BuildingDefinition* FindBuildingDefinition(const FPrimaryAssetId& BuildingDefinitionId) const;
 
 	UGP_OrbitalDropDefinition* GetLegacyLogisticsHubDrop() const { return LegacyLogisticsHubDrop; }
+	UGP_BuildingDefinition* GetMainBaseBuilding() const { return MainBaseBuilding; }
 	FPrimaryAssetId GetLegacyLogisticsHubDropId() const;
+
+	void ResolveDeliveryTiming(
+		const UGP_OrbitalDropDefinition* DropDefinition,
+		float& OutDescentSeconds,
+		float& OutPayloadDeployDelaySeconds) const;
+
+	void OverrideDeliveryTiming(float DescentSeconds, float PayloadDeployDelaySeconds);
 
 	/** Sync Cost from deprecated settings onto the native Logistics Hub drop (operator DefaultGame.ini bridge). */
 	void SyncLegacyLogisticsHubCompatibility();
@@ -77,6 +85,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UGP_OrbitalDropDefinition> LegacyLogisticsHubDrop;
+
+	UPROPERTY()
+	TObjectPtr<UGP_BuildingDefinition> MainBaseBuilding;
 
 	bool bNativeCatalogReady = false;
 };

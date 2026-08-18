@@ -11,8 +11,14 @@
 #include "Buildings/GPBuildingBase.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
+#include "Buildings/GPBuildingDefinition.h"
+#include "Orbital/GPBuildingDropCatalog.h"
 #include "Orbital/GPBuildingGroundPlacement.h"
+#include "Orbital/GPOrbitalDropDefinition.h"
+#include "Orbital/GPOrbitalUnitDropCatalog.h"
+#include "Orbital/GPOrbitalUnitDropDefinition.h"
 #include "Orbital/GPUnitGroundPlacement.h"
+#include "Units/GPUnitDefinition.h"
 #include "Player/GPPlayerState.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "TimerManager.h"
@@ -363,13 +369,15 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 		return;
 	}
 
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	const TSubclassOf<AGP_Worker> WorkerClass =
-		Settings != nullptr ? Settings->ResolveWorkerPayloadClass() : TSubclassOf<AGP_Worker>(AGP_Worker::StaticClass());
-	const TSubclassOf<AGP_SalvageWalker> WalkerClass =
-		Settings != nullptr
-			? Settings->ResolveSalvageWalkerPayloadClass()
-			: TSubclassOf<AGP_SalvageWalker>(AGP_SalvageWalker::StaticClass());
+	const UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+	const TSubclassOf<AGP_Worker> WorkerClass = UnitDrops.ResolveWorkerPayloadClass();
+	const TSubclassOf<AGP_SalvageWalker> WalkerClass = UnitDrops.ResolveSalvageWalkerPayloadClass();
+	const UGP_UnitDefinition* WorkerDef =
+		IsValid(UnitDrops.GetWorkerDrop()) ? UnitDrops.GetWorkerDrop()->ResolveLoadedUnitDefinition() : nullptr;
+	const UGP_UnitDefinition* WalkerDef =
+		IsValid(UnitDrops.GetSalvageWalkerDrop())
+			? UnitDrops.GetSalvageWalkerDrop()->ResolveLoadedUnitDefinition()
+			: nullptr;
 
 	const FVector Forward = LandingRotation.RotateVector(FVector::ForwardVector).GetSafeNormal2D();
 	const FVector Right = LandingRotation.RotateVector(FVector::RightVector).GetSafeNormal2D();
@@ -391,7 +399,7 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 	};
 
 	int32 SpawnIndex = 0;
-	auto SpawnTyped = [&](UClass* Class)
+	auto SpawnTyped = [&](UClass* Class, const UGP_UnitDefinition* Definition)
 	{
 		if (Class == nullptr)
 		{
@@ -400,17 +408,23 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 		const FVector Ground = SpawnXY(SpawnIndex++);
 		const float OffsetZ = GPUnitGroundPlacement::GetGroundSpawnOffsetZForUnitClass(Class);
 		const FVector Loc(Ground.X, Ground.Y, Ground.Z + OffsetZ);
+		const FTransform SpawnTM(LandingRotation, Loc);
 
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride =
-			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-		Params.Owner = RequestingPlayerStateWeak.Get();
-
-		AGP_UnitBase* Unit = World->SpawnActor<AGP_UnitBase>(Class, Loc, LandingRotation, Params);
+		AGP_UnitBase* Unit = World->SpawnActorDeferred<AGP_UnitBase>(
+			Class,
+			SpawnTM,
+			RequestingPlayerStateWeak.Get(),
+			nullptr,
+			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 		if (!IsValid(Unit))
 		{
 			return;
 		}
+		if (Unit->UnitDefinitionAsset.IsNull() && Definition != nullptr)
+		{
+			Unit->UnitDefinitionAsset = const_cast<UGP_UnitDefinition*>(Definition);
+		}
+		Unit->FinishSpawning(SpawnTM);
 		Unit->SetTeamId(OwnerTeamId);
 		if (Unit->HasBeenCountedTowardPlayerUnitCap())
 		{
@@ -420,11 +434,11 @@ void AGP_DropPod::AuthoritySpawnUnitPayload()
 
 	for (int32 i = 0; i < WorkerCount; ++i)
 	{
-		SpawnTyped(*WorkerClass);
+		SpawnTyped(*WorkerClass, WorkerDef);
 	}
 	for (int32 i = 0; i < WalkerCount; ++i)
 	{
-		SpawnTyped(*WalkerClass);
+		SpawnTyped(*WalkerClass, WalkerDef);
 	}
 
 	AuthorityReleaseLeftoverUnitReservation();
@@ -496,6 +510,21 @@ void AGP_DropPod::AuthoritySpawnBuildingPayload()
 	{
 		AuthorityReleaseBuildingGridReservation();
 		return;
+	}
+
+	if (PendingDropDefinitionId.IsValid())
+	{
+		if (const UGP_OrbitalDropDefinition* Drop =
+			UGP_BuildingDropCatalog::Get().FindDropDefinition(PendingDropDefinitionId))
+		{
+			if (UGP_BuildingDefinition* BuildingDef = Drop->ResolveLoadedBuildingDefinition())
+			{
+				if (Building->BuildingDefinitionAsset.IsNull())
+				{
+					Building->BuildingDefinitionAsset = BuildingDef;
+				}
+			}
+		}
 	}
 
 	Building->ConfigureGridPlacement(BuildingGridOriginCell, BuildingGridFootprintSize);

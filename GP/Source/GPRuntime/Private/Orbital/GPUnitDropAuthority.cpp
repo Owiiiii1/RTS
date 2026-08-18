@@ -10,6 +10,7 @@
 #include "Engine/World.h"
 #include "Game/GPGameState.h"
 #include "Orbital/GPDropPod.h"
+#include "Orbital/GPOrbitalUnitDropCatalog.h"
 #include "Player/GPPlayerState.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 
@@ -47,16 +48,17 @@ namespace GPUnitDropAuthority
 			return false;
 		}
 
-		const int32 WorkerSlots = FMath::Max(1, Settings->WorkerTransportSlotCost);
-		const int32 WalkerSlots = FMath::Max(1, Settings->SalvageWalkerTransportSlotCost);
+		const UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		const int32 WorkerSlots = FMath::Max(1, UnitDrops.GetWorkerTransportSlotCost());
+		const int32 WalkerSlots = FMath::Max(1, UnitDrops.GetSalvageWalkerTransportSlotCost());
 		const int32 Capacity = FMath::Max(1, Settings->PodTransportSlotCapacity);
 
 		OutSlotCost =
 			Manifest.WorkerCount * WorkerSlots
 			+ Manifest.SalvageWalkerCount * WalkerSlots;
 		OutOrbitalCost =
-			static_cast<float>(Manifest.WorkerCount) * Settings->WorkerOrbitalDropCost
-			+ static_cast<float>(Manifest.SalvageWalkerCount) * Settings->SalvageWalkerOrbitalDropCost;
+			static_cast<float>(Manifest.WorkerCount) * UnitDrops.GetWorkerOrbitalDropCost()
+			+ static_cast<float>(Manifest.SalvageWalkerCount) * UnitDrops.GetSalvageWalkerOrbitalDropCost();
 
 		if (OutSlotCost > Capacity)
 		{
@@ -214,16 +216,23 @@ namespace GPUnitDropAuthority
 			return Result;
 		}
 
+		float DescentSeconds = Settings->UnitDropDescentDurationSeconds;
+		float DeployDelaySeconds = Settings->UnitDropPayloadDeployDelaySeconds;
+		UGP_OrbitalUnitDropCatalog::Get().ResolveManifestDeliveryTiming(
+			Manifest,
+			DescentSeconds,
+			DeployDelaySeconds);
+
 		Pod->AuthorityInitUnitDrop(
 			RequestingPlayerState,
 			TeamId,
 			LandingLoc,
 			LandingRot,
 			Manifest,
-			Settings->UnitDropDescentDurationSeconds,
+			DescentSeconds,
 			Settings->UnitDropSpawnAltitudeCm,
 			Settings->UnitDropSpawnSpacingCm,
-			Settings->UnitDropPayloadDeployDelaySeconds,
+			DeployDelaySeconds,
 			Settings->UnitDropCleanupDelaySeconds);
 
 		Result.bAccepted = true;

@@ -15,9 +15,9 @@ class AGP_SalvageWalker;
  * Project Settings → Game → GP Orbital Delivery (GP-S31R).
  * TEMP operator-test tuning — not final balance. Config=Game → DefaultGame.ini.
  *
- * Capacity / costs / descent stay here for unit drops. Building purchase cost / payload class
- * are deprecated SoT as of GP-S35B (UGP_OrbitalDropDefinition / UGP_BuildingDefinition).
- * Authored BuildingPayloadClass remains a Logistics Hub compatibility bridge.
+ * Global transport / world-system tunables stay here (pod class, altitude, spacing, cleanup,
+ * deploy radius, overlap). Per-purchase unit/building cost, slots, payload and delivery timing
+ * live on orbital drop definitions. Deprecated unit-specific fields remain ini compatibility.
  */
 UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "GP Orbital Delivery"))
 class GPRUNTIME_API UGP_OrbitalDeliverySettings : public UDeveloperSettings
@@ -35,30 +35,36 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Slots", meta = (ClampMin = "1"))
 	int32 PodTransportSlotCapacity = 4;
 
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Slots", meta = (ClampMin = "1"))
+	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Slots", meta = (ClampMin = "1", DeprecatedProperty,
+		DeprecationMessage = "Canonical slot cost is UGP_OrbitalUnitDropDefinition.TransportSlotCost."))
 	int32 WorkerTransportSlotCost = 1;
 
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Slots", meta = (ClampMin = "1"))
+	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Slots", meta = (ClampMin = "1", DeprecatedProperty,
+		DeprecationMessage = "Canonical slot cost is UGP_OrbitalUnitDropDefinition.TransportSlotCost."))
 	int32 SalvageWalkerTransportSlotCost = 2;
 
-	/** TEMP Orbital costs — one Ready container launch (100) should afford a meaningful order. */
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Cost", meta = (ClampMin = "0.0"))
+	/** Compatibility fallback. Canonical cost is UGP_OrbitalUnitDropDefinition.Cost. */
+	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Cost", meta = (ClampMin = "0.0", DeprecatedProperty,
+		DeprecationMessage = "Canonical cost is UGP_OrbitalUnitDropDefinition.Cost."))
 	float WorkerOrbitalDropCost = 25.0f;
 
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Cost", meta = (ClampMin = "0.0"))
+	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Cost", meta = (ClampMin = "0.0", DeprecatedProperty,
+		DeprecationMessage = "Canonical cost is UGP_OrbitalUnitDropDefinition.Cost."))
 	float SalvageWalkerOrbitalDropCost = 50.0f;
 
 	/**
 	 * Authored Worker BP (must derive from AGP_Worker). Empty → native AGP_Worker fallback.
 	 * Owner assigns e.g. BP_Worker in Project Settings — no C++ /Game path.
 	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Payload", meta = (AllowAbstract = "false"))
+	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Payload", meta = (AllowAbstract = "false", DeprecatedProperty,
+		DeprecationMessage = "Canonical payload is UGP_OrbitalUnitDropDefinition.PayloadClass. Kept as operator BP bridge."))
 	TSoftClassPtr<AGP_Worker> WorkerPayloadClass;
 
 	/**
 	 * Authored Salvage Walker BP (must derive from AGP_SalvageWalker). Empty → native fallback.
 	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Payload", meta = (AllowAbstract = "false"))
+	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Payload", meta = (AllowAbstract = "false", DeprecatedProperty,
+		DeprecationMessage = "Canonical payload is UGP_OrbitalUnitDropDefinition.PayloadClass. Kept as operator BP bridge."))
 	TSoftClassPtr<AGP_SalvageWalker> SalvageWalkerPayloadClass;
 
 	/**

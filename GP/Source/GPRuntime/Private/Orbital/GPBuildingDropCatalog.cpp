@@ -79,12 +79,27 @@ void UGP_BuildingDropCatalog::EnsureNativeCatalog()
 
 	const FGPGameplayTags& Tags = FGPGameplayTags::Get();
 
+	MainBaseBuilding = CreateNativeBuilding(
+		FName(TEXT("DA_GP_Building_MainBase")),
+		NSLOCTEXT("GPBuildingDropCatalog", "MainBase", "Main Base"),
+		Tags.Building_Type_MainBase,
+		FIntPoint(5, 5),
+		100.0f);
+	MainBaseBuilding->ContainerCapacity = 100.0f;
+	MainBaseBuilding->ContainerCount = 5;
+	MainBaseBuilding->UnitCapBonus = 0;
+	MainBaseBuilding->UnitDefinition = UGP_UnitDefinitionCatalog::Get().GetMainBaseDefinition();
+
 	UGP_BuildingDefinition* HubBuilding = CreateNativeBuilding(
 		FName(TEXT("DA_GP_Building_LogisticsHub")),
 		NSLOCTEXT("GPBuildingDropCatalog", "Hub", "Logistics Hub"),
 		Tags.Building_Type_LogisticsHub,
 		FIntPoint(4, 4),
 		500.0f);
+	HubBuilding->ContainerCapacity = 0.0f;
+	HubBuilding->ContainerCount = 0;
+	HubBuilding->UnitCapBonus = 5;
+	HubBuilding->UnitDefinition = UGP_UnitDefinitionCatalog::Get().GetLogisticsHubDefinition();
 	UGP_BuildingDefinition* TurretBuilding = CreateNativeBuilding(
 		FName(TEXT("DA_GP_Building_DefensiveTurret")),
 		NSLOCTEXT("GPBuildingDropCatalog", "Turret", "Defensive Turret"),
@@ -93,18 +108,27 @@ void UGP_BuildingDropCatalog::EnsureNativeCatalog()
 		400.0f);
 	TurretBuilding->SpawnedClass = AGP_DefensiveTurret::StaticClass();
 	TurretBuilding->UnitDefinition = UGP_UnitDefinitionCatalog::Get().GetDefensiveTurretDefinition();
+	TurretBuilding->ContainerCapacity = 0.0f;
+	TurretBuilding->ContainerCount = 0;
+	TurretBuilding->UnitCapBonus = 0;
 	UGP_BuildingDefinition* WallBuilding = CreateNativeBuilding(
 		FName(TEXT("DA_GP_Building_Wall")),
 		NSLOCTEXT("GPBuildingDropCatalog", "Wall", "Wall"),
 		Tags.Building_Type_Wall,
 		FIntPoint(2, 2),
 		300.0f);
+	WallBuilding->ContainerCapacity = 0.0f;
+	WallBuilding->ContainerCount = 0;
+	WallBuilding->UnitCapBonus = 0;
 	UGP_BuildingDefinition* WallTurretBuilding = CreateNativeBuilding(
 		FName(TEXT("DA_GP_Building_WallTurret")),
 		NSLOCTEXT("GPBuildingDropCatalog", "WallTurret", "Wall Turret"),
 		Tags.Building_Type_WallTurret,
 		FIntPoint(2, 2),
 		350.0f);
+	WallTurretBuilding->ContainerCapacity = 0.0f;
+	WallTurretBuilding->ContainerCount = 0;
+	WallTurretBuilding->UnitCapBonus = 0;
 
 	LegacyLogisticsHubDrop = CreateNativeDrop(
 		FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub")),
@@ -165,6 +189,8 @@ UGP_OrbitalDropDefinition* UGP_BuildingDropCatalog::CreateNativeDrop(
 	UGP_OrbitalDropDefinition* Drop = NewObject<UGP_OrbitalDropDefinition>(this, AssetName, RF_Transient);
 	Drop->Cost = FMath::Max(0.0f, Cost);
 	Drop->BuildingDefinition = BuildingDefinition;
+	Drop->DeliveryDescentSeconds = 2.5f;
+	Drop->PayloadDeployDelaySeconds = 2.0f;
 	Drop->DropTags.Reset();
 	if (DropTypeTag.IsValid())
 	{
@@ -363,4 +389,41 @@ float UGP_BuildingDropCatalog::GetPurchaseCost(const UGP_OrbitalDropDefinition* 
 	}
 
 	return FMath::Max(0.0f, DropDefinition->Cost);
+}
+
+void UGP_BuildingDropCatalog::ResolveDeliveryTiming(
+	const UGP_OrbitalDropDefinition* DropDefinition,
+	float& OutDescentSeconds,
+	float& OutPayloadDeployDelaySeconds) const
+{
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	OutDescentSeconds = Settings != nullptr ? Settings->BuildingDropDescentDurationSeconds : 2.5f;
+	OutPayloadDeployDelaySeconds = Settings != nullptr ? Settings->BuildingDropPayloadDeployDelaySeconds : 2.0f;
+
+	if (IsValid(DropDefinition))
+	{
+		OutDescentSeconds = DropDefinition->DeliveryDescentSeconds;
+		OutPayloadDeployDelaySeconds = DropDefinition->PayloadDeployDelaySeconds;
+	}
+}
+
+void UGP_BuildingDropCatalog::OverrideDeliveryTiming(float DescentSeconds, float PayloadDeployDelaySeconds)
+{
+	auto Apply = [DescentSeconds, PayloadDeployDelaySeconds](UGP_OrbitalDropDefinition* Drop)
+	{
+		if (IsValid(Drop))
+		{
+			Drop->DeliveryDescentSeconds = DescentSeconds;
+			Drop->PayloadDeployDelaySeconds = PayloadDeployDelaySeconds;
+		}
+	};
+
+	for (UGP_OrbitalDropDefinition* Drop : NativeDrops)
+	{
+		Apply(Drop);
+	}
+	for (UGP_OrbitalDropDefinition* Drop : RegisteredDrops)
+	{
+		Apply(Drop);
+	}
 }

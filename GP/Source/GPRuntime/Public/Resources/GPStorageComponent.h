@@ -121,6 +121,15 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION(BlueprintPure, Category = "GP|Storage")
+	bool IsStorageConfigured() const { return bStorageConfigured; }
+
+	/**
+	 * Apply BuildingDefinition storage config (or explicit fallback).
+	 * Does not destroy stored resource if containers already hold Ferronite.
+	 */
+	void ConfigureFromDefinition(float InContainerCapacity, int32 InContainerCount);
+
+	UFUNCTION(BlueprintPure, Category = "GP|Storage")
 	float GetContainerCapacity() const { return ContainerCapacity; }
 
 	UFUNCTION(BlueprintPure, Category = "GP|Storage")
@@ -244,22 +253,24 @@ protected:
 	TSoftObjectPtr<UGP_ResourceDefinition> ResourceDefinition;
 
 	/**
-	 * Canonical GDD placeholder: 100 Ferronite per container.
-	 * Temporary until BuildingDefinition hosts these tunables.
+	 * Compatibility fallback when BuildingDefinition is empty. Canonical: UGP_BuildingDefinition.
+	 * MVP ReadyThreshold == ContainerCapacity (no partial launch).
 	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Replicated, Category = "GP|Storage", meta = (ClampMin = "0.01"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Replicated, Category = "GP|Storage", meta = (ClampMin = "0.0"))
 	float ContainerCapacity = 100.0f;
 
 	/**
-	 * Canonical GDD baseline placeholder (e.g. 5 slots). Temporary until BuildingDefinition.
+	 * Compatibility fallback when BuildingDefinition is empty. Canonical: UGP_BuildingDefinition.
 	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Replicated, Category = "GP|Storage", meta = (ClampMin = "1"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Replicated, Category = "GP|Storage", meta = (ClampMin = "0"))
 	int32 ContainerCount = 5;
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, ReplicatedUsing = OnRep_Containers, Category = "GP|Storage")
 	TArray<FGP_StorageContainer> Containers;
 
 private:
+	bool bStorageConfigured = false;
+
 	mutable TWeakObjectPtr<UGP_ResourceDefinition> CachedResourceDefinition;
 
 	FTimerHandle LaunchTelegraphTimerHandle;

@@ -15,7 +15,7 @@ Engineering implementation of orbital drop pods (per [`../GDD/10_Orbital_Deliver
 5. **Buildings: spend on Purchase, not on Deploy.** Deploy consumes READY inventory once.
 6. **Telegraph 2–3 s** (data-driven). Visible to all clients.
 7. **No client prediction** of spend / inventory / payload.
-8. **DataAsset-driven** costs, slot costs, pod capacity, descent duration, soft payload/visual refs.
+8. **DataAsset-driven** per-purchase costs, slot costs, and delivery timing on drop definitions. Global pod capacity / altitude / spacing / cleanup / placement stay on `UGP_OrbitalDeliverySettings`.
 9. **GAS spend only** via Instant spend GE (no direct attribute mutate). Spend exactly once on accepted unit Confirm / building Purchase.
 10. **FoW + grid** remain canonical for **building** placement when those systems exist. Unit Drop Zone path does not require FoW click targeting.
 
@@ -131,7 +131,19 @@ Single-payload DropDef for buildings; multi-payload carried as **manifest on the
 2. Placement valid: finite transform; MainBase radius on **server-snapped** XY; `FootprintCells > 0`; all footprint cells free/unreserved; NavMesh MVP; environmental overlap sanity. **FoW placement validation deferred to FoW integration slice.** Server ignores unsnapped client precision and reconstructs OriginCell itself.
 3. Reserve footprint → spawn pod at snapped location (yaw 0) → decrement READY[DropDefId] once → payload class from BuildingDefinition.SpawnedClass (Logistics Hub may fall back to deprecated settings `BuildingPayloadClass` / native `AGP_LogisticsHub`). Payload receives OriginCell + FootprintSize before BeginPlay (`ConfigureGridPlacement` rectangular path). Failed/skipped payload releases the reservation. Pre-placed buildings occupy from live oriented `PlacementFootprintBounds`; orbital spawn remains yaw-0 rectangular.
 4. Cancel placement: no inventory change, no spend.
-5. **GP-S33C / GP-S35B:** Logistics Hub `UGP_GE_UnitCap_Plus5` applies when the **payload building is live/operational**, not at Purchase READY, ghost, or while the DropPod is descending. Native Hub actor logic — not DA `EffectsOnPlacement`. Editor-placed owned live Hubs also grant the bonus once.
+5. **GP-S33C / GP-S39E:** Logistics Hub `UGP_GE_UnitCap_Plus5` applies when the **payload building is live/operational**. Magnitude is SetByCaller from `BuildingDefinition.UnitCapBonus` (Hub +5). Editor-placed owned live Hubs also grant the bonus once.
+
+## GP-S39E acquisition ownership
+
+| Concern | Canonical |
+| --- | --- |
+| Worker / Walker cost + slots + payload + descent/deploy | `UGP_OrbitalUnitDropDefinition` (native: 25/1 and 50/2, 2.5+1.25) |
+| Building cost | `UGP_OrbitalDropDefinition.Cost` (100 / 150 / 25 / 75) |
+| Building descent/deploy | `UGP_OrbitalDropDefinition` (2.5 + 2.0) |
+| Pod slot capacity, altitude, spacing, cleanup, radius, overlap | `UGP_OrbitalDeliverySettings` |
+| Manifest fields | still `WorkerCount` / `SalvageWalkerCount` (no UI rewrite) |
+
+`ComputeManifestCosts` and payload spawn resolve from unit drop definitions. Deprecated settings unit cost/slot/payload fields remain ini compatibility fallback.
 
 ## Order UI (target / TEMP)
 

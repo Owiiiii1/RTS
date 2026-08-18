@@ -12,6 +12,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Orbital/GPBuildingDropCatalog.h"
+#include "Orbital/GPOrbitalUnitDropCatalog.h"
 #include "Orbital/GPUnitDropManifest.h"
 #include "Orbital/GPOrbitalBuildingType.h"
 #include "Player/GPPlayerController.h"
@@ -694,24 +695,16 @@ int32 UGP_TEMP_S28P_PlanetaryFerroniteHUD::GetPodCapacity() const
 
 int32 UGP_TEMP_S28P_PlanetaryFerroniteHUD::ComputeSlotCost() const
 {
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	if (Settings == nullptr)
-	{
-		return WorkerCount + SalvageWalkerCount * 2;
-	}
-	return WorkerCount * FMath::Max(1, Settings->WorkerTransportSlotCost)
-		+ SalvageWalkerCount * FMath::Max(1, Settings->SalvageWalkerTransportSlotCost);
+	const UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+	return WorkerCount * FMath::Max(1, UnitDrops.GetWorkerTransportSlotCost())
+		+ SalvageWalkerCount * FMath::Max(1, UnitDrops.GetSalvageWalkerTransportSlotCost());
 }
 
 float UGP_TEMP_S28P_PlanetaryFerroniteHUD::ComputeOrbitalCost() const
 {
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	if (Settings == nullptr)
-	{
-		return static_cast<float>(WorkerCount) * 25.0f + static_cast<float>(SalvageWalkerCount) * 50.0f;
-	}
-	return static_cast<float>(WorkerCount) * Settings->WorkerOrbitalDropCost
-		+ static_cast<float>(SalvageWalkerCount) * Settings->SalvageWalkerOrbitalDropCost;
+	const UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+	return static_cast<float>(WorkerCount) * UnitDrops.GetWorkerOrbitalDropCost()
+		+ static_cast<float>(SalvageWalkerCount) * UnitDrops.GetSalvageWalkerOrbitalDropCost();
 }
 
 bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::CanConfirmLocally() const
@@ -917,9 +910,9 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetBuildingReadyDisplay(int32 InReadyL
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::AdjustWorkerCount(int32 Delta)
 {
 	const int32 Next = FMath::Max(0, WorkerCount + Delta);
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	const int32 WorkerSlots = Settings != nullptr ? FMath::Max(1, Settings->WorkerTransportSlotCost) : 1;
-	const int32 WalkerSlots = Settings != nullptr ? FMath::Max(1, Settings->SalvageWalkerTransportSlotCost) : 2;
+	const UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+	const int32 WorkerSlots = FMath::Max(1, UnitDrops.GetWorkerTransportSlotCost());
+	const int32 WalkerSlots = FMath::Max(1, UnitDrops.GetSalvageWalkerTransportSlotCost());
 	const int32 Cap = GetPodCapacity();
 	const int32 UsedWithoutWorker = SalvageWalkerCount * WalkerSlots;
 	const int32 MaxWorkers = FMath::Max(0, (Cap - UsedWithoutWorker) / WorkerSlots);
@@ -930,9 +923,9 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::AdjustWorkerCount(int32 Delta)
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::AdjustWalkerCount(int32 Delta)
 {
 	const int32 Next = FMath::Max(0, SalvageWalkerCount + Delta);
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	const int32 WorkerSlots = Settings != nullptr ? FMath::Max(1, Settings->WorkerTransportSlotCost) : 1;
-	const int32 WalkerSlots = Settings != nullptr ? FMath::Max(1, Settings->SalvageWalkerTransportSlotCost) : 2;
+	const UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+	const int32 WorkerSlots = FMath::Max(1, UnitDrops.GetWorkerTransportSlotCost());
+	const int32 WalkerSlots = FMath::Max(1, UnitDrops.GetSalvageWalkerTransportSlotCost());
 	const int32 Cap = GetPodCapacity();
 	const int32 UsedWithoutWalker = WorkerCount * WorkerSlots;
 	const int32 MaxWalkers = FMath::Max(0, (Cap - UsedWithoutWalker) / WalkerSlots);

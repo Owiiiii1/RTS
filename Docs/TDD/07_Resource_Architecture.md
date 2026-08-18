@@ -8,6 +8,19 @@
 
 Technical implementation of Ferronite resource flow per [`../GDD/06_Resources`](../GDD/06_Resources.md). Single MVP resource (Ferronite) як **universal exchange currency** (per Pillar 3, see [`../GDD/01_Game_Pillars`](../GDD/01_Game_Pillars.md)).
 
+## GP-S39E deposit / cargo ownership (current code)
+
+Factual current SoT (no rebalance):
+
+| Fact | Owner |
+| --- | --- |
+| Mine cycle 10 / 1s, range 200, conversions 1/1, threat 0.5 | `UGP_ResourceDefinition` (unchanged) |
+| Deposit max 5000, max concurrent miners 4 | `UGP_ResourceDefinition.DepositMaxAmount` / `MaxConcurrentMiners` |
+| Node `CurrentAmount` | `AGP_ResourceNode` runtime; `EditInstanceOnly` override preserved if ≠ native CDO |
+| Worker cargo 50 | `UGP_UnitDefinition.CargoCapacity`; `UGP_CargoComponent` runtime state; empty def keeps component 50 |
+| MainBase 100×5, Ready when full | `UGP_BuildingDefinition` storage; threshold == capacity |
+| Container launch telegraph 2.5s | `UGP_ResourceGameplaySettings` (stays global) |
+
 ## Decision Source
 
 - Owner decision 2026-05-16 — score-based win з finite Ferronite deposits + Main Base drop-off.

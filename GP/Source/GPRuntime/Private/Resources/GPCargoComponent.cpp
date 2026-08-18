@@ -95,6 +95,16 @@ float UGP_CargoComponent::GetCargoCapacity() const
 	return CargoCapacity;
 }
 
+void UGP_CargoComponent::ApplyCapacityFromDefinition(float NewCapacity)
+{
+	CargoCapacity = FMath::Max(0.0f, NewCapacity);
+	if (!FMath::IsFinite(CargoCapacity))
+	{
+		CargoCapacity = 0.0f;
+	}
+	ClampCargoState();
+}
+
 float UGP_CargoComponent::GetCurrentCargoAmount() const
 {
 	return CurrentCargoAmount;

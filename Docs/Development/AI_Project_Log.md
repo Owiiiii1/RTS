@@ -4,7 +4,7 @@
 
 Status: **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s39e-economy-logistics-data`
+- Branch: `feature/gp-s39e-economy-logistics-data` (correction `677e205051b0764bdcf30a3c0a2226235358cc0b`)
 - Defect: native transient `UGP_OrbitalUnitDropCatalog` permanently shadowed operator-created unit drop DataAssets
 - Fix: settings soft refs + async load; pending orders reject `DefinitionNotReady`; same class of seam for building drop definitions
 - **NOT MERGED. NOT FINALIZED.**

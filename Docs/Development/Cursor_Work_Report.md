@@ -11,7 +11,7 @@ Status: **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 `f841cdee19c97a0dfaacb8fc0bdd27623c543329`
 
 ## Feature head SHA
-Pending this correction commit.
+`677e205051b0764bdcf30a3c0a2226235358cc0b`
 
 ## Defect found in factual review
 

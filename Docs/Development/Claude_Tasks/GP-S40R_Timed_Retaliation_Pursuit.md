@@ -1,9 +1,11 @@
 # GP-S40R — Timed Retaliation Pursuit
 
 ## Status
-**GP-S40R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+**IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**GP-S40R_FINALIZATION_READY_FOR_MERGE**
+
+**NOT MERGED.**
 
 ## Slice Group
 Post-GP-S39E (Economy / Logistics Data is on verified `main`)
@@ -11,7 +13,7 @@ Post-GP-S39E (Economy / Logistics Data is on verified `main`)
 ## Branch
 `feature/gp-s40r-timed-retaliation-pursuit`  
 Base: `origin/main` @ `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`  
-Implementation tip: `fc57f0dd44dc7211c2e5e4905c04117207104d90` (LOS handoff correction)
+Finalization tip: see `Docs/Development/Cursor_Work_Report.md`
 
 ## Goal
 Server-authoritative timed retaliation for eligible **mobile combat** units, reused on the existing Attack FSM / LOS fire gate / movement serials. No parallel combat system.
@@ -44,17 +46,22 @@ Never replace a manual Held `Move` / `Attack` / `AttackMove` / `Mine` / haul cha
 
 Handoff to the existing Attack FSM requires **both** effective auto-acquire / sight range **and** `GPCombatLOS::HasLineOfSight`. If the attacker is inside sight but LOS is blocked, retaliation stays owner and continues pursuit. Timeout with LOS still blocked returns Idle with no Held Attack. The Attack Ready fire gate is unchanged.
 
-## Validation (candidate)
+## Validation (final)
 
 | Check | Result |
 | --- | --- |
-| `GPEditor Win64 Development` + UHT | **PASS** (LOS correction rebuild) |
-| `gp.Combat.RunRetaliationPursuitContractTest` | `Complete Failures=0 Cancelled=false` (includes blocked-LOS A/B/C) |
+| Operator PIE | **PASS** |
+| `GPEditor Win64 Development` + UHT | **PASS** |
+| `GP Win64 Development` | **PASS** |
+| `GP Win64 Shipping` | **PASS** |
+| `gp.Combat.RunRetaliationPursuitContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Combat.RunLOSFireGateContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Combat.RunAutoAcquireContractTest` | `Complete Failures=0 Cancelled=false` |
-| AttackMove / movement reconciliation | **NOT RERUN** this correction |
-| `GP` Win64 Development / Shipping | **NOT RUN** (candidate only) |
+
+## Recorded separately (not this slice)
+
+[`GP-S41M_Movement_Shortest_Yaw.md`](GP-S41M_Movement_Shortest_Yaw.md) — Move facing may take the long yaw path. Not fixed here.
 
 ## Out of scope
 
-Economy/resource/building acquisition, FoW, Wall, AI opponent, rebalance, new Tick, second damage path.
+Economy/resource/building acquisition, FoW, Wall, AI opponent, rebalance, new Tick, second damage path, movement-yaw shortest-path fix.

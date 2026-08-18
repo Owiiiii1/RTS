@@ -6,18 +6,19 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-18 (GP-S40R candidate). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
+> Стан станом на 2026-08-18 (GP-S40R finalized). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Timed Retaliation Pursuit. **Current: GP-S40R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**.
+**Поточна фаза:** GP-S40R finalized, ready for merge. **Current: GP-S40R_FINALIZATION_READY_FOR_MERGE**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
 | GP-S01 … GP-S39E | **DONE / on `main` tip** `5ad69aa7abd39e181cd6ffafb11e4277adf3160a` |
-| **GP-S40R** Timed Retaliation Pursuit | **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** — [`GP-S40R_Timed_Retaliation_Pursuit.md`](GP-S40R_Timed_Retaliation_Pursuit.md) — **NOT MERGED** |
+| **GP-S40R** Timed Retaliation Pursuit | **IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE** — [`GP-S40R_Timed_Retaliation_Pursuit.md`](GP-S40R_Timed_Retaliation_Pursuit.md) — **NOT MERGED** |
+| **GP-S41M** Movement Shortest Yaw | **DEFECT_RECORDED / NOT STARTED** — [`GP-S41M_Movement_Shortest_Yaw.md`](GP-S41M_Movement_Shortest_Yaw.md) |
 
-**NEXT action для агента:** do **not** merge. Await operator PIE. Do **not** start Wall / FoW.
+**NEXT action для агента:** do **not** merge GP-S40R. Do **not** start GP-S41M until assigned. Do **not** start Wall / FoW.
 
 ### Drift Warning
 

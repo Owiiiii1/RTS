@@ -234,7 +234,7 @@ void AGP_UnitBase::ReceiveCommand(const FGP_CommandRequest& Request)
 - Formation movement.
 - ~~Attack-move.~~ **Implemented by GP-S32A** (`GP.Command.AttackMove`, A → LMB ground) — see `Claude_Tasks/GP-S32A_Attack_Move_Reconciliation.md`. **Operator FULL PASS / FINALIZATION_READY_FOR_MERGE** (not yet merged).
 - Smart auto-acquire targets without explicit attack command — **Idle auto-acquire delivered by GP-S30R**; Attack-Move acquisition while travelling by GP-S32A.
-- Timed retaliation pursuit — **GP-S40R**: after successful hostile damage, an idle mobile combat unit may pursue/engage that attacker for `GetRetaliationPursuitSeconds()`. Handoff to Attack requires existing sight range **and** `GPCombatLOS::HasLineOfSight`. Blocked LOS keeps retaliation-owned pursuit. Manual Held commands win. Not a player-visible command. Turret/Worker do not gain movement retaliation.
+- Timed retaliation pursuit — **GP-S40R** (**FINALIZED / READY FOR MERGE**): after successful hostile damage, an idle mobile combat unit may pursue/engage that attacker for `GetRetaliationPursuitSeconds()`. Handoff to Attack requires existing sight range **and** `GPCombatLOS::HasLineOfSight`. Blocked LOS keeps retaliation-owned pursuit. Manual Held commands win. Not a player-visible command. Turret/Worker do not gain movement retaliation.
 
 ## Detailed Selection Rules (GP-0202)
 

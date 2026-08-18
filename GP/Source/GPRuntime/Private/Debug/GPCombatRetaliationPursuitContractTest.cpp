@@ -841,4 +841,52 @@ void UGP_CombatRetaliationPursuitContractTestRunner::AdvanceStage()
 	}
 }
 
-#endif
+#else
+
+void UGP_CombatRetaliationPursuitContractTestRunner::BeginDestroy()
+{
+	bFinished = true;
+	Super::BeginDestroy();
+}
+
+void UGP_CombatRetaliationPursuitContractTestRunner::Start(UWorld* InWorld)
+{
+	(void)InWorld;
+}
+
+void UGP_CombatRetaliationPursuitContractTestRunner::ScheduleNext(float DelaySeconds)
+{
+	(void)DelaySeconds;
+}
+
+void UGP_CombatRetaliationPursuitContractTestRunner::AdvanceStage() {}
+
+bool UGP_CombatRetaliationPursuitContractTestRunner::Expect(bool bOk, const TCHAR* Label)
+{
+	(void)bOk;
+	(void)Label;
+	return false;
+}
+
+void UGP_CombatRetaliationPursuitContractTestRunner::Abort(const TCHAR* Reason)
+{
+	(void)Reason;
+}
+
+void UGP_CombatRetaliationPursuitContractTestRunner::Finish()
+{
+	bFinished = true;
+}
+
+void UGP_CombatRetaliationPursuitContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	(void)World;
+	(void)bSessionEnded;
+	(void)bCleanupResources;
+}
+
+void UGP_CombatRetaliationPursuitContractTestRunner::UnbindWorldCleanup() {}
+
+void UGP_CombatRetaliationPursuitContractTestRunner::CleanupActors() {}
+
+#endif // !UE_BUILD_SHIPPING

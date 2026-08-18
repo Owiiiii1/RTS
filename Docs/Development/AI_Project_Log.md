@@ -4,7 +4,7 @@
 
 Status: **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s37t-defensive-turret-mvp` (not merged, not finalized)
+- Branch: `feature/gp-s37t-defensive-turret-mvp` (correction `b88926acc6415abc8efe07729ac48837ce8a5fae`; not merged, not finalized)
 - Candidate correction: Defensive Turret idle AutoAcquire may target valid enemy units **and** buildings. Legacy Salvage Walker idle/AttackMove remain unit-only.
 - Seam: `EGP_AutoAcquireMode` + `IsEligibleAutoAcquireTarget` on `UGP_UnitCommandComponent`. Still `ValidateAttackTarget`.
 - Turret + AutoAcquire + AttackMove contracts extended; listed regressions Failures=0; GPEditor Win64 Development + UHT **PASS**

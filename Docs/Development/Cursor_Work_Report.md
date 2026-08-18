@@ -12,7 +12,7 @@ Status: **GP-S37T_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`
 
 ## Feature head SHA
-Pending this correction commit (recorded in the follow-up SHA commit).
+`b88926acc6415abc8efe07729ac48837ce8a5fae`
 
 ## Correction
 This is a **candidate correction** after factual review. Not finalization.

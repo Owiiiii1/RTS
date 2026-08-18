@@ -9,6 +9,7 @@ Status: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 - Fix: `AGP_MobileUnit` disables generation on all primitives; buildings unchanged
 - `StripProjectedStartAnchor` removed; shortest-yaw helper retained
 - Rebuild NavMesh in editor to clear already-baked holes (maps not touched here)
+- Tip: `5de48e900fc7ceef75bc3bc983949b94537b7ab7`
 - **NOT MERGED. NOT FINALIZED.**
 
 ## 2026-08-18 — GP-S41M first-Move path-start correction

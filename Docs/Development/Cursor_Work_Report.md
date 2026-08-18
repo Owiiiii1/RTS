@@ -8,7 +8,7 @@
 ## Branch / base / head
 - Branch: `feature/gp-s41m-movement-shortest-yaw`
 - Base: `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`
-- Head: recorded after commit
+- Head: `5de48e900fc7ceef75bc3bc983949b94537b7ab7`
 
 ## Operator result
 Second FAIL / residual first-Move sideways leg. Shortest yaw itself is correct (long arc gone).

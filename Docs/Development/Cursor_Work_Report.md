@@ -12,7 +12,7 @@ Status: **GP-S39E_FINALIZATION_READY_FOR_MERGE**
 `f841cdee19c97a0dfaacb8fc0bdd27623c543329`
 
 ## Feature head SHA
-FEATURE_HEAD_SHA_PLACEHOLDER
+ecb38f5b0c24c6e09846b4afab6ac6c8035e2102
 
 ## Operator validation
 **PASS**

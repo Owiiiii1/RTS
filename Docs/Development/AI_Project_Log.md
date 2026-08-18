@@ -4,7 +4,7 @@
 
 Status: **IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE**
 
-- Branch: `feature/gp-s40r-timed-retaliation-pursuit` (base `origin/main` @ `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`)
+- Branch: `feature/gp-s40r-timed-retaliation-pursuit` (base `origin/main` @ `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`; tip `6c8c91120c64ad08b54f6d3d58e8c311a46fa351`)
 - Operator PASS. Retaliation confirmed correct
 - Targeted contracts Failures=0; GPEditor+UHT / GP Development / GP Shipping **PASS**
 - **NOT MERGED.**

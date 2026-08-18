@@ -8,7 +8,7 @@
 ## Branch / base / head
 - Branch: `feature/gp-s40r-timed-retaliation-pursuit`
 - Base: `origin/main` @ `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`
-- Head: recorded after commit
+- Head: `6c8c91120c64ad08b54f6d3d58e8c311a46fa351`
 
 ## Operator
 **PASS.** Retaliation behavior confirmed correct.

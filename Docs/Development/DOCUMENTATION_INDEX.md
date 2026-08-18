@@ -39,7 +39,7 @@
 | Last closed / merged stage | **GP-S39E Economy / Logistics Data Ownership** on `main` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S40R_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s40r-timed-retaliation-pursuit` (**NOT MERGED**) |
+| Current stage | **GP-S40R_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s40r-timed-retaliation-pursuit` @ `6c8c9112…` (**NOT MERGED**) |
 
 ---
 
@@ -162,4 +162,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S39E are on verified `main` tip `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`. Current stage: **GP-S40R_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s40r-timed-retaliation-pursuit`. See [`Claude_Tasks/GP-S40R_Timed_Retaliation_Pursuit.md`](Claude_Tasks/GP-S40R_Timed_Retaliation_Pursuit.md). **NOT MERGED.** NEXT defect (not started): [`Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`](Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md).
+SETUP-001, DOCS-001, GP-S01…GP-S39E are on verified `main` tip `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`. Current stage: **GP-S40R_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s40r-timed-retaliation-pursuit` @ `6c8c91120c64ad08b54f6d3d58e8c311a46fa351`. See [`Claude_Tasks/GP-S40R_Timed_Retaliation_Pursuit.md`](Claude_Tasks/GP-S40R_Timed_Retaliation_Pursuit.md). **NOT MERGED.** NEXT defect (not started): [`Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`](Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md).

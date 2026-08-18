@@ -13,7 +13,7 @@ Post-GP-S39E (Economy / Logistics Data is on verified `main`)
 ## Branch
 `feature/gp-s40r-timed-retaliation-pursuit`  
 Base: `origin/main` @ `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`  
-Finalization tip: see `Docs/Development/Cursor_Work_Report.md`
+Finalization tip: `6c8c91120c64ad08b54f6d3d58e8c311a46fa351`
 
 ## Goal
 Server-authoritative timed retaliation for eligible **mobile combat** units, reused on the existing Attack FSM / LOS fire gate / movement serials. No parallel combat system.

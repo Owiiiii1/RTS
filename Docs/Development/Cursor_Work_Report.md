@@ -11,7 +11,7 @@ Status: **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 `c79b017a45b1560e025cedfe262b0afde3c9cb6a`
 
 ## Feature head SHA
-Pending implementation commit on this branch.
+`cc94ac85c3069431ab4ec4f49b7ae0fc335a71a6`
 
 ## Factual old stat ownership (pre-S38D)
 

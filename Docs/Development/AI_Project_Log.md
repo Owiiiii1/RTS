@@ -4,7 +4,7 @@
 
 Status: **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s38d-unit-building-combat-data` (base verified `origin/main` @ `c79b017a45b1560e025cedfe262b0afde3c9cb6a`)
+- Branch: `feature/gp-s38d-unit-building-combat-data` (base verified `origin/main` @ `c79b017a45b1560e025cedfe262b0afde3c9cb6a`, implementation `cc94ac85c3069431ab4ec4f49b7ae0fc335a71a6`)
 - Canonical designer source: `UGP_UnitDefinition` (`PrimaryAssetType = GPUnitDefinition`). One bounded DA — no Combat/Movement/Vision profile hierarchy
 - GAS remains runtime combat state. Definition initializes base values only. Soft `UnitDefinitionAsset` on `AGP_UnitBase`; already-loaded resolver; no `LoadSynchronous`
 - Precedence: loaded UnitDefinition → existing actor/component defaults. Empty ref keeps authored BP compatibility

@@ -200,9 +200,9 @@ Total ~16 distinct visual states. Implementation: material parameter або mesh
 
 #### Acquisition (Wall Package)
 
-1. Order Menu **Buy Wall Package** (available only when MainBase Wall stock == 0 and no package is in flight).
-2. Spend package `Cost` once. One rocket delivers **5** segments to MainBase. No placement mode.
-3. Arrival: Wall inventory = 5 (MVP max). Depot shows 5 blocks. Cannot buy another package until stock returns to 0.
+1. Order Menu **Buy Wall Package** (available when MainBase Wall stock is **0..4** and no package is in flight).
+2. Spend full package `Cost` once. One rocket delivers the package to MainBase **UnitDropZone**. No placement mode.
+3. Arrival: stock becomes `min(5, current + 5)`. Excess segments are wasted. Depot shows remaining blocks. Cannot buy at stock 5.
 4. **Build Wall** becomes available while stock > 0.
 
 #### Drag-Build (from inventory)

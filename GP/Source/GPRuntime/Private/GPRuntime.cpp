@@ -20,7 +20,7 @@ void FGPRuntimeModule::StartupModule()
 void FGPRuntimeModule::ShutdownModule()
 {
 	UGP_WallPackageCatalog::UnbindEngineLifecycle();
-	UGP_WallPackageCatalog::ShutdownCatalog();
+	UGP_WallPackageCatalog::NotifyEngineShutdown();
 	UGP_OrbitalUnitDropCatalog::UnbindEngineLifecycle();
 	UGP_OrbitalUnitDropCatalog::ShutdownCatalog();
 	UGP_BuildingDropCatalog::UnbindEngineLifecycle();

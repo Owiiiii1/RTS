@@ -46,13 +46,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Presentation")
 	USceneComponent* GetDropOffVisualAnchor() const;
 
-	/** Authored Unit Drop Zone (unit pods only). Reposition in BP-derived MainBase. */
+	/** Authored Unit Drop Zone — units and Wall Package. Reposition in BP-derived MainBase. */
 	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Orbital")
 	USceneComponent* GetUnitDropZone() const;
-
-	/** Package landing anchor (GP-S42A). Separate from UnitDropZone. Reposition in BP. */
-	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Orbital")
-	USceneComponent* GetWallPackageDropZone() const;
 
 	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Wall")
 	UGP_WallSegmentInventoryComponent* GetWallSegmentInventoryComponent() const;
@@ -99,14 +95,11 @@ protected:
 	TObjectPtr<USceneComponent> DropOffVisualAnchor;
 
 	/**
-	 * Unit DropPod landing anchor (GP-S31R). Authored-relative; not used by building pods later.
-	 * Default offset from PresentationRoot — reposition in BP without C++ hardcoded world coords.
+	 * Unit DropPod landing anchor (GP-S31R / GP-S42A). Authored-relative.
+	 * Wall Package uses this same point. Building READY pods do not.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Orbital", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USceneComponent> UnitDropZone;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Orbital", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<USceneComponent> WallPackageDropZone;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Storage", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_StorageComponent> StorageComponent;

@@ -51,10 +51,10 @@ Deploy mode (ghost)
 WALL PACKAGE FLOW
 ─────────────────
 Order UI BuyWallPackage(PackageDef)   // UGP_WallPackageDefinition
-  → Validate stock==0, not in-flight, catalog, Orbital >= Cost
-  → GE_SpendOrbital(PackageDef.Cost) once
-  → Mark delivery pending; spawn AGP_DropPod → Landing = owning MainBase
-  → OnLanding: WallSegmentInventory += SegmentCount (5) if capacity allows
+  → Validate stock<5, not in-flight, catalog, Orbital >= full Cost
+  → GE_SpendOrbital(PackageDef.Cost) once (never prorated)
+  → Mark delivery pending; spawn AGP_DropPod → Landing = owning MainBase UnitDropZone
+  → OnLanding: Accepted = min(SegmentCount, Capacity - current stock); excess wasted
   → Presentation: WallInventoryChanged(NewCount)
   (NO READY. NO placement mode. NO AGP_Wall spawn on landing.)
 
@@ -67,8 +67,8 @@ Shared presentation: native DropPod lifecycle + soft `BP_DropPod_MVP` (or equiva
 Requirement (implementation class name TBD):
 
 - Authored relative to MainBase (scene component / socket / dedicated component).
-- Server resolves world transform for delivery.
-- Replicated delivery uses that authoritative point.
+- Server resolves world transform for **unit** delivery **and Wall Package** delivery.
+- Building READY placement does **not** use this point.
 - Owner relocates pad in BP without C++ offset rewrite.
 
 ## Transport Slots vs Unit Cap
@@ -175,7 +175,7 @@ Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / 
 
 - **Unit panel:** manifest builder — slots used/cap, counts, per-unit costs, total Orbital, Confirm.
 - **Building panel:** Purchase buttons; READY list; click READY → ghost deploy mode.
-- **Wall:** Buy Wall Package when stock==0 and not in-flight; Build Wall when stock>0. Package never enters READY/ghost.
+- **Wall:** Buy Wall Package when stock is 0..4 and not in-flight (full package price); Build Wall when stock>0. Package never enters READY/ghost. Lands at UnitDropZone.
 - TEMP HUD buttons acceptable for first unit slice; production Order Menu later.
 
 ## RPCs (illustrative)

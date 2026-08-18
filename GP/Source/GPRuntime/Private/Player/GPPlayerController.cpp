@@ -2648,9 +2648,9 @@ void AGP_PlayerController::SyncWallPackageHUDFromInventory()
 		? PS->GetPlayerAttributeSet()->GetOrbitalFerronite()
 		: 0.0f;
 
-	UGP_WallPackageCatalog& Catalog = UGP_WallPackageCatalog::Get();
-	const bool bDefReady = Catalog.IsWallPackageDefinitionReady();
-	const UGP_WallPackageDefinition* Package = Catalog.GetWallPackage();
+	UGP_WallPackageCatalog* Catalog = UGP_WallPackageCatalog::Get();
+	const bool bDefReady = Catalog != nullptr && Catalog->IsWallPackageDefinitionReady();
+	const UGP_WallPackageDefinition* Package = Catalog != nullptr ? Catalog->GetWallPackage() : nullptr;
 	const float Cost = IsValid(Package) ? Package->Cost : 0.0f;
 	const bool bCanBuy = bDefReady
 		&& IsValid(Inventory)

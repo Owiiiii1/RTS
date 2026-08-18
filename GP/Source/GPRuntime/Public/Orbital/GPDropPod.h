@@ -95,6 +95,9 @@ public:
 	EGP_DropPodPayloadKind GetPayloadKind() const { return PayloadKind; }
 
 	UFUNCTION(BlueprintPure, Category = "GP|DropPod")
+	FVector GetLandingLocation() const { return LandingLocation; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|DropPod")
 	float GetDescentProgress01() const { return DescentProgress01; }
 
 	UFUNCTION(BlueprintPure, Category = "GP|DropPod")

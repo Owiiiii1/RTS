@@ -35,7 +35,7 @@ bool UGP_WallSegmentInventoryComponent::HasAuthorityOwner() const
 
 bool UGP_WallSegmentInventoryComponent::CanPurchaseWallPackage() const
 {
-	return WallSegmentCount == 0 && !bWallPackagePending;
+	return WallSegmentCount < DefaultCapacity && !bWallPackagePending;
 }
 
 void UGP_WallSegmentInventoryComponent::SetCount(int32 NewCount)
@@ -61,7 +61,7 @@ void UGP_WallSegmentInventoryComponent::SetPending(bool bPending)
 
 bool UGP_WallSegmentInventoryComponent::AuthorityBeginPackageDelivery()
 {
-	if (!HasAuthorityOwner() || WallSegmentCount != 0 || bWallPackagePending)
+	if (!HasAuthorityOwner() || WallSegmentCount >= DefaultCapacity || bWallPackagePending)
 	{
 		return false;
 	}
@@ -71,22 +71,25 @@ bool UGP_WallSegmentInventoryComponent::AuthorityBeginPackageDelivery()
 	return true;
 }
 
-bool UGP_WallSegmentInventoryComponent::AuthorityCompletePackageDelivery(int32 SegmentCount)
+bool UGP_WallSegmentInventoryComponent::AuthorityCompletePackageDelivery(int32 PackageSegmentCount)
 {
 	if (!HasAuthorityOwner() || !bWallPackagePending)
 	{
 		return false;
 	}
 
-	if (SegmentCount <= 0
-		|| WallSegmentCount != 0
-		|| WallSegmentCount + SegmentCount > DefaultCapacity)
+	if (PackageSegmentCount <= 0)
 	{
 		AuthorityCancelPackageDelivery();
 		return false;
 	}
 
-	SetCount(WallSegmentCount + SegmentCount);
+	const int32 FreeCapacity = FMath::Max(0, DefaultCapacity - WallSegmentCount);
+	const int32 Accepted = FMath::Min(PackageSegmentCount, FreeCapacity);
+	if (Accepted > 0)
+	{
+		SetCount(WallSegmentCount + Accepted);
+	}
 	SetPending(false);
 	++DeliveryGeneration;
 	return true;
@@ -131,6 +134,17 @@ bool UGP_WallSegmentInventoryComponent::AuthorityTryConsumeSegments(int32 Amount
 	SetCount(WallSegmentCount - Amount);
 	return true;
 }
+
+#if !UE_BUILD_SHIPPING
+void UGP_WallSegmentInventoryComponent::DebugForceSetStock(int32 NewCount)
+{
+	if (!HasAuthorityOwner())
+	{
+		return;
+	}
+	SetCount(NewCount);
+}
+#endif
 
 void UGP_WallSegmentInventoryComponent::OnRep_WallSegmentCount()
 {

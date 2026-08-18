@@ -141,8 +141,8 @@ AGP_PlayerController (local)
 
 ### Walls (not READY)
 
-1. **Buy Wall Package** (stock == 0, no in-flight) → `GE_GP_SpendOrbital` once → one rocket to MainBase.
-2. Arrival: MainBase Wall inventory = 5 (MVP max; no stacking).
+1. **Buy Wall Package** (stock 0..4, no in-flight) → `GE_GP_SpendOrbital` full package Cost once → one rocket to MainBase UnitDropZone.
+2. Arrival: stock = min(5, current + 5). Excess wasted. Cannot buy at 5.
 3. **Build Wall** (stock > 0) → drag path ≤ inventory → confirm consumes N and places N `AGP_Wall` immediately. Cancel consumes nothing.
 
 Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md), [`05_Buildings`](05_Buildings.md), [`04_Units`](04_Units.md).

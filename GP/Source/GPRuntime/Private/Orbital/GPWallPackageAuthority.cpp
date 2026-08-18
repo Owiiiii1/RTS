@@ -86,8 +86,13 @@ GPWallPackageAuthority::FPurchaseResult GPWallPackageAuthority::AuthorityPurchas
 		return Result;
 	}
 
-	UGP_WallPackageCatalog& Catalog = UGP_WallPackageCatalog::Get();
-	if (Catalog.IsWallPackageDefinitionPending())
+	UGP_WallPackageCatalog* Catalog = UGP_WallPackageCatalog::Get();
+	if (Catalog == nullptr)
+	{
+		Result.RejectReason = EGP_WallPackageRejectReason::DefinitionNotReady;
+		return Result;
+	}
+	if (Catalog->IsWallPackageDefinitionPending())
 	{
 		Result.RejectReason = EGP_WallPackageRejectReason::DefinitionNotReady;
 		return Result;
@@ -96,11 +101,11 @@ GPWallPackageAuthority::FPurchaseResult GPWallPackageAuthority::AuthorityPurchas
 	const UGP_WallPackageDefinition* Package = PackageDefinition;
 	if (!IsValid(Package))
 	{
-		Package = Catalog.GetWallPackage();
+		Package = Catalog->GetWallPackage();
 	}
 	if (!IsValid(Package))
 	{
-		Result.RejectReason = Catalog.IsWallPackageDefinitionPending()
+		Result.RejectReason = Catalog->IsWallPackageDefinitionPending()
 			? EGP_WallPackageRejectReason::DefinitionNotReady
 			: EGP_WallPackageRejectReason::InvalidDefinition;
 		return Result;
@@ -134,7 +139,7 @@ GPWallPackageAuthority::FPurchaseResult GPWallPackageAuthority::AuthorityPurchas
 		return Result;
 	}
 
-	if (Inventory->GetWallSegmentCount() != 0)
+	if (Inventory->GetWallSegmentCount() >= UGP_WallSegmentInventoryComponent::DefaultCapacity)
 	{
 		Result.RejectReason = EGP_WallPackageRejectReason::InventoryFull;
 		return Result;
@@ -146,7 +151,7 @@ GPWallPackageAuthority::FPurchaseResult GPWallPackageAuthority::AuthorityPurchas
 		return Result;
 	}
 
-	USceneComponent* DropZone = MainBase->GetWallPackageDropZone();
+	USceneComponent* DropZone = MainBase->GetUnitDropZone();
 	if (!IsValid(DropZone))
 	{
 		Result.RejectReason = EGP_WallPackageRejectReason::MissingMainBase;

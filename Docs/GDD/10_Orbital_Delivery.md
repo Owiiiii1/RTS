@@ -152,13 +152,13 @@ Building pods use player-confirmed placement. Same DropPod/rocket actor/visual a
 
 ## C — Wall Package
 
-1. **Buy Wall Package** when MainBase Wall stock == 0 and no package is in flight.
-2. Spend `UGP_WallPackageDefinition.Cost` once. Do **not** enter placement.
-3. One rocket delivers the package to MainBase. Payload is **5 segments of inventory**, not an `AGP_Wall` actor.
-4. On arrival: Wall stock = 5 (MVP cap). Depot presentation shows 5 blocks.
+1. **Buy Wall Package** when MainBase Wall stock is **0..4** and no package is in flight.
+2. Spend full `UGP_WallPackageDefinition.Cost` once. Do **not** enter placement. Price does not prorate.
+3. One rocket delivers the package to MainBase **UnitDropZone**. Payload is inventory, not an `AGP_Wall` actor.
+4. On arrival: `Accepted = min(5, Capacity - current stock)`. Excess wasted. No refund.
 5. **Build Wall** (separate action) drags a path limited by stock; confirm consumes N and places N `AGP_Wall` immediately. No second Orbital spend. No READY. No extra rocket.
 
-Cannot repurchase while stock > 0 or a package is in flight. MainBase destroyed → remaining stock is lost.
+Cannot repurchase at stock 5 or while a package is in flight. MainBase destroyed → remaining stock is lost.
 
 ---
 

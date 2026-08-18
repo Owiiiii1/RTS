@@ -93,7 +93,7 @@ Buildings are pawns (static units). No building owns a Production or Constructio
 | Class | Base | Replication | Purpose |
 | --- | --- | --- | --- |
 | `AGP_BuildingBase` (abstract) | `AGP_UnitBase` | Yes | Static unit ancestor (a pawn). Owns optional `UGP_StorageComponent` based on Definition. No Production/Construction component. |
-| `AGP_MainBase` | `AGP_BuildingBase` | Yes | Initial base. Hosts `UGP_StorageComponent` (Ferronite) and `UGP_WallSegmentInventoryComponent` (Wall stock 0..5 + depot presentation). Drop-zone marker. Non-sellable. |
+| `AGP_MainBase` | `AGP_BuildingBase` | Yes | Initial base. Hosts `UGP_StorageComponent` (Ferronite) and `UGP_WallSegmentInventoryComponent` (Wall stock 0..5 + depot presentation). `UnitDropZone` is the landing point for units **and** Wall Package. Non-sellable. |
 | `AGP_LogisticsHub` | `AGP_BuildingBase` | Yes | Orbital order point. Surfaces Order Menu, applies `GE_GP_UnitCap_Plus5` + storage-cap bonus while alive. Orbital drops only — no production. |
 | `AGP_DropPod` | `APawn` | Yes | Orbital descent vehicle. Spawned by `UGP_OrbitalDeliverySubsystem` on accepted order; descends to grid-validated location or MainBase (units / READY buildings / Wall Package). Carries `GP.State.PodInFlight`. |
 | `AGP_FerroniteDeposit` | `AGP_BuildingBase` | Yes | Resource node, CurrentCapacity, ActiveMiners / WaitingMiners queue. `TeamId=0`, `bDamageable=false`. 3×3 footprint. |

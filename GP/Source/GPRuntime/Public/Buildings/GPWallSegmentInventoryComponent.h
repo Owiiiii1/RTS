@@ -52,6 +52,10 @@ public:
 	/** Future GP-S42C consume. Not wired to gameplay in this slice. */
 	bool AuthorityTryConsumeSegments(int32 Amount);
 
+#if !UE_BUILD_SHIPPING
+	void DebugForceSetStock(int32 NewCount);
+#endif
+
 	UPROPERTY(BlueprintAssignable, Category = "GP|Wall|Inventory")
 	FOnGP_WallInventoryChanged OnWallInventoryChanged;
 

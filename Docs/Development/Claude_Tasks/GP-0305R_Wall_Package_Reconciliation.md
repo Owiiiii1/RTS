@@ -30,8 +30,9 @@ Purchase individual Wall segment → placement → orbital pod/rocket **per segm
 6. **One** rocket/drop carries the entire package of 5.
 7. On successful arrival: MainBase Wall inventory becomes **5** available segments.
 8. MVP MainBase Wall inventory capacity: **maximum 5**.
-   - Cannot buy a new package while inventory is non-zero.
-   - No stacking. No inventory above 5.
+   - Buy Wall Package is allowed at stock **0..4** (not while pending or at 5).
+   - Price is always the full `PackageDefinition.Cost`. Excess segments on arrival are wasted (no refund, no prorating).
+   - No inventory above 5.
 9. MainBase has a presentation-only Wall Depot. Visible blocks = actual remaining inventory (0..5). Gameplay stock is authoritative; meshes are never gameplay state.
 10. When inventory > 0, player gets **Build Wall**.
 11. Build Wall is **not** an orbital purchase. It enters wall drag-placement.
@@ -83,7 +84,7 @@ Not Ferronite storage. Not Building READY. Not a generic inventory framework.
 | Count | `int32` **0..5** |
 | Capacity | 5, matching package `SegmentCount` |
 | Delivery pending | Replicated bool; blocks repurchase while in flight |
-| Arrival | Adds 5 only if count == 0 and capacity allows; else reject (should not have been purchasable) |
+| Arrival | `Accepted = min(SegmentCount, Capacity - stock)` using **actual stock at arrival**. Always clears pending. Excess wasted. |
 | Placement | Atomic consume of confirmed path length N |
 | Cancel / failed preview | Consumes **nothing** |
 | UI / meshes | Read this count only; no duplicated SoT |
@@ -107,7 +108,7 @@ No final visual layout.
 | Stock 0, no in-flight package | Available | Unavailable |
 | Package in flight | Unavailable (pending) | Unavailable |
 | Stock 5 (just delivered / full) | Unavailable (full / no stack) | Available |
-| Stock 1..4 | Unavailable | Available |
+| Stock 1..4 | Available (full package price) | Available |
 | Stock returns to 0 | Available again | Unavailable |
 
 Purchase never enters placement. Build Wall never spends OrbitalFerronite.

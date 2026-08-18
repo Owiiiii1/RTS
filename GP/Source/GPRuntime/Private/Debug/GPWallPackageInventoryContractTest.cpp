@@ -112,11 +112,39 @@ namespace GPWallPackageInventoryDebug
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunWallPackageInventoryContractTest));
 }
 
+void UGP_WallPackageInventoryContractTestRunner::CleanupCatalogIfExists()
+{
+	if (UGP_WallPackageCatalog* Catalog = UGP_WallPackageCatalog::TryGetExisting())
+	{
+		Catalog->DebugClearAuthoredOverrides();
+		Catalog->DebugEndContractIsolation();
+	}
+}
+
+bool UGP_WallPackageInventoryContractTestRunner::WaitForStock(
+	UGP_WallSegmentInventoryComponent* Inventory,
+	int32 ExpectedStock,
+	int32 RetryStage)
+{
+	if (!IsValid(Inventory))
+	{
+		return false;
+	}
+	if (Inventory->GetWallSegmentCount() != ExpectedStock && ArrivalWaitAttempts < 40)
+	{
+		++ArrivalWaitAttempts;
+		StageIndex = RetryStage;
+		ScheduleNext(0.1f);
+		return true;
+	}
+	ArrivalWaitAttempts = 0;
+	return false;
+}
+
 void UGP_WallPackageInventoryContractTestRunner::BeginDestroy()
 {
 	UnbindInventoryDelegates();
-	UGP_WallPackageCatalog::Get().DebugClearAuthoredOverrides();
-	UGP_WallPackageCatalog::Get().DebugEndContractIsolation();
+	CleanupCatalogIfExists();
 	CleanupActors();
 	UnbindWorldCleanup();
 	Super::BeginDestroy();
@@ -222,8 +250,7 @@ void UGP_WallPackageInventoryContractTestRunner::Finish()
 		World->GetTimerManager().ClearTimer(StageTimerHandle);
 	}
 	UnbindInventoryDelegates();
-	UGP_WallPackageCatalog::Get().DebugClearAuthoredOverrides();
-	UGP_WallPackageCatalog::Get().DebugEndContractIsolation();
+	CleanupCatalogIfExists();
 	CleanupActors();
 	UnbindWorldCleanup();
 	GPContractTestCoordinator::Release(
@@ -302,14 +329,35 @@ void UGP_WallPackageInventoryContractTestRunner::AdvanceStage()
 	}
 
 	constexpr int32 ContractTeam = 91;
-	UGP_WallPackageCatalog& Catalog = UGP_WallPackageCatalog::Get();
+	UGP_WallPackageCatalog* Catalog = UGP_WallPackageCatalog::Get();
+	if (!Expect(Catalog != nullptr, TEXT("CatalogReady")))
+	{
+		Finish();
+		return;
+	}
 
 	switch (StageIndex++)
 	{
 	case 0:
 	{
-		Catalog.DebugBeginContractIsolation();
-		UGP_WallPackageDefinition* Native = Catalog.GetNativeWallPackage();
+		UGP_WallPackageCatalog* Created = UGP_WallPackageCatalog::Get();
+		Expect(Created != nullptr && UGP_WallPackageCatalog::TryGetExisting() == Created, TEXT("Life_Existing"));
+		CleanupCatalogIfExists();
+		Expect(UGP_WallPackageCatalog::TryGetExisting() != nullptr, TEXT("Life_CleanupNoCreate"));
+		UGP_WallPackageCatalog::ShutdownCatalog();
+		Expect(UGP_WallPackageCatalog::TryGetExisting() == nullptr, TEXT("Life_NullAfterShutdown"));
+		CleanupCatalogIfExists();
+		Expect(UGP_WallPackageCatalog::TryGetExisting() == nullptr, TEXT("Life_DestroyCleanupNoResurrect"));
+		Catalog = UGP_WallPackageCatalog::Get();
+		Expect(Catalog != nullptr && Catalog->GetNativeWallPackage() != nullptr, TEXT("Life_Recreate"));
+		if (Catalog == nullptr)
+		{
+			Finish();
+			return;
+		}
+
+		Catalog->DebugBeginContractIsolation();
+		UGP_WallPackageDefinition* Native = Catalog->GetNativeWallPackage();
 		const FGPGameplayTags& Tags = FGPGameplayTags::Get();
 		Expect(IsValid(Native), TEXT("A_NativeExists"));
 		Expect(IsValid(Native)
@@ -341,7 +389,7 @@ void UGP_WallPackageInventoryContractTestRunner::AdvanceStage()
 			Params);
 		MainBaseWeak = Base;
 		if (!Expect(IsValid(Base) && IsValid(Base->GetWallSegmentInventoryComponent())
-			&& IsValid(Base->GetWallPackageDropZone()), TEXT("SpawnMainBase")))
+			&& IsValid(Base->GetUnitDropZone()), TEXT("SpawnMainBase")))
 		{
 			Finish();
 			return;
@@ -408,6 +456,12 @@ void UGP_WallPackageInventoryContractTestRunner::AdvanceStage()
 			}
 		}
 		Expect(WallPods == 1, TEXT("C_OnePod"));
+		if (Buy.SpawnedPod.IsValid() && IsValid(Base->GetUnitDropZone()))
+		{
+			Expect(Buy.SpawnedPod->GetLandingLocation().Equals(
+				Base->GetUnitDropZone()->GetComponentLocation(),
+				1.0f), TEXT("I_LandingEqualsUnitDropZone"));
+		}
 
 		const GPWallPackageAuthority::FPurchaseResult Dup =
 			GPWallPackageAuthority::AuthorityPurchaseWallPackage(World, PS, nullptr);
@@ -440,14 +494,10 @@ void UGP_WallPackageInventoryContractTestRunner::AdvanceStage()
 			Finish();
 			return;
 		}
-		if (Inventory->GetWallSegmentCount() != 5 && ArrivalWaitAttempts < 40)
+		if (WaitForStock(Inventory, 5, 2))
 		{
-			++ArrivalWaitAttempts;
-			StageIndex = 2;
-			ScheduleNext(0.1f);
 			return;
 		}
-		ArrivalWaitAttempts = 0;
 		Expect(Inventory->GetWallSegmentCount() == 5, TEXT("D_Stock5"));
 		Expect(!Inventory->IsWallPackagePending(), TEXT("D_PendingCleared"));
 		Expect(Inventory->CanBuildWall(), TEXT("D_CanBuild"));
@@ -459,36 +509,176 @@ void UGP_WallPackageInventoryContractTestRunner::AdvanceStage()
 		const float Orbital = PS->GetPlayerAttributeSet()->GetOrbitalFerronite();
 		const GPWallPackageAuthority::FPurchaseResult Full =
 			GPWallPackageAuthority::AuthorityPurchaseWallPackage(World, PS, nullptr);
-		Expect(!Full.bAccepted, TEXT("E_FullReject"));
-		Expect(Full.RejectReason == EGP_WallPackageRejectReason::InventoryFull, TEXT("E_FullReason"));
+		Expect(!Full.bAccepted, TEXT("D5_FullReject"));
+		Expect(Full.RejectReason == EGP_WallPackageRejectReason::InventoryFull, TEXT("D5_FullReason"));
 		Expect(FMath::IsNearlyEqual(PS->GetPlayerAttributeSet()->GetOrbitalFerronite(), Orbital, 1.0f),
-			TEXT("E_NoSpend"));
+			TEXT("D5_NoSpend"));
+
+		Expect(Inventory->AuthorityTryConsumeSegments(1), TEXT("F_ConsumeTo4"));
+		Expect(Inventory->GetWallSegmentCount() == 4, TEXT("F_Stock4"));
+		Expect(Inventory->CanPurchaseWallPackage(), TEXT("F_CanPurchaseAt4"));
+		Expect(Inventory->AuthorityBeginPackageDelivery(), TEXT("F_BeginAt4"));
+		Expect(Inventory->AuthorityCompletePackageDelivery(5), TEXT("F_CompleteNonZeroStock"));
+		Expect(Inventory->GetWallSegmentCount() == 5, TEXT("F_FilledTo5"));
+		Expect(!Inventory->IsWallPackagePending(), TEXT("F_PendingCleared"));
+
+		Expect(Inventory->AuthorityTryConsumeSegments(1), TEXT("B4_ConsumeTo4"));
+		Expect(Inventory->CanPurchaseWallPackage(), TEXT("B4_CanPurchase"));
+		const float OrbitalAt4 = PS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+		const GPWallPackageAuthority::FPurchaseResult Buy4 =
+			GPWallPackageAuthority::AuthorityPurchaseWallPackage(World, PS, nullptr);
+		Expect(Buy4.bAccepted, TEXT("B4_Accepted"));
+		Expect(FMath::IsNearlyEqual(Buy4.OrbitalCost, Catalog->GetWallPackage()->Cost, 0.01f), TEXT("B4_FullCost"));
+		Expect(FMath::IsNearlyEqual(
+			PS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
+			OrbitalAt4 - Buy4.OrbitalCost,
+			1.0f), TEXT("B4_SpendOnce"));
+		Expect(Buy4.SpawnedPod.IsValid()
+			&& Buy4.SpawnedPod->GetPayloadKind() == EGP_DropPodPayloadKind::WallPackage,
+			TEXT("B4_OnePod"));
+		LastPodWeak = Buy4.SpawnedPod;
+		ExpectedArrivalStock = 5;
+		ScheduleNext(0.15f);
+		break;
+	}
+	case 3:
+	{
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		AGP_PlayerState* PS = OwnerPSWeak.Get();
+		UGP_WallSegmentInventoryComponent* Inventory =
+			IsValid(Base) ? Base->GetWallSegmentInventoryComponent() : nullptr;
+		if (!Expect(IsValid(Inventory) && IsValid(PS), TEXT("B4_ArrivalActors")))
+		{
+			Finish();
+			return;
+		}
+		if (WaitForStock(Inventory, 5, 3))
+		{
+			return;
+		}
+		Expect(Inventory->GetWallSegmentCount() == 5, TEXT("B4_ArrivalStock5"));
+		Expect(!Inventory->IsWallPackagePending(), TEXT("B4_NoPartialRefundPending"));
+
+		Expect(Inventory->AuthorityTryConsumeSegments(4), TEXT("C1_ConsumeTo1"));
+		Expect(Inventory->GetWallSegmentCount() == 1, TEXT("C1_Stock1"));
+		Expect(Inventory->CanPurchaseWallPackage(), TEXT("C1_CanPurchase"));
+		const float OrbitalAt1 = PS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+		const GPWallPackageAuthority::FPurchaseResult Buy1 =
+			GPWallPackageAuthority::AuthorityPurchaseWallPackage(World, PS, nullptr);
+		Expect(Buy1.bAccepted, TEXT("C1_Accepted"));
+		Expect(FMath::IsNearlyEqual(Buy1.OrbitalCost, Catalog->GetWallPackage()->Cost, 0.01f), TEXT("C1_FullCost"));
+		Expect(FMath::IsNearlyEqual(
+			PS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
+			OrbitalAt1 - Buy1.OrbitalCost,
+			1.0f), TEXT("C1_SpendOnce"));
+		LastPodWeak = Buy1.SpawnedPod;
+		ScheduleNext(0.15f);
+		break;
+	}
+	case 4:
+	{
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		AGP_PlayerState* PS = OwnerPSWeak.Get();
+		UGP_WallSegmentInventoryComponent* Inventory =
+			IsValid(Base) ? Base->GetWallSegmentInventoryComponent() : nullptr;
+		if (!Expect(IsValid(Inventory) && IsValid(PS), TEXT("C1_ArrivalActors")))
+		{
+			Finish();
+			return;
+		}
+		if (WaitForStock(Inventory, 5, 4))
+		{
+			return;
+		}
+		Expect(Inventory->GetWallSegmentCount() == 5, TEXT("C1_ArrivalStock5"));
+
+		Expect(Inventory->AuthorityTryConsumeSegments(1), TEXT("E_ConsumeTo4"));
+		const float OrbitalPending = PS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+		const GPWallPackageAuthority::FPurchaseResult BuyPending =
+			GPWallPackageAuthority::AuthorityPurchaseWallPackage(World, PS, nullptr);
+		Expect(BuyPending.bAccepted, TEXT("E_AcceptedAt4"));
+		const GPWallPackageAuthority::FPurchaseResult DupAt4 =
+			GPWallPackageAuthority::AuthorityPurchaseWallPackage(World, PS, nullptr);
+		Expect(!DupAt4.bAccepted, TEXT("E_PendingBlocks"));
+		Expect(DupAt4.RejectReason == EGP_WallPackageRejectReason::PackagePending, TEXT("E_PendingReason"));
+		Expect(FMath::IsNearlyEqual(
+			PS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
+			OrbitalPending - BuyPending.OrbitalCost,
+			1.0f), TEXT("E_NoSecondSpend"));
 		int32 WallPods = 0;
 		for (TActorIterator<AGP_DropPod> It(World); It; ++It)
 		{
-			if (It->GetPayloadKind() == EGP_DropPodPayloadKind::WallPackage && It->GetPhase() != EGP_DropPodPhase::Idle)
+			if (It->GetPayloadKind() == EGP_DropPodPayloadKind::WallPackage
+				&& It->GetPhase() != EGP_DropPodPhase::Idle
+				&& It->GetPhase() != EGP_DropPodPhase::PayloadDeployed)
 			{
 				++WallPods;
 			}
 		}
-		(void)WallPods;
+		Expect(WallPods == 1, TEXT("E_NoSecondPod"));
 
-		Expect(!Inventory->AuthorityCompletePackageDelivery(6), TEXT("L_OverCapacityRejected"));
-		Expect(Inventory->GetWallSegmentCount() == 5, TEXT("L_Still5"));
-		Expect(Inventory->AuthorityTryConsumeSegments(5), TEXT("L_ConsumeSetup"));
-		Expect(Inventory->GetWallSegmentCount() == 0, TEXT("L_ConsumedTo0"));
-
-		if (Inventory->CanPurchaseWallPackage())
+		Expect(Inventory->AuthorityTryConsumeSegments(3), TEXT("G_Consume3WhilePending"));
+		Expect(Inventory->GetWallSegmentCount() == 1, TEXT("G_Stock1DuringFlight"));
+		LastPodWeak = BuyPending.SpawnedPod;
+		ScheduleNext(0.15f);
+		break;
+	}
+	case 5:
+	{
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		AGP_PlayerState* PS = OwnerPSWeak.Get();
+		UGP_WallSegmentInventoryComponent* Inventory =
+			IsValid(Base) ? Base->GetWallSegmentInventoryComponent() : nullptr;
+		if (!Expect(IsValid(Inventory) && IsValid(PS), TEXT("G_ArrivalActors")))
 		{
-			Expect(Inventory->AuthorityBeginPackageDelivery(), TEXT("L_BeginPending"));
+			Finish();
+			return;
 		}
-		if (Inventory->IsWallPackagePending())
+		if (WaitForStock(Inventory, 5, 5))
 		{
-			Expect(!Inventory->AuthorityCompletePackageDelivery(6), TEXT("L_Complete6Fails"));
-			Expect(Inventory->GetWallSegmentCount() == 0, TEXT("L_NoGrantOnBadComplete"));
-			Expect(!Inventory->IsWallPackagePending(), TEXT("L_PendingClearedOnBadComplete"));
+			return;
 		}
+		Expect(Inventory->GetWallSegmentCount() == 5, TEXT("G_ArrivalStock5"));
+		Expect(!Inventory->IsWallPackagePending(), TEXT("G_PendingCleared"));
 
+		Expect(Inventory->AuthorityTryConsumeSegments(1), TEXT("H_ConsumeTo4"));
+		OrbitalAtPending = PS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+		const GPWallPackageAuthority::FPurchaseResult FullFlight =
+			GPWallPackageAuthority::AuthorityPurchaseWallPackage(World, PS, nullptr);
+		Expect(FullFlight.bAccepted, TEXT("H_PurchaseAt4"));
+		Inventory->DebugForceSetStock(5);
+		Expect(Inventory->GetWallSegmentCount() == 5, TEXT("H_ForcedFull"));
+		LastPodWeak = FullFlight.SpawnedPod;
+		ScheduleNext(0.15f);
+		break;
+	}
+	case 6:
+	{
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		AGP_PlayerState* PS = OwnerPSWeak.Get();
+		UGP_WallSegmentInventoryComponent* Inventory =
+			IsValid(Base) ? Base->GetWallSegmentInventoryComponent() : nullptr;
+		if (!Expect(IsValid(Inventory) && IsValid(PS), TEXT("H_FullArrivalActors")))
+		{
+			Finish();
+			return;
+		}
+		if (Inventory->IsWallPackagePending() && ArrivalWaitAttempts < 40)
+		{
+			++ArrivalWaitAttempts;
+			StageIndex = 6;
+			ScheduleNext(0.1f);
+			return;
+		}
+		ArrivalWaitAttempts = 0;
+		Expect(Inventory->GetWallSegmentCount() == 5, TEXT("H_Still5"));
+		Expect(!Inventory->IsWallPackagePending(), TEXT("H_PendingClearedAccepted0"));
+		Expect(FMath::IsNearlyEqual(
+			PS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
+			OrbitalAtPending - Catalog->GetWallPackage()->Cost,
+			1.0f), TEXT("H_NoRefund"));
+
+		Expect(Inventory->AuthorityTryConsumeSegments(5), TEXT("GFail_ClearStock"));
 		const float OrbitalFailBefore = PS->GetPlayerAttributeSet()->GetOrbitalFerronite();
 		GPWallPackageAuthority::DebugForceNextPodSpawnFailure(true);
 		const GPWallPackageAuthority::FPurchaseResult FailSpawn =
@@ -504,34 +694,36 @@ void UGP_WallPackageInventoryContractTestRunner::AdvanceStage()
 		GPWallPackageInventoryDebug::GrantOrbital(PS, 500.0f);
 		const GPWallPackageAuthority::FPurchaseResult DeathBuy =
 			GPWallPackageAuthority::AuthorityPurchaseWallPackage(World, PS, nullptr);
-		Expect(DeathBuy.bAccepted, TEXT("H_PurchaseForDeath"));
+		Expect(DeathBuy.bAccepted, TEXT("Death_Purchase"));
 		LastPodWeak = DeathBuy.SpawnedPod;
 		if (AGP_GameMode* GM = World->GetAuthGameMode<AGP_GameMode>())
 		{
 			GM->DebugSetAnnihilationCountsAsWin(false);
 		}
 		Base->NotifyAuthorityDeath();
-		Expect(Inventory->GetWallSegmentCount() == 0, TEXT("H_StockClearedOnDeath"));
-		Expect(!Inventory->IsWallPackagePending(), TEXT("H_PendingClearedOnDeath"));
-		ArrivalWaitAttempts = 0;
+		Expect(Inventory->GetWallSegmentCount() == 0, TEXT("Death_StockCleared"));
+		Expect(!Inventory->IsWallPackagePending(), TEXT("Death_PendingCleared"));
 		ScheduleNext(0.35f);
 		break;
 	}
-	case 3:
+	case 7:
 	{
 		AGP_MainBase* Base = MainBaseWeak.Get();
 		UGP_WallSegmentInventoryComponent* Inventory =
 			IsValid(Base) ? Base->GetWallSegmentInventoryComponent() : nullptr;
-		if (!Expect(IsValid(Inventory), TEXT("H_InventoryAfterWait")))
+		if (!Expect(IsValid(Inventory), TEXT("Death_InventoryAfterWait")))
 		{
 			Finish();
 			return;
 		}
-		Expect(Inventory->GetWallSegmentCount() == 0, TEXT("H_NoResurrectStock"));
-		Expect(!Inventory->IsWallPackagePending(), TEXT("H_StillNotPending"));
+		Expect(Inventory->GetWallSegmentCount() == 0, TEXT("Death_NoResurrectStock"));
+		Expect(!Inventory->IsWallPackagePending(), TEXT("Death_StillNotPending"));
 
-		if (GS->FindMainBaseForTeam(ContractTeam) == nullptr)
 		{
+			if (AGP_MainBase* DeadBase = MainBaseWeak.Get())
+			{
+				DeadBase->SetTeamId(-1);
+			}
 			FActorSpawnParameters Params;
 			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			Params.ObjectFlags |= RF_Transient;
@@ -550,8 +742,36 @@ void UGP_WallPackageInventoryContractTestRunner::AdvanceStage()
 			}
 		}
 
-		Catalog.DebugForceUnresolvedAuthoredLoad(nullptr, true);
-		Expect(Catalog.IsWallPackageDefinitionPending(), TEXT("I_PendingDef"));
+		AGP_PlayerState* PS = OwnerPSWeak.Get();
+		const GPWallPackageAuthority::FPurchaseResult TeamBuy =
+			GPWallPackageAuthority::AuthorityPurchaseWallPackage(World, PS, nullptr);
+		Expect(TeamBuy.bAccepted, TEXT("Team_Purchase"));
+		if (AGP_MainBase* LiveBase = MainBaseWeak.Get())
+		{
+			LiveBase->SetTeamId(92);
+		}
+		Expect(!Inventory->IsWallPackagePending(), TEXT("Team_PendingCancelled"));
+		ScheduleNext(0.25f);
+		break;
+	}
+	case 8:
+	{
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		UGP_WallSegmentInventoryComponent* Inventory =
+			IsValid(Base) ? Base->GetWallSegmentInventoryComponent() : nullptr;
+		if (!Expect(IsValid(Inventory), TEXT("Team_AfterWait")))
+		{
+			Finish();
+			return;
+		}
+		Expect(Inventory->GetWallSegmentCount() == 0, TEXT("Team_NoWrongGrant"));
+		if (AGP_MainBase* LiveBase = MainBaseWeak.Get())
+		{
+			LiveBase->SetTeamId(ContractTeam);
+		}
+
+		Catalog->DebugForceUnresolvedAuthoredLoad(nullptr, true);
+		Expect(Catalog->IsWallPackageDefinitionPending(), TEXT("I_PendingDef"));
 		AGP_PlayerState* PS = OwnerPSWeak.Get();
 		const float OrbitalPending = PS->GetPlayerAttributeSet()->GetOrbitalFerronite();
 		const GPWallPackageAuthority::FPurchaseResult NotReady =
@@ -573,12 +793,12 @@ void UGP_WallPackageInventoryContractTestRunner::AdvanceStage()
 		{
 			AuthoredPackage->DropTags.AddTag(Tags.Drop_Type_WallPackage);
 		}
-		Catalog.DebugCompletePendingAuthoredLoad();
-		Catalog.DebugAssignLoadedAuthored(AuthoredPackage);
-		Expect(Catalog.GetWallPackage() == AuthoredPackage, TEXT("J_AuthoredWins"));
-		Expect(FMath::IsNearlyEqual(Catalog.GetWallPackage()->Cost, 17.0f, 0.01f), TEXT("J_Cost17"));
-		Expect(FMath::IsNearlyEqual(Catalog.GetWallPackage()->DeliveryDescentSeconds, 4.25f, 0.01f), TEXT("J_Descent"));
-		Expect(FMath::IsNearlyEqual(Catalog.GetWallPackage()->PayloadDeployDelaySeconds, 0.75f, 0.01f), TEXT("J_Deploy"));
+		Catalog->DebugCompletePendingAuthoredLoad();
+		Catalog->DebugAssignLoadedAuthored(AuthoredPackage);
+		Expect(Catalog->GetWallPackage() == AuthoredPackage, TEXT("J_AuthoredWins"));
+		Expect(FMath::IsNearlyEqual(Catalog->GetWallPackage()->Cost, 17.0f, 0.01f), TEXT("J_Cost17"));
+		Expect(FMath::IsNearlyEqual(Catalog->GetWallPackage()->DeliveryDescentSeconds, 4.25f, 0.01f), TEXT("J_Descent"));
+		Expect(FMath::IsNearlyEqual(Catalog->GetWallPackage()->PayloadDeployDelaySeconds, 0.75f, 0.01f), TEXT("J_Deploy"));
 
 		AuthoredPackage->DeliveryDescentSeconds = 0.2f;
 		AuthoredPackage->PayloadDeployDelaySeconds = 0.05f;
@@ -592,11 +812,10 @@ void UGP_WallPackageInventoryContractTestRunner::AdvanceStage()
 			OrbitalAuth - 17.0f,
 			1.0f), TEXT("J_SpendMatchesAuthored"));
 		LastPodWeak = AuthBuy.SpawnedPod;
-		ArrivalWaitAttempts = 0;
 		ScheduleNext(0.15f);
 		break;
 	}
-	case 4:
+	case 9:
 	{
 		AGP_MainBase* Base = MainBaseWeak.Get();
 		AGP_PlayerState* PS = OwnerPSWeak.Get();
@@ -607,14 +826,10 @@ void UGP_WallPackageInventoryContractTestRunner::AdvanceStage()
 			Finish();
 			return;
 		}
-		if (Inventory->GetWallSegmentCount() != 5 && ArrivalWaitAttempts < 40)
+		if (WaitForStock(Inventory, 5, 9))
 		{
-			++ArrivalWaitAttempts;
-			StageIndex = 4;
-			ScheduleNext(0.1f);
 			return;
 		}
-		ArrivalWaitAttempts = 0;
 		Expect(Inventory->GetWallSegmentCount() == 5, TEXT("J_ArrivalStock5"));
 
 		const int32 ReadyCount = PS->GetOrbitalBuildingInventoryComponent()->GetReadyEntries().Num();

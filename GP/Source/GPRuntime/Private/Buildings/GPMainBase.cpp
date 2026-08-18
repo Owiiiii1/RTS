@@ -56,11 +56,6 @@ AGP_MainBase::AGP_MainBase()
 	// Default authored-relative offset (tuning). Owner repositions in BP-derived MainBase.
 	UnitDropZone->SetRelativeLocation(FVector(350.0f, 0.0f, 0.0f));
 
-	WallPackageDropZone = CreateDefaultSubobject<USceneComponent>(TEXT("WallPackageDropZone"));
-	WallPackageDropZone->SetupAttachment(PresentationRoot);
-	WallPackageDropZone->SetCanEverAffectNavigation(false);
-	WallPackageDropZone->SetRelativeLocation(FVector(-350.0f, 0.0f, 0.0f));
-
 	StorageComponent = CreateDefaultSubobject<UGP_StorageComponent>(TEXT("StorageComponent"));
 	WallSegmentInventoryComponent = CreateDefaultSubobject<UGP_WallSegmentInventoryComponent>(TEXT("WallSegmentInventoryComponent"));
 	DropOffRangeCm = 400.0f;
@@ -222,11 +217,6 @@ USceneComponent* AGP_MainBase::GetUnitDropZone() const
 	return UnitDropZone;
 }
 
-USceneComponent* AGP_MainBase::GetWallPackageDropZone() const
-{
-	return WallPackageDropZone;
-}
-
 UGP_WallSegmentInventoryComponent* AGP_MainBase::GetWallSegmentInventoryComponent() const
 {
 	return WallSegmentInventoryComponent;
@@ -337,14 +327,6 @@ bool AGP_MainBase::ValidateMainBaseContract(TArray<FText>& OutErrors, TArray<FTe
 	if (IsValid(UnitDropZone) && UnitDropZone->GetAttachParent() != PresentationRoot)
 	{
 		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrUnitDropZoneAttach", "UnitDropZone must attach to PresentationRoot."));
-	}
-	if (!IsValid(WallPackageDropZone))
-	{
-		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrWallPackageDropZone", "MainBase requires WallPackageDropZone."));
-	}
-	if (IsValid(WallPackageDropZone) && WallPackageDropZone->GetAttachParent() != PresentationRoot)
-	{
-		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrWallPackageDropZoneAttach", "WallPackageDropZone must attach to PresentationRoot."));
 	}
 	if (!IsValid(WallSegmentInventoryComponent))
 	{

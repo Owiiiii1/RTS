@@ -5,6 +5,7 @@
 #include "Engine/AssetManager.h"
 #include "Engine/StreamableManager.h"
 #include "Misc/CoreDelegates.h"
+#include "Misc/CoreMisc.h"
 #include "Orbital/GPWallPackageDefinition.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "Tags/GPGameplayTags.h"
@@ -16,41 +17,82 @@ namespace GPWallPackageCatalogPrivate
 {
 	static TStrongObjectPtr<UGP_WallPackageCatalog> GCatalog;
 	static FDelegateHandle EnginePreExitHandle;
+	static bool bInShutdownCatalog = false;
+	static bool bEngineExitLocked = false;
+
+	static bool IsCreationBlocked()
+	{
+		return bInShutdownCatalog || bEngineExitLocked || IsEngineExitRequested();
+	}
 	static constexpr TCHAR CatalogObjectName[] = TEXT("GP_WallPackageCatalog");
 	static constexpr TCHAR UnresolvedStub[] =
 		TEXT("/Game/GrimProtocol/Data/Orbital/DA_GP_WallPackage_UnresolvedSoftRefStub.DA_GP_WallPackage_UnresolvedSoftRefStub");
 }
 
-UGP_WallPackageCatalog& UGP_WallPackageCatalog::Get()
+UGP_WallPackageCatalog* UGP_WallPackageCatalog::TryGetExisting()
 {
-	if (!GPWallPackageCatalogPrivate::GCatalog.IsValid())
+	if (GPWallPackageCatalogPrivate::GCatalog.IsValid())
 	{
-		UGP_WallPackageCatalog* CatalogObj = FindObject<UGP_WallPackageCatalog>(
-			GetTransientPackage(),
-			GPWallPackageCatalogPrivate::CatalogObjectName);
-		if (!IsValid(CatalogObj))
+		return GPWallPackageCatalogPrivate::GCatalog.Get();
+	}
+	return nullptr;
+}
+
+UGP_WallPackageCatalog* UGP_WallPackageCatalog::Get()
+{
+	if (UGP_WallPackageCatalog* Existing = TryGetExisting())
+	{
+		if (!GPWallPackageCatalogPrivate::IsCreationBlocked())
 		{
-			CatalogObj = NewObject<UGP_WallPackageCatalog>(
-				GetTransientPackage(),
-				GPWallPackageCatalogPrivate::CatalogObjectName,
-				RF_Transient);
+			Existing->RefreshAuthoredBindings();
 		}
-		GPWallPackageCatalogPrivate::GCatalog.Reset(CatalogObj);
-		CatalogObj->EnsureNativeCatalog();
+		return Existing;
 	}
 
-	UGP_WallPackageCatalog& Catalog = *GPWallPackageCatalogPrivate::GCatalog.Get();
-	Catalog.RefreshAuthoredBindings();
-	return Catalog;
+	if (GPWallPackageCatalogPrivate::IsCreationBlocked())
+	{
+		return nullptr;
+	}
+
+	UGP_WallPackageCatalog* CatalogObj = FindObject<UGP_WallPackageCatalog>(
+		GetTransientPackage(),
+		GPWallPackageCatalogPrivate::CatalogObjectName);
+	if (!IsValid(CatalogObj))
+	{
+		CatalogObj = NewObject<UGP_WallPackageCatalog>(
+			GetTransientPackage(),
+			GPWallPackageCatalogPrivate::CatalogObjectName,
+			RF_Transient);
+	}
+	GPWallPackageCatalogPrivate::GCatalog.Reset(CatalogObj);
+	CatalogObj->EnsureNativeCatalog();
+	CatalogObj->RefreshAuthoredBindings();
+	return CatalogObj;
 }
 
 void UGP_WallPackageCatalog::ShutdownCatalog()
 {
+	if (GPWallPackageCatalogPrivate::bInShutdownCatalog)
+	{
+		return;
+	}
+
+	GPWallPackageCatalogPrivate::bInShutdownCatalog = true;
 	if (GPWallPackageCatalogPrivate::GCatalog.IsValid())
 	{
 		GPWallPackageCatalogPrivate::GCatalog->CancelLoad();
 	}
 	GPWallPackageCatalogPrivate::GCatalog.Reset();
+	if (!GPWallPackageCatalogPrivate::bEngineExitLocked && !IsEngineExitRequested())
+	{
+		GPWallPackageCatalogPrivate::bInShutdownCatalog = false;
+	}
+}
+
+void UGP_WallPackageCatalog::NotifyEngineShutdown()
+{
+	GPWallPackageCatalogPrivate::bEngineExitLocked = true;
+	ShutdownCatalog();
 }
 
 void UGP_WallPackageCatalog::BindEngineLifecycle()
@@ -61,7 +103,7 @@ void UGP_WallPackageCatalog::BindEngineLifecycle()
 	}
 
 	GPWallPackageCatalogPrivate::EnginePreExitHandle =
-		FCoreDelegates::OnEnginePreExit.AddStatic(&UGP_WallPackageCatalog::ShutdownCatalog);
+		FCoreDelegates::OnEnginePreExit.AddStatic(&UGP_WallPackageCatalog::NotifyEngineShutdown);
 }
 
 void UGP_WallPackageCatalog::UnbindEngineLifecycle()
@@ -223,7 +265,7 @@ void UGP_WallPackageCatalog::RequestAsyncLoad(const FSoftObjectPath& SoftPath)
 
 void UGP_WallPackageCatalog::HandleLoaded()
 {
-	if (!IsValid(this))
+	if (!IsValid(this) || GPWallPackageCatalogPrivate::IsCreationBlocked() || IsEngineExitRequested())
 	{
 		return;
 	}
@@ -436,6 +478,9 @@ void UGP_WallPackageCatalog::DebugEndContractIsolation()
 	}
 	bContractIsolationActive = false;
 	ContractSavedSettingsRef.Reset();
-	RefreshAuthoredBindings();
+	if (!GPWallPackageCatalogPrivate::IsCreationBlocked())
+	{
+		RefreshAuthoredBindings();
+	}
 }
 #endif

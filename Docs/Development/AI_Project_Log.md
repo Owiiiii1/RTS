@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S42A operator-feedback + shutdown-crash correction
+
+Status: **GP-S42A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Same branch `feature/gp-s42a-wall-package-inventory`
+- Shutdown: `TryGetExisting` / engine-exit lock; BeginDestroy must not recreate catalog
+- Wall Package lands at MainBase `UnitDropZone`; `WallPackageDropZone` removed
+- Purchase allowed stock 0..4 at full package Cost; arrival wastes excess; cap 5
+- **NOT MERGED. NOT FINALIZED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-18 — GP-S42A Wall Package Data + MainBase Wall Inventory
 
 Status: **GP-S42A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

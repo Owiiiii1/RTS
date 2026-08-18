@@ -33,9 +33,13 @@ private:
 	void CleanupActors();
 	void BindInventoryDelegates();
 	void UnbindInventoryDelegates();
+	void CleanupCatalogIfExists();
+	bool WaitForStock(class UGP_WallSegmentInventoryComponent* Inventory, int32 ExpectedStock, int32 RetryStage);
 
 	int32 StageIndex = 0;
 	int32 ArrivalWaitAttempts = 0;
+	int32 ExpectedArrivalStock = 5;
+	float OrbitalAtPending = 0.0f;
 	int32 Failures = 0;
 	bool bFinished = false;
 	FDelegateHandle WorldCleanupHandle;

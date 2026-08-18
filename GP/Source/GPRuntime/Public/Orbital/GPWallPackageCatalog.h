@@ -20,8 +20,15 @@ class GPRUNTIME_API UGP_WallPackageCatalog : public UObject
 	GENERATED_BODY()
 
 public:
-	static UGP_WallPackageCatalog& Get();
+	/** Creates if allowed. Null during/after engine shutdown. */
+	static UGP_WallPackageCatalog* Get();
+
+	/** Live catalog only. Never creates. Never refreshes. Teardown-safe. */
+	static UGP_WallPackageCatalog* TryGetExisting();
+
+	/** Idempotent. Engine pre-exit / module shutdown lock recreation. */
 	static void ShutdownCatalog();
+	static void NotifyEngineShutdown();
 	static void BindEngineLifecycle();
 	static void UnbindEngineLifecycle();
 

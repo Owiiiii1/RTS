@@ -672,9 +672,9 @@ Mesh resolution per bitfield — lookup table. Implementation у `UGP_WallConnec
 ### Wall Package + MainBase inventory
 
 `UGP_WallPackageDefinition` owns Cost, DisplayName, Icon, SegmentCount=5, delivery timing.  
-`UGP_WallSegmentInventoryComponent` on `AGP_MainBase`: replicated count **0..5**, delivery-pending flag. Arrival sets count to 5 only when stock is 0. MainBase destroy **loses** remaining stock.
+`UGP_WallSegmentInventoryComponent` on `AGP_MainBase`: replicated count **0..5**, delivery-pending flag. Purchase allowed at stock **0..4** for full package Cost. Arrival adds `min(SegmentCount, free capacity)` using stock at arrival; excess wasted; never above 5. MainBase destroy **loses** remaining stock. Landing = MainBase `UnitDropZone`.
 
-**GP-S42A implementation (candidate):** native/authored `UGP_WallPackageDefinition` catalog, MainBase inventory + `WallPackageDropZone`, `EGP_DropPodPayloadKind::WallPackage`, purchase/spend authority, TEMP HUD Buy + Build Wall **availability**. `AGP_Wall` / drag / WallTurret are not in this slice.
+**GP-S42A implementation (candidate):** native/authored `UGP_WallPackageDefinition` catalog, MainBase inventory, `EGP_DropPodPayloadKind::WallPackage` to `UnitDropZone`, purchase/spend authority, TEMP HUD Buy + Build Wall **availability**. `AGP_Wall` / drag / WallTurret are not in this slice.
 
 Presentation: `WallInventoryChanged(NewCount)` — BP depot meshes only; not gameplay state.
 

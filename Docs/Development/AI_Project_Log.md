@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S42A Wall Package Data + MainBase Wall Inventory
+
+Status: **GP-S42A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s42a-wall-package-inventory` (base `origin/main` @ `c00e95ed46fb4aa738a1747576ee2d6b84ffe593`)
+- Wall Package is not READY: `UGP_WallPackageDefinition` + catalog (authored soft ref wins, async load, native Cost 150 fallback)
+- `UGP_WallSegmentInventoryComponent` on `AGP_MainBase` (stock 0..5, pending, depot delegates)
+- One `EGP_DropPodPayloadKind::WallPackage` pod to `WallPackageDropZone`; arrival sets stock 5
+- Purchase spends OrbitalFerronite once; spawn fail refunds; death clears stock/pending
+- TEMP HUD: Buy + stock/pending + Build Wall availability only (no drag)
+- **NOT MERGED. NOT FINALIZED.** Deferred: `AGP_Wall`, WallConnection, drag, WallTurret
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-18 — GP-0305R Wall Package Delivery Reconciliation
 
 Status: **GP-0305R_WALL_PACKAGE_RECONCILIATION_READY_FOR_REVIEW**

@@ -111,6 +111,20 @@ public:
 	void RequestBuildingPurchaseById(FPrimaryAssetId DropDefinitionId);
 	void RequestBuildingDeployById(FPrimaryAssetId DropDefinitionId);
 
+	void SetWallPackageDisplay(
+		int32 Stock,
+		bool bPending,
+		bool bCanBuy,
+		bool bCanBuild,
+		float PackageCost,
+		bool bDefinitionReady);
+
+	UFUNCTION(BlueprintCallable, Category = "GP|TEMP HUD")
+	void HandleBuyWallPackageClicked();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|TEMP HUD")
+	void HandleBuildWallClicked();
+
 #if !UE_BUILD_SHIPPING
 	FString GetBaseLineTextForContract() const;
 	FString GetOrbitalLineTextForContract() const;
@@ -144,6 +158,10 @@ public:
 	int32 GetSalvageWalkerCountForContract() const { return SalvageWalkerCount; }
 	bool IsConfirmDropEnabledForContract() const;
 	int32 GetBuildingReadyForContract() const { return ReadyLogisticsHubCount; }
+	int32 GetWallStockForContract() const { return WallStock; }
+	bool IsWallPackagePendingForContract() const { return bWallPackagePending; }
+	bool IsBuyWallPackageEnabledForContract() const;
+	bool IsBuildWallAvailableForContract() const { return bWallBuildAvailable; }
 #endif
 
 protected:
@@ -156,6 +174,8 @@ private:
 	void BindLaunchClickedIdempotent();
 	void BindUnitDropClickedIdempotent();
 	void BindBuildingPanelClickedIdempotent();
+	void BindWallPackageClickedIdempotent();
+	void RefreshWallPackagePanel();
 	void EnsureContainerLineCount(int32 DesiredCount);
 	void RefreshStatusText();
 	void RefreshOrbitalText();
@@ -286,6 +306,28 @@ private:
 	TArray<FGP_BuildingHudCatalogRow> BuildingCatalogRows;
 
 	void RebuildExtraBuildingRows();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UVerticalBox> WallPackagePanel;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> WallStockLineText;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UButton> BuyWallPackageButton;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> BuyWallPackageLabel;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> BuildWallAvailabilityText;
+
+	int32 WallStock = 0;
+	bool bWallPackagePending = false;
+	bool bWallCanBuy = false;
+	bool bWallBuildAvailable = false;
+	float WallPackageCost = 0.0f;
+	bool bWallDefinitionReady = false;
 
 	bool bHasResolvedBase = false;
 	float DisplayStored = 0.0f;

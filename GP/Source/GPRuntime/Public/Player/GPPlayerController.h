@@ -79,6 +79,13 @@ public:
 	bool AuthorityTryPurchaseBuilding(FPrimaryAssetId DropDefinitionId);
 	bool AuthorityTryPurchaseBuilding(EGP_OrbitalBuildingType BuildingType);
 
+	void RequestWallPackagePurchase();
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestWallPackagePurchase();
+
+	bool AuthorityTryPurchaseWallPackage();
+
 	/** Local deploy intent — placement transform from ghost confirm. */
 	void RequestBuildingDeploy(FPrimaryAssetId DropDefinitionId, const FTransform& WorldTransform);
 	void RequestBuildingDeploy(EGP_OrbitalBuildingType BuildingType, const FTransform& WorldTransform);
@@ -224,6 +231,13 @@ private:
 	void UnbindOrbitalFerroniteAttribute();
 	void SyncOrbitalFerroniteHUDFromAttributes();
 	void SyncBuildingReadyHUDFromInventory();
+	void BindWallInventoryEvents(AGP_MainBase* MainBase);
+	void UnbindWallInventoryEvents();
+	void SyncWallPackageHUDFromInventory();
+	UFUNCTION()
+	void HandleWallInventoryChangedForHUD(int32 NewCount);
+	UFUNCTION()
+	void HandleWallPackagePendingChangedForHUD(bool bPending);
 	void HandleOrbitalFerroniteAttributeChanged(const struct FOnAttributeChangeData& Data);
 	void HandleMaxUnitsAttributeChanged(const struct FOnAttributeChangeData& Data);
 	void HandleCurrentUnitsAttributeChanged(const struct FOnAttributeChangeData& Data);
@@ -359,6 +373,7 @@ private:
 	TWeakObjectPtr<AGP_GameState> BoundPlanetaryGameState;
 	TWeakObjectPtr<AGP_PlayerState> BoundPlanetaryPlayerState;
 	TWeakObjectPtr<UGP_StorageComponent> BoundPlanetaryStorage;
+	TWeakObjectPtr<class UGP_WallSegmentInventoryComponent> BoundWallInventory;
 	TWeakObjectPtr<UGP_AbilitySystemComponent> BoundOrbitalASC;
 	FDelegateHandle ResolvedMainBaseChangedHandle;
 	FDelegateHandle PlayerTeamIdChangedHandle;

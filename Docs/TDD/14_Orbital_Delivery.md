@@ -185,7 +185,7 @@ Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / 
 | `Server_RequestUnitDrop(Manifest)` | Confirm packed unit order |
 | `Server_RequestBuildingPurchase(DropDef)` | Spend → READY++ |
 | `Server_RequestBuildingDeploy(DropDef, Loc, Rot)` | Consume READY → pod |
-| `Server_RequestWallPackage(PackageDef)` | Spend → one rocket to MainBase; pending until arrival |
+| `Server_RequestWallPackagePurchase()` | Spend → one rocket to MainBase; pending until arrival (GP-S42A) |
 
 Client intent only. Rejection via existing notify path where possible.
 
@@ -196,7 +196,7 @@ Client intent only. Rejection via existing notify path where possible.
 | DropPod LandingLocation, TeamId, DescentProgress01 | COND_None (telegraph) |
 | OrbitalFerronite | COND_OwnerOnly |
 | Building READY inventory | OwnerOnly (or equivalent) |
-| MainBase Wall segment count + package pending | Owner-readable |
+| MainBase Wall segment count + package pending | COND_None (depot presentation is world-visible) |
 | Mesh/Niagara | Authored BP; not gameplay-hardcoded |
 
 ## Cosmetic budget (MVP)

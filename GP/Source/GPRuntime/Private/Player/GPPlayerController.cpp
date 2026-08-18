@@ -40,6 +40,10 @@
 #include "Orbital/GPOrbitalBuildingInventoryComponent.h"
 #include "Orbital/GPOrbitalDropDefinition.h"
 #include "Orbital/GPDropPod.h"
+#include "Orbital/GPWallPackageAuthority.h"
+#include "Orbital/GPWallPackageCatalog.h"
+#include "Orbital/GPWallPackageDefinition.h"
+#include "Buildings/GPWallSegmentInventoryComponent.h"
 #include "Resources/GPStorageComponent.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPUnitBase.h"
@@ -1152,6 +1156,52 @@ bool AGP_PlayerController::AuthorityTryPurchaseBuilding(FPrimaryAssetId DropDefi
 	return Result.bAccepted;
 }
 
+void AGP_PlayerController::RequestWallPackagePurchase()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+	Server_RequestWallPackagePurchase();
+}
+
+bool AGP_PlayerController::Server_RequestWallPackagePurchase_Validate()
+{
+	return true;
+}
+
+void AGP_PlayerController::Server_RequestWallPackagePurchase_Implementation()
+{
+	AuthorityTryPurchaseWallPackage();
+}
+
+bool AGP_PlayerController::AuthorityTryPurchaseWallPackage()
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+
+	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	if (PS == nullptr)
+	{
+		return false;
+	}
+
+	const GPWallPackageAuthority::FPurchaseResult Result =
+		GPWallPackageAuthority::AuthorityPurchaseWallPackage(GetWorld(), PS, nullptr);
+	UE_LOG(LogTemp, Log,
+		TEXT("GP WallPackagePurchase Result: PC=%s Team=%d Accepted=%s Reason=%d Cost=%.3f Pending=%s Stock=%d"),
+		*GetName(),
+		PS->GetTeamId(),
+		Result.bAccepted ? TEXT("true") : TEXT("false"),
+		static_cast<int32>(Result.RejectReason),
+		Result.OrbitalCost,
+		Result.bPending ? TEXT("true") : TEXT("false"),
+		Result.StockAfter);
+	return Result.bAccepted;
+}
+
 bool AGP_PlayerController::AuthorityTryPurchaseBuilding(EGP_OrbitalBuildingType BuildingType)
 {
 	if (BuildingType != EGP_OrbitalBuildingType::LogisticsHub)
@@ -1884,6 +1934,11 @@ void AGP_PlayerController::SyncBuildingReadyHUDFromInventory()
 		Row.ReadyCount = Inventory != nullptr ? Inventory->GetReadyCount(Drop) : 0;
 		Row.bCanDeploy = Row.ReadyCount > 0
 			&& UGP_BuildingDropCatalog::Get().ResolvePayloadClass(Drop) != nullptr;
+		const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+		if (GPTags.Drop_Type_Wall.IsValid() && Drop->DropTags.HasTagExact(GPTags.Drop_Type_Wall))
+		{
+			continue;
+		}
 		Rows.Add(Row);
 		if (Row.DropDefinitionId == HubId)
 		{
@@ -2484,6 +2539,7 @@ void AGP_PlayerController::DestroyPlanetaryFerroniteHUD()
 void AGP_PlayerController::ClearPlanetaryFerroniteHUDBindings()
 {
 	UnbindPlanetaryFerroniteStorage();
+	UnbindWallInventoryEvents();
 	UnbindOrbitalFerroniteAttribute();
 	UnbindBuildingInventoryEvents();
 
@@ -2533,9 +2589,82 @@ void AGP_PlayerController::UnbindPlanetaryFerroniteStorage()
 	BoundPlanetaryStorage.Reset();
 }
 
+void AGP_PlayerController::UnbindWallInventoryEvents()
+{
+	if (UGP_WallSegmentInventoryComponent* Inventory = BoundWallInventory.Get())
+	{
+		Inventory->OnWallInventoryChanged.RemoveDynamic(this, &AGP_PlayerController::HandleWallInventoryChangedForHUD);
+		Inventory->OnWallPackagePendingChanged.RemoveDynamic(
+			this,
+			&AGP_PlayerController::HandleWallPackagePendingChangedForHUD);
+	}
+	BoundWallInventory.Reset();
+}
+
+void AGP_PlayerController::BindWallInventoryEvents(AGP_MainBase* MainBase)
+{
+	UnbindWallInventoryEvents();
+	UGP_WallSegmentInventoryComponent* Inventory =
+		IsValid(MainBase) ? MainBase->GetWallSegmentInventoryComponent() : nullptr;
+	if (!IsValid(Inventory))
+	{
+		SyncWallPackageHUDFromInventory();
+		return;
+	}
+
+	BoundWallInventory = Inventory;
+	Inventory->OnWallInventoryChanged.AddDynamic(this, &AGP_PlayerController::HandleWallInventoryChangedForHUD);
+	Inventory->OnWallPackagePendingChanged.AddDynamic(this, &AGP_PlayerController::HandleWallPackagePendingChangedForHUD);
+	SyncWallPackageHUDFromInventory();
+}
+
+void AGP_PlayerController::HandleWallInventoryChangedForHUD(int32 NewCount)
+{
+	(void)NewCount;
+	SyncWallPackageHUDFromInventory();
+}
+
+void AGP_PlayerController::HandleWallPackagePendingChangedForHUD(bool bPending)
+{
+	(void)bPending;
+	SyncWallPackageHUDFromInventory();
+}
+
+void AGP_PlayerController::SyncWallPackageHUDFromInventory()
+{
+	EnsurePlanetaryFerroniteHUD();
+	if (PlanetaryFerroniteHUD == nullptr)
+	{
+		return;
+	}
+
+	UGP_WallSegmentInventoryComponent* Inventory = BoundWallInventory.Get();
+	const int32 Stock = IsValid(Inventory) ? Inventory->GetWallSegmentCount() : 0;
+	const bool bPending = IsValid(Inventory) && Inventory->IsWallPackagePending();
+	const bool bCanBuild = IsValid(Inventory) && Inventory->CanBuildWall();
+
+	AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	const float Orbital = (PS != nullptr && PS->GetPlayerAttributeSet() != nullptr)
+		? PS->GetPlayerAttributeSet()->GetOrbitalFerronite()
+		: 0.0f;
+
+	UGP_WallPackageCatalog& Catalog = UGP_WallPackageCatalog::Get();
+	const bool bDefReady = Catalog.IsWallPackageDefinitionReady();
+	const UGP_WallPackageDefinition* Package = Catalog.GetWallPackage();
+	const float Cost = IsValid(Package) ? Package->Cost : 0.0f;
+	const bool bCanBuy = bDefReady
+		&& IsValid(Inventory)
+		&& Inventory->CanPurchaseWallPackage()
+		&& Orbital + KINDA_SMALL_NUMBER >= Cost
+		&& BoundWallInventory.IsValid();
+
+	PlanetaryFerroniteHUD->SetWallPackageDisplay(Stock, bPending, bCanBuy, bCanBuild, Cost, bDefReady);
+}
+
 void AGP_PlayerController::BindPlanetaryFerroniteStorage(AGP_MainBase* MainBase)
 {
 	UnbindPlanetaryFerroniteStorage();
+	BindWallInventoryEvents(MainBase);
 	UGP_StorageComponent* Storage = IsValid(MainBase) ? MainBase->GetStorageComponent() : nullptr;
 	if (!IsValid(Storage))
 	{
@@ -2680,6 +2809,7 @@ void AGP_PlayerController::SyncOrbitalFerroniteHUDFromAttributes()
 		}
 	}
 	PlanetaryFerroniteHUD->SetOrbitalFerroniteDisplay(Orbital);
+	SyncWallPackageHUDFromInventory();
 }
 
 void AGP_PlayerController::HandleOrbitalFerroniteAttributeChanged(const FOnAttributeChangeData& Data)
@@ -2689,6 +2819,7 @@ void AGP_PlayerController::HandleOrbitalFerroniteAttributeChanged(const FOnAttri
 	{
 		PlanetaryFerroniteHUD->SetOrbitalFerroniteDisplay(Data.NewValue);
 	}
+	SyncWallPackageHUDFromInventory();
 }
 
 void AGP_PlayerController::SyncUnitCapHUDFromAttributes()

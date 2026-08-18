@@ -130,10 +130,12 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeConstruct()
 	RefreshUnitCapText();
 	RefreshUnitDropPanel();
 	RefreshBuildingPanel();
+	RefreshWallPackagePanel();
 	SetLaunchButtonEnabled(bLaunchEnabled);
 	BindLaunchClickedIdempotent();
 	BindUnitDropClickedIdempotent();
 	BindBuildingPanelClickedIdempotent();
+	BindWallPackageClickedIdempotent();
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeDestruct()
@@ -169,6 +171,10 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::NativeDestruct()
 	if (DeployLogisticsHubButton != nullptr)
 	{
 		DeployLogisticsHubButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleDeployLogisticsHubClicked);
+	}
+	if (BuyWallPackageButton != nullptr)
+	{
+		BuyWallPackageButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleBuyWallPackageClicked);
 	}
 	ExtraRowBinders.Reset();
 	Super::NativeDestruct();
@@ -227,6 +233,15 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::BindBuildingPanelClickedIdempotent()
 	}
 }
 
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::BindWallPackageClickedIdempotent()
+{
+	if (BuyWallPackageButton != nullptr)
+	{
+		BuyWallPackageButton->OnClicked.RemoveDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleBuyWallPackageClicked);
+		BuyWallPackageButton->OnClicked.AddDynamic(this, &UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleBuyWallPackageClicked);
+	}
+}
+
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 {
 	if (WidgetTree == nullptr)
@@ -251,11 +266,14 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 		&& ConfirmDropButton != nullptr
 		&& BuildingPanel != nullptr
 		&& PurchaseLogisticsHubButton != nullptr
-		&& DeployLogisticsHubButton != nullptr)
+		&& DeployLogisticsHubButton != nullptr
+		&& WallPackagePanel != nullptr
+		&& BuyWallPackageButton != nullptr)
 	{
 		BindLaunchClickedIdempotent();
 		BindUnitDropClickedIdempotent();
 		BindBuildingPanelClickedIdempotent();
+		BindWallPackageClickedIdempotent();
 		return;
 	}
 
@@ -513,12 +531,48 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 
 	BuildingExtraRowsBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BuildingExtraRows"));
 	BuildingExtraRowsBox->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	WallPackagePanel = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("WallPackagePanel"));
+	WallPackagePanel->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (UVerticalBoxSlot* WallGroupSlot = ProcurementPanel->AddChildToVerticalBox(WallPackagePanel))
+	{
+		WallGroupSlot->SetHorizontalAlignment(HAlign_Right);
+		WallGroupSlot->SetPadding(FMargin(0.0f, 8.0f, 0.0f, 0.0f));
+	}
+
+	UTextBlock* WallTitle = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("WallPackageTitle"));
+	GPTempS28PHUDPrivate::StyleStatusText(WallTitle);
+	WallTitle->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(18));
+	WallTitle->SetText(FText::FromString(TEXT("WALL PACKAGE")));
+	WallPackagePanel->AddChildToVerticalBox(WallTitle);
+
+	WallStockLineText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("WallStockLine"));
+	GPTempS28PHUDPrivate::StyleStatusText(WallStockLineText);
+	WallPackagePanel->AddChildToVerticalBox(WallStockLineText);
+
+	BuyWallPackageButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("BuyWallPackageButton"));
+	BuyWallPackageButton->SetVisibility(ESlateVisibility::Visible);
+	BuyWallPackageLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuyWallPackageLabel"));
+	BuyWallPackageLabel->SetText(FText::FromString(TEXT("Buy Wall Package")));
+	BuyWallPackageLabel->SetJustification(ETextJustify::Center);
+	BuyWallPackageLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	BuyWallPackageLabel->SetFont(GPTempS28PHUDPrivate::MakeStatusFont(14));
+	BuyWallPackageButton->SetContent(BuyWallPackageLabel);
+	if (UVerticalBoxSlot* BuySlot = WallPackagePanel->AddChildToVerticalBox(BuyWallPackageButton))
+	{
+		BuySlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 4.0f));
+	}
+
+	BuildWallAvailabilityText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BuildWallAvailability"));
+	GPTempS28PHUDPrivate::StyleStatusText(BuildWallAvailabilityText);
+	WallPackagePanel->AddChildToVerticalBox(BuildWallAvailabilityText);
+
 	if (UVerticalBoxSlot* ExtraSlot = BuildingPanel->AddChildToVerticalBox(BuildingExtraRowsBox))
 	{
 		ExtraSlot->SetPadding(FMargin(0.0f, 8.0f, 0.0f, 0.0f));
 	}
 
 	BindBuildingPanelClickedIdempotent();
+	BindWallPackageClickedIdempotent();
 
 	bTreeBuilt = true;
 	RefreshStatusText();
@@ -526,6 +580,7 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureWidgetTreeBuilt()
 	RefreshUnitCapText();
 	RefreshUnitDropPanel();
 	RefreshBuildingPanel();
+	RefreshWallPackagePanel();
 }
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::EnsureContainerLineCount(int32 DesiredCount)
@@ -906,6 +961,80 @@ void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetBuildingReadyDisplay(int32 InReadyL
 	ReadyLogisticsHubCount = FMath::Max(0, InReadyLogisticsHubCount);
 	RefreshBuildingPanel();
 }
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::SetWallPackageDisplay(
+	int32 Stock,
+	bool bPending,
+	bool bCanBuy,
+	bool bCanBuild,
+	float PackageCost,
+	bool bDefinitionReady)
+{
+	WallStock = FMath::Clamp(Stock, 0, 5);
+	bWallPackagePending = bPending;
+	bWallCanBuy = bCanBuy;
+	bWallBuildAvailable = bCanBuild;
+	WallPackageCost = PackageCost;
+	bWallDefinitionReady = bDefinitionReady;
+	RefreshWallPackagePanel();
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::RefreshWallPackagePanel()
+{
+	if (WallStockLineText != nullptr)
+	{
+		if (bWallPackagePending)
+		{
+			WallStockLineText->SetText(FText::FromString(FString::Printf(
+				TEXT("Wall stock: %d / 5 — DELIVERY PENDING"),
+				WallStock)));
+		}
+		else
+		{
+			WallStockLineText->SetText(FText::FromString(FString::Printf(
+				TEXT("Wall stock: %d / 5 — Cost: %d"),
+				WallStock,
+				FMath::RoundToInt(WallPackageCost))));
+		}
+	}
+
+	if (BuyWallPackageButton != nullptr)
+	{
+		BuyWallPackageButton->SetIsEnabled(bWallCanBuy && !bWallPackagePending);
+	}
+	if (BuyWallPackageLabel != nullptr)
+	{
+		BuyWallPackageLabel->SetText(FText::FromString(
+			bWallPackagePending ? TEXT("Wall Package PENDING") : TEXT("Buy Wall Package")));
+	}
+	if (BuildWallAvailabilityText != nullptr)
+	{
+		BuildWallAvailabilityText->SetText(FText::FromString(
+			bWallBuildAvailable
+				? TEXT("Build Wall: available (GP-S42C)")
+				: TEXT("Build Wall: unavailable")));
+	}
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleBuyWallPackageClicked()
+{
+	if (AGP_PlayerController* PC = Cast<AGP_PlayerController>(GetOwningPlayer()))
+	{
+		PC->RequestWallPackagePurchase();
+	}
+}
+
+void UGP_TEMP_S28P_PlanetaryFerroniteHUD::HandleBuildWallClicked()
+{
+	UE_LOG(LogTemp, Log, TEXT("GP Build Wall deferred to GP-S42C"));
+}
+
+#if !UE_BUILD_SHIPPING
+bool UGP_TEMP_S28P_PlanetaryFerroniteHUD::IsBuyWallPackageEnabledForContract() const
+{
+	return BuyWallPackageButton != nullptr && BuyWallPackageButton->GetIsEnabled();
+}
+#endif
 
 void UGP_TEMP_S28P_PlanetaryFerroniteHUD::AdjustWorkerCount(int32 Delta)
 {

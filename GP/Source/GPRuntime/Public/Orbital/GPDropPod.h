@@ -11,12 +11,14 @@ class USceneComponent;
 class UStaticMeshComponent;
 class AGP_PlayerState;
 class AGP_BuildingBase;
+class AGP_MainBase;
 
 UENUM(BlueprintType)
 enum class EGP_DropPodPayloadKind : uint8
 {
 	Unit = 0,
-	Building
+	Building,
+	WallPackage
 };
 
 UENUM(BlueprintType)
@@ -74,6 +76,20 @@ public:
 		FIntPoint OriginCell,
 		FIntPoint FootprintSize,
 		FGuid GridReservationId);
+
+	/** Authority-only. Package inventory arrival at MainBase. No AGP_Wall spawn. No grid reservation. */
+	void AuthorityInitWallPackageDrop(
+		AGP_PlayerState* RequestingPlayerState,
+		int32 TeamId,
+		AGP_MainBase* TargetMainBase,
+		int32 DeliveryGeneration,
+		int32 SegmentCount,
+		const FVector& LandingWorldLocation,
+		const FRotator& LandingWorldRotation,
+		float DescentDurationSeconds,
+		float SpawnAltitudeCm,
+		float PayloadDeployDelaySeconds,
+		float CleanupDelaySeconds);
 
 	UFUNCTION(BlueprintPure, Category = "GP|DropPod")
 	EGP_DropPodPayloadKind GetPayloadKind() const { return PayloadKind; }
@@ -167,6 +183,8 @@ private:
 	void AuthorityBeginPayloadDeploy();
 	void AuthoritySpawnUnitPayload();
 	void AuthoritySpawnBuildingPayload();
+	void AuthorityDeliverWallPackage();
+	void AuthorityCancelWallPackageIfPending();
 	void AuthorityScheduleCleanup();
 	void HandleCleanup();
 	void ClearLifecycleTimers();
@@ -182,6 +200,11 @@ private:
 	FGuid BuildingGridReservationId;
 	bool bGridReservationPromoted = false;
 	TWeakObjectPtr<AGP_PlayerState> RequestingPlayerStateWeak;
+	TWeakObjectPtr<AGP_MainBase> WallPackageMainBaseWeak;
+	int32 WallPackageDeliveryGeneration = 0;
+	int32 WallPackageSegmentCount = 0;
+	int32 WallPackageExpectedTeamId = 0;
+	bool bWallPackageDelivered = false;
 	float DescentDurationSeconds = 2.5f;
 	float SpawnSpacingCm = 180.0f;
 	float PayloadDeployDelaySeconds = 1.25f;

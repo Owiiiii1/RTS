@@ -9,6 +9,7 @@
 #include "Game/GPGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "Buildings/GPBuildingDefinition.h"
+#include "Buildings/GPWallSegmentInventoryComponent.h"
 #include "Resources/GPStorageComponent.h"
 #include "Tags/GPGameplayTags.h"
 
@@ -55,7 +56,13 @@ AGP_MainBase::AGP_MainBase()
 	// Default authored-relative offset (tuning). Owner repositions in BP-derived MainBase.
 	UnitDropZone->SetRelativeLocation(FVector(350.0f, 0.0f, 0.0f));
 
+	WallPackageDropZone = CreateDefaultSubobject<USceneComponent>(TEXT("WallPackageDropZone"));
+	WallPackageDropZone->SetupAttachment(PresentationRoot);
+	WallPackageDropZone->SetCanEverAffectNavigation(false);
+	WallPackageDropZone->SetRelativeLocation(FVector(-350.0f, 0.0f, 0.0f));
+
 	StorageComponent = CreateDefaultSubobject<UGP_StorageComponent>(TEXT("StorageComponent"));
+	WallSegmentInventoryComponent = CreateDefaultSubobject<UGP_WallSegmentInventoryComponent>(TEXT("WallSegmentInventoryComponent"));
 	DropOffRangeCm = 400.0f;
 
 	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
@@ -119,6 +126,11 @@ void AGP_MainBase::NotifyAuthorityDeath()
 		return;
 	}
 
+	if (IsValid(WallSegmentInventoryComponent))
+	{
+		WallSegmentInventoryComponent->AuthorityClearForDestruction();
+	}
+
 	if (AGP_GameMode* GameMode = World->GetAuthGameMode<AGP_GameMode>())
 	{
 		GameMode->NotifyMainBaseDied(this);
@@ -149,6 +161,11 @@ void AGP_MainBase::NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId)
 	if (bRegisteredWithGameState)
 	{
 		UnregisterFromGameState();
+	}
+
+	if (IsValid(WallSegmentInventoryComponent) && WallSegmentInventoryComponent->IsWallPackagePending())
+	{
+		WallSegmentInventoryComponent->AuthorityCancelPackageDelivery();
 	}
 
 	if (NewTeamId >= 1)
@@ -203,6 +220,16 @@ USceneComponent* AGP_MainBase::GetDropOffVisualAnchor() const
 USceneComponent* AGP_MainBase::GetUnitDropZone() const
 {
 	return UnitDropZone;
+}
+
+USceneComponent* AGP_MainBase::GetWallPackageDropZone() const
+{
+	return WallPackageDropZone;
+}
+
+UGP_WallSegmentInventoryComponent* AGP_MainBase::GetWallSegmentInventoryComponent() const
+{
+	return WallSegmentInventoryComponent;
 }
 
 float AGP_MainBase::GetPlanetaryStored() const
@@ -310,6 +337,18 @@ bool AGP_MainBase::ValidateMainBaseContract(TArray<FText>& OutErrors, TArray<FTe
 	if (IsValid(UnitDropZone) && UnitDropZone->GetAttachParent() != PresentationRoot)
 	{
 		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrUnitDropZoneAttach", "UnitDropZone must attach to PresentationRoot."));
+	}
+	if (!IsValid(WallPackageDropZone))
+	{
+		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrWallPackageDropZone", "MainBase requires WallPackageDropZone."));
+	}
+	if (IsValid(WallPackageDropZone) && WallPackageDropZone->GetAttachParent() != PresentationRoot)
+	{
+		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrWallPackageDropZoneAttach", "WallPackageDropZone must attach to PresentationRoot."));
+	}
+	if (!IsValid(WallSegmentInventoryComponent))
+	{
+		OutErrors.Add(NSLOCTEXT("GPMainBase", "ErrWallInventory", "MainBase requires WallSegmentInventoryComponent."));
 	}
 
 	if (!FMath::IsFinite(DropOffRangeCm) || DropOffRangeCm <= 0.0f)

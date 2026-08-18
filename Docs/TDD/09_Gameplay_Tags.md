@@ -83,6 +83,7 @@ GP.Command.CancelOrder     # cancel a pending/in-flight orbital order
 GP.Drop.Type.Unit
 GP.Drop.Type.Building
 GP.Drop.Type.WallPackage  # Wall Package to MainBase (not READY / not per-segment)
+GP.Drop.Type.Wall         # superseded per-segment classification (do not use for purchase)
 GP.Drop.Type.Module        # reserved payload kind; tag registered for DA classification
 
 # Orbital pod state

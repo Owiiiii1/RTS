@@ -10,6 +10,8 @@
 #include "Net/UnrealNetwork.h"
 #include "Buildings/GPBuildingBase.h"
 #include "Buildings/GPLogisticsHub.h"
+#include "Buildings/GPMainBase.h"
+#include "Buildings/GPWallSegmentInventoryComponent.h"
 #include "Buildings/Grid/GPBuildGridSubsystem.h"
 #include "Buildings/GPBuildingDefinition.h"
 #include "Orbital/GPBuildingDropCatalog.h"
@@ -132,6 +134,7 @@ void AGP_DropPod::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	ClearLifecycleTimers();
 	AuthorityReleaseLeftoverUnitReservation();
 	AuthorityReleaseBuildingGridReservation();
+	AuthorityCancelWallPackageIfPending();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -175,6 +178,11 @@ void AGP_DropPod::AuthorityInitUnitDrop(
 	BuildingGridFootprintSize = FIntPoint::ZeroValue;
 	BuildingGridReservationId.Invalidate();
 	bGridReservationPromoted = false;
+	WallPackageMainBaseWeak.Reset();
+	WallPackageDeliveryGeneration = 0;
+	WallPackageSegmentCount = 0;
+	WallPackageExpectedTeamId = 0;
+	bWallPackageDelivered = false;
 	PendingManifest = Manifest;
 	LandingLocation = LandingWorldLocation;
 	LandingRotation = LandingWorldRotation;
@@ -225,6 +233,11 @@ void AGP_DropPod::AuthorityInitBuildingDrop(
 	PayloadKind = EGP_DropPodPayloadKind::Building;
 	PendingDropDefinitionId = DropDefinitionId;
 	PendingBuildingPayloadClass = PayloadClass;
+	WallPackageMainBaseWeak.Reset();
+	WallPackageDeliveryGeneration = 0;
+	WallPackageSegmentCount = 0;
+	WallPackageExpectedTeamId = 0;
+	bWallPackageDelivered = false;
 	PendingManifest = FGP_UnitDropManifest();
 	BuildingGridOriginCell = OriginCell;
 	BuildingGridFootprintSize = FootprintSize;
@@ -241,6 +254,62 @@ void AGP_DropPod::AuthorityInitBuildingDrop(
 	bLandingCompleted = false;
 	bPayloadSpawned = false;
 	RemainingUnitReservation = 0;
+	ClearLifecycleTimers();
+
+	AuthoritySetPhase(EGP_DropPodPhase::Descending);
+	ApplyNativePlaceholderVisibility();
+	SetActorLocationAndRotation(StartLocation, LandingRotation);
+	SetActorTickEnabled(true);
+	Multicast_PresentationDescentStarted();
+}
+
+void AGP_DropPod::AuthorityInitWallPackageDrop(
+	AGP_PlayerState* RequestingPlayerState,
+	int32 TeamId,
+	AGP_MainBase* TargetMainBase,
+	int32 DeliveryGeneration,
+	int32 SegmentCount,
+	const FVector& LandingWorldLocation,
+	const FRotator& LandingWorldRotation,
+	float InDescentDurationSeconds,
+	float SpawnAltitudeCm,
+	float InPayloadDeployDelaySeconds,
+	float InCleanupDelaySeconds)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	RequestingPlayerStateWeak = RequestingPlayerState;
+	OwnerTeamId = TeamId;
+	PayloadKind = EGP_DropPodPayloadKind::WallPackage;
+	PendingDropDefinitionId = FPrimaryAssetId();
+	PendingBuildingPayloadClass = nullptr;
+	PendingManifest = FGP_UnitDropManifest();
+	BuildingGridOriginCell = FIntPoint::ZeroValue;
+	BuildingGridFootprintSize = FIntPoint::ZeroValue;
+	BuildingGridReservationId.Invalidate();
+	bGridReservationPromoted = false;
+	WallPackageMainBaseWeak = TargetMainBase;
+	WallPackageDeliveryGeneration = DeliveryGeneration;
+	WallPackageSegmentCount = FMath::Max(0, SegmentCount);
+	WallPackageExpectedTeamId = TeamId;
+	bWallPackageDelivered = false;
+	LandingLocation = LandingWorldLocation;
+	LandingRotation = LandingWorldRotation;
+	DescentDurationSeconds = FMath::Max(0.05f, InDescentDurationSeconds);
+	PayloadDeployDelaySeconds = FMath::Max(0.0f, InPayloadDeployDelaySeconds);
+	CleanupDelaySeconds = FMath::Max(0.0f, InCleanupDelaySeconds);
+	StartLocation = LandingLocation + FVector(0.0f, 0.0f, FMath::Max(100.0f, SpawnAltitudeCm));
+	DescentElapsed = 0.0f;
+	DescentProgress01 = 0.0f;
+	bLandingCompleted = false;
+	bPayloadSpawned = false;
+	RemainingUnitReservation = 0;
+#if !UE_BUILD_SHIPPING
+	bDebugSkipPayloadSpawn = false;
+#endif
 	ClearLifecycleTimers();
 
 	AuthoritySetPhase(EGP_DropPodPhase::Descending);
@@ -331,6 +400,10 @@ void AGP_DropPod::AuthorityBeginPayloadDeploy()
 	if (PayloadKind == EGP_DropPodPayloadKind::Building)
 	{
 		AuthoritySpawnBuildingPayload();
+	}
+	else if (PayloadKind == EGP_DropPodPayloadKind::WallPackage)
+	{
+		AuthorityDeliverWallPackage();
 	}
 	else
 	{
@@ -555,6 +628,66 @@ void AGP_DropPod::AuthoritySpawnBuildingPayload()
 
 	Building->FinishSpawning(SpawnTM);
 	Building->SetTeamId(OwnerTeamId);
+}
+
+void AGP_DropPod::AuthorityCancelWallPackageIfPending()
+{
+	if (!HasAuthority() || PayloadKind != EGP_DropPodPayloadKind::WallPackage || bWallPackageDelivered)
+	{
+		return;
+	}
+
+	AGP_MainBase* MainBase = WallPackageMainBaseWeak.Get();
+	if (!IsValid(MainBase))
+	{
+		return;
+	}
+
+	if (UGP_WallSegmentInventoryComponent* Inventory = MainBase->GetWallSegmentInventoryComponent())
+	{
+		if (Inventory->IsWallPackagePending()
+			&& Inventory->GetDeliveryGeneration() == WallPackageDeliveryGeneration)
+		{
+			Inventory->AuthorityCancelPackageDelivery();
+		}
+	}
+}
+
+void AGP_DropPod::AuthorityDeliverWallPackage()
+{
+	if (!HasAuthority() || bPayloadSpawned)
+	{
+		return;
+	}
+	bPayloadSpawned = true;
+
+#if !UE_BUILD_SHIPPING
+	if (bDebugSkipPayloadSpawn)
+	{
+		AuthorityCancelWallPackageIfPending();
+		return;
+	}
+#endif
+
+	AGP_MainBase* MainBase = WallPackageMainBaseWeak.Get();
+	if (!IsValid(MainBase) || MainBase->IsDead() || MainBase->GetTeamId() != WallPackageExpectedTeamId)
+	{
+		AuthorityCancelWallPackageIfPending();
+		return;
+	}
+
+	UGP_WallSegmentInventoryComponent* Inventory = MainBase->GetWallSegmentInventoryComponent();
+	if (!IsValid(Inventory)
+		|| !Inventory->IsWallPackagePending()
+		|| Inventory->GetDeliveryGeneration() != WallPackageDeliveryGeneration)
+	{
+		return;
+	}
+
+	if (Inventory->AuthorityCompletePackageDelivery(WallPackageSegmentCount))
+	{
+		bWallPackageDelivered = true;
+	}
 }
 
 void AGP_DropPod::AuthorityScheduleCleanup()

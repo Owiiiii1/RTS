@@ -87,7 +87,8 @@ void FGPGameplayTags::AddAllTags()
 	// Drop.Type
 	AddTag(Drop_Type_Unit, "GP.Drop.Type.Unit", "Orbital drop payload is a unit.");
 	AddTag(Drop_Type_Building, "GP.Drop.Type.Building", "Orbital drop payload is a building.");
-	AddTag(Drop_Type_Wall, "GP.Drop.Type.Wall", "Orbital drop payload is a wall.");
+	AddTag(Drop_Type_Wall, "GP.Drop.Type.Wall", "Superseded per-segment wall drop classification.");
+	AddTag(Drop_Type_WallPackage, "GP.Drop.Type.WallPackage", "Wall Package delivered to MainBase inventory.");
 	AddTag(Drop_Type_Module, "GP.Drop.Type.Module", "Orbital drop payload kind reserved for modules.");
 
 	// State

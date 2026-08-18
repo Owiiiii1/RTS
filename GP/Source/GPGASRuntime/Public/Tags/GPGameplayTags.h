@@ -74,6 +74,7 @@ public:
 	FGameplayTag Drop_Type_Unit;
 	FGameplayTag Drop_Type_Building;
 	FGameplayTag Drop_Type_Wall;
+	FGameplayTag Drop_Type_WallPackage;
 	FGameplayTag Drop_Type_Module;
 
 	// State

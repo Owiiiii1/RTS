@@ -9,6 +9,7 @@
 class UCapsuleComponent;
 class USceneComponent;
 class UGP_StorageComponent;
+class UGP_WallSegmentInventoryComponent;
 
 /**
  * Minimal MainBase host for StorageComponent + Worker drop-off (GP-S28).
@@ -48,6 +49,13 @@ public:
 	/** Authored Unit Drop Zone (unit pods only). Reposition in BP-derived MainBase. */
 	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Orbital")
 	USceneComponent* GetUnitDropZone() const;
+
+	/** Package landing anchor (GP-S42A). Separate from UnitDropZone. Reposition in BP. */
+	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Orbital")
+	USceneComponent* GetWallPackageDropZone() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Wall")
+	UGP_WallSegmentInventoryComponent* GetWallSegmentInventoryComponent() const;
 
 	UFUNCTION(BlueprintPure, Category = "GP|MainBase|Storage")
 	float GetPlanetaryStored() const;
@@ -97,8 +105,14 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Orbital", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USceneComponent> UnitDropZone;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Orbital", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> WallPackageDropZone;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Storage", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_StorageComponent> StorageComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Wall", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UGP_WallSegmentInventoryComponent> WallSegmentInventoryComponent;
 
 	/** Temporary canonical placeholder until UGP_BuildingDefinition exists (TDD 400 cm). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Replicated, Category = "GP|MainBase", meta = (ClampMin = "1.0"))

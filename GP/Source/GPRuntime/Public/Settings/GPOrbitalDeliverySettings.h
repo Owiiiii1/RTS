@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
+#include "Orbital/GPWallPackageDefinition.h"
 #include "GPOrbitalDeliverySettings.generated.h"
 
 class AGP_BuildingBase;
@@ -63,6 +64,13 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Definitions")
 	TSoftObjectPtr<UGP_OrbitalDropDefinition> WallTurretDropDefinition;
+
+	/**
+	 * Designer-selected Wall Package DataAsset (GP-S42A).
+	 * Empty = native bootstrap. Authored configured definition wins.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Wall Package|Definitions")
+	TSoftObjectPtr<UGP_WallPackageDefinition> WallPackageDefinition;
 
 	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Slots", meta = (ClampMin = "1"))
 	int32 PodTransportSlotCapacity = 4;

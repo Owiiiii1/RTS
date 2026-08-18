@@ -4,7 +4,7 @@
 
 Status: **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s38d-unit-building-combat-data`
+- Branch: `feature/gp-s38d-unit-building-combat-data` (correction `fe74f7a70b047790b5e8950690adc89a2b258acc`)
 - Defect: valid unloaded `UnitDefinitionAsset` silently used Default* because resolver was already-loaded-only
 - Fix: `RequestAsyncLoad` via StreamableManager; empty ref immediate fallback; load failure logged + Default* fallback
 - AutoAcquire / AttackMove acquire gated on `IsUnitDefinitionReady()`. EndPlay cancels pending handle

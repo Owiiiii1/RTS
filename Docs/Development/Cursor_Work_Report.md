@@ -11,7 +11,7 @@ Status: **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 `c79b017a45b1560e025cedfe262b0afde3c9cb6a`
 
 ## Feature head SHA
-Pending correction commit on this branch.
+`fe74f7a70b047790b5e8950690adc89a2b258acc`
 
 ## Previous already-loaded-only defect
 `ResolveLoadedUnitDefinition()` used `Get()` / `ResolveObject()` only. A valid authored soft `UnitDefinitionAsset` that was not already resident silently fell through to Default* / component CDO values. No async request. Contracts only covered already-resident native catalog objects.

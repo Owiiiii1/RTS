@@ -38,6 +38,10 @@ private:
 	FTimerHandle StageTimerHandle;
 	TWeakObjectPtr<UWorld> WorldWeak;
 	TWeakObjectPtr<class AGP_SalvageWalker> WalkerWeak;
+	TWeakObjectPtr<class AGP_Worker> WorkerWeak;
+	TWeakObjectPtr<class AGP_MainBase> BuildingWeak;
+	TWeakObjectPtr<class AActor> CarverWeak;
+	FVector NavProbeLocation = FVector::ZeroVector;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

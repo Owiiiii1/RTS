@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S41M mobile units must not carve NavMesh
+
+Status: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Second operator FAIL: first Move still took a ~90 cm sideways nav-rim leg
+- Confirmed: BP/SCS primitives on mobile units can carve static Recast at authored XY; actor pawn flag is not enough
+- Fix: `AGP_MobileUnit` disables generation on all primitives; buildings unchanged
+- `StripProjectedStartAnchor` removed; shortest-yaw helper retained
+- Rebuild NavMesh in editor to clear already-baked holes (maps not touched here)
+- **NOT MERGED. NOT FINALIZED.**
+
 ## 2026-08-18 — GP-S41M first-Move path-start correction
 
 Status: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

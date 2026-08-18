@@ -198,8 +198,7 @@ private:
 		const FVector& DestinationForLog);
 
 	bool TryBuildNavigationPath(const FVector& Start, const FVector& Dest, TArray<FVector>& OutPoints, bool& bOutUsedNav);
-	void StripProjectedStartAnchor(const FVector& ProjectedStart, TArray<FVector>& InOutPoints) const;
-	void FinalizeNavRuntimePath(const FVector& ActualStart, const FVector& ProjectedStart, TArray<FVector>& InOutPoints);
+	void RecordNavRuntimePathDebug(const FVector& ActualStart, const FVector& ProjectedStart, const TArray<FVector>& PathPointsForLog);
 	FVector ComputeSteeringOffset(const FVector& OwnerLocation, const FVector& DesiredDir2D) const;
 	void FinishMoveReached(AActor* Owner, const FVector& FinalLocation);
 	void FinishMoveFailed(AActor* Owner, EGP_MovementResultReason Reason);

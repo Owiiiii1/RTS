@@ -34,15 +34,17 @@ Repro in `gp.Movement.RunShortestYawContractTest`:
 
 Tick facing uses this helper with `MaxAbsDelta = RotationSpeed * DeltaTime`. Existing movement Tick only. No new Tick.
 
-## First-Move path start (operator FAIL correction)
+## First-Move sideways leg (second operator FAIL)
 
-Operator: first PIE/spawn Move still turned the long-looking way; later Moves were correct.
+Shortest yaw is correct. Residual: first Move after PIE drove ~90 cm to a nav rim, then toward the click.
 
-Proven: `FindPathSync` / projected-straight copies Recast `PathPoints[0] == ProjectedStart`. First Tick with `PathIndex=0` steered toward that query anchor. Later Moves project near the actor, so the defect disappeared.
+Confirmed: mobile BP primitives can still affect Recast generation (`APawn` actor flag is not enough). Authored meshes carve a static hole at the placed location. After the unit leaves that hole, DistActualProjected → 0.
 
-Contract first-Move (arena): ActualStart XY `(80,-1400)` Z=`50`; ProjectedStart XY same Z=`10`; DistXY=`0`; raw Path0 == ProjectedStart; after strip Path0=`(1280,-1400)`; first tick `+X`, yaw `90→84` Applied=`-6`.
+Fix: `AGP_MobileUnit::ApplyMobileNavigationGenerationPolicy` + `UpdateNavigationRelevance` force all primitives off nav generation (including Blueprint/SCS). Buildings unchanged.
 
-Fix: `StripProjectedStartAnchor` removes the first runtime point when it is the projected query start (tolerance `max(AcceptanceRadius, 25)`). Genuine first corners (not the query start) are kept. Destination projection, repath, serials, and straight-line fallback are unchanged.
+`StripProjectedStartAnchor` **removed** — it skipped legitimate off-nav entry once the hole is gone. `AcceptanceRadius` already advances past a coincident Recast start.
+
+**Rebuild NavMesh in editor** after this C++ change so old baked holes disappear. Maps are not modified in this slice.
 
 ## Recorded out of scope
 

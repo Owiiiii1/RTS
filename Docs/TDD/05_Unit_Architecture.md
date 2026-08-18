@@ -176,7 +176,7 @@ Own presentation/resource composition: Capsule root, `PresentationRoot` / cargo 
 
 - Owned by `AGP_MobileUnit` (one instance).
 - Authority-only `RequestMove` / `StopMove` / `OnMovementResult` used by UnitCommand (Move, Attack approach, AttackMove, Mine, Haul).
-- **GP-S41M:** yaw-only `bRotateToMovement` facing uses shortest signed delta (`FindDeltaAngleDegrees` / `NormalizeAxis`). Not `RInterpConstantTo` on `FRotator` (that helper does not wrap yaw). Runtime PathPoints drop the Recast/projected **query-start anchor**; the actor location is the movement origin.
+- **GP-S41M:** yaw-only `bRotateToMovement` facing uses shortest signed delta (`FindDeltaAngleDegrees` / `NormalizeAxis`). Not `RInterpConstantTo` on `FRotator` (that helper does not wrap yaw). Mobile units do not affect NavMesh generation (actor + all primitives, including Blueprint/SCS). Buildings keep `NavigationObstacle`.
 - **GP-S33M:** NavMesh path follow via `UNavigationSystemV1` when the unit is on navigable ground; rate-limited repath; lightweight Pawn-overlap separation steering.
 - Terminal results: `Reached` / `Cancelled` / **`Failed`** (e.g. PathNotFound, DestinationOffNav, Blocked). Sync reject mirrors nav failures when applicable.
 - Missing NavData or unit outside nav coverage → straight-line fallback (diagnostic / isolation safe).

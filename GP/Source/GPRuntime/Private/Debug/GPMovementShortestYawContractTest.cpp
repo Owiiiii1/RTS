@@ -4,16 +4,23 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "AI/NavigationSystemBase.h"
+#include "Buildings/GPMainBase.h"
+#include "Components/BoxComponent.h"
 #include "Debug/GPContractTestCoordinator.h"
+#include "NavAreas/NavArea_Null.h"
+#include "NavMesh/RecastNavMesh.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "Math/UnrealMathUtility.h"
 #include "NavigationSystem.h"
 #include "TimerManager.h"
-#include "UObject/Package.h"
+#include "Units/GPMobileUnit.h"
 #include "Units/GPMovementComponent.h"
 #include "Units/GPSalvageWalker.h"
 #include "Units/GPUnitCommandComponent.h"
+#include "Units/GPWorker.h"
+#include "UObject/Package.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPShortestYaw, Log, All);
 
@@ -54,6 +61,43 @@ namespace GPShortestYawDebug
 		TEXT("gp.Movement.RunShortestYawContractTest"),
 		TEXT("GP-S41M shortest-yaw movement facing contract."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunShortestYawContractTest));
+
+	static void RebuildNavAround(UWorld* World, const FVector& Center, float RadiusCm)
+	{
+		UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		if (NavSys == nullptr)
+		{
+			return;
+		}
+		const FVector Extent(RadiusCm, RadiusCm, FMath::Max(RadiusCm, 400.0f));
+		NavSys->AddDirtyArea(FBox(Center - Extent, Center + Extent), ENavigationDirtyFlag::All);
+		NavSys->Build();
+	}
+
+	static UBoxComponent* AttachNavCarverBox(AActor* Owner, const FName& Name, const FVector& Extent)
+	{
+		UBoxComponent* Box = NewObject<UBoxComponent>(Owner, Name);
+		Box->SetBoxExtent(Extent);
+		Box->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		Box->SetCollisionObjectType(ECC_WorldStatic);
+		Box->SetCollisionResponseToAllChannels(ECR_Ignore);
+		Box->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+		Box->SetCanEverAffectNavigation(true);
+		Box->bDynamicObstacle = true;
+		Box->SetAreaClassOverride(UNavArea_Null::StaticClass());
+		Box->SetGenerateOverlapEvents(false);
+		if (Owner->GetRootComponent() != nullptr)
+		{
+			Box->SetupAttachment(Owner->GetRootComponent());
+		}
+		else
+		{
+			Owner->SetRootComponent(Box);
+		}
+		Box->RegisterComponent();
+		FNavigationSystem::UpdateComponentData(*Box);
+		return Box;
+	}
 }
 
 void UGP_MovementShortestYawContractTestRunner::BeginDestroy()
@@ -91,6 +135,21 @@ void UGP_MovementShortestYawContractTestRunner::CleanupActors()
 		Actor->Destroy();
 	}
 	WalkerWeak.Reset();
+	if (AGP_Worker* Worker = WorkerWeak.Get())
+	{
+		Worker->Destroy();
+	}
+	WorkerWeak.Reset();
+	if (AGP_MainBase* Building = BuildingWeak.Get())
+	{
+		Building->Destroy();
+	}
+	BuildingWeak.Reset();
+	if (AActor* Carver = CarverWeak.Get())
+	{
+		Carver->Destroy();
+	}
+	CarverWeak.Reset();
 }
 
 void UGP_MovementShortestYawContractTestRunner::Finish()
@@ -314,7 +373,7 @@ void UGP_MovementShortestYawContractTestRunner::AdvanceStage()
 			WalkerWeak.Reset();
 		}
 
-		const FVector ArenaSpawn(0.0f, -1400.0f, 88.0f);
+		const FVector ArenaSpawn(80.0f, -1400.0f, 88.0f);
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		Params.ObjectFlags |= RF_Transient;
@@ -349,32 +408,16 @@ void UGP_MovementShortestYawContractTestRunner::AdvanceStage()
 			Movement->NavProjectionExtentXY,
 			Movement->NavProjectionExtentZ);
 		FNavLocation SeedProjected;
-		if (!Expect(NavSys->ProjectPointToNavigation(Walker->GetActorLocation(), SeedProjected, Extent),
+		if (!Expect(NavSys->ProjectPointToNavigation(ArenaSpawn, SeedProjected, Extent),
 			TEXT("J_SeedProjectsToNav")))
 		{
 			Finish();
 			return;
 		}
 
-		const FVector OffsetCandidates[] = {
-			FVector(SeedProjected.Location.X + 80.0f, SeedProjected.Location.Y, SeedProjected.Location.Z + 40.0f),
-			FVector(0.0f, -2080.0f, 88.0f),
-			FVector(2080.0f, -1400.0f, 88.0f),
-			FVector(0.0f, -2050.0f, 150.0f)
-		};
-		FVector ChosenStart = OffsetCandidates[0];
-		for (const FVector& Candidate : OffsetCandidates)
-		{
-			FNavLocation CandidateProjected;
-			if (NavSys->ProjectPointToNavigation(Candidate, CandidateProjected, Extent)
-				&& FVector::Dist2D(Candidate, CandidateProjected.Location) > Movement->AcceptanceRadius)
-			{
-				ChosenStart = Candidate;
-				break;
-			}
-		}
-		Walker->SetActorLocation(ChosenStart);
+		Walker->SetActorLocation(FVector(SeedProjected.Location.X, SeedProjected.Location.Y, 88.0f));
 		Walker->SetActorRotation(FRotator(0.0f, 90.0f, 0.0f));
+		GPShortestYawDebug::RebuildNavAround(World, Walker->GetActorLocation(), 600.0f);
 
 		const FVector ActualStart = Walker->GetActorLocation();
 		FVector Dest = ActualStart + FVector(1200.0f, 0.0f, 0.0f);
@@ -395,12 +438,10 @@ void UGP_MovementShortestYawContractTestRunner::AdvanceStage()
 		const float DistActualProjected = FVector::Dist2D(ActualStart, ProjectedStart);
 		FVector Path0 = FVector::ZeroVector;
 		FVector Path1 = FVector::ZeroVector;
-		FVector Path2 = FVector::ZeroVector;
 		const bool bHas0 = Movement->TryGetActivePathPoint(0, Path0);
 		const bool bHas1 = Movement->TryGetActivePathPoint(1, Path1);
-		const bool bHas2 = Movement->TryGetActivePathPoint(2, Path2);
 		UE_LOG(LogGPShortestYaw, Log,
-			TEXT("J_FirstMoveDiag ActualStart=%s ProjectedStart=%s DistActualProjected=%.1f PathIndex=%d PathPoints=%d Path0=%s Path1=%s Path2=%s Yaw=%.2f"),
+			TEXT("J_FirstMoveDiag ActualStart=%s ProjectedStart=%s DistActualProjected=%.1f PathIndex=%d PathPoints=%d Path0=%s Path1=%s Yaw=%.2f"),
 			*ActualStart.ToCompactString(),
 			*ProjectedStart.ToCompactString(),
 			DistActualProjected,
@@ -408,60 +449,158 @@ void UGP_MovementShortestYawContractTestRunner::AdvanceStage()
 			Movement->GetActivePathPointCount(),
 			bHas0 ? *Path0.ToCompactString() : TEXT("none"),
 			bHas1 ? *Path1.ToCompactString() : TEXT("none"),
-			bHas2 ? *Path2.ToCompactString() : TEXT("none"),
 			Walker->GetActorRotation().Yaw);
 
-		const FVector RawPath0 = Movement->DebugGetLastRawNavPath0();
-		Expect(FVector::Dist2D(RawPath0, ProjectedStart) <= FMath::Max(Movement->AcceptanceRadius, 25.0f),
-			TEXT("J_RawFirstNavPointWasProjectedStart"));
-		if (DistActualProjected > Movement->AcceptanceRadius)
-		{
-			Expect(true, TEXT("J_ProjectedStartNoticeablyOffset"));
-		}
-		else
-		{
-			UE_LOG(LogGPShortestYaw, Log,
-				TEXT("J_ProjectedStartNoticeablyOffset SKIP: DistActualProjected=%.1f (XY aligned; raw Recast start still proven)"),
-				DistActualProjected);
-		}
-		Expect(Movement->GetActivePathIndex() == 0, TEXT("J_InitialPathIndex0"));
+		Expect(!Walker->HasAnyPrimitiveThatCanAffectNavigation(), TEXT("J_WalkerNotNavRelevant"));
+		Expect(DistActualProjected <= FMath::Max(Movement->AcceptanceRadius, 25.0f),
+			TEXT("J_FirstMoveProjectedStartNearActual"));
 		Expect(bHas0, TEXT("J_HasPath0"));
-		Expect(FVector::Dist2D(Path0, ProjectedStart) > FMath::Max(Movement->AcceptanceRadius, 25.0f),
-			TEXT("J_FirstRuntimePointIsNotProjectedStartAnchor"));
 
-		const FVector2D ToProjected(ProjectedStart.X - ActualStart.X, ProjectedStart.Y - ActualStart.Y);
-		const FVector2D ToPath0(Path0.X - ActualStart.X, Path0.Y - ActualStart.Y);
 		const FVector2D ToDest(Dest.X - ActualStart.X, Dest.Y - ActualStart.Y);
-		const float DotPath0Dest = FVector2D::DotProduct(ToPath0.GetSafeNormal(), ToDest.GetSafeNormal());
-		const float DotPath0Projected = FVector2D::DotProduct(ToPath0.GetSafeNormal(), ToProjected.GetSafeNormal());
-		UE_LOG(LogGPShortestYaw, Log,
-			TEXT("J_FirstMoveDir DotPath0Dest=%.3f DotPath0Projected=%.3f"),
-			DotPath0Dest,
-			DotPath0Projected);
-		Expect(DotPath0Dest > DotPath0Projected, TEXT("J_FirstWaypointNotTowardProjectedStart"));
-
 		const float YawBefore = Walker->GetActorRotation().Yaw;
 		Movement->TickComponent(1.0f / 60.0f, LEVELTICK_All, nullptr);
 		const FVector After = Walker->GetActorLocation();
 		const FVector2D Moved(After.X - ActualStart.X, After.Y - ActualStart.Y);
 		const float YawAfter = Walker->GetActorRotation().Yaw;
 		const float Applied = FMath::FindDeltaAngleDegrees(YawBefore, YawAfter);
-		const float TargetYaw = FMath::RadiansToDegrees(FMath::Atan2(Moved.Y, Moved.X));
 		UE_LOG(LogGPShortestYaw, Log,
-			TEXT("J_FirstTick Moved=%s YawBefore=%.2f YawAfter=%.2f Applied=%.2f TargetFromMove=%.2f"),
+			TEXT("J_FirstTick Moved=%s YawBefore=%.2f YawAfter=%.2f Applied=%.2f"),
 			*FVector(Moved.X, Moved.Y, 0.0f).ToCompactString(),
 			YawBefore,
 			YawAfter,
-			Applied,
-			TargetYaw);
+			Applied);
 
-		Expect(FVector2D::DotProduct(Moved, ToDest) > FVector2D::DotProduct(Moved, ToProjected),
-			TEXT("J_FirstStepTowardForwardNotProjectedStart"));
+		Expect(FVector2D::DotProduct(Moved, ToDest) > 0.0f, TEXT("J_FirstStepTowardCommandedDest"));
+		Expect(FVector::Dist2D(After, ActualStart) < 80.0f, TEXT("J_FirstStepNotNinetyCmSideways"));
 		const float DestYaw = FMath::RadiansToDegrees(FMath::Atan2(ToDest.Y, ToDest.X));
 		const float ExpectedDelta = FMath::FindDeltaAngleDegrees(YawBefore, DestYaw);
 		Expect(Applied * ExpectedDelta > 0.0f, TEXT("J_FirstYawShortestTowardMoveDir"));
 		Expect(FMath::Abs(Applied) <= (360.0f / 60.0f) + 0.05f, TEXT("J_FirstYawWithinRotationSpeed"));
 
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 3:
+	{
+		if (AGP_SalvageWalker* Previous = WalkerWeak.Get())
+		{
+			Previous->Destroy();
+			WalkerWeak.Reset();
+		}
+
+		UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		if (!Expect(NavSys != nullptr, TEXT("K_HasNavSys")))
+		{
+			Finish();
+			return;
+		}
+
+		const ANavigationData* NavData = NavSys->GetDefaultNavDataInstance(FNavigationSystem::DontCreate);
+		const ARecastNavMesh* Recast = Cast<ARecastNavMesh>(NavData);
+		const ERuntimeGenerationType GenMode = Recast != nullptr
+			? Recast->GetRuntimeGenerationMode()
+			: ERuntimeGenerationType::Static;
+		UE_LOG(LogGPShortestYaw, Log,
+			TEXT("K_NavRuntimeGeneration=%d SupportsRuntimeGeneration=%s"),
+			static_cast<int32>(GenMode),
+			(NavData != nullptr && NavData->SupportsRuntimeGeneration()) ? TEXT("true") : TEXT("false"));
+
+		const FVector ProbeGuess(80.0f, -1400.0f, 88.0f);
+		const FVector Extent(250.0f, 250.0f, 400.0f);
+		FNavLocation Seed;
+		if (!Expect(NavSys->ProjectPointToNavigation(ProbeGuess, Seed, Extent), TEXT("K_SeedOnNav")))
+		{
+			Finish();
+			return;
+		}
+		NavProbeLocation = FVector(Seed.Location.X, Seed.Location.Y, 88.0f);
+		const float DistSeed = FVector::Dist2D(NavProbeLocation, Seed.Location);
+		Expect(DistSeed <= 25.0f, TEXT("K_EmptyProbeOnNav"));
+
+		FNavLocation OffNav;
+		const bool bOffProjects = NavSys->ProjectPointToNavigation(
+			FVector(-8000.0f, -8000.0f, 88.0f), OffNav, FVector(50.0f, 50.0f, 100.0f));
+		const float DistOff = bOffProjects ? FVector::Dist2D(FVector(-8000.0f, -8000.0f, 88.0f), OffNav.Location) : 1000.0f;
+		UE_LOG(LogGPShortestYaw, Log, TEXT("K_OffNavProbe Projects=%s Dist=%.1f"), bOffProjects ? TEXT("true") : TEXT("false"), DistOff);
+		Expect(!bOffProjects || DistOff > 50.0f, TEXT("K_ProjectionDetectsMissingNav"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 4:
+	{
+		UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const FVector Extent(250.0f, 250.0f, 400.0f);
+		FNavLocation Restored;
+		if (!Expect(NavSys != nullptr
+			&& NavSys->ProjectPointToNavigation(NavProbeLocation, Restored, Extent)
+			&& FVector::Dist2D(NavProbeLocation, Restored.Location) <= 25.0f,
+			TEXT("K_ProbeStillOnNavBeforeUnits")))
+		{
+			Finish();
+			return;
+		}
+
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.ObjectFlags |= RF_Transient;
+		AGP_SalvageWalker* Walker = World->SpawnActor<AGP_SalvageWalker>(
+			AGP_SalvageWalker::StaticClass(), NavProbeLocation, FRotator::ZeroRotator, Params);
+		WalkerWeak = Walker;
+		AGP_Worker* Worker = World->SpawnActor<AGP_Worker>(
+			AGP_Worker::StaticClass(), NavProbeLocation + FVector(250.0f, 0.0f, 0.0f), FRotator::ZeroRotator, Params);
+		WorkerWeak = Worker;
+		if (!Expect(IsValid(Walker) && IsValid(Worker), TEXT("K_SpawnMobileUnits")))
+		{
+			Finish();
+			return;
+		}
+
+		UBoxComponent* WalkerFake = GPShortestYawDebug::AttachNavCarverBox(
+			Walker, TEXT("SimulatedAuthoredMesh"), FVector(140.0f, 140.0f, 120.0f));
+		UBoxComponent* WorkerFake = GPShortestYawDebug::AttachNavCarverBox(
+			Worker, TEXT("SimulatedAuthoredMesh"), FVector(140.0f, 140.0f, 120.0f));
+		Walker->ApplyMobileNavigationGenerationPolicy();
+		Worker->ApplyMobileNavigationGenerationPolicy();
+		Expect(WalkerFake != nullptr && !WalkerFake->CanEverAffectNavigation(), TEXT("K_WalkerAuthoredMeshForcedOff"));
+		Expect(WorkerFake != nullptr && !WorkerFake->CanEverAffectNavigation(), TEXT("K_WorkerAuthoredMeshForcedOff"));
+		Expect(!Walker->HasAnyPrimitiveThatCanAffectNavigation(), TEXT("K_WalkerNoNavPrimitives"));
+		Expect(!Worker->HasAnyPrimitiveThatCanAffectNavigation(), TEXT("K_WorkerNoNavPrimitives"));
+
+		AGP_MainBase* Building = World->SpawnActor<AGP_MainBase>(
+			AGP_MainBase::StaticClass(),
+			NavProbeLocation + FVector(0.0f, 900.0f, 0.0f),
+			FRotator::ZeroRotator,
+			Params);
+		BuildingWeak = Building;
+		if (Expect(IsValid(Building) && Building->GetNavigationObstacle() != nullptr, TEXT("K_SpawnBuilding")))
+		{
+			Expect(Building->GetNavigationObstacle()->CanEverAffectNavigation(),
+				TEXT("K_BuildingObstacleStillNavRelevant"));
+		}
+
+		GPShortestYawDebug::RebuildNavAround(World, NavProbeLocation, 800.0f);
+		++StageIndex;
+		ScheduleNext(0.25f);
+		break;
+	}
+	case 5:
+	{
+		UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const FVector Extent(250.0f, 250.0f, 400.0f);
+		FNavLocation AfterMobile;
+		const bool bStillOnNav = NavSys != nullptr
+			&& NavSys->ProjectPointToNavigation(NavProbeLocation, AfterMobile, Extent);
+		const float DistAfterMobile = bStillOnNav
+			? FVector::Dist2D(NavProbeLocation, AfterMobile.Location)
+			: 1000.0f;
+		UE_LOG(LogGPShortestYaw, Log,
+			TEXT("K_AfterMobilePlace Dist=%.1f Projected=%s"),
+			DistAfterMobile,
+			bStillOnNav ? *AfterMobile.Location.ToCompactString() : TEXT("none"));
+		Expect(bStillOnNav && DistAfterMobile <= 25.0f, TEXT("K_MobileUnitDoesNotCarveOwnXY"));
 		++StageIndex;
 		ScheduleNext(0.05f);
 		break;

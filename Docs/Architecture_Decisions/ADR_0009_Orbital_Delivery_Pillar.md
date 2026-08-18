@@ -60,7 +60,7 @@ This is not just а gameplay mechanic — це **architectural constraint** that
 ## Hard Rules (Project-Wide)
 
 1. **No local production code paths.** `UGP_ProductionComponent`, `UGP_ConstructionComponent` — removed. Не add у new code.
-2. **All non-initial assets arrive via `AGP_DropPod`.** Direct `SpawnActor` для gameplay assets outside `UGP_OrbitalDeliverySubsystem` — review-blocking (exception: initial faction StartingBuildings / StartingUnits at match init via GameMode).
+2. **Non-initial units and READY buildings arrive via `AGP_DropPod`.** Wall **material** still originates from orbit as a **Wall Package** (one DropPod to MainBase, owned by `UGP_OrbitalDeliverySubsystem`). **`AGP_Wall` segments are not DropPod payloads** and are not individually delivered. They are server-instantiated on the surface from MainBase WallSegment inventory by **Build Wall** (GP-S42C / BuildGrid). Direct `SpawnActor` of units / READY buildings outside `UGP_OrbitalDeliverySubsystem` remains review-blocking (exception: initial faction StartingBuildings / StartingUnits). Confirmed Build Wall consume → `AGP_Wall` spawn is the allowed surface-placement path, not local construction and not per-segment orbital delivery.
 3. **Containers are the ONLY ship-to-orbit pipeline.** Direct write to `OrbitalFerronite` attribute outside `GE_GP_AddOrbital` (from container launch) — review-blocking.
 4. **Drop validation requires Actively Visible FoW.** Blind drops banned by default; only `DropDef.bRequiresActiveVisibility = false` overrides (no MVP drop type uses this — reserved post-MVP).
 5. **Drop spend через `GE_GP_SpendOrbital`** — direct attribute write banned per [ADR-0003 GAS First].
@@ -122,7 +122,7 @@ Adds parallel system. Pillar 8 (Simple Core) violation — two ways to do same t
 
 ## Refinement — 2026-08-08 (Owner-approved; does not replace ADR)
 
-This note **refines placement/procurement UX** without overturning the pillar (no local production; all non-initial assets via DropPod; GAS spend; FoW remains relevant for **building** deploy when FoW exists).
+This note **refines placement/procurement UX** without overturning the pillar (no local production; units / READY buildings / Wall **Package** via DropPod; `AGP_Wall` segments placed from inventory; GAS spend; FoW remains relevant for **building** deploy when FoW exists).
 
 | Topic | Refinement |
 | --- | --- |
@@ -138,7 +138,7 @@ Canonical player docs: `Docs/GDD/10_Orbital_Delivery.md`. Engineering: `Docs/TDD
 
 ## Refinement — 2026-08-18 (GP-0305R; does not replace ADR)
 
-Wall is a **third orbital flow**. Buy a **Wall Package of 5** (one rocket to MainBase). Placement is **Build Wall** from MainBase inventory (max 5, no stacking). Not READY. Not per-segment pods. Not Worker construction. Details: `Docs/Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`.
+Wall is a **third orbital flow**. Buy a **Wall Package of 5** (one rocket to MainBase). `UGP_OrbitalDeliverySubsystem` owns that package DropPod. Placement is **Build Wall** from MainBase inventory (max 5, no stacking) — GP-S42C / BuildGrid instantiates `AGP_Wall` on the surface. Not READY. Not per-segment pods. Not Worker construction. Details: `Docs/Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`.
 
 ## References
 

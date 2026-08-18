@@ -13,7 +13,7 @@
 
 Шість building entity-типів у MVP (4 player-orderable + 1 wall-mounted variant + 1 environment). Без research, без supply, без upgrade tiers, без faction-unique buildings.
 
-**Pivot note (2026-05-16):** усе крім Main Base і Ferronite Deposit arrives **only via orbital delivery** (per ADR-0009 і [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Worker не будує локально. "Assembly Yard" → "Logistics Hub".
+**Pivot note (2026-05-16):** усе крім Main Base і Ferronite Deposit **originates from orbit** (per ADR-0009 і [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Worker не будує локально. "Assembly Yard" → "Logistics Hub". Wall **Package** uses DropPod; `AGP_Wall` segments are placed from MainBase inventory (GP-0305R).
 
 **Owner refinement (2026-08-08):** Most buildings are **Purchased** into **orbital READY inventory** (Orbital spend at purchase), then **Deployed** later via ghost placement (DropPod to confirmed location; **no second spend**). Buildings do **not** land in the MainBase Unit Drop Zone (that pad is for **units** only). Shared DropPod/rocket visual with unit deliveries.
 
@@ -85,7 +85,7 @@ Grid overlay прихований за default — з'являється тіл�
 
 - Мають `UGP_BuildingDefinition` Data Asset.
 - Replicate health через `UGP_UnitAttributeSet`.
-- Server-spawn only (через orbital drop pod або initial deployment).
+- Server-spawn only (orbital DropPod, initial deployment, or **Build Wall** inventory consume for `AGP_Wall`). Wall segments are not DropPod payloads.
 - Можуть отримувати damage. При `Health <= 0` → destroyed → server тригерить destruction state → multicast VFX.
 - Учасники SWARM aggro (SWARM waves цілять usable assets, building destruction скорочує оборону гравця).
 - Sight source (різний `SightRadius` per type) — contribute до FoW visibility per [`11_Fog_of_War`](11_Fog_of_War.md).

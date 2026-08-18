@@ -32,10 +32,10 @@ Per [`06_Resources`](06_Resources.md):
 
 | Rule | Meaning |
 | --- | --- |
-| No local production | Nothing is built/trained on the planet surface after match start. |
+| No local production | Nothing is trained or Worker-constructed on the planet. Wall segments are placed from already-delivered package stock (not a new local production path). |
 | Initial exception only | MainBase + **2 Workers** pre-deployed. |
-| All else from orbit | Additional Workers, Salvage Walkers, Logistics Hub, Turrets, Wall Packages, Wall-mounted Turrets — orbital only. |
-| Shared delivery actor | Units and buildings use the **same** MVP DropPod/rocket visual family. |
+| All else from orbit | Additional Workers, Salvage Walkers, Logistics Hub, Turrets, Wall Packages, Wall-mounted Turrets — orbital only. Wall **material** arrives as a package; segments are not individual pods. |
+| Shared delivery actor | Units, READY buildings, and Wall **Package** use the **same** MVP DropPod/rocket visual family. `AGP_Wall` segments do **not**. |
 
 ## Procurement Flows
 

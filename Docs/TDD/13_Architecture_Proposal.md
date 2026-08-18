@@ -43,7 +43,7 @@ GameplayEffects + Abilities — `.uasset` (BP), не C++ class explosion. C++ pr
 - `UGP_GA_ActorTargeted` — base ability that reads target from `FGameplayEventData.Target`.
 - `UGP_GA_LocationTargeted` — base ability що читає FVector з event.
 
-Concrete abilities у Content (`/Game/GrimProtocol/Abilities/GA_GP_Repair`, `GA_GP_Attack` if upgraded post-MVP). Worker repair STAYS in MVP (`GP.Command.Repair`); Worker has NO Build ability — buildings/units arrive via orbital delivery, not local construction.
+Concrete abilities у Content (`/Game/GrimProtocol/Abilities/GA_GP_Repair`, `GA_GP_Attack` if upgraded post-MVP). Worker repair STAYS in MVP (`GP.Command.Repair`); Worker has NO Build ability. Units and READY buildings arrive via orbital DropPod. Wall **material** arrives as a Wall Package DropPod to MainBase; `AGP_Wall` segments are placed from inventory (not Worker-built, not per-segment pods).
 
 ### GPRuntime — Match Flow
 
@@ -58,7 +58,7 @@ Concrete abilities у Content (`/Game/GrimProtocol/Abilities/GA_GP_Repair`, `GA_
 | `UGP_SessionSubsystem` | `UGameInstanceSubsystem` | — | Steam Online Session API wrapper. Single-subsystem rule (ADR-0006). |
 | `UGP_MatchAssetLoader` | `UGameInstanceSubsystem` | — | Asset Manager async preload, soft-ref resolution (per ADR-0002 update). |
 | `UGP_BuildGridSubsystem` | `UWorldSubsystem` | Server (state) + client mirror | Grid cell occupancy, footprint validation, A* pathfinding for wall drag-build. Cell size DA-driven. |
-| `UGP_OrbitalDeliverySubsystem` | `UWorldSubsystem` | Server-only | Drop order queue, drop validation (grid-aware), `AGP_DropPod` lifecycle + payload spawn. Sole path for all non-initial units/buildings/walls. |
+| `UGP_OrbitalDeliverySubsystem` | `UWorldSubsystem` | Server-only | Drop order queue, drop validation (grid-aware), `AGP_DropPod` lifecycle + payload spawn. Owns **unit**, **READY building**, and **Wall Package** delivery. Does **not** own per-segment `AGP_Wall` placement (GP-S42C / BuildGrid). |
 
 ### GPRuntime — Player Camera
 
@@ -82,7 +82,13 @@ Composition default — BP children add components. Optional data-driven composi
 
 ### GPRuntime — Buildings & Orbital Delivery
 
-Buildings are pawns (static units). No building owns a Production or Construction component — there is no local production or local construction. Every non-initial unit/building/wall is ordered through the Logistics Hub / Order Menu and arrives via `AGP_DropPod`, spawned by `UGP_OrbitalDeliverySubsystem`. Soft refs only.
+Buildings are pawns (static units). No building owns a Production or Construction component — there is no local production or local Worker construction. Soft refs only.
+
+**Orbital vs surface Wall (GP-0305R):**
+- Normal units and READY buildings keep their existing orbital paths (`UGP_OrbitalDeliverySubsystem` + `AGP_DropPod`).
+- Wall **Package** is delivered from orbit to MainBase (one DropPod; subsystem-owned).
+- `AGP_Wall` segments are **not** individually delivered by DropPod. They are instantiated on the surface from authoritative MainBase WallSegment inventory by **Build Wall**.
+- GP-S42C owns/routes surface wall placement through the wall / BuildGrid authority path.
 
 | Class | Base | Replication | Purpose |
 | --- | --- | --- | --- |
@@ -91,7 +97,7 @@ Buildings are pawns (static units). No building owns a Production or Constructio
 | `AGP_LogisticsHub` | `AGP_BuildingBase` | Yes | Orbital order point. Surfaces Order Menu, applies `GE_GP_UnitCap_Plus5` + storage-cap bonus while alive. Orbital drops only — no production. |
 | `AGP_DropPod` | `APawn` | Yes | Orbital descent vehicle. Spawned by `UGP_OrbitalDeliverySubsystem` on accepted order; descends to grid-validated location or MainBase (units / READY buildings / Wall Package). Carries `GP.State.PodInFlight`. |
 | `AGP_FerroniteDeposit` | `AGP_BuildingBase` | Yes | Resource node, CurrentCapacity, ActiveMiners / WaitingMiners queue. `TeamId=0`, `bDamageable=false`. 3×3 footprint. |
-| `AGP_Wall` | `AGP_BuildingBase` | Yes | Defensive wall segment, 2×2 footprint. Hosts `UGP_WallConnectionComponent` для 8-dir auto-connect. Mountable surface для `WallTurret`. Placed from MainBase Wall inventory (GP-0305R). |
+| `AGP_Wall` | `AGP_BuildingBase` | Yes | Defensive wall segment, 2×2 footprint. Hosts `UGP_WallConnectionComponent` для 8-dir auto-connect. Mountable surface для `WallTurret`. Instantiated from MainBase Wall inventory by Build Wall — **not** a DropPod payload. |
 | `AGP_WallTurret` | `AGP_BuildingBase` (or BP variant of `AGP_DefensiveTurret`) | Yes | Constrained 2×2 turret mounted on `AGP_Wall`. Lower HP / shorter range than 4×4 free-standing Turret. |
 | `AGP_DropReticle` | `AActor` | None | Local-only drop-targeting preview (free-standing drop targets). Material parameter tint. Grid-snapped. |
 | `AGP_GhostWallSegment` | `AActor` | None | Local-only wall drag-build preview (ghosts along A* path; length limited by Wall inventory). |
@@ -406,7 +412,7 @@ Slice 8 — Buildings + Orbital Drops + Wall + Grid (post-pivot)
   GP-S41  AGP_DefensiveTurret free-standing 4×4 (TargetingComponent + CombatComponent).
   GP-S42A Wall Package Data + MainBase Wall Inventory (purchase, one rocket, stock 0..5, depot event, Build Wall availability). **Next implementation after GP-S41M.**
   GP-S42B AGP_Wall + UGP_WallConnectionComponent (2×2, 8-dir bitfield, local neighbor refresh; no player drag).
-  GP-S42C Wall Drag Placement (Build Wall mode, inventory-limited preview, atomic consume + spawn).
+  GP-S42C Wall Drag Placement (Build Wall mode, inventory-limited preview, atomic consume + spawn via BuildGrid / wall authority — **not** OrbitalDeliverySubsystem / DropPod).
   GP-S43  AGP_WallTurret variant (2×2 wall-mounted, later).
   GP-S44  AGP_DropReticle (local building-deploy reticle). Ghost wall preview lives in S42C.
   GP-S45  **SUPERSEDED by GP-S42C** — old “sequential pod cascade / PathLength × cost” must not be implemented.

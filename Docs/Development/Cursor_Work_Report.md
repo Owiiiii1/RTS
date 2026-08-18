@@ -11,7 +11,7 @@
 - Branch: `docs/gp-0305r-wall-package-reconciliation`
 - Base: `origin/main` @ `5dd56cacdd7b25d4a0d3fc167b69b7a2e3a005a0`
 - Factual: **GP-S41M is already on this `main` tip**. Stale “NEXT = GP-S41M / not merged on feature branch” cursor text is reconciled.
-- Head: this docs-only commit (see git after push)
+- Head: pending this follow-up commit (updated after push)
 
 ## New canonical Wall acquisition / deployment
 1. Buy a **Wall Package** from the orbital / order menu (OrbitalFerronite). Not an individually deployable building.
@@ -23,6 +23,17 @@
 7. MainBase destroyed: remaining stored segments are **lost**.
 
 **Rejected:** purchase individual segment → placement → orbital pod **per segment**.
+
+## Contradiction corrected (this follow-up)
+Factual review: `Docs/TDD/13_Architecture_Proposal.md` still said every non-initial unit/building/wall arrives via `AGP_DropPod` and that `UGP_OrbitalDeliverySubsystem` is the sole path for walls.
+
+Corrected canon (also GDD/02, 05, 10; TDD/06, 14, 05; ADR-0009):
+- Units and READY buildings keep existing orbital DropPod paths.
+- Wall **Package** is delivered from orbit to MainBase (`UGP_OrbitalDeliverySubsystem` + one DropPod).
+- `AGP_Wall` segments are **not** DropPod payloads and are **not** individually delivered.
+- Segments are instantiated on the surface from MainBase WallSegment inventory by **Build Wall**.
+- GP-S42C owns/routes that surface path through wall / BuildGrid authority.
+- Wall material still originates from orbit. Only the per-segment delivery mechanism is special.
 
 ## Package / inventory / depot
 - Wall Package = **exactly 5** segments (`UGP_WallPackageDefinition.SegmentCount`).
@@ -61,19 +72,19 @@
 Old TDD/13 GP-S42 / S45 pod-cascade must **not** be implemented. WallTurret remains later.
 
 ## Files changed
-Docs only. See git. Includes:
-- `Docs/Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md` (created)
-- `Docs/Development/Claude_Tasks/GP-0305_Wall.md` (supersession)
-- GDD: `02`, `05`, `06`, `10`, `12`
-- TDD: `06`, `09`, `10`, `13`, `14`
-- ADR-0009 refinement note
-- `DOCUMENTATION_INDEX.md`, `AI_Project_Log.md`, `Claude_Tasks/README.md`, `Claude_Task_Backlog.md`
+Docs only. See git. This follow-up adds/updates:
+- `Docs/TDD/13_Architecture_Proposal.md` — subsystem / class responsibility (no sole-path for walls)
+- `Docs/TDD/06_Building_Architecture.md`, `Docs/TDD/14_Orbital_Delivery.md`, `Docs/TDD/05_Unit_Architecture.md`
+- GDD: `02`, `05`, `10`
+- ADR-0009 hard rule #2 + ADR README
+- `GP-0305R_Wall_Package_Reconciliation.md` (subsystem vs GP-S42C ownership)
 - this report
 
 ## Docs-only validation
 - No C++ / Build.cs / config / content / maps / Blueprints / DataAssets in this commit
 - No Unreal tests / builds
-- Canonical GDD/TDD Wall acquisition is package → inventory → Build Wall
+- No current GDD/TDD statement implies per-segment orbital Wall delivery
+- TDD/13 class/subsystem text matches GP-0305R
 - Next implementation slice is **GP-S42A**, not old GP-S42
 - Remote `main` baseline recorded as `5dd56cac…` (GP-S41M already on main)
 

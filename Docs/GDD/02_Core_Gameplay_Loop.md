@@ -1,6 +1,6 @@
 # Core Gameplay Loop
 
-> **Canonical model:** узгоджений з [ADR-0009](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md) (+ 2026-08-08 procurement refinement + 2026-08-18 GP-0305R). Усі non-initial units / buildings / walls прибувають **з орбіти** (no local production / construction). Units land at MainBase **Unit Drop Zone** (manifest + transport slots). Buildings: **Purchase → READY inventory → Deploy** (ghost). Walls: **Buy Wall Package (5) → one rocket to MainBase → Build Wall from inventory**. Shared DropPod/rocket. Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md); Ferronite — [`06_Resources`](06_Resources.md); будівлі — [`05_Buildings`](05_Buildings.md).
+> **Canonical model:** узгоджений з [ADR-0009](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md) (+ 2026-08-08 procurement refinement + 2026-08-18 GP-0305R). Non-initial units / READY buildings / Wall **material** originate **from orbit** (no local production / Worker construction). Units land at MainBase **Unit Drop Zone** (manifest + transport slots). Buildings: **Purchase → READY inventory → Deploy** (ghost). Walls: **Buy Wall Package (5) → one rocket to MainBase → Build Wall from inventory**. `AGP_Wall` segments are **not** DropPod payloads. Shared DropPod/rocket for units, READY buildings, and Wall Package. Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md); Ferronite — [`06_Resources`](06_Resources.md); будівлі — [`05_Buildings`](05_Buildings.md).
 
 ```
 Mine → Containers → Launch → OrbitalFerronite (+ Score)

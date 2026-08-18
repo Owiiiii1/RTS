@@ -64,6 +64,8 @@ Settings may hold a **soft ref** to the authored package DA (same seam as Hub/Tu
 
 `DA_GP_Building_Wall` / `UGP_BuildingDefinition` still own Wall **building** identity: footprint 2×2, UnitDefinition, tags, clearance/host-mount flags, sell/demolish. Combat/building identity does **not** move into package data.
 
+`UGP_OrbitalDeliverySubsystem` owns Wall **Package** delivery (one DropPod to MainBase). It does **not** own per-segment `AGP_Wall` placement. GP-S42C owns/routes surface placement through wall / BuildGrid authority.
+
 `DA_GP_OrbitalDrop_Wall` (READY + per-segment drop) is **superseded** for MVP acquisition. `DA_GP_OrbitalDrop_WallTurret` stays a normal READY building drop (later slice).
 
 Faction catalog: replace `DA_GP_OrbitalDrop_Wall` in the orderable list with `DA_GP_WallPackage`. `DA_GP_Building_Wall` remains in AllowedBuildings.

@@ -91,19 +91,24 @@ public:
 
 **GP-S35B did not implement** `EffectsOnPlacement`. Logistics Hub `+5 MaxUnits` remains native on `AGP_LogisticsHub` (apply when live/operational; remove on destroy). Do not migrate that into a generic DA effect list until a dedicated slice.
 
-There is no `BuildTime`, no `AllowedProductions` — buildings do not build other things; new units/buildings come from the global Order Menu (orbital). Remaining grid fields (`ClearanceCells`, `bMountsOnWall`, `bCanHostWallMount`) and economy fields (`bSellable`, `SellRefundRate`) stay documented in §Build Grid System and §Sell + Demolish System. **GP-S36G implements BuildGrid occupancy + snap.** `ClearanceCells`, orbital rotation UI, Walls, and FoW placement remain deferred.
+There is no `BuildTime`, no `AllowedProductions` — buildings do not build other things; new units and READY buildings come from the global Order Menu (orbital). Wall **material** is ordered as a Wall Package (orbital); `AGP_Wall` segments are placed from MainBase inventory. Remaining grid fields (`ClearanceCells`, `bMountsOnWall`, `bCanHostWallMount`) and economy fields (`bSellable`, `SellRefundRate`) stay documented in §Build Grid System and §Sell + Demolish System. **GP-S36G implements BuildGrid occupancy + snap.** `ClearanceCells`, orbital rotation UI, Walls, and FoW placement remain deferred.
 
 ## Building Lifecycle — Orbital Procurement
 
-**Усе крім initial MainBase прибуває з орбіти.** Player не будує локально.
+**Units and READY buildings** besides initial MainBase arrive via DropPod. Player does not Worker-construct. Wall **Package** arrives from orbit to MainBase; **`AGP_Wall` segments are not DropPod payloads** — Build Wall instantiates them from inventory (GP-S42C / BuildGrid).
 
 ```
+READY buildings:
 Purchase → GE_GP_SpendOrbital → READY inventory++
 Deploy ghost (LMB) → READY-- → DropPod → AGP_BuildingBase operational
 Esc/RMB cancel deploy → READY unchanged (no refund; purchase already paid)
+
+Wall:
+Buy Wall Package → GE_GP_SpendOrbital → one DropPod to MainBase → stock 5
+Build Wall → consume N inventory → spawn N AGP_Wall on the surface (no DropPod)
 ```
 
-Units use a **separate** Unit Delivery path to MainBase Unit Drop Zone (manifest + transport slots) — see TDD/14 / GDD/10. Buildings do **not** land on the Unit Drop Zone.
+Units use a **separate** Unit Delivery path to MainBase Unit Drop Zone (manifest + transport slots) — see TDD/14 / GDD/10. Buildings do **not** land on the Unit Drop Zone. Wall Package lands at MainBase; wall segments do not ride pods.
 
 Building deploy still uses grid/FoW validation when those systems exist (TDD/06 grid + TDD/15). EffectsOnPlacement apply on landing.
 

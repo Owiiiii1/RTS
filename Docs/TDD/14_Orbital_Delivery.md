@@ -2,7 +2,7 @@
 
 ## Scope
 
-Engineering implementation of orbital drop pods (per [`../GDD/10_Orbital_Delivery`](../GDD/10_Orbital_Delivery.md)). Defines dual procurement flows (units vs buildings), shared DropPod actor, validation, replication, presentation hooks, subsystem ownership. Replaces pre-pivot Production/Construction/GhostBuilding.
+Engineering implementation of orbital drop pods (per [`../GDD/10_Orbital_Delivery`](../GDD/10_Orbital_Delivery.md)). Defines three procurement flows (units, READY buildings, Wall Package), shared DropPod actor, validation, replication, presentation hooks, subsystem ownership. Replaces pre-pivot Production/Construction/GhostBuilding. `AGP_Wall` surface placement is **not** an orbital pod path (GP-S42C).
 
 > **Owner refinement (2026-08-08):** See GDD/10. Units → MainBase Unit Drop Zone + transport-slot manifests. Buildings → Purchase/READY inventory then Deploy (no second spend). Shared rocket visual family; authored BP for mesh/Niagara.
 >
@@ -10,9 +10,9 @@ Engineering implementation of orbital drop pods (per [`../GDD/10_Orbital_Deliver
 
 ## Hard Rules
 
-1. **All non-initial assets arrive from orbit.** No local production / construction.
-2. **Server-authoritative.** Client intent only; server validates and schedules pods.
-3. **Three flows, one delivery actor family.** Unit manifests, building deploys, and Wall Package share `AGP_DropPod` + presentation BP; differ in targeting + payload data.
+1. **Non-initial material originates from orbit.** No local production / Worker construction. Units and READY buildings arrive via DropPod. Wall **Package** arrives via DropPod to MainBase. **`AGP_Wall` segments are not DropPod payloads** — they are placed from MainBase inventory.
+2. **Server-authoritative.** Client intent only. `UGP_OrbitalDeliverySubsystem` validates and schedules pods for units / READY buildings / Wall Package. Surface wall placement is GP-S42C / BuildGrid, not this subsystem.
+3. **Three orbital flows, one delivery actor family.** Unit manifests, building deploys, and Wall Package share `AGP_DropPod` + presentation BP; differ in targeting + payload data. Per-segment wall pods are **forbidden**.
 4. **Units do not free-place.** Landing = server-resolved MainBase **Unit Drop Zone** (authored anchor — not hardcoded `BaseLocation + offset`).
 5. **Buildings: spend on Purchase, not on Deploy.** Deploy consumes READY inventory once.
 6. **Telegraph 2–3 s** (data-driven). Visible to all clients.
@@ -58,7 +58,7 @@ Order UI BuyWallPackage(PackageDef)   // UGP_WallPackageDefinition
   → Presentation: WallInventoryChanged(NewCount)
   (NO READY. NO placement mode. NO AGP_Wall spawn on landing.)
 
-Build Wall is **not** an orbital RPC. It consumes MainBase inventory (GP-S42C).
+Build Wall is **not** an orbital RPC and does **not** spawn a DropPod. GP-S42C owns/routes surface `AGP_Wall` placement through wall / BuildGrid authority and consumes MainBase inventory.
 
 Shared presentation: native DropPod lifecycle + soft `BP_DropPod_MVP` (or equivalent) for mesh/Niagara.
 
@@ -84,13 +84,14 @@ Unit-cap MVP: **reject whole manifest** if it would exceed free cap — no silen
 
 ## UGP_OrbitalDeliverySubsystem
 
-Owns enqueue for both flows, active pods, validation helpers, READY building inventory mutation (or delegates to a minimal owner-only replicated component on PlayerState — pick smallest server-authoritative structure at impl).
+Owns enqueue for **unit**, **READY building**, and **Wall Package** orbital flows, active pods, validation helpers, READY building inventory mutation (or delegates to a minimal owner-only replicated component on PlayerState — pick smallest server-authoritative structure at impl). Does **not** instantiate `AGP_Wall` segments.
 
 Conceptual APIs (names illustrative):
 
 - `TryEnqueueUnitManifest(Requester, Manifest, OutReason)`
 - `TryPurchaseBuilding(Requester, BuildingDropDef, OutReason)`
 - `TryDeployBuilding(Requester, BuildingDropDef, Loc, Rot, OutReason)`
+- `TryPurchaseWallPackage(Requester, PackageDef, OutReason)`
 
 Reject reasons should distinguish: InsufficientOrbital, ManifestExceedsSlots, UnitCapReached, MissingDropZone, NoReadyInventory, InvalidPlacement, etc.
 
@@ -122,7 +123,7 @@ Multi-unit: deterministic server offsets around landing point; stable ordering; 
 
 **Building Definition (`UGP_BuildingDefinition`):** intrinsic `SpawnedClass`, `FootprintCells`, identity, soft `UnitDefinition`. `MaxHealth` is compatibility fallback; canonical MaxHealth is `UnitDefinition.MaxHealth` (GP-S38D). GP-S36G BuildGrid reads `FootprintCells` from here.
 
-Single-payload DropDef for buildings; multi-payload carried as **manifest on the order**, not N separate pods unless future design says otherwise. MVP: **one pod per confirmed unit order**; **one pod per building deploy**.
+Single-payload DropDef for buildings; multi-payload carried as **manifest on the order**, not N separate pods unless future design says otherwise. MVP: **one pod per confirmed unit order**; **one pod per READY building deploy**; **one pod per Wall Package**. **Not** one pod per wall segment.
 
 ## Validation
 

@@ -272,7 +272,7 @@ Worker — економічний primary unit:
 - Видобуває raw Ferronite з `AGP_FerroniteDeposit` (resource node — building per ADR-0007 + TDD/07).
 - Carries raw Ferronite to MainBase containers via the mining/drop-off cycle (planetary Ferronite, not spendable until launched to orbit).
 - Виконує repair (`GP.Ability.Repair` per GP-0301) — repair STAYS in MVP.
-- **Does NOT build and does NOT produce.** Per the Orbital Delivery pivot all units/buildings arrive via orbital drop pods; there is no Worker Build ability and no local construction.
+- **Does NOT build and does NOT produce.** Units and READY buildings arrive via orbital DropPod. Wall Package arrives via DropPod; `AGP_Wall` segments are placed from MainBase inventory (not Worker-built). No Worker Build ability and no local construction.
 - **Не атакує.** Per GDD/04 і GP-0204 — `bAutoAttacks=false`, `AllowedCommands` без `Command_Attack/AttackMove`.
 - Soft target для SWARM waves (low HP = strategic vulnerability).
 

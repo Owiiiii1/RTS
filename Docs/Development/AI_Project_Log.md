@@ -10,13 +10,14 @@ Status: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 - Arena XY Actual vs Projected was aligned (Z-only snap); the Recast start-anchor contract still held
 - Fix: `StripProjectedStartAnchor` after FindPathSync / projected-straight; keep `ComputeShortestYawStep`
 - Unrelated (not fixed): MainBase `BuildingDefinitionLoadFailed` / `ResolveFailedUsingFallback`
+- Tip: `37a567db20b58457c6a92754393edf26839410a7`
 - **NOT MERGED. NOT FINALIZED.**
 
 ## 2026-08-18 — GP-S41M Movement Shortest Yaw (implementation candidate)
 
 Status: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s41m-movement-shortest-yaw` (base `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`; tip `503467f60beb35b6126745788d5029eb5f4dc665`)
+- Branch: `feature/gp-s41m-movement-shortest-yaw` (base `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`; tip `37a567db20b58457c6a92754393edf26839410a7`)
 - Root cause reproduced: `FMath::RInterpConstantTo` on `FRotator` does not wrap yaw (350→10 takes the long path)
 - Facing now uses `ComputeShortestYawStep` + `FindDeltaAngleDegrees` / `NormalizeAxis`
 - Path / serial / speed / steering unchanged

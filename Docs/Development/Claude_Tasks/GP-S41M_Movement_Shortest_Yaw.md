@@ -13,7 +13,7 @@ Post-GP-S40R movement facing defect
 ## Branch
 `feature/gp-s41m-movement-shortest-yaw`  
 Base: `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`  
-Implementation tip: `503467f60beb35b6126745788d5029eb5f4dc665`
+Implementation tip: `37a567db20b58457c6a92754393edf26839410a7`
 
 ## Reproduced root cause
 

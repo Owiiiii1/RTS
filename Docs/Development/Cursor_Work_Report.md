@@ -8,7 +8,7 @@
 ## Branch / base / head
 - Branch: `feature/gp-s41m-movement-shortest-yaw`
 - Base: `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`
-- Head: recorded after commit
+- Head: `37a567db20b58457c6a92754393edf26839410a7`
 
 ## Operator result
 **FAIL** on first Move after PIE/spawn.

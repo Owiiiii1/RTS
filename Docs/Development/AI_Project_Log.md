@@ -4,7 +4,7 @@
 
 Status: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s41m-movement-shortest-yaw` (base `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`)
+- Branch: `feature/gp-s41m-movement-shortest-yaw` (base `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`; tip `503467f60beb35b6126745788d5029eb5f4dc665`)
 - Root cause reproduced: `FMath::RInterpConstantTo` on `FRotator` does not wrap yaw (350→10 takes the long path)
 - Facing now uses `ComputeShortestYawStep` + `FindDeltaAngleDegrees` / `NormalizeAxis`
 - Path / serial / speed / steering unchanged

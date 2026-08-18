@@ -39,7 +39,7 @@
 | Last closed / merged stage | **GP-S40R Timed Retaliation Pursuit** on `main` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s41m-movement-shortest-yaw` (**NOT MERGED**) |
+| Current stage | **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s41m-movement-shortest-yaw` @ `503467f6…` (**NOT MERGED**) |
 
 ---
 
@@ -162,4 +162,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S40R are on verified `main` tip `d9df23143f256b2b2143fe66f5a0444f727452ae`. Current stage: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s41m-movement-shortest-yaw`. See [`Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`](Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md). **NOT MERGED. NOT FINALIZED.** Await operator PIE.
+SETUP-001, DOCS-001, GP-S01…GP-S40R are on verified `main` tip `d9df23143f256b2b2143fe66f5a0444f727452ae`. Current stage: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s41m-movement-shortest-yaw` @ `503467f60beb35b6126745788d5029eb5f4dc665`. See [`Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`](Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md). **NOT MERGED. NOT FINALIZED.** Await operator PIE.

@@ -10,7 +10,9 @@
 #include "Combat/GPDamageApplication.h"
 #include "Command/GPUnitCommand.h"
 #include "Effects/GPGE_DamageBasic.h"
+#include "Engine/AssetManager.h"
 #include "Engine/EngineBaseTypes.h"
+#include "Engine/StreamableManager.h"
 #include "Engine/World.h"
 #include "GameplayEffectExtension.h"
 #include "Net/UnrealNetwork.h"
@@ -229,13 +231,12 @@ void AGP_UnitBase::BeginPlay()
 	Super::BeginPlay();
 	AttachHealthBarToOwnerRoot();
 	InitializeAbilitySystemActorInfo();
-	ApplyUnitDefinitionComponentTuningIfNeeded();
-	InitializeCombatAttributesIfNeeded();
-	TryRegisterPlayerUnitCap();
+	BeginUnitDefinitionInitialization();
 }
 
 void AGP_UnitBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	CancelPendingUnitDefinitionLoad();
 	UnregisterPlayerUnitCap();
 	Super::EndPlay(EndPlayReason);
 }
@@ -357,6 +358,13 @@ const UGP_UnitDefinition* AGP_UnitBase::ResolveLoadedUnitDefinition() const
 		return nullptr;
 	}
 
+#if !UE_BUILD_SHIPPING
+	if (bDebugForceUnresolvedSoftPath && !bUnitDefinitionReady)
+	{
+		return nullptr;
+	}
+#endif
+
 	UObject* Loaded = UnitDefinitionAsset.Get();
 	if (Loaded == nullptr)
 	{
@@ -367,9 +375,178 @@ const UGP_UnitDefinition* AGP_UnitBase::ResolveLoadedUnitDefinition() const
 
 float AGP_UnitBase::GetRetaliationPursuitSeconds() const
 {
-	const UGP_UnitDefinition* Def = ResolveLoadedUnitDefinition();
-	return Def != nullptr ? FMath::Max(0.0f, Def->RetaliationPursuitSeconds) : 0.0f;
+	return FMath::Max(0.0f, ResolvedRetaliationPursuitSeconds);
 }
+
+void AGP_UnitBase::BeginUnitDefinitionInitialization()
+{
+	if (bUnitDefinitionReady || bUnitDefinitionLoadAbandoned)
+	{
+		return;
+	}
+
+	if (UnitDefinitionAsset.IsNull())
+	{
+		CompleteUnitDefinitionInitialization(nullptr);
+		return;
+	}
+
+	if (const UGP_UnitDefinition* Loaded = ResolveLoadedUnitDefinition())
+	{
+		CompleteUnitDefinitionInitialization(Loaded);
+		return;
+	}
+
+	RequestAsyncUnitDefinitionLoad();
+}
+
+void AGP_UnitBase::RequestAsyncUnitDefinitionLoad()
+{
+	if (UnitDefinitionLoadHandle.IsValid() || bUnitDefinitionReady)
+	{
+		return;
+	}
+
+	const FSoftObjectPath SoftPath = UnitDefinitionAsset.ToSoftObjectPath();
+	bUnitDefinitionLoadPending = true;
+
+#if !UE_BUILD_SHIPPING
+	bDebugDidRequestAsyncUnitDefinitionLoad = true;
+#endif
+
+	UnitDefinitionLoadHandle = UAssetManager::GetStreamableManager().RequestAsyncLoad(
+		SoftPath,
+		FStreamableDelegate::CreateUObject(this, &AGP_UnitBase::HandleUnitDefinitionLoaded));
+
+	if (!UnitDefinitionLoadHandle.IsValid())
+	{
+		UE_LOG(LogGPCombat, Error,
+			TEXT("GP UnitDefinitionLoadFailed: Unit=%s Path=%s Reason=RequestAsyncLoadNullHandle"),
+			*GetName(),
+			*SoftPath.ToString());
+#if !UE_BUILD_SHIPPING
+		if (bDebugHoldAsyncCompletion)
+		{
+			return;
+		}
+#endif
+		CompleteUnitDefinitionInitialization(nullptr);
+	}
+}
+
+void AGP_UnitBase::HandleUnitDefinitionLoaded()
+{
+	if (bUnitDefinitionLoadAbandoned || bUnitDefinitionReady || !IsValid(this) || GetWorld() == nullptr)
+	{
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	if (bDebugHoldAsyncCompletion)
+	{
+		return;
+	}
+#endif
+
+	FinishUnitDefinitionLoadResolve();
+}
+
+void AGP_UnitBase::FinishUnitDefinitionLoadResolve()
+{
+	if (bUnitDefinitionLoadAbandoned || bUnitDefinitionReady)
+	{
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	bDebugForceUnresolvedSoftPath = false;
+	if (DebugInjectedUnitDefinition != nullptr)
+	{
+		UnitDefinitionAsset = DebugInjectedUnitDefinition;
+	}
+#endif
+
+	const UGP_UnitDefinition* Def = ResolveLoadedUnitDefinition();
+	if (Def == nullptr && !UnitDefinitionAsset.IsNull())
+	{
+		UE_LOG(LogGPCombat, Error,
+			TEXT("GP UnitDefinitionLoadFailed: Unit=%s Path=%s Reason=ResolveFailedUsingFallback"),
+			*GetName(),
+			*UnitDefinitionAsset.ToSoftObjectPath().ToString());
+	}
+
+	CompleteUnitDefinitionInitialization(Def);
+}
+
+void AGP_UnitBase::CompleteUnitDefinitionInitialization(const UGP_UnitDefinition* DefinitionOrNull)
+{
+	if (bUnitDefinitionReady)
+	{
+		return;
+	}
+
+	bUnitDefinitionLoadPending = false;
+	bUnitDefinitionReady = true;
+	UnitDefinitionLoadHandle.Reset();
+
+	ResolvedRetaliationPursuitSeconds = DefinitionOrNull != nullptr
+		? FMath::Max(0.0f, DefinitionOrNull->RetaliationPursuitSeconds)
+		: FallbackRetaliationPursuitSeconds;
+
+	ApplyUnitDefinitionComponentTuningIfNeeded();
+	InitializeCombatAttributesIfNeeded();
+	TryRegisterPlayerUnitCap();
+
+	if (UGP_UnitCommandComponent* Command = GetUnitCommandComponent())
+	{
+		Command->RefreshCombatAutoAcquireTimer();
+	}
+}
+
+void AGP_UnitBase::CancelPendingUnitDefinitionLoad()
+{
+	bUnitDefinitionLoadAbandoned = true;
+	bUnitDefinitionLoadPending = false;
+#if !UE_BUILD_SHIPPING
+	bDebugHoldAsyncCompletion = false;
+#endif
+	if (UnitDefinitionLoadHandle.IsValid())
+	{
+		if (UnitDefinitionLoadHandle->IsLoadingInProgress())
+		{
+			UnitDefinitionLoadHandle->CancelHandle();
+		}
+		UnitDefinitionLoadHandle.Reset();
+	}
+}
+
+#if !UE_BUILD_SHIPPING
+void AGP_UnitBase::DebugForceUnresolvedSoftDefinitionLoad(UGP_UnitDefinition* InjectedDefinition, bool bHoldCompletion)
+{
+	bDebugForceUnresolvedSoftPath = true;
+	bDebugHoldAsyncCompletion = bHoldCompletion;
+	DebugInjectedUnitDefinition = InjectedDefinition;
+	if (InjectedDefinition != nullptr)
+	{
+		UnitDefinitionAsset = InjectedDefinition;
+	}
+	else
+	{
+		UnitDefinitionAsset = TSoftObjectPtr<UGP_UnitDefinition>(FSoftObjectPath(
+			TEXT("/Game/GrimProtocol/Data/Units/DA_GP_Unit_UnresolvedSoftRefStub.DA_GP_Unit_UnresolvedSoftRefStub")));
+	}
+}
+
+void AGP_UnitBase::DebugCompletePendingUnitDefinitionLoad()
+{
+	if (bUnitDefinitionReady || bUnitDefinitionLoadAbandoned)
+	{
+		return;
+	}
+	bDebugHoldAsyncCompletion = false;
+	FinishUnitDefinitionLoadResolve();
+}
+#endif
 
 void AGP_UnitBase::ApplyUnitDefinitionComponentTuningIfNeeded()
 {
@@ -391,7 +568,6 @@ void AGP_UnitBase::ApplyUnitDefinitionComponentTuningIfNeeded()
 		Command->AutoAcquireScanIntervalSeconds = FMath::Max(0.05f, Def->AutoAcquireScanIntervalSeconds);
 		Command->AttackFacingRotationSpeedDegreesPerSecond =
 			FMath::Max(0.0f, Def->AttackFacingRotationSpeedDegreesPerSecond);
-		Command->RefreshCombatAutoAcquireTimer();
 	}
 
 	if (Def->MoveSpeedCmPerSecond > 0.0f)

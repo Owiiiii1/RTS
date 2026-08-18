@@ -29,20 +29,39 @@ namespace GPUnitDefinitionContractDebug
 	static const FVector Origin(-54000.0f, -16000.0f, 100.0f);
 
 	template <typename TActor>
-	static TActor* SpawnWithDefinition(UWorld* World, const FVector& Loc, UGP_UnitDefinition* Def)
+	static TActor* SpawnDeferredBase(UWorld* World, const FVector& Loc)
 	{
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		Params.ObjectFlags |= RF_Transient;
-		TActor* Actor = World->SpawnActorDeferred<TActor>(
+		return World->SpawnActorDeferred<TActor>(
 			TActor::StaticClass(),
 			FTransform(FRotator::ZeroRotator, Loc),
 			nullptr,
 			nullptr,
 			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	}
+
+	template <typename TActor>
+	static TActor* SpawnWithDefinition(UWorld* World, const FVector& Loc, UGP_UnitDefinition* Def)
+	{
+		TActor* Actor = SpawnDeferredBase<TActor>(World, Loc);
 		if (Actor != nullptr)
 		{
 			Actor->UnitDefinitionAsset = Def;
+			Actor->FinishSpawning(FTransform(FRotator::ZeroRotator, Loc));
+		}
+		return Actor;
+	}
+
+	template <typename TActor>
+	static TActor* SpawnWithForcedAsync(
+		UWorld* World,
+		const FVector& Loc,
+		UGP_UnitDefinition* InjectedDef,
+		bool bHoldCompletion)
+	{
+		TActor* Actor = SpawnDeferredBase<TActor>(World, Loc);
+		if (Actor != nullptr)
+		{
+			Actor->DebugForceUnresolvedSoftDefinitionLoad(InjectedDef, bHoldCompletion);
 			Actor->FinishSpawning(FTransform(FRotator::ZeroRotator, Loc));
 		}
 		return Actor;
@@ -135,12 +154,23 @@ void UGP_UnitDefinitionContractTestRunner::CleanupActors()
 	{
 		Worker->Destroy();
 	}
+	if (AGP_SalvageWalker* SW = AsyncWalkerWeak.Get())
+	{
+		SW->Destroy();
+	}
+	if (AGP_SalvageWalker* SW = FailWalkerWeak.Get())
+	{
+		SW->Destroy();
+	}
 	WalkerWeak.Reset();
 	FallbackWalkerWeak.Reset();
 	OverrideWalkerWeak.Reset();
 	TurretWeak.Reset();
 	WorkerWeak.Reset();
+	AsyncWalkerWeak.Reset();
+	FailWalkerWeak.Reset();
 	OverrideDef = nullptr;
+	AsyncDef = nullptr;
 }
 
 void UGP_UnitDefinitionContractTestRunner::Finish()
@@ -365,7 +395,8 @@ void UGP_UnitDefinitionContractTestRunner::AdvanceStage()
 			&& FMath::IsNearlyEqual(Cmd->AutoAcquireSightRangeCm, 900.0f, 0.01f)
 			&& Movement != nullptr
 			&& FMath::IsNearlyEqual(Movement->MoveSpeed, 250.0f, 0.01f)
-			&& FMath::IsNearlyEqual(Fallback->GetRetaliationPursuitSeconds(), 0.0f, 0.01f),
+			&& FMath::IsNearlyEqual(Fallback->GetRetaliationPursuitSeconds(),
+				AGP_UnitBase::FallbackRetaliationPursuitSeconds, 0.01f),
 			TEXT("J_EmptyDefinitionLegacyFallback"));
 		++StageIndex;
 		ScheduleNext(0.05f);
@@ -421,6 +452,132 @@ void UGP_UnitDefinitionContractTestRunner::AdvanceStage()
 			&& FMath::IsNearlyEqual(Linked->MaxHealth, 400.0f, 0.01f)
 			&& BuildingDef->MaxHealth == 400.0f,
 			TEXT("L_BuildingDefinitionCanonicalMaxHealth"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 10:
+	{
+		AsyncDef = NewObject<UGP_UnitDefinition>(this);
+		AsyncDef->DisplayName = FText::FromString(TEXT("AsyncWalker"));
+		AsyncDef->MaxHealth = 180.0f;
+		AsyncDef->InitialHealth = 180.0f;
+		AsyncDef->Damage = 11.0f;
+		AsyncDef->AttackRangeCm = 333.0f;
+		AsyncDef->AttackCooldownSeconds = 2.5f;
+		AsyncDef->SightRangeCm = 777.0f;
+		AsyncDef->AutoAcquireScanIntervalSeconds = 0.2f;
+		AsyncDef->AttackFacingRotationSpeedDegreesPerSecond = 90.0f;
+		AsyncDef->MoveSpeedCmPerSecond = 111.0f;
+		AsyncDef->RetaliationPursuitSeconds = 5.0f;
+
+		AsyncWalkerWeak = GPUnitDefinitionContractDebug::SpawnWithForcedAsync<AGP_SalvageWalker>(
+			World,
+			GPUnitDefinitionContractDebug::Origin + FVector(0.0f, 800.0f, 0.0f),
+			AsyncDef,
+			true);
+		AGP_SalvageWalker* AsyncWalker = AsyncWalkerWeak.Get();
+		const UGP_UnitAttributeSet* Attrs = AsyncWalker != nullptr ? AsyncWalker->GetUnitAttributeSet() : nullptr;
+		UGP_UnitCommandComponent* Cmd = AsyncWalker != nullptr ? AsyncWalker->GetUnitCommandComponent() : nullptr;
+		UGP_MovementComponent* Movement = AsyncWalker != nullptr ? AsyncWalker->GetUnitMovementComponent() : nullptr;
+		Expect(IsValid(AsyncWalker)
+			&& AsyncWalker->DebugDidRequestAsyncUnitDefinitionLoad()
+			&& AsyncWalker->IsUnitDefinitionLoadPending()
+			&& !AsyncWalker->IsUnitDefinitionReady()
+			&& Attrs != nullptr
+			&& FMath::IsNearlyEqual(Attrs->GetMaxHealth(), 0.0f, 0.01f)
+			&& FMath::IsNearlyEqual(Attrs->GetDamage(), 0.0f, 0.01f)
+			&& FMath::IsNearlyEqual(Attrs->GetAttackRange(), 0.0f, 0.01f)
+			&& Cmd != nullptr
+			&& FMath::IsNearlyEqual(Cmd->AutoAcquireSightRangeCm, 900.0f, 0.01f)
+			&& Movement != nullptr
+			&& FMath::IsNearlyEqual(Movement->MoveSpeed, 250.0f, 0.01f),
+			TEXT("C_D_UnresolvedSoftRefDefersGasAndTuning"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 11:
+	{
+		AGP_SalvageWalker* AsyncWalker = AsyncWalkerWeak.Get();
+		if (!Expect(IsValid(AsyncWalker), TEXT("C_AsyncWalkerStillAlive")))
+		{
+			Finish();
+			return;
+		}
+		AsyncWalker->DebugCompletePendingUnitDefinitionLoad();
+		const UGP_UnitAttributeSet* Attrs = AsyncWalker->GetUnitAttributeSet();
+		UGP_UnitCommandComponent* Cmd = AsyncWalker->GetUnitCommandComponent();
+		UGP_MovementComponent* Movement = AsyncWalker->GetUnitMovementComponent();
+		Expect(AsyncWalker->IsUnitDefinitionReady()
+			&& !AsyncWalker->IsUnitDefinitionLoadPending()
+			&& Attrs != nullptr
+			&& FMath::IsNearlyEqual(Attrs->GetMaxHealth(), 180.0f, 0.01f)
+			&& FMath::IsNearlyEqual(Attrs->GetDamage(), 11.0f, 0.01f)
+			&& FMath::IsNearlyEqual(Attrs->GetAttackRange(), 333.0f, 0.01f)
+			&& Cmd != nullptr
+			&& FMath::IsNearlyEqual(Cmd->AutoAcquireSightRangeCm, 777.0f, 0.01f)
+			&& FMath::IsNearlyEqual(Cmd->AutoAcquireScanIntervalSeconds, 0.2f, 0.01f)
+			&& FMath::IsNearlyEqual(Cmd->AttackFacingRotationSpeedDegreesPerSecond, 90.0f, 0.01f)
+			&& Movement != nullptr
+			&& FMath::IsNearlyEqual(Movement->MoveSpeed, 111.0f, 0.01f)
+			&& FMath::IsNearlyEqual(AsyncWalker->GetRetaliationPursuitSeconds(), 5.0f, 0.01f),
+			TEXT("E_F_AsyncCompletionAppliesDefinition"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 12:
+	{
+		FailWalkerWeak = GPUnitDefinitionContractDebug::SpawnWithForcedAsync<AGP_SalvageWalker>(
+			World,
+			GPUnitDefinitionContractDebug::Origin + FVector(800.0f, 0.0f, 0.0f),
+			nullptr,
+			false);
+		FailWaitTicks = 0;
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 13:
+	{
+		AGP_SalvageWalker* FailWalker = FailWalkerWeak.Get();
+		if (IsValid(FailWalker) && !FailWalker->IsUnitDefinitionReady() && FailWaitTicks < 40)
+		{
+			++FailWaitTicks;
+			ScheduleNext(0.05f);
+			return;
+		}
+		const UGP_UnitAttributeSet* Attrs = FailWalker != nullptr ? FailWalker->GetUnitAttributeSet() : nullptr;
+		Expect(IsValid(FailWalker)
+			&& FailWalker->DebugDidRequestAsyncUnitDefinitionLoad()
+			&& FailWalker->IsUnitDefinitionReady()
+			&& Attrs != nullptr
+			&& FMath::IsNearlyEqual(Attrs->GetMaxHealth(), 200.0f, 0.01f)
+			&& FMath::IsNearlyEqual(Attrs->GetDamage(), 20.0f, 0.01f)
+			&& FMath::IsNearlyEqual(Attrs->GetAttackRange(), 600.0f, 0.01f)
+			&& FMath::IsNearlyEqual(FailWalker->GetRetaliationPursuitSeconds(),
+				AGP_UnitBase::FallbackRetaliationPursuitSeconds, 0.01f),
+			TEXT("G_LoadFailureDeterministicFallback"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 14:
+	{
+		AGP_SalvageWalker* Pending = GPUnitDefinitionContractDebug::SpawnWithForcedAsync<AGP_SalvageWalker>(
+			World,
+			GPUnitDefinitionContractDebug::Origin + FVector(-800.0f, 0.0f, 0.0f),
+			AsyncDef,
+			true);
+		const bool bPending = IsValid(Pending)
+			&& Pending->DebugDidRequestAsyncUnitDefinitionLoad()
+			&& !Pending->IsUnitDefinitionReady();
+		if (IsValid(Pending))
+		{
+			Pending->Destroy();
+		}
+		Expect(bPending && !IsValid(Pending), TEXT("H_EndPlayPendingLoadSafe"));
 		Finish();
 		break;
 	}

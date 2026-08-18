@@ -621,7 +621,8 @@ bool UGP_UnitCommandComponent::IsEligibleForCombatAutoAcquire() const
 	}
 
 	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
-	if (OwnerUnit == nullptr || OwnerUnit->IsDead() || !IsCombatCapableForAutoAcquire(OwnerUnit))
+	if (OwnerUnit == nullptr || !OwnerUnit->IsUnitDefinitionReady()
+		|| OwnerUnit->IsDead() || !IsCombatCapableForAutoAcquire(OwnerUnit))
 	{
 		return false;
 	}
@@ -673,7 +674,7 @@ bool UGP_UnitCommandComponent::IsEligibleForAttackMoveAcquire() const
 	}
 
 	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
-	if (OwnerUnit == nullptr || OwnerUnit->IsDead())
+	if (OwnerUnit == nullptr || !OwnerUnit->IsUnitDefinitionReady() || OwnerUnit->IsDead())
 	{
 		return false;
 	}
@@ -747,7 +748,8 @@ void UGP_UnitCommandComponent::StartCombatAutoAcquireTimer()
 	}
 
 	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
-	if (!IsCombatCapableForAutoAcquire(OwnerUnit))
+	if (OwnerUnit == nullptr || !OwnerUnit->IsUnitDefinitionReady()
+		|| !IsCombatCapableForAutoAcquire(OwnerUnit))
 	{
 		return;
 	}

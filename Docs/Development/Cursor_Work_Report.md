@@ -11,78 +11,57 @@ Status: **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 `c79b017a45b1560e025cedfe262b0afde3c9cb6a`
 
 ## Feature head SHA
-`cc94ac85c3069431ab4ec4f49b7ae0fc335a71a6`
+Pending correction commit on this branch.
 
-## Factual old stat ownership (pre-S38D)
+## Previous already-loaded-only defect
+`ResolveLoadedUnitDefinition()` used `Get()` / `ResolveObject()` only. A valid authored soft `UnitDefinitionAsset` that was not already resident silently fell through to Default* / component CDO values. No async request. Contracts only covered already-resident native catalog objects.
 
-| Stat | Owner |
-| --- | --- |
-| MaxHealth / Health / Damage / Armor / DamageResistance / AttackCooldown / AttackRange | `AGP_UnitBase` `Default*` → `InitializeCombatAttributesIfNeeded()` → `UGP_UnitAttributeSet` |
-| SightRange / AutoAcquireScanInterval / AttackFacingRotationSpeed | `UGP_UnitCommandComponent` CDO / derived ctor |
-| MoveSpeed | `UGP_MovementComponent` CDO (`600`) or `AGP_SalvageWalker` ctor (`250`) |
-| Building catalog MaxHealth | `UGP_BuildingDefinition.MaxHealth` metadata only — not applied to spawned actors |
-| CapabilityTags | `AGP_UnitBase` class defaults (left in place) |
-| Acquisition cost / transport slots | orbital drop / unit delivery layer |
+## New async soft-loading lifecycle
+`TSoftObjectPtr<UGP_UnitDefinition>` unchanged. No hard ref. No `LoadSynchronous`.
 
-Old TDD UnitDefinition schemas (Icon / Mesh / Cost / AllowedCommands / GrantedAbilities) did **not** match disk.
+`BeginPlay`: ASC ActorInfo → `BeginUnitDefinitionInitialization()`:
 
-## UnitDefinition schema
+1. Empty soft ref → immediate fallback complete.
+2. Already-loaded definition → apply immediately.
+3. Valid unloaded soft ref → `UAssetManager::GetStreamableManager().RequestAsyncLoad` → callback resolves and completes.
 
-`UGP_UnitDefinition : UPrimaryDataAsset`, `PrimaryAssetType = GPUnitDefinition`.
+GAS / command / movement tuning and unit-cap register run only inside `CompleteUnitDefinitionInitialization`. One complete path. No second init.
 
-- Identity: `DisplayName` only
-- Vitals: `MaxHealth`, `InitialHealth`, `Armor`, `DamageResistance`
-- Combat: `Damage`, `AttackRangeCm`, `AttackCooldownSeconds`, `SightRangeCm`, `AutoAcquireScanIntervalSeconds`, `AttackFacingRotationSpeedDegreesPerSecond`
-- Movement: `MoveSpeedCmPerSecond` only
-- Behavior: `RetaliationPursuitSeconds` (default 5.0, ClampMin 0, `GP|Behavior|Retaliation`)
+## Empty-ref fallback
+Immediate. Uses existing `Default*` + command/movement CDO / derived ctor values. `GetRetaliationPursuitSeconds()` = **5.0** (documented baseline).
 
-No CombatProfile / MovementProfile / VisionProfile hierarchy.
+## Load-failure fallback
+Logs `GP UnitDefinitionLoadFailed` (null handle or resolve failed). Then the same Default* fallback. No hang.
 
-## Canonical ownership after migration
+## When GAS / command / movement become active
+Only after `IsUnitDefinitionReady()`:
 
-| Concern | Canonical |
-| --- | --- |
-| Initial/base vitals + combat + sight + facing + MoveSpeed + RetaliationPursuitSeconds | `UGP_UnitDefinition` |
-| Runtime Health / Damage / Armor / Resistance / Cooldown / Range | `UGP_UnitAttributeSet` (GAS). Definition initializes base values only. |
-| Sight / scan / facing at runtime | `UGP_UnitCommandComponent` (initialized from definition when loaded) |
-| MoveSpeed at runtime | `UGP_MovementComponent` for mobile units when `MoveSpeedCmPerSecond > 0` |
-| RetaliationPursuitSeconds | readable, unused until GP-S39R |
-| Building identity / icon / tags / SpawnedClass / footprint | `UGP_BuildingDefinition` |
-| Acquisition cost / DropTags / READY | `UGP_OrbitalDropDefinition` |
-| Unit delivery cost / slots / manifest | orbital unit delivery layer |
+- GAS base values written from definition or Default*
+- Command sight / scan / facing written from definition when present
+- MoveSpeed written on mobile units when `MoveSpeedCmPerSecond > 0`
+- Then `RefreshCombatAutoAcquireTimer()`
 
-`AGP_UnitBase` soft ref: `TSoftObjectPtr<UGP_UnitDefinition> UnitDefinitionAsset`. Resolver is already-loaded only (`Get()` / `ResolveObject()`). No `LoadSynchronous`. No replicated CurrentDamage / CurrentRange / DataAsset.
+## AutoAcquire readiness
+`StartCombatAutoAcquireTimer`, `IsEligibleForCombatAutoAcquire`, and `IsEligibleForAttackMoveAcquire` require `IsUnitDefinitionReady()`. Component `BeginPlay` cannot start scanning on stale/zero GAS. After complete, timer starts with the applied interval.
 
-## BuildingDefinition relationship
+## EndPlay safety
+`CancelPendingUnitDefinitionLoad()` cancels an in-flight streamable handle, marks abandoned, and resets pending. Callback no-ops if abandoned / destroyed / already ready.
 
-`UGP_BuildingDefinition` now has soft `UnitDefinition`. `MaxHealth` is **compatibility fallback** (`GP|Vitals|Fallback`). Canonical MaxHealth = `UnitDefinition.MaxHealth` via `ResolveCanonicalMaxHealth()`. Native turret building links `DA_GP_Unit_DefensiveTurret`. BuildingDef.MaxHealth never outranks a loaded UnitDefinition.
+## RetaliationPursuitSeconds (data only)
+Canonical rule: pending and empty/failure fallback = **5.0**. Successful definition apply uses the definition value. No GP-S39R behavior.
 
-## Fallback precedence
+## Unloaded-soft-ref test coverage
+`gp.Units.RunUnitDefinitionContractTest` now proves:
 
-1. Resolved loaded `UGP_UnitDefinition`
-2. Existing actor / component defaults (`Default*`, command CDO, movement CDO / derived ctor)
+- A already-loaded definition
+- B empty soft ref → legacy fallback
+- C valid unresolved soft path issues real `RequestAsyncLoad`
+- D GAS stays at AttributeSet zeros (not locked to Default* 200) until completion
+- E/F command + MoveSpeed apply after completion
+- G missing path → deterministic fallback, no crash
+- H EndPlay while pending → safe destroy
 
-Empty `UnitDefinitionAsset` does not break authored BPs. Native catalog is **not** auto-applied by class.
-
-## Worker values (preserved)
-
-MaxHealth/Health 100, Damage 25, Armor 0, Resistance 0, AttackRange 250, AttackCooldown 1.0, Sight 900, Scan 0.35, Facing 360, MoveSpeed **600** (live movement CDO; TDD 350 was stale), RetaliationPursuitSeconds 5.0.
-
-## Salvage Walker values (preserved)
-
-MaxHealth/Health 200, Damage 20, Armor 0, Resistance 0, AttackRange 600, AttackCooldown 1.0, Sight 900, Scan 0.35, Facing 360, MoveSpeed 250, RetaliationPursuitSeconds 5.0.
-
-## Defensive Turret values (preserved)
-
-MaxHealth/Health 400, Damage 20, Armor 0, Resistance 0, AttackRange 600, AttackCooldown 1.0, Sight 600, Scan 0.35, Facing 360, MoveSpeed 0 (no movement write), RetaliationPursuitSeconds 5.0.
-
-## Movement ownership decision
-
-Unit-type **MoveSpeed** is on UnitDefinition. NavProjectionExtent, RepathInterval, BlockedFail, Separation, AcceptanceRadius stay on `UGP_MovementComponent` (algorithm / system tuning).
-
-## RetaliationPursuitSeconds
-
-DATA ONLY. Default 5.0. `0` = disabled. `>0` = max pursuit duration after reacting to attacker. No damage reaction, no attacker callback, no pursuit timer, no new command state. GP-S39R owns behavior.
+Non-shipping hold/inject seam exists so automation can observe the pending window. Production path still calls `RequestAsyncLoad`.
 
 ## Exact tests
 
@@ -113,28 +92,16 @@ All: **Failures=0**.
 | GP Win64 Shipping | not run (candidate) |
 
 ## Exact changed files
-Diff vs `c79b017a45b1560e025cedfe262b0afde3c9cb6a`:
+Correction vs prior S38D implementation:
 
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Claude_Tasks/GP-S38D_Unit_Building_Combat_Data.md`
-- `Docs/Development/Claude_Tasks/README.md`
 - `Docs/Development/Cursor_Work_Report.md`
-- `Docs/Development/DOCUMENTATION_INDEX.md`
 - `Docs/TDD/05_Unit_Architecture.md`
-- `Docs/TDD/06_Building_Architecture.md`
-- `Docs/TDD/10_Data_Assets.md`
-- `Docs/TDD/14_Orbital_Delivery.md`
-- `GP/Source/GPRuntime/Private/Buildings/GPBuildingDefinition.cpp`
 - `GP/Source/GPRuntime/Private/Debug/GPUnitDefinitionContractTest.cpp`
-- `GP/Source/GPRuntime/Private/GPRuntime.cpp`
-- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropCatalog.cpp`
 - `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
-- `GP/Source/GPRuntime/Private/Units/GPUnitDefinition.cpp`
-- `GP/Source/GPRuntime/Private/Units/GPUnitDefinitionCatalog.cpp`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
 - `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
-- `GP/Source/GPRuntime/Public/Units/GPUnitDefinition.h`
-- `GP/Source/GPRuntime/Public/Units/GPUnitDefinitionCatalog.h`
 - `GP/Source/GPRuntime/Public/Units/GPUnitDefinitionContractTest.h`
 
 ## Protected assets untouched

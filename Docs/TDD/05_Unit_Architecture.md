@@ -63,7 +63,9 @@ Server spawn concrete AGP_UnitBase child
    v
 BeginPlay
    - Init ASC ActorInfo
-   - Apply loaded UnitDefinition to command/movement tuning (if present)
+   - UnitDefinition: empty ref → immediate Default* fallback; already-loaded → apply now;
+     valid unloaded soft ref → RequestAsyncLoad (no LoadSynchronous), then apply on callback
+   - AutoAcquire stays off until definition init completes, then RefreshCombatAutoAcquireTimer
    - Initialize combat attributes from UnitDefinition, else Default* (authority)
    - Presentation components bind / attach as implemented per component
 ```

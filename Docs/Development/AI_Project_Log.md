@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S38D async soft-load correction (candidate)
+
+Status: **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s38d-unit-building-combat-data`
+- Defect: valid unloaded `UnitDefinitionAsset` silently used Default* because resolver was already-loaded-only
+- Fix: `RequestAsyncLoad` via StreamableManager; empty ref immediate fallback; load failure logged + Default* fallback
+- AutoAcquire / AttackMove acquire gated on `IsUnitDefinitionReady()`. EndPlay cancels pending handle
+- `GetRetaliationPursuitSeconds` baseline 5.0 for pending/empty/failure (data only)
+- Contract covers unresolved soft path + listed regressions Failures=0; GPEditor + UHT **PASS**
+- **NOT MERGED. NOT FINALIZED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-18 — GP-S38D Unit/Building Combat Data (implementation candidate)
 
 Status: **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

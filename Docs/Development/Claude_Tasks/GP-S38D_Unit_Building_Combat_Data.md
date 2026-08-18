@@ -78,9 +78,13 @@ Behavior: `RetaliationPursuitSeconds` (default 5.0, ClampMin 0, category `GP|Beh
 TSoftObjectPtr<UGP_UnitDefinition> UnitDefinitionAsset;
 ```
 
-Resolver uses already-loaded object only (`Get()` / `ResolveObject()`). No `LoadSynchronous` on the gameplay path.
+No `LoadSynchronous`. Valid non-empty soft ref is `UAssetManager::GetStreamableManager().RequestAsyncLoad`. Empty ref falls back immediately. Load failure logs `GP UnitDefinitionLoadFailed` and uses Default* fallback.
 
-`BeginPlay` order: ASC ActorInfo → `ApplyUnitDefinitionComponentTuningIfNeeded()` → `InitializeCombatAttributesIfNeeded()`.
+`BeginPlay` order: ASC ActorInfo → `BeginUnitDefinitionInitialization()` (apply now, or async then apply). GAS / command / movement tuning and unit-cap register run only after definition init completes. AutoAcquire timer starts only when `IsUnitDefinitionReady()`.
+
+`GetRetaliationPursuitSeconds()`: documented baseline **5.0** while pending and for empty/failure fallback. Definition value after successful apply. Data only until GP-S39R.
+
+EndPlay cancels the pending streamable handle. Callback no-ops if abandoned/destroyed.
 
 ## Fallback precedence
 
@@ -129,7 +133,7 @@ Operator PIE check: assign a temporary UnitDefinition, change AttackRange or Mov
 ## Tests
 All Failures=0:
 
-- `gp.Units.RunUnitDefinitionContractTest` (A–L)
+- `gp.Units.RunUnitDefinitionContractTest` (A–L + unloaded soft-ref C–H)
 - `gp.Building.RunDefensiveTurretContractTest`
 - `gp.Combat.RunAutoAcquireContractTest`
 - `gp.Combat.RunAttackMoveContractTest`

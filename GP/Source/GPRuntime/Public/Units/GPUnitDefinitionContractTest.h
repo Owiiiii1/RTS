@@ -42,8 +42,13 @@ private:
 	TWeakObjectPtr<class AGP_SalvageWalker> OverrideWalkerWeak;
 	TWeakObjectPtr<class AGP_DefensiveTurret> TurretWeak;
 	TWeakObjectPtr<class AGP_Worker> WorkerWeak;
+	TWeakObjectPtr<class AGP_SalvageWalker> AsyncWalkerWeak;
+	TWeakObjectPtr<class AGP_SalvageWalker> FailWalkerWeak;
+	int32 FailWaitTicks = 0;
 	UPROPERTY()
 	TObjectPtr<class UGP_UnitDefinition> OverrideDef;
+	UPROPERTY()
+	TObjectPtr<class UGP_UnitDefinition> AsyncDef;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

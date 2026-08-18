@@ -19,6 +19,7 @@ class UGP_UnitDefinition;
 struct FGP_DamageApplicationResult;
 struct FGP_UnitCommand;
 struct FGameplayEffectModCallbackData;
+struct FStreamableHandle;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FGP_OnUnitDied, AGP_UnitBase*);
 
@@ -133,19 +134,39 @@ public:
 	bool IsSelectionTypeBuilding() const;
 
 	/**
-	 * Designer-facing intrinsic stats. Soft only — already-loaded objects resolve; no LoadSynchronous.
-	 * Empty = compatibility fallback to Default* / component CDO values.
+	 * Designer-facing intrinsic stats. Soft only — no LoadSynchronous.
+	 * Valid non-empty ref async-loads then initializes. Empty = immediate Default* fallback.
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Definition")
 	TSoftObjectPtr<UGP_UnitDefinition> UnitDefinitionAsset;
 
-	/** Already-loaded definition only. Does not LoadSynchronous. */
+	/** Already-resident definition only. Does not LoadSynchronous or start a load. */
 	UFUNCTION(BlueprintPure, Category = "GP|Definition")
 	const UGP_UnitDefinition* ResolveLoadedUnitDefinition() const;
 
-	/** Definition RetaliationPursuitSeconds, or 0 when no loaded definition. Data only until GP-S39R. */
+	/** True after empty-ref fallback, load failure fallback, or successful definition apply. */
+	UFUNCTION(BlueprintPure, Category = "GP|Definition")
+	bool IsUnitDefinitionReady() const { return bUnitDefinitionReady; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|Definition")
+	bool IsUnitDefinitionLoadPending() const { return bUnitDefinitionLoadPending; }
+
+	/**
+	 * Data only until GP-S39R.
+	 * After ready: definition value, or 5.0 fallback when empty-ref / load failure.
+	 * Pending/unready: documented baseline 5.0 (not 0).
+	 */
 	UFUNCTION(BlueprintPure, Category = "GP|Behavior|Retaliation")
 	float GetRetaliationPursuitSeconds() const;
+
+	static constexpr float FallbackRetaliationPursuitSeconds = 5.0f;
+
+#if !UE_BUILD_SHIPPING
+	/** Force the unresolved-soft RequestAsyncLoad path. Injected def is applied on completion. */
+	void DebugForceUnresolvedSoftDefinitionLoad(UGP_UnitDefinition* InjectedDefinition, bool bHoldCompletion);
+	bool DebugDidRequestAsyncUnitDefinitionLoad() const { return bDebugDidRequestAsyncUnitDefinitionLoad; }
+	void DebugCompletePendingUnitDefinitionLoad();
+#endif
 
 protected:
 	UFUNCTION()
@@ -155,6 +176,12 @@ protected:
 	void OnRep_IsDead();
 
 	void InitializeAbilitySystemActorInfo();
+	void BeginUnitDefinitionInitialization();
+	void RequestAsyncUnitDefinitionLoad();
+	void HandleUnitDefinitionLoaded();
+	void FinishUnitDefinitionLoadResolve();
+	void CompleteUnitDefinitionInitialization(const UGP_UnitDefinition* DefinitionOrNull);
+	void CancelPendingUnitDefinitionLoad();
 	void InitializeCombatAttributesIfNeeded();
 	void ApplyUnitDefinitionComponentTuningIfNeeded();
 	void HandleDeathInternal();
@@ -230,9 +257,24 @@ private:
 
 	FGP_OnUnitDied UnitDiedDelegate;
 
+	TSharedPtr<FStreamableHandle> UnitDefinitionLoadHandle;
+
 	bool bCombatAttributesInitialized = false;
 	bool bDefinitionTuningApplied = false;
+	bool bUnitDefinitionReady = false;
+	bool bUnitDefinitionLoadPending = false;
+	bool bUnitDefinitionLoadAbandoned = false;
+	float ResolvedRetaliationPursuitSeconds = FallbackRetaliationPursuitSeconds;
 	bool bDeathHandled = false;
 	bool bCountedTowardPlayerUnitCap = false;
 	TWeakObjectPtr<class AGP_PlayerState> UnitCapOwnerWeak;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGP_UnitDefinition> DebugInjectedUnitDefinition;
+
+#if !UE_BUILD_SHIPPING
+	bool bDebugForceUnresolvedSoftPath = false;
+	bool bDebugHoldAsyncCompletion = false;
+	bool bDebugDidRequestAsyncUnitDefinitionLoad = false;
+#endif
 };

@@ -1,5 +1,23 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — Risk-Based Development Workflow (docs)
+
+Status: **RISK_BASED_WORKFLOW_DOCS_READY_FOR_REVIEW**
+
+- Branch: `docs/risk-based-development-workflow` (base `origin/main` @ `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d`)
+- Canonical process: [`Risk_Based_Development_Workflow.md`](Risk_Based_Development_Workflow.md)
+- Rule: smallest sufficient test/build set for actual change risk; full suite only when justified; escalate if blast radius grows
+- Tests/builds: **NOT RUN** — documentation-only
+- **NOT MERGED.** Next planned slice: **GP-S40R** Timed Retaliation Pursuit
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+## 2026-08-18 — GP-S39E Economy / Logistics Data Ownership (merged)
+
+Status: **MERGED / VERIFIED / CLOSED**
+
+- Verified remote `main` SHA: `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d`
+- Next planned slice: **GP-S40R** Timed Retaliation Pursuit
+
 ## 2026-08-18 — GP-S39E Economy / Logistics Data Ownership (finalization)
 
 Status: **IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE**

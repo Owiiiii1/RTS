@@ -142,6 +142,8 @@ Automated checks для PR (configured у CI but documented тут for slice aut
 6. **Replication completeness:** Every `UPROPERTY(Replicated)` має parent у `GetLifetimeReplicatedProps` з explicit `DOREPLIFETIME_*` condition.
 7. **`AddToViewport` in screens:** `grep -rEn 'AddToViewport\(' GP/Source/GPUIRuntime/` → match only allowed for HUD root.
 
+Runtime contract / Unreal build selection is **not** “run every project test”. Follow [`Risk_Based_Development_Workflow.md`](Risk_Based_Development_Workflow.md).
+
 ## Per-Slice Documentation Sync
 
 Every slice updates exactly **one** TDD section authoritatively. If slice spans multiple TDD pages — split slice. Cross-TDD references лишаються links, не duplicated content.

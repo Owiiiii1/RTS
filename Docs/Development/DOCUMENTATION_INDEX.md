@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | **Architecture** | `Docs/Architecture_Decisions/` (ADR wins) + `Docs/TDD/13_Architecture_Proposal.md` | ADR-0009 (Orbital Delivery) overrides pre-pivot building/production examples. |
 | **Gameplay** | `Docs/GDD/` + `Docs/Game_Pitch.md` | Prefer `02`, `06`, `08`, `10`, `11`, `12` over stale fragments in `00` / `09` / `Out_Of_Scope`. |
-| **Workflow / process** | `GRIM_PROTOCOL_START_RULES.md` (root + `Docs/Development/`) + `/CONTRIBUTING.md` + `/STYLE.md` + `Docs/Development/Git_Workflow.md` + `Coding_Rules.md` | One stage at a time; operator validates in UE Editor. |
+| **Workflow / process** | `GRIM_PROTOCOL_START_RULES.md` (root + `Docs/Development/`) + [`Risk_Based_Development_Workflow.md`](Risk_Based_Development_Workflow.md) + `/CONTRIBUTING.md` + `/STYLE.md` + `Docs/Development/Git_Workflow.md` + `Coding_Rules.md` | One stage at a time; operator validates in UE Editor. Test/build selection is risk-based. |
 | **Current status / NEXT** | `Docs/Development/AI_Project_Log.md` + **this file** + `Docs/Development/Claude_Tasks/README.md` (cursor) | Cursor must match disk/`AI_Project_Log`. |
 | **Engineering rules** | `/CONTRIBUTING.md`, `/STYLE.md`, `Docs/Development/Coding_Rules.md` | Review-blocking rules. |
 | **Implementation map** | `Docs/TDD/13_Architecture_Proposal.md` | Slice order S01… after foundation. |
@@ -34,24 +34,24 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S38D on main tip** `f841cdee19c97a0dfaacb8fc0bdd27623c543329` |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S39E on main tip** `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S38D Unit/Building Combat Data** on `main` (tip `f841cdee19c97a0dfaacb8fc0bdd27623c543329`) |
+| Last closed / merged stage | **GP-S39E Economy / Logistics Data Ownership** on `main` (tip `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S39E_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s39e-economy-logistics-data` (**NOT MERGED**) |
+| Current stage | **RISK_BASED_WORKFLOW_DOCS_READY_FOR_REVIEW** on `docs/risk-based-development-workflow` (**NOT MERGED**) |
 
 ---
 
 ## Current NEXT Task
 
-**Closed:** GP-S38D Unit/Building Combat Data — **DONE / MERGED** on `main` @ `f841cdee19c97a0dfaacb8fc0bdd27623c543329`.
+**Closed:** GP-S39E Economy / Logistics Data Ownership — **MERGED / VERIFIED / CLOSED** on `main` @ `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d`.
 
-**Prior closed:** GP-S37T / GP-S36G / GP-S35B / GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
+**Prior closed:** GP-S38D / GP-S37T / GP-S36G / GP-S35B / GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S39E_Economy_Logistics_Data.md`](Claude_Tasks/GP-S39E_Economy_Logistics_Data.md) — **GP-S39E_FINALIZATION_READY_FOR_MERGE**. Do **not** merge. Await human merge.
+**Current:** [`Risk_Based_Development_Workflow.md`](Risk_Based_Development_Workflow.md) — **RISK_BASED_WORKFLOW_DOCS_READY_FOR_REVIEW**. Do **not** merge until review.
 
-**Do not** start Wall gameplay / FoW / **GP-S40R** Timed Retaliation Pursuit / Order Menu / Spectating without explicit assignment.
+**Next planned gameplay slice:** **GP-S40R** Timed Retaliation Pursuit. Do **not** start Wall gameplay / FoW / Order Menu / Spectating without explicit assignment.
 
 **Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 
@@ -73,7 +73,8 @@
 14. **GP-S36G** — BuildGrid MVP — **DONE / MERGED** @ `9ace159…`
 15. **GP-S37T** — Defensive Turret MVP — **DONE / MERGED** @ `c79b017…`
 16. **GP-S38D** — Unit/Building Combat Data — **DONE / MERGED** @ `f841cdee…`
-17. **GP-S39E** — Economy / Logistics Data Ownership — **FINALIZATION_READY_FOR_MERGE** (NOT MERGED)
+17. **GP-S39E** — Economy / Logistics Data Ownership — **MERGED / VERIFIED / CLOSED** @ `75a0e5bd…`
+18. **GP-S40R** — Timed Retaliation Pursuit — **not started**
 
 ---
 
@@ -88,7 +89,8 @@
 | `Docs/Architecture_Decisions/ADR_0001`…`0006`, `0008`, `0009` | Active (Accepted) |
 | `ADR_0007` Building-As-Pawn | Active but **Draft** — pattern stands; examples superseded by ADR-0009 |
 | Root `README.md`, `CONTRIBUTING.md`, `STYLE.md` | Active |
-| `GRIM_PROTOCOL_START_RULES.md` | Active process SoT |
+| `GRIM_PROTOCOL_START_RULES.md` | Active process SoT (roles / one-stage / factual review) |
+| [`Risk_Based_Development_Workflow.md`](Risk_Based_Development_Workflow.md) | Active process SoT for test/build selection |
 | `Docs/Development/*` ops + Claude task specs | Active |
 | `Docs/Game_Pitch.md` | Active onboarding |
 | `UGP_ResourceGameplaySettings` + `GP/Config/DefaultGame.ini` (`[/Script/GPRuntime.GP_ResourceGameplaySettings]`) | Active — Project Settings → Game → GP Resource Gameplay (P2 + P3 `DropOffRetrySeconds`) |
@@ -157,4 +159,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S38D are on verified `main` tip `f841cdee19c97a0dfaacb8fc0bdd27623c543329`. Current stage: **GP-S39E_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s39e-economy-logistics-data`. See [`Claude_Tasks/GP-S39E_Economy_Logistics_Data.md`](Claude_Tasks/GP-S39E_Economy_Logistics_Data.md). **NOT MERGED.** READY FOR MERGE. Do not start **GP-S40R** Timed Retaliation Pursuit.
+SETUP-001, DOCS-001, GP-S01…GP-S39E are on verified `main` tip `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d`. Current stage: **RISK_BASED_WORKFLOW_DOCS_READY_FOR_REVIEW** on `docs/risk-based-development-workflow`. See [`Risk_Based_Development_Workflow.md`](Risk_Based_Development_Workflow.md). **NOT MERGED.** Next planned slice: **GP-S40R** Timed Retaliation Pursuit.

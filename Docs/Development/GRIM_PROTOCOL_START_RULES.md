@@ -490,3 +490,13 @@ Cursor выполняет конкретный этап.
 ```text
 Этап принят. Переходим к следующему.
 ```
+
+---
+
+## 21. Risk-Based Development Workflow
+
+Canonical validation selection (which contracts / builds to run) lives in:
+
+`Docs/Development/Risk_Based_Development_Workflow.md`
+
+Default for a bounded slice: slice contract + 3–5 affected regressions, not the full project suite. Full suite only when the change risk justifies it. Docs-only stages run no Unreal tests or builds. Factual review before operator test, before merge, and after merge is unchanged.

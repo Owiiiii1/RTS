@@ -1,9 +1,9 @@
 # GP-S39E — Economy / Logistics Data Ownership
 
 ## Status
-**IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE**
+**MERGED / VERIFIED / CLOSED**
 
-**NOT MERGED.** READY FOR MERGE.
+Verified on `main` @ `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d`.
 
 ## Slice Group
 Post-GP-S38D (Unit/Building Combat Data is on verified `main` @ `f841cdee19c97a0dfaacb8fc0bdd27623c543329`)

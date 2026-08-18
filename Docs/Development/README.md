@@ -15,6 +15,7 @@ Operational rules для щоденної роботи у репозиторії
 - [Claude_Task_Backlog](Claude_Task_Backlog.md) — індекс модульних Claude задач (Phase 0 → Phase 7 + Phase 6A code slices).
 - [Claude_Tasks/](Claude_Tasks/README.md) — окремі task-файли, один файл на одну задачу.
 - [GRIM_PROTOCOL_START_RULES](GRIM_PROTOCOL_START_RULES.md) — AI/operator process protocol (keep in sync with root copy).
+- [Risk_Based_Development_Workflow](Risk_Based_Development_Workflow.md) — canonical test/build selection for slices (adaptive validation, not weaker validation).
 
 ## Task Categories
 

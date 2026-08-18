@@ -6,18 +6,19 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-18 (GP-S39E finalized, not merged). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-18 (GP-S39E merged). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Economy / Logistics Data Ownership. **Current: GP-S39E_FINALIZATION_READY_FOR_MERGE**.
+**Поточна фаза:** process docs. **Current: RISK_BASED_WORKFLOW_DOCS_READY_FOR_REVIEW**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
-| GP-S01 … GP-S38D | **DONE / on `main` tip** `f841cdee19c97a0dfaacb8fc0bdd27623c543329` |
-| **GP-S39E** Economy / Logistics Data | **IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE** — [`GP-S39E_Economy_Logistics_Data.md`](GP-S39E_Economy_Logistics_Data.md) — **NOT MERGED** |
+| GP-S01 … GP-S39E | **DONE / on `main` tip** `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d` |
+| **GP-S39E** Economy / Logistics Data | **MERGED / VERIFIED / CLOSED** — [`GP-S39E_Economy_Logistics_Data.md`](GP-S39E_Economy_Logistics_Data.md) |
+| Risk-Based Development Workflow | **READY FOR REVIEW** — [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md) — **NOT MERGED** |
 
-**NEXT action для агента:** do **not** merge. Await human merge. Do **not** start Wall / FoW / **GP-S40R** Timed Retaliation Pursuit.
+**NEXT planned gameplay slice:** **GP-S40R** Timed Retaliation Pursuit. Do **not** start it without explicit assignment.
 
 ### Drift Warning
 

@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S41M first-Move path-start correction
+
+Status: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Operator FAIL: first Move after PIE/spawn still used a long-looking turn; later Moves OK
+- Proven: Recast `PathPoints[0]` is `ProjectedStart` (query anchor). First Tick steered toward that anchor while `PathIndex=0`
+- Contract: raw Path0 == ProjectedStart; after strip runtime Path0 is the forward waypoint; first yaw is shortest signed toward that move
+- Arena XY Actual vs Projected was aligned (Z-only snap); the Recast start-anchor contract still held
+- Fix: `StripProjectedStartAnchor` after FindPathSync / projected-straight; keep `ComputeShortestYawStep`
+- Unrelated (not fixed): MainBase `BuildingDefinitionLoadFailed` / `ResolveFailedUsingFallback`
+- **NOT MERGED. NOT FINALIZED.**
+
 ## 2026-08-18 — GP-S41M Movement Shortest Yaw (implementation candidate)
 
 Status: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

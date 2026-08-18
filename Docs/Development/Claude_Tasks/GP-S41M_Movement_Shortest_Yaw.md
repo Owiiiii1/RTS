@@ -32,7 +32,21 @@ Repro in `gp.Movement.RunShortestYawContractTest`:
 - if `|Delta| <= MaxAbsDelta` → snap to `NormalizeAxis(Target)`
 - else apply `Clamp(Delta, -Max, +Max)` and `NormalizeAxis(Current + Applied)`
 
-Tick facing uses this helper with `MaxAbsDelta = RotationSpeed * DeltaTime`. Existing movement Tick only. No new Tick. Path / serial / speed / steering unchanged.
+Tick facing uses this helper with `MaxAbsDelta = RotationSpeed * DeltaTime`. Existing movement Tick only. No new Tick.
+
+## First-Move path start (operator FAIL correction)
+
+Operator: first PIE/spawn Move still turned the long-looking way; later Moves were correct.
+
+Proven: `FindPathSync` / projected-straight copies Recast `PathPoints[0] == ProjectedStart`. First Tick with `PathIndex=0` steered toward that query anchor. Later Moves project near the actor, so the defect disappeared.
+
+Contract first-Move (arena): ActualStart XY `(80,-1400)` Z=`50`; ProjectedStart XY same Z=`10`; DistXY=`0`; raw Path0 == ProjectedStart; after strip Path0=`(1280,-1400)`; first tick `+X`, yaw `90→84` Applied=`-6`.
+
+Fix: `StripProjectedStartAnchor` removes the first runtime point when it is the projected query start (tolerance `max(AcceptanceRadius, 25)`). Genuine first corners (not the query start) are kept. Destination projection, repath, serials, and straight-line fallback are unchanged.
+
+## Recorded out of scope
+
+`LogGPBuildGridRegister` `GP BuildingDefinitionLoadFailed` for `BP_GP_MainBase` / `DA_GP_Buildings_MainBase` (`ResolveFailedUsingFallback`). Separate DataAsset/load issue. **Not fixed here.**
 
 ## Shortest-yaw invariant
 

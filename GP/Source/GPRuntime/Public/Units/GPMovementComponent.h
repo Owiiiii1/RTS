@@ -113,8 +113,14 @@ public:
 	/** GP-S33M diagnostic: current nav path point count (0 if idle / straight fallback). */
 	int32 GetActivePathPointCount() const { return PathPoints.Num(); }
 
+	/** GP-S33M / GP-S41M diagnostic: current waypoint index. */
+	int32 GetActivePathIndex() const { return PathIndex; }
+
 	/** GP-S33M diagnostic: true when active path used NavigationSystem (not straight fallback). */
 	bool IsActivePathFromNavigation() const { return bActivePathFromNavigation; }
+
+	/** Copies PathPoints[Index] when valid. */
+	bool TryGetActivePathPoint(int32 Index, FVector& OutPoint) const;
 
 	FGP_OnMovementResult& OnMovementResult();
 
@@ -127,6 +133,10 @@ public:
 	static float ComputeShortestYawStep(float CurrentYaw, float TargetYaw, float MaxAbsDeltaDegrees);
 
 #if !UE_BUILD_SHIPPING
+	FVector DebugGetLastProjectedStart() const { return DebugLastProjectedStart; }
+	FVector DebugGetLastActualStart() const { return DebugLastActualStart; }
+	FVector DebugGetLastRawNavPath0() const { return DebugLastRawNavPath0; }
+
 	/** Synthetic terminal broadcast for stale-serial validation. Does not mutate movement state. */
 	void DebugBroadcastResult(
 		uint32 Serial,
@@ -188,6 +198,8 @@ private:
 		const FVector& DestinationForLog);
 
 	bool TryBuildNavigationPath(const FVector& Start, const FVector& Dest, TArray<FVector>& OutPoints, bool& bOutUsedNav);
+	void StripProjectedStartAnchor(const FVector& ProjectedStart, TArray<FVector>& InOutPoints) const;
+	void FinalizeNavRuntimePath(const FVector& ActualStart, const FVector& ProjectedStart, TArray<FVector>& InOutPoints);
 	FVector ComputeSteeringOffset(const FVector& OwnerLocation, const FVector& DesiredDir2D) const;
 	void FinishMoveReached(AActor* Owner, const FVector& FinalLocation);
 	void FinishMoveFailed(AActor* Owner, EGP_MovementResultReason Reason);
@@ -210,4 +222,10 @@ private:
 	double LastRepathWorldTime = -1.0;
 	double LastProgressWorldTime = -1.0;
 	FVector LastProgressLocation = FVector::ZeroVector;
+
+#if !UE_BUILD_SHIPPING
+	FVector DebugLastProjectedStart = FVector::ZeroVector;
+	FVector DebugLastActualStart = FVector::ZeroVector;
+	FVector DebugLastRawNavPath0 = FVector::ZeroVector;
+#endif
 };

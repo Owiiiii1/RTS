@@ -298,6 +298,7 @@ bool UGP_MovementComponent::TryBuildNavigationPath(
 	if (DistNav2D <= TrivialPathCm)
 	{
 		MakeProjectedStraightPath();
+		FinalizeNavRuntimePath(Start, PathStart, OutPoints);
 		return true;
 	}
 
@@ -313,6 +314,7 @@ bool UGP_MovementComponent::TryBuildNavigationPath(
 		if (DistNav2D <= SoftStraightMaxCm)
 		{
 			MakeProjectedStraightPath();
+			FinalizeNavRuntimePath(Start, PathStart, OutPoints);
 			return true;
 		}
 		return false;
@@ -339,6 +341,63 @@ bool UGP_MovementComponent::TryBuildNavigationPath(
 	}
 
 	bOutUsedNav = true;
+	FinalizeNavRuntimePath(Start, PathStart, OutPoints);
+	return true;
+}
+
+void UGP_MovementComponent::StripProjectedStartAnchor(const FVector& ProjectedStart, TArray<FVector>& InOutPoints) const
+{
+	if (InOutPoints.Num() <= 1)
+	{
+		return;
+	}
+
+	const float AnchorTolCm = FMath::Max(AcceptanceRadius, 25.0f);
+	if (FVector::Dist2D(InOutPoints[0], ProjectedStart) > AnchorTolCm)
+	{
+		return;
+	}
+
+	// Recast / projected-straight first point is the FindPathSync query anchor.
+	// The actor already exists at ActualStart and must not walk back to that anchor.
+	InOutPoints.RemoveAt(0);
+}
+
+void UGP_MovementComponent::FinalizeNavRuntimePath(
+	const FVector& ActualStart,
+	const FVector& ProjectedStart,
+	TArray<FVector>& InOutPoints)
+{
+#if !UE_BUILD_SHIPPING
+	DebugLastActualStart = ActualStart;
+	DebugLastProjectedStart = ProjectedStart;
+	DebugLastRawNavPath0 = InOutPoints.Num() > 0 ? InOutPoints[0] : FVector::ZeroVector;
+#endif
+	StripProjectedStartAnchor(ProjectedStart, InOutPoints);
+	const FVector Raw0 =
+#if !UE_BUILD_SHIPPING
+		DebugLastRawNavPath0;
+#else
+		FVector::ZeroVector;
+#endif
+	UE_LOG(LogGPUnitMovement, Log,
+		TEXT("GP UnitMovement PathAnchor: ActualStart=%s ProjectedStart=%s RawPath0=%s Path0=%s Path1=%s DistActualProjected=%.1f PathPoints=%d"),
+		*ActualStart.ToCompactString(),
+		*ProjectedStart.ToCompactString(),
+		*Raw0.ToCompactString(),
+		InOutPoints.Num() > 0 ? *InOutPoints[0].ToCompactString() : TEXT("none"),
+		InOutPoints.Num() > 1 ? *InOutPoints[1].ToCompactString() : TEXT("none"),
+		FVector::Dist2D(ActualStart, ProjectedStart),
+		InOutPoints.Num());
+}
+
+bool UGP_MovementComponent::TryGetActivePathPoint(int32 Index, FVector& OutPoint) const
+{
+	if (!PathPoints.IsValidIndex(Index))
+	{
+		return false;
+	}
+	OutPoint = PathPoints[Index];
 	return true;
 }
 

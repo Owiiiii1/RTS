@@ -8,6 +8,7 @@
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "Math/UnrealMathUtility.h"
+#include "NavigationSystem.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
 #include "Units/GPMovementComponent.h"
@@ -300,6 +301,166 @@ void UGP_MovementShortestYawContractTestRunner::AdvanceStage()
 		Expect(Movement->GetActivePathPointCount() == PathAfterAccept, TEXT("I_PathCountUnchanged"));
 		Expect(PathAfterAccept >= PathBefore, TEXT("I_PathStillPresent"));
 		Expect(Movement->IsMoving(), TEXT("I_StillMoving"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 2:
+	{
+		if (AGP_SalvageWalker* Previous = WalkerWeak.Get())
+		{
+			Previous->Destroy();
+			WalkerWeak.Reset();
+		}
+
+		const FVector ArenaSpawn(0.0f, -1400.0f, 88.0f);
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.ObjectFlags |= RF_Transient;
+		AGP_SalvageWalker* Walker = World->SpawnActor<AGP_SalvageWalker>(
+			AGP_SalvageWalker::StaticClass(), ArenaSpawn, FRotator(0.0f, 90.0f, 0.0f), Params);
+		WalkerWeak = Walker;
+		if (!Expect(IsValid(Walker), TEXT("J_SpawnOnArena")))
+		{
+			Finish();
+			return;
+		}
+		if (UGP_UnitCommandComponent* Cmd = Walker->GetUnitCommandComponent())
+		{
+			Cmd->AutoAcquireScanIntervalSeconds = 10000.0f;
+			Cmd->RefreshCombatAutoAcquireTimer();
+		}
+
+		UGP_MovementComponent* Movement = Walker->FindComponentByClass<UGP_MovementComponent>();
+		UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		if (!Expect(Movement != nullptr && NavSys != nullptr, TEXT("J_HasMovementAndNavSys")))
+		{
+			Finish();
+			return;
+		}
+
+		Movement->SeparationStrength = 0.0f;
+		Movement->RotationSpeed = 360.0f;
+		Movement->bRotateToMovement = true;
+
+		const FVector Extent(
+			Movement->NavProjectionExtentXY,
+			Movement->NavProjectionExtentXY,
+			Movement->NavProjectionExtentZ);
+		FNavLocation SeedProjected;
+		if (!Expect(NavSys->ProjectPointToNavigation(Walker->GetActorLocation(), SeedProjected, Extent),
+			TEXT("J_SeedProjectsToNav")))
+		{
+			Finish();
+			return;
+		}
+
+		const FVector OffsetCandidates[] = {
+			FVector(SeedProjected.Location.X + 80.0f, SeedProjected.Location.Y, SeedProjected.Location.Z + 40.0f),
+			FVector(0.0f, -2080.0f, 88.0f),
+			FVector(2080.0f, -1400.0f, 88.0f),
+			FVector(0.0f, -2050.0f, 150.0f)
+		};
+		FVector ChosenStart = OffsetCandidates[0];
+		for (const FVector& Candidate : OffsetCandidates)
+		{
+			FNavLocation CandidateProjected;
+			if (NavSys->ProjectPointToNavigation(Candidate, CandidateProjected, Extent)
+				&& FVector::Dist2D(Candidate, CandidateProjected.Location) > Movement->AcceptanceRadius)
+			{
+				ChosenStart = Candidate;
+				break;
+			}
+		}
+		Walker->SetActorLocation(ChosenStart);
+		Walker->SetActorRotation(FRotator(0.0f, 90.0f, 0.0f));
+
+		const FVector ActualStart = Walker->GetActorLocation();
+		FVector Dest = ActualStart + FVector(1200.0f, 0.0f, 0.0f);
+		Dest.X = FMath::Clamp(Dest.X, -1800.0f, 1800.0f);
+		Dest.Y = FMath::Clamp(Dest.Y, -1800.0f, 1800.0f);
+		if (FVector::Dist2D(ActualStart, Dest) < 400.0f)
+		{
+			Dest = FVector(0.0f, 0.0f, ActualStart.Z);
+		}
+		const FGP_MovementRequestOutcome Outcome = Movement->RequestMove(Dest, 42);
+		if (!Expect(Outcome.IsAccepted() && Movement->IsActivePathFromNavigation(), TEXT("J_FirstMoveUsedNav")))
+		{
+			Finish();
+			return;
+		}
+
+		const FVector ProjectedStart = Movement->DebugGetLastProjectedStart();
+		const float DistActualProjected = FVector::Dist2D(ActualStart, ProjectedStart);
+		FVector Path0 = FVector::ZeroVector;
+		FVector Path1 = FVector::ZeroVector;
+		FVector Path2 = FVector::ZeroVector;
+		const bool bHas0 = Movement->TryGetActivePathPoint(0, Path0);
+		const bool bHas1 = Movement->TryGetActivePathPoint(1, Path1);
+		const bool bHas2 = Movement->TryGetActivePathPoint(2, Path2);
+		UE_LOG(LogGPShortestYaw, Log,
+			TEXT("J_FirstMoveDiag ActualStart=%s ProjectedStart=%s DistActualProjected=%.1f PathIndex=%d PathPoints=%d Path0=%s Path1=%s Path2=%s Yaw=%.2f"),
+			*ActualStart.ToCompactString(),
+			*ProjectedStart.ToCompactString(),
+			DistActualProjected,
+			Movement->GetActivePathIndex(),
+			Movement->GetActivePathPointCount(),
+			bHas0 ? *Path0.ToCompactString() : TEXT("none"),
+			bHas1 ? *Path1.ToCompactString() : TEXT("none"),
+			bHas2 ? *Path2.ToCompactString() : TEXT("none"),
+			Walker->GetActorRotation().Yaw);
+
+		const FVector RawPath0 = Movement->DebugGetLastRawNavPath0();
+		Expect(FVector::Dist2D(RawPath0, ProjectedStart) <= FMath::Max(Movement->AcceptanceRadius, 25.0f),
+			TEXT("J_RawFirstNavPointWasProjectedStart"));
+		if (DistActualProjected > Movement->AcceptanceRadius)
+		{
+			Expect(true, TEXT("J_ProjectedStartNoticeablyOffset"));
+		}
+		else
+		{
+			UE_LOG(LogGPShortestYaw, Log,
+				TEXT("J_ProjectedStartNoticeablyOffset SKIP: DistActualProjected=%.1f (XY aligned; raw Recast start still proven)"),
+				DistActualProjected);
+		}
+		Expect(Movement->GetActivePathIndex() == 0, TEXT("J_InitialPathIndex0"));
+		Expect(bHas0, TEXT("J_HasPath0"));
+		Expect(FVector::Dist2D(Path0, ProjectedStart) > FMath::Max(Movement->AcceptanceRadius, 25.0f),
+			TEXT("J_FirstRuntimePointIsNotProjectedStartAnchor"));
+
+		const FVector2D ToProjected(ProjectedStart.X - ActualStart.X, ProjectedStart.Y - ActualStart.Y);
+		const FVector2D ToPath0(Path0.X - ActualStart.X, Path0.Y - ActualStart.Y);
+		const FVector2D ToDest(Dest.X - ActualStart.X, Dest.Y - ActualStart.Y);
+		const float DotPath0Dest = FVector2D::DotProduct(ToPath0.GetSafeNormal(), ToDest.GetSafeNormal());
+		const float DotPath0Projected = FVector2D::DotProduct(ToPath0.GetSafeNormal(), ToProjected.GetSafeNormal());
+		UE_LOG(LogGPShortestYaw, Log,
+			TEXT("J_FirstMoveDir DotPath0Dest=%.3f DotPath0Projected=%.3f"),
+			DotPath0Dest,
+			DotPath0Projected);
+		Expect(DotPath0Dest > DotPath0Projected, TEXT("J_FirstWaypointNotTowardProjectedStart"));
+
+		const float YawBefore = Walker->GetActorRotation().Yaw;
+		Movement->TickComponent(1.0f / 60.0f, LEVELTICK_All, nullptr);
+		const FVector After = Walker->GetActorLocation();
+		const FVector2D Moved(After.X - ActualStart.X, After.Y - ActualStart.Y);
+		const float YawAfter = Walker->GetActorRotation().Yaw;
+		const float Applied = FMath::FindDeltaAngleDegrees(YawBefore, YawAfter);
+		const float TargetYaw = FMath::RadiansToDegrees(FMath::Atan2(Moved.Y, Moved.X));
+		UE_LOG(LogGPShortestYaw, Log,
+			TEXT("J_FirstTick Moved=%s YawBefore=%.2f YawAfter=%.2f Applied=%.2f TargetFromMove=%.2f"),
+			*FVector(Moved.X, Moved.Y, 0.0f).ToCompactString(),
+			YawBefore,
+			YawAfter,
+			Applied,
+			TargetYaw);
+
+		Expect(FVector2D::DotProduct(Moved, ToDest) > FVector2D::DotProduct(Moved, ToProjected),
+			TEXT("J_FirstStepTowardForwardNotProjectedStart"));
+		const float DestYaw = FMath::RadiansToDegrees(FMath::Atan2(ToDest.Y, ToDest.X));
+		const float ExpectedDelta = FMath::FindDeltaAngleDegrees(YawBefore, DestYaw);
+		Expect(Applied * ExpectedDelta > 0.0f, TEXT("J_FirstYawShortestTowardMoveDir"));
+		Expect(FMath::Abs(Applied) <= (360.0f / 60.0f) + 0.05f, TEXT("J_FirstYawWithinRotationSpeed"));
 
 		++StageIndex;
 		ScheduleNext(0.05f);

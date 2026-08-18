@@ -4,7 +4,7 @@
 
 Status: **GP-S40R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-- Branch: `feature/gp-s40r-timed-retaliation-pursuit` (base `origin/main` @ `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`)
+- Branch: `feature/gp-s40r-timed-retaliation-pursuit` (base `origin/main` @ `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`; tip `8b7e3aee68568a19cf6009228c74f3824eb971f8`)
 - After successful hostile damage, idle mobile combat units pursue/engage the attacker for `GetRetaliationPursuitSeconds()`
 - Latest attacker replaces only while retaliation owns behavior; manual Held commands always win
 - Worker / DefensiveTurret do not start movement retaliation

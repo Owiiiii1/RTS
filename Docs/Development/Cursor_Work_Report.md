@@ -8,7 +8,7 @@
 ## Branch / base / head
 - Branch: `feature/gp-s40r-timed-retaliation-pursuit`
 - Base: `origin/main` @ `5ad69aa7abd39e181cd6ffafb11e4277adf3160a`
-- Head: recorded after commit (see git tip of this branch)
+- Head: `8b7e3aee68568a19cf6009228c74f3824eb971f8`
 
 ## Implementation summary
 After **successful** hostile `AGP_UnitBase::ApplyDamageFromUnit`, the living target notifies `UGP_UnitCommandComponent::NotifyHostileDamageReceived`. Eligible idle mobile combat units (factual: Salvage Walker) either enter the existing Attack FSM if the attacker is already engageable, or pursue that attacker for `GetRetaliationPursuitSeconds()` (definition value; fallback 5.0; 0 disables). Fire/LOS remain the existing Ready cadence + `GPCombatLOS`. No second combat system, no new permanent Tick, no player-visible retaliation command.

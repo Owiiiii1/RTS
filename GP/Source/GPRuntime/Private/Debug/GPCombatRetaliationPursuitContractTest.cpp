@@ -9,9 +9,12 @@
 #include "Buildings/GPDefensiveTurret.h"
 #include "Command/GPStoredUnitCommand.h"
 #include "Command/GPUnitCommand.h"
+#include "Combat/GPCombatLOS.h"
 #include "Combat/GPDamageApplication.h"
+#include "Components/StaticMeshComponent.h"
 #include "Units/GPUnitBase.h"
 #include "Debug/GPContractTestCoordinator.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "Tags/GPGameplayTags.h"
@@ -84,6 +87,38 @@ namespace GPCombatRetaliationDebug
 			SilenceAutoAcquire(Worker);
 		}
 		return Worker;
+	}
+
+	static AActor* SpawnVisibilityBlocker(UWorld* World, const FVector& Loc)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.ObjectFlags |= RF_Transient;
+		AActor* Blocker = World->SpawnActor<AActor>(AActor::StaticClass(), Loc, FRotator::ZeroRotator, Params);
+		if (Blocker == nullptr)
+		{
+			return nullptr;
+		}
+
+		UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(Blocker, TEXT("BlockerMesh"));
+		Mesh->SetMobility(EComponentMobility::Movable);
+		Mesh->RegisterComponent();
+		Blocker->SetRootComponent(Mesh);
+		Mesh->SetWorldLocation(Loc);
+		Mesh->SetWorldScale3D(FVector(4.0f, 4.0f, 8.0f));
+
+		if (UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+		{
+			Mesh->SetStaticMesh(CubeMesh);
+		}
+
+		Mesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		Mesh->SetCollisionObjectType(ECC_WorldStatic);
+		Mesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+		Mesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+		Mesh->SetGenerateOverlapEvents(false);
+		Mesh->SetCanEverAffectNavigation(false);
+		return Blocker;
 	}
 
 	static AGP_DefensiveTurret* SpawnTurret(UWorld* World, const FVector& Loc, int32 TeamId)
@@ -203,6 +238,12 @@ void UGP_CombatRetaliationPursuitContractTestRunner::CleanupActors()
 	if (AGP_SalvageWalker* Actor = ManualVictimWeak.Get()) { Actor->Destroy(); }
 	if (AGP_Worker* Actor = WorkerVictimWeak.Get()) { Actor->Destroy(); }
 	if (AGP_DefensiveTurret* Actor = TurretWeak.Get()) { Actor->Destroy(); }
+	if (AGP_SalvageWalker* Actor = LOSVictimWeak.Get()) { Actor->Destroy(); }
+	if (AGP_SalvageWalker* Actor = LOSAttackerWeak.Get()) { Actor->Destroy(); }
+	if (AActor* Actor = LOSBlockerWeak.Get()) { Actor->Destroy(); }
+	if (AGP_SalvageWalker* Actor = TimeoutLOSVictimWeak.Get()) { Actor->Destroy(); }
+	if (AGP_SalvageWalker* Actor = TimeoutLOSAttackerWeak.Get()) { Actor->Destroy(); }
+	if (AActor* Actor = TimeoutLOSBlockerWeak.Get()) { Actor->Destroy(); }
 	VictimWeak.Reset();
 	AttackerWeak.Reset();
 	AttackerBWeak.Reset();
@@ -211,6 +252,12 @@ void UGP_CombatRetaliationPursuitContractTestRunner::CleanupActors()
 	ManualVictimWeak.Reset();
 	WorkerVictimWeak.Reset();
 	TurretWeak.Reset();
+	LOSVictimWeak.Reset();
+	LOSAttackerWeak.Reset();
+	LOSBlockerWeak.Reset();
+	TimeoutLOSVictimWeak.Reset();
+	TimeoutLOSAttackerWeak.Reset();
+	TimeoutLOSBlockerWeak.Reset();
 	ShortRetaliationDefWeak.Reset();
 }
 
@@ -609,6 +656,181 @@ void UGP_CombatRetaliationPursuitContractTestRunner::AdvanceStage()
 			VictimWeak.Reset();
 		}
 		Expect(true, TEXT("L_OwnerDestroySafe"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 12:
+	{
+		const FVector LOSOrigin = Origin + FVector(0.0f, 8000.0f, 0.0f);
+		AGP_SalvageWalker* LOSVictim = GPCombatRetaliationDebug::SpawnSW(World, LOSOrigin, TeamA);
+		AGP_SalvageWalker* LOSAttacker = GPCombatRetaliationDebug::SpawnSW(
+			World, LOSOrigin + FVector(200.0f, 0.0f, 0.0f), TeamB);
+		LOSVictimWeak = LOSVictim;
+		LOSAttackerWeak = LOSAttacker;
+		if (!Expect(IsValid(LOSVictim) && IsValid(LOSAttacker), TEXT("LOS_SpawnBlockedPair")))
+		{
+			Finish();
+			return;
+		}
+		AActor* Blocker = GPCombatRetaliationDebug::SpawnVisibilityBlocker(
+			World,
+			(LOSVictim->GetActorLocation() + LOSAttacker->GetActorLocation()) * 0.5f + FVector(0.0f, 0.0f, 40.0f));
+		LOSBlockerWeak = Blocker;
+		if (!Expect(IsValid(Blocker), TEXT("LOS_A_SpawnBlocker")))
+		{
+			Finish();
+			return;
+		}
+		GPCombatRetaliationDebug::ApplyCombatStats(LOSVictim, 400.0f, 25.0f, 400.0f, 1.0f);
+		GPCombatRetaliationDebug::ApplyCombatStats(LOSAttacker, 400.0f, 15.0f, 250.0f, 1.0f);
+		if (UGP_UnitCommandComponent* Cmd = LOSVictim->GetUnitCommandComponent())
+		{
+			Cmd->AutoAcquireSightRangeCm = 900.0f;
+		}
+		Expect(!GPCombatLOS::HasLineOfSight(World, LOSVictim, LOSAttacker), TEXT("LOS_A_HelperBlocked"));
+		Expect(GPCombatRetaliationDebug::ApplyHit(LOSAttacker, LOSVictim), TEXT("LOS_A_DamageApplied"));
+		++StageIndex;
+		ScheduleNext(0.25f);
+		break;
+	}
+	case 13:
+	{
+		AGP_SalvageWalker* LOSVictim = LOSVictimWeak.Get();
+		AGP_SalvageWalker* LOSAttacker = LOSAttackerWeak.Get();
+		if (!Expect(IsValid(LOSVictim) && IsValid(LOSAttacker), TEXT("LOS_A_ActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+		Expect(!GPCombatLOS::HasLineOfSight(World, LOSVictim, LOSAttacker), TEXT("LOS_A_StillBlocked"));
+		if (UGP_UnitCommandComponent* Cmd = LOSVictim->GetUnitCommandComponent())
+		{
+			Expect(Cmd->IsRetaliationActive() && Cmd->GetRetaliationTarget() == LOSAttacker, TEXT("LOS_A_RetaliationRemains"));
+			Expect(!Cmd->IsAttackActive(), TEXT("LOS_A_NoAttackFSM"));
+			Expect(!Cmd->HasHeldCommand(), TEXT("LOS_A_NoHeldAttack"));
+		}
+		if (AActor* Blocker = LOSBlockerWeak.Get())
+		{
+			Blocker->Destroy();
+			LOSBlockerWeak.Reset();
+		}
+		++StageIndex;
+		ScheduleNext(0.30f);
+		break;
+	}
+	case 14:
+	{
+		AGP_SalvageWalker* LOSVictim = LOSVictimWeak.Get();
+		AGP_SalvageWalker* LOSAttacker = LOSAttackerWeak.Get();
+		if (!Expect(IsValid(LOSVictim) && IsValid(LOSAttacker), TEXT("LOS_B_ActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+		Expect(GPCombatLOS::HasLineOfSight(World, LOSVictim, LOSAttacker), TEXT("LOS_B_HelperClear"));
+		if (UGP_UnitCommandComponent* Cmd = LOSVictim->GetUnitCommandComponent())
+		{
+			Expect(Cmd->IsAttackActive() && Cmd->GetAttackTarget() == LOSAttacker, TEXT("LOS_B_HandoffToAttack"));
+			Expect(!Cmd->IsRetaliationActive(), TEXT("LOS_B_RetaliationReleased"));
+			AttackHandoffSerial = Cmd->GetActiveAttackSerial();
+			Expect(AttackHandoffSerial != 0, TEXT("LOS_B_AttackSerialAssigned"));
+		}
+		++StageIndex;
+		ScheduleNext(0.25f);
+		break;
+	}
+	case 15:
+	{
+		AGP_SalvageWalker* LOSVictim = LOSVictimWeak.Get();
+		AGP_SalvageWalker* LOSAttacker = LOSAttackerWeak.Get();
+		if (!Expect(IsValid(LOSVictim) && IsValid(LOSAttacker), TEXT("LOS_B_OnceAlive")))
+		{
+			Finish();
+			return;
+		}
+		if (UGP_UnitCommandComponent* Cmd = LOSVictim->GetUnitCommandComponent())
+		{
+			Expect(Cmd->IsAttackActive()
+				&& Cmd->GetAttackTarget() == LOSAttacker
+				&& Cmd->GetActiveAttackSerial() == AttackHandoffSerial,
+				TEXT("LOS_B_HandoffExactlyOnce"));
+			Expect(!Cmd->IsRetaliationActive(), TEXT("LOS_B_NoRetaliationRestart"));
+		}
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 16:
+	{
+		const FVector TimeoutOrigin = Origin + FVector(0.0f, 10000.0f, 0.0f);
+		AGP_SalvageWalker* TimeoutVictim = GPCombatRetaliationDebug::SpawnSW(World, TimeoutOrigin, TeamA);
+		AGP_SalvageWalker* TimeoutAttacker = GPCombatRetaliationDebug::SpawnSW(
+			World, TimeoutOrigin + FVector(200.0f, 0.0f, 0.0f), TeamB);
+		TimeoutLOSVictimWeak = TimeoutVictim;
+		TimeoutLOSAttackerWeak = TimeoutAttacker;
+		if (!Expect(IsValid(TimeoutVictim) && IsValid(TimeoutAttacker), TEXT("LOS_C_Spawn")))
+		{
+			Finish();
+			return;
+		}
+		AActor* Blocker = GPCombatRetaliationDebug::SpawnVisibilityBlocker(
+			World,
+			(TimeoutVictim->GetActorLocation() + TimeoutAttacker->GetActorLocation()) * 0.5f + FVector(0.0f, 0.0f, 40.0f));
+		TimeoutLOSBlockerWeak = Blocker;
+		if (!Expect(IsValid(Blocker), TEXT("LOS_C_SpawnBlocker")))
+		{
+			Finish();
+			return;
+		}
+		GPCombatRetaliationDebug::ApplyCombatStats(TimeoutVictim, 400.0f, 25.0f, 400.0f, 1.0f);
+		GPCombatRetaliationDebug::ApplyCombatStats(TimeoutAttacker, 400.0f, 15.0f, 250.0f, 1.0f);
+		if (UGP_UnitDefinition* ShortDef = ShortRetaliationDefWeak.Get())
+		{
+			TimeoutVictim->DebugApplyRetaliationPursuitSecondsFromDefinition(ShortDef);
+		}
+		else
+		{
+			UGP_UnitDefinition* ShortDefLocal = NewObject<UGP_UnitDefinition>(GetTransientPackage());
+			ShortDefLocal->RetaliationPursuitSeconds = 1.25f;
+			ShortRetaliationDefWeak = ShortDefLocal;
+			TimeoutVictim->DebugApplyRetaliationPursuitSecondsFromDefinition(ShortDefLocal);
+		}
+		if (UGP_UnitCommandComponent* Cmd = TimeoutVictim->GetUnitCommandComponent())
+		{
+			Cmd->AutoAcquireSightRangeCm = 900.0f;
+		}
+		Expect(!GPCombatLOS::HasLineOfSight(World, TimeoutVictim, TimeoutAttacker), TEXT("LOS_C_HelperBlocked"));
+		Expect(FMath::IsNearlyEqual(TimeoutVictim->GetRetaliationPursuitSeconds(), 1.25f, 0.01f), TEXT("LOS_C_ShortDuration"));
+		Expect(GPCombatRetaliationDebug::ApplyHit(TimeoutAttacker, TimeoutVictim), TEXT("LOS_C_DamageApplied"));
+		if (UGP_UnitCommandComponent* Cmd = TimeoutVictim->GetUnitCommandComponent())
+		{
+			Expect(Cmd->IsRetaliationActive(), TEXT("LOS_C_StartedRetaliation"));
+			Expect(!Cmd->IsAttackActive() && !Cmd->HasHeldCommand(), TEXT("LOS_C_NoAttackAtStart"));
+		}
+		++StageIndex;
+		ScheduleNext(1.40f);
+		break;
+	}
+	case 17:
+	{
+		AGP_SalvageWalker* TimeoutVictim = TimeoutLOSVictimWeak.Get();
+		if (!Expect(IsValid(TimeoutVictim), TEXT("LOS_C_VictimAlive")))
+		{
+			Finish();
+			return;
+		}
+		Expect(!GPCombatLOS::HasLineOfSight(World, TimeoutVictim, TimeoutLOSAttackerWeak.Get()), TEXT("LOS_C_StillBlockedAtTimeout"));
+		if (UGP_UnitCommandComponent* Cmd = TimeoutVictim->GetUnitCommandComponent())
+		{
+			Expect(!Cmd->IsRetaliationActive(), TEXT("LOS_C_TimeoutClearedRetaliation"));
+			Expect(!Cmd->IsAttackActive(), TEXT("LOS_C_NoAttackAfterTimeout"));
+			Expect(!Cmd->HasHeldCommand(), TEXT("LOS_C_NoHeldAttackAfterTimeout"));
+		}
+		if (UGP_MovementComponent* Movement = TimeoutVictim->FindComponentByClass<UGP_MovementComponent>())
+		{
+			Expect(!Movement->IsMoving(), TEXT("LOS_C_MovementStopped"));
+		}
 		++StageIndex;
 		ScheduleNext(0.05f);
 		break;

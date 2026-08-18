@@ -1,5 +1,14 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S40R LOS handoff correction (pre-operator)
+
+Status: **GP-S40R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Factual review: `CanEngageRetaliationTarget` used sight range only
+- Correction: handoff also requires `GPCombatLOS::HasLineOfSight`
+- Blocked LOS keeps retaliation-owned pursuit; timeout returns Idle with no Held Attack
+- **NOT MERGED. NOT FINALIZED.**
+
 ## 2026-08-18 — GP-S40R Timed Retaliation Pursuit (implementation candidate)
 
 Status: **GP-S40R_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

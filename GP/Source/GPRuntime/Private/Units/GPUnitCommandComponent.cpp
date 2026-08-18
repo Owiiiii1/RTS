@@ -6004,7 +6004,12 @@ bool UGP_UnitCommandComponent::CanEngageRetaliationTarget(AGP_UnitBase* Attacker
 		return false;
 	}
 
-	return Distance <= GetEffectiveAutoAcquireRange();
+	if (Distance > GetEffectiveAutoAcquireRange())
+	{
+		return false;
+	}
+
+	return GPCombatLOS::HasLineOfSight(Owner->GetWorld(), Owner, ValidTarget);
 }
 
 void UGP_UnitCommandComponent::StartOrRefreshRetaliation(AGP_UnitBase* Attacker)

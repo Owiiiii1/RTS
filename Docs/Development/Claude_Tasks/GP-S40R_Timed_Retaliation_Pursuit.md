@@ -42,18 +42,17 @@ Never replace a manual Held `Move` / `Attack` / `AttackMove` / `Mine` / haul cha
 - Owner is mobile combat-capable (current factual: Salvage Walker). Worker is not combat-capable. Buildings / Defensive Turret must not start movement retaliation
 - Start blocked if Attack FSM already active or Held Move/Attack/AttackMove/Mine / mine-haul active
 
-If the attacker is inside effective auto-acquire range, transition into the existing Attack command/FSM. Otherwise pursue with a retaliation-owned move serial until engageable or timeout.
+Handoff to the existing Attack FSM requires **both** effective auto-acquire / sight range **and** `GPCombatLOS::HasLineOfSight`. If the attacker is inside sight but LOS is blocked, retaliation stays owner and continues pursuit. Timeout with LOS still blocked returns Idle with no Held Attack. The Attack Ready fire gate is unchanged.
 
 ## Validation (candidate)
 
 | Check | Result |
 | --- | --- |
-| `GPEditor Win64 Development` + UHT | **PASS** |
-| `gp.Combat.RunRetaliationPursuitContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Combat.RunAutoAcquireContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Combat.RunAttackMoveContractTest` | `Complete Failures=0 Cancelled=false` |
+| `GPEditor Win64 Development` + UHT | **PASS** (LOS correction rebuild) |
+| `gp.Combat.RunRetaliationPursuitContractTest` | `Complete Failures=0 Cancelled=false` (includes blocked-LOS A/B/C) |
 | `gp.Combat.RunLOSFireGateContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Movement.RunRTSMovementReconciliationContractTest` | `Complete Failures=0 Cancelled=false` |
+| `gp.Combat.RunAutoAcquireContractTest` | `Complete Failures=0 Cancelled=false` |
+| AttackMove / movement reconciliation | **NOT RERUN** this correction |
 | `GP` Win64 Development / Shipping | **NOT RUN** (candidate only) |
 
 ## Out of scope

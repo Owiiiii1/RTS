@@ -45,9 +45,16 @@ private:
 	TWeakObjectPtr<class AGP_SalvageWalker> ManualVictimWeak;
 	TWeakObjectPtr<class AGP_Worker> WorkerVictimWeak;
 	TWeakObjectPtr<class AGP_DefensiveTurret> TurretWeak;
+	TWeakObjectPtr<class AGP_SalvageWalker> LOSVictimWeak;
+	TWeakObjectPtr<class AGP_SalvageWalker> LOSAttackerWeak;
+	TWeakObjectPtr<class AActor> LOSBlockerWeak;
+	TWeakObjectPtr<class AGP_SalvageWalker> TimeoutLOSVictimWeak;
+	TWeakObjectPtr<class AGP_SalvageWalker> TimeoutLOSAttackerWeak;
+	TWeakObjectPtr<class AActor> TimeoutLOSBlockerWeak;
 	TWeakObjectPtr<class UGP_UnitDefinition> ShortRetaliationDefWeak;
 	FVector Origin = FVector::ZeroVector;
 	uint32 ManualMoveSerial = 0;
+	uint32 AttackHandoffSerial = 0;
 	float RemainingAfterFirstHit = 0.0f;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;

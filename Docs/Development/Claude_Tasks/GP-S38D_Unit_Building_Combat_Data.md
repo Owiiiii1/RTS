@@ -12,7 +12,8 @@ Post-GP-S37T (Defensive Turret MVP is on verified `main` @ `c79b017a45b1560e025c
 `feature/gp-s38d-unit-building-combat-data`  
 Base: `origin/main` @ `c79b017a45b1560e025cedfe262b0afde3c9cb6a`  
 Implementation: `cc94ac85c3069431ab4ec4f49b7ae0fc335a71a6`  
-Async-load correction: `fe74f7a70b047790b5e8950690adc89a2b258acc`
+Async-load correction: `fe74f7a70b047790b5e8950690adc89a2b258acc`  
+Finalization: `e4fe2d255a1c54007707a21c379dab67cc40e57e`
 
 ## Goal
 One designer-facing per-type `UGP_UnitDefinition` (`UPrimaryDataAsset`, `PrimaryAssetType = GPUnitDefinition`) as the canonical **initial/base** source for unit/building gameplay stats. No CombatProfile / MovementProfile / VisionProfile hierarchy. No balance pass. No retaliation behavior.

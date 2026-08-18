@@ -11,7 +11,7 @@ Status: **GP-S38D_FINALIZATION_READY_FOR_MERGE**
 `c79b017a45b1560e025cedfe262b0afde3c9cb6a`
 
 ## Feature head SHA
-Pending finalization commit on this branch.
+`e4fe2d255a1c54007707a21c379dab67cc40e57e`
 
 ## Operator PASS
 Operator created a `UGP_UnitDefinition` Data Asset, assigned it on `BP_SalvageWalker` via `Unit Definition Asset`, set `MoveSpeedCmPerSecond = 100`, and confirmed in PIE that Salvage Walker moved at ~100 cm/s instead of legacy 250. Authored UnitDefinition loads and applies as the gameplay source.

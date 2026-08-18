@@ -4,7 +4,7 @@
 
 Status: **GP-S38D_FINALIZATION_READY_FOR_MERGE**
 
-- Branch: `feature/gp-s38d-unit-building-combat-data` (base verified `origin/main` @ `c79b017a45b1560e025cedfe262b0afde3c9cb6a`)
+- Branch: `feature/gp-s38d-unit-building-combat-data` (base verified `origin/main` @ `c79b017a45b1560e025cedfe262b0afde3c9cb6a`, finalization `e4fe2d255a1c54007707a21c379dab67cc40e57e`)
 - Operator PASS: authored `UGP_UnitDefinition` assigned on `BP_SalvageWalker`; `MoveSpeedCmPerSecond = 100` applied in PIE (~100 cm/s vs legacy 250)
 - Canonical: `UGP_UnitDefinition` initializes GAS / command / movement. Runtime remains GAS + command + movement components. BuildingDef.MaxHealth compatibility-only. Orbital cost/slots stay acquisition-layer
 - Soft lifecycle: empty → immediate fallback; resident → apply now; unloaded valid ref → `RequestAsyncLoad`; failure → log + fallback. AutoAcquire gated until ready. EndPlay cancels pending handle. No `LoadSynchronous`

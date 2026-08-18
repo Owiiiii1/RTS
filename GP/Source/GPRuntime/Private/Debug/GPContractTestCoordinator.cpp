@@ -7,6 +7,8 @@
 #include "Buildings/GPDefensiveTurret.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Orbital/GPBuildingDropCatalog.h"
+#include "Orbital/GPOrbitalUnitDropCatalog.h"
 #include "Units/GPUnitCommandComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPContractTest, Log, All);
@@ -74,6 +76,10 @@ namespace GPContractTestCoordinator
 		Private::GActive.WorldWeak = World;
 		OutToken = Private::GActive;
 
+		// Operator-authored drop DataAssets must not shadow native bootstrap during contracts.
+		UGP_OrbitalUnitDropCatalog::Get().DebugBeginContractIsolation();
+		UGP_BuildingDropCatalog::Get().DebugBeginContractIsolation();
+
 		// Operator-placed arena turrets must not fire during contracts (headless isolation).
 		for (TActorIterator<AGP_DefensiveTurret> It(World); It; ++It)
 		{
@@ -111,6 +117,8 @@ namespace GPContractTestCoordinator
 
 		const FName FinishedName = Private::GActive.TestName;
 		const uint64 FinishedId = Private::GActive.ExecutionId;
+		UGP_OrbitalUnitDropCatalog::Get().DebugEndContractIsolation();
+		UGP_BuildingDropCatalog::Get().DebugEndContractIsolation();
 		Private::GBusy = false;
 		Private::GActive = FExecutionToken();
 

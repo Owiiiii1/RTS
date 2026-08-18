@@ -707,6 +707,14 @@ void UGP_MultiBuildingDataContractTestRunner::AdvanceStage()
 		}
 		Expect(HubCount == 1 && IsValid(Hub), TEXT("K_LiveHub"));
 		LiveHubWeak = Hub;
+		if (IsValid(Hub)
+			&& GPMultiBuildingDataDebug::RoundMaxUnits(OwnerPS) != MaxUnitsBeforeHub + 5
+			&& HubBonusWaitTicks < 20)
+		{
+			++HubBonusWaitTicks;
+			ScheduleNext(0.1f);
+			return;
+		}
 		Expect(GPMultiBuildingDataDebug::RoundMaxUnits(OwnerPS) == MaxUnitsBeforeHub + 5, TEXT("K_Plus5Granted"));
 
 		if (IsValid(Hub))

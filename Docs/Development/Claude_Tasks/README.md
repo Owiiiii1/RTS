@@ -6,18 +6,18 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-18 (GP-S39E candidate). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-18 (GP-S39E finalized, not merged). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Economy / Logistics Data Ownership. **Current: GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**.
+**Поточна фаза:** Economy / Logistics Data Ownership. **Current: GP-S39E_FINALIZATION_READY_FOR_MERGE**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
 | GP-S01 … GP-S38D | **DONE / on `main` tip** `f841cdee19c97a0dfaacb8fc0bdd27623c543329` |
-| **GP-S39E** Economy / Logistics Data | **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** — [`GP-S39E_Economy_Logistics_Data.md`](GP-S39E_Economy_Logistics_Data.md) — **NOT MERGED** |
+| **GP-S39E** Economy / Logistics Data | **IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE** — [`GP-S39E_Economy_Logistics_Data.md`](GP-S39E_Economy_Logistics_Data.md) — **NOT MERGED** |
 
-**NEXT action для агента:** do **not** merge. Await operator PIE. Do **not** start Wall / FoW / **GP-S40R** Timed Retaliation Pursuit.
+**NEXT action для агента:** do **not** merge. Await human merge. Do **not** start Wall / FoW / **GP-S40R** Timed Retaliation Pursuit.
 
 ### Drift Warning
 

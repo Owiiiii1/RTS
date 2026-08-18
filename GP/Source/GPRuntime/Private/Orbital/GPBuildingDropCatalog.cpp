@@ -822,4 +822,68 @@ void UGP_BuildingDropCatalog::DebugClearAuthoredBuildingDropOverrides()
 	bDebugSavedBuildingSettings = false;
 	DebugSavedBuildingRefs.Reset();
 }
+
+void UGP_BuildingDropCatalog::DebugBeginContractIsolation()
+{
+	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+	{
+		if (!bContractIsolationActive)
+		{
+			ContractSavedBuildingRefs.SetNum(static_cast<int32>(EBuildingAuthoredSlot::COUNT));
+			ContractSavedBuildingRefs[static_cast<int32>(EBuildingAuthoredSlot::LogisticsHub)] =
+				Settings->LogisticsHubDropDefinition;
+			ContractSavedBuildingRefs[static_cast<int32>(EBuildingAuthoredSlot::DefensiveTurret)] =
+				Settings->DefensiveTurretDropDefinition;
+			ContractSavedBuildingRefs[static_cast<int32>(EBuildingAuthoredSlot::Wall)] = Settings->WallDropDefinition;
+			ContractSavedBuildingRefs[static_cast<int32>(EBuildingAuthoredSlot::WallTurret)] =
+				Settings->WallTurretDropDefinition;
+			bContractIsolationActive = true;
+		}
+		Settings->LogisticsHubDropDefinition.Reset();
+		Settings->DefensiveTurretDropDefinition.Reset();
+		Settings->WallDropDefinition.Reset();
+		Settings->WallTurretDropDefinition.Reset();
+	}
+	for (int32 i = 0; i < static_cast<int32>(EBuildingAuthoredSlot::COUNT); ++i)
+	{
+		CancelAuthoredLoad(static_cast<EBuildingAuthoredSlot>(i));
+		if (AuthoredSlotDrops.IsValidIndex(i))
+		{
+			AuthoredSlotDrops[i] = nullptr;
+		}
+		if (AuthoredStates.IsValidIndex(i))
+		{
+			AuthoredStates[i] = EAuthoredSlotState::Empty;
+		}
+		if (AuthoredRequestedPaths.IsValidIndex(i))
+		{
+			AuthoredRequestedPaths[i].Reset();
+		}
+	}
+}
+
+void UGP_BuildingDropCatalog::DebugEndContractIsolation()
+{
+	if (!bContractIsolationActive)
+	{
+		return;
+	}
+	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+	{
+		if (ContractSavedBuildingRefs.Num() >= static_cast<int32>(EBuildingAuthoredSlot::COUNT))
+		{
+			Settings->LogisticsHubDropDefinition =
+				ContractSavedBuildingRefs[static_cast<int32>(EBuildingAuthoredSlot::LogisticsHub)];
+			Settings->DefensiveTurretDropDefinition =
+				ContractSavedBuildingRefs[static_cast<int32>(EBuildingAuthoredSlot::DefensiveTurret)];
+			Settings->WallDropDefinition =
+				ContractSavedBuildingRefs[static_cast<int32>(EBuildingAuthoredSlot::Wall)];
+			Settings->WallTurretDropDefinition =
+				ContractSavedBuildingRefs[static_cast<int32>(EBuildingAuthoredSlot::WallTurret)];
+		}
+	}
+	bContractIsolationActive = false;
+	ContractSavedBuildingRefs.Reset();
+	RefreshAuthoredBindings();
+}
 #endif

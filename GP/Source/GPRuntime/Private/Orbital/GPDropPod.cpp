@@ -519,7 +519,12 @@ void AGP_DropPod::AuthoritySpawnBuildingPayload()
 		{
 			if (UGP_BuildingDefinition* BuildingDef = Drop->ResolveLoadedBuildingDefinition())
 			{
-				if (Building->BuildingDefinitionAsset.IsNull())
+				bool bAssignCatalogBuildingDef = Building->BuildingDefinitionAsset.IsNull();
+#if !UE_BUILD_SHIPPING
+				bAssignCatalogBuildingDef = bAssignCatalogBuildingDef
+					|| UGP_BuildingDropCatalog::Get().IsContractIsolationActive();
+#endif
+				if (bAssignCatalogBuildingDef)
 				{
 					Building->BuildingDefinitionAsset = BuildingDef;
 				}

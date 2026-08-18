@@ -65,6 +65,8 @@ public:
 	void DebugCompletePendingAuthoredWorkerLoad();
 	void DebugForceAuthoredWorkerLoadFailure();
 	void DebugClearAuthoredUnitDropOverrides();
+	void DebugBeginContractIsolation();
+	void DebugEndContractIsolation();
 	bool DebugConsumeWorkerLoadFailedLog() { const bool b = bDebugWorkerLoadFailedLogged; bDebugWorkerLoadFailedLogged = false; return b; }
 #endif
 
@@ -123,5 +125,8 @@ private:
 	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> DebugSavedWorkerSettingsRef;
 	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> DebugSavedWalkerSettingsRef;
 	bool bDebugSavedSettings = false;
+	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> ContractSavedWorkerSettingsRef;
+	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> ContractSavedWalkerSettingsRef;
+	bool bContractIsolationActive = false;
 #endif
 };

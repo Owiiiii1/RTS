@@ -1,8 +1,9 @@
 # Cursor Work Report
 
-Status: **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+Status: **GP-S39E_FINALIZATION_READY_FOR_MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.**
+**READY FOR MERGE.**
 
 ## Branch
 `feature/gp-s39e-economy-logistics-data`
@@ -11,74 +12,59 @@ Status: **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 `f841cdee19c97a0dfaacb8fc0bdd27623c543329`
 
 ## Feature head SHA
-`677e205051b0764bdcf30a3c0a2226235358cc0b`
+FEATURE_HEAD_SHA_PLACEHOLDER
 
-## Defect found in factual review
+## Operator validation
+**PASS**
 
-`UGP_OrbitalUnitDropCatalog::EnsureNativeCatalog()` always created transient `DA_GP_OrbitalUnitDrop_Worker` / `DA_GP_OrbitalUnitDrop_SalvageWalker`. Cost, slots, payload, and delivery timing always read those native objects. There was no production path for an operator-created authored DataAsset to become canonical. Changing authored Worker Cost 25 → 17 would not affect gameplay.
+Operator created/configured the relevant authored DataAssets and assigned them through:
 
-The same class of problem existed for building acquisition: `GetOperatorVisibleDrops` / `FindDropDefinition` permanently preferred transient native `DA_GP_OrbitalDrop_*`. An operator-created Hub/Turret/Wall DataAsset could not change Cost or delivery timing.
+- `UnitDefinitionAsset` on unit/building Blueprints
+- `BuildingDefinitionAsset` on building Blueprints
+- GP Orbital Delivery → authored unit/building drop definition references
 
-`AGP_UnitBase::UnitDefinitionAsset` and `AGP_BuildingBase::BuildingDefinitionAsset` already had explicit authored actor refs + async load. Those paths were not defective.
+Exact operator statement: **"все работает"**
 
-## Exact correction
+## Final ownership matrix
 
-Settings now hold **soft references only** (no balance values):
+| Asset | Owns |
+| --- | --- |
+| `UGP_UnitDefinition` | combat / vitals / movement + `CargoCapacity` |
+| `UGP_BuildingDefinition` | building identity, UnitDefinition link, storage config, `UnitCapBonus`, footprint / payload identity |
+| `UGP_ResourceDefinition` | mining, deposit defaults, conversion, threat |
+| `UGP_OrbitalUnitDropDefinition` | unit acquisition cost, slots, payload, UnitDefinition link, descent, deploy delay |
+| `UGP_OrbitalDropDefinition` | building acquisition cost, BuildingDefinition link, descent, deploy delay |
+| GP Orbital Delivery settings | authored drop-definition soft refs + only global transport/world tuning as canonical; deprecated legacy numeric/class fields only as compatibility fallback |
 
-- `WorkerDropDefinition`
-- `SalvageWalkerDropDefinition`
-- `LogisticsHubDropDefinition`
-- `DefensiveTurretDropDefinition`
-- `WallDropDefinition`
-- `WallTurretDropDefinition`
-
-Catalogs resolve one canonical definition per slot and drive **all** cost / slot / payload / UnitDefinition link / descent / deploy reads from that object.
-
-## Authored vs native precedence
+## Authored / native precedence
 
 1. Explicitly configured authored drop definition (settings soft ref)
 2. Native bootstrap (contracts / empty project)
 3. Deprecated settings numeric/class fallback only if the resolved definition cannot provide a valid value
 
-Empty authored `PayloadClass` may still use the operator BP payload bridge (`WorkerPayloadClass` / `SalvageWalkerPayloadClass`). Deprecated cost/slot fields never override a valid authored definition.
+Empty authored `PayloadClass` may still use the operator BP payload bridge. Deprecated cost/slot fields never override a valid authored definition.
 
-## Async lifecycle
+Authored drop definitions are not shadowed by native transient definitions on the production path. Headless contracts temporarily isolate settings authored drop refs (and assign the catalog BuildingDefinition onto isolated payloads) so native +5 / native costs remain the contract SoT; isolation is restored on coordinator Release.
+
+## Async readiness behavior
 
 - Empty ref → native bootstrap immediately
 - Already loaded authored ref → authored canonical
-- Valid unloaded authored ref → `RequestAsyncLoad` (no repeat, no Tick, no `LoadSynchronous` on purchase)
+- Valid unloaded authored ref → `RequestAsyncLoad` (no repeat, no Tick, no `LoadSynchronous` on unit/building acquisition gameplay path)
 - Load failure → explicit log + native bootstrap
 - Shutdown / EndPlay cancels pending handles
+- Pending authored unit drop: reject `EGP_UnitDropRejectReason::DefinitionNotReady` — no spend, no reserve, no pod
+- Pending authored building drop: reject `EGP_BuildingDropRejectReason::DefinitionNotReady` — no spend, no READY mutation
 
-## Pending-order behavior
+## Audit confirmations
 
-If an authored unit drop definition is configured but still pending:
-
-- `ComputeManifestCosts` / `AuthorityRequestUnitDrop` reject `EGP_UnitDropRejectReason::DefinitionNotReady`
-- No spend, no unit-cap reserve, no pod spawn
-
-If an authored building drop definition is pending:
-
-- Purchase rejects `EGP_BuildingDropRejectReason::DefinitionNotReady`
-
-Once load completes, normal orders use the authored values.
-
-## Building acquisition authored-path audit
-
-**Same defect class. Fixed in this correction.** Native building catalog no longer permanently shadows assigned authored drop definitions. Visible catalog / Find / purchase cost / delivery timing resolve the authored object when the settings soft ref is ready.
-
-## Contracts proving non-native authored values
-
-`gp.Economy.RunEconomyLogisticsDataContractTest` now proves authored Worker:
-
-- Cost 17
-- TransportSlotCost 3
-- DeliveryDescentSeconds 4.25
-- PayloadDeployDelaySeconds 0.75
-
-and not native 25 / 1 / 2.5 / 1.25.
-
-Also: empty ref → native; already-loaded authored; real unresolved soft `RequestAsyncLoad`; pending cannot spend/reserve/spawn; completion switches to authored; failed load logs + native fallback; teardown restore; Hub authored Cost 17 vs native 100; existing exact-spend 25 still passes.
+- No duplicate cost SoT
+- No duplicate storage/cargo SoT
+- No duplicate spend
+- No duplicate READY mutation
+- No unit-cap regression (Hub `UnitCapBonus` via SetByCaller GE; isolation uses native catalog +5)
+- No `LoadSynchronous` on unit/building acquisition gameplay path
+- No permanent Tick added (DropPod descent tick is pre-existing)
 
 ## Exact tests
 
@@ -97,38 +83,82 @@ Also: empty ref → native; already-loaded authored; real unresolved soft `Reque
 | `gp.Building.RunBuildGridContractTest` | Complete Failures=0 |
 | `gp.Combat.RunAutoAcquireContractTest` | Complete Failures=0 |
 | `gp.Combat.RunAttackMoveContractTest` | Complete Failures=0 |
+| `gp.Combat.RunLOSFireGateContractTest` | Complete Failures=0 |
 | `gp.Match.RunWinLoseContractTest` | Complete Failures=0 |
 | `gp.Movement.RunRTSMovementReconciliationContractTest` | Complete Failures=0 |
 
 All: **Failures=0**.
 
-## Builds
+## Final build matrix
 
 | Target | Result |
 | --- | --- |
 | GPEditor Win64 Development + UHT | **PASS** |
-| GP Win64 Development | not run |
-| GP Win64 Shipping | not run |
+| GP Win64 Development | **PASS** |
+| GP Win64 Shipping | **PASS** |
 
 ## Exact changed files
 
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Claude_Tasks/GP-S39E_Economy_Logistics_Data.md`
+- `Docs/Development/Claude_Tasks/README.md`
 - `Docs/Development/Cursor_Work_Report.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/TDD/05_Unit_Architecture.md`
+- `Docs/TDD/06_Building_Architecture.md`
+- `Docs/TDD/07_Resource_Architecture.md`
 - `Docs/TDD/10_Data_Assets.md`
 - `Docs/TDD/14_Orbital_Delivery.md`
+- `GP/Source/GPGASRuntime/Private/Effects/GPGE_UnitCap_Plus5.cpp`
+- `GP/Source/GPGASRuntime/Public/Effects/GPGE_UnitCap_Plus5.h`
+- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
+- `GP/Source/GPRuntime/Private/Buildings/GPLogisticsHub.cpp`
+- `GP/Source/GPRuntime/Private/Buildings/GPMainBase.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPContractTestCoordinator.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPDefensiveTurretContractTest.cpp`
 - `GP/Source/GPRuntime/Private/Debug/GPEconomyLogisticsDataContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPMultiBuildingDataContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPOrbitalBuildingDropContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPOrbitalUnitDropContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPUnitCapLogisticsHubContractTest.cpp`
+- `GP/Source/GPRuntime/Private/GPRuntime.cpp`
 - `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropAuthority.cpp`
 - `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropCatalog.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPDropPod.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPOrbitalDropDefinition.cpp`
 - `GP/Source/GPRuntime/Private/Orbital/GPOrbitalUnitDropCatalog.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPOrbitalUnitDropDefinition.cpp`
 - `GP/Source/GPRuntime/Private/Orbital/GPUnitDropAuthority.cpp`
 - `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Source/GPRuntime/Private/Resources/GPCargoComponent.cpp`
+- `GP/Source/GPRuntime/Private/Resources/GPResourceDefinition.cpp`
+- `GP/Source/GPRuntime/Private/Resources/GPResourceNode.cpp`
+- `GP/Source/GPRuntime/Private/Resources/GPStorageComponent.cpp`
+- `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPUnitDefinitionCatalog.cpp`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
+- `GP/Source/GPRuntime/Public/Buildings/GPLogisticsHub.h`
+- `GP/Source/GPRuntime/Public/Buildings/GPMainBase.h`
 - `GP/Source/GPRuntime/Public/Economy/GPEconomyLogisticsDataContractTest.h`
 - `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropAuthority.h`
 - `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropCatalog.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPMultiBuildingDataContractTest.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalDropDefinition.h`
 - `GP/Source/GPRuntime/Public/Orbital/GPOrbitalUnitDropCatalog.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalUnitDropDefinition.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPUnitDropAuthority.h`
 - `GP/Source/GPRuntime/Public/Orbital/GPUnitDropManifest.h`
+- `GP/Source/GPRuntime/Public/Resources/GPCargoComponent.h`
+- `GP/Source/GPRuntime/Public/Resources/GPResourceDefinition.h`
+- `GP/Source/GPRuntime/Public/Resources/GPResourceNode.h`
+- `GP/Source/GPRuntime/Public/Resources/GPStorageComponent.h`
 - `GP/Source/GPRuntime/Public/Settings/GPOrbitalDeliverySettings.h`
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `GP/Source/GPRuntime/Public/Units/GPUnitDefinition.h`
+- `GP/Source/GPRuntime/Public/Units/GPUnitDefinitionCatalog.h`
 
 ## Protected / operator assets untouched
 
@@ -136,10 +166,19 @@ Not committed:
 
 - `GP/Config/DefaultEngine.ini`
 - `GP/Config/DefaultGame.ini`
-- maps
-- operator-created DataAssets
-- Blueprint assignments
-- untracked VFX / content packs / `Tools/`
+- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
+- `GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`
+- operator-created UnitDefinition assets
+- operator-created BuildingDefinition assets
+- operator-created ResourceDefinition assets
+- operator-created OrbitalUnitDropDefinition assets
+- operator-created OrbitalDropDefinition assets
+- `BP_Worker` / `BP_SalvageWalker` / `BP_MainBase` / `BP_LogisticsHub` / `BP_GP_DefensiveTurret`
+- other operator content / untracked VFX / content packs / `Tools/`
+
+## Next planned slice
+
+**GP-S40R** Timed Retaliation Pursuit — not started.
 
 **NOT MERGED.**
-**NOT FINALIZED.**
+**READY FOR MERGE.**

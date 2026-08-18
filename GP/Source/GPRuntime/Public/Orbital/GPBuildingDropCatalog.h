@@ -66,6 +66,9 @@ public:
 #if !UE_BUILD_SHIPPING
 	void DebugAssignLoadedAuthoredLogisticsHub(UGP_OrbitalDropDefinition* Definition);
 	void DebugClearAuthoredBuildingDropOverrides();
+	void DebugBeginContractIsolation();
+	void DebugEndContractIsolation();
+	bool IsContractIsolationActive() const { return bContractIsolationActive; }
 #endif
 
 private:
@@ -147,5 +150,7 @@ private:
 #if !UE_BUILD_SHIPPING
 	TArray<TSoftObjectPtr<UGP_OrbitalDropDefinition>> DebugSavedBuildingRefs;
 	bool bDebugSavedBuildingSettings = false;
+	TArray<TSoftObjectPtr<UGP_OrbitalDropDefinition>> ContractSavedBuildingRefs;
+	bool bContractIsolationActive = false;
 #endif
 };

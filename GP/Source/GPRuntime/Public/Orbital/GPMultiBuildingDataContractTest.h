@@ -56,6 +56,7 @@ private:
 	float OrbitalBeforePurchaseA = 0.0f;
 	float OrbitalBeforeDeployA = 0.0f;
 	int32 MaxUnitsBeforeHub = 0;
+	int32 HubBonusWaitTicks = 0;
 	FVector ValidDeployLocation = FVector::ZeroVector;
 	float SavedBuildingDeployDelay = 2.0f;
 	float SavedBuildingDescent = 2.5f;

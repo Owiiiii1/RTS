@@ -697,4 +697,46 @@ void UGP_OrbitalUnitDropCatalog::DebugClearAuthoredUnitDropOverrides()
 	DebugSavedWorkerSettingsRef.Reset();
 	DebugSavedWalkerSettingsRef.Reset();
 }
+
+void UGP_OrbitalUnitDropCatalog::DebugBeginContractIsolation()
+{
+	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+	{
+		if (!bContractIsolationActive)
+		{
+			ContractSavedWorkerSettingsRef = Settings->WorkerDropDefinition;
+			ContractSavedWalkerSettingsRef = Settings->SalvageWalkerDropDefinition;
+			bContractIsolationActive = true;
+		}
+		Settings->WorkerDropDefinition.Reset();
+		Settings->SalvageWalkerDropDefinition.Reset();
+	}
+	CancelWorkerLoad();
+	CancelWalkerLoad();
+	AuthoredWorkerDrop = nullptr;
+	AuthoredSalvageWalkerDrop = nullptr;
+	WorkerState = EAuthoredSlotState::Empty;
+	WalkerState = EAuthoredSlotState::Empty;
+	WorkerRequestedPath.Reset();
+	WalkerRequestedPath.Reset();
+	bDebugForceUnresolvedWorker = false;
+	bDebugHoldWorkerCompletion = false;
+}
+
+void UGP_OrbitalUnitDropCatalog::DebugEndContractIsolation()
+{
+	if (!bContractIsolationActive)
+	{
+		return;
+	}
+	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+	{
+		Settings->WorkerDropDefinition = ContractSavedWorkerSettingsRef;
+		Settings->SalvageWalkerDropDefinition = ContractSavedWalkerSettingsRef;
+	}
+	bContractIsolationActive = false;
+	ContractSavedWorkerSettingsRef.Reset();
+	ContractSavedWalkerSettingsRef.Reset();
+	RefreshAuthoredBindings();
+}
 #endif

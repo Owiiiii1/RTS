@@ -39,7 +39,7 @@
 | Last closed / merged stage | **GP-S38D Unit/Building Combat Data** on `main` (tip `f841cdee19c97a0dfaacb8fc0bdd27623c543329`) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s39e-economy-logistics-data` (**NOT MERGED**) |
+| Current stage | **GP-S39E_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s39e-economy-logistics-data` (**NOT MERGED**) |
 
 ---
 
@@ -49,7 +49,7 @@
 
 **Prior closed:** GP-S37T / GP-S36G / GP-S35B / GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Current:** [`Claude_Tasks/GP-S39E_Economy_Logistics_Data.md`](Claude_Tasks/GP-S39E_Economy_Logistics_Data.md) — **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. Do **not** merge. Await operator validation.
+**Current:** [`Claude_Tasks/GP-S39E_Economy_Logistics_Data.md`](Claude_Tasks/GP-S39E_Economy_Logistics_Data.md) — **GP-S39E_FINALIZATION_READY_FOR_MERGE**. Do **not** merge. Await human merge.
 
 **Do not** start Wall gameplay / FoW / **GP-S40R** Timed Retaliation Pursuit / Order Menu / Spectating without explicit assignment.
 
@@ -73,7 +73,7 @@
 14. **GP-S36G** — BuildGrid MVP — **DONE / MERGED** @ `9ace159…`
 15. **GP-S37T** — Defensive Turret MVP — **DONE / MERGED** @ `c79b017…`
 16. **GP-S38D** — Unit/Building Combat Data — **DONE / MERGED** @ `f841cdee…`
-17. **GP-S39E** — Economy / Logistics Data Ownership — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (NOT MERGED)
+17. **GP-S39E** — Economy / Logistics Data Ownership — **FINALIZATION_READY_FOR_MERGE** (NOT MERGED)
 
 ---
 
@@ -157,4 +157,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S38D are on verified `main` tip `f841cdee19c97a0dfaacb8fc0bdd27623c543329`. Current stage: **GP-S39E_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s39e-economy-logistics-data`. See [`Claude_Tasks/GP-S39E_Economy_Logistics_Data.md`](Claude_Tasks/GP-S39E_Economy_Logistics_Data.md). **NOT MERGED. NOT FINALIZED.** Await operator PIE. Do not start **GP-S40R** Timed Retaliation Pursuit.
+SETUP-001, DOCS-001, GP-S01…GP-S38D are on verified `main` tip `f841cdee19c97a0dfaacb8fc0bdd27623c543329`. Current stage: **GP-S39E_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s39e-economy-logistics-data`. See [`Claude_Tasks/GP-S39E_Economy_Logistics_Data.md`](Claude_Tasks/GP-S39E_Economy_Logistics_Data.md). **NOT MERGED.** READY FOR MERGE. Do not start **GP-S40R** Timed Retaliation Pursuit.

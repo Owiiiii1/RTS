@@ -10,7 +10,7 @@
 
 Per Pillar 3 (One Resource, Many Tradeoffs) і Pillar 4 (Capacity Is Strategy) з [`01_Game_Pillars`](01_Game_Pillars.md). Усі orbital drops оплачуються одним currency — **OrbitalFerronite** (orbital state Ferronite). Через нього гравець order-ить **все**, що прибуває з орбіти:
 
-- Orbital drops: Worker, Salvage Walker, Defensive Turret, Wall, Logistics Hub (per [`10_Orbital_Delivery`](10_Orbital_Delivery.md)).
+- Orbital drops: Worker, Salvage Walker, Defensive Turret, Wall Package, Logistics Hub (per [`10_Orbital_Delivery`](10_Orbital_Delivery.md)).
 - Capacity expansion (через Logistics Hub drop — +MaxUnits + container cap).
 - Score (через container ship-to-orbit conversion → FerroniteScore).
 - Post-MVP — corporate doctrine purchases.
@@ -231,7 +231,7 @@ At Main Base drop-off range:
 | Worker | TBD | `UGP_OrbitalDropDefinition.Cost` (DA_GP_OrbitalDrop_Worker) |
 | Salvage Walker | TBD | `UGP_OrbitalDropDefinition.Cost` (DA_GP_OrbitalDrop_SalvageWalker) |
 | Defensive Turret | TBD | `UGP_OrbitalDropDefinition.Cost` (DA_GP_OrbitalDrop_DefensiveTurret) |
-| Wall segment | TBD | `UGP_OrbitalDropDefinition.Cost` (DA_GP_OrbitalDrop_Wall) |
+| Wall Package (5 segments) | TBD | `UGP_WallPackageDefinition.Cost` (`DA_GP_WallPackage`) |
 | Logistics Hub | TBD | `UGP_OrbitalDropDefinition.Cost` (DA_GP_OrbitalDrop_LogisticsHub) |
 
 Усі numbers — TBD у balance pass. Зберігаються у Data Assets, не в C++. Spend виконується через `GE_GP_SpendOrbital` на accepted drop order (per [`10_Orbital_Delivery`](10_Orbital_Delivery.md)).

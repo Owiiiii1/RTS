@@ -1,61 +1,84 @@
-# Cursor Work Report — GP-S41M Finalization
+# Cursor Work Report — GP-0305R Wall Package Delivery Reconciliation
 
 ## Status
-**GP-S41M_FINALIZATION_READY_FOR_MERGE**
+**GP-0305R_WALL_PACKAGE_RECONCILIATION_READY_FOR_REVIEW**
+
+**NO CODE.**
 
 **NOT MERGED.**
 
 ## Branch / base / head
-- Branch: `feature/gp-s41m-movement-shortest-yaw`
-- Base: `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`
-- Head: `3eff247cb155bd1faabb8466c50b1074a8315016`
+- Branch: `docs/gp-0305r-wall-package-reconciliation`
+- Base: `origin/main` @ `5dd56cacdd7b25d4a0d3fc167b69b7a2e3a005a0`
+- Factual: **GP-S41M is already on this `main` tip**. Stale “NEXT = GP-S41M / not merged on feature branch” cursor text is reconciled.
+- Head: this docs-only commit (see git after push)
 
-## Operator PASS
-Confirmed after operator rebuilt NavMesh:
+## New canonical Wall acquisition / deployment
+1. Buy a **Wall Package** from the orbital / order menu (OrbitalFerronite). Not an individually deployable building.
+2. Purchase does **not** enter placement.
+3. One rocket delivers the package to the player's **MainBase**.
+4. Arrival: MainBase Wall inventory = **5**.
+5. **Build Wall** (stock > 0) enters drag-placement and consumes already-delivered segments.
+6. Placed segments are real `AGP_Wall` (2×2, health, auto-connect, later WallTurret).
+7. MainBase destroyed: remaining stored segments are **lost**.
 
-- first Move no longer makes the initial sideways excursion
-- movement-facing rotates by the shortest yaw path
-- overall behavior is correct
+**Rejected:** purchase individual segment → placement → orbital pod **per segment**.
 
-## Final root causes
-1. `TickComponent` facing used `FMath::RInterpConstantTo` on `FRotator`. That interpolator does not wrap yaw, so 350→10 could take the long path.
-2. Blueprint/SCS primitives on mobile units could stay nav-relevant and carve static NavMesh holes at authored start locations (~90 cm first-Move projection and a sideways first leg).
+## Package / inventory / depot
+- Wall Package = **exactly 5** segments (`UGP_WallPackageDefinition.SegmentCount`).
+- MainBase inventory max = **5**. No stacking. Cannot buy while stock ≠ 0 or a package is in flight.
+- Depot presentation: visible blocks = remaining stock **0..5**. `WallInventoryChanged(NewCount)`. Meshes are presentation only.
 
-## Final implementation
-- `ComputeShortestYawStep` via `FindDeltaAngleDegrees` + `NormalizeAxis`; Tick facing uses `RotationSpeed * DeltaTime`. Existing movement Tick only.
-- `AGP_MobileUnit` forces actor + all primitives (including Blueprint/SCS) off NavMesh generation. Buildings keep `NavigationObstacle`.
-- `StripProjectedStartAnchor` removed. First-Move uses normal Recast semantics; `AcceptanceRadius` advances past a coincident start point.
+## UI state / action contract
+| Condition | Buy Wall Package | Build Wall |
+| --- | --- | --- |
+| Stock 0, no in-flight | Available | Unavailable |
+| Package in flight | Unavailable (pending) | Unavailable |
+| Stock 5 | Unavailable (full) | Available |
+| Stock 1..4 | Unavailable | Available |
+| Stock returns to 0 | Available again | Unavailable |
 
-## Targeted tests
-| Command | Result |
+## Drag-build resource semantics
+- Preview length ≤ inventory.
+- Confirm: server validates inventory + cells + clearance + existing wall rules; consume **N once**; spawn N `AGP_Wall` **immediately operational**.
+- Cancel / failed preview: consume nothing.
+- No per-segment rocket. No `PathLength × WallSegmentCost`. No second Orbital spend. No Building READY decrement. No Worker builders.
+
+## DataAsset ownership
+- **Package:** new `UGP_WallPackageDefinition` / `DA_GP_WallPackage` — DisplayName, Icon, Cost, SegmentCount=5, delivery timing, `GP.Drop.Type.WallPackage`.
+- **Do not** force the package through `UGP_OrbitalDropDefinition` READY-building semantics.
+- **Building identity stays** on `DA_GP_Building_Wall` / `UGP_BuildingDefinition` (footprint, UnitDefinition, tags).
+- `DA_GP_OrbitalDrop_Wall` superseded for MVP acquisition.
+- **Inventory owner:** `UGP_WallSegmentInventoryComponent` on `AGP_MainBase` (replicated 0..5 + pending). Not Ferronite storage. Not READY. Not a generic inventory.
+
+## Implementation slice split (no code in this task)
+| Slice | Scope |
 | --- | --- |
-| `gp.Movement.RunShortestYawContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Movement.RunRTSMovementReconciliationContractTest` | `Complete Failures=0 Cancelled=false` |
+| **GP-S42A** (next implementation) | Package DA + purchase/delivery + inventory 0..5 + depot seam + Build Wall **availability**. No drag. |
+| **GP-S42B** | `AGP_Wall` + connection bitfield. No player drag. |
+| **GP-S42C** | Build Wall drag, inventory-limited preview, atomic consume + spawn. |
 
-Full regression: **NOT RUN**.
+Old TDD/13 GP-S42 / S45 pod-cascade must **not** be implemented. WallTurret remains later.
 
-## Final builds
-| Target | Result |
-| --- | --- |
-| `GPEditor Win64 Development` + UHT | **PASS** |
-| `GP Win64 Development` | **PASS** |
-| `GP Win64 Shipping` | **PASS** |
+## Files changed
+Docs only. See git. Includes:
+- `Docs/Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md` (created)
+- `Docs/Development/Claude_Tasks/GP-0305_Wall.md` (supersession)
+- GDD: `02`, `05`, `06`, `10`, `12`
+- TDD: `06`, `09`, `10`, `13`, `14`
+- ADR-0009 refinement note
+- `DOCUMENTATION_INDEX.md`, `AI_Project_Log.md`, `Claude_Tasks/README.md`, `Claude_Task_Backlog.md`
+- this report
 
-## Final audit
-- Shortest signed yaw: 350→10 and 10→350 take the short direction; ±180 boundary works
-- Rotation clamped to `RotationSpeed * DeltaTime`
-- No new permanent Tick
-- Path / serial / result semantics unchanged
-- Mobile units cannot affect NavMesh generation
-- Blueprint/SCS primitives forced non-navigation-relevant
-- Buildings remain navigation obstacles
-- `StripProjectedStartAnchor` removed
-- First-Move path uses normal Recast semantics
-- No combat / retaliation changes
-- Operator rebuilt NavMesh manually; map/NavMesh **not committed**
+## Docs-only validation
+- No C++ / Build.cs / config / content / maps / Blueprints / DataAssets in this commit
+- No Unreal tests / builds
+- Canonical GDD/TDD Wall acquisition is package → inventory → Build Wall
+- Next implementation slice is **GP-S42A**, not old GP-S42
+- Remote `main` baseline recorded as `5dd56cac…` (GP-S41M already on main)
 
-## Protected assets
-Untouched / not committed (config, maps, BPs, DAs, VFX).
+## Open Questions
+None blocking. Package Orbital cost remains TBD balance. Non-blocking: depot mesh layout, later place-animation.
 
-## Merge
-**NOT MERGED.** READY FOR MERGE.
+## Pillar / MVP gate
+Package delivery preserves orbital logistics, avoids rocket-per-block, keeps walls as prefabricated material, shows stock at MainBase, finite defensive inventory, no Worker builders. Pillar 8 five-question gate **passed** (recorded in GP-0305R).

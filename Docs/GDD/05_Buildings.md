@@ -7,7 +7,7 @@
 | Main Base | Initial deployment (pre-placed at match start) | Container storage + ship-to-orbit launch + worker drop-off zone + **Unit Drop Zone** (authored unit landing pad) + sight source | 5×5 | `DA_GP_Building_MainBase` |
 | Logistics Hub | **Orbital drop** | +5 MaxUnits + expanded container cap + sight source | 4×4 | `DA_GP_Building_LogisticsHub` |
 | Defensive Turret (free-standing) | **Orbital drop** | Static defense vs SWARM / enemy units + sight source | 4×4 | `DA_GP_Building_DefensiveTurret` |
-| Wall segment | **Orbital drop** (drag-build) | Defensive perimeter — auto-connects 8-dir; hosts wall-mounted turret | 2×2 | `DA_GP_Building_Wall` |
+| Wall segment | **Wall Package → MainBase inventory → Build Wall** | Defensive perimeter — auto-connects 8-dir; hosts wall-mounted turret | 2×2 | `DA_GP_Building_Wall` |
 | Wall-mounted Turret | Built on Wall segment | Constrained-footprint defense node mounted on wall | 2×2 | `DA_GP_Building_WallTurret` |
 | Ferronite Deposit (environment) | Map placement (level-spawned) | Mining source — natural resource node | 3×3 | `DA_GP_Building_FerroniteDeposit` |
 
@@ -15,7 +15,9 @@
 
 **Pivot note (2026-05-16):** усе крім Main Base і Ferronite Deposit arrives **only via orbital delivery** (per ADR-0009 і [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Worker не будує локально. "Assembly Yard" → "Logistics Hub".
 
-**Owner refinement (2026-08-08):** Buildings are **Purchased** into **orbital READY inventory** (Orbital spend at purchase), then **Deployed** later via ghost placement (DropPod to confirmed location; **no second spend**). Buildings do **not** land in the MainBase Unit Drop Zone (that pad is for **units** only). Shared DropPod/rocket visual with unit deliveries.
+**Owner refinement (2026-08-08):** Most buildings are **Purchased** into **orbital READY inventory** (Orbital spend at purchase), then **Deployed** later via ghost placement (DropPod to confirmed location; **no second spend**). Buildings do **not** land in the MainBase Unit Drop Zone (that pad is for **units** only). Shared DropPod/rocket visual with unit deliveries.
+
+**Owner refinement (2026-08-18, GP-0305R):** Wall is **not** a READY building. Player buys a **Wall Package of 5** (one rocket to MainBase). **Build Wall** then places already-delivered segments from MainBase inventory (max 5, no stacking). No per-segment rocket. No second Orbital spend. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md) and [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).
 
 Per Pillar 2 (Engineer, Not Soldier) і Pillar 7 (Simple Machines, Strong Readability) з [`01_Game_Pillars`](01_Game_Pillars.md). Усі buildings — industrial / engineering visual identity. Жодних military bunkers, fortress towers, або command centers з військовою aesthetic.
 
@@ -173,7 +175,7 @@ Wall — це **захисна периметральна структура**. 
 - `DisplayName`: "Wall Segment"
 - `BuildingType`: `GP.Unit.Type.Building`
 - `BuildingRole`: `GP.Building.Role.Defense`
-- `Source`: **orbital drop** (drag-build OR single-click placement). Cost у Orbital Ferronite per segment — low (TBD balance).
+- `Source`: **placed from MainBase Wall inventory** after a Wall Package delivery. Package Cost is Orbital Ferronite on `DA_GP_WallPackage` (TBD balance). Placement does **not** spend Orbital again.
 - `FootprintCells`: 2×2.
 - `ClearanceCells`: 0 для wall-to-wall (walls конектяться), але cell-to-other-structure clearance = 2.
 - `MaxHealth`: TBD balance (нижче за Turret, але стіну легко відремонтувати / перебудувати).
@@ -196,22 +198,31 @@ Wall — це **захисна периметральна структура**. 
 
 Total ~16 distinct visual states. Implementation: material parameter або mesh-swap по bitfield. Деталі — [`../TDD/06_Building_Architecture`](../TDD/06_Building_Architecture.md) §Wall System.
 
-#### Drag-Build (Smart Pathing)
+#### Acquisition (Wall Package)
 
-Player вибирає Wall з Order Menu → enters drag-targeting mode:
+1. Order Menu **Buy Wall Package** (available only when MainBase Wall stock == 0 and no package is in flight).
+2. Spend package `Cost` once. One rocket delivers **5** segments to MainBase. No placement mode.
+3. Arrival: Wall inventory = 5 (MVP max). Depot shows 5 blocks. Cannot buy another package until stock returns to 0.
+4. **Build Wall** becomes available while stock > 0.
+
+#### Drag-Build (from inventory)
+
+Player presses **Build Wall** (not an orbital purchase):
 
 1. LMB-press на start cell A (валідний grid cell з clearance OK).
-2. Hold + drag cursor — система малює preview path:
-   - A* pathfinding на BuildGrid (server-side).
-   - Path traverse тільки **free cells with clearance OK**.
-   - Avoids existing buildings + own/enemy clearance zones.
-3. LMB-release — order issued:
-   - Validate `OrbitalFerronite >= (PathLength × WallSegmentCost)`.
-   - Spawn drop pods для кожного cell у path (sequential з 0.2 s stagger — visual cascade).
-   - Кожен wall lands → auto-connect query → bitfield update.
-4. RMB / Esc — cancel mode.
+2. Hold + drag — preview path:
+   - A* on BuildGrid (server-side).
+   - Free cells with clearance OK only.
+   - Path length **cannot exceed** current Wall inventory.
+3. LMB-release — confirm:
+   - Server validates inventory ≥ N, cells, clearance, existing wall rules.
+   - Consume **N** inventory once. Spawn **N** `AGP_Wall` immediately (operational). Auto-connect.
+   - Depot updates to remaining stock.
+4. RMB / Esc — cancel; **consume nothing**.
 
-Alternative: single LMB click drops single 2×2 wall segment (без drag). Both modes supported.
+No per-segment DropPod. No `PathLength × WallSegmentCost`. No Building READY decrement.
+
+Single-click place of one segment from inventory is allowed if stock ≥ 1 (same consume-1 rule).
 
 #### Clearance Rule — "2 Cells Away"
 
@@ -228,7 +239,7 @@ Reason: prevents wallhugging-fortification (encasing MainBase у impassable wall
 ### Trade-Off
 
 Walls — це **economic insurance**:
-- Дешеві per segment, але кумулятивно витратні (long perimeter = significant Orbital Ferronite).
+- Bought as a **5-segment package** (one Orbital spend); each placed cell spends inventory, not Orbital. Long perimeters need more packages over time (max stock 5, no stacking).
 - Не contribute vision (gap у sight pyramid — wall blind spot).
 - Можна обійти navigation-wise, якщо є open path (wall працює як NavMesh modifier, не magic barrier).
 
@@ -379,9 +390,9 @@ Static defense node: tripod або quadruped mounting на industrial base plate
 
 ### Чому Walls не sellable
 
-- Walls дешеві per segment (placeholder 30 Orbital Ferronite). Refund створює exploits:
-  - **Scout-by-drag-then-cancel:** drag wall path through fog → pod descent reveals cells → cancel → refund. Free scouting.
-  - **No-commitment defense:** build walls per wave, demolish between waves з refund → defensive flexibility without economy cost.
+- Walls arrive as a paid **package**; placed segments are already-spent material. Refund створює exploits:
+  - **No-commitment defense:** place walls per wave, demolish between waves з refund → defensive flexibility without economy cost.
+  - Preview/cancel does not spend; only confirmed placement consumes inventory (no pod-scout refund loop).
 - Permanent demolish форсить considered placement. Per Pillar 8 — глибина від positional decision, не від undo loops.
 
 ### Engineering Note
@@ -399,7 +410,7 @@ Unit Order manifest → MainBase **Unit Drop Zone**. See [`10_Orbital_Delivery`]
 ### Buildings
 
 1. Open Building Order UI.
-2. **Purchase** Logistics Hub / Defensive Turret / Wall / Wall Turret → `GE_GP_SpendOrbital` → READY inventory++.
+2. **Purchase** Logistics Hub / Defensive Turret / Wall Turret → `GE_GP_SpendOrbital` → READY inventory++. **Not Wall** — Wall uses Wall Package (flow C).
 3. Click READY → **deployment mode** (semi-transparent ghost + footprint; valid/invalid tint).
 4. **LMB** valid: consume one READY → DropPod → building operational.
 5. **RMB / Esc:** cancel; READY unchanged; no refund.

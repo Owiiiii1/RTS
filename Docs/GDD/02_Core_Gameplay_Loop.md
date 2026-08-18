@@ -1,11 +1,12 @@
 # Core Gameplay Loop
 
-> **Canonical model:** узгоджений з [ADR-0009](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md) (+ 2026-08-08 procurement refinement). Усі non-initial units / buildings / walls прибувають **з орбіти** (no local production / construction). Units land at MainBase **Unit Drop Zone** (manifest + transport slots). Buildings: **Purchase → READY inventory → Deploy** (ghost). Shared DropPod/rocket. Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md); Ferronite — [`06_Resources`](06_Resources.md); будівлі — [`05_Buildings`](05_Buildings.md).
+> **Canonical model:** узгоджений з [ADR-0009](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md) (+ 2026-08-08 procurement refinement + 2026-08-18 GP-0305R). Усі non-initial units / buildings / walls прибувають **з орбіти** (no local production / construction). Units land at MainBase **Unit Drop Zone** (manifest + transport slots). Buildings: **Purchase → READY inventory → Deploy** (ghost). Walls: **Buy Wall Package (5) → one rocket to MainBase → Build Wall from inventory**. Shared DropPod/rocket. Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md); Ferronite — [`06_Resources`](06_Resources.md); будівлі — [`05_Buildings`](05_Buildings.md).
 
 ```
 Mine → Containers → Launch → OrbitalFerronite (+ Score)
   → Unit Order (manifest / slots) → DropPod → Unit Drop Zone → control units
   → Building Purchase → READY → Deploy ghost → DropPod → building
+  → Buy Wall Package → one rocket to MainBase → Build Wall from inventory
 ```
 
 Старт: MainBase + 2 Workers pre-deployed; `OrbitalFerronite = 0`.
@@ -17,6 +18,7 @@ Land  ->  Scout  ->  Mine  ->  Carry to MainBase containers (raw Planetary Ferro
       ->  Container fills  ->  Launch to orbit (-FerroniteThreatValue, +OrbitalFerronite +FerroniteScore)
       ->  Units: manifest order (transport slots) -> DropPod -> MainBase Unit Drop Zone
       ->  Buildings: Purchase -> READY inventory -> Deploy ghost -> DropPod -> placed building
+      ->  Walls: Buy Wall Package (5) -> rocket to MainBase -> Build Wall from inventory
       ->  Expand / Defend (SWARM scales with FerroniteThreatValue)
       ->  Win by Delivery Quota OR highest FerroniteScore at timer.
 ```
@@ -39,6 +41,7 @@ Land  ->  Scout  ->  Mine  ->  Carry to MainBase containers (raw Planetary Ferro
 - Spend `OrbitalFerronite` via orbital procurement:
   - **Units:** build transport-slot manifest → Confirm → DropPod to MainBase Unit Drop Zone.
   - **Buildings:** Purchase → READY inventory → later Deploy (ghost) → DropPod to chosen location (no second spend).
+  - **Walls:** Buy Wall Package → one rocket to MainBase (stock 5, max 5) → later **Build Wall** from inventory (no READY, no second spend, no per-segment rocket).
 - Increase unit cap via Logistics Hub (purchase/deploy). Per Pillar 4 — capacity expansion є свідомий strategic spend.
 - React to SWARM waves: position Salvage Walker, drop Defensive Turret / Walls біля threatened deposits / buildings; Worker repairs damaged assets (`GP.Command.Repair`).
 - Scout opponent (minimap awareness, mid-match push для denied expansion).
@@ -114,8 +117,9 @@ AGP_PlayerController (local)
    - `FerroniteThreatValue -= launched` — shipping relieves SWARM pressure.
 8. Player витрачає `OrbitalFerronite` через `GE_GP_SpendOrbital`:
    - Unit Confirm (manifest total), or
-   - Building Purchase (READY inventory).
-   Deploy of READY buildings does **not** spend again.
+   - Building Purchase (READY inventory), or
+   - Wall Package purchase (one rocket to MainBase; stock 5).
+   Deploy of READY buildings and **Build Wall** from inventory do **not** spend again.
 
 Деталі — [`06_Resources`](06_Resources.md), [`10_Orbital_Delivery`](10_Orbital_Delivery.md).
 
@@ -134,6 +138,12 @@ AGP_PlayerController (local)
 1. Purchase → `GE_GP_SpendOrbital` once → READY inventory++.
 2. Deploy mode: ghost; Esc/RMB cancels (READY stays).
 3. LMB valid → consume one READY → DropPod → building (**no second spend**).
+
+### Walls (not READY)
+
+1. **Buy Wall Package** (stock == 0, no in-flight) → `GE_GP_SpendOrbital` once → one rocket to MainBase.
+2. Arrival: MainBase Wall inventory = 5 (MVP max; no stacking).
+3. **Build Wall** (stock > 0) → drag path ≤ inventory → confirm consumes N and places N `AGP_Wall` immediately. Cancel consumes nothing.
 
 Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md), [`05_Buildings`](05_Buildings.md), [`04_Units`](04_Units.md).
 
@@ -193,7 +203,7 @@ Balance цих failure loops — primary gameplay tension.
 | --- | --- | --- |
 | **Hoard vs Ship** | Кожен container fill. | Тримати raw Ferronite (вищий threat, ризик) vs ship зараз (safe, +score). |
 | **Capacity expansion** | При `CurrentUnits == MaxUnits`. | Order Logistics Hub drop (+5 cap, spend OrbitalFerronite) vs тримати tight roster. |
-| **Defense investment** | Перед swarm escalation. | Drop Turret / Walls vs drop more Workers (mining throughput). |
+| **Defense investment** | Перед swarm escalation. | Drop Turret / Buy Wall Package vs drop more Workers (mining throughput). |
 | **Worker count** | Continuously. | More workers = більше mining + швидше росте threat при hoarding. |
 | **Combat acquisition** | Mid-match. | Drop Salvage Walker (spend OrbitalFerronite, +1 cap usage) vs more workers. |
 | **Expansion to remote deposits** | При near-base depletion. | Risk vulnerability під час transit vs deposit yield. |
@@ -212,7 +222,9 @@ Spend moments:
 | Unit manifest Confirm | Yes — total cost once |
 | Building Purchase | Yes — purchase cost once → READY++ |
 | Building Deploy (READY) | **No** — consume READY only |
-| Cancel ghost placement | **No** |
+| Wall Package purchase | Yes — package Cost once → rocket to MainBase |
+| Build Wall (from inventory) | **No** — consume Wall stock only |
+| Cancel ghost placement / wall preview | **No** |
 
 Unit Confirm also validates transport slots + MaxUnits (reject whole manifest if over) + Unit Drop Zone. Building Deploy validates READY + placement.
 
@@ -241,7 +253,7 @@ On Hub destroyed/sold → remove Infinite GE → MaxUnits/cap bonuses reverse
 | `DA_GP_Building_MainBase` | Main Base config — health, container storage + launch range, drop-off zone, sight. | [`05_Buildings`](05_Buildings.md) |
 | `DA_GP_Building_LogisticsHub` | Logistics Hub config — drop cost, health, `GE_GP_UnitCap_Plus5`, container cap bonus. | [`05_Buildings`](05_Buildings.md) |
 | `DA_GP_Building_DefensiveTurret` | Defensive Turret config — drop cost, health, attack range, damage, attack speed, targeting priority. | [`05_Buildings`](05_Buildings.md) |
-| `DA_GP_Building_Wall` | Wall config — drop cost per segment, health, footprint, clearance, auto-connect. | [`05_Buildings`](05_Buildings.md) |
+| `DA_GP_Building_Wall` | Wall config — health, footprint, clearance, auto-connect. Package cost lives on `DA_GP_WallPackage`. | [`05_Buildings`](05_Buildings.md) |
 | `DA_GP_Building_FerroniteDeposit` | Deposit properties — capacity, MineRatePerWorker, MaxConcurrentWorkers, depleted behavior. | [`05_Buildings`](05_Buildings.md), [`06_Resources`](06_Resources.md) |
 | `DA_GP_Unit_Worker` | Worker config — drop cost, health, move speed, carry capacity, mine rate, allowed commands, granted abilities (Repair), tags. | [`04_Units`](04_Units.md) |
 | `DA_GP_Unit_SalvageWalker` | Salvage Walker config — drop cost, health, move speed, damage, attack range, attack speed, allowed commands, tags. | [`04_Units`](04_Units.md) |
@@ -260,7 +272,7 @@ GP.Faction.{Corporate, Swarm}
 GP.Unit.Type.{Worker, SalvageWalker}
 GP.Unit.State.{Idle, Moving, Mining, Carrying, Attacking, Repairing, Dead}
 GP.Building.Type.{MainBase, LogisticsHub, DefensiveTurret, Wall, WallTurret, FerroniteDeposit}
-GP.Drop.Type.{Unit, Building, Wall}
+GP.Drop.Type.{Unit, Building, WallPackage}
 GP.Resource.Node
 GP.Resource.Type.Ferronite
 GP.Command.{OrderDrop, Repair, Move, Stop, Attack, Mine, Sell, Demolish}

@@ -107,9 +107,10 @@ Per [`14_Orbital_Delivery`](14_Orbital_Delivery.md). Each `DA_GP_OrbitalDrop_*` 
 | --- | --- |
 | `UGP_BuildingDefinition` | Intrinsic identity/grid/payload + storage + `UnitCapBonus`. `MaxHealth` compatibility-only. |
 | `UGP_UnitDefinition` | Canonical initial MaxHealth / combat / sight / facing / cargo (GP-S38D / GP-S39E). Runtime remains GAS. |
-| `UGP_OrbitalDropDefinition` | Building acquisition: `Cost`, `DropTags`, soft `BuildingDefinition`, descent / deploy delay |
+| `UGP_OrbitalDropDefinition` | Building READY acquisition: `Cost`, `DropTags`, soft `BuildingDefinition`, descent / deploy delay. Not Wall Package. |
 | `UGP_OrbitalUnitDropDefinition` | Unit acquisition: `Cost`, slots, payload, descent / deploy delay |
-| `UGP_OrbitalDeliverySettings` | Global transport tunables + **soft refs only** to authored unit/building drop DataAssets. No balance values on those refs. |
+| `UGP_WallPackageDefinition` | Wall Package: DisplayName, Icon, Cost, SegmentCount=5, delivery timing |
+| `UGP_OrbitalDeliverySettings` | Global transport tunables + **soft refs only** to authored unit/building/package DataAssets. No balance values on those refs. |
 
 Do **not** duplicate `SpawnedClass` / `FootprintCells` / MaxHealth onto the DropDef as a second SoT. Canonical MaxHealth after GP-S38D is `UnitDefinition.MaxHealth`. Per-purchase delivery timing lives on drop definitions; settings remain fallback. Spawn altitude / cleanup / placement radius stay global.
 
@@ -119,7 +120,8 @@ Building catalog names (content, later): `DA_GP_Building_LogisticsHub` / `Defens
 - `DA_GP_OrbitalUnitDrop_SalvageWalker` — Cost 50, TransportSlotCost 2, same unit delivery timing.
 - `DA_GP_OrbitalDrop_LogisticsHub` — `DropTags: GP.Drop.Type.Building`; `Cost` from DropDef (operator Hub bridge may sync deprecated settings cost); BuildingDefinition `FootprintCells`: 4×4.
 - `DA_GP_OrbitalDrop_DefensiveTurret` — `DropTags: GP.Drop.Type.Building`; identity only in GP-S35B (no turret combat).
-- `DA_GP_OrbitalDrop_Wall` — `DropTags: GP.Drop.Type.Wall`; identity only (no wall gameplay / drag-build).
+- `DA_GP_WallPackage` — `UGP_WallPackageDefinition`; Cost TBD; SegmentCount=5; `GP.Drop.Type.WallPackage`. Not READY. Not `UGP_OrbitalDropDefinition`.
+- `DA_GP_OrbitalDrop_Wall` — **superseded** for MVP acquisition (do not use READY + per-segment drop).
 - `DA_GP_OrbitalDrop_WallTurret` — payload classified `GP.Drop.Type.Building`; identity only (no wall mounting).
 
 `GP.Drop.Type.Module` — reserved post-MVP; no active `DA_GP_OrbitalDrop_*` ships in MVP.
@@ -133,7 +135,7 @@ Building catalog names (content, later): `DA_GP_Building_LogisticsHub` / `Defens
   - `StartingOrbitalFerronite`: TBD (starting spendable balance; balance pass).
   - `AllowedUnits`: `[DA_GP_Unit_Worker, DA_GP_Unit_SalvageWalker]`.
   - `AllowedBuildings`: `[DA_GP_Building_MainBase, DA_GP_Building_LogisticsHub, DA_GP_Building_DefensiveTurret, DA_GP_Building_Wall, DA_GP_Building_WallTurret]`.
-  - `AllowedOrbitalDrops`: `[DA_GP_OrbitalDrop_Worker, DA_GP_OrbitalDrop_SalvageWalker, DA_GP_OrbitalDrop_LogisticsHub, DA_GP_OrbitalDrop_DefensiveTurret, DA_GP_OrbitalDrop_Wall, DA_GP_OrbitalDrop_WallTurret]` — soft list; the acquisition catalog presented in the Order Menu.
+  - `AllowedOrbitalDrops`: `[DA_GP_OrbitalDrop_Worker, DA_GP_OrbitalDrop_SalvageWalker, DA_GP_OrbitalDrop_LogisticsHub, DA_GP_OrbitalDrop_DefensiveTurret, DA_GP_WallPackage, DA_GP_OrbitalDrop_WallTurret]` — soft list; the acquisition catalog presented in the Order Menu.
   - `FactionTags`: `{GP.Faction.Corporate}`.
 
 ### Resource
@@ -194,7 +196,7 @@ Building catalog names (content, later): `DA_GP_Building_LogisticsHub` / `Defens
   - `UnitTags`: `{GP.Unit.Type.Building, GP.Building.Type.DefensiveTurret, GP.Building.Role.Defense, GP.Faction.Corporate}`.
 
 - `DA_GP_Building_Wall` — perimeter wall segment (2×2 cell, 8-dir auto-connect).
-  - `Acquisition`: via `DA_GP_OrbitalDrop_Wall` (Cost in OrbitalFerronite — TBD; drag-build cost = segments × per-segment cost).
+  - `Acquisition`: placed from MainBase Wall inventory after `DA_GP_WallPackage` delivery. Package Cost is OrbitalFerronite (TBD). Placement does not spend Orbital.
   - `FootprintCells`: 2×2.
   - `MaxHealth`: TBD.
   - `bSellable`: false — walls are **DEMOLISHED** permanently (no refund) via `GP.Command.Demolish`.
@@ -281,7 +283,7 @@ Building catalog names (content, later): `DA_GP_Building_LogisticsHub` / `Defens
     DA_GP_OrbitalDrop_SalvageWalker
     DA_GP_OrbitalDrop_LogisticsHub
     DA_GP_OrbitalDrop_DefensiveTurret
-    DA_GP_OrbitalDrop_Wall
+    DA_GP_WallPackage
     DA_GP_OrbitalDrop_WallTurret
   Buildings/
     DA_GP_Building_MainBase

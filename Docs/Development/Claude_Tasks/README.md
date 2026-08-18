@@ -6,18 +6,18 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-18 (GP-S41M finalized). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
+> Стан станом на 2026-08-18 (GP-0305R). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Movement shortest yaw. **Current: GP-S41M_FINALIZATION_READY_FOR_MERGE**.
+**Поточна фаза:** Wall Package reconciliation. **Current: GP-0305R_WALL_PACKAGE_RECONCILIATION_READY_FOR_REVIEW**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
-| GP-S01 … GP-S40R | **DONE / on `main` tip** `d9df23143f256b2b2143fe66f5a0444f727452ae` |
-| **GP-S41M** Movement Shortest Yaw | **IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE** — [`GP-S41M_Movement_Shortest_Yaw.md`](GP-S41M_Movement_Shortest_Yaw.md) — **NOT MERGED** |
+| GP-S01 … GP-S41M | **DONE / on `main` tip** `5dd56cacdd7b25d4a0d3fc167b69b7a2e3a005a0` |
+| **GP-0305R** Wall Package Delivery | **READY FOR REVIEW** — [`GP-0305R_Wall_Package_Reconciliation.md`](GP-0305R_Wall_Package_Reconciliation.md) — **NO CODE / NOT MERGED** |
 
-**NEXT action для агента:** do **not** merge until asked. Do **not** start Wall / FoW.
+**NEXT action для агента:** do **not** start GP-S42A until this review is accepted. Do **not** implement old pod-per-segment Wall. Do **not** start FoW.
 
 ### Drift Warning
 
@@ -311,7 +311,8 @@ Per-slice C++ writing. **Code Allowed: Yes** після approval поперед�
 - [GP-0302 Worker Unit](GP-0302_Worker_Unit.md) → `TDD/05`
 - [GP-0303 Resource Primary](GP-0303_Resource_Primary.md) → `TDD/07` + Container System
 - [GP-0304 Logistics Hub (renamed)](GP-0304_Barracks.md) → `TDD/06` + Post-Pivot (rename pending GP-0802)
-- [GP-0305 Wall](GP-0305_Wall.md) → `TDD/06` §Build Grid + Wall System
+- [GP-0305 Wall](GP-0305_Wall.md) → `TDD/06` §Build Grid + Wall System (acquisition superseded by GP-0305R)
+- [GP-0305R Wall Package Reconciliation](GP-0305R_Wall_Package_Reconciliation.md) → current Wall acquisition/deployment canon
 - [GP-0306 AI Opponent (design)](GP-0306_AI_Opponent.md) → ADR-0008 + GP-S54..S56
 - [GP-0307 Sell + Demolish](GP-0307_Sell_Demolish.md) → `TDD/06` §Sell + Demolish
 

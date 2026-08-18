@@ -42,7 +42,7 @@
 10. [GP-0302 Worker Unit](Claude_Tasks/GP-0302_Worker_Unit.md)
 11. [GP-0303 Resource Primary](Claude_Tasks/GP-0303_Resource_Primary.md)
 12. [GP-0304 Logistics Hub (renamed from Assembly Yard / Barracks)](Claude_Tasks/GP-0304_Barracks.md) — task file ще під старим іменем; rename pending GP-0802.
-13. [GP-0305 Wall + Wall-mounted Turret + Build Grid System](Claude_Tasks/GP-0305_Wall.md)
+13. [GP-0305 Wall + Wall-mounted Turret + Build Grid System](Claude_Tasks/GP-0305_Wall.md) — acquisition superseded by [GP-0305R](Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md)
 14. [GP-0306 AI Opponent — design (state machine, AAIController per ADR-0008)](Claude_Tasks/GP-0306_AI_Opponent.md)
 15. [GP-0307 Sell + Demolish (buildings sold for partial refund; walls demolished permanently)](Claude_Tasks/GP-0307_Sell_Demolish.md)
 

@@ -136,6 +136,10 @@ This note **refines placement/procurement UX** without overturning the pillar (n
 
 Canonical player docs: `Docs/GDD/10_Orbital_Delivery.md`. Engineering: `Docs/TDD/14_Orbital_Delivery.md`.
 
+## Refinement — 2026-08-18 (GP-0305R; does not replace ADR)
+
+Wall is a **third orbital flow**. Buy a **Wall Package of 5** (one rocket to MainBase). Placement is **Build Wall** from MainBase inventory (max 5, no stacking). Not READY. Not per-segment pods. Not Worker construction. Details: `Docs/Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`.
+
 ## References
 
 - Memory rule: `project_orbital_delivery_model`.

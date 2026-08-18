@@ -16,6 +16,8 @@ Planetary Ferronite → containers → launch → Orbital Ferronite
 Цей doc описує **гравецьке відчуття і правила**. Engineering — [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md).
 
 > **Owner refinement (2026-08-08):** Unit delivery and building procurement are **two flows** sharing one DropPod/rocket presentation. Units land at the MainBase **Unit Drop Zone** (no free world placement). Buildings are **purchased into orbital inventory (READY)** then **deployed later** via ghost placement — spend happens at purchase, not at placement confirm.
+>
+> **Owner refinement (2026-08-18, GP-0305R):** Wall is a **third flow**. Buy a **Wall Package of 5** → one rocket to MainBase → MainBase Wall inventory (max 5). **Build Wall** places from that inventory. Not READY. Not per-segment pods. See [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).
 
 ## Two-State Resource (Recap)
 
@@ -32,17 +34,18 @@ Per [`06_Resources`](06_Resources.md):
 | --- | --- |
 | No local production | Nothing is built/trained on the planet surface after match start. |
 | Initial exception only | MainBase + **2 Workers** pre-deployed. |
-| All else from orbit | Additional Workers, Salvage Walkers, Logistics Hub, Turrets, Walls — orbital only. |
+| All else from orbit | Additional Workers, Salvage Walkers, Logistics Hub, Turrets, Wall Packages, Wall-mounted Turrets — orbital only. |
 | Shared delivery actor | Units and buildings use the **same** MVP DropPod/rocket visual family. |
 
-## Two Procurement Flows
+## Procurement Flows
 
 | Flow | Spend moment | Placement | Payload |
 | --- | --- | --- | --- |
 | **A. Unit Delivery** | On Confirm Order (manifest) | Fixed: MainBase **Unit Drop Zone** | 1..N units packed by **Transport Slots** |
 | **B. Building Procurement + Deployment** | On **Purchase** → READY inventory | Later: ghost placement → DropPod to chosen cell | Exactly **one** READY building item |
+| **C. Wall Package** | On **Buy Wall Package** | None at purchase. Later **Build Wall** from MainBase inventory | One rocket: **5** segments into MainBase Wall stock (max 5) |
 
-Buildings do **not** land in the Unit Drop Zone. Units do **not** use free world placement for normal orders.
+Buildings (Hub / Turret / WallTurret) do **not** land in the Unit Drop Zone. Units do **not** use free world placement for normal orders. Wall Package lands at **MainBase** (not a grid ghost, not READY).
 
 ---
 
@@ -122,7 +125,7 @@ Buying and deploying are **two actions**.
 
 ### Purchase → Orbital Building Inventory
 
-1. Player selects a building type (Logistics Hub, Defensive Turret, Wall, …).
+1. Player selects a building type (Logistics Hub, Defensive Turret, Wall-mounted Turret, …). **Not Wall** — Wall uses flow C.
 2. Pays Orbital Ferronite **immediately** (GAS spend).
 3. Building becomes owned **orbital inventory** item with status **READY**.
 4. It does **not** descend yet.
@@ -144,6 +147,18 @@ Server must prevent: double-deploy of same item, duplicate RPC double-spawn, los
 ### Building drop target
 
 Building pods use player-confirmed placement. Same DropPod/rocket actor/visual as units. Payload = exactly one READY building.
+
+---
+
+## C — Wall Package
+
+1. **Buy Wall Package** when MainBase Wall stock == 0 and no package is in flight.
+2. Spend `UGP_WallPackageDefinition.Cost` once. Do **not** enter placement.
+3. One rocket delivers the package to MainBase. Payload is **5 segments of inventory**, not an `AGP_Wall` actor.
+4. On arrival: Wall stock = 5 (MVP cap). Depot presentation shows 5 blocks.
+5. **Build Wall** (separate action) drags a path limited by stock; confirm consumes N and places N `AGP_Wall` immediately. No second Orbital spend. No READY. No extra rocket.
+
+Cannot repurchase while stock > 0 or a package is in flight. MainBase destroyed → remaining stock is lost.
 
 ---
 
@@ -180,7 +195,7 @@ Authority spawn occurs **once** at deterministic landing-complete. Impact FX can
 | **Salvage Walker** | Unit manifest → Unit Drop Zone | Slot cost example 2 |
 | **Logistics Hub** | Purchase → READY → deploy ghost | Cap / logistics expansion |
 | **Defensive Turret** | Purchase → READY → deploy ghost | Static defense |
-| **Wall Segment** | Purchase → READY → deploy (drag later) | Perimeter |
+| **Wall Package** | Purchase → one rocket to MainBase → stock 5 | Then **Build Wall** from inventory |
 | **Wall-mounted Turret** | Purchase → READY → deploy on wall | Mounted defense |
 | **MainBase** | Initial only | Not purchased |
 | **Ferronite Deposit** | Environment | Not purchased |
@@ -238,7 +253,8 @@ Drop pod **telegraphs** (visible descent, audio, minimap, 2–3 s). Window of vu
 3. Launch → OrbitalFerronite + FerroniteScore ↑; Threat ↓.
 4. **Units:** fill manifest → Confirm → spend → pod → Unit Drop Zone → control units.
 5. **Buildings:** Purchase → READY → later ghost deploy → pod → building operational.
-6. Defend / expand / score race.
+6. **Walls:** Buy Wall Package → one rocket to MainBase → Build Wall from inventory (no READY, no per-segment rocket).
+7. Defend / expand / score race.
 
 See [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md).
 
@@ -246,7 +262,7 @@ See [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md).
 
 ## Validation per Pillars
 
-**Pillar 8:** “Ship Ferronite to orbit, spend Orbital Ferronite, drop units at base pad or deploy READY buildings.”  
+**Pillar 8:** “Ship Ferronite to orbit, spend Orbital Ferronite, drop units at base pad, deploy READY buildings, or land a Wall Package at MainBase and build from stock.”  
 **Pillar 1 / 3 / 6:** mining/shipping remains the score and threat loop; orbital is the acquisition sink.
 
 ## Open Questions
@@ -254,7 +270,7 @@ See [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md).
 1. Drop interruption / refund mid-flight (post-MVP).
 2. Max simultaneous in-flight pods (recommend soft cap later).
 3. Exact Unit Drop Zone component vs scene socket naming.
-4. Wall drag-build vs single READY segment UX (building slice).
+4. ~~Wall drag-build vs single READY segment UX~~ — **resolved GP-0305R:** package of 5 + inventory Build Wall.
 5. Whether unit-cap check also reserves slots during in-flight pods (recommend count at confirm).
 
 ## Out of MVP

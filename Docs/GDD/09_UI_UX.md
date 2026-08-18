@@ -1,6 +1,8 @@
 # UI / UX
 
 > **Orbital procurement (2026-08-08):** No local Build menu. Unit Order = manifest → Unit Drop Zone. Building Order = Purchase→READY→Deploy ghost. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md). Command bar shows Move/Stop/Attack/Mine/Repair — **not** Build.
+>
+> **GP-0305R (2026-08-18):** Wall is not READY. Order Menu **Buy Wall Package** (stock 0, not in-flight). After delivery, **Build Wall** is a separate action (not an orbital purchase). State contract only — no final layout. See GDD/10 flow C.
 
 ## MVP UI Surface
 

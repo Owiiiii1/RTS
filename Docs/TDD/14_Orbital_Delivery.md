@@ -5,18 +5,20 @@
 Engineering implementation of orbital drop pods (per [`../GDD/10_Orbital_Delivery`](../GDD/10_Orbital_Delivery.md)). Defines dual procurement flows (units vs buildings), shared DropPod actor, validation, replication, presentation hooks, subsystem ownership. Replaces pre-pivot Production/Construction/GhostBuilding.
 
 > **Owner refinement (2026-08-08):** See GDD/10. Units → MainBase Unit Drop Zone + transport-slot manifests. Buildings → Purchase/READY inventory then Deploy (no second spend). Shared rocket visual family; authored BP for mesh/Niagara.
+>
+> **GP-0305R (2026-08-18):** Wall Package is a **third flow**: spend → one rocket to MainBase → Wall inventory 0..5. Not READY. Not per-segment pods. [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).
 
 ## Hard Rules
 
 1. **All non-initial assets arrive from orbit.** No local production / construction.
 2. **Server-authoritative.** Client intent only; server validates and schedules pods.
-3. **Two flows, one delivery actor.** Unit manifests and building deploys share `AGP_DropPod` + presentation BP; differ in targeting + payload data.
+3. **Three flows, one delivery actor family.** Unit manifests, building deploys, and Wall Package share `AGP_DropPod` + presentation BP; differ in targeting + payload data.
 4. **Units do not free-place.** Landing = server-resolved MainBase **Unit Drop Zone** (authored anchor — not hardcoded `BaseLocation + offset`).
 5. **Buildings: spend on Purchase, not on Deploy.** Deploy consumes READY inventory once.
 6. **Telegraph 2–3 s** (data-driven). Visible to all clients.
 7. **No client prediction** of spend / inventory / payload.
 8. **DataAsset-driven** per-purchase costs, slot costs, and delivery timing on drop definitions. Global pod capacity / altitude / spacing / cleanup / placement stay on `UGP_OrbitalDeliverySettings`.
-9. **GAS spend only** via Instant spend GE (no direct attribute mutate). Spend exactly once on accepted unit Confirm / building Purchase.
+9. **GAS spend only** via Instant spend GE (no direct attribute mutate). Spend exactly once on accepted unit Confirm / building Purchase / Wall Package purchase.
 10. **FoW + grid** remain canonical for **building** placement when those systems exist. Unit Drop Zone path does not require FoW click targeting.
 
 ## Architecture (refined)
@@ -45,6 +47,18 @@ Deploy mode (ghost)
   → OnLanding: spawn BuildingDefinition.SpawnedClass with OriginCell/FootprintSize
   (NO second Orbital spend)
 ```
+
+WALL PACKAGE FLOW
+─────────────────
+Order UI BuyWallPackage(PackageDef)   // UGP_WallPackageDefinition
+  → Validate stock==0, not in-flight, catalog, Orbital >= Cost
+  → GE_SpendOrbital(PackageDef.Cost) once
+  → Mark delivery pending; spawn AGP_DropPod → Landing = owning MainBase
+  → OnLanding: WallSegmentInventory += SegmentCount (5) if capacity allows
+  → Presentation: WallInventoryChanged(NewCount)
+  (NO READY. NO placement mode. NO AGP_Wall spawn on landing.)
+
+Build Wall is **not** an orbital RPC. It consumes MainBase inventory (GP-S42C).
 
 Shared presentation: native DropPod lifecycle + soft `BP_DropPod_MVP` (or equivalent) for mesh/Niagara.
 
@@ -154,12 +168,13 @@ Authored production path (GP-S39E correction):
 5. Load failure → log + native bootstrap.
 6. Deprecated settings numerics/class apply only when the resolved definition cannot provide a valid value. Empty authored `PayloadClass` may still use the operator BP payload bridge.
 
-Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / turret / wall / wallturret soft refs. Native catalog must not permanently shadow an assigned authored drop.
+Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / turret / wallturret soft refs. Wall Package uses a **separate** `UGP_WallPackageDefinition` soft ref (not READY `DA_GP_OrbitalDrop_Wall`). Native catalog must not permanently shadow an assigned authored drop.
 
 ## Order UI (target / TEMP)
 
 - **Unit panel:** manifest builder — slots used/cap, counts, per-unit costs, total Orbital, Confirm.
 - **Building panel:** Purchase buttons; READY list; click READY → ghost deploy mode.
+- **Wall:** Buy Wall Package when stock==0 and not in-flight; Build Wall when stock>0. Package never enters READY/ghost.
 - TEMP HUD buttons acceptable for first unit slice; production Order Menu later.
 
 ## RPCs (illustrative)
@@ -169,6 +184,7 @@ Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / 
 | `Server_RequestUnitDrop(Manifest)` | Confirm packed unit order |
 | `Server_RequestBuildingPurchase(DropDef)` | Spend → READY++ |
 | `Server_RequestBuildingDeploy(DropDef, Loc, Rot)` | Consume READY → pod |
+| `Server_RequestWallPackage(PackageDef)` | Spend → one rocket to MainBase; pending until arrival |
 
 Client intent only. Rejection via existing notify path where possible.
 
@@ -179,6 +195,7 @@ Client intent only. Rejection via existing notify path where possible.
 | DropPod LandingLocation, TeamId, DescentProgress01 | COND_None (telegraph) |
 | OrbitalFerronite | COND_OwnerOnly |
 | Building READY inventory | OwnerOnly (or equivalent) |
+| MainBase Wall segment count + package pending | Owner-readable |
 | Mesh/Niagara | Authored BP; not gameplay-hardcoded |
 
 ## Cosmetic budget (MVP)
@@ -187,7 +204,7 @@ Shared rocket: vertical descent, exhaust while moving, impact smoke, clear, payl
 
 ## Pillar 8
 
-1–2 sentences: “Ship to orbit, spend Orbital Ferronite; pack units onto a base pad rocket, or buy buildings into READY inventory and place them later.”
+1–2 sentences: “Ship to orbit, spend Orbital Ferronite; pack units onto a base pad rocket, buy buildings into READY inventory and place them later, or land a 5-segment Wall Package at MainBase and Build Wall from stock.”
 
 ## Acceptance sketches
 
@@ -202,10 +219,13 @@ Shared rocket: vertical descent, exhaust while moving, impact smoke, clear, payl
 | 7 | Esc cancel deploy → READY unchanged |
 | 8 | Duplicate deploy RPC → no double spawn / no double consume |
 | 9 | Multi-unit offsets non-overlapping |
+| 10 | Wall Package purchase → spend once → rocket to MainBase → stock 5; no placement |
+| 11 | Wall Package while stock>0 or in-flight → reject |
+| 12 | Build Wall is not an orbital purchase (inventory consume in GP-S42C) |
 
 ## Out of this TDD’s first impl slice
 
-Full FoW, Wall gameplay, production Order Menu polish — layered on the same DropPod pipeline in later slices. GP-S36G added BuildGrid occupancy + snap. GP-S37T added deployable `AGP_DefensiveTurret` (yaw-0 rectangular reservation, native 2×2).
+Full FoW, production Order Menu polish — later. Wall Package + inventory = **GP-S42A**; drag placement = **GP-S42C**. GP-S36G added BuildGrid occupancy + snap. GP-S37T added deployable `AGP_DefensiveTurret` (yaw-0 rectangular reservation, native 2×2).
 
 ## References
 

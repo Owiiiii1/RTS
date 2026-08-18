@@ -21,6 +21,7 @@ Production document для команди. Що ми крутимо щоб на�
 | `DA_GP_Building_LogisticsHub` | `/Game/GrimProtocol/DataAssets/Buildings/` | Design lead | Yes |
 | `DA_GP_Building_DefensiveTurret` | `/Game/GrimProtocol/DataAssets/Buildings/` | Design lead | Yes |
 | `DA_GP_Building_Wall` | `/Game/GrimProtocol/DataAssets/Buildings/` | Design lead | Yes |
+| `DA_GP_WallPackage` | `/Game/GrimProtocol/DataAssets/OrbitalDrops/` | Design lead | Yes |
 | `DA_GP_Unit_Worker` | `/Game/GrimProtocol/DataAssets/Units/` | Design lead | Yes |
 | `DA_GP_Unit_SalvageWalker` | `/Game/GrimProtocol/DataAssets/Units/` | Design lead | Yes |
 | `DA_GP_OrbitalDrop_*` | `/Game/GrimProtocol/DataAssets/OrbitalDrops/` | Design lead | Yes |
@@ -332,7 +333,7 @@ Mine more → containers fill → raw Ferronite stored at base → ship → orbi
 6.  Launch                — Full container ships to orbit (2-3 s telegraph window); FerroniteThreatValue drops (SWARM relief).
 7.  Orbital reward        — OrbitalFerronite + FerroniteScore increment.
 8.  SWARM pressure        — Wave size/frequency scale with FerroniteThreatValue (raw Ferronite stored at base RIGHT NOW; up on drop-off, down on launch).
-9.  Order                 — Spend OrbitalFerronite на Worker / Walker / Turret / Wall / Hub drops.
+9.  Order                 — Spend OrbitalFerronite на Worker / Walker / Turret / Wall Package / Hub drops.
 10. Drop                  — Pod descent (telegraph). Asset lands.
 11. Expand                — More territory revealed, more deposits available.
 12. Defend                — React to SWARM waves + opponent harass.
@@ -468,7 +469,7 @@ Master snapshot **тільки** placeholders (TBD у balance pass). Designers �
 | Worker | 80 | 50-150 | Design |
 | Salvage Walker | 200 | 150-400 | Design |
 | Defensive Turret | 150 | 100-300 | Design |
-| Wall segment | 30 | 15-60 | Design |
+| Wall Package (5) | TBD | 75-300 | Design (replaces old per-segment 30) |
 | Wall Turret | 100 | 60-200 | Design |
 | Logistics Hub | 400 | 300-700 | Design |
 

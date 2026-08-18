@@ -87,14 +87,14 @@ Buildings are pawns (static units). No building owns a Production or Constructio
 | Class | Base | Replication | Purpose |
 | --- | --- | --- | --- |
 | `AGP_BuildingBase` (abstract) | `AGP_UnitBase` | Yes | Static unit ancestor (a pawn). Owns optional `UGP_StorageComponent` based on Definition. No Production/Construction component. |
-| `AGP_MainBase` | `AGP_BuildingBase` | Yes | Initial base. Hosts `UGP_StorageComponent` containers for Planetary Ferronite (Worker drop-off target), drop-zone marker. Non-sellable. May be BP child if no MainBase-specific code emerges. |
+| `AGP_MainBase` | `AGP_BuildingBase` | Yes | Initial base. Hosts `UGP_StorageComponent` (Ferronite) and `UGP_WallSegmentInventoryComponent` (Wall stock 0..5 + depot presentation). Drop-zone marker. Non-sellable. |
 | `AGP_LogisticsHub` | `AGP_BuildingBase` | Yes | Orbital order point. Surfaces Order Menu, applies `GE_GP_UnitCap_Plus5` + storage-cap bonus while alive. Orbital drops only — no production. |
-| `AGP_DropPod` | `APawn` | Yes | Orbital descent vehicle. Spawned by `UGP_OrbitalDeliverySubsystem` on accepted order; descends to grid-validated location, spawns payload (unit/building/wall) on landing. Carries `GP.State.PodInFlight`. |
+| `AGP_DropPod` | `APawn` | Yes | Orbital descent vehicle. Spawned by `UGP_OrbitalDeliverySubsystem` on accepted order; descends to grid-validated location or MainBase (units / READY buildings / Wall Package). Carries `GP.State.PodInFlight`. |
 | `AGP_FerroniteDeposit` | `AGP_BuildingBase` | Yes | Resource node, CurrentCapacity, ActiveMiners / WaitingMiners queue. `TeamId=0`, `bDamageable=false`. 3×3 footprint. |
-| `AGP_Wall` | `AGP_BuildingBase` | Yes | Defensive wall segment, 2×2 footprint. Hosts `UGP_WallConnectionComponent` для 8-dir auto-connect. Mountable surface для `WallTurret`. Delivered via drop pod cascade. |
+| `AGP_Wall` | `AGP_BuildingBase` | Yes | Defensive wall segment, 2×2 footprint. Hosts `UGP_WallConnectionComponent` для 8-dir auto-connect. Mountable surface для `WallTurret`. Placed from MainBase Wall inventory (GP-0305R). |
 | `AGP_WallTurret` | `AGP_BuildingBase` (or BP variant of `AGP_DefensiveTurret`) | Yes | Constrained 2×2 turret mounted on `AGP_Wall`. Lower HP / shorter range than 4×4 free-standing Turret. |
 | `AGP_DropReticle` | `AActor` | None | Local-only drop-targeting preview (free-standing drop targets). Material parameter tint. Grid-snapped. |
-| `AGP_GhostWallSegment` | `AActor` | None | Local-only wall drag-build preview (ghost wall segments along A* path, pending pod cascade). |
+| `AGP_GhostWallSegment` | `AActor` | None | Local-only wall drag-build preview (ghosts along A* path; length limited by Wall inventory). |
 | `AGP_CinematicCameraPawn` (reserved name) | `APawn` | None | Reserved for post-MVP cinematic / end-of-match. Не implementuet у MVP. |
 
 ### GPRuntime — Components
@@ -111,6 +111,7 @@ Buildings are pawns (static units). No building owns a Production or Constructio
 | `UGP_TargetingComponent` | combat units | Server | Auto-acquire scan. |
 | `UGP_StorageComponent` | `AGP_MainBase` (containers) | Server | Holds Planetary Ferronite (raw, not spendable). Worker drop-off = Storage state mutation (NOT a player-attribute GE) and raises GameState `FerroniteThreatValue`. Container launch applies `GE_GP_AddOrbital` (+OrbitalFerronite) and `GE_GP_AddScore` (+FerroniteScore) and lowers `FerroniteThreatValue`. |
 | `UGP_WallConnectionComponent` | `AGP_Wall` | Server (replicated bitfield) | 8-neighbor query, ConnectionBitfield replication, visual state mapping. |
+| `UGP_WallSegmentInventoryComponent` | `AGP_MainBase` | Server (replicated count) | Wall stock 0..5, package-pending, `WallInventoryChanged`. Not Ferronite storage. |
 
 Жодних extra components у MVP. Якщо новий потрібен — окремий ticket з justification per ADR-0006.
 
@@ -151,7 +152,8 @@ Per [`10_Data_Assets`](10_Data_Assets.md) + [`ADR-0002`](../Architecture_Decisio
 | `UGP_NotificationConfig` | Toast metadata per tag | GPUIRuntime |
 | `UGP_SwarmDefinition` (post-MVP) | SWARM unit identity | GPRuntime |
 | `UGP_AIBehaviorDefinition` | AI thresholds, decision tick rate, action probabilities | GPRuntime |
-| `UGP_OrbitalDropDefinition` (family `DA_GP_OrbitalDrop_*`) | Per drop type: OrbitalFerronite cost, descent duration, payload class (soft), footprint, validation flags | GPRuntime |
+| `UGP_OrbitalDropDefinition` (family `DA_GP_OrbitalDrop_*`) | Building READY purchase: cost, tags, BuildingDefinition, timing. Not Wall Package. | GPRuntime |
+| `UGP_WallPackageDefinition` (`DA_GP_WallPackage`) | Wall Package: DisplayName, Icon, Cost, SegmentCount=5, delivery timing. Not READY. | GPRuntime |
 | `UGP_BuildGridConfig` | Grid cell size (200 cm), pathfinding iteration cap, A* heuristic flavor | GPRuntime |
 | `UGP_SwarmThreatCurves` | `ThreatToWaveSize` / `ThreatToWaveFrequency` curves over `FerroniteThreatValue`; `ThreatPerStoredUnit` (default 1.0) | GPRuntime |
 
@@ -178,7 +180,7 @@ GP.Resource.Node
 
 GP.Command.{Move, Stop, Attack, AttackMove, Mine, Repair, Sell, Demolish, OrderDrop, CancelOrder}
 
-GP.Drop.Type.{Unit, Building, Wall, Module}
+GP.Drop.Type.{Unit, Building, WallPackage, Module}
 GP.State.PodInFlight
 
 GP.Ability.Repair
@@ -402,10 +404,12 @@ Slice 8 — Buildings + Orbital Drops + Wall + Grid (post-pivot)
   GP-S39  AGP_MainBase (BP child з Storage + drop-zone marker, no production).
   GP-S40  AGP_LogisticsHub (orbital drop only; GE_GP_UnitCap_Plus5 + storage cap bonus).
   GP-S41  AGP_DefensiveTurret free-standing 4×4 (TargetingComponent + CombatComponent).
-  GP-S42  AGP_Wall + UGP_WallConnectionComponent (8-dir auto-connect, bitfield mesh swap).
-  GP-S43  AGP_WallTurret variant (2×2 wall-mounted, lower stats DA).
-  GP-S44  AGP_DropReticle + AGP_GhostWallSegment (local drop-targeting reticle, grid-snapped).
-  GP-S45  Wall drag-build flow (Server_PreviewWallPath, Server_BuildWallPath, sequential pod cascade).
+  GP-S42A Wall Package Data + MainBase Wall Inventory (purchase, one rocket, stock 0..5, depot event, Build Wall availability). **Next implementation after GP-S41M.**
+  GP-S42B AGP_Wall + UGP_WallConnectionComponent (2×2, 8-dir bitfield, local neighbor refresh; no player drag).
+  GP-S42C Wall Drag Placement (Build Wall mode, inventory-limited preview, atomic consume + spawn).
+  GP-S43  AGP_WallTurret variant (2×2 wall-mounted, later).
+  GP-S44  AGP_DropReticle (local building-deploy reticle). Ghost wall preview lives in S42C.
+  GP-S45  **SUPERSEDED by GP-S42C** — old “sequential pod cascade / PathLength × cost” must not be implemented.
   GP-S46  UGP_GA_Repair (Worker channel ability — retained from pre-pivot for damage repair).
   GP-S46A Sell + Demolish (GP-0307): Server_SellBuilding / Server_DemolishWalls RPCs, UGP_BuildingDefinition.bSellable/SellRefundRate fields, GE_GP_RefundOrbital, demolish cursor mode UI integration.
 

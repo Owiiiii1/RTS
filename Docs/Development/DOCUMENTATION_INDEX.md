@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S40R on main tip** `d9df23143f256b2b2143fe66f5a0444f727452ae` |
+| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S41M on main tip** `5dd56cacdd7b25d4a0d3fc167b69b7a2e3a005a0` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S40R Timed Retaliation Pursuit** on `main` |
+| Last closed / merged stage | **GP-S41M Movement Shortest Yaw** on `main` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S41M_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s41m-movement-shortest-yaw` @ `3eff247c…` (**NOT MERGED**) |
+| Current stage | **GP-0305R_WALL_PACKAGE_RECONCILIATION_READY_FOR_REVIEW** on `docs/gp-0305r-wall-package-reconciliation` (**NOT MERGED**) |
 
 ---
 
@@ -49,11 +49,11 @@
 
 **Prior closed:** GP-S38D / GP-S37T / GP-S36G / GP-S35B / GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Closed on this main tip:** GP-S40R Timed Retaliation Pursuit — **MERGED** @ `d9df23143f256b2b2143fe66f5a0444f727452ae`.
+**Closed on this main tip:** GP-S41M Movement Shortest Yaw — **MERGED** @ `5dd56cacdd7b25d4a0d3fc167b69b7a2e3a005a0`.
 
-**Current:** [`Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`](Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md) — **IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE**. Do **not** merge until asked.
+**Current:** [`Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md) — **GP-0305R_WALL_PACKAGE_RECONCILIATION_READY_FOR_REVIEW**. Docs only. Do **not** start GP-S42A until this review is accepted.
 
-**Do not** start Wall gameplay / FoW / Order Menu / Spectating without explicit assignment.
+**Do not** start Wall **code** / FoW / Order Menu / Spectating without explicit assignment. Next implementation slice after this canon is **GP-S42A** (package + inventory), not old GP-S42 pod-per-segment.
 
 **Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 
@@ -76,8 +76,9 @@
 15. **GP-S37T** — Defensive Turret MVP — **DONE / MERGED** @ `c79b017…`
 16. **GP-S38D** — Unit/Building Combat Data — **DONE / MERGED** @ `f841cdee…`
 17. **GP-S39E** — Economy / Logistics Data Ownership — **MERGED / VERIFIED / CLOSED** @ `75a0e5bd…`
-18. **GP-S40R** — Timed Retaliation Pursuit — **DONE / MERGED** @ `d9df231…`
-19. **GP-S41M** — Movement Shortest Yaw — **FINALIZED / READY FOR MERGE** (NOT MERGED)
+18. **GP-S40R** — Timed Retaliation Pursuit — **DONE / MERGED**
+19. **GP-S41M** — Movement Shortest Yaw — **DONE / MERGED** @ `5dd56cac…`
+20. **GP-0305R** — Wall Package Delivery Reconciliation — **READY FOR REVIEW** (docs only, NOT MERGED)
 
 ---
 
@@ -162,4 +163,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S40R are on verified `main` tip `d9df23143f256b2b2143fe66f5a0444f727452ae`. Current stage: **GP-S41M_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s41m-movement-shortest-yaw` @ `3eff247cb155bd1faabb8466c50b1074a8315016`. See [`Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`](Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md). **NOT MERGED.** READY FOR MERGE.
+SETUP-001, DOCS-001, GP-S01…GP-S41M are on verified `main` tip `5dd56cacdd7b25d4a0d3fc167b69b7a2e3a005a0`. Current stage: **GP-0305R_WALL_PACKAGE_RECONCILIATION_READY_FOR_REVIEW** on `docs/gp-0305r-wall-package-reconciliation`. Next implementation: **GP-S42A**. **NO CODE. NOT MERGED.**

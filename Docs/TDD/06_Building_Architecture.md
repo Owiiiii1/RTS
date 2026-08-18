@@ -10,7 +10,7 @@ AGP_UnitBase
     AGP_MainBase        (Blueprint child)  // initial deployment; container storage + ship-to-orbit
     AGP_LogisticsHub    (Blueprint child)  // orbital drop; UnitCapBonus from BuildingDefinition (Hub +5)
     AGP_DefensiveTurret (Blueprint child)  // orbital drop; auto-attack
-    AGP_Wall            (Blueprint child)  // orbital drop (drag-build); see Wall System
+    AGP_Wall            (Blueprint child)  // placed from MainBase Wall inventory; see Wall System
     AGP_FerroniteDeposit (Blueprint child) // level-placed natural resource node
 ```
 
@@ -114,7 +114,8 @@ MVP buildings list:
 | `AGP_MainBase` | Initial deployment (game start, pre-placed per faction StartingBuildings) | Container storage + launch + Worker drop-off + **Unit Drop Zone** + sight |
 | `AGP_LogisticsHub` | Orbital purchase → READY → deploy | +5 MaxUnits + expanded container cap (DA-tunable) + sight |
 | `AGP_DefensiveTurret` | Orbital purchase → READY → deploy | Auto-attack SWARM/enemy у range + sight |
-| `AGP_Wall` / `AGP_WallTurret` | Orbital purchase → READY → deploy (drag later) | Perimeter defense; turret mounts on wall |
+| `AGP_Wall` | Wall Package → MainBase inventory → Build Wall | Perimeter defense |
+| `AGP_WallTurret` | Orbital purchase → READY → deploy on wall (later) | Turret mounts on wall |
 | `AGP_FerroniteDeposit` | Level-placed (natural) | Resource node, not player-controlled |
 
 ## Storage Component
@@ -617,7 +618,9 @@ virtual void EndPlay(const EEndPlayReason::Type Reason) override
 
 Reticle on client similarly grid-snaps + queries `BuildGrid` для valid/invalid feedback.
 
-## Wall System (GP-0305)
+## Wall System (GP-0305 / **GP-0305R**)
+
+> **GP-0305R (2026-08-18):** Acquisition is a **Wall Package of 5** delivered to MainBase. Placement consumes MainBase Wall inventory. Per-segment Orbital cost and pod-per-segment cascade are **removed**. See [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).
 
 `AGP_Wall : AGP_BuildingBase`. Custom logic on top of base + `UGP_WallConnectionComponent`.
 
@@ -661,26 +664,31 @@ protected:
 
 Mesh resolution per bitfield — lookup table. Implementation у `UGP_WallConnectionComponent::UpdateVisualState()`.
 
+### Wall Package + MainBase inventory
+
+`UGP_WallPackageDefinition` owns Cost, DisplayName, Icon, SegmentCount=5, delivery timing.  
+`UGP_WallSegmentInventoryComponent` on `AGP_MainBase`: replicated count **0..5**, delivery-pending flag. Arrival sets count to 5 only when stock is 0. MainBase destroy **loses** remaining stock.
+
+Presentation: `WallInventoryChanged(NewCount)` — BP depot meshes only; not gameplay state.
+
 ### Wall Drag-Build Flow
 
 ```
-Player opens Order Menu → selects Wall → enters wall-drag mode (special variant of drop-targeting):
-  Client side:
-    - On mouse-move: snap cursor to grid cell.
-    - If LMB-pressed (drag mode): record `DragStart`, draw preview.
-    - On drag: request `Server_PreviewWallPath(DragStart, CurrentCursor)` (rate-limited 4 Hz).
-       - Server runs A* on free cells with clearance OK.
-       - Returns path cell list.
-    - HUD draws ghost wall segments along path (transient AGP_GhostWallSegment actors, local-only).
-  On LMB-release:
-    - Client sends Server_BuildWallPath(DragStart, DragEnd).
-    - Server re-validates path (anti-cheat).
-    - Computes Cost = PathLength × WallSegmentCost.
-    - Validates OrbitalFerronite >= Cost.
-    - Spawns drop pods for each path cell sequentially (0.2 s stagger).
-    - Each wall lands → RegisterFootprint → triggers OnNeighborChanged on adjacent walls.
-  On RMB / Esc:
-    - Cancel mode, no spend.
+Player presses Build Wall (requires inventory > 0). Not an orbital purchase.
+  Client:
+    - Snap cursor to grid.
+    - LMB-press: DragStart, preview.
+    - Drag: Server_PreviewWallPath (rate-limited 4 Hz).
+       - A* on free cells with clearance OK.
+       - Path length clamped to current Wall inventory.
+    - Ghosts: local-only AGP_GhostWallSegment.
+  LMB-release:
+    - Server_BuildWallPath(Start, End).
+    - Re-validate path + inventory >= N + clearance/occupancy.
+    - Consume N exactly once. Spawn N AGP_Wall immediately (operational).
+    - RegisterFootprint + OnNeighborChanged. No DropPod. No Orbital spend. No READY.
+  RMB / Esc:
+    - Cancel. Consume nothing.
 ```
 
 ### Server_PreviewWallPath / Server_BuildWallPath
@@ -692,7 +700,7 @@ void Server_PreviewWallPath(FIntPoint Start, FIntPoint End);
 
 UFUNCTION(Server, Reliable, WithValidation)
 void Server_BuildWallPath(FIntPoint Start, FIntPoint End);
-// Validates spend + path, drops walls
+// Validates inventory + path, consumes N, spawns walls immediately
 ```
 
 Preview RPC unreliable (per-frame OK to drop). Build RPC reliable (one-shot, не drop).
@@ -750,7 +758,7 @@ When wall destroyed → wall-mounted turret destroyed cascade (`OnDestroyed` del
 | `GP.Building.Type.WallTurret` | Wall-mounted turret identity |
 | `GP.Capability.WallMountable` | DropDef flag — must mount on wall |
 | `GP.Capability.HostsWallMount` | Wall capability — accepts mounts |
-| `GP.Drop.Type.Wall` | Drop classification (special drag-build pipeline) |
+| `GP.Drop.Type.WallPackage` | Wall Package purchase / delivery (not READY, not per-segment) |
 
 ### Performance Budget
 
@@ -812,12 +820,11 @@ Wall drag-build must feel **responsive і satisfying** per 5-component rubric:
 - Invalid cells у path: red highlight + cursor reticle = stop-symbol.
 - "No path" case (blocked all routes): full red strikethrough across drag line + "blocked" SFX. Player знає причину.
 
-**Commit cascade (Satisfaction):**
-- LMB release on valid path: walls drop sequentially 0.2 s stagger.
-- Per-wall pod descent + small impact VFX.
-- Audio: rhythmic "thunk-thunk-thunk" as walls land.
-- Auto-connect bitfield updates після кожного wall lands → visible reshape (corner → straight → T-junction).
-- Final wall lands: soft "completion" chime.
+**Commit (Satisfaction):**
+- LMB release on valid path: N segments spawn immediately from inventory (no per-segment rocket).
+- Optional later cosmetic place animation; MVP is instant operational.
+- Auto-connect bitfield updates as each segment registers → visible reshape.
+- Soft completion cue when the path is committed.
 
 **Auto-connect visual feedback (Clarity + Fit):**
 - New wall placed adjacent to existing → connection point flashes briefly (welding-spark VFX 200 ms).
@@ -836,10 +843,10 @@ Wall drag-build must feel **responsive і satisfying** per 5-component rubric:
 - Player **never wonders** why placement rejected.
 
 **Pillar 8 Re-Check (Wall):**
-- 1-2 sentence: "Drag from A to B, walls auto-route around buildings + auto-connect 8-dir. Mount turrets on walls."
-- Fun у v1: confirmed via drag-build flow + cascade landing + auto-connect reshape.
+- 1-2 sentence: "Buy a 5-block wall package at MainBase, then drag Build Wall from that stock. Walls auto-connect 8-dir. Mount turrets later."
+- Fun у v1: confirmed via package-to-depot + drag-build from inventory + auto-connect reshape.
 - New decision: perimeter design + chokepoint placement + turret coverage planning.
-- Cheap: tilemap neighbor lookup + bounded A* + standard drop pod reuse.
+- Cheap: tilemap neighbor lookup + bounded A* + one package rocket + inventory consume.
 - Scales via content: wall variants (heavy / light) via DA post-MVP.
 
 ## Sell + Demolish System (GP-0307)
@@ -1073,4 +1080,5 @@ Passes.
 - Wall GDD spec — [`../GDD/05_Buildings`](../GDD/05_Buildings.md) §Wall.
 - Build Grid GDD — [`../GDD/05_Buildings`](../GDD/05_Buildings.md) §Build Grid System.
 - Orbital drop integration — [`14_Orbital_Delivery`](14_Orbital_Delivery.md) (validation grid-aware).
-- Wall task — [`../Development/Claude_Tasks/GP-0305_Wall.md`](../Development/Claude_Tasks/GP-0305_Wall.md).
+- Wall task — [`../Development/Claude_Tasks/GP-0305_Wall.md`](../Development/Claude_Tasks/GP-0305_Wall.md) (superseded in part).
+- Wall Package canon — [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).

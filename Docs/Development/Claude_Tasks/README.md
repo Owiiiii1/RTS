@@ -6,18 +6,18 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-18 (GP-S41M candidate). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
+> Стан станом на 2026-08-18 (GP-S41M finalized). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Movement shortest yaw. **Current: GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**.
+**Поточна фаза:** Movement shortest yaw. **Current: GP-S41M_FINALIZATION_READY_FOR_MERGE**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
 | GP-S01 … GP-S40R | **DONE / on `main` tip** `d9df23143f256b2b2143fe66f5a0444f727452ae` |
-| **GP-S41M** Movement Shortest Yaw | **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** — [`GP-S41M_Movement_Shortest_Yaw.md`](GP-S41M_Movement_Shortest_Yaw.md) — **NOT MERGED** |
+| **GP-S41M** Movement Shortest Yaw | **IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE** — [`GP-S41M_Movement_Shortest_Yaw.md`](GP-S41M_Movement_Shortest_Yaw.md) — **NOT MERGED** |
 
-**NEXT action для агента:** do **not** merge. Await operator PIE. Do **not** start Wall / FoW.
+**NEXT action для агента:** do **not** merge until asked. Do **not** start Wall / FoW.
 
 ### Drift Warning
 

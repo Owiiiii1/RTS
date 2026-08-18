@@ -39,7 +39,7 @@
 | Last closed / merged stage | **GP-S40R Timed Retaliation Pursuit** on `main` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s41m-movement-shortest-yaw` @ `5de48e90…` (**NOT MERGED**) |
+| Current stage | **GP-S41M_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s41m-movement-shortest-yaw` (**NOT MERGED**) |
 
 ---
 
@@ -51,7 +51,7 @@
 
 **Closed on this main tip:** GP-S40R Timed Retaliation Pursuit — **MERGED** @ `d9df23143f256b2b2143fe66f5a0444f727452ae`.
 
-**Current:** [`Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`](Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md) — **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. Do **not** merge. Await operator validation.
+**Current:** [`Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`](Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md) — **IMPLEMENTED / OPERATOR PASS / FINALIZED / READY FOR MERGE**. Do **not** merge until asked.
 
 **Do not** start Wall gameplay / FoW / Order Menu / Spectating without explicit assignment.
 
@@ -77,7 +77,7 @@
 16. **GP-S38D** — Unit/Building Combat Data — **DONE / MERGED** @ `f841cdee…`
 17. **GP-S39E** — Economy / Logistics Data Ownership — **MERGED / VERIFIED / CLOSED** @ `75a0e5bd…`
 18. **GP-S40R** — Timed Retaliation Pursuit — **DONE / MERGED** @ `d9df231…`
-19. **GP-S41M** — Movement Shortest Yaw — **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** (NOT MERGED)
+19. **GP-S41M** — Movement Shortest Yaw — **FINALIZED / READY FOR MERGE** (NOT MERGED)
 
 ---
 
@@ -162,4 +162,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S40R are on verified `main` tip `d9df23143f256b2b2143fe66f5a0444f727452ae`. Current stage: **GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s41m-movement-shortest-yaw` @ `5de48e900fc7ceef75bc3bc983949b94537b7ab7`. See [`Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`](Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md). **NOT MERGED. NOT FINALIZED.** Await operator PIE.
+SETUP-001, DOCS-001, GP-S01…GP-S40R are on verified `main` tip `d9df23143f256b2b2143fe66f5a0444f727452ae`. Current stage: **GP-S41M_FINALIZATION_READY_FOR_MERGE** on `feature/gp-s41m-movement-shortest-yaw`. See [`Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md`](Claude_Tasks/GP-S41M_Movement_Shortest_Yaw.md). **NOT MERGED.** READY FOR MERGE.

@@ -1,68 +1,61 @@
-# Cursor Work Report — GP-S41M Mobile Nav Generation
+# Cursor Work Report — GP-S41M Finalization
 
 ## Status
-**GP-S41M_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+**GP-S41M_FINALIZATION_READY_FOR_MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.**
 
 ## Branch / base / head
 - Branch: `feature/gp-s41m-movement-shortest-yaw`
 - Base: `origin/main` @ `d9df23143f256b2b2143fe66f5a0444f727452ae`
-- Head: `5de48e900fc7ceef75bc3bc983949b94537b7ab7`
+- Head: recorded after commit
 
-## Operator result
-Second FAIL / residual first-Move sideways leg. Shortest yaw itself is correct (long arc gone).
+## Operator PASS
+Confirmed after operator rebuilt NavMesh:
 
-Two factual first-Move projections (~90 cm to nav):
+- first Move no longer makes the initial sideways excursion
+- movement-facing rotates by the shortest yaw path
+- overall behavior is correct
 
-| Case | ActualStart XY | ProjectedStart XY | Dist | Runtime Path0 |
-| --- | --- | --- | --- | --- |
-| 1 | (-733.49, -2229.23) | (-817.84, -2265.38) | 91.8 | (-836, -2223) |
-| 2 | (-1360.45, -1121.76) | (-1449.64, -1132.91) | 89.9 | (-1463, -1026) |
+## Final root causes
+1. `TickComponent` facing used `FMath::RInterpConstantTo` on `FRotator`. That interpolator does not wrap yaw, so 350→10 could take the long path.
+2. Blueprint/SCS primitives on mobile units could stay nav-relevant and carve static NavMesh holes at authored start locations (~90 cm first-Move projection and a sideways first leg).
 
-Later repaths on the same move drop to Dist 24.9 then 0.0.
+## Final implementation
+- `ComputeShortestYawStep` via `FindDeltaAngleDegrees` + `NormalizeAxis`; Tick facing uses `RotationSpeed * DeltaTime`. Existing movement Tick only.
+- `AGP_MobileUnit` forces actor + all primitives (including Blueprint/SCS) off NavMesh generation. Buildings keep `NavigationObstacle`.
+- `StripProjectedStartAnchor` removed. First-Move uses normal Recast semantics; `AcceptanceRadius` advances past a coincident start point.
 
-## Hypothesis
-**Confirmed.**
-
-`APawn::bCanAffectNavigationGeneration` defaults false, but the engine documents that **components can still affect generation independently**. `UpdateNavigationRelevance()` is empty on `APawn`. Authored BP meshes on `BP_SalvageWalker` / `BP_Worker` were only warned (`AuthoredNavigationWarnings`), not disabled.
-
-Native capsule is already `SetCanEverAffectNavigation(false)`. Blueprint/SCS collision meshes with Pawn-block remain nav-relevant and carve a hole at the authored location during **editor static bake**. First Move projects to the hole rim (~90 cm). After the unit leaves that footprint, later projections match ActualStart.
-
-Runtime Recast in `-game` is `Static` (`SupportsRuntimeGeneration=false`), so already-baked tiles do not update from newly spawned actors. That matches “first Move only” after PIE.
-
-## Exact production correction
-On `AGP_MobileUnit` only (Worker / SalvageWalker / Unit). Not `AGP_UnitBase` / buildings.
-
-- `ApplyMobileNavigationGenerationPolicy` → `SetCanAffectNavigationGeneration(false, true)`
-- Override `UpdateNavigationRelevance` to force **every** primitive `SetCanEverAffectNavigation(false)` (native + Blueprint/SCS)
-- Called from `OnConstruction`, `PostInitializeComponents`, `BeginPlay` so editor bake and PIE both see the policy
-
-Buildings keep `NavigationObstacle` nav-relevant. Untouched.
-
-**Operator:** rebuild NavMesh on playable maps once so old authored-unit holes leave the static Recast data. This slice does not modify maps.
-
-## StripProjectedStartAnchor
-**Removed.** It was compensation for the self-hole. Recast start == query start is skipped by `AcceptanceRadius` when Actual ≈ Projected. Stripping it would skip a real off-nav entry waypoint. Tick still advances past a coincident Path0.
-
-## Shortest-yaw helper
-**Retained.** `ComputeShortestYawStep` / `FindDeltaAngleDegrees` / `NormalizeAxis`.
-
-## Tests
+## Targeted tests
 | Command | Result |
 | --- | --- |
 | `gp.Movement.RunShortestYawContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Movement.RunRTSMovementReconciliationContractTest` | `Complete Failures=0 Cancelled=false` |
 
-## Candidate build
-`GPEditor Win64 Development` + UHT **PASS**.  
-`GP` Win64 Development / Shipping: **NOT RUN**.
+Full regression: **NOT RUN**.
+
+## Final builds
+| Target | Result |
+| --- | --- |
+| `GPEditor Win64 Development` + UHT | **PASS** |
+| `GP Win64 Development` | **PASS** |
+| `GP Win64 Shipping` | **PASS** |
+
+## Final audit
+- Shortest signed yaw: 350→10 and 10→350 take the short direction; ±180 boundary works
+- Rotation clamped to `RotationSpeed * DeltaTime`
+- No new permanent Tick
+- Path / serial / result semantics unchanged
+- Mobile units cannot affect NavMesh generation
+- Blueprint/SCS primitives forced non-navigation-relevant
+- Buildings remain navigation obstacles
+- `StripProjectedStartAnchor` removed
+- First-Move path uses normal Recast semantics
+- No combat / retaliation changes
+- Operator rebuilt NavMesh manually; map/NavMesh **not committed**
 
 ## Protected assets
 Untouched / not committed (config, maps, BPs, DAs, VFX).
 
-## Unrelated error (recorded only)
-`GP BuildingDefinitionLoadFailed` MainBase / `DA_GP_Buildings_MainBase` `ResolveFailedUsingFallback`. Not fixed.
-
 ## Merge
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.** READY FOR MERGE.

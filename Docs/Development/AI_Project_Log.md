@@ -4,7 +4,7 @@
 
 Status: **GP-S37T_FINALIZATION_READY_FOR_MERGE**
 
-- Branch: `feature/gp-s37t-defensive-turret-mvp` (base verified `origin/main` @ `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`)
+- Branch: `feature/gp-s37t-defensive-turret-mvp` (base verified `origin/main` @ `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`, finalization `7ce40f6de4f420616dddd911775ad853a094b670`)
 - Operator PASS: authored `BP_GP_DefensiveTurret` Purchase / READY / Deploy / DropPod / BuildGrid / auto-detect / fire / damage
 - Combat reuse: `UGP_UnitCommandComponent` idle AutoAcquire + `GPCombatLOS` + existing damage GE. Turret idle may target valid enemy units **and** buildings. Salvage Walker idle/AttackMove remain unit-only
 - Contract isolation: pre-placed arena turrets are neutralized for headless contracts (not committed)

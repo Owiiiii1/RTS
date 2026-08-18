@@ -11,7 +11,7 @@ Status: **GP-S37T_FINALIZATION_READY_FOR_MERGE**
 `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`
 
 ## Feature head SHA
-Pending this finalization commit (recorded in the follow-up SHA commit).
+`7ce40f6de4f420616dddd911775ad853a094b670`
 
 ## Operator PASS
 Operator confirmed the main gameplay path:

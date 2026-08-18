@@ -12,7 +12,8 @@ Post-GP-S36G (BuildGrid is on verified `main` @ `9ace159714b5eca0f79e4985fc2496d
 `feature/gp-s37t-defensive-turret-mvp`  
 Base: `origin/main` @ `9ace159714b5eca0f79e4985fc2496d34cbb7cc3`  
 Implementation: `7aa0565f9e10e9fe447fe9898835eba28ddc9b81`  
-Building-target correction: `b88926acc6415abc8efe07729ac48837ce8a5fae`
+Building-target correction: `b88926acc6415abc8efe07729ac48837ce8a5fae`  
+Finalization: `7ce40f6de4f420616dddd911775ad853a094b670`
 
 ## Goal
 Add the first functional combat building after Logistics Hub: Purchase → READY → Deploy → DropPod → operational `AGP_DefensiveTurret` that auto-acquires and damages enemies through the existing combat pipeline.

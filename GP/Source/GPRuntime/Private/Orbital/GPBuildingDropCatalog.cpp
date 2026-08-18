@@ -10,6 +10,8 @@
 #include "Orbital/GPOrbitalDropDefinition.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "Tags/GPGameplayTags.h"
+#include "Units/GPUnitDefinition.h"
+#include "Units/GPUnitDefinitionCatalog.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace GPBuildingDropCatalogPrivate
@@ -90,6 +92,7 @@ void UGP_BuildingDropCatalog::EnsureNativeCatalog()
 		FIntPoint(2, 2),
 		400.0f);
 	TurretBuilding->SpawnedClass = AGP_DefensiveTurret::StaticClass();
+	TurretBuilding->UnitDefinition = UGP_UnitDefinitionCatalog::Get().GetDefensiveTurretDefinition();
 	UGP_BuildingDefinition* WallBuilding = CreateNativeBuilding(
 		FName(TEXT("DA_GP_Building_Wall")),
 		NSLOCTEXT("GPBuildingDropCatalog", "Wall", "Wall"),

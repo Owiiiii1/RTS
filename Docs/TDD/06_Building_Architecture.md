@@ -42,7 +42,8 @@ Inherits from `AGP_UnitBase`. Plus:
 
 | Owner | Facts |
 | --- | --- |
-| `UGP_BuildingDefinition` | `DisplayName`, soft `Icon`, `BuildingTags`, soft `SpawnedClass`, `MaxHealth`, `FootprintCells` |
+| `UGP_BuildingDefinition` | `DisplayName`, soft `Icon`, `BuildingTags`, soft `SpawnedClass`, `FootprintCells`, soft `UnitDefinition`. `MaxHealth` is compatibility fallback only. |
+| `UGP_UnitDefinition` | Canonical initial MaxHealth / combat / sight / facing (shared with units). Runtime remains GAS. |
 | `UGP_OrbitalDropDefinition` | Acquisition `Cost` (OrbitalFerronite), `DropTags`, soft ref to BuildingDefinition. READY key = this asset's `FPrimaryAssetId` |
 
 Display-name SoT for HUD/acquisition rows: `BuildingDefinition.DisplayName` (DropDef resolves via `GetAcquisitionDisplayName()`). Do not put `Cost` on BuildingDefinition.
@@ -66,8 +67,11 @@ public:
     UPROPERTY(EditAnywhere, Category = "GP|Payload")
     TSoftClassPtr<AGP_BuildingBase> SpawnedClass;     // async-loaded by AssetManager; already-loaded resolve only
 
-    UPROPERTY(EditAnywhere, Category = "GP|Vitals")
-    float MaxHealth = 500.f;
+    UPROPERTY(EditAnywhere, Category = "GP|Definition")
+    TSoftObjectPtr<UGP_UnitDefinition> UnitDefinition; // canonical vitals/combat; already-loaded only
+
+    UPROPERTY(EditAnywhere, Category = "GP|Vitals|Fallback")
+    float MaxHealth = 500.f;                          // compatibility only; ResolveCanonicalMaxHealth() prefers UnitDefinition
 
     UPROPERTY(EditAnywhere, Category = "GP|BuildGrid")
     FIntPoint FootprintCells = FIntPoint(1, 1);       // consumed by GP-S36G BuildGrid
@@ -412,12 +416,12 @@ Reuses `AGP_BuildingBase` standard:
 
 - Source: orbital drop only (no local build path). Native 2×2 `PlacementFootprintBounds` (400×400 cm). Yaw-0 orbital reservation.
 - Auto-attack reuses production combat: `UGP_UnitCommandComponent` idle AutoAcquire timer + `GPCombatLOS` + `UGP_GE_Damage_Basic`. There is no `UGP_CombatComponent`.
-- Combat stats live on `AGP_UnitBase` Default* → `UGP_UnitAttributeSet` (same owner as Salvage Walker). MVP CDO: range 600, damage 20, cooldown 1.0, MaxHealth 400.
+- Combat stats: `UGP_UnitDefinition` initializes GAS / command tuning when assigned. Empty `UnitDefinitionAsset` keeps `AGP_UnitBase` Default* fallback. MVP baseline: range 600, damage 20, cooldown 1.0, MaxHealth 400, sight 600. BuildingDefinition.MaxHealth is compatibility-only; canonical MaxHealth is `UnitDefinition.MaxHealth`.
 - Target set: Defensive Turret idle AutoAcquire may target valid enemy units and buildings (`ValidateAttackTarget`). Legacy Salvage Walker idle/AttackMove still excludes buildings.
 - Stationary: no Move / Attack-Move. AttackMove eligibility remains Salvage Walker only.
 - Tags: `GP.Unit.Type.Building`, `GP.Building.Type.DefensiveTurret`, Selectable, Inspectable, `Selection.Type.Building`.
 - FoW vision (`GP.Capability.GrantsVision`), sell/demolish, Wall-mounted variant: **deferred**.
-- Combat/stat designer source remains fragmented Default* + command-component sight fields (planned **GP-S38D**, not in S37T).
+- Combat/stat designer source is `UGP_UnitDefinition` (GP-S38D). Default* / command CDO remain empty-ref fallback.
 - No damage retaliation / pursuit (planned **GP-S39R**, not in S37T).
 
 ## Storage Component (Containers)

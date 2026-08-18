@@ -6,18 +6,18 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-18 (GP-S37T finalization). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
+> Стан станом на 2026-08-18 (GP-S38D implementation). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md).
 
-**Поточна фаза:** Defensive Turret MVP. **Current: GP-S37T_FINALIZATION_READY_FOR_MERGE**.
+**Поточна фаза:** Unit/Building Combat Data. **Current: GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
-| GP-S01 … GP-S36G | **DONE / on `main` tip** `9ace159714b5eca0f79e4985fc2496d34cbb7cc3` |
-| **GP-S37T** Defensive Turret MVP | **FINALIZATION_READY_FOR_MERGE** — [`GP-S37T_Defensive_Turret_MVP.md`](GP-S37T_Defensive_Turret_MVP.md) — **NOT MERGED** |
+| GP-S01 … GP-S37T | **DONE / on `main` tip** `c79b017a45b1560e025cedfe262b0afde3c9cb6a` |
+| **GP-S38D** Unit/Building Combat Data | **IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** — [`GP-S38D_Unit_Building_Combat_Data.md`](GP-S38D_Unit_Building_Combat_Data.md) — **NOT MERGED / NOT FINALIZED** |
 
-**NEXT action для агента:** do **not** merge. Await human merge. Do **not** start Wall / FoW / GP-S38D combat-data rewrite / GP-S39R retaliation.
+**NEXT action для агента:** do **not** merge. Await operator PIE. Do **not** start Wall / FoW / GP-S39R retaliation.
 
 ### Drift Warning
 

@@ -1,5 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-18 — GP-S38D Unit/Building Combat Data (implementation candidate)
+
+Status: **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-s38d-unit-building-combat-data` (base verified `origin/main` @ `c79b017a45b1560e025cedfe262b0afde3c9cb6a`)
+- Canonical designer source: `UGP_UnitDefinition` (`PrimaryAssetType = GPUnitDefinition`). One bounded DA — no Combat/Movement/Vision profile hierarchy
+- GAS remains runtime combat state. Definition initializes base values only. Soft `UnitDefinitionAsset` on `AGP_UnitBase`; already-loaded resolver; no `LoadSynchronous`
+- Precedence: loaded UnitDefinition → existing actor/component defaults. Empty ref keeps authored BP compatibility
+- `UGP_BuildingDefinition.UnitDefinition` + `ResolveCanonicalMaxHealth()`. BuildingDef.MaxHealth is compatibility-only
+- Native catalog: Worker / Salvage Walker / Defensive Turret (current C++ values; no rebalance; no binary DA)
+- `RetaliationPursuitSeconds` default 5.0 is data-only. No GP-S39R behavior
+- Contracts Failures=0 including `gp.Units.RunUnitDefinitionContractTest` + listed regressions; GPEditor Win64 Development + UHT **PASS**
+- **NOT MERGED. NOT FINALIZED.** Await operator PIE. Do not start Wall / FoW / GP-S39R
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-18 — GP-S37T Defensive Turret MVP (finalization)
 
 Status: **GP-S37T_FINALIZATION_READY_FOR_MERGE**

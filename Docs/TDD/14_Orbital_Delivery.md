@@ -106,7 +106,7 @@ Multi-unit: deterministic server offsets around landing point; stable ordering; 
 
 **Building DropDef (`UGP_OrbitalDropDefinition`):** `Cost` (OrbitalFerronite) + `DropTags` + soft `BuildingDefinition`. Purchase cost only (deploy free of Orbital). Does **not** own spawned class or footprint.
 
-**Building Definition (`UGP_BuildingDefinition`):** intrinsic `SpawnedClass`, `FootprintCells`, `MaxHealth`, identity. GP-S36G BuildGrid reads `FootprintCells` from here.
+**Building Definition (`UGP_BuildingDefinition`):** intrinsic `SpawnedClass`, `FootprintCells`, identity, soft `UnitDefinition`. `MaxHealth` is compatibility fallback; canonical MaxHealth is `UnitDefinition.MaxHealth` (GP-S38D). GP-S36G BuildGrid reads `FootprintCells` from here.
 
 Single-payload DropDef for buildings; multi-payload carried as **manifest on the order**, not N separate pods unless future design says otherwise. MVP: **one pod per confirmed unit order**; **one pod per building deploy**.
 

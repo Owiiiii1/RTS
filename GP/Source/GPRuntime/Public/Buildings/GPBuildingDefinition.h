@@ -8,6 +8,7 @@
 #include "GPBuildingDefinition.generated.h"
 
 class AGP_BuildingBase;
+class UGP_UnitDefinition;
 class UTexture2D;
 
 /**
@@ -35,7 +36,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Payload", meta = (AllowAbstract = "false"))
 	TSoftClassPtr<AGP_BuildingBase> SpawnedClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Vitals", meta = (ClampMin = "1.0"))
+	/** Soft UnitDefinition for canonical vitals/combat. Already-loaded only. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Definition")
+	TSoftObjectPtr<UGP_UnitDefinition> UnitDefinition;
+
+	/**
+	 * Compatibility fallback MaxHealth when UnitDefinition is empty.
+	 * Canonical after GP-S38D: UnitDefinition.MaxHealth via ResolveCanonicalMaxHealth().
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Vitals|Fallback", meta = (ClampMin = "1.0"))
 	float MaxHealth = 500.0f;
 
 	/**
@@ -55,4 +64,10 @@ public:
 
 	/** Already-loaded spawned class only. Does not LoadObject / LoadSynchronous. */
 	TSubclassOf<AGP_BuildingBase> ResolveLoadedSpawnedClass() const;
+
+	/** Already-loaded UnitDefinition only. Does not LoadSynchronous. */
+	const UGP_UnitDefinition* ResolveLoadedUnitDefinition() const;
+
+	/** UnitDefinition.MaxHealth when loaded; otherwise compatibility MaxHealth. */
+	float ResolveCanonicalMaxHealth() const;
 };

@@ -1,68 +1,94 @@
 # Cursor Work Report
 
-Status: **GP-S37T_FINALIZATION_READY_FOR_MERGE**
+Status: **GP-S38D_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
 
-**NOT MERGED.**
+**NOT MERGED. NOT FINALIZED.**
 
 ## Branch
-`feature/gp-s37t-defensive-turret-mvp`
+`feature/gp-s38d-unit-building-combat-data`
 
 ## Base main SHA
-`9ace159714b5eca0f79e4985fc2496d34cbb7cc3`
+`c79b017a45b1560e025cedfe262b0afde3c9cb6a`
 
 ## Feature head SHA
-`7ce40f6de4f420616dddd911775ad853a094b670`
+Pending implementation commit on this branch.
 
-## Operator PASS
-Operator confirmed the main gameplay path:
+## Factual old stat ownership (pre-S38D)
 
-- `BP_GP_DefensiveTurret` authored child created operator-side
-- Defensive Turret purchases
-- READY / Deploy work
-- DropPod lands the turret
-- authored BP payload works
-- turret appears on BuildGrid
-- turret auto-detects enemies
-- turret fires
-- damage applies
+| Stat | Owner |
+| --- | --- |
+| MaxHealth / Health / Damage / Armor / DamageResistance / AttackCooldown / AttackRange | `AGP_UnitBase` `Default*` → `InitializeCombatAttributesIfNeeded()` → `UGP_UnitAttributeSet` |
+| SightRange / AutoAcquireScanInterval / AttackFacingRotationSpeed | `UGP_UnitCommandComponent` CDO / derived ctor |
+| MoveSpeed | `UGP_MovementComponent` CDO (`600`) or `AGP_SalvageWalker` ctor (`250`) |
+| Building catalog MaxHealth | `UGP_BuildingDefinition.MaxHealth` metadata only — not applied to spawned actors |
+| CapabilityTags | `AGP_UnitBase` class defaults (left in place) |
+| Acquisition cost / transport slots | orbital drop / unit delivery layer |
 
-Contracts already proved: enemy building targets, friendly reject, LOS, cooldown, health/death, grid release, legacy Salvage Walker target semantics unchanged.
+Old TDD UnitDefinition schemas (Icon / Mesh / Cost / AllowedCommands / GrantedAbilities) did **not** match disk.
 
-## Final Defensive Turret architecture
-`AGP_DefensiveTurret : AGP_BuildingBase` is thin identity/glue. Native 2×2 `PlacementFootprintBounds` (400×400 cm). Tags: Selectable, Inspectable, `Selection.Type.Building`, `GP.Unit.Type.Building`, `GP.Building.Type.DefensiveTurret`. Stationary: no Move / AttackMove. Native `CombatOrigin` scene anchor.
+## UnitDefinition schema
 
-MVP CDO combat: range 600, damage 20, cooldown 1.0, MaxHealth 400. AutoAcquire sight = 600 (equal fire range).
+`UGP_UnitDefinition : UPrimaryDataAsset`, `PrimaryAssetType = GPUnitDefinition`.
 
-## Combat reuse
-There is **no `UGP_CombatComponent`**. Production combat stays on `UGP_UnitCommandComponent`:
+- Identity: `DisplayName` only
+- Vitals: `MaxHealth`, `InitialHealth`, `Armor`, `DamageResistance`
+- Combat: `Damage`, `AttackRangeCm`, `AttackCooldownSeconds`, `SightRangeCm`, `AutoAcquireScanIntervalSeconds`, `AttackFacingRotationSpeedDegreesPerSecond`
+- Movement: `MoveSpeedCmPerSecond` only
+- Behavior: `RetaliationPursuitSeconds` (default 5.0, ClampMin 0, `GP|Behavior|Retaliation`)
 
-- Idle AutoAcquire repeating timer
-- Attack FSM + `ApplyDamageFromUnit` → `UGP_GE_Damage_Basic` → `UGP_UnitAttributeSet`
-- LOS via `GPCombatLOS` (ECC_Visibility, 3-pair traces; Eye can use `CombatOrigin`)
+No CombatProfile / MovementProfile / VisionProfile hierarchy.
 
-## Units + buildings target policy
-`EGP_AutoAcquireMode` + `IsEligibleAutoAcquireTarget` (not a generic targeting framework):
+## Canonical ownership after migration
 
-| Mode | Owner | Building candidates |
-| --- | --- | --- |
-| `DefensiveTurretIdle` | `GP.Building.Type.DefensiveTurret` | Allowed |
-| `LegacyUnitIdle` | Salvage Walker idle | Excluded |
-| `AttackMove` | Salvage Walker AttackMove | Excluded |
+| Concern | Canonical |
+| --- | --- |
+| Initial/base vitals + combat + sight + facing + MoveSpeed + RetaliationPursuitSeconds | `UGP_UnitDefinition` |
+| Runtime Health / Damage / Armor / Resistance / Cooldown / Range | `UGP_UnitAttributeSet` (GAS). Definition initializes base values only. |
+| Sight / scan / facing at runtime | `UGP_UnitCommandComponent` (initialized from definition when loaded) |
+| MoveSpeed at runtime | `UGP_MovementComponent` for mobile units when `MoveSpeedCmPerSecond > 0` |
+| RetaliationPursuitSeconds | readable, unused until GP-S39R |
+| Building identity / icon / tags / SpawnedClass / footprint | `UGP_BuildingDefinition` |
+| Acquisition cost / DropTags / READY | `UGP_OrbitalDropDefinition` |
+| Unit delivery cost / slots / manifest | orbital unit delivery layer |
 
-Still `ValidateAttackTarget`: same team / dead / self / invalid rejected.
+`AGP_UnitBase` soft ref: `TSoftObjectPtr<UGP_UnitDefinition> UnitDefinitionAsset`. Resolver is already-loaded only (`Get()` / `ResolveObject()`). No `LoadSynchronous`. No replicated CurrentDamage / CurrentRange / DataAsset.
 
-## Salvage Walker legacy unchanged
-S30R idle AutoAcquire and S32A AttackMove remain unit-only. Contracts assert an in-range enemy building is not acquired and is not damaged.
+## BuildingDefinition relationship
 
-## Orbital Purchase / READY / Deploy
-Unchanged GP-S35B/S36G authority: spend Orbital once on Purchase (READY+1); Deploy consumes READY once, no second spend; reject/cancel preserve READY. Authored payload seam: `UGP_BuildingDefinition.SpawnedClass` + optional settings `DefensiveTurretPayloadClass`.
+`UGP_BuildingDefinition` now has soft `UnitDefinition`. `MaxHealth` is **compatibility fallback** (`GP|Vitals|Fallback`). Canonical MaxHealth = `UnitDefinition.MaxHealth` via `ResolveCanonicalMaxHealth()`. Native turret building links `DA_GP_Unit_DefensiveTurret`. BuildingDef.MaxHealth never outranks a loaded UnitDefinition.
 
-## BuildGrid
-Native 2×2 occupancy. Death / destroy releases cells. Yaw-0 orbital reservation unchanged.
+## Fallback precedence
+
+1. Resolved loaded `UGP_UnitDefinition`
+2. Existing actor / component defaults (`Default*`, command CDO, movement CDO / derived ctor)
+
+Empty `UnitDefinitionAsset` does not break authored BPs. Native catalog is **not** auto-applied by class.
+
+## Worker values (preserved)
+
+MaxHealth/Health 100, Damage 25, Armor 0, Resistance 0, AttackRange 250, AttackCooldown 1.0, Sight 900, Scan 0.35, Facing 360, MoveSpeed **600** (live movement CDO; TDD 350 was stale), RetaliationPursuitSeconds 5.0.
+
+## Salvage Walker values (preserved)
+
+MaxHealth/Health 200, Damage 20, Armor 0, Resistance 0, AttackRange 600, AttackCooldown 1.0, Sight 900, Scan 0.35, Facing 360, MoveSpeed 250, RetaliationPursuitSeconds 5.0.
+
+## Defensive Turret values (preserved)
+
+MaxHealth/Health 400, Damage 20, Armor 0, Resistance 0, AttackRange 600, AttackCooldown 1.0, Sight 600, Scan 0.35, Facing 360, MoveSpeed 0 (no movement write), RetaliationPursuitSeconds 5.0.
+
+## Movement ownership decision
+
+Unit-type **MoveSpeed** is on UnitDefinition. NavProjectionExtent, RepathInterval, BlockedFail, Separation, AcceptanceRadius stay on `UGP_MovementComponent` (algorithm / system tuning).
+
+## RetaliationPursuitSeconds
+
+DATA ONLY. Default 5.0. `0` = disabled. `>0` = max pursuit duration after reacting to attacker. No damage reaction, no attacker callback, no pursuit timer, no new command state. GP-S39R owns behavior.
 
 ## Exact tests
+
 | Command | Result |
 | --- | --- |
+| `gp.Units.RunUnitDefinitionContractTest` | Complete Failures=0 |
 | `gp.Building.RunDefensiveTurretContractTest` | Complete Failures=0 |
 | `gp.Combat.RunAutoAcquireContractTest` | Complete Failures=0 |
 | `gp.Combat.RunAttackMoveContractTest` | Complete Failures=0 |
@@ -75,69 +101,51 @@ Native 2×2 occupancy. Death / destroy releases cells. Yaw-0 orbital reservation
 | `gp.Resource.RunContainerLaunchContractTest` | Complete Failures=0 |
 | `gp.Match.RunWinLoseContractTest` | Complete Failures=0 |
 | `gp.Resource.RunS28RegressionSuite` | GP-S28 RegressionSuite Complete Failures=0 |
+| `gp.Movement.RunRTSMovementReconciliationContractTest` | Complete Failures=0 |
 
 All: **Failures=0**.
-
-Headless contracts neutralize pre-placed arena turrets (operator `BP_GP_DefensiveTurret` on the local map is not committed).
 
 ## Builds
 | Target | Result |
 | --- | --- |
 | GPEditor Win64 Development + UHT | **PASS** |
-| GP Win64 Development | **PASS** |
-| GP Win64 Shipping | **PASS** |
-
-## Follow-up GP-S38D Unit/Building Combat Data
-Record only. Not implemented.
-
-Current factual ownership is fragmented:
-
-- `AGP_UnitBase` EditDefaultsOnly: `DefaultMaxHealth`, `DefaultHealth`, `DefaultDamage`, `DefaultArmor`, `DefaultDamageResistance`, `DefaultAttackCooldown`, `DefaultAttackRange`
-- `UGP_UnitCommandComponent`: `AutoAcquireScanIntervalSeconds`, `AutoAcquireSightRangeCm`, `AttackFacingRotationSpeedDegreesPerSecond`
-
-`AGP_UnitBase` already documents future UnitDefinition as the canonical source. Goal: central designer-facing per-type combat/stat configuration.
-
-## Follow-up GP-S39R Timed Retaliation Pursuit
-Record only. Not implemented.
-
-Factual seam: `AGP_UnitBase::ApplyDamageFromUnit(SourceUnit, ...)` already knows the attacker. Desired later: mobile combat unit hit by an unseen attacker may pursue for a configurable limited time (proposed 5s). Visible/valid attacker continues normal Attack FSM. Timeout without engagement → Idle. Manual command overrides. No infinite pursuit.
+| GP Win64 Development | not run (candidate) |
+| GP Win64 Shipping | not run (candidate) |
 
 ## Exact changed files
-Diff vs `9ace159714b5eca0f79e4985fc2496d34cbb7cc3` plus this finalization:
+Diff vs `c79b017a45b1560e025cedfe262b0afde3c9cb6a`:
 
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Claude_Tasks/GP-S37T_Defensive_Turret_MVP.md`
+- `Docs/Development/Claude_Tasks/GP-S38D_Unit_Building_Combat_Data.md`
 - `Docs/Development/Claude_Tasks/README.md`
 - `Docs/Development/Cursor_Work_Report.md`
 - `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/TDD/05_Unit_Architecture.md`
 - `Docs/TDD/06_Building_Architecture.md`
+- `Docs/TDD/10_Data_Assets.md`
 - `Docs/TDD/14_Orbital_Delivery.md`
-- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/GPDefensiveTurret.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/Grid/GPBuildGridSubsystem.cpp`
-- `GP/Source/GPRuntime/Private/Combat/GPCombatLOS.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPCombatAttackMoveContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPCombatAutoAcquireContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPContractTestCoordinator.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPDefensiveTurretContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Buildings/GPBuildingDefinition.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPUnitDefinitionContractTest.cpp`
+- `GP/Source/GPRuntime/Private/GPRuntime.cpp`
 - `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropCatalog.cpp`
-- `GP/Source/GPRuntime/Private/Settings/GPOrbitalDeliverySettings.cpp`
-- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
-- `GP/Source/GPRuntime/Public/Buildings/GPDefensiveTurret.h`
-- `GP/Source/GPRuntime/Public/Buildings/GPDefensiveTurretContractTest.h`
-- `GP/Source/GPRuntime/Public/Combat/GPCombatAttackMoveContractTest.h`
-- `GP/Source/GPRuntime/Public/Combat/GPCombatAutoAcquireContractTest.h`
-- `GP/Source/GPRuntime/Public/Settings/GPOrbitalDeliverySettings.h`
-- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPUnitDefinition.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPUnitDefinitionCatalog.cpp`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `GP/Source/GPRuntime/Public/Units/GPUnitDefinition.h`
+- `GP/Source/GPRuntime/Public/Units/GPUnitDefinitionCatalog.h`
+- `GP/Source/GPRuntime/Public/Units/GPUnitDefinitionContractTest.h`
 
 ## Protected assets untouched
 Confirmed **not** committed:
 
-- `DefaultEngine.ini`
-- `DefaultGame.ini`
-- `L_PrototypeArena.umap`
-- `BP_ResourceNode_AuthoredExample.uasset`
-- `BP_GP_DefensiveTurret` operator asset
-- untracked operator VFX / Blueprint / Materials / Tools folders
+- `GP/Config/DefaultEngine.ini`
+- `GP/Config/DefaultGame.ini`
+- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
+- `GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`
+- `BP_GP_DefensiveTurret` and other operator Blueprint/material/VFX assets
+- untracked `GP/Content/Basic_VFX/`, `GrimProtocol/Blueprint/`, `Materials/`, `Mixed_Magic_VFX_Pack/`, `RocketThrusterExhaustFX/`, `Tools/`
 
 **NOT MERGED.**
+**NOT FINALIZED.**

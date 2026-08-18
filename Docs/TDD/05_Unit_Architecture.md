@@ -43,7 +43,7 @@ Player `MaxUnits` / `CurrentUnits` live on `UGP_PlayerAttributeSet` (OwnerOnly).
 - `UGP_AbilitySystemComponent` — unit-scoped ASC (project Mixed replication mode).
 - `UGP_UnitAttributeSet` — owned alongside ASC.
 - `TeamId` (replicated) + `CapabilityTags` (class defaults / interim selection facts).
-- Interim native combat defaults (`DefaultHealth`, `DefaultDamage`, `DefaultAttackRange`, …) until full UnitDefinition apply pipeline.
+- Compatibility fallback combat defaults (`DefaultMaxHealth`, `DefaultHealth`, `DefaultDamage`, `DefaultArmor`, `DefaultDamageResistance`, `DefaultAttackCooldown`, `DefaultAttackRange`) used only when `UnitDefinitionAsset` is empty.
 
 **Not current:** UnitBase does **not** create a Sphere root and does **not** own StaticMesh/SkeletalMesh presentation directly. Capsule roots and visual ownership live on concrete children (`AGP_Unit`, `AGP_Worker`, buildings).
 
@@ -53,7 +53,7 @@ Player `MaxUnits` / `CurrentUnits` live on `UGP_PlayerAttributeSet` (OwnerOnly).
 - Death flag / related death presentation fields on UnitBase.
 - CapabilityTags are EditDefaultsOnly class facts (not a live replicated UnitTags snapshot from UnitDefinition in current code).
 
-> Historical note: soft `UnitDefinitionAsset` / full definition apply remains the intended DataAsset direction; current interim defaults are native on UnitBase.
+> GP-S38D: soft `UnitDefinitionAsset` (`TSoftObjectPtr<UGP_UnitDefinition>`) is the designer-facing initial/base source. Resolver is already-loaded only (no `LoadSynchronous`). Empty ref keeps the `Default*` / component CDO fallback.
 
 ### Lifecycle (simplified current)
 
@@ -63,7 +63,8 @@ Server spawn concrete AGP_UnitBase child
    v
 BeginPlay
    - Init ASC ActorInfo
-   - Initialize combat attributes from interim defaults (authority)
+   - Apply loaded UnitDefinition to command/movement tuning (if present)
+   - Initialize combat attributes from UnitDefinition, else Default* (authority)
    - Presentation components bind / attach as implemented per component
 ```
 
@@ -76,6 +77,18 @@ FORCEINLINE int32 AGP_UnitBase::GetTeamId() const { return TeamId; }
 
 ## UGP_UnitDefinition (Data Asset)
 
+**GP-S38D ownership (canonical):** `UGP_UnitDefinition` is the intrinsic unit/building **gameplay stat** definition. It initializes GAS base values and command/movement tuning. It does **not** replace runtime GAS state.
+
+Do **not** confuse with:
+
+| Asset | Owns |
+| --- | --- |
+| `UGP_UnitDefinition` | Intrinsic vitals / combat / sight / facing / MoveSpeed / RetaliationPursuitSeconds |
+| `UGP_BuildingDefinition` | Building identity / icon / tags / `SpawnedClass` / BuildGrid footprint + soft ref to UnitDefinition |
+| `UGP_OrbitalDropDefinition` / unit delivery | Acquisition cost, DropTags, transport slots, manifest |
+
+CapabilityTags stay on `AGP_UnitBase` (not migrated in S38D). Nav/repath/separation stay on `UGP_MovementComponent`.
+
 ```cpp
 UCLASS(BlueprintType)
 class GPRUNTIME_API UGP_UnitDefinition : public UPrimaryDataAsset
@@ -86,61 +99,31 @@ public:
     UPROPERTY(EditAnywhere, Category = "GP|Identity")
     FText DisplayName;
 
-    UPROPERTY(EditAnywhere, Category = "GP|Identity")
-    TSoftObjectPtr<UTexture2D> Icon;
-
-    UPROPERTY(EditAnywhere, Category = "GP|Identity")
-    TSoftObjectPtr<UStaticMesh> Mesh;            // або SkeletalMesh — фіналізується per-unit
-
-    UPROPERTY(EditAnywhere, Category = "GP|Identity")
-    FGameplayTagContainer UnitTags;
-
-    UPROPERTY(EditAnywhere, Category = "GP|Economy")
-    int32 Cost = 0;                              // OrbitalFerronite cost of the drop order
-
-    UPROPERTY(EditAnywhere, Category = "GP|Economy")
-    float DeliveryTime = 0.f;                    // orbital drop descent/telegraph time (no local production)
-    int32 TransportSlotCost = 1;                 // pod packing cost (Worker 1 / Salvage Walker 2 MVP examples; DA-driven)
-    int32 DropCost = 0;                          // OrbitalFerronite per unit in manifest (DA-driven)
+    UPROPERTY(EditAnywhere, Category = "GP|Vitals")
+    float MaxHealth = 100.f;
+    float InitialHealth = 100.f;
+    float Armor = 0.f;
+    float DamageResistance = 0.f;
 
     UPROPERTY(EditAnywhere, Category = "GP|Combat")
     float Damage = 0.f;
-
-    UPROPERTY(EditAnywhere, Category = "GP|Combat")
-    float AttackRange = 0.f;
-
-    UPROPERTY(EditAnywhere, Category = "GP|Combat")
-    float AttackSpeed = 0.f;
+    float AttackRangeCm = 250.f;
+    float AttackCooldownSeconds = 1.f;
+    float SightRangeCm = 900.f;
+    float AutoAcquireScanIntervalSeconds = 0.35f;
+    float AttackFacingRotationSpeedDegreesPerSecond = 360.f;
 
     UPROPERTY(EditAnywhere, Category = "GP|Movement")
-    float MoveSpeed = 0.f;
+    float MoveSpeedCmPerSecond = 0.f;   // 0 = do not write movement (buildings)
 
-    UPROPERTY(EditAnywhere, Category = "GP|Vitals")
-    float MaxHealth = 100.f;
-
-    UPROPERTY(EditAnywhere, Category = "GP|Vitals")
-    float HealthRegenRate = 0.f;
-
-    UPROPERTY(EditAnywhere, Category = "GP|Vitals")
-    float RepairRate = 0.f;
-
-    UPROPERTY(EditAnywhere, Category = "GP|Commands")
-    FGameplayTagContainer AllowedCommands;
-
-    UPROPERTY(EditAnywhere, Category = "GP|Abilities")
-    TArray<TSoftClassPtr<UGameplayAbility>> GrantedAbilities;     // async-loaded, resolved at spawn
-
-    UPROPERTY(EditAnywhere, Category = "GP|Animations")
-    TSoftObjectPtr<UAnimMontage> DeathAnimation;
-
-    UPROPERTY(EditAnywhere, Category = "GP|Components")
-    TSoftClassPtr<AGP_UnitBase> SpawnedClass;     // async-loaded by AssetManager; resolved at spawn time
+    UPROPERTY(EditAnywhere, Category = "GP|Behavior|Retaliation")
+    float RetaliationPursuitSeconds = 5.f; // DATA ONLY until GP-S39R; 0 = disabled
 };
 ```
 
-`UPrimaryDataAsset` — для asset manager registration.
+`PrimaryAssetType` = `GPUnitDefinition`. Native bootstrap catalog (`UGP_UnitDefinitionCatalog`) provides Worker / Salvage Walker / Defensive Turret values matching current C++/CDO. Authored `DA_GP_Unit_*` assets are operator-side and not required for contracts.
 
-`SpawnedClass` дозволяє через одне Data Asset spawn'ити правильний AActor subclass. Альтернатива — окрема production logic, що map'ить UnitTag → Class.
+`AGP_UnitBase::UnitDefinitionAsset` is a soft ref. Precedence: loaded definition → existing actor/component defaults.
 
 ## AGP_MobileUnit
 
@@ -168,8 +151,8 @@ Concrete Blueprintable generic mobile unit layer:
 `AGP_SalvageWalker : AGP_Unit` — canonical MVP combat unit (GDD/04).
 
 - Reuses UnitBase Attack FSM / LOS / GAS damage / HealthBar / TeamPresentation / CombatPresentation.
-- Native interim combat defaults: MaxHealth/Health 200, Damage 20, AttackCooldown 1.0, AttackRange 600.
-- `UGP_MovementComponent::MoveSpeed = 250` (same component instance; no second MoveSpeed).
+- Canonical baseline (UnitDefinition / ctor fallback): MaxHealth/Health 200, Damage 20, AttackCooldown 1.0, AttackRange 600, Sight 900, MoveSpeed 250.
+- `UGP_MovementComponent::MoveSpeed` is initialized from UnitDefinition `MoveSpeedCmPerSecond` when a definition is loaded; ctor 250 remains the empty-ref fallback.
 - `UnitVisualComponent.VisualSourceMode = AuthoredComponents` so operator BP visuals are not stacked with NativeFallback InfantryMelee.
 - No Cargo/Mining; no CombatComponent / TargetingComponent.
 

@@ -3,6 +3,7 @@
 #include "Buildings/GPBuildingDefinition.h"
 
 #include "Buildings/GPBuildingBase.h"
+#include "Units/GPUnitDefinition.h"
 
 namespace GPBuildingDefinitionPrivate
 {
@@ -44,4 +45,28 @@ TSubclassOf<AGP_BuildingBase> UGP_BuildingDefinition::ResolveLoadedSpawnedClass(
 	}
 
 	return TSubclassOf<AGP_BuildingBase>(Loaded);
+}
+
+const UGP_UnitDefinition* UGP_BuildingDefinition::ResolveLoadedUnitDefinition() const
+{
+	if (UnitDefinition.IsNull())
+	{
+		return nullptr;
+	}
+
+	UObject* Loaded = UnitDefinition.Get();
+	if (Loaded == nullptr)
+	{
+		Loaded = UnitDefinition.ToSoftObjectPath().ResolveObject();
+	}
+	return Cast<UGP_UnitDefinition>(Loaded);
+}
+
+float UGP_BuildingDefinition::ResolveCanonicalMaxHealth() const
+{
+	if (const UGP_UnitDefinition* Unit = ResolveLoadedUnitDefinition())
+	{
+		return Unit->MaxHealth;
+	}
+	return MaxHealth;
 }

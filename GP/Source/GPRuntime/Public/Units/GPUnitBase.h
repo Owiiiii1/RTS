@@ -15,6 +15,7 @@ class UGP_HealthBarComponent;
 class UGP_TeamPresentationComponent;
 class UGP_UnitAttributeSet;
 class UGP_UnitCommandComponent;
+class UGP_UnitDefinition;
 struct FGP_DamageApplicationResult;
 struct FGP_UnitCommand;
 struct FGameplayEffectModCallbackData;
@@ -131,6 +132,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Selection")
 	bool IsSelectionTypeBuilding() const;
 
+	/**
+	 * Designer-facing intrinsic stats. Soft only — already-loaded objects resolve; no LoadSynchronous.
+	 * Empty = compatibility fallback to Default* / component CDO values.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Definition")
+	TSoftObjectPtr<UGP_UnitDefinition> UnitDefinitionAsset;
+
+	/** Already-loaded definition only. Does not LoadSynchronous. */
+	UFUNCTION(BlueprintPure, Category = "GP|Definition")
+	const UGP_UnitDefinition* ResolveLoadedUnitDefinition() const;
+
+	/** Definition RetaliationPursuitSeconds, or 0 when no loaded definition. Data only until GP-S39R. */
+	UFUNCTION(BlueprintPure, Category = "GP|Behavior|Retaliation")
+	float GetRetaliationPursuitSeconds() const;
+
 protected:
 	UFUNCTION()
 	void OnRep_TeamId();
@@ -140,6 +156,7 @@ protected:
 
 	void InitializeAbilitySystemActorInfo();
 	void InitializeCombatAttributesIfNeeded();
+	void ApplyUnitDefinitionComponentTuningIfNeeded();
 	void HandleDeathInternal();
 	virtual void NotifyAuthorityDeath();
 	void ApplyClientDeadPresentation();
@@ -157,25 +174,32 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Selection")
 	FGameplayTagContainer CapabilityTags;
 
-	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults")
+	/** Compatibility fallback when UnitDefinitionAsset is empty. Prefer UGP_UnitDefinition. */
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults|Fallback")
 	float DefaultMaxHealth = 100.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults")
+	/** Compatibility fallback when UnitDefinitionAsset is empty. Prefer UGP_UnitDefinition. */
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults|Fallback")
 	float DefaultHealth = 100.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults")
+	/** Compatibility fallback when UnitDefinitionAsset is empty. Prefer UGP_UnitDefinition. */
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults|Fallback")
 	float DefaultDamage = 25.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults")
+	/** Compatibility fallback when UnitDefinitionAsset is empty. Prefer UGP_UnitDefinition. */
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults|Fallback")
 	float DefaultArmor = 0.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults")
+	/** Compatibility fallback when UnitDefinitionAsset is empty. Prefer UGP_UnitDefinition. */
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults|Fallback")
 	float DefaultDamageResistance = 0.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults")
+	/** Compatibility fallback when UnitDefinitionAsset is empty. Prefer UGP_UnitDefinition. */
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults|Fallback")
 	float DefaultAttackCooldown = 1.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults")
+	/** Compatibility fallback when UnitDefinitionAsset is empty. Prefer UGP_UnitDefinition. */
+	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults|Fallback")
 	float DefaultAttackRange = 250.0f;
 
 	/** Seconds until Destroy after death. 0 = remain indefinitely. */
@@ -207,6 +231,7 @@ private:
 	FGP_OnUnitDied UnitDiedDelegate;
 
 	bool bCombatAttributesInitialized = false;
+	bool bDefinitionTuningApplied = false;
 	bool bDeathHandled = false;
 	bool bCountedTowardPlayerUnitCap = false;
 	TWeakObjectPtr<class AGP_PlayerState> UnitCapOwnerWeak;

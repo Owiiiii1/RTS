@@ -16,7 +16,10 @@
 #include "Net/UnrealNetwork.h"
 #include "Player/GPPlayerState.h"
 #include "Tags/GPGameplayTags.h"
+#include "Units/GPMobileUnit.h"
+#include "Units/GPMovementComponent.h"
 #include "Units/GPUnitCommandComponent.h"
+#include "Units/GPUnitDefinition.h"
 
 #if !UE_BUILD_SHIPPING
 #include "EngineUtils.h"
@@ -226,6 +229,7 @@ void AGP_UnitBase::BeginPlay()
 	Super::BeginPlay();
 	AttachHealthBarToOwnerRoot();
 	InitializeAbilitySystemActorInfo();
+	ApplyUnitDefinitionComponentTuningIfNeeded();
 	InitializeCombatAttributesIfNeeded();
 	TryRegisterPlayerUnitCap();
 }
@@ -346,6 +350,62 @@ void AGP_UnitBase::InitializeAbilitySystemActorInfo()
 		GPUnitCommandPrivate::NetModeToString(World != nullptr ? World->GetNetMode() : NM_MAX));
 }
 
+const UGP_UnitDefinition* AGP_UnitBase::ResolveLoadedUnitDefinition() const
+{
+	if (UnitDefinitionAsset.IsNull())
+	{
+		return nullptr;
+	}
+
+	UObject* Loaded = UnitDefinitionAsset.Get();
+	if (Loaded == nullptr)
+	{
+		Loaded = UnitDefinitionAsset.ToSoftObjectPath().ResolveObject();
+	}
+	return Cast<UGP_UnitDefinition>(Loaded);
+}
+
+float AGP_UnitBase::GetRetaliationPursuitSeconds() const
+{
+	const UGP_UnitDefinition* Def = ResolveLoadedUnitDefinition();
+	return Def != nullptr ? FMath::Max(0.0f, Def->RetaliationPursuitSeconds) : 0.0f;
+}
+
+void AGP_UnitBase::ApplyUnitDefinitionComponentTuningIfNeeded()
+{
+	if (bDefinitionTuningApplied)
+	{
+		return;
+	}
+	bDefinitionTuningApplied = true;
+
+	const UGP_UnitDefinition* Def = ResolveLoadedUnitDefinition();
+	if (Def == nullptr)
+	{
+		return;
+	}
+
+	if (UGP_UnitCommandComponent* Command = GetUnitCommandComponent())
+	{
+		Command->AutoAcquireSightRangeCm = FMath::Max(0.0f, Def->SightRangeCm);
+		Command->AutoAcquireScanIntervalSeconds = FMath::Max(0.05f, Def->AutoAcquireScanIntervalSeconds);
+		Command->AttackFacingRotationSpeedDegreesPerSecond =
+			FMath::Max(0.0f, Def->AttackFacingRotationSpeedDegreesPerSecond);
+		Command->RefreshCombatAutoAcquireTimer();
+	}
+
+	if (Def->MoveSpeedCmPerSecond > 0.0f)
+	{
+		if (const AGP_MobileUnit* Mobile = Cast<AGP_MobileUnit>(this))
+		{
+			if (UGP_MovementComponent* Movement = Mobile->GetUnitMovementComponent())
+			{
+				Movement->MoveSpeed = Def->MoveSpeedCmPerSecond;
+			}
+		}
+	}
+}
+
 void AGP_UnitBase::InitializeCombatAttributesIfNeeded()
 {
 	if (!HasAuthority() || bCombatAttributesInitialized)
@@ -369,13 +429,22 @@ void AGP_UnitBase::InitializeCombatAttributesIfNeeded()
 		return;
 	}
 
-	const float MaxHealth = GPCombatPrivate::SanitizeMaxHealth(DefaultMaxHealth);
-	const float Health = GPCombatPrivate::SanitizeHealth(DefaultHealth, MaxHealth);
-	const float Damage = GPCombatPrivate::SanitizeNonNegative(DefaultDamage);
-	const float Armor = GPCombatPrivate::SanitizeNonNegative(DefaultArmor);
-	const float Resistance = GPCombatPrivate::SanitizeResistance(DefaultDamageResistance);
-	const float Cooldown = GPCombatPrivate::SanitizeCooldown(DefaultAttackCooldown);
-	const float Range = GPCombatPrivate::SanitizeRange(DefaultAttackRange);
+	const UGP_UnitDefinition* Def = ResolveLoadedUnitDefinition();
+	const float MaxHealth = GPCombatPrivate::SanitizeMaxHealth(
+		Def != nullptr ? Def->MaxHealth : DefaultMaxHealth);
+	const float Health = GPCombatPrivate::SanitizeHealth(
+		Def != nullptr ? Def->InitialHealth : DefaultHealth,
+		MaxHealth);
+	const float Damage = GPCombatPrivate::SanitizeNonNegative(
+		Def != nullptr ? Def->Damage : DefaultDamage);
+	const float Armor = GPCombatPrivate::SanitizeNonNegative(
+		Def != nullptr ? Def->Armor : DefaultArmor);
+	const float Resistance = GPCombatPrivate::SanitizeResistance(
+		Def != nullptr ? Def->DamageResistance : DefaultDamageResistance);
+	const float Cooldown = GPCombatPrivate::SanitizeCooldown(
+		Def != nullptr ? Def->AttackCooldownSeconds : DefaultAttackCooldown);
+	const float Range = GPCombatPrivate::SanitizeRange(
+		Def != nullptr ? Def->AttackRangeCm : DefaultAttackRange);
 
 	AbilitySystemComponent->SetNumericAttributeBase(UGP_UnitAttributeSet::GetMaxHealthAttribute(), MaxHealth);
 	AbilitySystemComponent->SetNumericAttributeBase(UGP_UnitAttributeSet::GetHealthAttribute(), Health);

@@ -11,7 +11,7 @@
 - Branch: `docs/gp-0305r-wall-package-reconciliation`
 - Base: `origin/main` @ `5dd56cacdd7b25d4a0d3fc167b69b7a2e3a005a0`
 - Factual: **GP-S41M is already on this `main` tip**. Stale “NEXT = GP-S41M / not merged on feature branch” cursor text is reconciled.
-- Head: pending this follow-up commit (updated after push)
+- Head: `572e4a04e3b5881086c010a41fe65f1f18626352` (contradiction-fix commit; SHA-record commit may follow)
 
 ## New canonical Wall acquisition / deployment
 1. Buy a **Wall Package** from the orbital / order menu (OrbitalFerronite). Not an individually deployable building.

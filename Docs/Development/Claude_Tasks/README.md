@@ -8,7 +8,7 @@
 
 > Стан станом на 2026-08-19. Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Configuration data ownership cleanup. **Current: BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_BLOCKED_BY_AUTHORED_ASSET_MIGRATION**.
+**Поточна фаза:** Configuration data ownership cleanup. **Current: BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**.
 
 **Status snapshot:**
 
@@ -21,9 +21,9 @@
 | **Cleanup Slice C** Unit numeric compatibility | **DONE / on `main`** @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53` |
 | **Cleanup Slice D** Unit payload compatibility | **DONE / on `main`** @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160` |
 | **Cleanup Slice G** Delivery timing ownership | **DONE / on `main`** @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65` |
-| **Building procurement + payload ownership** | **BLOCKED BY AUTHORED ASSET MIGRATION** — [`GP-Building-Procurement-Payload-Ownership.md`](GP-Building-Procurement-Payload-Ownership.md) — **NOT MERGED** |
+| **Building procurement + payload ownership** | **READY FOR OPERATOR VALIDATION** — [`GP-Building-Procurement-Payload-Ownership.md`](GP-Building-Procurement-Payload-Ownership.md) — **NOT MERGED / NOT FINALIZED** |
 
-**NEXT action для оператора:** set `DA_GP_Buildings_LogisticsHUB.SpawnedClass` to `BP_GP_LogisticsHUB_C` and save. Then rerun the same cleanup slice. Do **not** remove runtime bridges before that migration. Do **not** start GP-S42B / GP-S42C / FoW.
+**NEXT action для оператора:** PIE-validate Hub/Turret purchase, payload class, and READY/deploy after the Project Settings cost/payload bridges were removed. Do **not** start GP-S42B / GP-S42C / FoW.
 
 ### Drift Warning
 

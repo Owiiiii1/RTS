@@ -2,86 +2,153 @@
 
 ## Status
 
-**BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_BLOCKED_BY_AUTHORED_ASSET_MIGRATION**
+**BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**
+**NOT FINALIZED.**
 
 ## Branch / base / head
 
 - Branch: `feature/gp-building-procurement-payload-ownership`
 - Base: `origin/main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`
-- Head: (this commit)
+- Head: this commit on the same branch (previous docs-only blocker was `50d65239630e48daa8a71553a38536124dd894df`)
 
-## Pre-change reference classification
-
-- Settings UPROPERTYs: `BuildingOrbitalPurchaseCost`, `BuildingPayloadClass`, `DefensiveTurretPayloadClass`
-- Settings helpers: `ResolveBuildingPayloadClass`, `ResolveDefensiveTurretPayloadClass`, `IsBuildingPayloadClassConfigInvalid`, `IsDefensiveTurretPayloadClassConfigInvalid`
-- Native catalog construction: Hub cost 100; Turret cost 150; native Turret `SpawnedClass` is set; native Hub `SpawnedClass` is currently empty
-- Legacy cost mutation: `SyncLegacyLogisticsHubCompatibility` copies `BuildingOrbitalPurchaseCost` onto the native Hub drop and is called during catalog creation/access and native Hub cost reads
-- Payload precedence: Turret settings override → `BuildingDefinition.SpawnedClass` → native Turret; Hub `BuildingDefinition.SpawnedClass` → settings fallback → native Hub
-- Building authority: obtains cost and payload only through `UGP_BuildingDropCatalog`
-- DropPod: receives and stores the already-resolved payload class; no settings reader
-- TEMP HUD / player controller: reads catalog `GetPurchaseCost` / `ResolvePayloadClass`
-- Contracts: visibility, building-drop, economy, UnitCap, BuildGrid, MultiBuilding, and Turret contain bridge assertions or isolation
-- Config text: `DefaultGame.ini` contains all three stale keys and configured BP classes
-- Docs: audit and prior task history describe the active compatibility bridges
-- Manual GConfig/string reader: none in `GP/Source`
-- Other production readers: none outside the settings → catalog → authority/HUD chain
-
-## Authored asset migration safety gate
+## Repeated authored asset safety-gate result
 
 Inspected the configured assets using Unreal’s Python commandlet without modifying assets.
 
-### Logistics Hub — BLOCKING
+### Logistics Hub — PASS
 
 - Drop: `/Game/GrimProtocol/DataAssets/Game/DA_GP_OrbitalDrop_LogisticsHUB`
 - Cost: `100`
 - BuildingDefinition: `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_LogisticsHUB`
-- Current `SpawnedClass`: **None**
-- Legacy bridge dependency: `BuildingPayloadClass=/Game/GrimProtocol/Blueprint/Buildings/BP_GP_LogisticsHUB.BP_GP_LogisticsHUB_C`
+- Authored `SpawnedClass` path/class: `/Game/GrimProtocol/Blueprint/Buildings/BP_GP_LogisticsHUB.BP_GP_LogisticsHUB_C`
+- Slot validation: valid `AGP_LogisticsHub` subclass
 
-Required operator edit:
-
-1. Open `DA_GP_Buildings_LogisticsHUB`
-2. Set `SpawnedClass` to `BP_GP_LogisticsHUB_C`
-3. Save the asset
-4. Rerun this same cleanup slice
-
-### Defensive Turret — READY
+### Defensive Turret — PASS
 
 - Drop: `/Game/GrimProtocol/DataAssets/Game/DA_GP_OrbitalDrop_DefensiveTurret`
 - Cost: `150`
 - BuildingDefinition: `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_DefensiveTurret`
-- Current `SpawnedClass`: `/Game/GrimProtocol/Blueprint/Buildings/BP_GP_DefensiveTurret.BP_GP_DefensiveTurret_C`
+- Authored `SpawnedClass` path/class: `/Game/GrimProtocol/Blueprint/Buildings/BP_GP_DefensiveTurret.BP_GP_DefensiveTurret_C`
 - Slot validation: valid `AGP_DefensiveTurret` subclass
 
-## Runtime change result
+## Exact removed settings fields
 
-Implementation stopped at the required safety gate.
+- `BuildingOrbitalPurchaseCost`
+- `BuildingPayloadClass`
+- `DefensiveTurretPayloadClass`
 
-- No settings fields removed
-- No settings helper APIs removed
-- `SyncLegacyLogisticsHubCompatibility` remains
-- No cost ownership change
-- No payload ownership change
-- No async-readiness change
-- No authority, DropPod, vitals, footprint, grid, Wall Package, config, or content change
+## Exact removed helper APIs
 
-## Validation
+- `ResolveBuildingPayloadClass(...)`
+- `ResolveDefensiveTurretPayloadClass(...)`
+- `IsBuildingPayloadClassConfigInvalid()`
+- `IsDefensiveTurretPayloadClassConfigInvalid()`
 
-- Authored asset inspection: completed
-- Unreal contracts: not run because implementation was blocked before C++ changes
-- Full suite: not run; no runtime blast radius
-- GPEditor/UHT: not run; docs-only blocked result
+`TryLoadSoftSubclass` remains only for `UnitDropPodClass`.
 
-## Protected-files confirmation
+## `SyncLegacyLogisticsHubCompatibility` removal
 
-- `GP/Config/DefaultGame.ini` untouched
-- `GP/Config/DefaultEngine.ini` untouched
-- maps untouched
-- Blueprints untouched
-- DataAssets untouched
-- materials/content untouched
-- existing protected local changes remain unstaged
+Removed the method and every call site (catalog `Get()`, native catalog construction, and native Hub `GetPurchaseCost`). Native Hub cost is no longer mutated from Project Settings.
 
-## NOT MERGED
+## Canonical cost ownership
+
+Canonical cost is `UGP_OrbitalDropDefinition::Cost`.
+
+Native bootstrap values:
+
+- Logistics Hub = 100
+- Defensive Turret = 150
+- Wall = 25
+- Wall Turret = 75
+
+Authored Hub/Turret Cost comes only from authored `UGP_OrbitalDropDefinition`.
+
+## Canonical payload ownership
+
+Canonical payload is `UGP_OrbitalDropDefinition` → `UGP_BuildingDefinition::SpawnedClass`.
+
+Native bootstrap BuildingDefinitions now own payload classes explicitly:
+
+- Hub: `AGP_LogisticsHub::StaticClass()`
+- Turret: `AGP_DefensiveTurret::StaticClass()`
+
+`UGP_BuildingDropCatalog::ResolvePayloadClass` no longer reads Project Settings payload classes.
+
+## Slot validation rules
+
+- Logistics Hub: valid `SpawnedClass` must derive from `AGP_LogisticsHub`
+- Defensive Turret: valid `SpawnedClass` must derive from `AGP_DefensiveTurret`
+- Arbitrary `AGP_BuildingBase` is not silently accepted for those two known products
+- Wall / WallTurret / Wall Package behavior was preserved
+
+## SpawnedClass async-readiness analysis / result
+
+`UGP_BuildingDefinition::SpawnedClass` is `TSoftClassPtr<AGP_BuildingBase>` and can be unresolved while the drop + BuildingDefinition are already loaded. Hub/Turret Ready now requires:
+
+1. top-level drop loaded
+2. BuildingDefinition loaded
+3. required `SpawnedClass` non-null
+4. `SpawnedClass` resolved
+5. `SpawnedClass` valid for slot
+
+Async loading only. No `LoadSynchronous` was added to `BuildingDropCatalog`. Native Hub/Turret `StaticClass()` values are already loaded, so native bootstrap remains immediately Ready.
+
+## Pending / Failed semantics
+
+- Cold unresolved Hub/Turret `SpawnedClass` remains Pending → purchase `DefinitionNotReady`; no native substitution while the configured authored product is Pending
+- Invalid or missing slot `SpawnedClass` transitions to Failed, logs a diagnostic, and uses the existing native fallback
+- Never remains stuck Pending
+
+## BuildingAuthority / DropPod flow
+
+`GPBuildingDropAuthority` still obtains payload only via `UGP_BuildingDropCatalog::ResolvePayloadClass()`. DropPod receives the already-resolved payload class. Purchase, READY inventory, placement, grid reservation, snapping, deploy radius, altitude, cleanup, and delivery timing were not changed.
+
+## Vitals / footprint unchanged
+
+No changes to `BuildingDefinition.UnitDefinition`, `UnitDefinitionAsset`, MaxHealth fields, GAS initialization, `FootprintCells`, `PlacementFootprintBounds`, BuildGrid fallback tables, replicated footprint, `NavigationObstacle`, or placement offsets.
+
+## Stale DefaultGame.ini keys
+
+`GP/Config/DefaultGame.ini` was not modified. Stale keys `BuildingOrbitalPurchaseCost`, `BuildingPayloadClass`, and `DefensiveTurretPayloadClass` remain as inert leftover text. No GConfig reader, string compatibility lookup, or migration shim was added.
+
+## Exact production files changed
+
+- `GP/Source/GPRuntime/Public/Settings/GPOrbitalDeliverySettings.h`
+- `GP/Source/GPRuntime/Private/Settings/GPOrbitalDeliverySettings.cpp`
+- `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropCatalog.h`
+- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropCatalog.cpp`
+- `GP/Source/GPRuntime/Public/Orbital/GPDropPod.h` (debug getter only)
+
+## Exact tests / results
+
+All Failures=0, Cancelled=false:
+
+- `gp.Settings.RunOrbitalDeliveryVisibilityContractTest`
+- `gp.Building.RunOrbitalBuildingDropContractTest`
+- `gp.Building.RunMultiBuildingDataContractTest`
+- `gp.Building.RunDefensiveTurretContractTest`
+- `gp.Building.RunBuildGridContractTest`
+- `gp.Resource.RunUnitCapLogisticsHubContractTest`
+- `gp.Economy.RunEconomyLogisticsDataContractTest`
+
+The building-drop contract now covers native Hub/Turret cost and payload, authored cost/payload wins, absent settings mutation/override, Pending=`DefinitionNotReady`, invalid/missing Failed+native fallback, cold unresolved `SpawnedClass` Pending, and DropPod receiving the catalog-resolved payload.
+
+## Full-suite escalation decision
+
+**Not escalated.** `Docs/Development/Risk_Based_Development_Workflow.md` reserves the full suite for cross-cutting architecture, shared authority/state infrastructure, replication/GAS, major refactors, milestone/RC, or unexpected targeted-regression breakage. This is a bounded ownership-cleanup slice. Directly affected Hub/Turret SpawnedClass cold-load/failure paths are covered by the building-drop contract.
+
+## GPEditor / UHT result
+
+`GPEditor Win64 Development` + UHT **PASS**. GP Development / Shipping were not run; those wait for operator PASS / finalization.
+
+## Protected local DataAsset confirmation
+
+Authored Hub/Turret DataAssets and Blueprints remain local/untracked. They were inspected only. They were not staged, committed, reverted, stashed, reset, restored, or cleaned. `GP/Config/DefaultGame.ini`, `GP/Config/DefaultEngine.ini`, `L_PrototypeArena.umap`, and other protected local content remain untouched by this commit.
+
+## Stop
+
+**NOT MERGED.**
+**NOT FINALIZED.**
+Operator PIE validation is next.

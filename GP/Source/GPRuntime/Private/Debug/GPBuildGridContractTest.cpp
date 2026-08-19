@@ -257,7 +257,6 @@ void UGP_BuildGridContractTestRunner::RestoreSettings()
 			UGP_BuildingDropCatalog::NativePayloadDeployDelaySeconds);
 		Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
 		Settings->BuildingDropSpawnAltitudeCm = SavedBuildingAltitude;
-		Settings->BuildingPayloadClass = SavedBuildingPayload;
 	}
 	bSettingsMutated = false;
 }
@@ -1886,11 +1885,9 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 		{
 			SavedBuildingCleanup = Settings->BuildingDropCleanupDelaySeconds;
 			SavedBuildingAltitude = Settings->BuildingDropSpawnAltitudeCm;
-			SavedBuildingPayload = Settings->BuildingPayloadClass;
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
 			Settings->BuildingDropSpawnAltitudeCm = 400.0f;
 			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(0.45f, 0.35f);
-			Settings->BuildingPayloadClass.Reset();
 			bSettingsMutated = true;
 		}
 

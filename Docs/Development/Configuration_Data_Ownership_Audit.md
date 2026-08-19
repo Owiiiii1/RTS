@@ -99,9 +99,9 @@ Declaration: `GP/Source/GPRuntime/Public/Settings/GPOrbitalDeliverySettings.h:25
 | `UnitDropSpawnSpacingCm` | Direct global multi-unit spacing read | CANONICAL | Keep |
 | `UnitDropPayloadDeployDelaySeconds` | Seed overwritten by resolved unit drop definition | DUPLICATED | Relabel fallback; later remove if safe |
 | `UnitDropCleanupDelaySeconds` | Direct global cleanup read | CANONICAL | Keep |
-| `BuildingOrbitalPurchaseCost` | Mutates native Logistics Hub drop cost | DEPRECATED_ACTIVE | Migrate Hub product/config, then remove sync bridge |
-| `BuildingPayloadClass` | Hub fallback after BuildingDefinition.SpawnedClass | DEPRECATED_ACTIVE | Move Hub BP to BuildingDefinition |
-| `DefensiveTurretPayloadClass` | **Outranks** BuildingDefinition.SpawnedClass when configured | AMBIGUOUS | Move to BuildingDefinition; deprecate only after asset migration |
+| `BuildingOrbitalPurchaseCost` | Removed from C++ settings. Canonical cost is `UGP_OrbitalDropDefinition.Cost`. Native Hub bootstrap 100. Stale INI key only. | REMOVED | Config hygiene later |
+| `BuildingPayloadClass` | Removed from C++ settings. Canonical payload is `UGP_BuildingDefinition.SpawnedClass`. Native Hub bootstrap `AGP_LogisticsHub`. Stale INI key only. | REMOVED | Config hygiene later |
+| `DefensiveTurretPayloadClass` | Removed from C++ settings. Canonical payload is `UGP_BuildingDefinition.SpawnedClass`. Native Turret bootstrap `AGP_DefensiveTurret`. Stale INI key only. | REMOVED | Config hygiene later |
 | `BuildingDropDescentDurationSeconds` | Seed overwritten by canonical building drop | DUPLICATED | Relabel fallback; later remove if safe |
 | `BuildingDropSpawnAltitudeCm` | Direct building and Wall Package global altitude | CANONICAL | Keep |
 | `BuildingDropPayloadDeployDelaySeconds` | Building seed overwritten by drop; Wall Package ignores it | DUPLICATED | Relabel fallback |
@@ -112,7 +112,7 @@ Declaration: `GP/Source/GPRuntime/Public/Settings/GPOrbitalDeliverySettings.h:25
 Important cold-load split:
 
 - Definition soft references are loaded asynchronously by catalogs. `Pending` prevents purchase.
-- Settings soft **class** references call `LoadSynchronous()` in `GPOrbitalDeliverySettings.cpp:29-49`, so first payload/pod resolution can hitch.
+- `UnitDropPodClass` still uses `LoadSynchronous()` in `GPOrbitalDeliverySettings.cpp`. Building payload classes no longer resolve through Project Settings.
 - Config values replace header defaults at CDO load. Current INI timing can disagree with header defaults even when later overwritten by product DAs.
 
 ### 3.2 `UGP_ResourceGameplaySettings`
@@ -499,16 +499,13 @@ Do not combine H, I, J, M, or N into one implementation slice.
 
 **Slice G implementation status (this combined delivery timing package):** `DELIVERY_TIMING_OWNERSHIP_CLEANUP_FINALIZED_READY_FOR_MERGE` on `feature/gp-delivery-timing-ownership-cleanup`. Removed four Project Settings timing fallback fields. Canonical authored unit timing is `UGP_OrbitalUnitDropDefinition`; native Worker/Walker bootstrap is 2.5 / 1.25. Canonical authored building timing is `UGP_OrbitalDropDefinition`; native building bootstrap is 2.5 / 2.0. Mixed unit manifests keep max aggregation. Pending remains `DefinitionNotReady`. Wall Package timing independently owned and unchanged. Stale `DefaultGame.ini` keys intentionally not touched. Payload/numeric/altitude/cleanup/building procurement unchanged. **NOT MERGED.**
 
-**Combined building procurement + payload ownership safety-gate status:** `BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_BLOCKED_BY_AUTHORED_ASSET_MIGRATION` on `feature/gp-building-procurement-payload-ownership`. Unreal inspection found configured Hub drop `/Game/GrimProtocol/DataAssets/Game/DA_GP_OrbitalDrop_LogisticsHUB` points to `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_LogisticsHUB`, whose `SpawnedClass` is empty. It still depends on `BuildingPayloadClass` resolving `BP_GP_LogisticsHUB_C`. Configured Defensive Turret `SpawnedClass` is valid. Required operator migration: assign `BP_GP_LogisticsHUB_C` to the Hub BuildingDefinition `SpawnedClass`, save, then rerun the cleanup. No runtime bridges removed. **NOT MERGED.**
+**Combined building procurement + payload ownership implementation status:** `BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION` on `feature/gp-building-procurement-payload-ownership`. Repeated Unreal inspection confirmed authored Hub `SpawnedClass=BP_GP_LogisticsHUB_C` and authored Turret `SpawnedClass=BP_GP_DefensiveTurret_C`. Removed `BuildingOrbitalPurchaseCost`, `BuildingPayloadClass`, `DefensiveTurretPayloadClass`, the settings payload helper APIs, and `SyncLegacyLogisticsHubCompatibility`. Canonical cost is `UGP_OrbitalDropDefinition.Cost`. Canonical payload is `UGP_BuildingDefinition.SpawnedClass`. Native Hub/Turret bootstrap own `AGP_LogisticsHub` / `AGP_DefensiveTurret` and costs 100 / 150. Hub/Turret Ready requires async-resolved slot-valid `SpawnedClass`. Stale `DefaultGame.ini` keys intentionally not touched. Protected authored DataAssets not committed. **NOT MERGED. NOT FINALIZED.**
 
 ## 10. Do Not Delete Yet
 
 The following fields look obsolete or duplicated but still have proven readers:
 
-- Stale `DefaultGame.ini` keys `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost`, `WorkerPayloadClass`, `SalvageWalkerPayloadClass`, `UnitDropDescentDurationSeconds`, `UnitDropPayloadDeployDelaySeconds`, `BuildingDropDescentDurationSeconds`, `BuildingDropPayloadDeployDelaySeconds` — leftover text after C++ removal; no production GConfig/string reader. Config hygiene later.
-- `BuildingOrbitalPurchaseCost` — native Logistics Hub cost synchronization.
-- `BuildingPayloadClass` — Logistics Hub payload fallback.
-- `DefensiveTurretPayloadClass` — currently highest-priority Turret payload override.
+- Stale `DefaultGame.ini` keys `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost`, `WorkerPayloadClass`, `SalvageWalkerPayloadClass`, `UnitDropDescentDurationSeconds`, `UnitDropPayloadDeployDelaySeconds`, `BuildingDropDescentDurationSeconds`, `BuildingDropPayloadDeployDelaySeconds`, `BuildingOrbitalPurchaseCost`, `BuildingPayloadClass`, `DefensiveTurretPayloadClass` — leftover text after C++ removal; no production GConfig/string reader. Config hygiene later.
 - `UnitDropPodClass` — all three orbital product families use it.
 - `BuildingDropSpawnAltitudeCm`, `BuildingDropCleanupDelaySeconds` — building and Wall Package.
 - `BuildingDefinition.MaxHealth` — compatibility resolver/tests, even though live vitals wiring is incomplete.

@@ -2,8 +2,6 @@
 
 #include "Settings/GPOrbitalDeliverySettings.h"
 
-#include "Buildings/GPDefensiveTurret.h"
-#include "Buildings/GPLogisticsHub.h"
 #include "Orbital/GPDropPod.h"
 
 UGP_OrbitalDeliverySettings::UGP_OrbitalDeliverySettings()
@@ -65,54 +63,5 @@ bool UGP_OrbitalDeliverySettings::IsUnitDropPodClassConfigInvalid() const
 	bool bHadSoft = false;
 	bool bInvalid = false;
 	GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(UnitDropPodClass, bHadSoft, bInvalid);
-	return bHadSoft && bInvalid;
-}
-
-TSubclassOf<AGP_BuildingBase> UGP_OrbitalDeliverySettings::ResolveBuildingPayloadClass(bool* bOutUsedAuthored) const
-{
-	bool bHadSoft = false;
-	bool bInvalid = false;
-	UClass* Loaded = GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(BuildingPayloadClass, bHadSoft, bInvalid);
-	if (bOutUsedAuthored != nullptr)
-	{
-		*bOutUsedAuthored = Loaded != nullptr;
-	}
-	return Loaded != nullptr ? Loaded : AGP_LogisticsHub::StaticClass();
-}
-
-bool UGP_OrbitalDeliverySettings::IsBuildingPayloadClassConfigInvalid() const
-{
-	bool bHadSoft = false;
-	bool bInvalid = false;
-	GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(BuildingPayloadClass, bHadSoft, bInvalid);
-	return bHadSoft && bInvalid;
-}
-
-TSubclassOf<AGP_BuildingBase> UGP_OrbitalDeliverySettings::ResolveDefensiveTurretPayloadClass(bool* bOutUsedAuthored) const
-{
-	bool bHadSoft = false;
-	bool bInvalid = false;
-	UClass* Loaded = GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(DefensiveTurretPayloadClass, bHadSoft, bInvalid);
-	if (Loaded != nullptr && !Loaded->IsChildOf(AGP_DefensiveTurret::StaticClass()))
-	{
-		Loaded = nullptr;
-		bInvalid = true;
-	}
-	if (bOutUsedAuthored != nullptr)
-	{
-		*bOutUsedAuthored = Loaded != nullptr;
-	}
-	return Loaded != nullptr ? Loaded : AGP_DefensiveTurret::StaticClass();
-}
-
-bool UGP_OrbitalDeliverySettings::IsDefensiveTurretPayloadClassConfigInvalid() const
-{
-	bool bHadSoft = false;
-	bool bInvalid = false;
-	UClass* Loaded = GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(DefensiveTurretPayloadClass, bHadSoft, bInvalid);
-	if (Loaded != nullptr && !Loaded->IsChildOf(AGP_DefensiveTurret::StaticClass()))
-	{
-		return true;
-	}
 	return bHadSoft && bInvalid;
 }

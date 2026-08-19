@@ -39,7 +39,7 @@
 | Last closed / merged stage | **Delivery timing ownership cleanup (Cleanup Slice G)** on `main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md`](Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md) — **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_BLOCKED_BY_AUTHORED_ASSET_MIGRATION** |
+| Current stage | [`Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md`](Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md) — **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION** |
 
 ---
 
@@ -51,9 +51,9 @@
 
 **Closed on `main`:** Delivery timing ownership cleanup @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`; Unit payload compatibility cleanup @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`; Unit numeric compatibility cleanup @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`; Dead overlap setting removal @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`; Settings Visibility Truth @ `f38e803771261c60d865949c693a52a73fbcedb2`; Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current:** [`Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md`](Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md) — **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_BLOCKED_BY_AUTHORED_ASSET_MIGRATION**. Set the Hub BuildingDefinition `SpawnedClass` to `BP_GP_LogisticsHUB_C`, then rerun this slice. **NOT MERGED.**
+**Current:** [`Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md`](Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md) — **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**. Operator PIE validation is next. **NOT MERGED. NOT FINALIZED.**
 
-**Do not** remove the building settings bridges before the authored Hub asset migration. Do **not** implement old pod-per-segment Wall.
+**Do not** implement old pod-per-segment Wall.
 
 **Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 
@@ -166,4 +166,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-Current baseline: `origin/main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`. Current stage: **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_BLOCKED_BY_AUTHORED_ASSET_MIGRATION** on `feature/gp-building-procurement-payload-ownership`. Assign `BP_GP_LogisticsHUB_C` to the authored Hub BuildingDefinition `SpawnedClass`, save, then rerun. **NOT MERGED.**
+Current baseline: `origin/main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`. Current stage: **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-building-procurement-payload-ownership`. Operator PIE validation is next. **NOT MERGED. NOT FINALIZED.**

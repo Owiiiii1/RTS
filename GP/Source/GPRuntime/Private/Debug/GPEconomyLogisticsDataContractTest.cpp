@@ -337,12 +337,8 @@ void UGP_EconomyLogisticsDataContractTestRunner::AdvanceStage()
 			&& FerroniteDef->DepositMaxAmount == 5000
 			&& FerroniteDef->MaxConcurrentMiners == 4, TEXT("G_FerroniteDefinitionBaseline"));
 
-		const UGP_OrbitalDeliverySettings* CostSettings = UGP_OrbitalDeliverySettings::Get();
-		const float ExpectedHubCost = CostSettings != nullptr
-			? FMath::Max(0.0f, CostSettings->BuildingOrbitalPurchaseCost)
-			: 100.0f;
-		Expect(FMath::IsNearlyEqual(Buildings.GetPurchaseCost(Buildings.GetLegacyLogisticsHubDrop()), ExpectedHubCost)
-			&& FMath::IsNearlyEqual(ExpectedHubCost, 100.0f),
+		const float ExpectedHubCost = 100.0f;
+		Expect(FMath::IsNearlyEqual(Buildings.GetPurchaseCost(Buildings.GetLegacyLogisticsHubDrop()), ExpectedHubCost),
 			TEXT("M_HubCost100"));
 		TArray<UGP_OrbitalDropDefinition*> Drops;
 		Buildings.GetOperatorVisibleDrops(Drops);

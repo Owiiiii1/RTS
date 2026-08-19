@@ -59,9 +59,6 @@ public:
 
 	void OverrideDeliveryTiming(float DescentSeconds, float PayloadDeployDelaySeconds);
 
-	/** Sync Cost from deprecated settings onto the native Logistics Hub drop (operator DefaultGame.ini bridge). */
-	void SyncLegacyLogisticsHubCompatibility();
-
 	void RegisterDropDefinition(UGP_OrbitalDropDefinition* DropDefinition);
 	void RegisterBuildingDefinition(UGP_BuildingDefinition* BuildingDefinition);
 
@@ -85,10 +82,25 @@ public:
 		bool bHoldCompletion);
 	void DebugCompletePendingNestedBuildingLoad();
 	void DebugForceNestedBuildingLoadFailure();
+	void DebugForceUnresolvedNestedLogisticsHubSpawnedClassLoad(
+		UGP_OrbitalDropDefinition* InjectedDrop,
+		UGP_BuildingDefinition* InjectedBuilding,
+		TSubclassOf<AGP_BuildingBase> InjectedSpawnedClass,
+		bool bHoldCompletion);
+	void DebugForceUnresolvedNestedDefensiveTurretSpawnedClassLoad(
+		UGP_OrbitalDropDefinition* InjectedDrop,
+		UGP_BuildingDefinition* InjectedBuilding,
+		TSubclassOf<AGP_BuildingBase> InjectedSpawnedClass,
+		bool bHoldCompletion);
+	void DebugCompletePendingNestedSpawnedClassLoad();
+	void DebugForceNestedSpawnedClassLoadFailure();
 	bool DebugDidRequestAsyncAuthoredDropLoad() const { return bDebugDidRequestAsyncDropLoad; }
 	bool DebugDidRequestAsyncNestedBuildingLoad() const { return bDebugDidRequestAsyncNestedLoad; }
+	bool DebugDidRequestAsyncNestedSpawnedClassLoad() const { return bDebugDidRequestAsyncNestedSpawnedLoad; }
 	bool DebugConsumeNestedBuildingLoadFailedLog();
 	bool DebugConsumeNullBuildingDefinitionLog();
+	bool DebugConsumeNestedSpawnedClassLoadFailedLog();
+	bool DebugConsumeNullSpawnedClassLog();
 	bool DebugIsCallbackSafe() const { return IsCatalogCallbackSafe(); }
 	UGP_OrbitalDropDefinition* DebugGetCanonicalDefensiveTurretDrop() const;
 	void DebugClearAuthoredBuildingDropOverrides();
@@ -152,21 +164,27 @@ private:
 
 	TArray<TSharedPtr<FStreamableHandle>> AuthoredLoadHandles;
 	TArray<TSharedPtr<FStreamableHandle>> AuthoredNestedLoadHandles;
+	TArray<TSharedPtr<FStreamableHandle>> AuthoredSpawnedClassLoadHandles;
 	TArray<FSoftObjectPath> AuthoredRequestedPaths;
 	TArray<FSoftObjectPath> AuthoredNestedRequestedPaths;
+	TArray<FSoftObjectPath> AuthoredSpawnedClassRequestedPaths;
 	TArray<EAuthoredSlotState> AuthoredStates;
 
 	void RefreshAuthoredSlot(EBuildingAuthoredSlot Slot);
 	void RequestAuthoredAsyncLoad(EBuildingAuthoredSlot Slot, const FSoftObjectPath& SoftPath);
 	void RequestAuthoredNestedAsyncLoad(EBuildingAuthoredSlot Slot, const FSoftObjectPath& NestedPath);
+	void RequestAuthoredSpawnedClassAsyncLoad(EBuildingAuthoredSlot Slot, const FSoftObjectPath& NestedPath);
 	void HandleAuthoredLoaded(EBuildingAuthoredSlot Slot);
 	void HandleAuthoredNestedLoaded(EBuildingAuthoredSlot Slot);
+	void HandleAuthoredSpawnedClassLoaded(EBuildingAuthoredSlot Slot);
 	void FinishAuthoredLoadResolve(EBuildingAuthoredSlot Slot);
 	void FinishAuthoredNestedLoadResolve(EBuildingAuthoredSlot Slot);
+	void FinishAuthoredSpawnedClassLoadResolve(EBuildingAuthoredSlot Slot);
 	void ApplyLoadedAuthoredDrop(EBuildingAuthoredSlot Slot, UGP_OrbitalDropDefinition* Loaded);
 	void MarkAuthoredSlotFailed(EBuildingAuthoredSlot Slot);
 	void CancelAuthoredTopLevelLoad(EBuildingAuthoredSlot Slot);
 	void CancelAuthoredNestedLoad(EBuildingAuthoredSlot Slot);
+	void CancelAuthoredSpawnedClassLoad(EBuildingAuthoredSlot Slot);
 	void CancelAuthoredLoad(EBuildingAuthoredSlot Slot);
 	void CancelAllAuthoredLoads();
 	bool IsCatalogCallbackSafe() const;
@@ -176,6 +194,10 @@ private:
 	EBuildingAuthoredSlot FindSlotForDrop(const UGP_OrbitalDropDefinition* DropDefinition) const;
 	EBuildingAuthoredSlot FindSlotForId(const FPrimaryAssetId& DropDefinitionId) const;
 	UGP_OrbitalDropDefinition* ResolveCanonicalDrop(const UGP_OrbitalDropDefinition* DropDefinition) const;
+	bool SlotRequiresValidatedSpawnedClass(EBuildingAuthoredSlot Slot) const;
+	bool IsSpawnedClassValidForSlot(EBuildingAuthoredSlot Slot, const UClass* SpawnedClass) const;
+	bool HasResolvedAuthoredDependencies(const UGP_OrbitalDropDefinition* Drop, EBuildingAuthoredSlot Slot) const;
+	TSubclassOf<AGP_BuildingBase> ResolveFallbackPayloadClass(EBuildingAuthoredSlot Slot) const;
 
 	void HandleLogisticsHubLoaded() { HandleAuthoredLoaded(EBuildingAuthoredSlot::LogisticsHub); }
 	void HandleDefensiveTurretLoaded() { HandleAuthoredLoaded(EBuildingAuthoredSlot::DefensiveTurret); }
@@ -185,6 +207,10 @@ private:
 	void HandleDefensiveTurretNestedLoaded() { HandleAuthoredNestedLoaded(EBuildingAuthoredSlot::DefensiveTurret); }
 	void HandleWallNestedLoaded() { HandleAuthoredNestedLoaded(EBuildingAuthoredSlot::Wall); }
 	void HandleWallTurretNestedLoaded() { HandleAuthoredNestedLoaded(EBuildingAuthoredSlot::WallTurret); }
+	void HandleLogisticsHubSpawnedClassLoaded() { HandleAuthoredSpawnedClassLoaded(EBuildingAuthoredSlot::LogisticsHub); }
+	void HandleDefensiveTurretSpawnedClassLoaded() { HandleAuthoredSpawnedClassLoaded(EBuildingAuthoredSlot::DefensiveTurret); }
+	void HandleWallSpawnedClassLoaded() { HandleAuthoredSpawnedClassLoaded(EBuildingAuthoredSlot::Wall); }
+	void HandleWallTurretSpawnedClassLoaded() { HandleAuthoredSpawnedClassLoaded(EBuildingAuthoredSlot::WallTurret); }
 
 	bool bNativeCatalogReady = false;
 
@@ -202,7 +228,15 @@ private:
 		UGP_OrbitalDropDefinition* InjectedDrop,
 		UGP_BuildingDefinition* InjectedBuilding,
 		bool bHoldCompletion);
+	void DebugForceUnresolvedNestedSpawnedClassLoad(
+		EBuildingAuthoredSlot Slot,
+		UGP_OrbitalDropDefinition* InjectedDrop,
+		UGP_BuildingDefinition* InjectedBuilding,
+		TSubclassOf<AGP_BuildingBase> InjectedSpawnedClass,
+		bool bHoldCompletion);
 	void DebugCompletePendingAuthoredLoad(EBuildingAuthoredSlot Slot);
+	void DebugCompletePendingNestedSpawnedClassLoad(EBuildingAuthoredSlot Slot);
+	void DebugForceNestedSpawnedClassLoadFailure(EBuildingAuthoredSlot Slot);
 
 	TArray<TSoftObjectPtr<UGP_OrbitalDropDefinition>> DebugSavedBuildingRefs;
 	bool bDebugSavedBuildingSettings = false;
@@ -212,11 +246,17 @@ private:
 	TArray<uint8> DebugHoldDropCompletion;
 	TArray<uint8> DebugForceUnresolvedNested;
 	TArray<uint8> DebugHoldNestedCompletion;
+	TArray<uint8> DebugForceUnresolvedSpawnedClass;
+	TArray<uint8> DebugHoldSpawnedClassCompletion;
 	TArray<TObjectPtr<UGP_OrbitalDropDefinition>> DebugInjectedDrops;
 	TArray<TObjectPtr<UGP_BuildingDefinition>> DebugInjectedBuildings;
+	TArray<TSubclassOf<AGP_BuildingBase>> DebugInjectedSpawnedClasses;
 	bool bDebugDidRequestAsyncDropLoad = false;
 	bool bDebugDidRequestAsyncNestedLoad = false;
+	bool bDebugDidRequestAsyncNestedSpawnedLoad = false;
 	bool bDebugNestedLoadFailedLogged = false;
 	bool bDebugNullBuildingLogged = false;
+	bool bDebugNestedSpawnedClassLoadFailedLogged = false;
+	bool bDebugNullSpawnedClassLogged = false;
 #endif
 };

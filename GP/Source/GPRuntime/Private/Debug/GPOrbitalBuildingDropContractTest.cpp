@@ -6,6 +6,9 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPPlayerAttributeSet.h"
+#include "Buildings/GPBuildingDefinition.h"
+#include "Buildings/GPBuildingBase.h"
+#include "Buildings/GPDefensiveTurret.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Buildings/GPMainBase.h"
 #include "Debug/GPContractTestCoordinator.h"
@@ -166,9 +169,7 @@ void UGP_OrbitalBuildingDropContractTestRunner::RestoreSettings()
 					UGP_BuildingDropCatalog::NativeDeliveryDescentSeconds,
 					UGP_BuildingDropCatalog::NativePayloadDeployDelaySeconds);
 			}
-			Settings->BuildingOrbitalPurchaseCost = SavedBuildingPurchaseCost;
 			Settings->BuildingMaxDeployRadiusFromMainBaseCm = SavedBuildingMaxRadius;
-			Settings->BuildingPayloadClass = SavedBuildingPayload;
 		}
 		bSettingsMutated = false;
 	}
@@ -301,12 +302,9 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		{
 			SavedBuildingCleanup = Settings->BuildingDropCleanupDelaySeconds;
 			SavedBuildingAltitude = Settings->BuildingDropSpawnAltitudeCm;
-			SavedBuildingPurchaseCost = Settings->BuildingOrbitalPurchaseCost;
 			SavedBuildingMaxRadius = Settings->BuildingMaxDeployRadiusFromMainBaseCm;
-			SavedBuildingPayload = Settings->BuildingPayloadClass;
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
 			Settings->BuildingDropSpawnAltitudeCm = 400.0f;
-			Settings->BuildingPayloadClass.Reset();
 			bSettingsMutated = true;
 
 			UGP_BuildingDropCatalog& Buildings = UGP_BuildingDropCatalog::Get();
@@ -314,19 +312,28 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 			Expect(SettingsClass->FindPropertyByName(TEXT("BuildingDropDescentDurationSeconds")) == nullptr
 				&& SettingsClass->FindPropertyByName(TEXT("BuildingDropPayloadDeployDelaySeconds")) == nullptr
 				&& SettingsClass->FindPropertyByName(TEXT("UnitDropDescentDurationSeconds")) == nullptr
-				&& SettingsClass->FindPropertyByName(TEXT("UnitDropPayloadDeployDelaySeconds")) == nullptr,
-				TEXT("Timing_RemovedSettingsFieldsAbsent"));
+				&& SettingsClass->FindPropertyByName(TEXT("UnitDropPayloadDeployDelaySeconds")) == nullptr
+				&& SettingsClass->FindPropertyByName(TEXT("BuildingOrbitalPurchaseCost")) == nullptr
+				&& SettingsClass->FindPropertyByName(TEXT("BuildingPayloadClass")) == nullptr
+				&& SettingsClass->FindPropertyByName(TEXT("DefensiveTurretPayloadClass")) == nullptr,
+				TEXT("RemovedSettingsFieldsAbsent"));
 			float NativeDescent = 0.0f;
 			float NativeDeploy = 0.0f;
 			Buildings.ResolveDeliveryTiming(Buildings.GetLegacyLogisticsHubDrop(), NativeDescent, NativeDeploy);
 			Expect(FMath::IsNearlyEqual(NativeDescent, UGP_BuildingDropCatalog::NativeDeliveryDescentSeconds)
 				&& FMath::IsNearlyEqual(NativeDeploy, UGP_BuildingDropCatalog::NativePayloadDeployDelaySeconds),
 				TEXT("Timing_NativeBuildingDrop"));
+			UGP_OrbitalDropDefinition* NativeHub = Buildings.GetLegacyLogisticsHubDrop();
+			UGP_OrbitalDropDefinition* NativeTurret = Buildings.DebugGetCanonicalDefensiveTurretDrop();
+			Expect(IsValid(NativeHub)
+				&& FMath::IsNearlyEqual(Buildings.GetPurchaseCost(NativeHub), 100.0f)
+				&& Buildings.ResolvePayloadClass(NativeHub) == AGP_LogisticsHub::StaticClass(),
+				TEXT("Native_HubCost100PayloadLogisticsHub"));
+			Expect(IsValid(NativeTurret)
+				&& FMath::IsNearlyEqual(Buildings.GetPurchaseCost(NativeTurret), 150.0f)
+				&& Buildings.ResolvePayloadClass(NativeTurret) == AGP_DefensiveTurret::StaticClass(),
+				TEXT("Native_TurretCost150PayloadDefensiveTurret"));
 			Buildings.OverrideDeliveryTiming(0.25f, 0.0f);
-
-			bool bUsedAuthored = true;
-			Expect(Settings->ResolveBuildingPayloadClass(&bUsedAuthored) == AGP_LogisticsHub::StaticClass()
-				&& !bUsedAuthored, TEXT("M_FallbackNativeHub"));
 		}
 
 		FActorSpawnParameters Params;
@@ -551,6 +558,12 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		if (IsValid(Deploy.SpawnedPod.Get()))
 		{
 			Expect(Deploy.SpawnedPod->GetPayloadKind() == EGP_DropPodPayloadKind::Building, TEXT("G_BuildingPayloadKind"));
+			UGP_BuildingDropCatalog& Buildings = UGP_BuildingDropCatalog::Get();
+			const TSubclassOf<AGP_BuildingBase> CatalogPayload =
+				Buildings.ResolvePayloadClass(Buildings.GetLegacyLogisticsHubDrop());
+			Expect(CatalogPayload == AGP_LogisticsHub::StaticClass()
+				&& Deploy.SpawnedPod->DebugGetPendingBuildingPayloadClass() == CatalogPayload,
+				TEXT("G_PodReceivesCatalogPayload"));
 			float ExpectedDescent = 0.0f;
 			float ExpectedDeploy = 0.0f;
 			UGP_BuildingDropCatalog::Get().ResolveDeliveryTiming(
@@ -661,13 +674,33 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		Base->SetTeamId(ContractTeam);
 		ValidDeployLocation = Base->GetActorLocation() + FVector(1200.0f, 0.0f, 0.0f);
 
-		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+		UGP_OrbitalDropDefinition* NativeHub = Catalog.GetLegacyLogisticsHubDrop();
+		UGP_BuildingDefinition* NativeHubBuilding = NativeHub != nullptr
+			? NativeHub->ResolveLoadedBuildingDefinition()
+			: nullptr;
+		AuthoredHubBuildingDef = NewObject<UGP_BuildingDefinition>(
+			this, FName(TEXT("DA_GP_Building_LogisticsHub_StubPayload")), RF_Transient);
+		if (IsValid(NativeHubBuilding))
 		{
-			Settings->BuildingPayloadClass = AGP_OrbitalBuildingDropContractHubStub::StaticClass();
-			bool bUsedAuthored = false;
-			Expect(Settings->ResolveBuildingPayloadClass(&bUsedAuthored) == AGP_OrbitalBuildingDropContractHubStub::StaticClass()
-				&& bUsedAuthored, TEXT("N_ResolveStubHub"));
+			AuthoredHubBuildingDef->DisplayName = NativeHubBuilding->DisplayName;
+			AuthoredHubBuildingDef->BuildingTags = NativeHubBuilding->BuildingTags;
+			AuthoredHubBuildingDef->FootprintCells = NativeHubBuilding->FootprintCells;
+			AuthoredHubBuildingDef->MaxHealth = NativeHubBuilding->MaxHealth;
+			AuthoredHubBuildingDef->UnitCapBonus = NativeHubBuilding->UnitCapBonus;
+			AuthoredHubBuildingDef->UnitDefinition = NativeHubBuilding->UnitDefinition;
 		}
+		AuthoredHubBuildingDef->SpawnedClass = AGP_OrbitalBuildingDropContractHubStub::StaticClass();
+		AuthoredHubDropDef = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_StubPayload")), RF_Transient);
+		AuthoredHubDropDef->Cost = 100.0f;
+		AuthoredHubDropDef->BuildingDefinition = AuthoredHubBuildingDef;
+		AuthoredHubDropDef->DeliveryDescentSeconds = 0.25f;
+		AuthoredHubDropDef->PayloadDeployDelaySeconds = 0.0f;
+		Catalog.DebugAssignLoadedAuthoredLogisticsHub(AuthoredHubDropDef);
+		Expect(Catalog.GetLegacyLogisticsHubDrop() == AuthoredHubDropDef
+			&& Catalog.ResolvePayloadClass(AuthoredHubDropDef) == AGP_OrbitalBuildingDropContractHubStub::StaticClass(),
+			TEXT("N_AuthoredHubSpawnedClassWins"));
 
 		OwnerPS->GetOrbitalBuildingInventoryComponent()->AuthorityAddReady(EGP_OrbitalBuildingType::LogisticsHub, 1);
 		GPBuildingDropAuthority::FDeployResult StubDeploy =
@@ -735,6 +768,8 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		}
 
 		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+		Catalog.DebugClearAuthoredBuildingDropOverrides();
+		Catalog.DebugBeginContractIsolation();
 		UGP_BuildingDefinition* HubBuilding = Catalog.GetLegacyLogisticsHubDrop() != nullptr
 			? Catalog.GetLegacyLogisticsHubDrop()->ResolveLoadedBuildingDefinition()
 			: nullptr;
@@ -987,7 +1022,144 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		ScheduleNext(0.05f);
 		break;
 	}
-	case 12: // Catalog teardown: TryGetExisting never creates; BeginDestroy-style cleanup does not resurrect
+	case 12: // SpawnedClass pending / invalid / authored payload wins / DropPod payload
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+		Catalog.DebugClearAuthoredBuildingDropOverrides();
+		Catalog.DebugBeginContractIsolation();
+		UGP_OrbitalDropDefinition* NativeHub = Catalog.GetLegacyLogisticsHubDrop();
+		UGP_OrbitalDropDefinition* NativeTurret = Catalog.DebugGetCanonicalDefensiveTurretDrop();
+		UGP_BuildingDefinition* NativeHubBuilding = NativeHub != nullptr
+			? NativeHub->ResolveLoadedBuildingDefinition()
+			: nullptr;
+		UGP_BuildingDefinition* NativeTurretBuilding = NativeTurret != nullptr
+			? NativeTurret->ResolveLoadedBuildingDefinition()
+			: nullptr;
+
+		AuthoredHubBuildingDef = NewObject<UGP_BuildingDefinition>(
+			this, FName(TEXT("DA_GP_Building_LogisticsHub_SpawnedPending")), RF_Transient);
+		if (IsValid(NativeHubBuilding))
+		{
+			AuthoredHubBuildingDef->BuildingTags = NativeHubBuilding->BuildingTags;
+			AuthoredHubBuildingDef->FootprintCells = NativeHubBuilding->FootprintCells;
+			AuthoredHubBuildingDef->UnitCapBonus = NativeHubBuilding->UnitCapBonus;
+			AuthoredHubBuildingDef->UnitDefinition = NativeHubBuilding->UnitDefinition;
+		}
+		AuthoredHubDropDef = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_SpawnedPending")), RF_Transient);
+		AuthoredHubDropDef->Cost = 41.0f;
+		AuthoredHubDropDef->BuildingDefinition = AuthoredHubBuildingDef;
+		Catalog.DebugForceUnresolvedNestedLogisticsHubSpawnedClassLoad(
+			AuthoredHubDropDef,
+			AuthoredHubBuildingDef,
+			AGP_OrbitalBuildingDropContractHubStub::StaticClass(),
+			true);
+		Expect(Catalog.DebugDidRequestAsyncNestedSpawnedClassLoad()
+			&& Catalog.IsDropDefinitionPending(AuthoredHubDropDef)
+			&& Catalog.GetLegacyLogisticsHubDrop() != AuthoredHubDropDef,
+			TEXT("V_SpawnedClassPendingKeepsDefinitionNotReady"));
+		if (IsValid(OwnerPS))
+		{
+			const float OrbitalBefore = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+			GPBuildingDropAuthority::FPurchaseResult PendingBuy =
+				GPBuildingDropAuthority::AuthorityPurchaseBuilding(World, OwnerPS, AuthoredHubDropDef);
+			Expect(!PendingBuy.bAccepted
+				&& PendingBuy.RejectReason == EGP_BuildingDropRejectReason::DefinitionNotReady
+				&& FMath::IsNearlyEqual(
+					OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
+					OrbitalBefore,
+					0.05f),
+				TEXT("V_SpawnedClassPendingNoSpend"));
+		}
+
+		Catalog.DebugCompletePendingNestedSpawnedClassLoad();
+		Expect(!Catalog.IsDropDefinitionPending(AuthoredHubDropDef)
+			&& Catalog.GetLegacyLogisticsHubDrop() == AuthoredHubDropDef
+			&& FMath::IsNearlyEqual(Catalog.GetPurchaseCost(AuthoredHubDropDef), 41.0f)
+			&& Catalog.ResolvePayloadClass(AuthoredHubDropDef) == AGP_OrbitalBuildingDropContractHubStub::StaticClass(),
+			TEXT("V_AuthoredHubValidSpawnedClassWins"));
+
+		AuthoredTurretBuildingDef = NewObject<UGP_BuildingDefinition>(
+			this, FName(TEXT("DA_GP_Building_DefensiveTurret_AuthoredPayload")), RF_Transient);
+		if (IsValid(NativeTurretBuilding))
+		{
+			AuthoredTurretBuildingDef->BuildingTags = NativeTurretBuilding->BuildingTags;
+			AuthoredTurretBuildingDef->FootprintCells = NativeTurretBuilding->FootprintCells;
+			AuthoredTurretBuildingDef->UnitDefinition = NativeTurretBuilding->UnitDefinition;
+		}
+		AuthoredTurretBuildingDef->SpawnedClass = AGP_OrbitalBuildingDropContractTurretStub::StaticClass();
+		AuthoredTurretDropDef = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_DefensiveTurret_AuthoredPayload")), RF_Transient);
+		AuthoredTurretDropDef->Cost = 77.0f;
+		AuthoredTurretDropDef->BuildingDefinition = AuthoredTurretBuildingDef;
+		Catalog.DebugAssignLoadedAuthoredDefensiveTurret(AuthoredTurretDropDef);
+		Expect(Catalog.DebugGetCanonicalDefensiveTurretDrop() == AuthoredTurretDropDef
+			&& FMath::IsNearlyEqual(Catalog.GetPurchaseCost(AuthoredTurretDropDef), 77.0f)
+			&& Catalog.ResolvePayloadClass(AuthoredTurretDropDef)
+				== AGP_OrbitalBuildingDropContractTurretStub::StaticClass(),
+			TEXT("V_AuthoredTurretValidSpawnedClassWins"));
+
+		UGP_BuildingDefinition* MissingBuilding = NewObject<UGP_BuildingDefinition>(
+			this, FName(TEXT("DA_GP_Building_LogisticsHub_MissingSpawned")), RF_Transient);
+		if (IsValid(NativeHubBuilding))
+		{
+			MissingBuilding->BuildingTags = NativeHubBuilding->BuildingTags;
+			MissingBuilding->FootprintCells = NativeHubBuilding->FootprintCells;
+		}
+		MissingBuilding->SpawnedClass.Reset();
+		UGP_OrbitalDropDefinition* MissingDrop = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_MissingSpawned")), RF_Transient);
+		MissingDrop->Cost = 43.0f;
+		MissingDrop->BuildingDefinition = MissingBuilding;
+		Catalog.DebugAssignLoadedAuthoredLogisticsHub(MissingDrop);
+		Expect(Catalog.DebugConsumeNullSpawnedClassLog()
+			&& !Catalog.IsDropDefinitionPending(MissingDrop)
+			&& Catalog.GetLegacyLogisticsHubDrop() == NativeHub
+			&& FMath::IsNearlyEqual(Catalog.GetPurchaseCost(NativeHub), 100.0f)
+			&& Catalog.ResolvePayloadClass(NativeHub) == AGP_LogisticsHub::StaticClass(),
+			TEXT("V_MissingSpawnedClassNativeFallback"));
+
+		UGP_BuildingDefinition* InvalidBuilding = NewObject<UGP_BuildingDefinition>(
+			this, FName(TEXT("DA_GP_Building_LogisticsHub_InvalidSpawned")), RF_Transient);
+		if (IsValid(NativeHubBuilding))
+		{
+			InvalidBuilding->BuildingTags = NativeHubBuilding->BuildingTags;
+			InvalidBuilding->FootprintCells = NativeHubBuilding->FootprintCells;
+		}
+		InvalidBuilding->SpawnedClass = AGP_DefensiveTurret::StaticClass();
+		UGP_OrbitalDropDefinition* InvalidDrop = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_InvalidSpawned")), RF_Transient);
+		InvalidDrop->Cost = 45.0f;
+		InvalidDrop->BuildingDefinition = InvalidBuilding;
+		Catalog.DebugAssignLoadedAuthoredLogisticsHub(InvalidDrop);
+		Expect(Catalog.DebugConsumeNestedSpawnedClassLoadFailedLog()
+			&& !Catalog.IsDropDefinitionPending(InvalidDrop)
+			&& Catalog.GetLegacyLogisticsHubDrop() == NativeHub
+			&& Catalog.ResolvePayloadClass(NativeHub) == AGP_LogisticsHub::StaticClass(),
+			TEXT("V_InvalidSpawnedClassNativeFallbackNotStuckPending"));
+
+		UGP_OrbitalDropDefinition* FailedSpawnedDrop = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_FailedSpawned")), RF_Transient);
+		FailedSpawnedDrop->Cost = 47.0f;
+		FailedSpawnedDrop->BuildingDefinition = AuthoredHubBuildingDef;
+		Catalog.DebugForceUnresolvedNestedLogisticsHubSpawnedClassLoad(
+			FailedSpawnedDrop,
+			AuthoredHubBuildingDef,
+			AGP_OrbitalBuildingDropContractHubStub::StaticClass(),
+			true);
+		Expect(Catalog.IsDropDefinitionPending(FailedSpawnedDrop), TEXT("V_FailedSpawnedStartsPending"));
+		Catalog.DebugForceNestedSpawnedClassLoadFailure();
+		Expect(Catalog.DebugConsumeNestedSpawnedClassLoadFailedLog()
+			&& !Catalog.IsDropDefinitionPending(FailedSpawnedDrop)
+			&& Catalog.GetLegacyLogisticsHubDrop() == NativeHub,
+			TEXT("V_FailedSpawnedNativeFallbackNotStuckPending"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 13: // Catalog teardown: TryGetExisting never creates; BeginDestroy-style cleanup does not resurrect
 	{
 		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
 		Expect(UGP_BuildingDropCatalog::TryGetExisting() == &Catalog

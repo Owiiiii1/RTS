@@ -188,18 +188,6 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 		Expect(bOk, Label);
 	};
 
-	auto ExpectHiddenBridge = [this, &FindProp](const TCHAR* Name, const TCHAR* Label)
-	{
-		const FProperty* Prop = FindProp(Name);
-		bool bOk = Prop != nullptr
-			&& Prop->HasAnyPropertyFlags(CPF_Config)
-			&& !Prop->HasAnyPropertyFlags(CPF_Edit);
-#if WITH_METADATA
-		bOk = bOk && Prop->HasMetaData(TEXT("DeprecatedProperty"));
-#endif
-		Expect(bOk, Label);
-	};
-
 	switch (StageIndex)
 	{
 	case 0:
@@ -245,14 +233,14 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 			TEXT("Absent_WorkerPayloadClass"));
 		Expect(FindProp(TEXT("SalvageWalkerPayloadClass")) == nullptr,
 			TEXT("Absent_SalvageWalkerPayloadClass"));
-		ExpectHiddenBridge(TEXT("BuildingOrbitalPurchaseCost"), TEXT("Hidden_BuildingOrbitalPurchaseCost"));
-		ExpectHiddenBridge(TEXT("BuildingPayloadClass"), TEXT("Hidden_BuildingPayloadClass"));
+		Expect(FindProp(TEXT("BuildingOrbitalPurchaseCost")) == nullptr,
+			TEXT("Absent_BuildingOrbitalPurchaseCost"));
+		Expect(FindProp(TEXT("BuildingPayloadClass")) == nullptr,
+			TEXT("Absent_BuildingPayloadClass"));
+		Expect(FindProp(TEXT("DefensiveTurretPayloadClass")) == nullptr,
+			TEXT("Absent_DefensiveTurretPayloadClass"));
 		Expect(FindProp(TEXT("BuildingPlacementOverlapMarginCm")) == nullptr,
 			TEXT("Absent_BuildingPlacementOverlapMarginCm"));
-
-		Expect(FindProp(TEXT("BuildingPayloadClass")) != nullptr
-			&& FindProp(TEXT("BuildingPayloadClass"))->IsA<FSoftClassProperty>(),
-			TEXT("Type_BuildingPayloadClass"));
 
 		Expect(FindProp(TEXT("UnitDropDescentDurationSeconds")) == nullptr,
 			TEXT("Absent_UnitDropDescentDurationSeconds"));
@@ -263,35 +251,13 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 		Expect(FindProp(TEXT("BuildingDropPayloadDeployDelaySeconds")) == nullptr,
 			TEXT("Absent_BuildingDropPayloadDeployDelaySeconds"));
 
-		const FProperty* TurretPayload = FindProp(TEXT("DefensiveTurretPayloadClass"));
-		bool bTurretOk = TurretPayload != nullptr
-			&& TurretPayload->IsA<FSoftClassProperty>()
-			&& TurretPayload->HasAnyPropertyFlags(CPF_Config)
-			&& TurretPayload->HasAnyPropertyFlags(CPF_Edit);
-#if WITH_METADATA
-		const FString TurretCategory = TurretPayload != nullptr
-			? TurretPayload->GetMetaData(TEXT("Category"))
-			: FString();
-		const FString TurretDisplay = TurretPayload != nullptr
-			? TurretPayload->GetMetaData(TEXT("DisplayName"))
-			: FString();
-		bTurretOk = bTurretOk
-			&& !TurretPayload->HasMetaData(TEXT("DeprecatedProperty"))
-			&& TurretCategory.Contains(TEXT("LEGACY"))
-			&& TurretDisplay.Contains(TEXT("LEGACY"));
-#endif
-		Expect(bTurretOk, TEXT("Legacy_DefensiveTurretPayloadClassEditable"));
-
 		const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
 		Expect(Settings != nullptr, TEXT("SettingsGet"));
 		if (Settings != nullptr)
 		{
-			bool bUsedBuilding = false;
-			bool bUsedTurret = false;
-			Settings->ResolveBuildingPayloadClass(&bUsedBuilding);
-			Settings->ResolveDefensiveTurretPayloadClass(&bUsedTurret);
-			(void)bUsedBuilding;
-			(void)bUsedTurret;
+			bool bUsedPod = false;
+			Settings->ResolveUnitDropPodClass(&bUsedPod);
+			(void)bUsedPod;
 			Expect(true, TEXT("ReadersUnchangedSmoke"));
 		}
 

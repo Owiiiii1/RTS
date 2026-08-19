@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Buildings/GPDefensiveTurret.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Orbital/GPDropPod.h"
 #include "UObject/Object.h"
@@ -11,6 +12,13 @@
 /** Contract-only Logistics Hub subclass (authored BP stand-in). */
 UCLASS()
 class GPRUNTIME_API AGP_OrbitalBuildingDropContractHubStub : public AGP_LogisticsHub
+{
+	GENERATED_BODY()
+};
+
+/** Contract-only Defensive Turret subclass (authored BP stand-in). */
+UCLASS()
+class GPRUNTIME_API AGP_OrbitalBuildingDropContractTurretStub : public AGP_DefensiveTurret
 {
 	GENERATED_BODY()
 };
@@ -52,14 +60,16 @@ private:
 	FVector ValidDeployLocation = FVector::ZeroVector;
 	float SavedBuildingCleanup = 0.5f;
 	float SavedBuildingAltitude = 2500.0f;
-	float SavedBuildingPurchaseCost = 100.0f;
 	float SavedBuildingMaxRadius = 5000.0f;
-	TSoftClassPtr<AGP_BuildingBase> SavedBuildingPayload;
 	bool bSettingsMutated = false;
 	UPROPERTY()
 	TObjectPtr<class UGP_OrbitalDropDefinition> AuthoredHubDropDef;
 	UPROPERTY()
 	TObjectPtr<class UGP_OrbitalDropDefinition> AuthoredTurretDropDef;
+	UPROPERTY()
+	TObjectPtr<class UGP_BuildingDefinition> AuthoredHubBuildingDef;
+	UPROPERTY()
+	TObjectPtr<class UGP_BuildingDefinition> AuthoredTurretBuildingDef;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;
 	bool bCancelled = false;

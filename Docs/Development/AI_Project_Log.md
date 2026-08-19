@@ -1,5 +1,21 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — Building procurement + payload ownership cleanup
+
+Status: **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**
+
+- Same branch `feature/gp-building-procurement-payload-ownership` (base `origin/main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`)
+- Repeated Unreal safety-gate: authored Hub `SpawnedClass` is `BP_GP_LogisticsHUB_C`; authored Turret `SpawnedClass` is `BP_GP_DefensiveTurret_C`; both valid for slot
+- Removed `BuildingOrbitalPurchaseCost`, `BuildingPayloadClass`, `DefensiveTurretPayloadClass` and the settings payload helper APIs
+- Removed `UGP_BuildingDropCatalog::SyncLegacyLogisticsHubCompatibility`
+- Canonical cost is `UGP_OrbitalDropDefinition::Cost`; native Hub 100 / Turret 150 / Wall 25 / Wall Turret 75
+- Canonical payload is BuildingDefinition `SpawnedClass`; native Hub/Turret own `AGP_LogisticsHub` / `AGP_DefensiveTurret`
+- Hub/Turret Ready now requires resolved slot-valid `SpawnedClass` via async load only; Pending stays `DefinitionNotReady`; invalid/missing fails to native fallback
+- Stale `DefaultGame.ini` keys intentionally not touched. Protected authored DataAssets not staged
+- Mandatory contracts Failures=0. GPEditor Win64 Development + UHT **PASS**. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Building procurement + payload ownership safety gate
 
 Status: **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_BLOCKED_BY_AUTHORED_ASSET_MIGRATION**

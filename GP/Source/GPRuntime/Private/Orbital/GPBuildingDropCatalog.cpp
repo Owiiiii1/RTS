@@ -3,6 +3,7 @@
 #include "Orbital/GPBuildingDropCatalog.h"
 
 #include "Buildings/GPBuildingDefinition.h"
+#include "Buildings/GPBuildingBase.h"
 #include "Buildings/GPDefensiveTurret.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Engine/AssetManager.h"
@@ -35,6 +36,8 @@ namespace GPBuildingDropCatalogPrivate
 		TEXT("/Game/GrimProtocol/Data/Orbital/DA_GP_OrbitalDrop_UnresolvedSoftRefStub.DA_GP_OrbitalDrop_UnresolvedSoftRefStub");
 	static constexpr TCHAR UnresolvedBuildingStub[] =
 		TEXT("/Game/GrimProtocol/Data/Buildings/DA_GP_Building_UnresolvedSoftRefStub.DA_GP_Building_UnresolvedSoftRefStub");
+	static constexpr TCHAR UnresolvedSpawnedClassStub[] =
+		TEXT("/Game/GrimProtocol/Data/Buildings/BP_GP_UnresolvedSpawnedClassStub.BP_GP_UnresolvedSpawnedClassStub_C");
 
 	static const TCHAR* SlotNameFromIndex(int32 Index)
 	{
@@ -70,7 +73,6 @@ UGP_BuildingDropCatalog& UGP_BuildingDropCatalog::Get()
 		if (!GPBuildingDropCatalogPrivate::IsCreationBlocked())
 		{
 			Existing->RefreshAuthoredBindings();
-			Existing->SyncLegacyLogisticsHubCompatibility();
 		}
 		return *Existing;
 	}
@@ -93,7 +95,6 @@ UGP_BuildingDropCatalog& UGP_BuildingDropCatalog::Get()
 	GPBuildingDropCatalogPrivate::GCatalog.Reset(CatalogObj);
 	CatalogObj->EnsureNativeCatalog();
 	CatalogObj->RefreshAuthoredBindings();
-	CatalogObj->SyncLegacyLogisticsHubCompatibility();
 	return *CatalogObj;
 }
 
@@ -172,6 +173,7 @@ void UGP_BuildingDropCatalog::EnsureNativeCatalog()
 	HubBuilding->ContainerCount = 0;
 	HubBuilding->UnitCapBonus = 5;
 	HubBuilding->UnitDefinition = UGP_UnitDefinitionCatalog::Get().GetLogisticsHubDefinition();
+	HubBuilding->SpawnedClass = AGP_LogisticsHub::StaticClass();
 	UGP_BuildingDefinition* TurretBuilding = CreateNativeBuilding(
 		FName(TEXT("DA_GP_Building_DefensiveTurret")),
 		NSLOCTEXT("GPBuildingDropCatalog", "Turret", "Defensive Turret"),
@@ -207,8 +209,10 @@ void UGP_BuildingDropCatalog::EnsureNativeCatalog()
 	AuthoredSlotDrops.SetNum(SlotCount);
 	AuthoredLoadHandles.SetNum(SlotCount);
 	AuthoredNestedLoadHandles.SetNum(SlotCount);
+	AuthoredSpawnedClassLoadHandles.SetNum(SlotCount);
 	AuthoredRequestedPaths.SetNum(SlotCount);
 	AuthoredNestedRequestedPaths.SetNum(SlotCount);
+	AuthoredSpawnedClassRequestedPaths.SetNum(SlotCount);
 	AuthoredStates.Init(EAuthoredSlotState::Empty, SlotCount);
 
 	LegacyLogisticsHubDrop = CreateNativeDrop(
@@ -234,7 +238,6 @@ void UGP_BuildingDropCatalog::EnsureNativeCatalog()
 		75.0f);
 
 	bNativeCatalogReady = true;
-	SyncLegacyLogisticsHubCompatibility();
 }
 
 UGP_BuildingDefinition* UGP_BuildingDropCatalog::CreateNativeBuilding(
@@ -339,6 +342,60 @@ UGP_OrbitalDropDefinition* UGP_BuildingDropCatalog::ResolveLoadedAuthored(
 	return Cast<UGP_OrbitalDropDefinition>(Loaded);
 }
 
+bool UGP_BuildingDropCatalog::SlotRequiresValidatedSpawnedClass(EBuildingAuthoredSlot Slot) const
+{
+	return Slot == EBuildingAuthoredSlot::LogisticsHub || Slot == EBuildingAuthoredSlot::DefensiveTurret;
+}
+
+bool UGP_BuildingDropCatalog::IsSpawnedClassValidForSlot(EBuildingAuthoredSlot Slot, const UClass* SpawnedClass) const
+{
+	if (SpawnedClass == nullptr || !SpawnedClass->IsChildOf(AGP_BuildingBase::StaticClass()))
+	{
+		return false;
+	}
+
+	switch (Slot)
+	{
+	case EBuildingAuthoredSlot::LogisticsHub:
+		return SpawnedClass->IsChildOf(AGP_LogisticsHub::StaticClass());
+	case EBuildingAuthoredSlot::DefensiveTurret:
+		return SpawnedClass->IsChildOf(AGP_DefensiveTurret::StaticClass());
+	default:
+		return true;
+	}
+}
+
+bool UGP_BuildingDropCatalog::HasResolvedAuthoredDependencies(
+	const UGP_OrbitalDropDefinition* Drop,
+	EBuildingAuthoredSlot Slot) const
+{
+	if (!IsValid(Drop) || Drop->ResolveLoadedBuildingDefinition() == nullptr)
+	{
+		return false;
+	}
+	if (!SlotRequiresValidatedSpawnedClass(Slot))
+	{
+		return true;
+	}
+
+	const UGP_BuildingDefinition* Building = Drop->ResolveLoadedBuildingDefinition();
+	const TSubclassOf<AGP_BuildingBase> Spawned = Building->ResolveLoadedSpawnedClass();
+	return Spawned != nullptr && IsSpawnedClassValidForSlot(Slot, Spawned.Get());
+}
+
+TSubclassOf<AGP_BuildingBase> UGP_BuildingDropCatalog::ResolveFallbackPayloadClass(EBuildingAuthoredSlot Slot) const
+{
+	switch (Slot)
+	{
+	case EBuildingAuthoredSlot::LogisticsHub:
+		return TSubclassOf<AGP_BuildingBase>(AGP_LogisticsHub::StaticClass());
+	case EBuildingAuthoredSlot::DefensiveTurret:
+		return TSubclassOf<AGP_BuildingBase>(AGP_DefensiveTurret::StaticClass());
+	default:
+		return nullptr;
+	}
+}
+
 UGP_OrbitalDropDefinition* UGP_BuildingDropCatalog::CanonicalForSlot(EBuildingAuthoredSlot Slot) const
 {
 	const int32 Index = static_cast<int32>(Slot);
@@ -351,8 +408,7 @@ UGP_OrbitalDropDefinition* UGP_BuildingDropCatalog::CanonicalForSlot(EBuildingAu
 		return nullptr;
 	}
 	if (AuthoredStates[Index] == EAuthoredSlotState::Ready && AuthoredSlotDrops.IsValidIndex(Index)
-		&& IsValid(AuthoredSlotDrops[Index])
-		&& AuthoredSlotDrops[Index]->ResolveLoadedBuildingDefinition() != nullptr)
+		&& HasResolvedAuthoredDependencies(AuthoredSlotDrops[Index], Slot))
 	{
 		return AuthoredSlotDrops[Index];
 	}
@@ -431,6 +487,10 @@ void UGP_BuildingDropCatalog::RequestAuthoredAsyncLoad(EBuildingAuthoredSlot Slo
 	{
 		AuthoredNestedRequestedPaths[Index].Reset();
 	}
+	if (AuthoredSpawnedClassRequestedPaths.IsValidIndex(Index))
+	{
+		AuthoredSpawnedClassRequestedPaths[Index].Reset();
+	}
 	AuthoredStates[Index] = EAuthoredSlotState::Pending;
 	AuthoredSlotDrops[Index] = nullptr;
 
@@ -487,7 +547,12 @@ void UGP_BuildingDropCatalog::RequestAuthoredNestedAsyncLoad(
 	}
 
 	CancelAuthoredNestedLoad(Slot);
+	CancelAuthoredSpawnedClassLoad(Slot);
 	AuthoredNestedRequestedPaths[Index] = NestedPath;
+	if (AuthoredSpawnedClassRequestedPaths.IsValidIndex(Index))
+	{
+		AuthoredSpawnedClassRequestedPaths[Index].Reset();
+	}
 	AuthoredStates[Index] = EAuthoredSlotState::Pending;
 
 	FStreamableDelegate Delegate;
@@ -528,6 +593,67 @@ void UGP_BuildingDropCatalog::RequestAuthoredNestedAsyncLoad(
 #if !UE_BUILD_SHIPPING
 		bDebugNestedLoadFailedLogged = true;
 		if (DebugHoldNestedCompletion.IsValidIndex(Index) && DebugHoldNestedCompletion[Index] != 0)
+		{
+			return;
+		}
+#endif
+		MarkAuthoredSlotFailed(Slot);
+	}
+}
+
+void UGP_BuildingDropCatalog::RequestAuthoredSpawnedClassAsyncLoad(
+	EBuildingAuthoredSlot Slot,
+	const FSoftObjectPath& NestedPath)
+{
+	const int32 Index = static_cast<int32>(Slot);
+	if (AuthoredSpawnedClassLoadHandles.IsValidIndex(Index) && AuthoredSpawnedClassLoadHandles[Index].IsValid()
+		&& AuthoredSpawnedClassRequestedPaths[Index] == NestedPath)
+	{
+		return;
+	}
+
+	CancelAuthoredSpawnedClassLoad(Slot);
+	AuthoredSpawnedClassRequestedPaths[Index] = NestedPath;
+	AuthoredStates[Index] = EAuthoredSlotState::Pending;
+
+	FStreamableDelegate Delegate;
+	switch (Slot)
+	{
+	case EBuildingAuthoredSlot::LogisticsHub:
+		Delegate = FStreamableDelegate::CreateUObject(this, &UGP_BuildingDropCatalog::HandleLogisticsHubSpawnedClassLoaded);
+		break;
+	case EBuildingAuthoredSlot::DefensiveTurret:
+		Delegate = FStreamableDelegate::CreateUObject(this, &UGP_BuildingDropCatalog::HandleDefensiveTurretSpawnedClassLoaded);
+		break;
+	case EBuildingAuthoredSlot::Wall:
+		Delegate = FStreamableDelegate::CreateUObject(this, &UGP_BuildingDropCatalog::HandleWallSpawnedClassLoaded);
+		break;
+	case EBuildingAuthoredSlot::WallTurret:
+		Delegate = FStreamableDelegate::CreateUObject(this, &UGP_BuildingDropCatalog::HandleWallTurretSpawnedClassLoaded);
+		break;
+	default:
+		MarkAuthoredSlotFailed(Slot);
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	bDebugDidRequestAsyncNestedSpawnedLoad = true;
+#endif
+
+	AuthoredSpawnedClassLoadHandles[Index] = UAssetManager::GetStreamableManager().RequestAsyncLoad(NestedPath, Delegate);
+	if (!AuthoredSpawnedClassLoadHandles[Index].IsValid())
+	{
+		const FSoftObjectPath DropPath = AuthoredRequestedPaths.IsValidIndex(Index)
+			? AuthoredRequestedPaths[Index]
+			: FSoftObjectPath();
+		UE_LOG(LogGPBuildingDropCatalog, Error,
+			TEXT("GP SpawnedClassLoadFailed: Slot=%s Drop=%s SpawnedClass=%s Reason=RequestAsyncLoadNullHandleUsingNativeFallback"),
+			GPBuildingDropCatalogPrivate::SlotNameFromIndex(Index),
+			*DropPath.ToString(),
+			*NestedPath.ToString());
+#if !UE_BUILD_SHIPPING
+		bDebugNestedSpawnedClassLoadFailedLogged = true;
+		if (DebugHoldSpawnedClassCompletion.IsValidIndex(Index) && DebugHoldSpawnedClassCompletion[Index] != 0)
 		{
 			return;
 		}
@@ -577,6 +703,24 @@ void UGP_BuildingDropCatalog::HandleAuthoredNestedLoaded(EBuildingAuthoredSlot S
 #endif
 
 	FinishAuthoredNestedLoadResolve(Slot);
+}
+
+void UGP_BuildingDropCatalog::HandleAuthoredSpawnedClassLoaded(EBuildingAuthoredSlot Slot)
+{
+	if (!IsCatalogCallbackSafe())
+	{
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	const int32 Index = static_cast<int32>(Slot);
+	if (DebugHoldSpawnedClassCompletion.IsValidIndex(Index) && DebugHoldSpawnedClassCompletion[Index] != 0)
+	{
+		return;
+	}
+#endif
+
+	FinishAuthoredSpawnedClassLoadResolve(Slot);
 }
 
 void UGP_BuildingDropCatalog::FinishAuthoredLoadResolve(EBuildingAuthoredSlot Slot)
@@ -673,6 +817,76 @@ void UGP_BuildingDropCatalog::FinishAuthoredNestedLoadResolve(EBuildingAuthoredS
 	MarkAuthoredSlotFailed(Slot);
 }
 
+void UGP_BuildingDropCatalog::FinishAuthoredSpawnedClassLoadResolve(EBuildingAuthoredSlot Slot)
+{
+	const int32 Index = static_cast<int32>(Slot);
+	if (AuthoredSpawnedClassLoadHandles.IsValidIndex(Index))
+	{
+		AuthoredSpawnedClassLoadHandles[Index].Reset();
+	}
+
+#if !UE_BUILD_SHIPPING
+	if (DebugForceUnresolvedSpawnedClass.IsValidIndex(Index))
+	{
+		DebugForceUnresolvedSpawnedClass[Index] = 0;
+	}
+	if (DebugInjectedSpawnedClasses.IsValidIndex(Index) && DebugInjectedSpawnedClasses[Index] != nullptr)
+	{
+		UGP_OrbitalDropDefinition* Drop = AuthoredSlotDrops.IsValidIndex(Index) ? AuthoredSlotDrops[Index].Get() : nullptr;
+		if (!IsValid(Drop) && DebugInjectedDrops.IsValidIndex(Index))
+		{
+			Drop = DebugInjectedDrops[Index];
+		}
+		UGP_BuildingDefinition* Building = IsValid(Drop) ? Drop->ResolveLoadedBuildingDefinition() : nullptr;
+		if (Building == nullptr && DebugInjectedBuildings.IsValidIndex(Index))
+		{
+			Building = DebugInjectedBuildings[Index];
+		}
+		if (IsValid(Drop) && IsValid(Building))
+		{
+			Drop->BuildingDefinition = Building;
+			Building->SpawnedClass = DebugInjectedSpawnedClasses[Index];
+			ApplyLoadedAuthoredDrop(Slot, Drop);
+			return;
+		}
+	}
+#endif
+
+	UGP_OrbitalDropDefinition* Drop = AuthoredSlotDrops.IsValidIndex(Index) ? AuthoredSlotDrops[Index].Get() : nullptr;
+	if (!IsValid(Drop))
+	{
+		Drop = ResolveLoadedAuthored(GetAuthoredSoftRef(Slot));
+	}
+
+	const UGP_BuildingDefinition* Building = IsValid(Drop) ? Drop->ResolveLoadedBuildingDefinition() : nullptr;
+	const TSubclassOf<AGP_BuildingBase> LoadedSpawned = IsValid(Building) ? Building->ResolveLoadedSpawnedClass() : nullptr;
+	if (LoadedSpawned != nullptr && IsSpawnedClassValidForSlot(Slot, LoadedSpawned.Get()))
+	{
+		ApplyLoadedAuthoredDrop(Slot, Drop);
+		return;
+	}
+
+	const TCHAR* Reason = (LoadedSpawned != nullptr && !IsSpawnedClassValidForSlot(Slot, LoadedSpawned.Get()))
+		? TEXT("InvalidSubclassUsingNativeFallback")
+		: TEXT("ResolveFailedUsingNativeFallback");
+	const FSoftObjectPath DropPath = AuthoredRequestedPaths.IsValidIndex(Index)
+		? AuthoredRequestedPaths[Index]
+		: FSoftObjectPath();
+	const FSoftObjectPath NestedPath = AuthoredSpawnedClassRequestedPaths.IsValidIndex(Index)
+		? AuthoredSpawnedClassRequestedPaths[Index]
+		: (IsValid(Building) ? Building->SpawnedClass.ToSoftObjectPath() : FSoftObjectPath());
+	UE_LOG(LogGPBuildingDropCatalog, Error,
+		TEXT("GP SpawnedClassLoadFailed: Slot=%s Drop=%s SpawnedClass=%s Reason=%s"),
+		GPBuildingDropCatalogPrivate::SlotNameFromIndex(Index),
+		*DropPath.ToString(),
+		*NestedPath.ToString(),
+		Reason);
+#if !UE_BUILD_SHIPPING
+	bDebugNestedSpawnedClassLoadFailedLogged = true;
+#endif
+	MarkAuthoredSlotFailed(Slot);
+}
+
 void UGP_BuildingDropCatalog::ApplyLoadedAuthoredDrop(EBuildingAuthoredSlot Slot, UGP_OrbitalDropDefinition* Loaded)
 {
 	const int32 Index = static_cast<int32>(Slot);
@@ -688,7 +902,12 @@ void UGP_BuildingDropCatalog::ApplyLoadedAuthoredDrop(EBuildingAuthoredSlot Slot
 	if (!IsValid(Loaded))
 	{
 		CancelAuthoredNestedLoad(Slot);
+		CancelAuthoredSpawnedClassLoad(Slot);
 		AuthoredNestedRequestedPaths[Index].Reset();
+		if (AuthoredSpawnedClassRequestedPaths.IsValidIndex(Index))
+		{
+			AuthoredSpawnedClassRequestedPaths[Index].Reset();
+		}
 		AuthoredStates[Index] = EAuthoredSlotState::Empty;
 		return;
 	}
@@ -720,26 +939,107 @@ void UGP_BuildingDropCatalog::ApplyLoadedAuthoredDrop(EBuildingAuthoredSlot Slot
 	}
 #endif
 
-	if (Loaded->ResolveLoadedBuildingDefinition() != nullptr)
+	if (Loaded->ResolveLoadedBuildingDefinition() == nullptr)
 	{
-		CancelAuthoredNestedLoad(Slot);
-		AuthoredNestedRequestedPaths[Index].Reset();
+		const FSoftObjectPath NestedPath = Loaded->BuildingDefinition.ToSoftObjectPath();
+		if (AuthoredStates[Index] == EAuthoredSlotState::Pending && AuthoredNestedRequestedPaths[Index] == NestedPath
+			&& ((AuthoredNestedLoadHandles.IsValidIndex(Index) && AuthoredNestedLoadHandles[Index].IsValid())
+#if !UE_BUILD_SHIPPING
+				|| (DebugHoldNestedCompletion.IsValidIndex(Index) && DebugHoldNestedCompletion[Index] != 0)
+#endif
+				))
+		{
+			return;
+		}
+
+		RequestAuthoredNestedAsyncLoad(Slot, NestedPath);
+		return;
+	}
+
+	CancelAuthoredNestedLoad(Slot);
+	AuthoredNestedRequestedPaths[Index].Reset();
+
+	if (!SlotRequiresValidatedSpawnedClass(Slot))
+	{
+		CancelAuthoredSpawnedClassLoad(Slot);
+		if (AuthoredSpawnedClassRequestedPaths.IsValidIndex(Index))
+		{
+			AuthoredSpawnedClassRequestedPaths[Index].Reset();
+		}
 		AuthoredStates[Index] = EAuthoredSlotState::Ready;
 		return;
 	}
 
-	const FSoftObjectPath NestedPath = Loaded->BuildingDefinition.ToSoftObjectPath();
-	if (AuthoredStates[Index] == EAuthoredSlotState::Pending && AuthoredNestedRequestedPaths[Index] == NestedPath
-		&& ((AuthoredNestedLoadHandles.IsValidIndex(Index) && AuthoredNestedLoadHandles[Index].IsValid())
+	UGP_BuildingDefinition* Building = Loaded->ResolveLoadedBuildingDefinition();
+	if (Building->SpawnedClass.IsNull())
+	{
+		UE_LOG(LogGPBuildingDropCatalog, Error,
+			TEXT("GP SpawnedClassLoadFailed: Slot=%s Drop=%s SpawnedClass=None Reason=NullSpawnedClassUsingNativeFallback"),
+			GPBuildingDropCatalogPrivate::SlotNameFromIndex(Index),
+			*Loaded->GetPathName());
 #if !UE_BUILD_SHIPPING
-			|| (DebugHoldNestedCompletion.IsValidIndex(Index) && DebugHoldNestedCompletion[Index] != 0)
+		bDebugNullSpawnedClassLogged = true;
+#endif
+		MarkAuthoredSlotFailed(Slot);
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	if (DebugForceUnresolvedSpawnedClass.IsValidIndex(Index) && DebugForceUnresolvedSpawnedClass[Index] != 0
+		&& AuthoredStates[Index] != EAuthoredSlotState::Ready)
+	{
+		const FSoftObjectPath NestedPath = Building->SpawnedClass.ToSoftObjectPath();
+		if (AuthoredStates[Index] == EAuthoredSlotState::Pending
+			&& AuthoredSpawnedClassRequestedPaths.IsValidIndex(Index)
+			&& AuthoredSpawnedClassRequestedPaths[Index] == NestedPath)
+		{
+			return;
+		}
+		RequestAuthoredSpawnedClassAsyncLoad(Slot, NestedPath);
+		return;
+	}
+#endif
+
+	const TSubclassOf<AGP_BuildingBase> Spawned = Building->ResolveLoadedSpawnedClass();
+	if (Spawned != nullptr && IsSpawnedClassValidForSlot(Slot, Spawned.Get()))
+	{
+		CancelAuthoredSpawnedClassLoad(Slot);
+		if (AuthoredSpawnedClassRequestedPaths.IsValidIndex(Index))
+		{
+			AuthoredSpawnedClassRequestedPaths[Index].Reset();
+		}
+		AuthoredStates[Index] = EAuthoredSlotState::Ready;
+		return;
+	}
+
+	if (Spawned != nullptr)
+	{
+		UE_LOG(LogGPBuildingDropCatalog, Error,
+			TEXT("GP SpawnedClassLoadFailed: Slot=%s Drop=%s SpawnedClass=%s Reason=InvalidSubclassUsingNativeFallback"),
+			GPBuildingDropCatalogPrivate::SlotNameFromIndex(Index),
+			*Loaded->GetPathName(),
+			*Building->SpawnedClass.ToSoftObjectPath().ToString());
+#if !UE_BUILD_SHIPPING
+		bDebugNestedSpawnedClassLoadFailedLogged = true;
+#endif
+		MarkAuthoredSlotFailed(Slot);
+		return;
+	}
+
+	const FSoftObjectPath NestedPath = Building->SpawnedClass.ToSoftObjectPath();
+	if (AuthoredStates[Index] == EAuthoredSlotState::Pending
+		&& AuthoredSpawnedClassRequestedPaths.IsValidIndex(Index)
+		&& AuthoredSpawnedClassRequestedPaths[Index] == NestedPath
+		&& ((AuthoredSpawnedClassLoadHandles.IsValidIndex(Index) && AuthoredSpawnedClassLoadHandles[Index].IsValid())
+#if !UE_BUILD_SHIPPING
+			|| (DebugHoldSpawnedClassCompletion.IsValidIndex(Index) && DebugHoldSpawnedClassCompletion[Index] != 0)
 #endif
 			))
 	{
 		return;
 	}
 
-	RequestAuthoredNestedAsyncLoad(Slot, NestedPath);
+	RequestAuthoredSpawnedClassAsyncLoad(Slot, NestedPath);
 }
 
 void UGP_BuildingDropCatalog::MarkAuthoredSlotFailed(EBuildingAuthoredSlot Slot)
@@ -753,6 +1053,10 @@ void UGP_BuildingDropCatalog::MarkAuthoredSlotFailed(EBuildingAuthoredSlot Slot)
 	if (AuthoredNestedRequestedPaths.IsValidIndex(Index))
 	{
 		AuthoredNestedRequestedPaths[Index].Reset();
+	}
+	if (AuthoredSpawnedClassRequestedPaths.IsValidIndex(Index))
+	{
+		AuthoredSpawnedClassRequestedPaths[Index].Reset();
 	}
 	if (AuthoredStates.IsValidIndex(Index))
 	{
@@ -788,10 +1092,25 @@ void UGP_BuildingDropCatalog::CancelAuthoredNestedLoad(EBuildingAuthoredSlot Slo
 	AuthoredNestedLoadHandles[Index].Reset();
 }
 
+void UGP_BuildingDropCatalog::CancelAuthoredSpawnedClassLoad(EBuildingAuthoredSlot Slot)
+{
+	const int32 Index = static_cast<int32>(Slot);
+	if (!AuthoredSpawnedClassLoadHandles.IsValidIndex(Index) || !AuthoredSpawnedClassLoadHandles[Index].IsValid())
+	{
+		return;
+	}
+	if (AuthoredSpawnedClassLoadHandles[Index]->IsLoadingInProgress())
+	{
+		AuthoredSpawnedClassLoadHandles[Index]->CancelHandle();
+	}
+	AuthoredSpawnedClassLoadHandles[Index].Reset();
+}
+
 void UGP_BuildingDropCatalog::CancelAuthoredLoad(EBuildingAuthoredSlot Slot)
 {
 	CancelAuthoredTopLevelLoad(Slot);
 	CancelAuthoredNestedLoad(Slot);
+	CancelAuthoredSpawnedClassLoad(Slot);
 }
 
 void UGP_BuildingDropCatalog::CancelAllAuthoredLoads()
@@ -862,22 +1181,6 @@ bool UGP_BuildingDropCatalog::IsDropDefinitionIdPending(const FPrimaryAssetId& D
 	const EBuildingAuthoredSlot Slot = FindSlotForId(DropDefinitionId);
 	const int32 Index = static_cast<int32>(Slot);
 	return AuthoredStates.IsValidIndex(Index) && AuthoredStates[Index] == EAuthoredSlotState::Pending;
-}
-
-void UGP_BuildingDropCatalog::SyncLegacyLogisticsHubCompatibility()
-{
-	if (!IsValid(LegacyLogisticsHubDrop))
-	{
-		return;
-	}
-
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	if (Settings == nullptr)
-	{
-		return;
-	}
-
-	LegacyLogisticsHubDrop->Cost = FMath::Max(0.0f, Settings->BuildingOrbitalPurchaseCost);
 }
 
 void UGP_BuildingDropCatalog::RegisterDropDefinition(UGP_OrbitalDropDefinition* DropDefinition)
@@ -1011,50 +1314,22 @@ TSubclassOf<AGP_BuildingBase> UGP_BuildingDropCatalog::ResolvePayloadClass(
 		return nullptr;
 	}
 
+	const EBuildingAuthoredSlot Slot = FindSlotForDrop(DropDefinition);
 	const UGP_BuildingDefinition* Building = DropDefinition->ResolveLoadedBuildingDefinition();
-	const FGPGameplayTags& Tags = FGPGameplayTags::Get();
-	const bool bDefensiveTurretDrop = IsValid(Building)
-		&& Tags.Building_Type_DefensiveTurret.IsValid()
-		&& Building->BuildingTags.HasTag(Tags.Building_Type_DefensiveTurret);
+	const TSubclassOf<AGP_BuildingBase> Loaded = IsValid(Building)
+		? Building->ResolveLoadedSpawnedClass()
+		: nullptr;
 
-	if (bDefensiveTurretDrop)
+	if (Slot == EBuildingAuthoredSlot::LogisticsHub || Slot == EBuildingAuthoredSlot::DefensiveTurret)
 	{
-		if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
-		{
-			bool bUsedAuthored = false;
-			const TSubclassOf<AGP_BuildingBase> Authored = Settings->ResolveDefensiveTurretPayloadClass(&bUsedAuthored);
-			if (bUsedAuthored)
-			{
-				return Authored;
-			}
-		}
-	}
-
-	if (IsValid(Building))
-	{
-		if (TSubclassOf<AGP_BuildingBase> Loaded = Building->ResolveLoadedSpawnedClass())
+		if (Loaded != nullptr && IsSpawnedClassValidForSlot(Slot, Loaded.Get()))
 		{
 			return Loaded;
 		}
+		return ResolveFallbackPayloadClass(Slot);
 	}
 
-	if (bDefensiveTurretDrop)
-	{
-		return TSubclassOf<AGP_BuildingBase>(AGP_DefensiveTurret::StaticClass());
-	}
-
-	if (DropDefinition == LegacyLogisticsHubDrop
-		|| FindSlotForDrop(DropDefinition) == EBuildingAuthoredSlot::LogisticsHub)
-	{
-		const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-		if (Settings != nullptr)
-		{
-			return Settings->ResolveBuildingPayloadClass();
-		}
-		return TSubclassOf<AGP_BuildingBase>(AGP_LogisticsHub::StaticClass());
-	}
-
-	return nullptr;
+	return Loaded;
 }
 
 float UGP_BuildingDropCatalog::GetPurchaseCost(const UGP_OrbitalDropDefinition* DropDefinition) const
@@ -1073,11 +1348,6 @@ float UGP_BuildingDropCatalog::GetPurchaseCost(const UGP_OrbitalDropDefinition* 
 	if (!IsValid(Canonical))
 	{
 		return 0.0f;
-	}
-
-	if (Canonical == LegacyLogisticsHubDrop)
-	{
-		const_cast<UGP_BuildingDropCatalog*>(this)->SyncLegacyLogisticsHubCompatibility();
 	}
 
 	return FMath::Max(0.0f, Canonical->Cost);
@@ -1133,8 +1403,11 @@ void UGP_BuildingDropCatalog::EnsureDebugSlotArrays()
 	DebugHoldDropCompletion.SetNumZeroed(SlotCount);
 	DebugForceUnresolvedNested.SetNumZeroed(SlotCount);
 	DebugHoldNestedCompletion.SetNumZeroed(SlotCount);
+	DebugForceUnresolvedSpawnedClass.SetNumZeroed(SlotCount);
+	DebugHoldSpawnedClassCompletion.SetNumZeroed(SlotCount);
 	DebugInjectedDrops.SetNum(SlotCount);
 	DebugInjectedBuildings.SetNum(SlotCount);
+	DebugInjectedSpawnedClasses.SetNum(SlotCount);
 }
 
 void UGP_BuildingDropCatalog::ResetDebugSlotFlags()
@@ -1146,11 +1419,15 @@ void UGP_BuildingDropCatalog::ResetDebugSlotFlags()
 		DebugHoldDropCompletion[i] = 0;
 		DebugForceUnresolvedNested[i] = 0;
 		DebugHoldNestedCompletion[i] = 0;
+		DebugForceUnresolvedSpawnedClass[i] = 0;
+		DebugHoldSpawnedClassCompletion[i] = 0;
 		DebugInjectedDrops[i] = nullptr;
 		DebugInjectedBuildings[i] = nullptr;
+		DebugInjectedSpawnedClasses[i] = nullptr;
 	}
 	bDebugDidRequestAsyncDropLoad = false;
 	bDebugDidRequestAsyncNestedLoad = false;
+	bDebugDidRequestAsyncNestedSpawnedLoad = false;
 }
 
 void UGP_BuildingDropCatalog::SaveAuthoredSettingsIfNeeded()
@@ -1206,8 +1483,11 @@ void UGP_BuildingDropCatalog::DebugAssignLoadedAuthoredLogisticsHub(UGP_OrbitalD
 	DebugHoldDropCompletion[Index] = 0;
 	DebugForceUnresolvedNested[Index] = 0;
 	DebugHoldNestedCompletion[Index] = 0;
+	DebugForceUnresolvedSpawnedClass[Index] = 0;
+	DebugHoldSpawnedClassCompletion[Index] = 0;
 	DebugInjectedDrops[Index] = nullptr;
 	DebugInjectedBuildings[Index] = nullptr;
+	DebugInjectedSpawnedClasses[Index] = nullptr;
 	AssignAuthoredSettingsDrop(EBuildingAuthoredSlot::LogisticsHub, Definition);
 	RefreshAuthoredSlot(EBuildingAuthoredSlot::LogisticsHub);
 }
@@ -1220,8 +1500,11 @@ void UGP_BuildingDropCatalog::DebugAssignLoadedAuthoredDefensiveTurret(UGP_Orbit
 	DebugHoldDropCompletion[Index] = 0;
 	DebugForceUnresolvedNested[Index] = 0;
 	DebugHoldNestedCompletion[Index] = 0;
+	DebugForceUnresolvedSpawnedClass[Index] = 0;
+	DebugHoldSpawnedClassCompletion[Index] = 0;
 	DebugInjectedDrops[Index] = nullptr;
 	DebugInjectedBuildings[Index] = nullptr;
+	DebugInjectedSpawnedClasses[Index] = nullptr;
 	AssignAuthoredSettingsDrop(EBuildingAuthoredSlot::DefensiveTurret, Definition);
 	RefreshAuthoredSlot(EBuildingAuthoredSlot::DefensiveTurret);
 }
@@ -1261,8 +1544,11 @@ void UGP_BuildingDropCatalog::DebugForceUnresolvedAuthoredLoad(
 	DebugHoldDropCompletion[Index] = bHoldCompletion ? 1 : 0;
 	DebugForceUnresolvedNested[Index] = 0;
 	DebugHoldNestedCompletion[Index] = 0;
+	DebugForceUnresolvedSpawnedClass[Index] = 0;
+	DebugHoldSpawnedClassCompletion[Index] = 0;
 	DebugInjectedDrops[Index] = InjectedDefinition;
 	DebugInjectedBuildings[Index] = nullptr;
+	DebugInjectedSpawnedClasses[Index] = nullptr;
 	bDebugDidRequestAsyncDropLoad = false;
 	CancelAuthoredLoad(Slot);
 	if (AuthoredSlotDrops.IsValidIndex(Index))
@@ -1317,8 +1603,11 @@ void UGP_BuildingDropCatalog::DebugForceUnresolvedNestedBuildingLoad(
 	DebugHoldDropCompletion[Index] = 0;
 	DebugForceUnresolvedNested[Index] = 1;
 	DebugHoldNestedCompletion[Index] = bHoldCompletion ? 1 : 0;
+	DebugForceUnresolvedSpawnedClass[Index] = 0;
+	DebugHoldSpawnedClassCompletion[Index] = 0;
 	DebugInjectedDrops[Index] = InjectedDrop;
 	DebugInjectedBuildings[Index] = InjectedBuilding;
+	DebugInjectedSpawnedClasses[Index] = nullptr;
 	bDebugDidRequestAsyncNestedLoad = false;
 	CancelAuthoredNestedLoad(Slot);
 	if (AuthoredStates.IsValidIndex(Index))
@@ -1349,6 +1638,68 @@ void UGP_BuildingDropCatalog::DebugForceUnresolvedNestedDefensiveTurretBuildingL
 		EBuildingAuthoredSlot::DefensiveTurret,
 		InjectedDrop,
 		InjectedBuilding,
+		bHoldCompletion);
+}
+
+void UGP_BuildingDropCatalog::DebugForceUnresolvedNestedSpawnedClassLoad(
+	EBuildingAuthoredSlot Slot,
+	UGP_OrbitalDropDefinition* InjectedDrop,
+	UGP_BuildingDefinition* InjectedBuilding,
+	TSubclassOf<AGP_BuildingBase> InjectedSpawnedClass,
+	bool bHoldCompletion)
+{
+	EnsureDebugSlotArrays();
+	const int32 Index = static_cast<int32>(Slot);
+	if (IsValid(InjectedDrop) && IsValid(InjectedBuilding))
+	{
+		InjectedDrop->BuildingDefinition = InjectedBuilding;
+		InjectedBuilding->SpawnedClass = TSoftClassPtr<AGP_BuildingBase>(
+			FSoftObjectPath(GPBuildingDropCatalogPrivate::UnresolvedSpawnedClassStub));
+	}
+	AssignAuthoredSettingsDrop(Slot, InjectedDrop);
+	DebugForceUnresolvedDrop[Index] = 0;
+	DebugHoldDropCompletion[Index] = 0;
+	DebugForceUnresolvedNested[Index] = 0;
+	DebugHoldNestedCompletion[Index] = 0;
+	DebugForceUnresolvedSpawnedClass[Index] = 1;
+	DebugHoldSpawnedClassCompletion[Index] = bHoldCompletion ? 1 : 0;
+	DebugInjectedDrops[Index] = InjectedDrop;
+	DebugInjectedBuildings[Index] = InjectedBuilding;
+	DebugInjectedSpawnedClasses[Index] = InjectedSpawnedClass;
+	bDebugDidRequestAsyncNestedSpawnedLoad = false;
+	CancelAuthoredSpawnedClassLoad(Slot);
+	if (AuthoredStates.IsValidIndex(Index))
+	{
+		AuthoredStates[Index] = EAuthoredSlotState::Empty;
+	}
+	RefreshAuthoredSlot(Slot);
+}
+
+void UGP_BuildingDropCatalog::DebugForceUnresolvedNestedLogisticsHubSpawnedClassLoad(
+	UGP_OrbitalDropDefinition* InjectedDrop,
+	UGP_BuildingDefinition* InjectedBuilding,
+	TSubclassOf<AGP_BuildingBase> InjectedSpawnedClass,
+	bool bHoldCompletion)
+{
+	DebugForceUnresolvedNestedSpawnedClassLoad(
+		EBuildingAuthoredSlot::LogisticsHub,
+		InjectedDrop,
+		InjectedBuilding,
+		InjectedSpawnedClass,
+		bHoldCompletion);
+}
+
+void UGP_BuildingDropCatalog::DebugForceUnresolvedNestedDefensiveTurretSpawnedClassLoad(
+	UGP_OrbitalDropDefinition* InjectedDrop,
+	UGP_BuildingDefinition* InjectedBuilding,
+	TSubclassOf<AGP_BuildingBase> InjectedSpawnedClass,
+	bool bHoldCompletion)
+{
+	DebugForceUnresolvedNestedSpawnedClassLoad(
+		EBuildingAuthoredSlot::DefensiveTurret,
+		InjectedDrop,
+		InjectedBuilding,
+		InjectedSpawnedClass,
 		bHoldCompletion);
 }
 
@@ -1428,6 +1779,117 @@ bool UGP_BuildingDropCatalog::DebugConsumeNullBuildingDefinitionLog()
 	return bLogged;
 }
 
+bool UGP_BuildingDropCatalog::DebugConsumeNestedSpawnedClassLoadFailedLog()
+{
+	const bool bLogged = bDebugNestedSpawnedClassLoadFailedLogged;
+	bDebugNestedSpawnedClassLoadFailedLogged = false;
+	return bLogged;
+}
+
+bool UGP_BuildingDropCatalog::DebugConsumeNullSpawnedClassLog()
+{
+	const bool bLogged = bDebugNullSpawnedClassLogged;
+	bDebugNullSpawnedClassLogged = false;
+	return bLogged;
+}
+
+void UGP_BuildingDropCatalog::DebugCompletePendingNestedSpawnedClassLoad(EBuildingAuthoredSlot Slot)
+{
+	const int32 Index = static_cast<int32>(Slot);
+	if (!AuthoredStates.IsValidIndex(Index) || AuthoredStates[Index] != EAuthoredSlotState::Pending)
+	{
+		return;
+	}
+	if (DebugHoldSpawnedClassCompletion.IsValidIndex(Index))
+	{
+		DebugHoldSpawnedClassCompletion[Index] = 0;
+	}
+	FinishAuthoredSpawnedClassLoadResolve(Slot);
+}
+
+void UGP_BuildingDropCatalog::DebugCompletePendingNestedSpawnedClassLoad()
+{
+	for (int32 i = 0; i < static_cast<int32>(EBuildingAuthoredSlot::COUNT); ++i)
+	{
+		if (!AuthoredStates.IsValidIndex(i) || AuthoredStates[i] != EAuthoredSlotState::Pending)
+		{
+			continue;
+		}
+		if (DebugHoldSpawnedClassCompletion.IsValidIndex(i) && DebugHoldSpawnedClassCompletion[i] == 0
+			&& DebugForceUnresolvedSpawnedClass.IsValidIndex(i) && DebugForceUnresolvedSpawnedClass[i] == 0)
+		{
+			continue;
+		}
+		DebugCompletePendingNestedSpawnedClassLoad(static_cast<EBuildingAuthoredSlot>(i));
+	}
+}
+
+void UGP_BuildingDropCatalog::DebugForceNestedSpawnedClassLoadFailure(EBuildingAuthoredSlot Slot)
+{
+	const int32 Index = static_cast<int32>(Slot);
+	if (DebugInjectedSpawnedClasses.IsValidIndex(Index))
+	{
+		DebugInjectedSpawnedClasses[Index] = nullptr;
+	}
+	if (DebugHoldSpawnedClassCompletion.IsValidIndex(Index))
+	{
+		DebugHoldSpawnedClassCompletion[Index] = 0;
+	}
+	if (DebugForceUnresolvedSpawnedClass.IsValidIndex(Index))
+	{
+		DebugForceUnresolvedSpawnedClass[Index] = 0;
+	}
+	if (!AuthoredStates.IsValidIndex(Index) || AuthoredStates[Index] != EAuthoredSlotState::Pending)
+	{
+		return;
+	}
+
+	if (AuthoredSlotDrops.IsValidIndex(Index) && IsValid(AuthoredSlotDrops[Index]))
+	{
+		if (UGP_BuildingDefinition* Building = AuthoredSlotDrops[Index]->ResolveLoadedBuildingDefinition())
+		{
+			Building->SpawnedClass.Reset();
+		}
+	}
+	if (DebugInjectedDrops.IsValidIndex(Index) && IsValid(DebugInjectedDrops[Index]))
+	{
+		if (UGP_BuildingDefinition* Building = DebugInjectedDrops[Index]->ResolveLoadedBuildingDefinition())
+		{
+			Building->SpawnedClass.Reset();
+		}
+	}
+	if (DebugInjectedBuildings.IsValidIndex(Index) && IsValid(DebugInjectedBuildings[Index]))
+	{
+		DebugInjectedBuildings[Index]->SpawnedClass.Reset();
+	}
+
+	const FSoftObjectPath DropPath = AuthoredRequestedPaths.IsValidIndex(Index)
+		? AuthoredRequestedPaths[Index]
+		: FSoftObjectPath();
+	const FSoftObjectPath NestedPath = AuthoredSpawnedClassRequestedPaths.IsValidIndex(Index)
+		? AuthoredSpawnedClassRequestedPaths[Index]
+		: FSoftObjectPath();
+	UE_LOG(LogGPBuildingDropCatalog, Error,
+		TEXT("GP SpawnedClassLoadFailed: Slot=%s Drop=%s SpawnedClass=%s Reason=ResolveFailedUsingNativeFallback"),
+		GPBuildingDropCatalogPrivate::SlotNameFromIndex(Index),
+		*DropPath.ToString(),
+		*NestedPath.ToString());
+	bDebugNestedSpawnedClassLoadFailedLogged = true;
+	MarkAuthoredSlotFailed(Slot);
+}
+
+void UGP_BuildingDropCatalog::DebugForceNestedSpawnedClassLoadFailure()
+{
+	for (int32 i = 0; i < static_cast<int32>(EBuildingAuthoredSlot::COUNT); ++i)
+	{
+		if (!AuthoredStates.IsValidIndex(i) || AuthoredStates[i] != EAuthoredSlotState::Pending)
+		{
+			continue;
+		}
+		DebugForceNestedSpawnedClassLoadFailure(static_cast<EBuildingAuthoredSlot>(i));
+	}
+}
+
 UGP_OrbitalDropDefinition* UGP_BuildingDropCatalog::DebugGetCanonicalDefensiveTurretDrop() const
 {
 	return CanonicalForSlot(EBuildingAuthoredSlot::DefensiveTurret);
@@ -1454,6 +1916,10 @@ void UGP_BuildingDropCatalog::DebugClearAuthoredBuildingDropOverrides()
 		if (AuthoredNestedRequestedPaths.IsValidIndex(i))
 		{
 			AuthoredNestedRequestedPaths[i].Reset();
+		}
+		if (AuthoredSpawnedClassRequestedPaths.IsValidIndex(i))
+		{
+			AuthoredSpawnedClassRequestedPaths[i].Reset();
 		}
 	}
 
@@ -1522,6 +1988,10 @@ void UGP_BuildingDropCatalog::DebugBeginContractIsolation()
 		if (AuthoredNestedRequestedPaths.IsValidIndex(i))
 		{
 			AuthoredNestedRequestedPaths[i].Reset();
+		}
+		if (AuthoredSpawnedClassRequestedPaths.IsValidIndex(i))
+		{
+			AuthoredSpawnedClassRequestedPaths[i].Reset();
 		}
 	}
 }

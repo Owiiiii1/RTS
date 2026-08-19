@@ -7,7 +7,6 @@
 #include "Orbital/GPWallPackageDefinition.h"
 #include "GPOrbitalDeliverySettings.generated.h"
 
-class AGP_BuildingBase;
 class AGP_DropPod;
 class UGP_OrbitalDropDefinition;
 class UGP_OrbitalUnitDropDefinition;
@@ -19,13 +18,12 @@ class UGP_OrbitalUnitDropDefinition;
  * Project Settings own:
  * - DataAsset / catalog references
  * - true global transport and world-system tunables (pod class, altitude, spacing, cleanup, deploy radius)
- * - retained legacy / fallback Config compatibility (not canonical product balance)
  *
  * Product DataAssets own:
  * - product cost, transport slot cost, payload
  * - product-specific descent / payload-deploy timing
  *
- * Native bootstrap products own native delivery timing.
+ * Native bootstrap products own native delivery timing and native Hub/Turret payload classes.
  * Wall Package owns its own descent / deploy timing on UGP_WallPackageDefinition.
  */
 UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "GP Orbital Delivery"))
@@ -100,34 +98,6 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "0.0"))
 	float UnitDropCleanupDelaySeconds = 0.35f;
 
-	/**
-	 * DEPRECATED compatibility bridge. Canonical cost is UGP_OrbitalDropDefinition.Cost.
-	 * Retained as operator DefaultGame.ini compatibility for the native Logistics Hub catalog entry.
-	 * Not a designer-authoritative Project Settings control.
-	 */
-	UPROPERTY(Config, meta = (ClampMin = "0.0", DeprecatedProperty,
-		DeprecationMessage = "Canonical cost is UGP_OrbitalDropDefinition.Cost. Kept as Logistics Hub compatibility bridge."))
-	float BuildingOrbitalPurchaseCost = 100.0f;
-
-	/**
-	 * DEPRECATED compatibility bridge. Canonical class is UGP_BuildingDefinition.SpawnedClass.
-	 * Retained as operator DefaultGame.ini compatibility for Logistics Hub.
-	 * Not a designer-authoritative Project Settings control.
-	 */
-	UPROPERTY(Config, meta = (AllowAbstract = "false", DeprecatedProperty,
-		DeprecationMessage = "Canonical payload is UGP_BuildingDefinition.SpawnedClass. Kept as Logistics Hub compatibility bridge."))
-	TSoftClassPtr<AGP_BuildingBase> BuildingPayloadClass;
-
-	/**
-	 * LEGACY compatibility override. When set, currently outranks BuildingDefinition.SpawnedClass.
-	 * Not the desired future source of truth. Keep editable until BuildingDefinition payload migration.
-	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|LEGACY Compatibility Override",
-		meta = (AllowAbstract = "false",
-			DisplayName = "Defensive Turret Payload Class (LEGACY Override)",
-			ToolTip = "LEGACY compatibility override. Currently outranks BuildingDefinition.SpawnedClass when set. Not the desired future source of truth. Keep until BuildingDefinition payload migration."))
-	TSoftClassPtr<AGP_BuildingBase> DefensiveTurretPayloadClass;
-
 	/** Spawn altitude above building landing point (cm). */
 	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|DropPod", meta = (ClampMin = "100.0"))
 	float BuildingDropSpawnAltitudeCm = 2500.0f;
@@ -143,12 +113,6 @@ public:
 	/** Resolve DropPod class: soft class if valid subclass, else native. */
 	TSubclassOf<AGP_DropPod> ResolveUnitDropPodClass(bool* bOutUsedAuthored = nullptr) const;
 
-	/** Resolve building payload: soft class if valid subclass, else native AGP_LogisticsHub. */
-	TSubclassOf<AGP_BuildingBase> ResolveBuildingPayloadClass(bool* bOutUsedAuthored = nullptr) const;
-
-	/** Resolve Defensive Turret payload: authored subclass if valid, else native AGP_DefensiveTurret. */
-	TSubclassOf<AGP_BuildingBase> ResolveDefensiveTurretPayloadClass(bool* bOutUsedAuthored = nullptr) const;
-
 	/** Building pods reuse UnitDropPodClass / native AGP_DropPod fallback (GP-S32R). */
 	TSubclassOf<AGP_DropPod> ResolveBuildingDropPodClass(bool* bOutUsedAuthored = nullptr) const
 	{
@@ -157,6 +121,4 @@ public:
 
 	/** True if soft ref is set but fails base-class / load checks (does not use invalid class). */
 	bool IsUnitDropPodClassConfigInvalid() const;
-	bool IsBuildingPayloadClassConfigInvalid() const;
-	bool IsDefensiveTurretPayloadClassConfigInvalid() const;
 };

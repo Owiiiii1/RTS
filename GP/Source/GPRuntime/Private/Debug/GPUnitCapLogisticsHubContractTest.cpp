@@ -394,7 +394,6 @@ void UGP_UnitCapLogisticsHubContractTestRunner::AdvanceStage()
 			UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(0.35f, 0.15f);
 			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(0.30f, 0.15f);
 			Settings->UnitDropPodClass.Reset();
-			Settings->BuildingPayloadClass.Reset();
 			bSettingsMutated = true;
 		}
 

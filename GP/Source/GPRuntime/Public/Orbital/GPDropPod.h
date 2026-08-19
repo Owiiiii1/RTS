@@ -117,6 +117,7 @@ public:
 	void DebugForceSkipPayloadSpawn() { bDebugSkipPayloadSpawn = true; }
 	float DebugGetDescentDurationSeconds() const { return DescentDurationSeconds; }
 	float DebugGetPayloadDeployDelaySeconds() const { return PayloadDeployDelaySeconds; }
+	TSubclassOf<AGP_BuildingBase> DebugGetPendingBuildingPayloadClass() const { return PendingBuildingPayloadClass; }
 #endif
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "GP|DropPod|Presentation")

@@ -27,8 +27,11 @@ class GPRUNTIME_API UGP_BuildingDropCatalog : public UObject
 
 public:
 	static UGP_BuildingDropCatalog& Get();
-	/** Idempotent. Safe if never created. Later Get() recreates a fresh native catalog. */
+	/** Live catalog only. Never creates, refreshes, or syncs. Teardown-safe. */
+	static UGP_BuildingDropCatalog* TryGetExisting();
+	/** Idempotent. Engine pre-exit locks recreation. */
 	static void ShutdownCatalog();
+	static void NotifyEngineShutdown();
 	static void BindEngineLifecycle();
 	static void UnbindEngineLifecycle();
 
@@ -82,6 +85,7 @@ public:
 	bool DebugDidRequestAsyncNestedBuildingLoad() const { return bDebugDidRequestAsyncNestedLoad; }
 	bool DebugConsumeNestedBuildingLoadFailedLog();
 	bool DebugConsumeNullBuildingDefinitionLog();
+	bool DebugIsCallbackSafe() const { return IsCatalogCallbackSafe(); }
 	UGP_OrbitalDropDefinition* DebugGetCanonicalDefensiveTurretDrop() const;
 	void DebugClearAuthoredBuildingDropOverrides();
 	void DebugBeginContractIsolation();
@@ -160,6 +164,7 @@ private:
 	void CancelAuthoredTopLevelLoad(EBuildingAuthoredSlot Slot);
 	void CancelAuthoredNestedLoad(EBuildingAuthoredSlot Slot);
 	void CancelAuthoredLoad(EBuildingAuthoredSlot Slot);
+	void CancelAllAuthoredLoads();
 	bool IsCatalogCallbackSafe() const;
 	TSoftObjectPtr<UGP_OrbitalDropDefinition> GetAuthoredSoftRef(EBuildingAuthoredSlot Slot) const;
 	UGP_OrbitalDropDefinition* ResolveLoadedAuthored(const TSoftObjectPtr<UGP_OrbitalDropDefinition>& Soft) const;

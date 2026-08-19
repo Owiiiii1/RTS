@@ -29,6 +29,7 @@
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
+#include "UObject/StrongObjectPtr.h"
 #include "Units/GPWorker.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPOrbitalBuildingDrop, Log, All);
@@ -143,6 +144,14 @@ void UGP_OrbitalBuildingDropContractTestRunner::OnWorldCleanup(UWorld* World, bo
 	}
 }
 
+void UGP_OrbitalBuildingDropContractTestRunner::CleanupCatalogIfExists()
+{
+	if (UGP_BuildingDropCatalog* Catalog = UGP_BuildingDropCatalog::TryGetExisting())
+	{
+		Catalog->DebugEndContractIsolation();
+	}
+}
+
 void UGP_OrbitalBuildingDropContractTestRunner::RestoreSettings()
 {
 	if (bSettingsMutated)
@@ -153,14 +162,17 @@ void UGP_OrbitalBuildingDropContractTestRunner::RestoreSettings()
 			Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
 			Settings->BuildingDropSpawnAltitudeCm = SavedBuildingAltitude;
 			Settings->BuildingDropPayloadDeployDelaySeconds = SavedBuildingDeployDelay;
-			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(2.5f, 2.0f);
+			if (UGP_BuildingDropCatalog* Catalog = UGP_BuildingDropCatalog::TryGetExisting())
+			{
+				Catalog->OverrideDeliveryTiming(2.5f, 2.0f);
+			}
 			Settings->BuildingOrbitalPurchaseCost = SavedBuildingPurchaseCost;
 			Settings->BuildingMaxDeployRadiusFromMainBaseCm = SavedBuildingMaxRadius;
 			Settings->BuildingPayloadClass = SavedBuildingPayload;
 		}
 		bSettingsMutated = false;
 	}
-	UGP_BuildingDropCatalog::Get().DebugEndContractIsolation();
+	CleanupCatalogIfExists();
 }
 
 void UGP_OrbitalBuildingDropContractTestRunner::CleanupActors()
@@ -944,6 +956,75 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 			&& FMath::IsNearlyEqual(Catalog.GetPurchaseCost(Catalog.GetLegacyLogisticsHubDrop()), 100.0f),
 			TEXT("U_NativeHubBootstrapImmediatelyUsable"));
 
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 12: // Catalog teardown: TryGetExisting never creates; BeginDestroy-style cleanup does not resurrect
+	{
+		UGP_BuildingDropCatalog& Catalog = UGP_BuildingDropCatalog::Get();
+		Expect(UGP_BuildingDropCatalog::TryGetExisting() == &Catalog
+			&& IsValid(Catalog.GetLegacyLogisticsHubDrop()),
+			TEXT("Life_GetBeforeShutdown"));
+
+		RestoreSettings();
+		Expect(UGP_BuildingDropCatalog::TryGetExisting() == &Catalog
+			&& !Catalog.IsContractIsolationActive(),
+			TEXT("Life_NormalCleanupRestoresIsolation"));
+
+		TSoftObjectPtr<UGP_OrbitalDropDefinition> SavedHubRef;
+		TSoftObjectPtr<UGP_OrbitalDropDefinition> SavedTurretRef;
+		TSoftObjectPtr<UGP_OrbitalDropDefinition> SavedWallRef;
+		TSoftObjectPtr<UGP_OrbitalDropDefinition> SavedWallTurretRef;
+		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+		{
+			SavedHubRef = Settings->LogisticsHubDropDefinition;
+			SavedTurretRef = Settings->DefensiveTurretDropDefinition;
+			SavedWallRef = Settings->WallDropDefinition;
+			SavedWallTurretRef = Settings->WallTurretDropDefinition;
+		}
+
+		UGP_OrbitalDropDefinition* NativeHub = Catalog.GetLegacyLogisticsHubDrop();
+		UGP_BuildingDefinition* HubBuilding = NativeHub != nullptr
+			? NativeHub->ResolveLoadedBuildingDefinition()
+			: nullptr;
+		UGP_OrbitalDropDefinition* PendingDrop = NewObject<UGP_OrbitalDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHUB_Teardown")), RF_Transient);
+		PendingDrop->Cost = 23.0f;
+		PendingDrop->BuildingDefinition = HubBuilding;
+		Catalog.DebugForceUnresolvedNestedLogisticsHubBuildingLoad(PendingDrop, HubBuilding, true);
+		Expect(Catalog.IsDropDefinitionPending(PendingDrop) && Catalog.DebugIsCallbackSafe(),
+			TEXT("Life_PendingBeforeShutdown"));
+
+		TStrongObjectPtr<UGP_BuildingDropCatalog> Leftover;
+		Leftover.Reset(&Catalog);
+		UGP_BuildingDropCatalog::ShutdownCatalog();
+		Expect(UGP_BuildingDropCatalog::TryGetExisting() == nullptr, TEXT("Life_NullAfterShutdown"));
+		Expect(Leftover.IsValid() && !Leftover->DebugIsCallbackSafe(), TEXT("Life_CallbackIgnoredAfterShutdown"));
+		if (Leftover.IsValid())
+		{
+			Leftover->DebugCompletePendingNestedBuildingLoad();
+		}
+		Expect(UGP_BuildingDropCatalog::TryGetExisting() == nullptr, TEXT("Life_CompletePendingNoResurrect"));
+
+		RestoreSettings();
+		Expect(UGP_BuildingDropCatalog::TryGetExisting() == nullptr, TEXT("Life_DestroyCleanupNoResurrect"));
+		Leftover.Reset();
+
+		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+		{
+			Settings->LogisticsHubDropDefinition = SavedHubRef;
+			Settings->DefensiveTurretDropDefinition = SavedTurretRef;
+			Settings->WallDropDefinition = SavedWallRef;
+			Settings->WallTurretDropDefinition = SavedWallTurretRef;
+		}
+
+		UGP_BuildingDropCatalog& Recreated = UGP_BuildingDropCatalog::Get();
+		Recreated.DebugBeginContractIsolation();
+		Expect(UGP_BuildingDropCatalog::TryGetExisting() == &Recreated
+			&& IsValid(Recreated.GetLegacyLogisticsHubDrop()),
+			TEXT("Life_RecreateAfterLifecycle"));
+
 		Finish();
 		break;
 	}
@@ -979,5 +1060,6 @@ void UGP_OrbitalBuildingDropContractTestRunner::OnWorldCleanup(UWorld* World, bo
 void UGP_OrbitalBuildingDropContractTestRunner::UnbindWorldCleanup() {}
 void UGP_OrbitalBuildingDropContractTestRunner::CleanupActors() {}
 void UGP_OrbitalBuildingDropContractTestRunner::RestoreSettings() {}
+void UGP_OrbitalBuildingDropContractTestRunner::CleanupCatalogIfExists() {}
 
 #endif

@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — BuildingDropCatalog editor-close teardown
+
+Status: **UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION**
+
+- Same branch `feature/gp-unit-drop-nested-readiness`
+- Operator gameplay (Worker + Salvage Walker cold-start authored payload/UnitDefinition): **PASS**
+- Operator editor-close: **FAIL** — `Object is not packaged: GP_BuildingDropCatalog` from `Get()` during `RestoreSettings` / `BeginDestroy`
+- Narrow BuildingDropCatalog lifecycle: `TryGetExisting()`, engine-exit creation lock, idempotent shutdown, non-creating runner/coordinator cleanup
+- `gp.Building.RunOrbitalBuildingDropContractTest`, `gp.Resource.RunOrbitalUnitDropContractTest`, `gp.Economy.RunEconomyLogisticsDataContractTest` Failures=0
+- GPEditor Win64 Development + UHT **PASS**. **NOT MERGED. NOT FINALIZED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Unit Drop Nested Readiness
 
 Status: **UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION**

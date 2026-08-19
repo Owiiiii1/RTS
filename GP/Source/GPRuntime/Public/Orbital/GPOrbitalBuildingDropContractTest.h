@@ -36,6 +36,7 @@ private:
 	void UnbindWorldCleanup();
 	void CleanupActors();
 	void RestoreSettings();
+	void CleanupCatalogIfExists();
 
 	int32 StageIndex = 0;
 	int32 Failures = 0;

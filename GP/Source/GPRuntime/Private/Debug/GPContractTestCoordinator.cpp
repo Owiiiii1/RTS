@@ -117,8 +117,14 @@ namespace GPContractTestCoordinator
 
 		const FName FinishedName = Private::GActive.TestName;
 		const uint64 FinishedId = Private::GActive.ExecutionId;
-		UGP_OrbitalUnitDropCatalog::Get().DebugEndContractIsolation();
-		UGP_BuildingDropCatalog::Get().DebugEndContractIsolation();
+		if (UGP_OrbitalUnitDropCatalog* UnitDrops = UGP_OrbitalUnitDropCatalog::TryGetExisting())
+		{
+			UnitDrops->DebugEndContractIsolation();
+		}
+		if (UGP_BuildingDropCatalog* Buildings = UGP_BuildingDropCatalog::TryGetExisting())
+		{
+			Buildings->DebugEndContractIsolation();
+		}
 		Private::GBusy = false;
 		Private::GActive = FExecutionToken();
 

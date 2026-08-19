@@ -22,6 +22,13 @@ namespace GPBuildingDropCatalogPrivate
 {
 	static TStrongObjectPtr<UGP_BuildingDropCatalog> GCatalog;
 	static FDelegateHandle EnginePreExitHandle;
+	static bool bInShutdownCatalog = false;
+	static bool bEngineExitLocked = false;
+
+	static bool IsCreationBlocked()
+	{
+		return bInShutdownCatalog || bEngineExitLocked || IsEngineExitRequested();
+	}
 
 	static constexpr TCHAR CatalogObjectName[] = TEXT("GP_BuildingDropCatalog");
 	static constexpr TCHAR UnresolvedDropStub[] =
@@ -47,40 +54,72 @@ namespace GPBuildingDropCatalogPrivate
 	}
 }
 
+UGP_BuildingDropCatalog* UGP_BuildingDropCatalog::TryGetExisting()
+{
+	if (GPBuildingDropCatalogPrivate::GCatalog.IsValid())
+	{
+		return GPBuildingDropCatalogPrivate::GCatalog.Get();
+	}
+	return nullptr;
+}
+
 UGP_BuildingDropCatalog& UGP_BuildingDropCatalog::Get()
 {
-	if (!GPBuildingDropCatalogPrivate::GCatalog.IsValid())
+	if (UGP_BuildingDropCatalog* Existing = TryGetExisting())
 	{
-		UGP_BuildingDropCatalog* CatalogObj = FindObject<UGP_BuildingDropCatalog>(
-			GetTransientPackage(),
-			GPBuildingDropCatalogPrivate::CatalogObjectName);
-		if (!IsValid(CatalogObj))
+		if (!GPBuildingDropCatalogPrivate::IsCreationBlocked())
 		{
-			CatalogObj = NewObject<UGP_BuildingDropCatalog>(
-				GetTransientPackage(),
-				GPBuildingDropCatalogPrivate::CatalogObjectName,
-				RF_Transient);
+			Existing->RefreshAuthoredBindings();
+			Existing->SyncLegacyLogisticsHubCompatibility();
 		}
-		GPBuildingDropCatalogPrivate::GCatalog.Reset(CatalogObj);
-		CatalogObj->EnsureNativeCatalog();
+		return *Existing;
 	}
 
-	UGP_BuildingDropCatalog& Catalog = *GPBuildingDropCatalogPrivate::GCatalog.Get();
-	Catalog.RefreshAuthoredBindings();
-	Catalog.SyncLegacyLogisticsHubCompatibility();
-	return Catalog;
+	if (GPBuildingDropCatalogPrivate::IsCreationBlocked())
+	{
+		return *GetMutableDefault<UGP_BuildingDropCatalog>();
+	}
+
+	UGP_BuildingDropCatalog* CatalogObj = FindObject<UGP_BuildingDropCatalog>(
+		GetTransientPackage(),
+		GPBuildingDropCatalogPrivate::CatalogObjectName);
+	if (!IsValid(CatalogObj))
+	{
+		CatalogObj = NewObject<UGP_BuildingDropCatalog>(
+			GetTransientPackage(),
+			GPBuildingDropCatalogPrivate::CatalogObjectName,
+			RF_Transient);
+	}
+	GPBuildingDropCatalogPrivate::GCatalog.Reset(CatalogObj);
+	CatalogObj->EnsureNativeCatalog();
+	CatalogObj->RefreshAuthoredBindings();
+	CatalogObj->SyncLegacyLogisticsHubCompatibility();
+	return *CatalogObj;
 }
 
 void UGP_BuildingDropCatalog::ShutdownCatalog()
 {
+	if (GPBuildingDropCatalogPrivate::bInShutdownCatalog)
+	{
+		return;
+	}
+
+	GPBuildingDropCatalogPrivate::bInShutdownCatalog = true;
 	if (GPBuildingDropCatalogPrivate::GCatalog.IsValid())
 	{
-		for (int32 i = 0; i < static_cast<int32>(EBuildingAuthoredSlot::COUNT); ++i)
-		{
-			GPBuildingDropCatalogPrivate::GCatalog->CancelAuthoredLoad(static_cast<EBuildingAuthoredSlot>(i));
-		}
+		GPBuildingDropCatalogPrivate::GCatalog->CancelAllAuthoredLoads();
 	}
 	GPBuildingDropCatalogPrivate::GCatalog.Reset();
+	if (!GPBuildingDropCatalogPrivate::bEngineExitLocked && !IsEngineExitRequested())
+	{
+		GPBuildingDropCatalogPrivate::bInShutdownCatalog = false;
+	}
+}
+
+void UGP_BuildingDropCatalog::NotifyEngineShutdown()
+{
+	GPBuildingDropCatalogPrivate::bEngineExitLocked = true;
+	ShutdownCatalog();
 }
 
 void UGP_BuildingDropCatalog::BindEngineLifecycle()
@@ -91,7 +130,7 @@ void UGP_BuildingDropCatalog::BindEngineLifecycle()
 	}
 
 	GPBuildingDropCatalogPrivate::EnginePreExitHandle =
-		FCoreDelegates::OnEnginePreExit.AddStatic(&UGP_BuildingDropCatalog::ShutdownCatalog);
+		FCoreDelegates::OnEnginePreExit.AddStatic(&UGP_BuildingDropCatalog::NotifyEngineShutdown);
 }
 
 void UGP_BuildingDropCatalog::UnbindEngineLifecycle()
@@ -499,7 +538,9 @@ void UGP_BuildingDropCatalog::RequestAuthoredNestedAsyncLoad(
 
 bool UGP_BuildingDropCatalog::IsCatalogCallbackSafe() const
 {
-	return IsValid(this) && !IsEngineExitRequested();
+	return IsValid(this)
+		&& !GPBuildingDropCatalogPrivate::IsCreationBlocked()
+		&& GPBuildingDropCatalogPrivate::GCatalog.Get() == this;
 }
 
 void UGP_BuildingDropCatalog::HandleAuthoredLoaded(EBuildingAuthoredSlot Slot)
@@ -751,6 +792,14 @@ void UGP_BuildingDropCatalog::CancelAuthoredLoad(EBuildingAuthoredSlot Slot)
 {
 	CancelAuthoredTopLevelLoad(Slot);
 	CancelAuthoredNestedLoad(Slot);
+}
+
+void UGP_BuildingDropCatalog::CancelAllAuthoredLoads()
+{
+	for (int32 i = 0; i < static_cast<int32>(EBuildingAuthoredSlot::COUNT); ++i)
+	{
+		CancelAuthoredLoad(static_cast<EBuildingAuthoredSlot>(i));
+	}
 }
 
 UGP_BuildingDropCatalog::EBuildingAuthoredSlot UGP_BuildingDropCatalog::FindSlotForDrop(

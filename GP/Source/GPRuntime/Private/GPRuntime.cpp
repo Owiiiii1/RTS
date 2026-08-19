@@ -24,7 +24,7 @@ void FGPRuntimeModule::ShutdownModule()
 	UGP_OrbitalUnitDropCatalog::UnbindEngineLifecycle();
 	UGP_OrbitalUnitDropCatalog::ShutdownCatalog();
 	UGP_BuildingDropCatalog::UnbindEngineLifecycle();
-	UGP_BuildingDropCatalog::ShutdownCatalog();
+	UGP_BuildingDropCatalog::NotifyEngineShutdown();
 	UGP_UnitDefinitionCatalog::UnbindEngineLifecycle();
 	UGP_UnitDefinitionCatalog::ShutdownCatalog();
 }

@@ -36,3 +36,11 @@ Deprecated settings classes must not replace a valid authored product class beca
 ## Native / empty
 
 Unconfigured slots keep native bootstrap. Configured+failed authored slots fall back to native.
+
+## Editor-close teardown (BuildingDropCatalog)
+
+Operator editor close hit `Object is not packaged: GP_BuildingDropCatalog` because contract-runner `BeginDestroy` → `RestoreSettings` called creating `Get()` after package teardown.
+
+Correction is catalog lifecycle only (`TryGetExisting`, engine-exit lock, non-creating runner cleanup). Not a change to unit-drop nested readiness semantics.
+
+Operator re-test required: open Editor, optionally PIE once, close Editor normally. Do not mark operator PASS until that close is clean.

@@ -1,6 +1,6 @@
 # GP — Unit Numeric Compatibility Cleanup (Cleanup Slice C)
 
-Status: **UNIT_NUMERIC_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION**
+Status: **UNIT_NUMERIC_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE**
 
 Branch: `feature/gp-unit-numeric-compat-cleanup` from `origin/main` @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`
 
@@ -25,4 +25,4 @@ Committed `DefaultGame.ini` still contains the four stale keys. Intentionally un
 
 Payload bridges (`WorkerPayloadClass`, `SalvageWalkerPayloadClass`), `UnitDropPodClass`, unit/building timing fallbacks, building numeric/payload bridges, Wall Package, authored content/config edits.
 
-Operator validation: **pending**.
+Operator validation: **PASS**.

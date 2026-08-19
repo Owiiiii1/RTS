@@ -493,7 +493,7 @@ Do not combine H, I, J, M, or N into one implementation slice.
 
 **Slice B implementation status:** `DEAD_OVERLAP_SETTING_REMOVAL_FINALIZED_READY_FOR_MERGE` merged to `main` @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`. Dead C++ property `BuildingPlacementOverlapMarginCm` removed. Runtime placement unchanged. Stale `DefaultGame.ini` key intentionally not touched because protected config exists.
 
-**Slice C implementation status (this combined numeric package):** `UNIT_NUMERIC_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION` on `feature/gp-unit-numeric-compat-cleanup`. Removed `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost`. Native Worker 25/1 and Salvage Walker 50/2 owned by `UGP_OrbitalUnitDropCatalog` bootstrap construction. Authored Ready product Cost/Slots win. Pending does not substitute native numerics when the authored drop object is present. Stale `DefaultGame.ini` keys intentionally not touched. Payload/timing/building bridges unchanged. **NOT MERGED. NOT FINALIZED.**
+**Slice C implementation status (this combined numeric package):** `UNIT_NUMERIC_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE` on `feature/gp-unit-numeric-compat-cleanup`. Removed `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost`. Native Worker 25/1 and Salvage Walker 50/2 owned by `UGP_OrbitalUnitDropCatalog` bootstrap construction. Authored Ready product Cost/Slots win. Pending does not substitute native numerics when the authored drop object is present. Stale `DefaultGame.ini` keys intentionally not touched. Payload/timing/building bridges unchanged. **NOT MERGED.**
 
 ## 10. Do Not Delete Yet
 

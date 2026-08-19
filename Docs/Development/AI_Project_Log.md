@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Unit numeric compatibility cleanup finalization
+
+Status: **UNIT_NUMERIC_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE**
+
+- Same branch `feature/gp-unit-numeric-compat-cleanup` (base `origin/main` @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`)
+- Operator PASS: Worker and Salvage Walker price/display, purchase, delivery, orbital deduction, and transport-slot behavior
+- Final contracts Failures=0: settings visibility, unit-drop, economy/logistics
+- GPEditor+UHT / GP Development / GP Shipping **PASS**
+- Stale `DefaultGame.ini` keys left untouched. **NOT MERGED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Unit numeric compatibility cleanup (Cleanup Slice C)
 
 Status: **UNIT_NUMERIC_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION**

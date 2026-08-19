@@ -938,10 +938,49 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		Expect(IsValid(UnitDrops.GetNativeWorkerDrop())
 			&& UnitDrops.GetWorkerDrop() == UnitDrops.GetNativeWorkerDrop()
 			&& !UnitDrops.IsWorkerDropDefinitionPending()
+			&& FMath::IsNearlyEqual(UnitDrops.GetNativeWorkerDrop()->Cost, 25.0f)
+			&& UnitDrops.GetNativeWorkerDrop()->TransportSlotCost == 1
+			&& FMath::IsNearlyEqual(UnitDrops.GetWorkerOrbitalDropCost(), 25.0f)
+			&& UnitDrops.GetWorkerTransportSlotCost() == 1
 			&& IsValid(UnitDrops.GetNativeSalvageWalkerDrop())
 			&& UnitDrops.GetSalvageWalkerDrop() == UnitDrops.GetNativeSalvageWalkerDrop()
-			&& !UnitDrops.IsSalvageWalkerDropDefinitionPending(),
+			&& !UnitDrops.IsSalvageWalkerDropDefinitionPending()
+			&& FMath::IsNearlyEqual(UnitDrops.GetNativeSalvageWalkerDrop()->Cost, 50.0f)
+			&& UnitDrops.GetNativeSalvageWalkerDrop()->TransportSlotCost == 2
+			&& FMath::IsNearlyEqual(UnitDrops.GetSalvageWalkerOrbitalDropCost(), 50.0f)
+			&& UnitDrops.GetSalvageWalkerTransportSlotCost() == 2,
 			TEXT("Nested_NativeWorkerWalkerBootstrapUsable"));
+
+		const UClass* SettingsClass = UGP_OrbitalDeliverySettings::StaticClass();
+		Expect(SettingsClass != nullptr
+			&& SettingsClass->FindPropertyByName(TEXT("WorkerTransportSlotCost")) == nullptr
+			&& SettingsClass->FindPropertyByName(TEXT("SalvageWalkerTransportSlotCost")) == nullptr
+			&& SettingsClass->FindPropertyByName(TEXT("WorkerOrbitalDropCost")) == nullptr
+			&& SettingsClass->FindPropertyByName(TEXT("SalvageWalkerOrbitalDropCost")) == nullptr
+			&& FMath::IsNearlyEqual(UnitDrops.GetWorkerOrbitalDropCost(), 25.0f)
+			&& UnitDrops.GetWorkerTransportSlotCost() == 1
+			&& FMath::IsNearlyEqual(UnitDrops.GetSalvageWalkerOrbitalDropCost(), 50.0f)
+			&& UnitDrops.GetSalvageWalkerTransportSlotCost() == 2,
+			TEXT("Numeric_RemovedSettingsCannotAffectCatalog"));
+
+		UGP_OrbitalUnitDropDefinition* AuthoredWalkerDropDef = NewObject<UGP_OrbitalUnitDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalUnitDrop_SalvageWalker_Numeric")), RF_Transient);
+		AuthoredWalkerDropDef->Cost = 41.0f;
+		AuthoredWalkerDropDef->TransportSlotCost = 4;
+		AuthoredWalkerDropDef->UnitDefinition = UGP_UnitDefinitionCatalog::Get().GetSalvageWalkerDefinition();
+		AuthoredWalkerDropDef->PayloadClass = AGP_SalvageWalker::StaticClass();
+		UnitDrops.DebugAssignLoadedAuthoredSalvageWalker(AuthoredWalkerDropDef);
+		Expect(UnitDrops.GetSalvageWalkerDrop() == AuthoredWalkerDropDef
+			&& FMath::IsNearlyEqual(UnitDrops.GetSalvageWalkerOrbitalDropCost(), 41.0f)
+			&& UnitDrops.GetSalvageWalkerTransportSlotCost() == 4
+			&& FMath::IsNearlyEqual(UnitDrops.GetNativeSalvageWalkerDrop()->Cost, 50.0f)
+			&& UnitDrops.GetNativeSalvageWalkerDrop()->TransportSlotCost == 2,
+			TEXT("Numeric_AuthoredReadyWalkerWins"));
+		UnitDrops.DebugAssignLoadedAuthoredSalvageWalker(nullptr);
+		Expect(UnitDrops.GetSalvageWalkerDrop() == UnitDrops.GetNativeSalvageWalkerDrop()
+			&& FMath::IsNearlyEqual(UnitDrops.GetSalvageWalkerOrbitalDropCost(), 50.0f)
+			&& UnitDrops.GetSalvageWalkerTransportSlotCost() == 2,
+			TEXT("Numeric_WalkerRestoredNativeAfterAuthored"));
 
 		AuthoredWorkerUnitDef = NewObject<UGP_UnitDefinition>(
 			this, FName(TEXT("DA_GP_Unit_Worker_AuthoredNested")), RF_Transient);
@@ -953,7 +992,7 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		AuthoredWorkerDropDef = NewObject<UGP_OrbitalUnitDropDefinition>(
 			this, FName(TEXT("DA_GP_OrbitalUnitDrop_Worker_Nested")), RF_Transient);
 		AuthoredWorkerDropDef->Cost = 17.0f;
-		AuthoredWorkerDropDef->TransportSlotCost = 1;
+		AuthoredWorkerDropDef->TransportSlotCost = 3;
 		AuthoredWorkerDropDef->DeliveryDescentSeconds = 0.20f;
 		AuthoredWorkerDropDef->PayloadDeployDelaySeconds = 0.0f;
 		AuthoredWorkerDropDef->UnitDefinition = AuthoredWorkerUnitDef;
@@ -1001,7 +1040,11 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			true);
 		Expect(UnitDrops.DebugDidRequestAsyncNestedUnitDefinitionLoad()
 			&& UnitDrops.IsWorkerDropDefinitionPending()
-			&& UnitDrops.GetWorkerDrop() != AuthoredWorkerDropDef,
+			&& UnitDrops.GetWorkerDrop() != AuthoredWorkerDropDef
+			&& FMath::IsNearlyEqual(UnitDrops.GetWorkerOrbitalDropCost(), 17.0f)
+			&& UnitDrops.GetWorkerTransportSlotCost() == 3
+			&& FMath::IsNearlyEqual(UnitDrops.GetNativeWorkerDrop()->Cost, 25.0f)
+			&& UnitDrops.GetNativeWorkerDrop()->TransportSlotCost == 1,
 			TEXT("Nested_UnitDefinitionPending"));
 
 		if (Expect(IsValid(OwnerPS), TEXT("Nested_UnitDefOwnerAlive")))
@@ -1063,7 +1106,9 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		Expect(!UnitDrops.IsWorkerDropDefinitionPending()
 			&& UnitDrops.GetWorkerDrop() == AuthoredWorkerDropDef
 			&& AuthoredWorkerDropDef->ResolveLoadedUnitDefinition() == AuthoredWorkerUnitDef
-			&& UnitDrops.ResolveWorkerPayloadClass() == AGP_OrbitalDropContractWorkerStub::StaticClass(),
+			&& UnitDrops.ResolveWorkerPayloadClass() == AGP_OrbitalDropContractWorkerStub::StaticClass()
+			&& FMath::IsNearlyEqual(UnitDrops.GetWorkerOrbitalDropCost(), 17.0f)
+			&& UnitDrops.GetWorkerTransportSlotCost() == 3,
 			TEXT("Nested_AuthoredReadyUsesPayloadClass"));
 
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())

@@ -747,7 +747,10 @@ void UGP_EconomyLogisticsDataContractTestRunner::AdvanceStage()
 		UnitDrops.DebugClearAuthoredUnitDropOverrides();
 		Expect(IsValid(UnitDrops.GetWorkerDrop())
 			&& FMath::IsNearlyEqual(UnitDrops.GetWorkerOrbitalDropCost(), 25.0f)
-			&& UnitDrops.GetWorkerTransportSlotCost() == 1, TEXT("A_EmptyAuthoredRefUsesNativeBootstrap"));
+			&& UnitDrops.GetWorkerTransportSlotCost() == 1
+			&& FMath::IsNearlyEqual(UnitDrops.GetSalvageWalkerOrbitalDropCost(), 50.0f)
+			&& UnitDrops.GetSalvageWalkerTransportSlotCost() == 2,
+			TEXT("A_EmptyAuthoredRefUsesNativeBootstrap"));
 
 		UnitDrops.DebugAssignLoadedAuthoredWorker(AuthoredWorkerDropDef);
 		FGP_UnitDropManifest OneWorker;
@@ -765,7 +768,9 @@ void UGP_EconomyLogisticsDataContractTestRunner::AdvanceStage()
 			&& FMath::IsNearlyEqual(Descent, 4.25f)
 			&& FMath::IsNearlyEqual(Deploy, 0.75f)
 			&& GPUnitDropAuthority::ComputeManifestCosts(OneWorker, Slots, Cost, Units, Reject)
-			&& Slots == 3 && FMath::IsNearlyEqual(Cost, 17.0f),
+			&& Slots == 3 && FMath::IsNearlyEqual(Cost, 17.0f)
+			&& FMath::IsNearlyEqual(UnitDrops.GetSalvageWalkerOrbitalDropCost(), 50.0f)
+			&& UnitDrops.GetSalvageWalkerTransportSlotCost() == 2,
 			TEXT("B_LoadedAuthoredWorker17x3_4_25x0_75"));
 		Expect(IsValid(UnitDrops.GetNativeWorkerDrop())
 			&& FMath::IsNearlyEqual(UnitDrops.GetNativeWorkerDrop()->Cost, 25.0f)

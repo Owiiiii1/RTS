@@ -87,10 +87,10 @@ Declaration: `GP/Source/GPRuntime/Public/Settings/GPOrbitalDeliverySettings.h:25
 | `WallTurretDropDefinition` | Building catalog slot; native if empty | CANONICAL | Keep |
 | `WallPackageDefinition` | Separate package catalog; authored ready → native | CANONICAL | Keep |
 | `PodTransportSlotCapacity` | Direct authority/HUD read; global pod capacity | CANONICAL | Keep |
-| `WorkerTransportSlotCost` | Used only after canonical drop cannot provide valid value | DEPRECATED_ACTIVE | Hide now; migrate config/tests before removal |
-| `SalvageWalkerTransportSlotCost` | Same | DEPRECATED_ACTIVE | Hide now; migrate before removal |
-| `WorkerOrbitalDropCost` | Catalog fallback when no canonical drop | DEPRECATED_ACTIVE | Hide; migrate before removal |
-| `SalvageWalkerOrbitalDropCost` | Same | DEPRECATED_ACTIVE | Hide; migrate before removal |
+| `WorkerTransportSlotCost` | Removed from C++ settings. Native bootstrap Cost/Slots live on unit-drop catalog products. Stale INI key only. | REMOVED | Config hygiene later |
+| `SalvageWalkerTransportSlotCost` | Same | REMOVED | Config hygiene later |
+| `WorkerOrbitalDropCost` | Same | REMOVED | Config hygiene later |
+| `SalvageWalkerOrbitalDropCost` | Same | REMOVED | Config hygiene later |
 | `WorkerPayloadClass` | Sync-loaded fallback after drop payload class | DEPRECATED_ACTIVE | Move BP reference to unit drop DA, then remove bridge |
 | `SalvageWalkerPayloadClass` | Same | DEPRECATED_ACTIVE | Move and remove later |
 | `UnitDropPodClass` | Shared pod presentation class for unit/building/package | CANONICAL | Keep global |
@@ -491,14 +491,15 @@ Do not combine H, I, J, M, or N into one implementation slice.
 
 **Slice A implementation status:** `SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE` on `feature/gp-settings-visibility-truth`. Editor exposure/labels only. Findings and remaining cleanup slices are unchanged. **NOT MERGED.**
 
-**Slice B implementation status:** `DEAD_OVERLAP_SETTING_REMOVAL_FINALIZED_READY_FOR_MERGE` on `feature/gp-remove-dead-overlap-setting`. Dead C++ property `BuildingPlacementOverlapMarginCm` removed. Runtime placement unchanged. Stale `DefaultGame.ini` key intentionally not touched because protected config exists. **NOT MERGED.**
+**Slice B implementation status:** `DEAD_OVERLAP_SETTING_REMOVAL_FINALIZED_READY_FOR_MERGE` merged to `main` @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`. Dead C++ property `BuildingPlacementOverlapMarginCm` removed. Runtime placement unchanged. Stale `DefaultGame.ini` key intentionally not touched because protected config exists.
+
+**Slice C implementation status (this combined numeric package):** `UNIT_NUMERIC_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION` on `feature/gp-unit-numeric-compat-cleanup`. Removed `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost`. Native Worker 25/1 and Salvage Walker 50/2 owned by `UGP_OrbitalUnitDropCatalog` bootstrap construction. Authored Ready product Cost/Slots win. Pending does not substitute native numerics when the authored drop object is present. Stale `DefaultGame.ini` keys intentionally not touched. Payload/timing/building bridges unchanged. **NOT MERGED. NOT FINALIZED.**
 
 ## 10. Do Not Delete Yet
 
 The following fields look obsolete or duplicated but still have proven readers:
 
-- `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost` — unit catalog fallback.
-- `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost` — unit catalog fallback.
+- Stale `DefaultGame.ini` keys `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost` — leftover text after C++ removal; no production GConfig/string reader. Config hygiene later.
 - `WorkerPayloadClass`, `SalvageWalkerPayloadClass` — payload fallback and sync-load bridge.
 - `BuildingOrbitalPurchaseCost` — native Logistics Hub cost synchronization.
 - `BuildingPayloadClass` — Logistics Hub payload fallback.

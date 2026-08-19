@@ -1,5 +1,21 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Unit numeric compatibility cleanup (Cleanup Slice C)
+
+Status: **UNIT_NUMERIC_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-unit-numeric-compat-cleanup` from `origin/main` @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`
+- Removed `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost` from `UGP_OrbitalDeliverySettings`
+- Native bootstrap Worker Cost 25 / slots 1 and Salvage Walker Cost 50 / slots 2 owned by `UGP_OrbitalUnitDropCatalog` construction
+- Authored Ready product Cost/Slots win; Pending does not substitute native numerics when the authored drop object is present
+- Authority and TEMP HUD continue to read catalog getters
+- Stale `DefaultGame.ini` keys intentionally not touched (protected local config)
+- Payload / timing / building bridges unchanged
+- `gp.Settings.RunOrbitalDeliveryVisibilityContractTest`, `gp.Resource.RunOrbitalUnitDropContractTest`, `gp.Economy.RunEconomyLogisticsDataContractTest` Failures=0
+- GPEditor Win64 Development + UHT **PASS**. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-Unit-Numeric-Compat-Cleanup.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Dead overlap setting removal finalization
 
 Status: **DEAD_OVERLAP_SETTING_REMOVAL_FINALIZED_READY_FOR_MERGE**

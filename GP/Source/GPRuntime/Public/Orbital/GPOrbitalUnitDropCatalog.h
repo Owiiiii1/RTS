@@ -17,8 +17,9 @@ struct FStreamableHandle;
 /**
  * Native bootstrap + authored unit acquisition definitions (GP-S39E).
  * Precedence: authored settings soft ref (Ready only after nested UnitDefinition + PayloadClass
- * resolve) → native bootstrap → deprecated settings numerics/class.
+ * resolve) → native bootstrap. Payload class may still fall back to deprecated settings bridges.
  * Native catalog exists for contracts / empty setup. It must not permanently shadow authored DAs.
+ * Native Worker/Walker Cost and TransportSlotCost live on the bootstrap products constructed here.
  */
 UCLASS()
 class GPRUNTIME_API UGP_OrbitalUnitDropCatalog : public UObject
@@ -34,6 +35,12 @@ public:
 
 	void EnsureNativeCatalog();
 	void RefreshAuthoredBindings();
+
+	/** Native bootstrap numerics for unconfigured / failed authored unit-drop products. */
+	static constexpr float NativeWorkerOrbitalDropCost = 25.0f;
+	static constexpr int32 NativeWorkerTransportSlotCost = 1;
+	static constexpr float NativeSalvageWalkerOrbitalDropCost = 50.0f;
+	static constexpr int32 NativeSalvageWalkerTransportSlotCost = 2;
 
 	/** Canonical ready definition, or native bootstrap when authored is empty/failed. Null while authored pending. */
 	UGP_OrbitalUnitDropDefinition* GetWorkerDrop() const;
@@ -63,6 +70,7 @@ public:
 
 #if !UE_BUILD_SHIPPING
 	void DebugAssignLoadedAuthoredWorker(UGP_OrbitalUnitDropDefinition* Definition);
+	void DebugAssignLoadedAuthoredSalvageWalker(UGP_OrbitalUnitDropDefinition* Definition);
 	void DebugForceUnresolvedAuthoredWorkerLoad(UGP_OrbitalUnitDropDefinition* InjectedDefinition, bool bHoldCompletion);
 	bool DebugDidRequestAsyncAuthoredWorkerLoad() const { return bDebugDidRequestAsyncWorkerLoad; }
 	void DebugCompletePendingAuthoredWorkerLoad();
@@ -130,6 +138,7 @@ private:
 	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> GetAuthoredSoftRef(EUnitAuthoredSlot Slot) const;
 	UGP_OrbitalUnitDropDefinition* ResolveLoadedAuthored(const TSoftObjectPtr<UGP_OrbitalUnitDropDefinition>& Soft) const;
 	UGP_OrbitalUnitDropDefinition* CanonicalForSlot(EUnitAuthoredSlot Slot) const;
+	const UGP_OrbitalUnitDropDefinition* ResolveNumericProduct(EUnitAuthoredSlot Slot) const;
 	bool HasResolvedAuthoredDependencies(const UGP_OrbitalUnitDropDefinition* Drop, EUnitAuthoredSlot Slot) const;
 	bool IsPayloadClassValidForSlot(EUnitAuthoredSlot Slot, const UClass* PayloadClass) const;
 	TSubclassOf<AGP_UnitBase> ResolveFallbackPayloadClass(EUnitAuthoredSlot Slot) const;
@@ -167,6 +176,7 @@ private:
 	void ResetDebugSlotFlags();
 	void SaveAuthoredSettingsIfNeeded();
 	void AssignAuthoredSettingsDrop(EUnitAuthoredSlot Slot, UGP_OrbitalUnitDropDefinition* Definition);
+	void DebugAssignLoadedAuthoredDrop(EUnitAuthoredSlot Slot, UGP_OrbitalUnitDropDefinition* Definition);
 	void DebugForceUnresolvedAuthoredLoad(
 		EUnitAuthoredSlot Slot,
 		UGP_OrbitalUnitDropDefinition* InjectedDefinition,

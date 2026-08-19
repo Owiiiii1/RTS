@@ -149,8 +149,8 @@ void UGP_OrbitalUnitDropCatalog::EnsureNativeCatalog()
 		FName(TEXT("DA_GP_OrbitalUnitDrop_Worker")),
 		NSLOCTEXT("GPOrbitalUnitDropCatalog", "Worker", "Worker"));
 	NativeWorkerDrop->UnitDefinition = Units.GetWorkerDefinition();
-	NativeWorkerDrop->Cost = 25.0f;
-	NativeWorkerDrop->TransportSlotCost = 1;
+	NativeWorkerDrop->Cost = NativeWorkerOrbitalDropCost;
+	NativeWorkerDrop->TransportSlotCost = NativeWorkerTransportSlotCost;
 	NativeWorkerDrop->DeliveryDescentSeconds = 2.5f;
 	NativeWorkerDrop->PayloadDeployDelaySeconds = 1.25f;
 
@@ -158,8 +158,8 @@ void UGP_OrbitalUnitDropCatalog::EnsureNativeCatalog()
 		FName(TEXT("DA_GP_OrbitalUnitDrop_SalvageWalker")),
 		NSLOCTEXT("GPOrbitalUnitDropCatalog", "SalvageWalker", "Salvage Walker"));
 	NativeSalvageWalkerDrop->UnitDefinition = Units.GetSalvageWalkerDefinition();
-	NativeSalvageWalkerDrop->Cost = 50.0f;
-	NativeSalvageWalkerDrop->TransportSlotCost = 2;
+	NativeSalvageWalkerDrop->Cost = NativeSalvageWalkerOrbitalDropCost;
+	NativeSalvageWalkerDrop->TransportSlotCost = NativeSalvageWalkerTransportSlotCost;
 	NativeSalvageWalkerDrop->DeliveryDescentSeconds = 2.5f;
 	NativeSalvageWalkerDrop->PayloadDeployDelaySeconds = 1.25f;
 
@@ -273,6 +273,20 @@ UGP_OrbitalUnitDropDefinition* UGP_OrbitalUnitDropCatalog::CanonicalForSlot(EUni
 		return AuthoredSlotDrops[Index];
 	}
 	return NativeSlotDrops.IsValidIndex(Index) ? NativeSlotDrops[Index] : nullptr;
+}
+
+const UGP_OrbitalUnitDropDefinition* UGP_OrbitalUnitDropCatalog::ResolveNumericProduct(EUnitAuthoredSlot Slot) const
+{
+	const int32 Index = static_cast<int32>(Slot);
+	if (AuthoredStates.IsValidIndex(Index)
+		&& AuthoredSlotDrops.IsValidIndex(Index)
+		&& IsValid(AuthoredSlotDrops[Index])
+		&& (AuthoredStates[Index] == EAuthoredSlotState::Pending
+			|| AuthoredStates[Index] == EAuthoredSlotState::Ready))
+	{
+		return AuthoredSlotDrops[Index];
+	}
+	return CanonicalForSlot(Slot);
 }
 
 void UGP_OrbitalUnitDropCatalog::RefreshAuthoredBindings()
@@ -977,60 +991,44 @@ bool UGP_OrbitalUnitDropCatalog::AreManifestDefinitionsReady(const FGP_UnitDropM
 
 int32 UGP_OrbitalUnitDropCatalog::GetWorkerTransportSlotCost() const
 {
-	if (const UGP_OrbitalUnitDropDefinition* Drop = GetWorkerDrop())
+	if (const UGP_OrbitalUnitDropDefinition* Drop = ResolveNumericProduct(EUnitAuthoredSlot::Worker))
 	{
 		if (Drop->TransportSlotCost > 0)
 		{
 			return Drop->TransportSlotCost;
 		}
 	}
-	if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
-	{
-		return FMath::Max(1, Settings->WorkerTransportSlotCost);
-	}
-	return 1;
+	return NativeWorkerTransportSlotCost;
 }
 
 int32 UGP_OrbitalUnitDropCatalog::GetSalvageWalkerTransportSlotCost() const
 {
-	if (const UGP_OrbitalUnitDropDefinition* Drop = GetSalvageWalkerDrop())
+	if (const UGP_OrbitalUnitDropDefinition* Drop = ResolveNumericProduct(EUnitAuthoredSlot::SalvageWalker))
 	{
 		if (Drop->TransportSlotCost > 0)
 		{
 			return Drop->TransportSlotCost;
 		}
 	}
-	if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
-	{
-		return FMath::Max(1, Settings->SalvageWalkerTransportSlotCost);
-	}
-	return 2;
+	return NativeSalvageWalkerTransportSlotCost;
 }
 
 float UGP_OrbitalUnitDropCatalog::GetWorkerOrbitalDropCost() const
 {
-	if (const UGP_OrbitalUnitDropDefinition* Drop = GetWorkerDrop())
+	if (const UGP_OrbitalUnitDropDefinition* Drop = ResolveNumericProduct(EUnitAuthoredSlot::Worker))
 	{
 		return FMath::Max(0.0f, Drop->Cost);
 	}
-	if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
-	{
-		return FMath::Max(0.0f, Settings->WorkerOrbitalDropCost);
-	}
-	return 25.0f;
+	return NativeWorkerOrbitalDropCost;
 }
 
 float UGP_OrbitalUnitDropCatalog::GetSalvageWalkerOrbitalDropCost() const
 {
-	if (const UGP_OrbitalUnitDropDefinition* Drop = GetSalvageWalkerDrop())
+	if (const UGP_OrbitalUnitDropDefinition* Drop = ResolveNumericProduct(EUnitAuthoredSlot::SalvageWalker))
 	{
 		return FMath::Max(0.0f, Drop->Cost);
 	}
-	if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
-	{
-		return FMath::Max(0.0f, Settings->SalvageWalkerOrbitalDropCost);
-	}
-	return 50.0f;
+	return NativeSalvageWalkerOrbitalDropCost;
 }
 
 TSubclassOf<AGP_UnitBase> UGP_OrbitalUnitDropCatalog::ResolveFallbackPayloadClass(EUnitAuthoredSlot Slot) const
@@ -1210,11 +1208,13 @@ void UGP_OrbitalUnitDropCatalog::AssignAuthoredSettingsDrop(
 	}
 }
 
-void UGP_OrbitalUnitDropCatalog::DebugAssignLoadedAuthoredWorker(UGP_OrbitalUnitDropDefinition* Definition)
+void UGP_OrbitalUnitDropCatalog::DebugAssignLoadedAuthoredDrop(
+	EUnitAuthoredSlot Slot,
+	UGP_OrbitalUnitDropDefinition* Definition)
 {
 	EnsureDebugSlotArrays();
-	const int32 Index = static_cast<int32>(EUnitAuthoredSlot::Worker);
-	AssignAuthoredSettingsDrop(EUnitAuthoredSlot::Worker, Definition);
+	const int32 Index = static_cast<int32>(Slot);
+	AssignAuthoredSettingsDrop(Slot, Definition);
 	DebugForceUnresolvedDrop[Index] = 0;
 	DebugHoldDropCompletion[Index] = 0;
 	DebugForceUnresolvedUnitDef[Index] = 0;
@@ -1224,7 +1224,17 @@ void UGP_OrbitalUnitDropCatalog::DebugAssignLoadedAuthoredWorker(UGP_OrbitalUnit
 	DebugInjectedDrops[Index] = nullptr;
 	DebugInjectedUnitDefs[Index] = nullptr;
 	DebugInjectedPayloadClasses[Index] = nullptr;
-	RefreshAuthoredSlot(EUnitAuthoredSlot::Worker);
+	RefreshAuthoredSlot(Slot);
+}
+
+void UGP_OrbitalUnitDropCatalog::DebugAssignLoadedAuthoredWorker(UGP_OrbitalUnitDropDefinition* Definition)
+{
+	DebugAssignLoadedAuthoredDrop(EUnitAuthoredSlot::Worker, Definition);
+}
+
+void UGP_OrbitalUnitDropCatalog::DebugAssignLoadedAuthoredSalvageWalker(UGP_OrbitalUnitDropDefinition* Definition)
+{
+	DebugAssignLoadedAuthoredDrop(EUnitAuthoredSlot::SalvageWalker, Definition);
 }
 
 void UGP_OrbitalUnitDropCatalog::DebugForceUnresolvedAuthoredLoad(

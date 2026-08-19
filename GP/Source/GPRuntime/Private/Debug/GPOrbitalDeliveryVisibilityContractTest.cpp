@@ -258,10 +258,14 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 			&& FindProp(TEXT("UnitDropPodClass"))->IsA<FSoftClassProperty>(),
 			TEXT("Type_UnitDropPodClass"));
 
-		ExpectHiddenBridge(TEXT("WorkerTransportSlotCost"), TEXT("Hidden_WorkerTransportSlotCost"));
-		ExpectHiddenBridge(TEXT("SalvageWalkerTransportSlotCost"), TEXT("Hidden_SalvageWalkerTransportSlotCost"));
-		ExpectHiddenBridge(TEXT("WorkerOrbitalDropCost"), TEXT("Hidden_WorkerOrbitalDropCost"));
-		ExpectHiddenBridge(TEXT("SalvageWalkerOrbitalDropCost"), TEXT("Hidden_SalvageWalkerOrbitalDropCost"));
+		Expect(FindProp(TEXT("WorkerTransportSlotCost")) == nullptr,
+			TEXT("Absent_WorkerTransportSlotCost"));
+		Expect(FindProp(TEXT("SalvageWalkerTransportSlotCost")) == nullptr,
+			TEXT("Absent_SalvageWalkerTransportSlotCost"));
+		Expect(FindProp(TEXT("WorkerOrbitalDropCost")) == nullptr,
+			TEXT("Absent_WorkerOrbitalDropCost"));
+		Expect(FindProp(TEXT("SalvageWalkerOrbitalDropCost")) == nullptr,
+			TEXT("Absent_SalvageWalkerOrbitalDropCost"));
 		ExpectHiddenBridge(TEXT("WorkerPayloadClass"), TEXT("Hidden_WorkerPayloadClass"));
 		ExpectHiddenBridge(TEXT("SalvageWalkerPayloadClass"), TEXT("Hidden_SalvageWalkerPayloadClass"));
 		ExpectHiddenBridge(TEXT("BuildingOrbitalPurchaseCost"), TEXT("Hidden_BuildingOrbitalPurchaseCost"));
@@ -269,12 +273,6 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 		Expect(FindProp(TEXT("BuildingPlacementOverlapMarginCm")) == nullptr,
 			TEXT("Absent_BuildingPlacementOverlapMarginCm"));
 
-		Expect(FindProp(TEXT("WorkerTransportSlotCost")) != nullptr
-			&& FindProp(TEXT("WorkerTransportSlotCost"))->IsA<FIntProperty>(),
-			TEXT("Type_WorkerTransportSlotCost"));
-		Expect(FindProp(TEXT("WorkerOrbitalDropCost")) != nullptr
-			&& FindProp(TEXT("WorkerOrbitalDropCost"))->IsA<FFloatProperty>(),
-			TEXT("Type_WorkerOrbitalDropCost"));
 		Expect(FindProp(TEXT("WorkerPayloadClass")) != nullptr
 			&& FindProp(TEXT("WorkerPayloadClass"))->IsA<FSoftClassProperty>(),
 			TEXT("Type_WorkerPayloadClass"));

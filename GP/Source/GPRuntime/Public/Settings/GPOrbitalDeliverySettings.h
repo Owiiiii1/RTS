@@ -83,38 +83,6 @@ public:
 	int32 PodTransportSlotCapacity = 4;
 
 	/**
-	 * DEPRECATED compatibility bridge. Canonical slot cost is UGP_OrbitalUnitDropDefinition.TransportSlotCost.
-	 * Config serialization retained. Not a designer-authoritative Project Settings control.
-	 */
-	UPROPERTY(Config, meta = (ClampMin = "1", DeprecatedProperty,
-		DeprecationMessage = "Canonical slot cost is UGP_OrbitalUnitDropDefinition.TransportSlotCost."))
-	int32 WorkerTransportSlotCost = 1;
-
-	/**
-	 * DEPRECATED compatibility bridge. Canonical slot cost is UGP_OrbitalUnitDropDefinition.TransportSlotCost.
-	 * Config serialization retained. Not a designer-authoritative Project Settings control.
-	 */
-	UPROPERTY(Config, meta = (ClampMin = "1", DeprecatedProperty,
-		DeprecationMessage = "Canonical slot cost is UGP_OrbitalUnitDropDefinition.TransportSlotCost."))
-	int32 SalvageWalkerTransportSlotCost = 2;
-
-	/**
-	 * DEPRECATED compatibility bridge. Canonical cost is UGP_OrbitalUnitDropDefinition.Cost.
-	 * Config serialization retained. Not a designer-authoritative Project Settings control.
-	 */
-	UPROPERTY(Config, meta = (ClampMin = "0.0", DeprecatedProperty,
-		DeprecationMessage = "Canonical cost is UGP_OrbitalUnitDropDefinition.Cost."))
-	float WorkerOrbitalDropCost = 25.0f;
-
-	/**
-	 * DEPRECATED compatibility bridge. Canonical cost is UGP_OrbitalUnitDropDefinition.Cost.
-	 * Config serialization retained. Not a designer-authoritative Project Settings control.
-	 */
-	UPROPERTY(Config, meta = (ClampMin = "0.0", DeprecatedProperty,
-		DeprecationMessage = "Canonical cost is UGP_OrbitalUnitDropDefinition.Cost."))
-	float SalvageWalkerOrbitalDropCost = 50.0f;
-
-	/**
 	 * DEPRECATED compatibility bridge. Canonical payload is UGP_OrbitalUnitDropDefinition.PayloadClass.
 	 * Config serialization and existing fallback/sync-load readers retained.
 	 * Not a designer-authoritative Project Settings control.

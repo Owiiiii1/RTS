@@ -1,56 +1,42 @@
-# Cursor Work Report — GP-S42A finalization
+# Cursor Work Report — Configuration / Data Ownership Audit
 
 ## Status
-**GP-S42A_FINALIZED_READY_FOR_MERGE**
 
-**NOT MERGED.**
+**CONFIGURATION_DATA_OWNERSHIP_AUDIT_READY_FOR_REVIEW**
 
-## Branch / base / head
-- Branch: `feature/gp-s42a-wall-package-inventory` (same branch, no new branch)
-- Base: `origin/main` @ `c00e95ed46fb4aa738a1747576ee2d6b84ffe593`
-- Head: (this commit)
+## Branch / base
 
-## Operator PASS
-- Wall Package purchase/delivery works
-- Wall Package lands on MainBase `UnitDropZone`
-- Editor closes without `GP_WallPackageCatalog` unpackaged fatal
-- Cold Editor start → Logistics Hub purchase becomes READY correctly
-- Logistics Hub deploy works
-- Observed UnitCap mismatch was operator-authored `BuildingDefinition` configuration, not a runtime defect
+- Branch: `docs/gp-configuration-data-ownership-audit`
+- Base: `origin/main` @ `d9e89605aae76446a5b41281df1c8f8773d67e4e`
+- Scope: architecture audit and documentation only
 
-## Finalization-only
-No new gameplay features. No configuration/data ownership cleanup.
+## Audit coverage
 
-Shipping-only factual fix: `UGP_WallPackageInventoryContractTestRunner` was missing `#else` stubs, so `GP Win64 Shipping` failed to link. Stubs added. Production Wall Package / catalog code unchanged.
+- 48 exposed Project Settings fields
+- 58 fields across `UGP_UnitDefinition`, `UGP_BuildingDefinition`, `UGP_ResourceDefinition`, `UGP_OrbitalUnitDropDefinition`, `UGP_OrbitalDropDefinition`, and `UGP_WallPackageDefinition`
+- Actor/BP/CDO ownership: placement bounds, navigation obstacles, capsules, MainBase zones/range, DropPod presentation, combat/cargo/storage fallbacks
+- Runtime precedence: catalogs, async cold loading, product authorities, native bootstrap, compatibility and deprecated bridges
+- Documentation-to-code discrepancies
 
-## Final tests
-| Check | Result |
-| --- | --- |
-| `gp.Orbital.RunWallPackageInventoryContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Building.RunOrbitalBuildingDropContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Economy.RunEconomyLogisticsDataContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Building.RunMultiBuildingDataContractTest` | `Complete Failures=0 Cancelled=false` |
+## Principal findings
 
-Full project suite **not run**.
+1. Build footprint has five active representations and path-dependent occupancy.
+2. Eight deprecated Project Settings fields remain active runtime bridges.
+3. Building vitals do not automatically propagate the BuildingDefinition’s nested UnitDefinition to the spawned actor.
+4. Defensive Turret settings payload class currently outranks `BuildingDefinition.SpawnedClass`.
+5. `BuildingPlacementOverlapMarginCm` has no runtime/test reader.
+6. Wall Package remains a separate definition/catalog/authority and is not a Building READY product.
 
-## Builds
-| Target | Result |
-| --- | --- |
-| `GPEditor Win64 Development` + UHT | **PASS** (first attempt LNK1104: `CrashReportClientEditor` locked `UnrealEditor-GPRuntime.dll`; retry after kill, no code change) |
-| `GP Win64 Development` + UHT | **PASS** |
-| `GP Win64 Shipping` | **PASS** after shipping-only runner stubs |
+## Deliverables
 
-## Factual protected-files check
-Diff vs `origin/main` @ `c00e95ed46fb4aa738a1747576ee2d6b84ffe593`:
+- `Docs/Development/Configuration_Data_Ownership_Audit.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
-- no maps
-- no `DefaultGame.ini` / `DefaultEngine.ini`
-- no authored Blueprint / DataAsset / content
-- no accidental unrelated cleanup
+## Validation
 
-## Architecture checks
-- Wall Package remains a separate `UGP_WallPackageDefinition` catalog; not a Building READY path
-- `UGP_BuildingDropCatalog` nested `BuildingDefinition` load is async StreamableManager only
-- Wall Package teardown: `TryGetExisting` / engine-exit lock; no `Get()` resurrection during shutdown
-
-## NOT MERGED
+- Factual claims validated by direct declaration/read-site/resolver inspection and repository search.
+- No Unreal build or contract tests were run: documentation-only task.
+- No runtime code, config, map, Blueprint, DataAsset, material, or authored binary content was modified.
+- Cleanup recommendations are explicitly not implemented.

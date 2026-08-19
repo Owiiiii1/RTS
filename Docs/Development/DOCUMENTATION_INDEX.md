@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | SETUP-001 + DOCS-001 + GP-S01 … **GP-S41M + GP-0305R on main** `c00e95ed46fb4aa738a1747576ee2d6b84ffe593` |
+| Code baseline | Current `origin/main` baseline for this audit: `d9e89605aae76446a5b41281df1c8f8773d67e4e` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S41M** on `main`; **GP-0305R** canon on `main` |
+| Last closed / merged stage | **GP-S42A** on `main` @ `d9e89605aae76446a5b41281df1c8f8773d67e4e` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S42A_FINALIZED_READY_FOR_MERGE** on `feature/gp-s42a-wall-package-inventory` (**NOT MERGED**) |
+| Current stage | [`Configuration_Data_Ownership_Audit.md`](Configuration_Data_Ownership_Audit.md) — **CONFIGURATION_DATA_OWNERSHIP_AUDIT_READY_FOR_REVIEW** on `docs/gp-configuration-data-ownership-audit` |
 
 ---
 
@@ -49,11 +49,11 @@
 
 **Prior closed:** GP-S38D / GP-S37T / GP-S36G / GP-S35B / GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Closed on `main`:** GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon @ `c00e95ed46fb4aa738a1747576ee2d6b84ffe593`.
+**Closed on `main`:** GP-S42A Wall Package Data + MainBase Wall Inventory @ `d9e89605aae76446a5b41281df1c8f8773d67e4e`; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current:** [`Claude_Tasks/GP-S42A_Wall_Package_Inventory.md`](Claude_Tasks/GP-S42A_Wall_Package_Inventory.md) — **GP-S42A_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
+**Current:** [`Configuration_Data_Ownership_Audit.md`](Configuration_Data_Ownership_Audit.md) — **CONFIGURATION_DATA_OWNERSHIP_AUDIT_READY_FOR_REVIEW**. Architecture audit only; no cleanup implemented.
 
-**Do not** start GP-S42B / GP-S42C / FoW / Order Menu / Spectating / configuration-data ownership cleanup. Do **not** implement old pod-per-segment Wall.
+**Do not** implement configuration/data ownership cleanup from the audit without a separately approved slice. Do **not** implement old pod-per-segment Wall.
 
 **Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 
@@ -79,7 +79,7 @@
 18. **GP-S40R** — Timed Retaliation Pursuit — **DONE / MERGED**
 19. **GP-S41M** — Movement Shortest Yaw — **DONE / MERGED** @ `5dd56cac…`
 20. **GP-0305R** — Wall Package Delivery Reconciliation — **on `main`** @ `c00e95ed…`
-21. **GP-S42A** — Wall Package Data + MainBase Wall Inventory — **FINALIZED READY FOR MERGE** (**NOT MERGED**)
+21. **GP-S42A** — Wall Package Data + MainBase Wall Inventory — **DONE / MERGED** @ `d9e89605…`
 
 ---
 
@@ -100,6 +100,7 @@
 | `Docs/Game_Pitch.md` | Active onboarding |
 | `UGP_ResourceGameplaySettings` + `GP/Config/DefaultGame.ini` (`[/Script/GPRuntime.GP_ResourceGameplaySettings]`) | Active — Project Settings → Game → GP Resource Gameplay (P2 + P3 `DropOffRetrySeconds`) |
 | `UGP_GameplayPresentationSettings` + `DefaultGame.ini` (`[/Script/GPRuntime.GP_GameplayPresentationSettings]`) | Active — Project Settings → Game → GP Gameplay Presentation (S29R team colors + health bar tunables) |
+| [`Configuration_Data_Ownership_Audit.md`](Configuration_Data_Ownership_Audit.md) | Current factual ownership/precedence audit; recommendations are not implemented architecture |
 
 ### Stale / needs cleanup (still in active tree)
 
@@ -164,4 +165,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S41M and GP-0305R are on `main` @ `c00e95ed46fb4aa738a1747576ee2d6b84ffe593`. Current stage: **GP-S42A_FINALIZED_READY_FOR_MERGE** on `feature/gp-s42a-wall-package-inventory`. **NOT MERGED.** Do not start GP-S42B/C.
+Current audit baseline: `origin/main` @ `d9e89605aae76446a5b41281df1c8f8773d67e4e`. Current stage: **CONFIGURATION_DATA_OWNERSHIP_AUDIT_READY_FOR_REVIEW** on `docs/gp-configuration-data-ownership-audit`. Do not implement cleanup from this audit without a separately approved slice.

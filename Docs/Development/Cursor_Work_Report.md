@@ -1,42 +1,90 @@
-# Cursor Work Report — Configuration / Data Ownership Audit
+# Cursor Work Report — Unit Drop Nested Readiness
 
 ## Status
 
-**CONFIGURATION_DATA_OWNERSHIP_AUDIT_READY_FOR_REVIEW**
+**UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION**
 
-## Branch / base
+**NOT MERGED. NOT FINALIZED.**
 
-- Branch: `docs/gp-configuration-data-ownership-audit`
-- Base: `origin/main` @ `d9e89605aae76446a5b41281df1c8f8773d67e4e`
-- Scope: architecture audit and documentation only
+## Branch / base / head
 
-## Audit coverage
+- Branch: `feature/gp-unit-drop-nested-readiness`
+- Base: `origin/main` @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`
+- Head: (this commit)
 
-- 48 exposed Project Settings fields
-- 58 fields across `UGP_UnitDefinition`, `UGP_BuildingDefinition`, `UGP_ResourceDefinition`, `UGP_OrbitalUnitDropDefinition`, `UGP_OrbitalDropDefinition`, and `UGP_WallPackageDefinition`
-- Actor/BP/CDO ownership: placement bounds, navigation obstacles, capsules, MainBase zones/range, DropPod presentation, combat/cargo/storage fallbacks
-- Runtime precedence: catalogs, async cold loading, product authorities, native bootstrap, compatibility and deprecated bridges
-- Documentation-to-code discrepancies
+## Factual root cause
 
-## Principal findings
+`UGP_OrbitalUnitDropCatalog` marked an authored slot Ready as soon as the top-level `UGP_OrbitalUnitDropDefinition` resolved. Nested `UnitDefinition` and `PayloadClass` used already-loaded-only accessors. On a cold start the product could be Ready while those dependencies were still unloaded, so `ResolveWorkerPayloadClass` / `ResolveSalvageWalkerPayloadClass` could fall through to deprecated settings or native classes, and DropPod could spawn without the product UnitDefinition.
 
-1. Build footprint has five active representations and path-dependent occupancy.
-2. Eight deprecated Project Settings fields remain active runtime bridges.
-3. Building vitals do not automatically propagate the BuildingDefinition’s nested UnitDefinition to the spawned actor.
-4. Defensive Turret settings payload class currently outranks `BuildingDefinition.SpawnedClass`.
-5. `BuildingPlacementOverlapMarginCm` has no runtime/test reader.
-6. Wall Package remains a separate definition/catalog/authority and is not a Building READY product.
+## Changed files
 
-## Deliverables
-
-- `Docs/Development/Configuration_Data_Ownership_Audit.md`
+- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalUnitDropCatalog.h`
+- `GP/Source/GPRuntime/Private/Orbital/GPOrbitalUnitDropCatalog.cpp`
+- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalUnitDropContractTest.h`
+- `GP/Source/GPRuntime/Private/Debug/GPOrbitalUnitDropContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPEconomyLogisticsDataContractTest.cpp`
+- `Docs/Development/Claude_Tasks/GP-UnitDrop-Nested-Readiness.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/DOCUMENTATION_INDEX.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Validation
+## Resulting readiness contract
 
-- Factual claims validated by direct declaration/read-site/resolver inspection and repository search.
-- No Unreal build or contract tests were run: documentation-only task.
-- No runtime code, config, map, Blueprint, DataAsset, material, or authored binary content was modified.
-- Cleanup recommendations are explicitly not implemented.
+For a configured authored unit product slot, Ready means all of:
+
+1. Top-level `UGP_OrbitalUnitDropDefinition` loaded
+2. `UnitDefinition` soft ref non-null
+3. `UnitDefinition` loaded/resolved
+4. `PayloadClass` soft ref non-null
+5. `PayloadClass` loaded/resolved and a valid slot subclass (`AGP_Worker` or `AGP_SalvageWalker`)
+
+Until then the slot stays Pending. Purchase is `DefinitionNotReady`. No Orbital Ferronite spend, manifest mutation, pod spawn, or cold-load class substitution.
+
+Invalid/failed nested dependency: Failed, explicit log with slot/product/path/reason, native bootstrap, not stuck Pending.
+
+Loads: `AssetManager` / `StreamableManager` async only. Teardown cancels top-level and nested handles. Callbacks ignored when the catalog is shutting down or the engine is exiting. `TryGetExisting()` does not create/resurrect during shutdown.
+
+Unconfigured slots keep native bootstrap.
+
+## Exact payload precedence
+
+1. Canonical Ready authored `UGP_OrbitalUnitDropDefinition.PayloadClass`
+2. If canonical product is native/empty-payload (unconfigured or failed authored): deprecated `WorkerPayloadClass` / `SalvageWalkerPayloadClass`
+3. Native `AGP_Worker` / `AGP_SalvageWalker`
+
+Deprecated settings classes are not removed. They do not outrank a valid authored product class because it was cold.
+
+## Exact UnitDefinition behavior
+
+Catalog Ready requires the product `UnitDefinition` to be loaded.
+
+`AGP_DropPod` still assigns that product definition onto the spawned unit only when `UnitDefinitionAsset` is empty. If a BP/CDO already has `UnitDefinitionAsset` set, that explicit override is left unchanged (not audit slice H). Conflict: product UnitDefinition vs BP-authored `UnitDefinitionAsset` can still disagree when the actor reference is non-null.
+
+## Tests
+
+| Check | Result |
+| --- | --- |
+| `gp.Resource.RunOrbitalUnitDropContractTest` | `Complete Failures=0 Cancelled=false` |
+| `gp.Economy.RunEconomyLogisticsDataContractTest` | `Complete Failures=0 Cancelled=false` |
+
+Building-drop / Wall Package contracts not run: those catalogs were not changed. Full project suite not run.
+
+## Builds
+
+| Target | Result |
+| --- | --- |
+| `GPEditor Win64 Development` + UHT | **PASS** |
+
+GP Win64 Development / Shipping not run (finalization builds after operator PASS).
+
+## Protected-files confirmation
+
+Diff excludes maps, `DefaultGame.ini`, `DefaultEngine.ini`, Blueprints, DataAssets, materials, and other untracked Content.
+
+## Operator test (not claimed PASS)
+
+Cold editor start, do not open Worker/Salvage Walker DropDefinition, UnitDefinition, or payload BP. PIE immediately. Acquire Orbital Ferronite. Buy Worker, then Salvage Walker. Expect authored payload BP and authored UnitDefinition values. Close Editor normally.
+
+## NOT MERGED
+
+## NOT FINALIZED

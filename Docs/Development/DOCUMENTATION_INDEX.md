@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | Current `origin/main` baseline for this audit: `d9e89605aae76446a5b41281df1c8f8773d67e4e` |
+| Code baseline | Current `origin/main` baseline: `9c4ef72e44fad28d9922d82e8cded1f5d00a473f` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **GP-S42A** on `main` @ `d9e89605aae76446a5b41281df1c8f8773d67e4e` |
+| Last closed / merged stage | **Configuration / Data Ownership Audit** on `main` @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Configuration_Data_Ownership_Audit.md`](Configuration_Data_Ownership_Audit.md) — **CONFIGURATION_DATA_OWNERSHIP_AUDIT_READY_FOR_REVIEW** on `docs/gp-configuration-data-ownership-audit` |
+| Current stage | [`Claude_Tasks/GP-UnitDrop-Nested-Readiness.md`](Claude_Tasks/GP-UnitDrop-Nested-Readiness.md) — **UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-unit-drop-nested-readiness` |
 
 ---
 
@@ -49,11 +49,11 @@
 
 **Prior closed:** GP-S38D / GP-S37T / GP-S36G / GP-S35B / GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Closed on `main`:** GP-S42A Wall Package Data + MainBase Wall Inventory @ `d9e89605aae76446a5b41281df1c8f8773d67e4e`; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
+**Closed on `main`:** Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current:** [`Configuration_Data_Ownership_Audit.md`](Configuration_Data_Ownership_Audit.md) — **CONFIGURATION_DATA_OWNERSHIP_AUDIT_READY_FOR_REVIEW**. Architecture audit only; no cleanup implemented.
+**Current:** [`Claude_Tasks/GP-UnitDrop-Nested-Readiness.md`](Claude_Tasks/GP-UnitDrop-Nested-Readiness.md) — **UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION**. **NOT MERGED. NOT FINALIZED.**
 
-**Do not** implement configuration/data ownership cleanup from the audit without a separately approved slice. Do **not** implement old pod-per-segment Wall.
+**Do not** start general configuration/data ownership cleanup. Do **not** implement old pod-per-segment Wall.
 
 **Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 
@@ -165,4 +165,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-Current audit baseline: `origin/main` @ `d9e89605aae76446a5b41281df1c8f8773d67e4e`. Current stage: **CONFIGURATION_DATA_OWNERSHIP_AUDIT_READY_FOR_REVIEW** on `docs/gp-configuration-data-ownership-audit`. Do not implement cleanup from this audit without a separately approved slice.
+Current baseline: `origin/main` @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`. Current stage: **UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-unit-drop-nested-readiness`. **NOT MERGED. NOT FINALIZED.** Do not start general configuration cleanup.

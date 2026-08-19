@@ -16,6 +16,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Orbital/GPDropPod.h"
 #include "Orbital/GPOrbitalUnitDropCatalog.h"
+#include "Orbital/GPOrbitalUnitDropDefinition.h"
 #include "Orbital/GPUnitDropAuthority.h"
 #include "Orbital/GPUnitDropManifest.h"
 #include "Orbital/GPUnitGroundPlacement.h"
@@ -28,6 +29,9 @@
 #include "UObject/Package.h"
 #include "UObject/SoftObjectPath.h"
 #include "Units/GPSalvageWalker.h"
+#include "Units/GPUnitBase.h"
+#include "Units/GPUnitDefinition.h"
+#include "Units/GPUnitDefinitionCatalog.h"
 #include "Units/GPWorker.h"
 #include "UObject/Package.h"
 
@@ -143,6 +147,7 @@ void UGP_OrbitalUnitDropContractTestRunner::OnWorldCleanup(UWorld* World, bool b
 
 void UGP_OrbitalUnitDropContractTestRunner::RestoreSettings()
 {
+	UGP_OrbitalUnitDropCatalog::Get().DebugClearAuthoredUnitDropOverrides();
 	if (!bSettingsMutated)
 	{
 		return;
@@ -202,6 +207,8 @@ void UGP_OrbitalUnitDropContractTestRunner::CleanupActors()
 	DestroyWeak(LastPodWeak);
 	DestroyWeak(MainBaseWeak);
 	DestroyWeak(OwnerPSWeak);
+	AuthoredWorkerDropDef = nullptr;
+	AuthoredWorkerUnitDef = nullptr;
 }
 
 void UGP_OrbitalUnitDropContractTestRunner::Finish()
@@ -918,6 +925,295 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 
 		// Zero-delay already exercised in cases 1–6 (UnitDropPayloadDeployDelaySeconds=0).
 		Expect(true, TEXT("Deploy_ZeroDelayPathCoveredInCoreFlow"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 11: // Native bootstrap remains usable; top-level authored pending rejects spend
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		Expect(UnitDrops.TryGetExisting() == &UnitDrops, TEXT("Nested_CatalogExisting"));
+		Expect(IsValid(UnitDrops.GetNativeWorkerDrop())
+			&& UnitDrops.GetWorkerDrop() == UnitDrops.GetNativeWorkerDrop()
+			&& !UnitDrops.IsWorkerDropDefinitionPending()
+			&& IsValid(UnitDrops.GetNativeSalvageWalkerDrop())
+			&& UnitDrops.GetSalvageWalkerDrop() == UnitDrops.GetNativeSalvageWalkerDrop()
+			&& !UnitDrops.IsSalvageWalkerDropDefinitionPending(),
+			TEXT("Nested_NativeWorkerWalkerBootstrapUsable"));
+
+		AuthoredWorkerUnitDef = NewObject<UGP_UnitDefinition>(
+			this, FName(TEXT("DA_GP_Unit_Worker_AuthoredNested")), RF_Transient);
+		AuthoredWorkerUnitDef->DisplayName = NSLOCTEXT("GPOrbitalUnitDrop", "AuthoredWorker", "Authored Worker");
+		AuthoredWorkerUnitDef->MaxHealth = 777.0f;
+		AuthoredWorkerUnitDef->InitialHealth = 777.0f;
+		AuthoredWorkerUnitDef->CargoCapacity = 50.0f;
+
+		AuthoredWorkerDropDef = NewObject<UGP_OrbitalUnitDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalUnitDrop_Worker_Nested")), RF_Transient);
+		AuthoredWorkerDropDef->Cost = 17.0f;
+		AuthoredWorkerDropDef->TransportSlotCost = 1;
+		AuthoredWorkerDropDef->DeliveryDescentSeconds = 0.20f;
+		AuthoredWorkerDropDef->PayloadDeployDelaySeconds = 0.0f;
+		AuthoredWorkerDropDef->UnitDefinition = AuthoredWorkerUnitDef;
+		AuthoredWorkerDropDef->PayloadClass = AGP_OrbitalDropContractWorkerStub::StaticClass();
+
+		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+		{
+			Settings->WorkerPayloadClass = AGP_Worker::StaticClass();
+			Settings->UnitDropDescentDurationSeconds = 0.20f;
+			Settings->UnitDropPayloadDeployDelaySeconds = 0.0f;
+			UnitDrops.OverrideDeliveryTiming(0.20f, 0.0f);
+		}
+
+		UnitDrops.DebugForceUnresolvedAuthoredWorkerLoad(AuthoredWorkerDropDef, true);
+		Expect(UnitDrops.DebugDidRequestAsyncAuthoredWorkerLoad()
+			&& UnitDrops.IsWorkerDropDefinitionPending()
+			&& UnitDrops.GetWorkerDrop() == nullptr,
+			TEXT("Nested_TopLevelPending"));
+
+		if (Expect(IsValid(OwnerPS), TEXT("Nested_OwnerAlive")))
+		{
+			const float OrbitalBefore = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+			FGP_UnitDropManifest OneWorker;
+			OneWorker.WorkerCount = 1;
+			const GPUnitDropAuthority::FEvalResult Pending =
+				GPUnitDropAuthority::AuthorityRequestUnitDrop(World, OwnerPS, OneWorker);
+			Expect(!Pending.bAccepted
+				&& Pending.RejectReason == EGP_UnitDropRejectReason::DefinitionNotReady
+				&& !Pending.SpawnedPod.IsValid()
+				&& FMath::IsNearlyEqual(OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(), OrbitalBefore, 0.05f),
+				TEXT("Nested_TopLevelPendingNoSpend"));
+		}
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 12: // Top-level loaded, UnitDefinition unresolved → Pending, no spend
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UnitDrops.DebugForceUnresolvedNestedWorkerUnitDefinitionLoad(
+			AuthoredWorkerDropDef,
+			AuthoredWorkerUnitDef,
+			true);
+		Expect(UnitDrops.DebugDidRequestAsyncNestedUnitDefinitionLoad()
+			&& UnitDrops.IsWorkerDropDefinitionPending()
+			&& UnitDrops.GetWorkerDrop() != AuthoredWorkerDropDef,
+			TEXT("Nested_UnitDefinitionPending"));
+
+		if (Expect(IsValid(OwnerPS), TEXT("Nested_UnitDefOwnerAlive")))
+		{
+			const float OrbitalBefore = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+			FGP_UnitDropManifest OneWorker;
+			OneWorker.WorkerCount = 1;
+			const GPUnitDropAuthority::FEvalResult Pending =
+				GPUnitDropAuthority::AuthorityRequestUnitDrop(World, OwnerPS, OneWorker);
+			Expect(!Pending.bAccepted
+				&& Pending.RejectReason == EGP_UnitDropRejectReason::DefinitionNotReady
+				&& FMath::IsNearlyEqual(OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(), OrbitalBefore, 0.05f),
+				TEXT("Nested_UnitDefinitionPendingNoSpend"));
+		}
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 13: // UnitDefinition loaded, PayloadClass unresolved → Pending, no spend
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UnitDrops.DebugCompletePendingNestedWorkerUnitDefinitionLoad();
+		AuthoredWorkerDropDef->UnitDefinition = AuthoredWorkerUnitDef;
+		UnitDrops.DebugForceUnresolvedNestedWorkerPayloadClassLoad(
+			AuthoredWorkerDropDef,
+			AGP_OrbitalDropContractWorkerStub::StaticClass(),
+			true);
+		Expect(UnitDrops.DebugDidRequestAsyncNestedPayloadClassLoad()
+			&& UnitDrops.IsWorkerDropDefinitionPending()
+			&& UnitDrops.GetWorkerDrop() != AuthoredWorkerDropDef
+			&& AuthoredWorkerDropDef->ResolveLoadedUnitDefinition() == AuthoredWorkerUnitDef,
+			TEXT("Nested_PayloadClassPending"));
+
+		if (Expect(IsValid(OwnerPS), TEXT("Nested_PayloadOwnerAlive")))
+		{
+			const float OrbitalBefore = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+			FGP_UnitDropManifest OneWorker;
+			OneWorker.WorkerCount = 1;
+			const GPUnitDropAuthority::FEvalResult Pending =
+				GPUnitDropAuthority::AuthorityRequestUnitDrop(World, OwnerPS, OneWorker);
+			Expect(!Pending.bAccepted
+				&& Pending.RejectReason == EGP_UnitDropRejectReason::DefinitionNotReady
+				&& FMath::IsNearlyEqual(OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(), OrbitalBefore, 0.05f),
+				TEXT("Nested_PayloadClassPendingNoSpend"));
+		}
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 14: // Nested deps complete → authored Ready, purchase accepted
+	{
+		AGP_PlayerState* OwnerPS = OwnerPSWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UnitDrops.DebugCompletePendingNestedWorkerPayloadClassLoad();
+		Expect(!UnitDrops.IsWorkerDropDefinitionPending()
+			&& UnitDrops.GetWorkerDrop() == AuthoredWorkerDropDef
+			&& AuthoredWorkerDropDef->ResolveLoadedUnitDefinition() == AuthoredWorkerUnitDef
+			&& UnitDrops.ResolveWorkerPayloadClass() == AGP_OrbitalDropContractWorkerStub::StaticClass(),
+			TEXT("Nested_AuthoredReadyUsesPayloadClass"));
+
+		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
+		{
+			Expect(Settings->ResolveWorkerPayloadClass() == AGP_Worker::StaticClass(),
+				TEXT("Nested_DeprecatedSettingsRemainNativeWorker"));
+		}
+		Expect(UnitDrops.ResolveWorkerPayloadClass() == AGP_OrbitalDropContractWorkerStub::StaticClass(),
+			TEXT("Nested_AuthoredPayloadOutranksSettings"));
+
+		for (TActorIterator<AGP_Worker> It(World); It; ++It)
+		{
+			if (It->GetTeamId() == ContractTeam)
+			{
+				It->Destroy();
+			}
+		}
+		for (TActorIterator<AGP_DropPod> It(World); It; ++It)
+		{
+			It->Destroy();
+		}
+
+		if (!Expect(IsValid(OwnerPS) && IsValid(Base), TEXT("Nested_PurchaseActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		GPOrbitalUnitDropDebug::GrantOrbital(OwnerPS, 50.0f);
+		OrbitalBeforeSpend = OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite();
+		FGP_UnitDropManifest OneWorker;
+		OneWorker.WorkerCount = 1;
+		const GPUnitDropAuthority::FEvalResult Buy =
+			GPUnitDropAuthority::AuthorityRequestUnitDrop(World, OwnerPS, OneWorker);
+		Expect(Buy.bAccepted
+			&& FMath::IsNearlyEqual(Buy.OrbitalCost, 17.0f, 0.05f)
+			&& IsValid(Buy.SpawnedPod.Get())
+			&& FMath::IsNearlyEqual(
+				OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
+				OrbitalBeforeSpend - 17.0f,
+				0.05f),
+			TEXT("Nested_AuthoredPurchaseAccepted"));
+		LastPodWeak = Buy.SpawnedPod;
+
+		++StageIndex;
+		ScheduleNext(0.35f);
+		break;
+	}
+	case 15: // Spawned payload uses authored class + UnitDefinition
+	{
+		int32 StubWorkers = 0;
+		int32 NativeWorkers = 0;
+		AGP_Worker* Spawned = nullptr;
+		for (TActorIterator<AGP_Worker> It(World); It; ++It)
+		{
+			if (It->GetTeamId() != ContractTeam)
+			{
+				continue;
+			}
+			if (It->IsA(AGP_OrbitalDropContractWorkerStub::StaticClass()))
+			{
+				++StubWorkers;
+				Spawned = *It;
+			}
+			else if (It->GetClass() == AGP_Worker::StaticClass())
+			{
+				++NativeWorkers;
+			}
+		}
+		Expect(StubWorkers == 1, TEXT("Nested_AuthoredPayloadClassSpawned"));
+		Expect(NativeWorkers == 0, TEXT("Nested_DeprecatedSettingsClassDidNotWin"));
+		Expect(IsValid(Spawned)
+			&& Spawned->ResolveLoadedUnitDefinition() == AuthoredWorkerUnitDef,
+			TEXT("Nested_AuthoredUnitDefinitionAppliedToPayload"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 16: // Nested UnitDefinition failure → native fallback, not stuck Pending
+	{
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UGP_OrbitalUnitDropDefinition* NativeWorker = UnitDrops.GetNativeWorkerDrop();
+		UnitDrops.DebugForceUnresolvedNestedWorkerUnitDefinitionLoad(
+			AuthoredWorkerDropDef,
+			AuthoredWorkerUnitDef,
+			true);
+		Expect(UnitDrops.IsWorkerDropDefinitionPending(), TEXT("Nested_FailUnitDefStartsPending"));
+		UnitDrops.DebugForceNestedWorkerUnitDefinitionLoadFailure();
+		Expect(UnitDrops.DebugConsumeNestedUnitDefinitionLoadFailedLog()
+			&& !UnitDrops.IsWorkerDropDefinitionPending()
+			&& UnitDrops.GetWorkerDrop() == NativeWorker,
+			TEXT("Nested_FailUnitDefNativeFallback"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 17: // Nested PayloadClass failure / invalid subclass → native fallback
+	{
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UGP_OrbitalUnitDropDefinition* NativeWorker = UnitDrops.GetNativeWorkerDrop();
+		AuthoredWorkerDropDef->UnitDefinition = AuthoredWorkerUnitDef;
+		AuthoredWorkerDropDef->PayloadClass = AGP_OrbitalDropContractWorkerStub::StaticClass();
+		UnitDrops.DebugForceUnresolvedNestedWorkerPayloadClassLoad(
+			AuthoredWorkerDropDef,
+			AGP_OrbitalDropContractWorkerStub::StaticClass(),
+			true);
+		Expect(UnitDrops.IsWorkerDropDefinitionPending(), TEXT("Nested_FailPayloadStartsPending"));
+		UnitDrops.DebugForceNestedWorkerPayloadClassLoadFailure();
+		Expect(UnitDrops.DebugConsumeNestedPayloadClassLoadFailedLog()
+			&& !UnitDrops.IsWorkerDropDefinitionPending()
+			&& UnitDrops.GetWorkerDrop() == NativeWorker,
+			TEXT("Nested_FailPayloadNativeFallback"));
+
+		AuthoredWorkerDropDef->UnitDefinition = AuthoredWorkerUnitDef;
+		AuthoredWorkerDropDef->PayloadClass = AGP_SalvageWalker::StaticClass();
+		UnitDrops.DebugAssignLoadedAuthoredWorker(AuthoredWorkerDropDef);
+		Expect(UnitDrops.DebugConsumeNestedPayloadClassLoadFailedLog()
+			&& !UnitDrops.IsWorkerDropDefinitionPending()
+			&& UnitDrops.GetWorkerDrop() == NativeWorker,
+			TEXT("Nested_InvalidPayloadSubclassNativeFallback"));
+
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 18: // Teardown while nested pending: handles cancelled, callback safe, native usable
+	{
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		AuthoredWorkerDropDef->UnitDefinition = AuthoredWorkerUnitDef;
+		AuthoredWorkerDropDef->PayloadClass = AGP_OrbitalDropContractWorkerStub::StaticClass();
+		UnitDrops.DebugForceUnresolvedNestedWorkerUnitDefinitionLoad(
+			AuthoredWorkerDropDef,
+			AuthoredWorkerUnitDef,
+			true);
+		Expect(UnitDrops.IsWorkerDropDefinitionPending()
+			&& UGP_OrbitalUnitDropCatalog::TryGetExisting() == &UnitDrops,
+			TEXT("Nested_TeardownStartsPending"));
+
+		UGP_OrbitalUnitDropCatalog::ShutdownCatalog();
+		Expect(UGP_OrbitalUnitDropCatalog::TryGetExisting() == nullptr, TEXT("Nested_TeardownExistingNull"));
+
+		UGP_OrbitalUnitDropCatalog& Recreated = UGP_OrbitalUnitDropCatalog::Get();
+		Recreated.DebugCompletePendingNestedWorkerUnitDefinitionLoad();
+		Recreated.DebugClearAuthoredUnitDropOverrides();
+		Expect(!Recreated.IsWorkerDropDefinitionPending()
+			&& Recreated.GetWorkerDrop() == Recreated.GetNativeWorkerDrop()
+			&& Recreated.GetSalvageWalkerDrop() == Recreated.GetNativeSalvageWalkerDrop(),
+			TEXT("Nested_TeardownNativeUsableNoResurrectionFatal"));
 
 		Finish();
 		break;

@@ -1,5 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Unit Drop Nested Readiness
+
+Status: **UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-unit-drop-nested-readiness` from `origin/main` @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`
+- Authored unit product Ready now requires nested `UnitDefinition` + `PayloadClass` async resolve
+- Pending nested loads reject purchase as `DefinitionNotReady` with no spend
+- Failed/invalid nested dependency → native bootstrap, not stuck Pending
+- Deprecated settings payload classes remain fallback only for native/empty-payload products
+- DropPod still assigns product UnitDefinition only when `UnitDefinitionAsset` is empty
+- `gp.Resource.RunOrbitalUnitDropContractTest` and `gp.Economy.RunEconomyLogisticsDataContractTest` Failures=0
+- GPEditor Win64 Development + UHT **PASS**. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-UnitDrop-Nested-Readiness.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Configuration / Data Ownership Audit
 
 Status: **CONFIGURATION_DATA_OWNERSHIP_AUDIT_READY_FOR_REVIEW**

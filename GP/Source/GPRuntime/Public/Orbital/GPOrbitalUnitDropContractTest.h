@@ -69,6 +69,10 @@ private:
 	TSoftClassPtr<AGP_Worker> SavedWorkerPayload;
 	TSoftClassPtr<AGP_SalvageWalker> SavedWalkerPayload;
 	TSoftClassPtr<AGP_DropPod> SavedDropPodClass;
+	UPROPERTY()
+	TObjectPtr<class UGP_OrbitalUnitDropDefinition> AuthoredWorkerDropDef;
+	UPROPERTY()
+	TObjectPtr<class UGP_UnitDefinition> AuthoredWorkerUnitDef;
 	bool bSettingsMutated = false;
 	uint64 ExecutionId = 0;
 	FName OwnerTag;

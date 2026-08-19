@@ -741,6 +741,7 @@ void UGP_EconomyLogisticsDataContractTestRunner::AdvanceStage()
 		AuthoredWorkerDropDef->DeliveryDescentSeconds = 4.25f;
 		AuthoredWorkerDropDef->PayloadDeployDelaySeconds = 0.75f;
 		AuthoredWorkerDropDef->UnitDefinition = UGP_UnitDefinitionCatalog::Get().GetWorkerDefinition();
+		AuthoredWorkerDropDef->PayloadClass = AGP_Worker::StaticClass();
 
 		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
 		UnitDrops.DebugClearAuthoredUnitDropOverrides();

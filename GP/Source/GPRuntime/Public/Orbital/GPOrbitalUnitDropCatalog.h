@@ -10,12 +10,14 @@ class AGP_SalvageWalker;
 class AGP_UnitBase;
 class AGP_Worker;
 class UGP_OrbitalUnitDropDefinition;
+class UGP_UnitDefinition;
 struct FGP_UnitDropManifest;
 struct FStreamableHandle;
 
 /**
  * Native bootstrap + authored unit acquisition definitions (GP-S39E).
- * Precedence: authored settings soft ref → native bootstrap → deprecated settings numerics/class.
+ * Precedence: authored settings soft ref (Ready only after nested UnitDefinition + PayloadClass
+ * resolve) → native bootstrap → deprecated settings numerics/class.
  * Native catalog exists for contracts / empty setup. It must not permanently shadow authored DAs.
  */
 UCLASS()
@@ -25,6 +27,7 @@ class GPRUNTIME_API UGP_OrbitalUnitDropCatalog : public UObject
 
 public:
 	static UGP_OrbitalUnitDropCatalog& Get();
+	static UGP_OrbitalUnitDropCatalog* TryGetExisting();
 	static void ShutdownCatalog();
 	static void BindEngineLifecycle();
 	static void UnbindEngineLifecycle();
@@ -64,6 +67,24 @@ public:
 	bool DebugDidRequestAsyncAuthoredWorkerLoad() const { return bDebugDidRequestAsyncWorkerLoad; }
 	void DebugCompletePendingAuthoredWorkerLoad();
 	void DebugForceAuthoredWorkerLoadFailure();
+	void DebugForceUnresolvedNestedWorkerUnitDefinitionLoad(
+		UGP_OrbitalUnitDropDefinition* InjectedDrop,
+		UGP_UnitDefinition* InjectedUnitDefinition,
+		bool bHoldCompletion);
+	void DebugForceUnresolvedNestedWorkerPayloadClassLoad(
+		UGP_OrbitalUnitDropDefinition* InjectedDrop,
+		TSubclassOf<AGP_UnitBase> InjectedPayloadClass,
+		bool bHoldCompletion);
+	void DebugCompletePendingNestedWorkerUnitDefinitionLoad();
+	void DebugCompletePendingNestedWorkerPayloadClassLoad();
+	void DebugForceNestedWorkerUnitDefinitionLoadFailure();
+	void DebugForceNestedWorkerPayloadClassLoadFailure();
+	bool DebugDidRequestAsyncNestedUnitDefinitionLoad() const { return bDebugDidRequestAsyncNestedUnitDefLoad; }
+	bool DebugDidRequestAsyncNestedPayloadClassLoad() const { return bDebugDidRequestAsyncNestedPayloadLoad; }
+	bool DebugConsumeNestedUnitDefinitionLoadFailedLog();
+	bool DebugConsumeNestedPayloadClassLoadFailedLog();
+	bool DebugConsumeNullUnitDefinitionLog();
+	bool DebugConsumeNullPayloadClassLog();
 	void DebugClearAuthoredUnitDropOverrides();
 	void DebugBeginContractIsolation();
 	void DebugEndContractIsolation();
@@ -71,6 +92,13 @@ public:
 #endif
 
 private:
+	enum class EUnitAuthoredSlot : uint8
+	{
+		Worker = 0,
+		SalvageWalker,
+		COUNT
+	};
+
 	enum class EAuthoredSlotState : uint8
 	{
 		Empty = 0,
@@ -80,21 +108,38 @@ private:
 	};
 
 	UGP_OrbitalUnitDropDefinition* CreateNativeDrop(FName AssetName, const FText& DisplayName);
-	void RefreshWorkerSlot();
-	void RefreshWalkerSlot();
-	void RequestWorkerAsyncLoad(const FSoftObjectPath& SoftPath);
-	void RequestWalkerAsyncLoad(const FSoftObjectPath& SoftPath);
-	void HandleWorkerLoaded();
-	void HandleWalkerLoaded();
-	void FinishWorkerLoadResolve();
-	void FinishWalkerLoadResolve();
-	void CancelWorkerLoad();
-	void CancelWalkerLoad();
+	void RefreshAuthoredSlot(EUnitAuthoredSlot Slot);
+	void RequestAuthoredAsyncLoad(EUnitAuthoredSlot Slot, const FSoftObjectPath& SoftPath);
+	void RequestAuthoredNestedUnitDefinitionLoad(EUnitAuthoredSlot Slot, const FSoftObjectPath& NestedPath);
+	void RequestAuthoredNestedPayloadClassLoad(EUnitAuthoredSlot Slot, const FSoftObjectPath& NestedPath);
+	void HandleAuthoredLoaded(EUnitAuthoredSlot Slot);
+	void HandleAuthoredNestedUnitDefinitionLoaded(EUnitAuthoredSlot Slot);
+	void HandleAuthoredNestedPayloadClassLoaded(EUnitAuthoredSlot Slot);
+	void FinishAuthoredLoadResolve(EUnitAuthoredSlot Slot);
+	void FinishAuthoredNestedUnitDefinitionLoadResolve(EUnitAuthoredSlot Slot);
+	void FinishAuthoredNestedPayloadClassLoadResolve(EUnitAuthoredSlot Slot);
+	void ApplyLoadedAuthoredDrop(EUnitAuthoredSlot Slot, UGP_OrbitalUnitDropDefinition* Loaded);
+	void MarkAuthoredSlotFailed(EUnitAuthoredSlot Slot);
+	void CancelAuthoredTopLevelLoad(EUnitAuthoredSlot Slot);
+	void CancelAuthoredNestedUnitDefinitionLoad(EUnitAuthoredSlot Slot);
+	void CancelAuthoredNestedPayloadClassLoad(EUnitAuthoredSlot Slot);
+	void CancelAuthoredNestedLoads(EUnitAuthoredSlot Slot);
+	void CancelAuthoredLoad(EUnitAuthoredSlot Slot);
+	void CancelAllAuthoredLoads();
+	bool IsCatalogCallbackSafe() const;
+	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> GetAuthoredSoftRef(EUnitAuthoredSlot Slot) const;
 	UGP_OrbitalUnitDropDefinition* ResolveLoadedAuthored(const TSoftObjectPtr<UGP_OrbitalUnitDropDefinition>& Soft) const;
-	UGP_OrbitalUnitDropDefinition* CanonicalOrNative(
-		EAuthoredSlotState State,
-		UGP_OrbitalUnitDropDefinition* Authored,
-		UGP_OrbitalUnitDropDefinition* Native) const;
+	UGP_OrbitalUnitDropDefinition* CanonicalForSlot(EUnitAuthoredSlot Slot) const;
+	bool HasResolvedAuthoredDependencies(const UGP_OrbitalUnitDropDefinition* Drop, EUnitAuthoredSlot Slot) const;
+	bool IsPayloadClassValidForSlot(EUnitAuthoredSlot Slot, const UClass* PayloadClass) const;
+	TSubclassOf<AGP_UnitBase> ResolveFallbackPayloadClass(EUnitAuthoredSlot Slot) const;
+
+	void HandleWorkerLoaded() { HandleAuthoredLoaded(EUnitAuthoredSlot::Worker); }
+	void HandleWalkerLoaded() { HandleAuthoredLoaded(EUnitAuthoredSlot::SalvageWalker); }
+	void HandleWorkerUnitDefinitionLoaded() { HandleAuthoredNestedUnitDefinitionLoaded(EUnitAuthoredSlot::Worker); }
+	void HandleWalkerUnitDefinitionLoaded() { HandleAuthoredNestedUnitDefinitionLoaded(EUnitAuthoredSlot::SalvageWalker); }
+	void HandleWorkerPayloadClassLoaded() { HandleAuthoredNestedPayloadClassLoaded(EUnitAuthoredSlot::Worker); }
+	void HandleWalkerPayloadClassLoaded() { HandleAuthoredNestedPayloadClassLoaded(EUnitAuthoredSlot::SalvageWalker); }
 
 	UPROPERTY()
 	TObjectPtr<UGP_OrbitalUnitDropDefinition> NativeWorkerDrop;
@@ -103,30 +148,67 @@ private:
 	TObjectPtr<UGP_OrbitalUnitDropDefinition> NativeSalvageWalkerDrop;
 
 	UPROPERTY()
-	TObjectPtr<UGP_OrbitalUnitDropDefinition> AuthoredWorkerDrop;
+	TArray<TObjectPtr<UGP_OrbitalUnitDropDefinition>> NativeSlotDrops;
 
 	UPROPERTY()
-	TObjectPtr<UGP_OrbitalUnitDropDefinition> AuthoredSalvageWalkerDrop;
+	TArray<TObjectPtr<UGP_OrbitalUnitDropDefinition>> AuthoredSlotDrops;
 
-	TSharedPtr<FStreamableHandle> WorkerLoadHandle;
-	TSharedPtr<FStreamableHandle> WalkerLoadHandle;
-	FSoftObjectPath WorkerRequestedPath;
-	FSoftObjectPath WalkerRequestedPath;
-	EAuthoredSlotState WorkerState = EAuthoredSlotState::Empty;
-	EAuthoredSlotState WalkerState = EAuthoredSlotState::Empty;
+	TArray<TSharedPtr<FStreamableHandle>> AuthoredLoadHandles;
+	TArray<TSharedPtr<FStreamableHandle>> AuthoredUnitDefLoadHandles;
+	TArray<TSharedPtr<FStreamableHandle>> AuthoredPayloadLoadHandles;
+	TArray<FSoftObjectPath> AuthoredRequestedPaths;
+	TArray<FSoftObjectPath> AuthoredUnitDefRequestedPaths;
+	TArray<FSoftObjectPath> AuthoredPayloadRequestedPaths;
+	TArray<EAuthoredSlotState> AuthoredStates;
 	bool bNativeCatalogReady = false;
 
 #if !UE_BUILD_SHIPPING
-	bool bDebugForceUnresolvedWorker = false;
-	bool bDebugHoldWorkerCompletion = false;
-	bool bDebugDidRequestAsyncWorkerLoad = false;
-	bool bDebugWorkerLoadFailedLogged = false;
-	TObjectPtr<UGP_OrbitalUnitDropDefinition> DebugInjectedWorkerDrop;
+	void EnsureDebugSlotArrays();
+	void ResetDebugSlotFlags();
+	void SaveAuthoredSettingsIfNeeded();
+	void AssignAuthoredSettingsDrop(EUnitAuthoredSlot Slot, UGP_OrbitalUnitDropDefinition* Definition);
+	void DebugForceUnresolvedAuthoredLoad(
+		EUnitAuthoredSlot Slot,
+		UGP_OrbitalUnitDropDefinition* InjectedDefinition,
+		bool bHoldCompletion);
+	void DebugForceUnresolvedNestedUnitDefinitionLoad(
+		EUnitAuthoredSlot Slot,
+		UGP_OrbitalUnitDropDefinition* InjectedDrop,
+		UGP_UnitDefinition* InjectedUnitDefinition,
+		bool bHoldCompletion);
+	void DebugForceUnresolvedNestedPayloadClassLoad(
+		EUnitAuthoredSlot Slot,
+		UGP_OrbitalUnitDropDefinition* InjectedDrop,
+		TSubclassOf<AGP_UnitBase> InjectedPayloadClass,
+		bool bHoldCompletion);
+	void DebugCompletePendingAuthoredLoad(EUnitAuthoredSlot Slot);
+	void DebugCompletePendingNestedUnitDefinitionLoad(EUnitAuthoredSlot Slot);
+	void DebugCompletePendingNestedPayloadClassLoad(EUnitAuthoredSlot Slot);
+	void DebugForceNestedUnitDefinitionLoadFailure(EUnitAuthoredSlot Slot);
+	void DebugForceNestedPayloadClassLoadFailure(EUnitAuthoredSlot Slot);
+
 	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> DebugSavedWorkerSettingsRef;
 	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> DebugSavedWalkerSettingsRef;
 	bool bDebugSavedSettings = false;
 	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> ContractSavedWorkerSettingsRef;
 	TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> ContractSavedWalkerSettingsRef;
 	bool bContractIsolationActive = false;
+	TArray<uint8> DebugForceUnresolvedDrop;
+	TArray<uint8> DebugHoldDropCompletion;
+	TArray<uint8> DebugForceUnresolvedUnitDef;
+	TArray<uint8> DebugHoldUnitDefCompletion;
+	TArray<uint8> DebugForceUnresolvedPayload;
+	TArray<uint8> DebugHoldPayloadCompletion;
+	TArray<TObjectPtr<UGP_OrbitalUnitDropDefinition>> DebugInjectedDrops;
+	TArray<TObjectPtr<UGP_UnitDefinition>> DebugInjectedUnitDefs;
+	TArray<TSubclassOf<AGP_UnitBase>> DebugInjectedPayloadClasses;
+	bool bDebugDidRequestAsyncWorkerLoad = false;
+	bool bDebugDidRequestAsyncNestedUnitDefLoad = false;
+	bool bDebugDidRequestAsyncNestedPayloadLoad = false;
+	bool bDebugWorkerLoadFailedLogged = false;
+	bool bDebugNestedUnitDefLoadFailedLogged = false;
+	bool bDebugNestedPayloadLoadFailedLogged = false;
+	bool bDebugNullUnitDefinitionLogged = false;
+	bool bDebugNullPayloadClassLogged = false;
 #endif
 };

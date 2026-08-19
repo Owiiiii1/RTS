@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Settings Visibility Truth (Cleanup Slice A)
+
+Status: **SETTINGS_VISIBILITY_TRUTH_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-settings-visibility-truth` from `origin/main` @ `283297012c1cefe162028a7ba4166c02a81230cc`
+- Project Settings labels/exposure only; no runtime precedence, INI, or authored-content change
+- Eight deprecated bridges + unused overlap margin: Config retained, `EditAnywhere` removed
+- Four product timing seeds relabeled as fallback; `DefensiveTurretPayloadClass` stays editable LEGACY override
+- `gp.Settings.RunOrbitalDeliveryVisibilityContractTest` plus unit/building/economy/Wall Package contracts Failures=0
+- GPEditor Win64 Development + UHT **PASS**. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-Settings-Visibility-Truth.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Unit Drop Nested Readiness finalization
 
 Status: **UNIT_DROP_NESTED_READINESS_FINALIZED_READY_FOR_MERGE**

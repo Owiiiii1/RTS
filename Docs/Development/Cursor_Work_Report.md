@@ -1,93 +1,95 @@
-# Cursor Work Report — Unit Drop Nested Readiness
+# Cursor Work Report — Settings Visibility Truth
 
 ## Status
 
-**UNIT_DROP_NESTED_READINESS_FINALIZED_READY_FOR_MERGE**
+**SETTINGS_VISIBILITY_TRUTH_READY_FOR_OPERATOR_VALIDATION**
 
-**NOT MERGED.**
+**NOT MERGED. NOT FINALIZED.**
 
 ## Branch / base / head
 
-- Branch: `feature/gp-unit-drop-nested-readiness`
-- Base: `origin/main` @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`
+- Branch: `feature/gp-settings-visibility-truth`
+- Base: `origin/main` @ `283297012c1cefe162028a7ba4166c02a81230cc`
 - Head: (this commit)
 
-Implementation commits: `7aba363` (nested unit-drop readiness), `5c92fdd` (BuildingDropCatalog teardown). This commit is docs/status only.
+## What changed
 
-## Operator PASS summary
+Editor exposure and labels on `UGP_OrbitalDeliverySettings` only. No runtime readers, precedence, defaults, INI, or authored content.
 
-- Worker cold-start authored payload / UnitDefinition: **PASS**
-- Salvage Walker cold-start authored payload / UnitDefinition: **PASS**
-- Editor close after BuildingDropCatalog lifecycle correction: **PASS**
-- No fatal
-- No `Object is not packaged: GP_BuildingDropCatalog`
+Approach: keep `Config` serialization; drop `EditAnywhere` on hidden compatibility fields so they are not Project Settings controls. No custom details panel.
 
-## Final readiness contract
+## Editor exposure removed (still Config + same names/types/defaults/readers)
 
-For a configured authored unit product slot, Ready requires all of:
+- `WorkerTransportSlotCost`
+- `SalvageWalkerTransportSlotCost`
+- `WorkerOrbitalDropCost`
+- `SalvageWalkerOrbitalDropCost`
+- `WorkerPayloadClass`
+- `SalvageWalkerPayloadClass`
+- `BuildingOrbitalPurchaseCost`
+- `BuildingPayloadClass`
+- `BuildingPlacementOverlapMarginCm` (unused; hidden; not wired)
 
-1. Top-level `UGP_OrbitalUnitDropDefinition` loaded
-2. Nested `UnitDefinition` non-null and loaded
-3. Nested `PayloadClass` non-null, loaded, and a valid slot subclass (`AGP_Worker` / `AGP_SalvageWalker`)
+## Relabeled as fallback seeds (still editable)
 
-Until then the slot stays Pending. Purchase is `DefinitionNotReady`. No Orbital Ferronite spend, manifest mutation, pod spawn, or cold-load class substitution.
+- `UnitDropDescentDurationSeconds` — Fallback Defaults | Unit Product Timing
+- `UnitDropPayloadDeployDelaySeconds` — Fallback Defaults | Unit Product Timing
+- `BuildingDropDescentDurationSeconds` — Fallback Defaults | Building Product Timing
+- `BuildingDropPayloadDeployDelaySeconds` — Fallback Defaults | Building Product Timing
 
-Authored product cold state cannot fall through to deprecated `WorkerPayloadClass` / `SalvageWalkerPayloadClass` merely because nested assets are unloaded. Canonical slot is `nullptr` while Pending; payload resolve uses the canonical product only when Ready.
+Display names include `(Fallback Seed)`. Tooltips state canonical product definitions normally overwrite these. Wall Package still owns its own timing.
 
-Unconfigured or failed authored slots keep native bootstrap. Deprecated settings payload classes remain the fallback only for native/empty-payload products. Deprecated settings were not removed.
+## DefensiveTurretPayloadClass
 
-`AGP_DropPod` still assigns product `UnitDefinition` only when `UnitDefinitionAsset` is empty.
+Remains `EditAnywhere`. Category/display/tooltip mark it as **LEGACY compatibility override**. `DeprecatedProperty` not applied (must stay operator-editable until slice E). Precedence unchanged: still outranks `BuildingDefinition.SpawnedClass`.
 
-## BuildingDropCatalog shutdown correction
+## BuildingPlacementOverlapMarginCm
 
-`Get()` no longer recreates a transient `GP_BuildingDropCatalog` during engine exit or catalog shutdown.
+Config retained. `EditAnywhere` removed. `DeprecatedProperty` + comment: unused, does not affect placement. No gameplay wiring.
 
-- `TryGetExisting()` never creates
-- PreExit locks creation, then shuts down
-- `ShutdownCatalog()` is idempotent and cancels top-level and nested handles
-- Contract runner `BeginDestroy` / `RestoreSettings` uses `TryGetExisting()` only (non-creating)
-- Coordinator `Release()` also uses `TryGetExisting()`
-- If `Get()` must return while creation is blocked, it uses the packaged CDO, not a transient resurrection
+## Unchanged
 
-Wall Package behavior was not changed. Wall Package inventory contract was run only as a shutdown/catalog regression cross-check.
+- Canonical DataAsset refs and true global transport/world fields remain normal editable settings
+- Property names, types, C++ in-class defaults
+- Runtime readers and fallback precedence
+- No INI migration
 
-## Final contract tests / results
+## Tests / results
 
 | Check | Result |
 | --- | --- |
+| `gp.Settings.RunOrbitalDeliveryVisibilityContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Resource.RunOrbitalUnitDropContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Economy.RunEconomyLogisticsDataContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Building.RunOrbitalBuildingDropContractTest` | `Complete Failures=0 Cancelled=false` |
+| `gp.Economy.RunEconomyLogisticsDataContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Orbital.RunWallPackageInventoryContractTest` | `Complete Failures=0 Cancelled=false` |
 
-Full project suite not run. No new shared regression appeared.
+Full suite not run.
 
 ## Builds
 
 | Target | Result |
 | --- | --- |
-| `GPEditor Win64 Development` + UHT | **PASS** (up to date) |
-| `GP Win64 Development` | **PASS** |
-| `GP Win64 Shipping` | **PASS** |
+| `GPEditor Win64 Development` + UHT | **PASS** |
 
-No Shipping stub fixes required.
+GP Win64 Development / Shipping not run (finalization after operator PASS).
 
-## Factual protected-files check
+## Operator test (not claimed PASS)
 
-Committed diff vs `origin/main` @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f` is C++ + docs only:
+Project Settings → Game → GP Orbital Delivery:
 
-- no maps
-- no `DefaultGame.ini`
-- no `DefaultEngine.ini`
-- no Blueprint / DataAsset / material / content changes
-- no unrelated ownership cleanup
-- no deprecated settings removed
-- Wall Package runtime behavior unchanged (catalog/authority/inventory files not in this branch diff)
+- DataAsset refs obvious
+- true globals still available
+- old Worker/Walker cost/slot/payload bridges no longer look like normal settings
+- fallback unit/building timing explicitly labeled
+- dead overlap margin no longer looks functional
+- Defensive Turret LEGACY override clearly identified
+- existing gameplay still works
 
-Local untracked Content and local config/map dirt were left unstaged.
+## Protected-files confirmation
 
-## Finalization scope
-
-No new functionality in this finalization. Docs/status only after operator PASS and the validation above.
+Committed diff excludes maps, `DefaultGame.ini`, `DefaultEngine.ini`, Blueprints, DataAssets, materials, and other untracked Content.
 
 ## NOT MERGED
+
+## NOT FINALIZED

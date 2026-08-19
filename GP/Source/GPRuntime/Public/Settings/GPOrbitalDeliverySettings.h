@@ -18,9 +18,17 @@ class UGP_OrbitalUnitDropDefinition;
  * Project Settings → Game → GP Orbital Delivery (GP-S31R).
  * TEMP operator-test tuning — not final balance. Config=Game → DefaultGame.ini.
  *
- * Global transport / world-system tunables stay here (pod class, altitude, spacing, cleanup,
- * deploy radius, overlap). Per-purchase unit/building cost, slots, payload and delivery timing
- * live on orbital drop definitions. Deprecated unit-specific fields remain ini compatibility.
+ * Project Settings own:
+ * - DataAsset / catalog references
+ * - true global transport and world-system tunables (pod class, altitude, spacing, cleanup, deploy radius)
+ * - retained legacy / fallback Config compatibility (not canonical product balance)
+ *
+ * Product DataAssets own:
+ * - product cost, transport slot cost, payload
+ * - product-specific descent / payload-deploy timing
+ *
+ * Wall Package owns its own descent / deploy timing on UGP_WallPackageDefinition.
+ * BuildingPlacementOverlapMarginCm is unused (no runtime reader).
  */
 UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "GP Orbital Delivery"))
 class GPRUNTIME_API UGP_OrbitalDeliverySettings : public UDeveloperSettings
@@ -34,7 +42,6 @@ public:
 
 	static const UGP_OrbitalDeliverySettings* Get();
 
-	/** Transport slots per unit DropPod (MVP tuning example 4). */
 	/**
 	 * Designer-selected canonical Worker acquisition DataAsset.
 	 * Empty = native bootstrap. Contains no balance values itself.
@@ -72,38 +79,57 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Wall Package|Definitions")
 	TSoftObjectPtr<UGP_WallPackageDefinition> WallPackageDefinition;
 
+	/** Transport slots per unit DropPod (MVP tuning example 4). */
 	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Slots", meta = (ClampMin = "1"))
 	int32 PodTransportSlotCapacity = 4;
 
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Slots", meta = (ClampMin = "1", DeprecatedProperty,
+	/**
+	 * DEPRECATED compatibility bridge. Canonical slot cost is UGP_OrbitalUnitDropDefinition.TransportSlotCost.
+	 * Config serialization retained. Not a designer-authoritative Project Settings control.
+	 */
+	UPROPERTY(Config, meta = (ClampMin = "1", DeprecatedProperty,
 		DeprecationMessage = "Canonical slot cost is UGP_OrbitalUnitDropDefinition.TransportSlotCost."))
 	int32 WorkerTransportSlotCost = 1;
 
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Slots", meta = (ClampMin = "1", DeprecatedProperty,
+	/**
+	 * DEPRECATED compatibility bridge. Canonical slot cost is UGP_OrbitalUnitDropDefinition.TransportSlotCost.
+	 * Config serialization retained. Not a designer-authoritative Project Settings control.
+	 */
+	UPROPERTY(Config, meta = (ClampMin = "1", DeprecatedProperty,
 		DeprecationMessage = "Canonical slot cost is UGP_OrbitalUnitDropDefinition.TransportSlotCost."))
 	int32 SalvageWalkerTransportSlotCost = 2;
 
-	/** Compatibility fallback. Canonical cost is UGP_OrbitalUnitDropDefinition.Cost. */
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Cost", meta = (ClampMin = "0.0", DeprecatedProperty,
+	/**
+	 * DEPRECATED compatibility bridge. Canonical cost is UGP_OrbitalUnitDropDefinition.Cost.
+	 * Config serialization retained. Not a designer-authoritative Project Settings control.
+	 */
+	UPROPERTY(Config, meta = (ClampMin = "0.0", DeprecatedProperty,
 		DeprecationMessage = "Canonical cost is UGP_OrbitalUnitDropDefinition.Cost."))
 	float WorkerOrbitalDropCost = 25.0f;
 
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Cost", meta = (ClampMin = "0.0", DeprecatedProperty,
+	/**
+	 * DEPRECATED compatibility bridge. Canonical cost is UGP_OrbitalUnitDropDefinition.Cost.
+	 * Config serialization retained. Not a designer-authoritative Project Settings control.
+	 */
+	UPROPERTY(Config, meta = (ClampMin = "0.0", DeprecatedProperty,
 		DeprecationMessage = "Canonical cost is UGP_OrbitalUnitDropDefinition.Cost."))
 	float SalvageWalkerOrbitalDropCost = 50.0f;
 
 	/**
-	 * Authored Worker BP (must derive from AGP_Worker). Empty → native AGP_Worker fallback.
-	 * Owner assigns e.g. BP_Worker in Project Settings — no C++ /Game path.
+	 * DEPRECATED compatibility bridge. Canonical payload is UGP_OrbitalUnitDropDefinition.PayloadClass.
+	 * Config serialization and existing fallback/sync-load readers retained.
+	 * Not a designer-authoritative Project Settings control.
 	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Payload", meta = (AllowAbstract = "false", DeprecatedProperty,
+	UPROPERTY(Config, meta = (AllowAbstract = "false", DeprecatedProperty,
 		DeprecationMessage = "Canonical payload is UGP_OrbitalUnitDropDefinition.PayloadClass. Kept as operator BP bridge."))
 	TSoftClassPtr<AGP_Worker> WorkerPayloadClass;
 
 	/**
-	 * Authored Salvage Walker BP (must derive from AGP_SalvageWalker). Empty → native fallback.
+	 * DEPRECATED compatibility bridge. Canonical payload is UGP_OrbitalUnitDropDefinition.PayloadClass.
+	 * Config serialization and existing fallback/sync-load readers retained.
+	 * Not a designer-authoritative Project Settings control.
 	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Payload", meta = (AllowAbstract = "false", DeprecatedProperty,
+	UPROPERTY(Config, meta = (AllowAbstract = "false", DeprecatedProperty,
 		DeprecationMessage = "Canonical payload is UGP_OrbitalUnitDropDefinition.PayloadClass. Kept as operator BP bridge."))
 	TSoftClassPtr<AGP_SalvageWalker> SalvageWalkerPayloadClass;
 
@@ -114,8 +140,13 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "DropPod|Class", meta = (AllowAbstract = "false"))
 	TSoftClassPtr<AGP_DropPod> UnitDropPodClass;
 
-	/** DropPod descent telegraph (GDD 2–3 s). */
-	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "0.05"))
+	/**
+	 * Fallback seed for unit DropPod descent. Canonical timing is
+	 * UGP_OrbitalUnitDropDefinition.DeliveryDescentSeconds and normally overwrites this.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Fallback Defaults|Unit Product Timing",
+		meta = (ClampMin = "0.05", DisplayName = "Unit Descent Seconds (Fallback Seed)",
+			ToolTip = "Fallback seed used when resolving unit delivery timing. Canonical per-product timing lives on UGP_OrbitalUnitDropDefinition and normally overwrites this. Wall Package uses its own definition timing."))
 	float UnitDropDescentDurationSeconds = 2.5f;
 
 	/** Spawn altitude above Unit Drop Zone (cm). */
@@ -127,48 +158,67 @@ public:
 	float UnitDropSpawnSpacingCm = 180.0f;
 
 	/**
-	 * After Impact: wait before authority payload spawn (TEMP ~1.0–1.5s for units).
+	 * Fallback seed for unit payload deploy delay after Impact.
+	 * Canonical timing is UGP_OrbitalUnitDropDefinition.PayloadDeployDelaySeconds and normally overwrites this.
 	 * Zero = Impact → immediate payload. Separate from descent / cleanup.
 	 */
-	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "0.0"))
+	UPROPERTY(Config, EditAnywhere, Category = "Fallback Defaults|Unit Product Timing",
+		meta = (ClampMin = "0.0", DisplayName = "Unit Payload Deploy Delay Seconds (Fallback Seed)",
+			ToolTip = "Fallback seed used when resolving unit payload deploy delay. Canonical per-product timing lives on UGP_OrbitalUnitDropDefinition and normally overwrites this. Wall Package uses its own definition timing."))
 	float UnitDropPayloadDeployDelaySeconds = 1.25f;
 
 	/** Delay after payload deploy before DropPod destroy (seconds). */
 	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "0.0"))
 	float UnitDropCleanupDelaySeconds = 0.35f;
 
-	/** TEMP Orbital purchase cost for Logistics Hub. Deprecated SoT — GP-S35B uses UGP_OrbitalDropDefinition.Cost.
-	 * Retained as operator DefaultGame.ini compatibility bridge for the native Logistics Hub catalog entry. */
-	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Cost", meta = (ClampMin = "0.0", DeprecatedProperty,
+	/**
+	 * DEPRECATED compatibility bridge. Canonical cost is UGP_OrbitalDropDefinition.Cost.
+	 * Retained as operator DefaultGame.ini compatibility for the native Logistics Hub catalog entry.
+	 * Not a designer-authoritative Project Settings control.
+	 */
+	UPROPERTY(Config, meta = (ClampMin = "0.0", DeprecatedProperty,
 		DeprecationMessage = "Canonical cost is UGP_OrbitalDropDefinition.Cost. Kept as Logistics Hub compatibility bridge."))
 	float BuildingOrbitalPurchaseCost = 100.0f;
 
 	/**
-	 * Authored building payload BP (must derive from AGP_BuildingBase). Empty → native AGP_LogisticsHub.
-	 * Deprecated SoT — canonical class is UGP_BuildingDefinition.SpawnedClass.
-	 * Retained as operator DefaultGame.ini compatibility bridge for Logistics Hub.
+	 * DEPRECATED compatibility bridge. Canonical class is UGP_BuildingDefinition.SpawnedClass.
+	 * Retained as operator DefaultGame.ini compatibility for Logistics Hub.
+	 * Not a designer-authoritative Project Settings control.
 	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Payload", meta = (AllowAbstract = "false", DeprecatedProperty,
+	UPROPERTY(Config, meta = (AllowAbstract = "false", DeprecatedProperty,
 		DeprecationMessage = "Canonical payload is UGP_BuildingDefinition.SpawnedClass. Kept as Logistics Hub compatibility bridge."))
 	TSoftClassPtr<AGP_BuildingBase> BuildingPayloadClass;
 
 	/**
-	 * Authored Defensive Turret BP (must derive from AGP_DefensiveTurret). Empty → native class.
-	 * Canonical payload is still UGP_BuildingDefinition.SpawnedClass; this is the Hub-style override seam.
+	 * LEGACY compatibility override. When set, currently outranks BuildingDefinition.SpawnedClass.
+	 * Not the desired future source of truth. Keep editable until BuildingDefinition payload migration.
 	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Payload", meta = (AllowAbstract = "false"))
+	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|LEGACY Compatibility Override",
+		meta = (AllowAbstract = "false",
+			DisplayName = "Defensive Turret Payload Class (LEGACY Override)",
+			ToolTip = "LEGACY compatibility override. Currently outranks BuildingDefinition.SpawnedClass when set. Not the desired future source of truth. Keep until BuildingDefinition payload migration."))
 	TSoftClassPtr<AGP_BuildingBase> DefensiveTurretPayloadClass;
 
-	/** Building DropPod descent telegraph (GDD 2–3 s). */
-	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|DropPod", meta = (ClampMin = "0.05"))
+	/**
+	 * Fallback seed for building DropPod descent. Canonical timing is
+	 * UGP_OrbitalDropDefinition.DeliveryDescentSeconds and normally overwrites this.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Fallback Defaults|Building Product Timing",
+		meta = (ClampMin = "0.05", DisplayName = "Building Descent Seconds (Fallback Seed)",
+			ToolTip = "Fallback seed used when resolving building delivery timing. Canonical per-product timing lives on UGP_OrbitalDropDefinition and normally overwrites this. Wall Package uses its own definition timing."))
 	float BuildingDropDescentDurationSeconds = 2.5f;
 
 	/** Spawn altitude above building landing point (cm). */
 	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|DropPod", meta = (ClampMin = "100.0"))
 	float BuildingDropSpawnAltitudeCm = 2500.0f;
 
-	/** After Impact: wait before authority building spawn (TEMP ~2.0 s — longer than units). */
-	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|DropPod", meta = (ClampMin = "0.0"))
+	/**
+	 * Fallback seed for building payload deploy delay after Impact.
+	 * Canonical timing is UGP_OrbitalDropDefinition.PayloadDeployDelaySeconds and normally overwrites this.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Fallback Defaults|Building Product Timing",
+		meta = (ClampMin = "0.0", DisplayName = "Building Payload Deploy Delay Seconds (Fallback Seed)",
+			ToolTip = "Fallback seed used when resolving building payload deploy delay. Canonical per-product timing lives on UGP_OrbitalDropDefinition and normally overwrites this. Wall Package uses its own definition timing."))
 	float BuildingDropPayloadDeployDelaySeconds = 2.0f;
 
 	/** Delay after building deploy before DropPod destroy (seconds). */
@@ -179,8 +229,12 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Placement", meta = (ClampMin = "100.0"))
 	float BuildingMaxDeployRadiusFromMainBaseCm = 5000.0f;
 
-	/** Extra overlap margin when validating building placement (cm). */
-	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Placement", meta = (ClampMin = "0.0"))
+	/**
+	 * DEPRECATED unused Config key. Has no runtime or test reader and does not affect placement.
+	 * Not deleted (cleanup slice B). Not a designer-authoritative Project Settings control.
+	 */
+	UPROPERTY(Config, meta = (ClampMin = "0.0", DeprecatedProperty,
+		DeprecationMessage = "Unused. BuildingPlacementOverlapMarginCm has no runtime reader and does not affect placement."))
 	float BuildingPlacementOverlapMarginCm = 25.0f;
 
 	/** Resolve Worker payload: soft class if valid subclass, else native. */

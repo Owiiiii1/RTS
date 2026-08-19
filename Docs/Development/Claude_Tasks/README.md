@@ -8,17 +8,17 @@
 
 > Стан станом на 2026-08-19. Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Unit Drop Nested Readiness. **Current: UNIT_DROP_NESTED_READINESS_FINALIZED_READY_FOR_MERGE**.
+**Поточна фаза:** Configuration data ownership cleanup. **Current: SETTINGS_VISIBILITY_TRUTH_READY_FOR_OPERATOR_VALIDATION**.
 
 **Status snapshot:**
 
 | Area | Status |
 |---|---|
-| GP-S01 … GP-S42A | **DONE / on `main`** (GP-S42A Wall Package Inventory merged @ `d9e89605…`) |
-| **GP-0305R** Wall Package Delivery | **on `main`** @ `c00e95ed46fb4aa738a1747576ee2d6b84ffe593` — canon |
-| **Unit Drop Nested Readiness** | **FINALIZED READY FOR MERGE** — [`GP-UnitDrop-Nested-Readiness.md`](GP-UnitDrop-Nested-Readiness.md) — **NOT MERGED** |
+| GP-S01 … GP-S42A | **DONE / on `main`** |
+| **Unit Drop Nested Readiness** | **DONE / on `main`** @ `283297012c1cefe162028a7ba4166c02a81230cc` |
+| **Cleanup Slice A** Settings visibility truth | **READY FOR OPERATOR VALIDATION** — [`GP-Settings-Visibility-Truth.md`](GP-Settings-Visibility-Truth.md) — **NOT MERGED** |
 
-**NEXT action для агента:** wait for merge authorization. Do **not** start configuration/data ownership cleanup. Do **not** start GP-S42B / GP-S42C. Do **not** implement old pod-per-segment Wall. Do **not** start FoW.
+**NEXT action для агента:** wait for operator Project Settings validation. Do **not** start cleanup slice B (dead overlap decision) or later slices. Do **not** migrate authored assets or remove compatibility fields. Do **not** start GP-S42B / GP-S42C / FoW.
 
 ### Drift Warning
 

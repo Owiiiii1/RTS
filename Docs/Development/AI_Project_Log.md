@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Dead overlap setting removal finalization
+
+Status: **DEAD_OVERLAP_SETTING_REMOVAL_FINALIZED_READY_FOR_MERGE**
+
+- Same branch `feature/gp-remove-dead-overlap-setting` (base `origin/main` @ `f38e803771261c60d865949c693a52a73fbcedb2`)
+- Operator PASS: overlap field gone from Project Settings; Hub/Turret placement unchanged
+- Final contracts Failures=0: settings visibility, building-drop, economy/logistics
+- GPEditor+UHT / GP Development / GP Shipping **PASS**
+- Stale `DefaultGame.ini` key left untouched. **NOT MERGED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Dead overlap setting removal (Cleanup Slice B)
 
 Status: **DEAD_OVERLAP_SETTING_REMOVAL_READY_FOR_OPERATOR_VALIDATION**

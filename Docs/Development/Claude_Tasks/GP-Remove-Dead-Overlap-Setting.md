@@ -1,6 +1,6 @@
 # GP — Remove Dead Overlap Setting (Cleanup Slice B)
 
-Status: **DEAD_OVERLAP_SETTING_REMOVAL_READY_FOR_OPERATOR_VALIDATION**
+Status: **DEAD_OVERLAP_SETTING_REMOVAL_FINALIZED_READY_FOR_MERGE**
 
 Branch: `feature/gp-remove-dead-overlap-setting` from `origin/main` @ `f38e803771261c60d865949c693a52a73fbcedb2`
 
@@ -15,6 +15,9 @@ No production runtime reader existed. Placement behavior is unchanged. No replac
 ## INI
 
 Committed `DefaultGame.ini` still contains `BuildingPlacementOverlapMarginCm=25.000000`. Intentionally untouched because protected local config exists. After C++ removal the stale key cannot populate a runtime field. Config hygiene later.
+
+Operator validation: **PASS**.
+
 
 ## Out of scope
 

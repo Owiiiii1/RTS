@@ -39,7 +39,7 @@
 | Last closed / merged stage | **Settings Visibility Truth (Cleanup Slice A)** on `main` @ `f38e803771261c60d865949c693a52a73fbcedb2` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md`](Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md) — **DEAD_OVERLAP_SETTING_REMOVAL_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-remove-dead-overlap-setting` |
+| Current stage | [`Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md`](Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md) — **DEAD_OVERLAP_SETTING_REMOVAL_FINALIZED_READY_FOR_MERGE** on `feature/gp-remove-dead-overlap-setting` |
 
 ---
 
@@ -51,7 +51,7 @@
 
 **Closed on `main`:** Settings Visibility Truth @ `f38e803771261c60d865949c693a52a73fbcedb2`; Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current:** [`Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md`](Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md) — **DEAD_OVERLAP_SETTING_REMOVAL_READY_FOR_OPERATOR_VALIDATION**. **NOT MERGED. NOT FINALIZED.**
+**Current:** [`Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md`](Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md) — **DEAD_OVERLAP_SETTING_REMOVAL_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
 
 **Do not** start cleanup slice C or later. Do **not** implement old pod-per-segment Wall.
 

@@ -2,9 +2,9 @@
 
 ## Status
 
-**DEAD_OVERLAP_SETTING_REMOVAL_READY_FOR_OPERATOR_VALIDATION**
+**DEAD_OVERLAP_SETTING_REMOVAL_FINALIZED_READY_FOR_MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.**
 
 ## Branch / base / head
 
@@ -12,40 +12,26 @@
 - Base: `origin/main` @ `f38e803771261c60d865949c693a52a73fbcedb2`
 - Head: (this commit)
 
-## Repository-wide search / classification
+## Operator PASS summary
 
-`BuildingPlacementOverlapMarginCm` occurrences before removal:
+- `BuildingPlacementOverlapMarginCm` is gone from Project Settings
+- Logistics Hub placement works
+- Defensive Turret placement works
+- normal placement behavior looks unchanged
 
-| Kind | Path | Notes |
-| --- | --- | --- |
-| Declaration | `GPOrbitalDeliverySettings.h` | UPROPERTY + class comment |
-| Config text | `GP/Config/DefaultGame.ini` | `BuildingPlacementOverlapMarginCm=25.000000` |
-| Test | `GPOrbitalDeliveryVisibilityContractTest.cpp` | Slice A hidden/deprecated expectation |
-| Docs | audit / slice A task / prior report | ownership notes |
-| Runtime reader | **none** | |
+## Property removed
 
-No `GConfig` / `GetFloat` / `GetInt` access of this key exists in `GP/Source`. Zero production runtime readers.
+`UGP_OrbitalDeliverySettings::BuildingPlacementOverlapMarginCm` is completely absent. No replacement setting. No production runtime reader existed before or after. No `GConfig`/string reader was added for the stale INI key.
 
-## C++ removal
+## Stale INI key untouched
 
-Removed `UGP_OrbitalDeliverySettings::BuildingPlacementOverlapMarginCm` (UPROPERTY, default, comments). No redirect or replacement property.
+Committed `GP/Config/DefaultGame.ini` still contains `BuildingPlacementOverlapMarginCm=25.000000`. Intentionally not edited. After C++ removal it cannot populate a runtime field.
 
-Placement, footprint, SAT/OBB, deploy radius, NavigationObstacle, and related systems were not touched.
+## Placement behavior unchanged
 
-## Stale DefaultGame.ini key
+No BuildGrid, footprint, SAT/OBB, NavigationObstacle, or deploy-radius changes.
 
-Intentionally **not** edited. Protected local config exists. After C++ removal the leftover INI key cannot populate a runtime field. Harmless legacy text for a later dedicated config-hygiene operation.
-
-## Settings contract change
-
-`gp.Settings.RunOrbitalDeliveryVisibilityContractTest`:
-
-- OLD: property exists, Config, hidden/deprecated
-- NEW: `FindPropertyByName("BuildingPlacementOverlapMarginCm") == nullptr`
-
-Other Slice A visibility/metadata assertions unchanged.
-
-## Tests / results
+## Final tests / results
 
 | Check | Result |
 | --- | --- |
@@ -53,26 +39,25 @@ Other Slice A visibility/metadata assertions unchanged.
 | `gp.Building.RunOrbitalBuildingDropContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Economy.RunEconomyLogisticsDataContractTest` | `Complete Failures=0 Cancelled=false` |
 
-Unit-drop / Wall Package / full suite not run.
+Full suite not run.
 
 ## Builds
 
 | Target | Result |
 | --- | --- |
-| `GPEditor Win64 Development` + UHT | **PASS** |
-
-GP Win64 Development / Shipping not run (finalization after operator PASS).
-
-## Operator test (not claimed PASS)
-
-Project Settings → Game → GP Orbital Delivery: field gone. Normal building placement and Hub/Turret deploy still work.
+| `GPEditor Win64 Development` + UHT | **PASS** (up to date) |
+| `GP Win64 Development` | **PASS** |
+| `GP Win64 Shipping` | **PASS** |
 
 ## Protected-files confirmation
 
-Committed diff excludes maps, `DefaultGame.ini`, `DefaultEngine.ini`, Blueprints, DataAssets, materials, and other untracked Content.
+Committed diff vs `origin/main` @ `f38e803…` is settings header, visibility contract, and docs only:
 
-## Runtime placement behavior unchanged
+- no maps
+- no `DefaultGame.ini`
+- no `DefaultEngine.ini`
+- no Blueprint / DataAsset / material / content changes
+
+No new functionality in this finalization.
 
 ## NOT MERGED
-
-## NOT FINALIZED

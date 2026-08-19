@@ -39,7 +39,7 @@
 | Last closed / merged stage | **Unit Drop Nested Readiness** on `main` @ `283297012c1cefe162028a7ba4166c02a81230cc` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-Settings-Visibility-Truth.md`](Claude_Tasks/GP-Settings-Visibility-Truth.md) — **SETTINGS_VISIBILITY_TRUTH_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-settings-visibility-truth` |
+| Current stage | [`Claude_Tasks/GP-Settings-Visibility-Truth.md`](Claude_Tasks/GP-Settings-Visibility-Truth.md) — **SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE** on `feature/gp-settings-visibility-truth` |
 
 ---
 
@@ -51,7 +51,7 @@
 
 **Closed on `main`:** Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current:** [`Claude_Tasks/GP-Settings-Visibility-Truth.md`](Claude_Tasks/GP-Settings-Visibility-Truth.md) — **SETTINGS_VISIBILITY_TRUTH_READY_FOR_OPERATOR_VALIDATION**. **NOT MERGED. NOT FINALIZED.**
+**Current:** [`Claude_Tasks/GP-Settings-Visibility-Truth.md`](Claude_Tasks/GP-Settings-Visibility-Truth.md) — **SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
 
 **Do not** start cleanup slice B or later. Do **not** implement old pod-per-segment Wall.
 

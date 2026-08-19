@@ -1,6 +1,6 @@
 # GP — Settings Visibility Truth (Cleanup Slice A)
 
-Status: **SETTINGS_VISIBILITY_TRUTH_READY_FOR_OPERATOR_VALIDATION**
+Status: **SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE**
 
 Branch: `feature/gp-settings-visibility-truth` from `origin/main` @ `283297012c1cefe162028a7ba4166c02a81230cc`
 
@@ -21,3 +21,6 @@ Make Project Settings → Game → GP Orbital Delivery match actual ownership. N
 ## Out of scope
 
 Slices B–N. Field removal. Asset/INI migration. Gameplay changes.
+
+Operator validation: **PASS**.
+

@@ -489,7 +489,7 @@ Recommended footprint model:
 
 Do not combine H, I, J, M, or N into one implementation slice.
 
-**Slice A implementation status:** `SETTINGS_VISIBILITY_TRUTH_READY_FOR_OPERATOR_VALIDATION` on `feature/gp-settings-visibility-truth`. Editor exposure/labels only. Findings and remaining cleanup slices are unchanged.
+**Slice A implementation status:** `SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE` on `feature/gp-settings-visibility-truth`. Editor exposure/labels only. Findings and remaining cleanup slices are unchanged. **NOT MERGED.**
 
 ## 10. Do Not Delete Yet
 

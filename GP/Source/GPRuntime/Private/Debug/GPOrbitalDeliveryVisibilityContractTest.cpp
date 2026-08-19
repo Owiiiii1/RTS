@@ -179,21 +179,25 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 	auto ExpectCanonicalEdit = [this, &FindProp](const TCHAR* Name, const TCHAR* Label)
 	{
 		const FProperty* Prop = FindProp(Name);
-		Expect(Prop != nullptr
+		bool bOk = Prop != nullptr
 			&& Prop->HasAnyPropertyFlags(CPF_Config)
-			&& Prop->HasAnyPropertyFlags(CPF_Edit)
-			&& !Prop->HasMetaData(TEXT("DeprecatedProperty")),
-			Label);
+			&& Prop->HasAnyPropertyFlags(CPF_Edit);
+#if WITH_METADATA
+		bOk = bOk && !Prop->HasMetaData(TEXT("DeprecatedProperty"));
+#endif
+		Expect(bOk, Label);
 	};
 
 	auto ExpectHiddenBridge = [this, &FindProp](const TCHAR* Name, const TCHAR* Label)
 	{
 		const FProperty* Prop = FindProp(Name);
-		Expect(Prop != nullptr
+		bool bOk = Prop != nullptr
 			&& Prop->HasAnyPropertyFlags(CPF_Config)
-			&& !Prop->HasAnyPropertyFlags(CPF_Edit)
-			&& Prop->HasMetaData(TEXT("DeprecatedProperty")),
-			Label);
+			&& !Prop->HasAnyPropertyFlags(CPF_Edit);
+#if WITH_METADATA
+		bOk = bOk && Prop->HasMetaData(TEXT("DeprecatedProperty"));
+#endif
+		Expect(bOk, Label);
 	};
 
 	auto ExpectFallbackTiming = [this, &FindProp](
@@ -202,18 +206,23 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 		const TCHAR* Label)
 	{
 		const FProperty* Prop = FindProp(Name);
+		bool bOk = Prop != nullptr
+			&& Prop->IsA<FFloatProperty>()
+			&& Prop->HasAnyPropertyFlags(CPF_Config)
+			&& Prop->HasAnyPropertyFlags(CPF_Edit);
+#if WITH_METADATA
 		const FString Category = Prop != nullptr ? Prop->GetMetaData(TEXT("Category")) : FString();
 		const FString Display = Prop != nullptr ? Prop->GetMetaData(TEXT("DisplayName")) : FString();
 		const FString Tip = Prop != nullptr ? Prop->GetMetaData(TEXT("ToolTip")) : FString();
-		Expect(Prop != nullptr
-			&& Prop->IsA<FFloatProperty>()
-			&& Prop->HasAnyPropertyFlags(CPF_Config)
-			&& Prop->HasAnyPropertyFlags(CPF_Edit)
+		bOk = bOk
 			&& Category.Contains(FString(CategoryNeedle))
 			&& Category.Contains(TEXT("Fallback Defaults"))
 			&& Display.Contains(TEXT("Fallback Seed"))
-			&& (Tip.Contains(TEXT("Fallback seed")) || Tip.Contains(TEXT("normally overwrites"))),
-			Label);
+			&& (Tip.Contains(TEXT("Fallback seed")) || Tip.Contains(TEXT("normally overwrites")));
+#else
+		(void)CategoryNeedle;
+#endif
+		Expect(bOk, Label);
 	};
 
 	switch (StageIndex)
@@ -293,20 +302,23 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 			TEXT("Fallback_BuildingDropPayloadDeployDelaySeconds"));
 
 		const FProperty* TurretPayload = FindProp(TEXT("DefensiveTurretPayloadClass"));
+		bool bTurretOk = TurretPayload != nullptr
+			&& TurretPayload->IsA<FSoftClassProperty>()
+			&& TurretPayload->HasAnyPropertyFlags(CPF_Config)
+			&& TurretPayload->HasAnyPropertyFlags(CPF_Edit);
+#if WITH_METADATA
 		const FString TurretCategory = TurretPayload != nullptr
 			? TurretPayload->GetMetaData(TEXT("Category"))
 			: FString();
 		const FString TurretDisplay = TurretPayload != nullptr
 			? TurretPayload->GetMetaData(TEXT("DisplayName"))
 			: FString();
-		Expect(TurretPayload != nullptr
-			&& TurretPayload->IsA<FSoftClassProperty>()
-			&& TurretPayload->HasAnyPropertyFlags(CPF_Config)
-			&& TurretPayload->HasAnyPropertyFlags(CPF_Edit)
+		bTurretOk = bTurretOk
 			&& !TurretPayload->HasMetaData(TEXT("DeprecatedProperty"))
 			&& TurretCategory.Contains(TEXT("LEGACY"))
-			&& TurretDisplay.Contains(TEXT("LEGACY")),
-			TEXT("Legacy_DefensiveTurretPayloadClassEditable"));
+			&& TurretDisplay.Contains(TEXT("LEGACY"));
+#endif
+		Expect(bTurretOk, TEXT("Legacy_DefensiveTurretPayloadClassEditable"));
 
 		const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
 		Expect(Settings != nullptr, TEXT("SettingsGet"));

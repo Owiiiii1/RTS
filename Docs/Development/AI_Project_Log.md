@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Settings Visibility Truth finalization
+
+Status: **SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE**
+
+- Same branch `feature/gp-settings-visibility-truth` (base `origin/main` @ `283297012c1cefe162028a7ba4166c02a81230cc`)
+- Operator PASS: Project Settings GP Orbital Delivery looks correct; gameplay smoke shows no issue
+- Final contracts Failures=0: settings visibility, unit-drop, building-drop, economy/logistics, Wall Package inventory
+- GPEditor+UHT / GP Development / GP Shipping **PASS**
+- Development compile required `WITH_METADATA` guards on the visibility contract; no runtime/settings change
+- **NOT MERGED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Settings Visibility Truth (Cleanup Slice A)
 
 Status: **SETTINGS_VISIBILITY_TRUTH_READY_FOR_OPERATOR_VALIDATION**

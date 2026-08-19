@@ -2,9 +2,9 @@
 
 ## Status
 
-**SETTINGS_VISIBILITY_TRUTH_READY_FOR_OPERATOR_VALIDATION**
+**SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.**
 
 ## Branch / base / head
 
@@ -12,13 +12,15 @@
 - Base: `origin/main` @ `283297012c1cefe162028a7ba4166c02a81230cc`
 - Head: (this commit)
 
-## What changed
+## Operator PASS summary
 
-Editor exposure and labels on `UGP_OrbitalDeliverySettings` only. No runtime readers, precedence, defaults, INI, or authored content.
+- Project Settings → Game → GP Orbital Delivery looks correct / logical
+- no visible configuration problems
+- gameplay smoke test shows no issue
 
-Approach: keep `Config` serialization; drop `EditAnywhere` on hidden compatibility fields so they are not Project Settings controls. No custom details panel.
+## Exact visibility changes
 
-## Editor exposure removed (still Config + same names/types/defaults/readers)
+Hidden from normal Project Settings edit (`Config` retained, `EditAnywhere` removed):
 
 - `WorkerTransportSlotCost`
 - `SalvageWalkerTransportSlotCost`
@@ -28,33 +30,31 @@ Approach: keep `Config` serialization; drop `EditAnywhere` on hidden compatibili
 - `SalvageWalkerPayloadClass`
 - `BuildingOrbitalPurchaseCost`
 - `BuildingPayloadClass`
-- `BuildingPlacementOverlapMarginCm` (unused; hidden; not wired)
+- `BuildingPlacementOverlapMarginCm` (unused, unwired)
 
-## Relabeled as fallback seeds (still editable)
+Relabeled as fallback seeds (still editable):
 
-- `UnitDropDescentDurationSeconds` — Fallback Defaults | Unit Product Timing
-- `UnitDropPayloadDeployDelaySeconds` — Fallback Defaults | Unit Product Timing
-- `BuildingDropDescentDurationSeconds` — Fallback Defaults | Building Product Timing
-- `BuildingDropPayloadDeployDelaySeconds` — Fallback Defaults | Building Product Timing
+- `UnitDropDescentDurationSeconds`
+- `UnitDropPayloadDeployDelaySeconds`
+- `BuildingDropDescentDurationSeconds`
+- `BuildingDropPayloadDeployDelaySeconds`
 
-Display names include `(Fallback Seed)`. Tooltips state canonical product definitions normally overwrite these. Wall Package still owns its own timing.
+`DefensiveTurretPayloadClass` stays editable and is labeled LEGACY override. Precedence unchanged.
 
-## DefensiveTurretPayloadClass
+## Runtime behavior unchanged
 
-Remains `EditAnywhere`. Category/display/tooltip mark it as **LEGACY compatibility override**. `DeprecatedProperty` not applied (must stay operator-editable until slice E). Precedence unchanged: still outranks `BuildingDefinition.SpawnedClass`.
+- property names, types, and C++ defaults unchanged
+- `GPOrbitalDeliverySettings.cpp` readers unchanged
+- Config still deserializes deprecated compatibility fields
+- timing fallback seeds still seed resolvers; product definitions still overwrite
+- `DefensiveTurretPayloadClass` still outranks `BuildingDefinition.SpawnedClass`
+- `BuildingPlacementOverlapMarginCm` remains unused
 
-## BuildingPlacementOverlapMarginCm
+## Finalization compile fix
 
-Config retained. `EditAnywhere` removed. `DeprecatedProperty` + comment: unused, does not affect placement. No gameplay wiring.
+GP Win64 Development initially failed: `FProperty::HasMetaData` / `GetMetaData` are `WITH_METADATA` (editor) APIs. Guarded those checks. No gameplay/settings change. Reran GPEditor and the visibility contract after the fix.
 
-## Unchanged
-
-- Canonical DataAsset refs and true global transport/world fields remain normal editable settings
-- Property names, types, C++ in-class defaults
-- Runtime readers and fallback precedence
-- No INI migration
-
-## Tests / results
+## Final tests / results
 
 | Check | Result |
 | --- | --- |
@@ -71,25 +71,20 @@ Full suite not run.
 | Target | Result |
 | --- | --- |
 | `GPEditor Win64 Development` + UHT | **PASS** |
-
-GP Win64 Development / Shipping not run (finalization after operator PASS).
-
-## Operator test (not claimed PASS)
-
-Project Settings → Game → GP Orbital Delivery:
-
-- DataAsset refs obvious
-- true globals still available
-- old Worker/Walker cost/slot/payload bridges no longer look like normal settings
-- fallback unit/building timing explicitly labeled
-- dead overlap margin no longer looks functional
-- Defensive Turret LEGACY override clearly identified
-- existing gameplay still works
+| `GP Win64 Development` | **PASS** |
+| `GP Win64 Shipping` | **PASS** |
 
 ## Protected-files confirmation
 
-Committed diff excludes maps, `DefaultGame.ini`, `DefaultEngine.ini`, Blueprints, DataAssets, materials, and other untracked Content.
+Committed diff vs `origin/main` @ `28329701…` is settings metadata, visibility contract, and docs only:
+
+- no maps
+- no `DefaultGame.ini`
+- no `DefaultEngine.ini`
+- no Blueprint / DataAsset / material / content changes
+
+Local untracked Content and local config/map dirt were left unstaged.
+
+No new functionality in this finalization beyond the `WITH_METADATA` test compile guard.
 
 ## NOT MERGED
-
-## NOT FINALIZED

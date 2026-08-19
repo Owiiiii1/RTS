@@ -39,7 +39,7 @@
 | Last closed / merged stage | **Configuration / Data Ownership Audit** on `main` @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-UnitDrop-Nested-Readiness.md`](Claude_Tasks/GP-UnitDrop-Nested-Readiness.md) — **UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-unit-drop-nested-readiness` |
+| Current stage | [`Claude_Tasks/GP-UnitDrop-Nested-Readiness.md`](Claude_Tasks/GP-UnitDrop-Nested-Readiness.md) — **UNIT_DROP_NESTED_READINESS_FINALIZED_READY_FOR_MERGE** on `feature/gp-unit-drop-nested-readiness` |
 
 ---
 
@@ -51,7 +51,7 @@
 
 **Closed on `main`:** Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current:** [`Claude_Tasks/GP-UnitDrop-Nested-Readiness.md`](Claude_Tasks/GP-UnitDrop-Nested-Readiness.md) — **UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION**. **NOT MERGED. NOT FINALIZED.**
+**Current:** [`Claude_Tasks/GP-UnitDrop-Nested-Readiness.md`](Claude_Tasks/GP-UnitDrop-Nested-Readiness.md) — **UNIT_DROP_NESTED_READINESS_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
 
 **Do not** start general configuration/data ownership cleanup. Do **not** implement old pod-per-segment Wall.
 

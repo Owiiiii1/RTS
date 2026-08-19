@@ -1,6 +1,6 @@
 # GP — Unit Drop Nested Readiness
 
-Status: **UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION**
+Status: **UNIT_DROP_NESTED_READINESS_FINALIZED_READY_FOR_MERGE**
 
 Branch: `feature/gp-unit-drop-nested-readiness`
 
@@ -43,4 +43,4 @@ Operator editor close hit `Object is not packaged: GP_BuildingDropCatalog` becau
 
 Correction is catalog lifecycle only (`TryGetExisting`, engine-exit lock, non-creating runner cleanup). Not a change to unit-drop nested readiness semantics.
 
-Operator re-test required: open Editor, optionally PIE once, close Editor normally. Do not mark operator PASS until that close is clean.
+Operator editor close after this correction: **PASS**.

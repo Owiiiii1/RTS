@@ -2,110 +2,92 @@
 
 ## Status
 
-**UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION**
+**UNIT_DROP_NESTED_READINESS_FINALIZED_READY_FOR_MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.**
 
-## Branch
+## Branch / base / head
 
-`feature/gp-unit-drop-nested-readiness`
+- Branch: `feature/gp-unit-drop-nested-readiness`
+- Base: `origin/main` @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`
+- Head: (this commit)
 
-## Operator gameplay validation (already PASS — do not repeat unless unit-drop behavior changes)
+Implementation commits: `7aba363` (nested unit-drop readiness), `5c92fdd` (BuildingDropCatalog teardown). This commit is docs/status only.
+
+## Operator PASS summary
 
 - Worker cold-start authored payload / UnitDefinition: **PASS**
 - Salvage Walker cold-start authored payload / UnitDefinition: **PASS**
+- Editor close after BuildingDropCatalog lifecycle correction: **PASS**
+- No fatal
+- No `Object is not packaged: GP_BuildingDropCatalog`
 
-## Operator editor-close validation: FAIL (original)
+## Final readiness contract
 
-Fatal:
+For a configured authored unit product slot, Ready requires all of:
 
-`Object is not packaged: GP_BuildingDropCatalog GP_BuildingDropCatalog`
+1. Top-level `UGP_OrbitalUnitDropDefinition` loaded
+2. Nested `UnitDefinition` non-null and loaded
+3. Nested `PayloadClass` non-null, loaded, and a valid slot subclass (`AGP_Worker` / `AGP_SalvageWalker`)
 
-Stack:
+Until then the slot stays Pending. Purchase is `DefinitionNotReady`. No Orbital Ferronite spend, manifest mutation, pod spawn, or cold-load class substitution.
 
-- `UGP_BuildingDropCatalog::Get()`
-- `UGP_OrbitalBuildingDropContractTestRunner::RestoreSettings()`
-- `UGP_OrbitalBuildingDropContractTestRunner::BeginDestroy()`
+Authored product cold state cannot fall through to deprecated `WorkerPayloadClass` / `SalvageWalkerPayloadClass` merely because nested assets are unloaded. Canonical slot is `nullptr` while Pending; payload resolve uses the canonical product only when Ready.
 
-This is a factual teardown defect discovered during validation. **Do not mark operator PASS yet.**
+Unconfigured or failed authored slots keep native bootstrap. Deprecated settings payload classes remain the fallback only for native/empty-payload products. Deprecated settings were not removed.
 
-Required operator re-test after this correction (editor close only):
+`AGP_DropPod` still assigns product `UnitDefinition` only when `UnitDefinitionAsset` is empty.
 
-- Open Editor
-- Optionally PIE once
-- Close Editor normally
-- Expect: no fatal / no `Object is not packaged: GP_BuildingDropCatalog`
+## BuildingDropCatalog shutdown correction
 
-## Factual root cause
+`Get()` no longer recreates a transient `GP_BuildingDropCatalog` during engine exit or catalog shutdown.
 
-`UGP_BuildingDropCatalog::Get()` recovered/created the transient catalog via `FindObject` / `NewObject` whenever `GCatalog` was invalid. `ShutdownCatalog()` reset `GCatalog` with no engine-exit creation lock.
+- `TryGetExisting()` never creates
+- PreExit locks creation, then shuts down
+- `ShutdownCatalog()` is idempotent and cancels top-level and nested handles
+- Contract runner `BeginDestroy` / `RestoreSettings` uses `TryGetExisting()` only (non-creating)
+- Coordinator `Release()` also uses `TryGetExisting()`
+- If `Get()` must return while creation is blocked, it uses the packaged CDO, not a transient resurrection
 
-Contract runner `BeginDestroy()` → `RestoreSettings()` always called creating `Get()` for `OverrideDeliveryTiming` and `DebugEndContractIsolation`.
+Wall Package behavior was not changed. Wall Package inventory contract was run only as a shutdown/catalog regression cross-check.
 
-UObject destruction during editor shutdown therefore recreated `GP_BuildingDropCatalog` after package teardown had begun.
-
-## BuildingDropCatalog lifecycle correction
-
-Narrow production-safe lifecycle, matching `UGP_WallPackageCatalog` / `UGP_OrbitalUnitDropCatalog` principles. No change to building purchase, nested BuildingDefinition readiness, payload precedence, unit-drop readiness, or Wall Package behavior.
-
-- `TryGetExisting()` returns the live catalog or `nullptr`. Never creates, refreshes, or syncs.
-- `Get()` does not create a transient catalog while shutdown is active, engine pre-exit has locked creation, or `IsEngineExitRequested()`. If creation is blocked and no live catalog exists, `Get()` returns the packaged CDO (`GetMutableDefault`) and skips refresh/mutation of a transient object.
-- `ShutdownCatalog()` is idempotent: marks shutdown first, cancels top-level and nested building-definition handles, resets strong ownership, does not recreate.
-- Engine PreExit (`NotifyEngineShutdown`) locks future creation before shutdown.
-- Async load callbacks ignore completion when the catalog is not the live instance or creation is blocked.
-
-Contract runner teardown never calls creating `Get()`:
-
-- Ordinary active-test cleanup may restore mutable settings.
-- Catalog-specific cleanup uses `TryGetExisting()`.
-- If the catalog no longer exists, do not create it merely to `OverrideDeliveryTiming` or `DebugEndContractIsolation`.
-- `BeginDestroy` is non-creating and cleanup is idempotent.
-- Normal completed-test `Finish()` still restores isolation/settings deterministically while the catalog exists.
-
-Coordinator `Release()` also uses `TryGetExisting()` so contract finish during teardown cannot resurrect catalogs.
-
-## Exact files changed
-
-- `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropCatalog.h`
-- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropCatalog.cpp`
-- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalBuildingDropContractTest.h`
-- `GP/Source/GPRuntime/Private/Debug/GPOrbitalBuildingDropContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPContractTestCoordinator.cpp`
-- `GP/Source/GPRuntime/Private/GPRuntime.cpp`
-- `Docs/Development/Cursor_Work_Report.md`
-- `Docs/Development/AI_Project_Log.md`
-
-## Tests / results
+## Final contract tests / results
 
 | Check | Result |
 | --- | --- |
-| `gp.Building.RunOrbitalBuildingDropContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Resource.RunOrbitalUnitDropContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Economy.RunEconomyLogisticsDataContractTest` | `Complete Failures=0 Cancelled=false` |
+| `gp.Building.RunOrbitalBuildingDropContractTest` | `Complete Failures=0 Cancelled=false` |
+| `gp.Orbital.RunWallPackageInventoryContractTest` | `Complete Failures=0 Cancelled=false` |
 
-Building-drop contract now includes teardown coverage:
-
-1. `TryGetExisting()` with no catalog → `nullptr`, does not create
-2. Normal `Get()` before shutdown works
-3. Contract cleanup during normal execution restores settings/isolation
-4. Shutdown cancels handles and releases the catalog
-5. BeginDestroy-style cleanup after catalog shutdown does not call creating `Get()` and does not resurrect
-6. Callback after shutdown is ignored safely
-
-Wall Package contract not run: shared Wall Package lifecycle code was not changed. Full regression suite not run.
+Full project suite not run. No new shared regression appeared.
 
 ## Builds
 
 | Target | Result |
 | --- | --- |
-| `GPEditor Win64 Development` + UHT | **PASS** |
+| `GPEditor Win64 Development` + UHT | **PASS** (up to date) |
+| `GP Win64 Development` | **PASS** |
+| `GP Win64 Shipping` | **PASS** |
 
-GP Win64 Development / Shipping not run.
+No Shipping stub fixes required.
 
-## Protected-files confirmation
+## Factual protected-files check
 
-Diff excludes maps, `DefaultGame.ini`, `DefaultEngine.ini`, Blueprints, DataAssets, materials, and other untracked Content.
+Committed diff vs `origin/main` @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f` is C++ + docs only:
+
+- no maps
+- no `DefaultGame.ini`
+- no `DefaultEngine.ini`
+- no Blueprint / DataAsset / material / content changes
+- no unrelated ownership cleanup
+- no deprecated settings removed
+- Wall Package runtime behavior unchanged (catalog/authority/inventory files not in this branch diff)
+
+Local untracked Content and local config/map dirt were left unstaged.
+
+## Finalization scope
+
+No new functionality in this finalization. Docs/status only after operator PASS and the validation above.
 
 ## NOT MERGED
-
-## NOT FINALIZED

@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Unit Drop Nested Readiness finalization
+
+Status: **UNIT_DROP_NESTED_READINESS_FINALIZED_READY_FOR_MERGE**
+
+- Same branch `feature/gp-unit-drop-nested-readiness` (base `origin/main` @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`)
+- Operator PASS: Worker + Salvage Walker cold-start authored payload/UnitDefinition; editor close after BuildingDropCatalog lifecycle correction; no fatal / no unpackaged catalog
+- Final contracts Failures=0: unit-drop, economy/logistics, building-drop, Wall Package inventory (shutdown cross-check)
+- GPEditor+UHT / GP Development / GP Shipping **PASS**
+- No new features; no ownership cleanup; no authored content/config in the committed diff
+- **NOT MERGED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — BuildingDropCatalog editor-close teardown
 
 Status: **UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION**

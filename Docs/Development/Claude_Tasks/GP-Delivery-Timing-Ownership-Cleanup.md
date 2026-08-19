@@ -1,6 +1,6 @@
 # GP — Delivery Timing Ownership Cleanup (Cleanup Slice G)
 
-Status: **DELIVERY_TIMING_OWNERSHIP_CLEANUP_READY_FOR_OPERATOR_VALIDATION**
+Status: **DELIVERY_TIMING_OWNERSHIP_CLEANUP_FINALIZED_READY_FOR_MERGE**
 
 Branch: `feature/gp-delivery-timing-ownership-cleanup` from `origin/main` @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`
 
@@ -27,4 +27,4 @@ Committed `DefaultGame.ini` may still contain the four stale timing keys. Intent
 
 Unit numeric/payload ownership, `UnitDropPodClass`, spawn altitude / cleanup delay settings, building payload/procurement, Wall Package redesign, `UnitDefinitionAsset` override semantics, authored content/config edits.
 
-Operator validation: **pending**.
+Operator validation: **PASS**.

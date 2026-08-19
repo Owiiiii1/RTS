@@ -495,7 +495,7 @@ Do not combine H, I, J, M, or N into one implementation slice.
 
 **Slice C implementation status (this combined numeric package):** `UNIT_NUMERIC_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE` merged to `main` @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`. Removed unit numeric Project Settings bridges. Native Worker 25/1 and Salvage Walker 50/2 owned by catalog bootstrap construction. Stale `DefaultGame.ini` keys intentionally not touched.
 
-**Slice D implementation status (this combined payload package):** `UNIT_PAYLOAD_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION` on `feature/gp-unit-payload-compat-cleanup`. Removed `WorkerPayloadClass` and `SalvageWalkerPayloadClass` plus settings resolvers. Canonical authored payload is `UGP_OrbitalUnitDropDefinition.PayloadClass`. Native fallback is `AGP_Worker` / `AGP_SalvageWalker` on catalog bootstrap. Nested PayloadClass pending remains `DefinitionNotReady`. Stale `DefaultGame.ini` keys intentionally not touched. Numeric/timing/building bridges unchanged. **NOT MERGED. NOT FINALIZED.**
+**Slice D implementation status (this combined payload package):** `UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE` on `feature/gp-unit-payload-compat-cleanup`. Removed `WorkerPayloadClass` and `SalvageWalkerPayloadClass` plus settings resolvers. Canonical authored payload is `UGP_OrbitalUnitDropDefinition.PayloadClass`. Native fallback is `AGP_Worker` / `AGP_SalvageWalker` on catalog bootstrap. Nested PayloadClass pending remains `DefinitionNotReady`. Stale `DefaultGame.ini` keys intentionally not touched. Numeric/timing/building bridges unchanged. **NOT MERGED.**
 
 ## 10. Do Not Delete Yet
 

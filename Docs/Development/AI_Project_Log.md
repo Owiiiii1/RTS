@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Unit payload compatibility cleanup finalization
+
+Status: **UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE**
+
+- Same branch `feature/gp-unit-payload-compat-cleanup` (base `origin/main` @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`)
+- Operator PASS: Worker and Salvage Walker authored BP/class arrive correctly; visuals/behavior, prices/currency deduction, and transport behavior unchanged
+- Final contracts Failures=0: settings visibility, unit-drop, economy/logistics, UnitCap/Hub
+- GPEditor+UHT / GP Development / GP Shipping **PASS**
+- Stale `DefaultGame.ini` keys left untouched. **NOT MERGED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Unit payload compatibility cleanup (Cleanup Slice D)
 
 Status: **UNIT_PAYLOAD_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION**

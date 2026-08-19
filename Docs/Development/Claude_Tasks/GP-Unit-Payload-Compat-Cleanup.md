@@ -1,6 +1,6 @@
 # GP — Unit Payload Compatibility Cleanup (Cleanup Slice D)
 
-Status: **UNIT_PAYLOAD_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION**
+Status: **UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE**
 
 Branch: `feature/gp-unit-payload-compat-cleanup` from `origin/main` @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`
 
@@ -20,4 +20,4 @@ Committed `DefaultGame.ini` may still contain `WorkerPayloadClass` / `SalvageWal
 
 Unit numeric ownership, `UnitDropPodClass`, timing fallbacks, building payload/procurement, Wall Package, `UnitDefinitionAsset` override semantics, authored content/config edits.
 
-Operator validation: **pending**.
+Operator validation: **PASS**.

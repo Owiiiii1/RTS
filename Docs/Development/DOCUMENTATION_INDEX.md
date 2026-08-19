@@ -39,7 +39,7 @@
 | Last closed / merged stage | **Unit numeric compatibility cleanup (Cleanup Slice C)** on `main` @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md`](Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md) — **UNIT_PAYLOAD_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-unit-payload-compat-cleanup` |
+| Current stage | [`Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md`](Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md) — **UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE** on `feature/gp-unit-payload-compat-cleanup` |
 
 ---
 
@@ -51,7 +51,7 @@
 
 **Closed on `main`:** Unit numeric compatibility cleanup @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`; Dead overlap setting removal @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`; Settings Visibility Truth @ `f38e803771261c60d865949c693a52a73fbcedb2`; Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current:** [`Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md`](Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md) — **UNIT_PAYLOAD_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION**. **NOT MERGED. NOT FINALIZED.**
+**Current:** [`Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md`](Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md) — **UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
 
 **Do not** start building payload / timing cleanup or authored DA migration. Do **not** implement old pod-per-segment Wall.
 
@@ -166,4 +166,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-Current baseline: `origin/main` @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`. Current stage: **UNIT_DROP_NESTED_READINESS_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-unit-drop-nested-readiness`. **NOT MERGED. NOT FINALIZED.** Do not start general configuration cleanup.
+Current baseline: `origin/main` @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`. Current stage: **UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE** on `feature/gp-unit-payload-compat-cleanup`. **NOT MERGED.** Do not start building payload / timing cleanup.

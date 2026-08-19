@@ -495,17 +495,18 @@ Do not combine H, I, J, M, or N into one implementation slice.
 
 **Slice C implementation status (this combined numeric package):** `UNIT_NUMERIC_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE` merged to `main` @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`. Removed unit numeric Project Settings bridges. Native Worker 25/1 and Salvage Walker 50/2 owned by catalog bootstrap construction. Stale `DefaultGame.ini` keys intentionally not touched.
 
-**Slice D implementation status (this combined payload package):** `UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE` on `feature/gp-unit-payload-compat-cleanup`. Removed `WorkerPayloadClass` and `SalvageWalkerPayloadClass` plus settings resolvers. Canonical authored payload is `UGP_OrbitalUnitDropDefinition.PayloadClass`. Native fallback is `AGP_Worker` / `AGP_SalvageWalker` on catalog bootstrap. Nested PayloadClass pending remains `DefinitionNotReady`. Stale `DefaultGame.ini` keys intentionally not touched. Numeric/timing/building bridges unchanged. **NOT MERGED.**
+**Slice D implementation status (this combined payload package):** `UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE` merged to `main` @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`. Removed `WorkerPayloadClass` and `SalvageWalkerPayloadClass` plus settings resolvers. Canonical authored payload is `UGP_OrbitalUnitDropDefinition.PayloadClass`. Native fallback is `AGP_Worker` / `AGP_SalvageWalker` on catalog bootstrap. Stale `DefaultGame.ini` keys intentionally not touched.
+
+**Slice G implementation status (this combined delivery timing package):** `DELIVERY_TIMING_OWNERSHIP_CLEANUP_READY_FOR_OPERATOR_VALIDATION` on `feature/gp-delivery-timing-ownership-cleanup`. Removed four Project Settings timing fallback fields. Canonical authored unit timing is `UGP_OrbitalUnitDropDefinition`; native Worker/Walker bootstrap is 2.5 / 1.25. Canonical authored building timing is `UGP_OrbitalDropDefinition`; native building bootstrap is 2.5 / 2.0. Mixed unit manifests keep max aggregation. Pending remains `DefinitionNotReady`. Wall Package timing independently owned and unchanged. Stale `DefaultGame.ini` keys intentionally not touched. Payload/numeric/altitude/cleanup/building procurement unchanged. **NOT MERGED. NOT FINALIZED.**
 
 ## 10. Do Not Delete Yet
 
 The following fields look obsolete or duplicated but still have proven readers:
 
-- Stale `DefaultGame.ini` keys `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost`, `WorkerPayloadClass`, `SalvageWalkerPayloadClass` — leftover text after C++ removal; no production GConfig/string reader. Config hygiene later.
+- Stale `DefaultGame.ini` keys `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost`, `WorkerPayloadClass`, `SalvageWalkerPayloadClass`, `UnitDropDescentDurationSeconds`, `UnitDropPayloadDeployDelaySeconds`, `BuildingDropDescentDurationSeconds`, `BuildingDropPayloadDeployDelaySeconds` — leftover text after C++ removal; no production GConfig/string reader. Config hygiene later.
 - `BuildingOrbitalPurchaseCost` — native Logistics Hub cost synchronization.
 - `BuildingPayloadClass` — Logistics Hub payload fallback.
 - `DefensiveTurretPayloadClass` — currently highest-priority Turret payload override.
-- settings descent/deploy fields — timing resolver seeds and test compatibility.
 - `UnitDropPodClass` — all three orbital product families use it.
 - `BuildingDropSpawnAltitudeCm`, `BuildingDropCleanupDelaySeconds` — building and Wall Package.
 - `BuildingDefinition.MaxHealth` — compatibility resolver/tests, even though live vitals wiring is incomplete.

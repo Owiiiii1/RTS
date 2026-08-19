@@ -62,10 +62,8 @@ private:
 	TWeakObjectPtr<class AGP_PlayerState> OwnerPSWeak;
 	TWeakObjectPtr<class AGP_DropPod> LastPodWeak;
 	float OrbitalBeforeSpend = 0.0f;
-	float SavedDescent = 2.5f;
 	float SavedCleanup = 0.35f;
 	float SavedAltitude = 2500.0f;
-	float SavedDeployDelay = 1.25f;
 	TSoftClassPtr<AGP_DropPod> SavedDropPodClass;
 	TSoftObjectPtr<class UGP_OrbitalUnitDropDefinition> SavedWorkerDropDef;
 	TSoftObjectPtr<class UGP_OrbitalUnitDropDefinition> SavedWalkerDropDef;

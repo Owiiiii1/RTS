@@ -25,6 +25,7 @@ class UGP_OrbitalUnitDropDefinition;
  * - product cost, transport slot cost, payload
  * - product-specific descent / payload-deploy timing
  *
+ * Native bootstrap products own native delivery timing.
  * Wall Package owns its own descent / deploy timing on UGP_WallPackageDefinition.
  */
 UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "GP Orbital Delivery"))
@@ -87,15 +88,6 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "DropPod|Class", meta = (AllowAbstract = "false"))
 	TSoftClassPtr<AGP_DropPod> UnitDropPodClass;
 
-	/**
-	 * Fallback seed for unit DropPod descent. Canonical timing is
-	 * UGP_OrbitalUnitDropDefinition.DeliveryDescentSeconds and normally overwrites this.
-	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Fallback Defaults|Unit Product Timing",
-		meta = (ClampMin = "0.05", DisplayName = "Unit Descent Seconds (Fallback Seed)",
-			ToolTip = "Fallback seed used when resolving unit delivery timing. Canonical per-product timing lives on UGP_OrbitalUnitDropDefinition and normally overwrites this. Wall Package uses its own definition timing."))
-	float UnitDropDescentDurationSeconds = 2.5f;
-
 	/** Spawn altitude above Unit Drop Zone (cm). */
 	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "100.0"))
 	float UnitDropSpawnAltitudeCm = 2500.0f;
@@ -103,16 +95,6 @@ public:
 	/** Horizontal spacing between multi-unit spawn offsets (cm). */
 	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "50.0"))
 	float UnitDropSpawnSpacingCm = 180.0f;
-
-	/**
-	 * Fallback seed for unit payload deploy delay after Impact.
-	 * Canonical timing is UGP_OrbitalUnitDropDefinition.PayloadDeployDelaySeconds and normally overwrites this.
-	 * Zero = Impact → immediate payload. Separate from descent / cleanup.
-	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Fallback Defaults|Unit Product Timing",
-		meta = (ClampMin = "0.0", DisplayName = "Unit Payload Deploy Delay Seconds (Fallback Seed)",
-			ToolTip = "Fallback seed used when resolving unit payload deploy delay. Canonical per-product timing lives on UGP_OrbitalUnitDropDefinition and normally overwrites this. Wall Package uses its own definition timing."))
-	float UnitDropPayloadDeployDelaySeconds = 1.25f;
 
 	/** Delay after payload deploy before DropPod destroy (seconds). */
 	UPROPERTY(Config, EditAnywhere, Category = "DropPod", meta = (ClampMin = "0.0"))
@@ -146,27 +128,9 @@ public:
 			ToolTip = "LEGACY compatibility override. Currently outranks BuildingDefinition.SpawnedClass when set. Not the desired future source of truth. Keep until BuildingDefinition payload migration."))
 	TSoftClassPtr<AGP_BuildingBase> DefensiveTurretPayloadClass;
 
-	/**
-	 * Fallback seed for building DropPod descent. Canonical timing is
-	 * UGP_OrbitalDropDefinition.DeliveryDescentSeconds and normally overwrites this.
-	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Fallback Defaults|Building Product Timing",
-		meta = (ClampMin = "0.05", DisplayName = "Building Descent Seconds (Fallback Seed)",
-			ToolTip = "Fallback seed used when resolving building delivery timing. Canonical per-product timing lives on UGP_OrbitalDropDefinition and normally overwrites this. Wall Package uses its own definition timing."))
-	float BuildingDropDescentDurationSeconds = 2.5f;
-
 	/** Spawn altitude above building landing point (cm). */
 	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|DropPod", meta = (ClampMin = "100.0"))
 	float BuildingDropSpawnAltitudeCm = 2500.0f;
-
-	/**
-	 * Fallback seed for building payload deploy delay after Impact.
-	 * Canonical timing is UGP_OrbitalDropDefinition.PayloadDeployDelaySeconds and normally overwrites this.
-	 */
-	UPROPERTY(Config, EditAnywhere, Category = "Fallback Defaults|Building Product Timing",
-		meta = (ClampMin = "0.0", DisplayName = "Building Payload Deploy Delay Seconds (Fallback Seed)",
-			ToolTip = "Fallback seed used when resolving building payload deploy delay. Canonical per-product timing lives on UGP_OrbitalDropDefinition and normally overwrites this. Wall Package uses its own definition timing."))
-	float BuildingDropPayloadDeployDelaySeconds = 2.0f;
 
 	/** Delay after building deploy before DropPod destroy (seconds). */
 	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|DropPod", meta = (ClampMin = "0.0"))

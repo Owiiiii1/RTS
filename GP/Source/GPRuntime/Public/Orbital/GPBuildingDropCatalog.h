@@ -38,6 +38,10 @@ public:
 	void EnsureNativeCatalog();
 	void RefreshAuthoredBindings();
 
+	/** Native bootstrap delivery timing for unconfigured / failed authored building products. */
+	static constexpr float NativeDeliveryDescentSeconds = 2.5f;
+	static constexpr float NativePayloadDeployDelaySeconds = 2.0f;
+
 	UGP_OrbitalDropDefinition* FindDropDefinition(const FPrimaryAssetId& DropDefinitionId) const;
 	UGP_BuildingDefinition* FindBuildingDefinition(const FPrimaryAssetId& BuildingDefinitionId) const;
 

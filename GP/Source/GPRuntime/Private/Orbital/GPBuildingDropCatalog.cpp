@@ -271,8 +271,8 @@ UGP_OrbitalDropDefinition* UGP_BuildingDropCatalog::CreateNativeDrop(
 	UGP_OrbitalDropDefinition* Drop = NewObject<UGP_OrbitalDropDefinition>(this, AssetName, RF_Transient);
 	Drop->Cost = FMath::Max(0.0f, Cost);
 	Drop->BuildingDefinition = BuildingDefinition;
-	Drop->DeliveryDescentSeconds = 2.5f;
-	Drop->PayloadDeployDelaySeconds = 2.0f;
+	Drop->DeliveryDescentSeconds = NativeDeliveryDescentSeconds;
+	Drop->PayloadDeployDelaySeconds = NativePayloadDeployDelaySeconds;
 	Drop->DropTags.Reset();
 	if (DropTypeTag.IsValid())
 	{
@@ -1088,16 +1088,16 @@ void UGP_BuildingDropCatalog::ResolveDeliveryTiming(
 	float& OutDescentSeconds,
 	float& OutPayloadDeployDelaySeconds) const
 {
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	OutDescentSeconds = Settings != nullptr ? Settings->BuildingDropDescentDurationSeconds : 2.5f;
-	OutPayloadDeployDelaySeconds = Settings != nullptr ? Settings->BuildingDropPayloadDeployDelaySeconds : 2.0f;
-
 	const UGP_OrbitalDropDefinition* Canonical = ResolveCanonicalDrop(DropDefinition);
 	if (IsValid(Canonical))
 	{
 		OutDescentSeconds = Canonical->DeliveryDescentSeconds;
 		OutPayloadDeployDelaySeconds = Canonical->PayloadDeployDelaySeconds;
+		return;
 	}
+
+	OutDescentSeconds = NativeDeliveryDescentSeconds;
+	OutPayloadDeployDelaySeconds = NativePayloadDeployDelaySeconds;
 }
 
 void UGP_BuildingDropCatalog::OverrideDeliveryTiming(float DescentSeconds, float PayloadDeployDelaySeconds)

@@ -106,11 +106,8 @@ namespace GPMultiBuildingDataDebug
 		UGP_OrbitalDropDefinition* Drop = NewObject<UGP_OrbitalDropDefinition>(Outer, Name, RF_Transient);
 		Drop->Cost = Cost;
 		Drop->BuildingDefinition = Building;
-		if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
-		{
-			Drop->DeliveryDescentSeconds = Settings->BuildingDropDescentDurationSeconds;
-			Drop->PayloadDeployDelaySeconds = Settings->BuildingDropPayloadDeployDelaySeconds;
-		}
+		Drop->DeliveryDescentSeconds = 0.2f;
+		Drop->PayloadDeployDelaySeconds = 0.0f;
 		UGP_BuildingDropCatalog::Get().RegisterDropDefinition(Drop);
 		return Drop;
 	}
@@ -253,9 +250,9 @@ void UGP_MultiBuildingDataContractTestRunner::RestoreSettings()
 	}
 	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 	{
-		Settings->BuildingDropPayloadDeployDelaySeconds = SavedBuildingDeployDelay;
-		Settings->BuildingDropDescentDurationSeconds = SavedBuildingDescent;
-		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(2.5f, 2.0f);
+		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
+			UGP_BuildingDropCatalog::NativeDeliveryDescentSeconds,
+			UGP_BuildingDropCatalog::NativePayloadDeployDelaySeconds);
 		Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
 		Settings->BuildingDropSpawnAltitudeCm = SavedBuildingAltitude;
 	}
@@ -393,15 +390,9 @@ void UGP_MultiBuildingDataContractTestRunner::AdvanceStage()
 	{
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
-			SavedBuildingDeployDelay = Settings->BuildingDropPayloadDeployDelaySeconds;
-			SavedBuildingDescent = Settings->BuildingDropDescentDurationSeconds;
 			SavedBuildingCleanup = Settings->BuildingDropCleanupDelaySeconds;
 			SavedBuildingAltitude = Settings->BuildingDropSpawnAltitudeCm;
-			Settings->BuildingDropPayloadDeployDelaySeconds = 0.0f;
-			Settings->BuildingDropDescentDurationSeconds = 0.2f;
-			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
-				Settings->BuildingDropDescentDurationSeconds,
-				Settings->BuildingDropPayloadDeployDelaySeconds);
+			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(0.2f, 0.0f);
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
 			Settings->BuildingDropSpawnAltitudeCm = 400.0f;
 			bSettingsMutated = true;
@@ -447,6 +438,7 @@ void UGP_MultiBuildingDataContractTestRunner::AdvanceStage()
 		DropAWeak = DropA;
 		DropBWeak = DropB;
 		DropCWeak = DropC;
+		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(0.2f, 0.0f);
 
 		Expect(DropA->IsA(UPrimaryDataAsset::StaticClass()) && DropA->GetPrimaryAssetId().IsValid(),
 			TEXT("A_DropIsPrimaryDataAsset"));

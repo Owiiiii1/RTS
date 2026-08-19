@@ -50,10 +50,8 @@ private:
 	float OrbitalBeforePurchase = 0.0f;
 	float OrbitalBeforeDeploy = 0.0f;
 	FVector ValidDeployLocation = FVector::ZeroVector;
-	float SavedBuildingDescent = 2.5f;
 	float SavedBuildingCleanup = 0.5f;
 	float SavedBuildingAltitude = 2500.0f;
-	float SavedBuildingDeployDelay = 2.0f;
 	float SavedBuildingPurchaseCost = 100.0f;
 	float SavedBuildingMaxRadius = 5000.0f;
 	TSoftClassPtr<AGP_BuildingBase> SavedBuildingPayload;

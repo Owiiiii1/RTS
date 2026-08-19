@@ -222,8 +222,8 @@ namespace GPUnitDropAuthority
 			return Result;
 		}
 
-		float DescentSeconds = Settings->UnitDropDescentDurationSeconds;
-		float DeployDelaySeconds = Settings->UnitDropPayloadDeployDelaySeconds;
+		float DescentSeconds = 0.0f;
+		float DeployDelaySeconds = 0.0f;
 		UGP_OrbitalUnitDropCatalog::Get().ResolveManifestDeliveryTiming(
 			Manifest,
 			DescentSeconds,

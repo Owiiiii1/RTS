@@ -1,5 +1,21 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Delivery timing ownership cleanup (Cleanup Slice G)
+
+Status: **DELIVERY_TIMING_OWNERSHIP_CLEANUP_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-delivery-timing-ownership-cleanup` from `origin/main` @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`
+- Removed `UnitDropDescentDurationSeconds`, `UnitDropPayloadDeployDelaySeconds`, `BuildingDropDescentDurationSeconds`, `BuildingDropPayloadDeployDelaySeconds` from `UGP_OrbitalDeliverySettings`
+- Canonical authored unit timing is `UGP_OrbitalUnitDropDefinition`; native Worker/Walker bootstrap is 2.5 / 1.25 on catalog construction; mixed manifests keep max aggregation
+- Canonical authored building timing is `UGP_OrbitalDropDefinition`; native building bootstrap is 2.5 / 2.0 on catalog construction
+- Pending remains `DefinitionNotReady`; Wall Package timing independently owned and unchanged
+- Stale `DefaultGame.ini` keys intentionally not touched (protected local config)
+- Payload / numeric / altitude / cleanup / building procurement bridges unchanged
+- `gp.Settings.RunOrbitalDeliveryVisibilityContractTest`, `gp.Resource.RunOrbitalUnitDropContractTest`, `gp.Building.RunOrbitalBuildingDropContractTest`, `gp.Economy.RunEconomyLogisticsDataContractTest` Failures=0; migrated UnitCap / MultiBuilding / Turret / BuildGrid Failures=0
+- GPEditor Win64 Development + UHT **PASS**. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-Delivery-Timing-Ownership-Cleanup.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Unit payload compatibility cleanup finalization
 
 Status: **UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE**

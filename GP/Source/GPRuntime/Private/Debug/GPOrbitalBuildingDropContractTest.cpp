@@ -158,13 +158,13 @@ void UGP_OrbitalBuildingDropContractTestRunner::RestoreSettings()
 	{
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
-			Settings->BuildingDropDescentDurationSeconds = SavedBuildingDescent;
 			Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
 			Settings->BuildingDropSpawnAltitudeCm = SavedBuildingAltitude;
-			Settings->BuildingDropPayloadDeployDelaySeconds = SavedBuildingDeployDelay;
 			if (UGP_BuildingDropCatalog* Catalog = UGP_BuildingDropCatalog::TryGetExisting())
 			{
-				Catalog->OverrideDeliveryTiming(2.5f, 2.0f);
+				Catalog->OverrideDeliveryTiming(
+					UGP_BuildingDropCatalog::NativeDeliveryDescentSeconds,
+					UGP_BuildingDropCatalog::NativePayloadDeployDelaySeconds);
 			}
 			Settings->BuildingOrbitalPurchaseCost = SavedBuildingPurchaseCost;
 			Settings->BuildingMaxDeployRadiusFromMainBaseCm = SavedBuildingMaxRadius;
@@ -299,22 +299,30 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		UGP_BuildingDropCatalog::Get().DebugBeginContractIsolation();
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
-			SavedBuildingDescent = Settings->BuildingDropDescentDurationSeconds;
 			SavedBuildingCleanup = Settings->BuildingDropCleanupDelaySeconds;
 			SavedBuildingAltitude = Settings->BuildingDropSpawnAltitudeCm;
-			SavedBuildingDeployDelay = Settings->BuildingDropPayloadDeployDelaySeconds;
 			SavedBuildingPurchaseCost = Settings->BuildingOrbitalPurchaseCost;
 			SavedBuildingMaxRadius = Settings->BuildingMaxDeployRadiusFromMainBaseCm;
 			SavedBuildingPayload = Settings->BuildingPayloadClass;
-			Settings->BuildingDropDescentDurationSeconds = 0.25f;
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
 			Settings->BuildingDropSpawnAltitudeCm = 400.0f;
-			Settings->BuildingDropPayloadDeployDelaySeconds = 0.0f;
-			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
-				Settings->BuildingDropDescentDurationSeconds,
-				Settings->BuildingDropPayloadDeployDelaySeconds);
 			Settings->BuildingPayloadClass.Reset();
 			bSettingsMutated = true;
+
+			UGP_BuildingDropCatalog& Buildings = UGP_BuildingDropCatalog::Get();
+			const UClass* SettingsClass = UGP_OrbitalDeliverySettings::StaticClass();
+			Expect(SettingsClass->FindPropertyByName(TEXT("BuildingDropDescentDurationSeconds")) == nullptr
+				&& SettingsClass->FindPropertyByName(TEXT("BuildingDropPayloadDeployDelaySeconds")) == nullptr
+				&& SettingsClass->FindPropertyByName(TEXT("UnitDropDescentDurationSeconds")) == nullptr
+				&& SettingsClass->FindPropertyByName(TEXT("UnitDropPayloadDeployDelaySeconds")) == nullptr,
+				TEXT("Timing_RemovedSettingsFieldsAbsent"));
+			float NativeDescent = 0.0f;
+			float NativeDeploy = 0.0f;
+			Buildings.ResolveDeliveryTiming(Buildings.GetLegacyLogisticsHubDrop(), NativeDescent, NativeDeploy);
+			Expect(FMath::IsNearlyEqual(NativeDescent, UGP_BuildingDropCatalog::NativeDeliveryDescentSeconds)
+				&& FMath::IsNearlyEqual(NativeDeploy, UGP_BuildingDropCatalog::NativePayloadDeployDelaySeconds),
+				TEXT("Timing_NativeBuildingDrop"));
+			Buildings.OverrideDeliveryTiming(0.25f, 0.0f);
 
 			bool bUsedAuthored = true;
 			Expect(Settings->ResolveBuildingPayloadClass(&bUsedAuthored) == AGP_LogisticsHub::StaticClass()
@@ -543,6 +551,15 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		if (IsValid(Deploy.SpawnedPod.Get()))
 		{
 			Expect(Deploy.SpawnedPod->GetPayloadKind() == EGP_DropPodPayloadKind::Building, TEXT("G_BuildingPayloadKind"));
+			float ExpectedDescent = 0.0f;
+			float ExpectedDeploy = 0.0f;
+			UGP_BuildingDropCatalog::Get().ResolveDeliveryTiming(
+				UGP_BuildingDropCatalog::Get().GetLegacyLogisticsHubDrop(),
+				ExpectedDescent,
+				ExpectedDeploy);
+			Expect(FMath::IsNearlyEqual(Deploy.SpawnedPod->DebugGetDescentDurationSeconds(), ExpectedDescent)
+				&& FMath::IsNearlyEqual(Deploy.SpawnedPod->DebugGetPayloadDeployDelaySeconds(), ExpectedDeploy),
+				TEXT("Timing_PodUsesResolvedProduct"));
 		}
 		Expect(FMath::IsNearlyEqual(
 			OwnerPS->GetPlayerAttributeSet()->GetOrbitalFerronite(),
@@ -725,6 +742,8 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 			this, FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_NestedPending")), RF_Transient);
 		AuthoredHubDropDef->Cost = 17.0f;
 		AuthoredHubDropDef->BuildingDefinition = HubBuilding;
+		AuthoredHubDropDef->DeliveryDescentSeconds = 4.25f;
+		AuthoredHubDropDef->PayloadDeployDelaySeconds = 0.75f;
 
 		Catalog.DebugForceUnresolvedNestedLogisticsHubBuildingLoad(AuthoredHubDropDef, HubBuilding, true);
 		Expect(Catalog.DebugDidRequestAsyncNestedBuildingLoad()
@@ -765,6 +784,14 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 			&& AuthoredHubDropDef != nullptr
 			&& AuthoredHubDropDef->ResolveLoadedBuildingDefinition() != nullptr,
 			TEXT("R_NestedResolveMakesAuthoredReady"));
+		float AuthoredDescent = 0.0f;
+		float AuthoredDeploy = 0.0f;
+		Catalog.ResolveDeliveryTiming(AuthoredHubDropDef, AuthoredDescent, AuthoredDeploy);
+		Expect(FMath::IsNearlyEqual(AuthoredDescent, 4.25f)
+			&& FMath::IsNearlyEqual(AuthoredDeploy, 0.75f),
+			TEXT("Timing_AuthoredBuildingWins"));
+		AuthoredHubDropDef->DeliveryDescentSeconds = 0.25f;
+		AuthoredHubDropDef->PayloadDeployDelaySeconds = 0.0f;
 
 		if (!Expect(IsValid(OwnerPS), TEXT("R_OwnerAlive")))
 		{

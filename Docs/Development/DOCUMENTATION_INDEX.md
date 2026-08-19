@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | Current `origin/main` baseline: `47a220b480e455f1cf5dfb6ca0613c13cf760a53` |
+| Code baseline | Current `origin/main` baseline: `75b13fc193531170eb3d4c1eaf9ee3f736d1d160` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **Unit numeric compatibility cleanup (Cleanup Slice C)** on `main` @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53` |
+| Last closed / merged stage | **Unit payload compatibility cleanup (Cleanup Slice D)** on `main` @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md`](Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md) — **UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE** on `feature/gp-unit-payload-compat-cleanup` |
+| Current stage | [`Claude_Tasks/GP-Delivery-Timing-Ownership-Cleanup.md`](Claude_Tasks/GP-Delivery-Timing-Ownership-Cleanup.md) — **DELIVERY_TIMING_OWNERSHIP_CLEANUP_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-delivery-timing-ownership-cleanup` |
 
 ---
 
@@ -49,11 +49,11 @@
 
 **Prior closed:** GP-S38D / GP-S37T / GP-S36G / GP-S35B / GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Closed on `main`:** Unit numeric compatibility cleanup @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`; Dead overlap setting removal @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`; Settings Visibility Truth @ `f38e803771261c60d865949c693a52a73fbcedb2`; Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
+**Closed on `main`:** Unit payload compatibility cleanup @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`; Unit numeric compatibility cleanup @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`; Dead overlap setting removal @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`; Settings Visibility Truth @ `f38e803771261c60d865949c693a52a73fbcedb2`; Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current:** [`Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md`](Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md) — **UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
+**Current:** [`Claude_Tasks/GP-Delivery-Timing-Ownership-Cleanup.md`](Claude_Tasks/GP-Delivery-Timing-Ownership-Cleanup.md) — **DELIVERY_TIMING_OWNERSHIP_CLEANUP_READY_FOR_OPERATOR_VALIDATION**. **NOT MERGED. NOT FINALIZED.**
 
-**Do not** start building payload / timing cleanup or authored DA migration. Do **not** implement old pod-per-segment Wall.
+**Do not** start building payload cleanup or authored DA migration. Do **not** implement old pod-per-segment Wall.
 
 **Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 
@@ -166,4 +166,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-Current baseline: `origin/main` @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`. Current stage: **UNIT_PAYLOAD_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE** on `feature/gp-unit-payload-compat-cleanup`. **NOT MERGED.** Do not start building payload / timing cleanup.
+Current baseline: `origin/main` @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`. Current stage: **DELIVERY_TIMING_OWNERSHIP_CLEANUP_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-delivery-timing-ownership-cleanup`. **NOT MERGED. NOT FINALIZED.** Do not start building payload cleanup.

@@ -64,10 +64,8 @@ private:
 	int32 ReadyAfterPurchase = 0;
 	FVector ValidDeployLocation = FVector::ZeroVector;
 	FVector RejectDeployLocation = FVector::ZeroVector;
-	float SavedBuildingDescent = 2.5f;
 	float SavedBuildingCleanup = 0.5f;
 	float SavedBuildingAltitude = 2500.0f;
-	float SavedBuildingDeployDelay = 2.0f;
 	float SavedBuildingMaxRadius = 5000.0f;
 	bool bSettingsMutated = false;
 	uint64 ExecutionId = 0;

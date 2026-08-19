@@ -227,15 +227,15 @@ void UGP_UnitCapLogisticsHubContractTestRunner::RestoreSettings()
 	}
 	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 	{
-		Settings->UnitDropDescentDurationSeconds = SavedDescent;
 		Settings->UnitDropCleanupDelaySeconds = SavedCleanup;
 		Settings->UnitDropSpawnAltitudeCm = SavedAltitude;
-		Settings->UnitDropPayloadDeployDelaySeconds = SavedDeployDelay;
-		Settings->BuildingDropDescentDurationSeconds = SavedBuildingDescent;
-		Settings->BuildingDropPayloadDeployDelaySeconds = SavedBuildingDeployDelay;
 		Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
-		UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(2.5f, 1.25f);
-		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(2.5f, 2.0f);
+		UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(
+			UGP_OrbitalUnitDropCatalog::NativeDeliveryDescentSeconds,
+			UGP_OrbitalUnitDropCatalog::NativePayloadDeployDelaySeconds);
+		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
+			UGP_BuildingDropCatalog::NativeDeliveryDescentSeconds,
+			UGP_BuildingDropCatalog::NativePayloadDeployDelaySeconds);
 	}
 	bSettingsMutated = false;
 }
@@ -385,26 +385,14 @@ void UGP_UnitCapLogisticsHubContractTestRunner::AdvanceStage()
 	{
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
-			SavedDescent = Settings->UnitDropDescentDurationSeconds;
 			SavedCleanup = Settings->UnitDropCleanupDelaySeconds;
 			SavedAltitude = Settings->UnitDropSpawnAltitudeCm;
-			SavedDeployDelay = Settings->UnitDropPayloadDeployDelaySeconds;
-			SavedBuildingDescent = Settings->BuildingDropDescentDurationSeconds;
-			SavedBuildingDeployDelay = Settings->BuildingDropPayloadDeployDelaySeconds;
 			SavedBuildingCleanup = Settings->BuildingDropCleanupDelaySeconds;
-			Settings->UnitDropDescentDurationSeconds = 0.35f;
 			Settings->UnitDropCleanupDelaySeconds = 0.05f;
 			Settings->UnitDropSpawnAltitudeCm = 400.0f;
-			Settings->UnitDropPayloadDeployDelaySeconds = 0.15f;
-			Settings->BuildingDropDescentDurationSeconds = 0.30f;
-			Settings->BuildingDropPayloadDeployDelaySeconds = 0.15f;
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
-			UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(
-				Settings->UnitDropDescentDurationSeconds,
-				Settings->UnitDropPayloadDeployDelaySeconds);
-			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
-				Settings->BuildingDropDescentDurationSeconds,
-				Settings->BuildingDropPayloadDeployDelaySeconds);
+			UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(0.35f, 0.15f);
+			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(0.30f, 0.15f);
 			Settings->UnitDropPodClass.Reset();
 			Settings->BuildingPayloadClass.Reset();
 			bSettingsMutated = true;

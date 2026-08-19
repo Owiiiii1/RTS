@@ -58,8 +58,6 @@ private:
 	int32 MaxUnitsBeforeHub = 0;
 	int32 HubBonusWaitTicks = 0;
 	FVector ValidDeployLocation = FVector::ZeroVector;
-	float SavedBuildingDeployDelay = 2.0f;
-	float SavedBuildingDescent = 2.5f;
 	float SavedBuildingCleanup = 0.5f;
 	float SavedBuildingAltitude = 2500.0f;
 	bool bSettingsMutated = false;

@@ -745,8 +745,8 @@ GPBuildingDropAuthority::FDeployResult GPBuildingDropAuthority::AuthorityDeployB
 		return Result;
 	}
 
-	float DescentSeconds = Settings->BuildingDropDescentDurationSeconds;
-	float DeployDelaySeconds = Settings->BuildingDropPayloadDeployDelaySeconds;
+	float DescentSeconds = 0.0f;
+	float DeployDelaySeconds = 0.0f;
 	UGP_BuildingDropCatalog::Get().ResolveDeliveryTiming(
 		DropDefinition,
 		DescentSeconds,

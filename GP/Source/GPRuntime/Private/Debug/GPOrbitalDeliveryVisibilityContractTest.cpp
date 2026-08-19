@@ -200,31 +200,6 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 		Expect(bOk, Label);
 	};
 
-	auto ExpectFallbackTiming = [this, &FindProp](
-		const TCHAR* Name,
-		const TCHAR* CategoryNeedle,
-		const TCHAR* Label)
-	{
-		const FProperty* Prop = FindProp(Name);
-		bool bOk = Prop != nullptr
-			&& Prop->IsA<FFloatProperty>()
-			&& Prop->HasAnyPropertyFlags(CPF_Config)
-			&& Prop->HasAnyPropertyFlags(CPF_Edit);
-#if WITH_METADATA
-		const FString Category = Prop != nullptr ? Prop->GetMetaData(TEXT("Category")) : FString();
-		const FString Display = Prop != nullptr ? Prop->GetMetaData(TEXT("DisplayName")) : FString();
-		const FString Tip = Prop != nullptr ? Prop->GetMetaData(TEXT("ToolTip")) : FString();
-		bOk = bOk
-			&& Category.Contains(FString(CategoryNeedle))
-			&& Category.Contains(TEXT("Fallback Defaults"))
-			&& Display.Contains(TEXT("Fallback Seed"))
-			&& (Tip.Contains(TEXT("Fallback seed")) || Tip.Contains(TEXT("normally overwrites")));
-#else
-		(void)CategoryNeedle;
-#endif
-		Expect(bOk, Label);
-	};
-
 	switch (StageIndex)
 	{
 	case 0:
@@ -279,22 +254,14 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 			&& FindProp(TEXT("BuildingPayloadClass"))->IsA<FSoftClassProperty>(),
 			TEXT("Type_BuildingPayloadClass"));
 
-		ExpectFallbackTiming(
-			TEXT("UnitDropDescentDurationSeconds"),
-			TEXT("Unit Product Timing"),
-			TEXT("Fallback_UnitDropDescentDurationSeconds"));
-		ExpectFallbackTiming(
-			TEXT("UnitDropPayloadDeployDelaySeconds"),
-			TEXT("Unit Product Timing"),
-			TEXT("Fallback_UnitDropPayloadDeployDelaySeconds"));
-		ExpectFallbackTiming(
-			TEXT("BuildingDropDescentDurationSeconds"),
-			TEXT("Building Product Timing"),
-			TEXT("Fallback_BuildingDropDescentDurationSeconds"));
-		ExpectFallbackTiming(
-			TEXT("BuildingDropPayloadDeployDelaySeconds"),
-			TEXT("Building Product Timing"),
-			TEXT("Fallback_BuildingDropPayloadDeployDelaySeconds"));
+		Expect(FindProp(TEXT("UnitDropDescentDurationSeconds")) == nullptr,
+			TEXT("Absent_UnitDropDescentDurationSeconds"));
+		Expect(FindProp(TEXT("UnitDropPayloadDeployDelaySeconds")) == nullptr,
+			TEXT("Absent_UnitDropPayloadDeployDelaySeconds"));
+		Expect(FindProp(TEXT("BuildingDropDescentDurationSeconds")) == nullptr,
+			TEXT("Absent_BuildingDropDescentDurationSeconds"));
+		Expect(FindProp(TEXT("BuildingDropPayloadDeployDelaySeconds")) == nullptr,
+			TEXT("Absent_BuildingDropPayloadDeployDelaySeconds"));
 
 		const FProperty* TurretPayload = FindProp(TEXT("DefensiveTurretPayloadClass"));
 		bool bTurretOk = TurretPayload != nullptr

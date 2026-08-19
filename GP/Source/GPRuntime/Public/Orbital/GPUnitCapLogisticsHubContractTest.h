@@ -42,12 +42,8 @@ private:
 	TWeakObjectPtr<class AGP_DropPod> LastPodWeak;
 	TWeakObjectPtr<class AGP_LogisticsHub> HubAWeak;
 	TWeakObjectPtr<class AGP_LogisticsHub> HubBWeak;
-	float SavedDescent = 2.5f;
 	float SavedCleanup = 0.35f;
 	float SavedAltitude = 2500.0f;
-	float SavedDeployDelay = 1.25f;
-	float SavedBuildingDescent = 2.5f;
-	float SavedBuildingDeployDelay = 2.0f;
 	float SavedBuildingCleanup = 0.5f;
 	bool bSettingsMutated = false;
 	uint64 ExecutionId = 0;

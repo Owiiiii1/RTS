@@ -321,11 +321,11 @@ void UGP_DefensiveTurretContractTestRunner::RestoreSettings()
 	}
 	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 	{
-		Settings->BuildingDropDescentDurationSeconds = SavedBuildingDescent;
 		Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
 		Settings->BuildingDropSpawnAltitudeCm = SavedBuildingAltitude;
-		Settings->BuildingDropPayloadDeployDelaySeconds = SavedBuildingDeployDelay;
-		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(2.5f, 2.0f);
+		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
+			UGP_BuildingDropCatalog::NativeDeliveryDescentSeconds,
+			UGP_BuildingDropCatalog::NativePayloadDeployDelaySeconds);
 		Settings->BuildingMaxDeployRadiusFromMainBaseCm = SavedBuildingMaxRadius;
 	}
 	bSettingsMutated = false;
@@ -879,18 +879,12 @@ void UGP_DefensiveTurretContractTestRunner::AdvanceStage()
 	{
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
-			SavedBuildingDescent = Settings->BuildingDropDescentDurationSeconds;
 			SavedBuildingCleanup = Settings->BuildingDropCleanupDelaySeconds;
 			SavedBuildingAltitude = Settings->BuildingDropSpawnAltitudeCm;
-			SavedBuildingDeployDelay = Settings->BuildingDropPayloadDeployDelaySeconds;
 			SavedBuildingMaxRadius = Settings->BuildingMaxDeployRadiusFromMainBaseCm;
-			Settings->BuildingDropDescentDurationSeconds = 0.05f;
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
 			Settings->BuildingDropSpawnAltitudeCm = 400.0f;
-			Settings->BuildingDropPayloadDeployDelaySeconds = 0.0f;
-			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
-				Settings->BuildingDropDescentDurationSeconds,
-				Settings->BuildingDropPayloadDeployDelaySeconds);
+			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(0.05f, 0.0f);
 			Settings->BuildingMaxDeployRadiusFromMainBaseCm = 8000.0f;
 			bSettingsMutated = true;
 		}

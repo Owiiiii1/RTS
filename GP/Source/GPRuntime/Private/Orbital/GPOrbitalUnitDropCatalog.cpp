@@ -151,8 +151,8 @@ void UGP_OrbitalUnitDropCatalog::EnsureNativeCatalog()
 	NativeWorkerDrop->UnitDefinition = Units.GetWorkerDefinition();
 	NativeWorkerDrop->Cost = NativeWorkerOrbitalDropCost;
 	NativeWorkerDrop->TransportSlotCost = NativeWorkerTransportSlotCost;
-	NativeWorkerDrop->DeliveryDescentSeconds = 2.5f;
-	NativeWorkerDrop->PayloadDeployDelaySeconds = 1.25f;
+	NativeWorkerDrop->DeliveryDescentSeconds = NativeDeliveryDescentSeconds;
+	NativeWorkerDrop->PayloadDeployDelaySeconds = NativePayloadDeployDelaySeconds;
 	NativeWorkerDrop->PayloadClass = AGP_Worker::StaticClass();
 
 	NativeSalvageWalkerDrop = CreateNativeDrop(
@@ -161,8 +161,8 @@ void UGP_OrbitalUnitDropCatalog::EnsureNativeCatalog()
 	NativeSalvageWalkerDrop->UnitDefinition = Units.GetSalvageWalkerDefinition();
 	NativeSalvageWalkerDrop->Cost = NativeSalvageWalkerOrbitalDropCost;
 	NativeSalvageWalkerDrop->TransportSlotCost = NativeSalvageWalkerTransportSlotCost;
-	NativeSalvageWalkerDrop->DeliveryDescentSeconds = 2.5f;
-	NativeSalvageWalkerDrop->PayloadDeployDelaySeconds = 1.25f;
+	NativeSalvageWalkerDrop->DeliveryDescentSeconds = NativeDeliveryDescentSeconds;
+	NativeSalvageWalkerDrop->PayloadDeployDelaySeconds = NativePayloadDeployDelaySeconds;
 	NativeSalvageWalkerDrop->PayloadClass = AGP_SalvageWalker::StaticClass();
 
 	const int32 SlotCount = static_cast<int32>(EUnitAuthoredSlot::COUNT);
@@ -1087,9 +1087,11 @@ void UGP_OrbitalUnitDropCatalog::ResolveManifestDeliveryTiming(
 	float& OutDescentSeconds,
 	float& OutPayloadDeployDelaySeconds) const
 {
-	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
-	OutDescentSeconds = Settings != nullptr ? Settings->UnitDropDescentDurationSeconds : 2.5f;
-	OutPayloadDeployDelaySeconds = Settings != nullptr ? Settings->UnitDropPayloadDeployDelaySeconds : 1.25f;
+	const UGP_OrbitalUnitDropDefinition* NativeSeed = NativeWorkerDrop;
+	OutDescentSeconds = IsValid(NativeSeed) ? NativeSeed->DeliveryDescentSeconds : NativeDeliveryDescentSeconds;
+	OutPayloadDeployDelaySeconds = IsValid(NativeSeed)
+		? NativeSeed->PayloadDeployDelaySeconds
+		: NativePayloadDeployDelaySeconds;
 
 	bool bUsedDefinition = false;
 	if (Manifest.WorkerCount > 0)

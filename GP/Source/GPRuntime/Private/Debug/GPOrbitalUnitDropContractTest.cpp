@@ -156,14 +156,14 @@ void UGP_OrbitalUnitDropContractTestRunner::RestoreSettings()
 	{
 		if (bSettingsMutated)
 		{
-			Settings->UnitDropDescentDurationSeconds = SavedDescent;
 			Settings->UnitDropCleanupDelaySeconds = SavedCleanup;
 			Settings->UnitDropSpawnAltitudeCm = SavedAltitude;
-			Settings->UnitDropPayloadDeployDelaySeconds = SavedDeployDelay;
 			Settings->UnitDropPodClass = SavedDropPodClass;
 			if (UGP_OrbitalUnitDropCatalog* Existing = UGP_OrbitalUnitDropCatalog::TryGetExisting())
 			{
-				Existing->OverrideDeliveryTiming(2.5f, 1.25f);
+				Existing->OverrideDeliveryTiming(
+					UGP_OrbitalUnitDropCatalog::NativeDeliveryDescentSeconds,
+					UGP_OrbitalUnitDropCatalog::NativePayloadDeployDelaySeconds);
 			}
 		}
 		Settings->WorkerDropDefinition = SavedWorkerDropDef;
@@ -321,20 +321,13 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 	{
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
-			SavedDescent = Settings->UnitDropDescentDurationSeconds;
 			SavedCleanup = Settings->UnitDropCleanupDelaySeconds;
 			SavedAltitude = Settings->UnitDropSpawnAltitudeCm;
-			SavedDeployDelay = Settings->UnitDropPayloadDeployDelaySeconds;
 			SavedDropPodClass = Settings->UnitDropPodClass;
 			SavedWorkerDropDef = Settings->WorkerDropDefinition;
 			SavedWalkerDropDef = Settings->SalvageWalkerDropDefinition;
-			Settings->UnitDropDescentDurationSeconds = 0.25f;
 			Settings->UnitDropCleanupDelaySeconds = 0.05f;
 			Settings->UnitDropSpawnAltitudeCm = 400.0f;
-			Settings->UnitDropPayloadDeployDelaySeconds = 0.0f; // zero-delay path for core flow
-			UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(
-				Settings->UnitDropDescentDurationSeconds,
-				Settings->UnitDropPayloadDeployDelaySeconds);
 			Settings->UnitDropPodClass.Reset();
 			bSettingsMutated = true;
 
@@ -347,8 +340,79 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 				&& UnitDrops.ResolveWorkerPayloadClass() == AGP_Worker::StaticClass()
 				&& UnitDrops.ResolveSalvageWalkerPayloadClass() == AGP_SalvageWalker::StaticClass(),
 				TEXT("Payload_UnconfiguredNativeAndSettingsAbsent"));
+			Expect(SettingsClass->FindPropertyByName(TEXT("UnitDropDescentDurationSeconds")) == nullptr
+				&& SettingsClass->FindPropertyByName(TEXT("UnitDropPayloadDeployDelaySeconds")) == nullptr
+				&& SettingsClass->FindPropertyByName(TEXT("BuildingDropDescentDurationSeconds")) == nullptr
+				&& SettingsClass->FindPropertyByName(TEXT("BuildingDropPayloadDeployDelaySeconds")) == nullptr,
+				TEXT("Timing_RemovedSettingsFieldsAbsent"));
 			Expect(Settings->ResolveUnitDropPodClass(&bUsedAuthored) == AGP_DropPod::StaticClass()
 				&& !bUsedAuthored, TEXT("F_FallbackNativePod"));
+
+			FGP_UnitDropManifest NativeWorkerManifest;
+			NativeWorkerManifest.WorkerCount = 1;
+			FGP_UnitDropManifest NativeWalkerManifest;
+			NativeWalkerManifest.SalvageWalkerCount = 1;
+			float NativeDescent = 0.0f;
+			float NativeDeploy = 0.0f;
+			UnitDrops.ResolveManifestDeliveryTiming(NativeWorkerManifest, NativeDescent, NativeDeploy);
+			Expect(FMath::IsNearlyEqual(NativeDescent, UGP_OrbitalUnitDropCatalog::NativeDeliveryDescentSeconds)
+				&& FMath::IsNearlyEqual(NativeDeploy, UGP_OrbitalUnitDropCatalog::NativePayloadDeployDelaySeconds),
+				TEXT("Timing_NativeWorker"));
+			UnitDrops.ResolveManifestDeliveryTiming(NativeWalkerManifest, NativeDescent, NativeDeploy);
+			Expect(FMath::IsNearlyEqual(NativeDescent, UGP_OrbitalUnitDropCatalog::NativeDeliveryDescentSeconds)
+				&& FMath::IsNearlyEqual(NativeDeploy, UGP_OrbitalUnitDropCatalog::NativePayloadDeployDelaySeconds),
+				TEXT("Timing_NativeWalker"));
+
+			UGP_OrbitalUnitDropDefinition* TimingWorkerDrop = NewObject<UGP_OrbitalUnitDropDefinition>(
+				this, FName(TEXT("DA_GP_OrbitalUnitDrop_Worker_Timing")), RF_Transient);
+			TimingWorkerDrop->Cost = UnitDrops.GetWorkerOrbitalDropCost();
+			TimingWorkerDrop->TransportSlotCost = UnitDrops.GetWorkerTransportSlotCost();
+			TimingWorkerDrop->DeliveryDescentSeconds = 4.25f;
+			TimingWorkerDrop->PayloadDeployDelaySeconds = 0.75f;
+			TimingWorkerDrop->UnitDefinition = UGP_UnitDefinitionCatalog::Get().GetWorkerDefinition();
+			TimingWorkerDrop->PayloadClass = AGP_Worker::StaticClass();
+			UnitDrops.DebugAssignLoadedAuthoredWorker(TimingWorkerDrop);
+			float AuthoredDescent = 0.0f;
+			float AuthoredDeploy = 0.0f;
+			UnitDrops.ResolveManifestDeliveryTiming(NativeWorkerManifest, AuthoredDescent, AuthoredDeploy);
+			Expect(UnitDrops.GetWorkerDrop() == TimingWorkerDrop
+				&& FMath::IsNearlyEqual(AuthoredDescent, 4.25f)
+				&& FMath::IsNearlyEqual(AuthoredDeploy, 0.75f),
+				TEXT("Timing_AuthoredWorkerWins"));
+
+			UGP_OrbitalUnitDropDefinition* TimingWalkerDrop = NewObject<UGP_OrbitalUnitDropDefinition>(
+				this, FName(TEXT("DA_GP_OrbitalUnitDrop_Walker_Timing")), RF_Transient);
+			TimingWalkerDrop->Cost = UnitDrops.GetSalvageWalkerOrbitalDropCost();
+			TimingWalkerDrop->TransportSlotCost = UnitDrops.GetSalvageWalkerTransportSlotCost();
+			TimingWalkerDrop->DeliveryDescentSeconds = 3.00f;
+			TimingWalkerDrop->PayloadDeployDelaySeconds = 2.00f;
+			TimingWalkerDrop->UnitDefinition = UGP_UnitDefinitionCatalog::Get().GetSalvageWalkerDefinition();
+			TimingWalkerDrop->PayloadClass = AGP_SalvageWalker::StaticClass();
+			UnitDrops.DebugAssignLoadedAuthoredSalvageWalker(TimingWalkerDrop);
+			UnitDrops.ResolveManifestDeliveryTiming(NativeWalkerManifest, AuthoredDescent, AuthoredDeploy);
+			Expect(UnitDrops.GetSalvageWalkerDrop() == TimingWalkerDrop
+				&& FMath::IsNearlyEqual(AuthoredDescent, 3.00f)
+				&& FMath::IsNearlyEqual(AuthoredDeploy, 2.00f),
+				TEXT("Timing_AuthoredWalkerWins"));
+
+			FGP_UnitDropManifest MixedManifest;
+			MixedManifest.WorkerCount = 1;
+			MixedManifest.SalvageWalkerCount = 1;
+			float MixedDescent = 0.0f;
+			float MixedDeploy = 0.0f;
+			UnitDrops.ResolveManifestDeliveryTiming(MixedManifest, MixedDescent, MixedDeploy);
+			Expect(FMath::IsNearlyEqual(MixedDescent, 4.25f)
+				&& FMath::IsNearlyEqual(MixedDeploy, 2.00f),
+				TEXT("Timing_MixedManifestUsesMax"));
+
+			UnitDrops.DebugAssignLoadedAuthoredWorker(nullptr);
+			UnitDrops.DebugAssignLoadedAuthoredSalvageWalker(nullptr);
+			UnitDrops.ResolveManifestDeliveryTiming(NativeWorkerManifest, NativeDescent, NativeDeploy);
+			Expect(FMath::IsNearlyEqual(NativeDescent, UGP_OrbitalUnitDropCatalog::NativeDeliveryDescentSeconds)
+				&& FMath::IsNearlyEqual(NativeDeploy, UGP_OrbitalUnitDropCatalog::NativePayloadDeployDelaySeconds),
+				TEXT("Timing_RestoredNativeAfterAuthored"));
+
+			UnitDrops.OverrideDeliveryTiming(0.25f, 0.0f);
 		}
 
 		FActorSpawnParameters Params;
@@ -853,13 +917,9 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			It->Destroy();
 		}
 
+		UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(0.20f, 0.40f);
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
-			Settings->UnitDropDescentDurationSeconds = 0.20f;
-			Settings->UnitDropPayloadDeployDelaySeconds = 0.40f;
-			UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(
-				Settings->UnitDropDescentDurationSeconds,
-				Settings->UnitDropPayloadDeployDelaySeconds);
 			Settings->UnitDropCleanupDelaySeconds = 0.10f;
 			Settings->UnitDropPodClass.Reset();
 		}
@@ -946,7 +1006,7 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		}
 		Expect(Pods == 0, TEXT("Deploy_NoPodsRemain"));
 
-		// Zero-delay already exercised in cases 1–6 (UnitDropPayloadDeployDelaySeconds=0).
+		// Zero-delay already exercised in cases 1–6 (catalog OverrideDeliveryTiming 0).
 		Expect(true, TEXT("Deploy_ZeroDelayPathCoveredInCoreFlow"));
 
 		++StageIndex;
@@ -1021,12 +1081,7 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		AuthoredWorkerDropDef->UnitDefinition = AuthoredWorkerUnitDef;
 		AuthoredWorkerDropDef->PayloadClass = AGP_OrbitalDropContractWorkerStub::StaticClass();
 
-		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
-		{
-			Settings->UnitDropDescentDurationSeconds = 0.20f;
-			Settings->UnitDropPayloadDeployDelaySeconds = 0.0f;
-			UnitDrops.OverrideDeliveryTiming(0.20f, 0.0f);
-		}
+		UnitDrops.OverrideDeliveryTiming(0.20f, 0.0f);
 
 		UnitDrops.DebugForceUnresolvedAuthoredWorkerLoad(AuthoredWorkerDropDef, true);
 		Expect(UnitDrops.DebugDidRequestAsyncAuthoredWorkerLoad()

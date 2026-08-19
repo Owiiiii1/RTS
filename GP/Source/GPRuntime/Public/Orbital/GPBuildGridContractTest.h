@@ -53,8 +53,6 @@ private:
 	int32 MaxUnitsBeforeHub = 0;
 	int32 ReadyBeforeInvalid = 0;
 	float OrbitalBeforeInvalid = 0.0f;
-	float SavedBuildingDeployDelay = 2.0f;
-	float SavedBuildingDescent = 2.5f;
 	float SavedBuildingCleanup = 0.5f;
 	float SavedBuildingAltitude = 2500.0f;
 	TSoftClassPtr<AGP_BuildingBase> SavedBuildingPayload;

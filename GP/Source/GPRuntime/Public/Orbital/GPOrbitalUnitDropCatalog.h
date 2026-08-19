@@ -19,7 +19,8 @@ struct FStreamableHandle;
  * Precedence: authored settings soft ref (Ready only after nested UnitDefinition + PayloadClass
  * resolve) → native bootstrap (AGP_Worker / AGP_SalvageWalker).
  * Native catalog exists for contracts / empty setup. It must not permanently shadow authored DAs.
- * Native Worker/Walker Cost, TransportSlotCost, and PayloadClass live on the bootstrap products constructed here.
+ * Native Worker/Walker Cost, TransportSlotCost, PayloadClass, and delivery timing
+ * live on the bootstrap products constructed here.
  */
 UCLASS()
 class GPRUNTIME_API UGP_OrbitalUnitDropCatalog : public UObject
@@ -41,6 +42,8 @@ public:
 	static constexpr int32 NativeWorkerTransportSlotCost = 1;
 	static constexpr float NativeSalvageWalkerOrbitalDropCost = 50.0f;
 	static constexpr int32 NativeSalvageWalkerTransportSlotCost = 2;
+	static constexpr float NativeDeliveryDescentSeconds = 2.5f;
+	static constexpr float NativePayloadDeployDelaySeconds = 1.25f;
 
 	/** Canonical ready definition, or native bootstrap when authored is empty/failed. Null while authored pending. */
 	UGP_OrbitalUnitDropDefinition* GetWorkerDrop() const;

@@ -115,6 +115,8 @@ public:
 #if !UE_BUILD_SHIPPING
 	/** Contract seam: accepted pod skips payload spawn and releases reservation. */
 	void DebugForceSkipPayloadSpawn() { bDebugSkipPayloadSpawn = true; }
+	float DebugGetDescentDurationSeconds() const { return DescentDurationSeconds; }
+	float DebugGetPayloadDeployDelaySeconds() const { return PayloadDeployDelaySeconds; }
 #endif
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "GP|DropPod|Presentation")

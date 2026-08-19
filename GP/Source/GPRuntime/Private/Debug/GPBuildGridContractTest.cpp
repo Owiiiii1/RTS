@@ -252,9 +252,9 @@ void UGP_BuildGridContractTestRunner::RestoreSettings()
 	}
 	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 	{
-		Settings->BuildingDropPayloadDeployDelaySeconds = SavedBuildingDeployDelay;
-		Settings->BuildingDropDescentDurationSeconds = SavedBuildingDescent;
-		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(2.5f, 2.0f);
+		UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
+			UGP_BuildingDropCatalog::NativeDeliveryDescentSeconds,
+			UGP_BuildingDropCatalog::NativePayloadDeployDelaySeconds);
 		Settings->BuildingDropCleanupDelaySeconds = SavedBuildingCleanup;
 		Settings->BuildingDropSpawnAltitudeCm = SavedBuildingAltitude;
 		Settings->BuildingPayloadClass = SavedBuildingPayload;
@@ -1884,18 +1884,12 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 	{
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
-			SavedBuildingDescent = Settings->BuildingDropDescentDurationSeconds;
 			SavedBuildingCleanup = Settings->BuildingDropCleanupDelaySeconds;
 			SavedBuildingAltitude = Settings->BuildingDropSpawnAltitudeCm;
-			SavedBuildingDeployDelay = Settings->BuildingDropPayloadDeployDelaySeconds;
 			SavedBuildingPayload = Settings->BuildingPayloadClass;
-			Settings->BuildingDropDescentDurationSeconds = 0.45f;
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
 			Settings->BuildingDropSpawnAltitudeCm = 400.0f;
-			Settings->BuildingDropPayloadDeployDelaySeconds = 0.35f;
-			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
-				Settings->BuildingDropDescentDurationSeconds,
-				Settings->BuildingDropPayloadDeployDelaySeconds);
+			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(0.45f, 0.35f);
 			Settings->BuildingPayloadClass.Reset();
 			bSettingsMutated = true;
 		}
@@ -2334,12 +2328,8 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
-			Settings->BuildingDropDescentDurationSeconds = 0.08f;
-			Settings->BuildingDropPayloadDeployDelaySeconds = 0.0f;
 			Settings->BuildingDropCleanupDelaySeconds = 0.05f;
-			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
-				Settings->BuildingDropDescentDurationSeconds,
-				Settings->BuildingDropPayloadDeployDelaySeconds);
+			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(0.08f, 0.0f);
 		}
 
 		UGP_OrbitalBuildingInventoryComponent* Inventory = OwnerPS->GetOrbitalBuildingInventoryComponent();

@@ -1,90 +1,78 @@
-# Cursor Work Report — Settings Visibility Truth
+# Cursor Work Report — Dead Overlap Setting Removal
 
 ## Status
 
-**SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE**
+**DEAD_OVERLAP_SETTING_REMOVAL_READY_FOR_OPERATOR_VALIDATION**
 
-**NOT MERGED.**
+**NOT MERGED. NOT FINALIZED.**
 
 ## Branch / base / head
 
-- Branch: `feature/gp-settings-visibility-truth`
-- Base: `origin/main` @ `283297012c1cefe162028a7ba4166c02a81230cc`
+- Branch: `feature/gp-remove-dead-overlap-setting`
+- Base: `origin/main` @ `f38e803771261c60d865949c693a52a73fbcedb2`
 - Head: (this commit)
 
-## Operator PASS summary
+## Repository-wide search / classification
 
-- Project Settings → Game → GP Orbital Delivery looks correct / logical
-- no visible configuration problems
-- gameplay smoke test shows no issue
+`BuildingPlacementOverlapMarginCm` occurrences before removal:
 
-## Exact visibility changes
+| Kind | Path | Notes |
+| --- | --- | --- |
+| Declaration | `GPOrbitalDeliverySettings.h` | UPROPERTY + class comment |
+| Config text | `GP/Config/DefaultGame.ini` | `BuildingPlacementOverlapMarginCm=25.000000` |
+| Test | `GPOrbitalDeliveryVisibilityContractTest.cpp` | Slice A hidden/deprecated expectation |
+| Docs | audit / slice A task / prior report | ownership notes |
+| Runtime reader | **none** | |
 
-Hidden from normal Project Settings edit (`Config` retained, `EditAnywhere` removed):
+No `GConfig` / `GetFloat` / `GetInt` access of this key exists in `GP/Source`. Zero production runtime readers.
 
-- `WorkerTransportSlotCost`
-- `SalvageWalkerTransportSlotCost`
-- `WorkerOrbitalDropCost`
-- `SalvageWalkerOrbitalDropCost`
-- `WorkerPayloadClass`
-- `SalvageWalkerPayloadClass`
-- `BuildingOrbitalPurchaseCost`
-- `BuildingPayloadClass`
-- `BuildingPlacementOverlapMarginCm` (unused, unwired)
+## C++ removal
 
-Relabeled as fallback seeds (still editable):
+Removed `UGP_OrbitalDeliverySettings::BuildingPlacementOverlapMarginCm` (UPROPERTY, default, comments). No redirect or replacement property.
 
-- `UnitDropDescentDurationSeconds`
-- `UnitDropPayloadDeployDelaySeconds`
-- `BuildingDropDescentDurationSeconds`
-- `BuildingDropPayloadDeployDelaySeconds`
+Placement, footprint, SAT/OBB, deploy radius, NavigationObstacle, and related systems were not touched.
 
-`DefensiveTurretPayloadClass` stays editable and is labeled LEGACY override. Precedence unchanged.
+## Stale DefaultGame.ini key
 
-## Runtime behavior unchanged
+Intentionally **not** edited. Protected local config exists. After C++ removal the leftover INI key cannot populate a runtime field. Harmless legacy text for a later dedicated config-hygiene operation.
 
-- property names, types, and C++ defaults unchanged
-- `GPOrbitalDeliverySettings.cpp` readers unchanged
-- Config still deserializes deprecated compatibility fields
-- timing fallback seeds still seed resolvers; product definitions still overwrite
-- `DefensiveTurretPayloadClass` still outranks `BuildingDefinition.SpawnedClass`
-- `BuildingPlacementOverlapMarginCm` remains unused
+## Settings contract change
 
-## Finalization compile fix
+`gp.Settings.RunOrbitalDeliveryVisibilityContractTest`:
 
-GP Win64 Development initially failed: `FProperty::HasMetaData` / `GetMetaData` are `WITH_METADATA` (editor) APIs. Guarded those checks. No gameplay/settings change. Reran GPEditor and the visibility contract after the fix.
+- OLD: property exists, Config, hidden/deprecated
+- NEW: `FindPropertyByName("BuildingPlacementOverlapMarginCm") == nullptr`
 
-## Final tests / results
+Other Slice A visibility/metadata assertions unchanged.
+
+## Tests / results
 
 | Check | Result |
 | --- | --- |
 | `gp.Settings.RunOrbitalDeliveryVisibilityContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Resource.RunOrbitalUnitDropContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Building.RunOrbitalBuildingDropContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Economy.RunEconomyLogisticsDataContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Orbital.RunWallPackageInventoryContractTest` | `Complete Failures=0 Cancelled=false` |
 
-Full suite not run.
+Unit-drop / Wall Package / full suite not run.
 
 ## Builds
 
 | Target | Result |
 | --- | --- |
 | `GPEditor Win64 Development` + UHT | **PASS** |
-| `GP Win64 Development` | **PASS** |
-| `GP Win64 Shipping` | **PASS** |
+
+GP Win64 Development / Shipping not run (finalization after operator PASS).
+
+## Operator test (not claimed PASS)
+
+Project Settings → Game → GP Orbital Delivery: field gone. Normal building placement and Hub/Turret deploy still work.
 
 ## Protected-files confirmation
 
-Committed diff vs `origin/main` @ `28329701…` is settings metadata, visibility contract, and docs only:
+Committed diff excludes maps, `DefaultGame.ini`, `DefaultEngine.ini`, Blueprints, DataAssets, materials, and other untracked Content.
 
-- no maps
-- no `DefaultGame.ini`
-- no `DefaultEngine.ini`
-- no Blueprint / DataAsset / material / content changes
-
-Local untracked Content and local config/map dirt were left unstaged.
-
-No new functionality in this finalization beyond the `WITH_METADATA` test compile guard.
+## Runtime placement behavior unchanged
 
 ## NOT MERGED
+
+## NOT FINALIZED

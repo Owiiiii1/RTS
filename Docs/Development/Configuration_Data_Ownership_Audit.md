@@ -491,6 +491,8 @@ Do not combine H, I, J, M, or N into one implementation slice.
 
 **Slice A implementation status:** `SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE` on `feature/gp-settings-visibility-truth`. Editor exposure/labels only. Findings and remaining cleanup slices are unchanged. **NOT MERGED.**
 
+**Slice B implementation status:** `DEAD_OVERLAP_SETTING_REMOVAL_READY_FOR_OPERATOR_VALIDATION` on `feature/gp-remove-dead-overlap-setting`. Dead C++ property `BuildingPlacementOverlapMarginCm` removed. Runtime placement unchanged. Stale `DefaultGame.ini` key intentionally not touched because protected config exists.
+
 ## 10. Do Not Delete Yet
 
 The following fields look obsolete or duplicated but still have proven readers:

@@ -28,7 +28,6 @@ class UGP_OrbitalUnitDropDefinition;
  * - product-specific descent / payload-deploy timing
  *
  * Wall Package owns its own descent / deploy timing on UGP_WallPackageDefinition.
- * BuildingPlacementOverlapMarginCm is unused (no runtime reader).
  */
 UCLASS(Config = Game, DefaultConfig, meta = (DisplayName = "GP Orbital Delivery"))
 class GPRUNTIME_API UGP_OrbitalDeliverySettings : public UDeveloperSettings
@@ -228,14 +227,6 @@ public:
 	/** Max horizontal deploy distance from owning MainBase (cm). */
 	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Placement", meta = (ClampMin = "100.0"))
 	float BuildingMaxDeployRadiusFromMainBaseCm = 5000.0f;
-
-	/**
-	 * DEPRECATED unused Config key. Has no runtime or test reader and does not affect placement.
-	 * Not deleted (cleanup slice B). Not a designer-authoritative Project Settings control.
-	 */
-	UPROPERTY(Config, meta = (ClampMin = "0.0", DeprecatedProperty,
-		DeprecationMessage = "Unused. BuildingPlacementOverlapMarginCm has no runtime reader and does not affect placement."))
-	float BuildingPlacementOverlapMarginCm = 25.0f;
 
 	/** Resolve Worker payload: soft class if valid subclass, else native. */
 	TSubclassOf<AGP_Worker> ResolveWorkerPayloadClass(bool* bOutUsedAuthored = nullptr) const;

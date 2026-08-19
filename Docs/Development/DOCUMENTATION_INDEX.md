@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | Current `origin/main` baseline: `283297012c1cefe162028a7ba4166c02a81230cc` |
+| Code baseline | Current `origin/main` baseline: `f38e803771261c60d865949c693a52a73fbcedb2` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **Unit Drop Nested Readiness** on `main` @ `283297012c1cefe162028a7ba4166c02a81230cc` |
+| Last closed / merged stage | **Settings Visibility Truth (Cleanup Slice A)** on `main` @ `f38e803771261c60d865949c693a52a73fbcedb2` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-Settings-Visibility-Truth.md`](Claude_Tasks/GP-Settings-Visibility-Truth.md) — **SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE** on `feature/gp-settings-visibility-truth` |
+| Current stage | [`Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md`](Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md) — **DEAD_OVERLAP_SETTING_REMOVAL_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-remove-dead-overlap-setting` |
 
 ---
 
@@ -49,11 +49,11 @@
 
 **Prior closed:** GP-S38D / GP-S37T / GP-S36G / GP-S35B / GP-S34W / TEMP HUD layout / GP-S33C / GP-S33M / GP-S32A / GP-S32R / GP-S31R / GP-S30 / GP-S29R / GP-S30R — **DONE / MERGED**.
 
-**Closed on `main`:** Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
+**Closed on `main`:** Settings Visibility Truth @ `f38e803771261c60d865949c693a52a73fbcedb2`; Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current:** [`Claude_Tasks/GP-Settings-Visibility-Truth.md`](Claude_Tasks/GP-Settings-Visibility-Truth.md) — **SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
+**Current:** [`Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md`](Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md) — **DEAD_OVERLAP_SETTING_REMOVAL_READY_FOR_OPERATOR_VALIDATION**. **NOT MERGED. NOT FINALIZED.**
 
-**Do not** start cleanup slice B or later. Do **not** implement old pod-per-segment Wall.
+**Do not** start cleanup slice C or later. Do **not** implement old pod-per-segment Wall.
 
 **Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 

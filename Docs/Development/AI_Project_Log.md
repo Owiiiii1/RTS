@@ -1,5 +1,19 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Dead overlap setting removal (Cleanup Slice B)
+
+Status: **DEAD_OVERLAP_SETTING_REMOVAL_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-remove-dead-overlap-setting` from `origin/main` @ `f38e803771261c60d865949c693a52a73fbcedb2`
+- Removed dead C++ property `UGP_OrbitalDeliverySettings::BuildingPlacementOverlapMarginCm`
+- Zero production readers; placement behavior unchanged
+- Stale `DefaultGame.ini` key intentionally not touched (protected local config)
+- Visibility contract now asserts the property is absent
+- `gp.Settings.RunOrbitalDeliveryVisibilityContractTest`, `gp.Building.RunOrbitalBuildingDropContractTest`, `gp.Economy.RunEconomyLogisticsDataContractTest` Failures=0
+- GPEditor Win64 Development + UHT **PASS**. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-Remove-Dead-Overlap-Setting.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Settings Visibility Truth finalization
 
 Status: **SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE**

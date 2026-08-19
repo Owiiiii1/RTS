@@ -266,7 +266,8 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 		ExpectHiddenBridge(TEXT("SalvageWalkerPayloadClass"), TEXT("Hidden_SalvageWalkerPayloadClass"));
 		ExpectHiddenBridge(TEXT("BuildingOrbitalPurchaseCost"), TEXT("Hidden_BuildingOrbitalPurchaseCost"));
 		ExpectHiddenBridge(TEXT("BuildingPayloadClass"), TEXT("Hidden_BuildingPayloadClass"));
-		ExpectHiddenBridge(TEXT("BuildingPlacementOverlapMarginCm"), TEXT("Hidden_BuildingPlacementOverlapMarginCm"));
+		Expect(FindProp(TEXT("BuildingPlacementOverlapMarginCm")) == nullptr,
+			TEXT("Absent_BuildingPlacementOverlapMarginCm"));
 
 		Expect(FindProp(TEXT("WorkerTransportSlotCost")) != nullptr
 			&& FindProp(TEXT("WorkerTransportSlotCost"))->IsA<FIntProperty>(),
@@ -280,9 +281,6 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 		Expect(FindProp(TEXT("BuildingPayloadClass")) != nullptr
 			&& FindProp(TEXT("BuildingPayloadClass"))->IsA<FSoftClassProperty>(),
 			TEXT("Type_BuildingPayloadClass"));
-		Expect(FindProp(TEXT("BuildingPlacementOverlapMarginCm")) != nullptr
-			&& FindProp(TEXT("BuildingPlacementOverlapMarginCm"))->IsA<FFloatProperty>(),
-			TEXT("Type_BuildingPlacementOverlapMarginCm"));
 
 		ExpectFallbackTiming(
 			TEXT("UnitDropDescentDurationSeconds"),

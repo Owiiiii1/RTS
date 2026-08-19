@@ -8,7 +8,7 @@
 
 > Стан станом на 2026-08-19. Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Configuration data ownership cleanup. **Current: SETTINGS_VISIBILITY_TRUTH_FINALIZED_READY_FOR_MERGE**.
+**Поточна фаза:** Configuration data ownership cleanup. **Current: DEAD_OVERLAP_SETTING_REMOVAL_READY_FOR_OPERATOR_VALIDATION**.
 
 **Status snapshot:**
 
@@ -16,9 +16,10 @@
 |---|---|
 | GP-S01 … GP-S42A | **DONE / on `main`** |
 | **Unit Drop Nested Readiness** | **DONE / on `main`** @ `283297012c1cefe162028a7ba4166c02a81230cc` |
-| **Cleanup Slice A** Settings visibility truth | **FINALIZED READY FOR MERGE** — [`GP-Settings-Visibility-Truth.md`](GP-Settings-Visibility-Truth.md) — **NOT MERGED** |
+| **Cleanup Slice A** Settings visibility truth | **DONE / on `main`** @ `f38e803771261c60d865949c693a52a73fbcedb2` |
+| **Cleanup Slice B** Dead overlap setting removal | **READY FOR OPERATOR VALIDATION** — [`GP-Remove-Dead-Overlap-Setting.md`](GP-Remove-Dead-Overlap-Setting.md) — **NOT MERGED** |
 
-**NEXT action для агента:** wait for merge authorization. Do **not** start cleanup slice B (dead overlap decision) or later slices. Do **not** migrate authored assets or remove compatibility fields. Do **not** start GP-S42B / GP-S42C / FoW.
+**NEXT action для агента:** wait for operator Project Settings / placement smoke validation. Do **not** start cleanup slice C or later. Do **not** migrate authored assets or remove remaining compatibility fields. Do **not** start GP-S42B / GP-S42C / FoW.
 
 ### Drift Warning
 

@@ -17,9 +17,9 @@ struct FStreamableHandle;
 /**
  * Native bootstrap + authored unit acquisition definitions (GP-S39E).
  * Precedence: authored settings soft ref (Ready only after nested UnitDefinition + PayloadClass
- * resolve) → native bootstrap. Payload class may still fall back to deprecated settings bridges.
+ * resolve) → native bootstrap (AGP_Worker / AGP_SalvageWalker).
  * Native catalog exists for contracts / empty setup. It must not permanently shadow authored DAs.
- * Native Worker/Walker Cost and TransportSlotCost live on the bootstrap products constructed here.
+ * Native Worker/Walker Cost, TransportSlotCost, and PayloadClass live on the bootstrap products constructed here.
  */
 UCLASS()
 class GPRUNTIME_API UGP_OrbitalUnitDropCatalog : public UObject

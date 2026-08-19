@@ -91,8 +91,8 @@ Declaration: `GP/Source/GPRuntime/Public/Settings/GPOrbitalDeliverySettings.h:25
 | `SalvageWalkerTransportSlotCost` | Same | REMOVED | Config hygiene later |
 | `WorkerOrbitalDropCost` | Same | REMOVED | Config hygiene later |
 | `SalvageWalkerOrbitalDropCost` | Same | REMOVED | Config hygiene later |
-| `WorkerPayloadClass` | Sync-loaded fallback after drop payload class | DEPRECATED_ACTIVE | Move BP reference to unit drop DA, then remove bridge |
-| `SalvageWalkerPayloadClass` | Same | DEPRECATED_ACTIVE | Move and remove later |
+| `WorkerPayloadClass` | Removed from C++ settings. Canonical payload is `UGP_OrbitalUnitDropDefinition.PayloadClass`. Native bootstrap is `AGP_Worker`. Stale INI key only. | REMOVED | Config hygiene later |
+| `SalvageWalkerPayloadClass` | Same with native `AGP_SalvageWalker` | REMOVED | Config hygiene later |
 | `UnitDropPodClass` | Shared pod presentation class for unit/building/package | CANONICAL | Keep global |
 | `UnitDropDescentDurationSeconds` | Seed overwritten by any resolved unit drop definition | DUPLICATED | Hide or relabel “fallback default”; later remove if all products required |
 | `UnitDropSpawnAltitudeCm` | Direct global transport read | CANONICAL | Keep |
@@ -493,14 +493,15 @@ Do not combine H, I, J, M, or N into one implementation slice.
 
 **Slice B implementation status:** `DEAD_OVERLAP_SETTING_REMOVAL_FINALIZED_READY_FOR_MERGE` merged to `main` @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`. Dead C++ property `BuildingPlacementOverlapMarginCm` removed. Runtime placement unchanged. Stale `DefaultGame.ini` key intentionally not touched because protected config exists.
 
-**Slice C implementation status (this combined numeric package):** `UNIT_NUMERIC_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE` on `feature/gp-unit-numeric-compat-cleanup`. Removed `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost`. Native Worker 25/1 and Salvage Walker 50/2 owned by `UGP_OrbitalUnitDropCatalog` bootstrap construction. Authored Ready product Cost/Slots win. Pending does not substitute native numerics when the authored drop object is present. Stale `DefaultGame.ini` keys intentionally not touched. Payload/timing/building bridges unchanged. **NOT MERGED.**
+**Slice C implementation status (this combined numeric package):** `UNIT_NUMERIC_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE` merged to `main` @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`. Removed unit numeric Project Settings bridges. Native Worker 25/1 and Salvage Walker 50/2 owned by catalog bootstrap construction. Stale `DefaultGame.ini` keys intentionally not touched.
+
+**Slice D implementation status (this combined payload package):** `UNIT_PAYLOAD_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION` on `feature/gp-unit-payload-compat-cleanup`. Removed `WorkerPayloadClass` and `SalvageWalkerPayloadClass` plus settings resolvers. Canonical authored payload is `UGP_OrbitalUnitDropDefinition.PayloadClass`. Native fallback is `AGP_Worker` / `AGP_SalvageWalker` on catalog bootstrap. Nested PayloadClass pending remains `DefinitionNotReady`. Stale `DefaultGame.ini` keys intentionally not touched. Numeric/timing/building bridges unchanged. **NOT MERGED. NOT FINALIZED.**
 
 ## 10. Do Not Delete Yet
 
 The following fields look obsolete or duplicated but still have proven readers:
 
-- Stale `DefaultGame.ini` keys `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost` — leftover text after C++ removal; no production GConfig/string reader. Config hygiene later.
-- `WorkerPayloadClass`, `SalvageWalkerPayloadClass` — payload fallback and sync-load bridge.
+- Stale `DefaultGame.ini` keys `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost`, `WorkerPayloadClass`, `SalvageWalkerPayloadClass` — leftover text after C++ removal; no production GConfig/string reader. Config hygiene later.
 - `BuildingOrbitalPurchaseCost` — native Logistics Hub cost synchronization.
 - `BuildingPayloadClass` — Logistics Hub payload fallback.
 - `DefensiveTurretPayloadClass` — currently highest-priority Turret payload override.

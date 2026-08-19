@@ -1,5 +1,21 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Unit payload compatibility cleanup (Cleanup Slice D)
+
+Status: **UNIT_PAYLOAD_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch: `feature/gp-unit-payload-compat-cleanup` from `origin/main` @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`
+- Removed `WorkerPayloadClass` and `SalvageWalkerPayloadClass` from `UGP_OrbitalDeliverySettings`, plus settings payload resolvers/invalid helpers
+- Canonical authored payload is `UGP_OrbitalUnitDropDefinition.PayloadClass`; native bootstrap is `AGP_Worker` / `AGP_SalvageWalker` on catalog construction
+- Nested PayloadClass pending remains `DefinitionNotReady`; no unit-payload `LoadSynchronous` path remains
+- DropPod still reads catalog resolvers; `UnitDefinitionAsset` override semantics unchanged
+- Stale `DefaultGame.ini` keys intentionally not touched (protected local config)
+- Numeric / timing / building bridges unchanged
+- `gp.Settings.RunOrbitalDeliveryVisibilityContractTest`, `gp.Resource.RunOrbitalUnitDropContractTest`, `gp.Economy.RunEconomyLogisticsDataContractTest`, `gp.Resource.RunUnitCapLogisticsHubContractTest` Failures=0
+- GPEditor Win64 Development + UHT **PASS**. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-Unit-Payload-Compat-Cleanup.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Unit numeric compatibility cleanup finalization
 
 Status: **UNIT_NUMERIC_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE**

@@ -66,9 +66,9 @@ private:
 	float SavedCleanup = 0.35f;
 	float SavedAltitude = 2500.0f;
 	float SavedDeployDelay = 1.25f;
-	TSoftClassPtr<AGP_Worker> SavedWorkerPayload;
-	TSoftClassPtr<AGP_SalvageWalker> SavedWalkerPayload;
 	TSoftClassPtr<AGP_DropPod> SavedDropPodClass;
+	TSoftObjectPtr<class UGP_OrbitalUnitDropDefinition> SavedWorkerDropDef;
+	TSoftObjectPtr<class UGP_OrbitalUnitDropDefinition> SavedWalkerDropDef;
 	UPROPERTY()
 	TObjectPtr<class UGP_OrbitalUnitDropDefinition> AuthoredWorkerDropDef;
 	UPROPERTY()

@@ -9,8 +9,6 @@
 
 class AGP_BuildingBase;
 class AGP_DropPod;
-class AGP_Worker;
-class AGP_SalvageWalker;
 class UGP_OrbitalDropDefinition;
 class UGP_OrbitalUnitDropDefinition;
 
@@ -81,24 +79,6 @@ public:
 	/** Transport slots per unit DropPod (MVP tuning example 4). */
 	UPROPERTY(Config, EditAnywhere, Category = "Unit Drop|Slots", meta = (ClampMin = "1"))
 	int32 PodTransportSlotCapacity = 4;
-
-	/**
-	 * DEPRECATED compatibility bridge. Canonical payload is UGP_OrbitalUnitDropDefinition.PayloadClass.
-	 * Config serialization and existing fallback/sync-load readers retained.
-	 * Not a designer-authoritative Project Settings control.
-	 */
-	UPROPERTY(Config, meta = (AllowAbstract = "false", DeprecatedProperty,
-		DeprecationMessage = "Canonical payload is UGP_OrbitalUnitDropDefinition.PayloadClass. Kept as operator BP bridge."))
-	TSoftClassPtr<AGP_Worker> WorkerPayloadClass;
-
-	/**
-	 * DEPRECATED compatibility bridge. Canonical payload is UGP_OrbitalUnitDropDefinition.PayloadClass.
-	 * Config serialization and existing fallback/sync-load readers retained.
-	 * Not a designer-authoritative Project Settings control.
-	 */
-	UPROPERTY(Config, meta = (AllowAbstract = "false", DeprecatedProperty,
-		DeprecationMessage = "Canonical payload is UGP_OrbitalUnitDropDefinition.PayloadClass. Kept as operator BP bridge."))
-	TSoftClassPtr<AGP_SalvageWalker> SalvageWalkerPayloadClass;
 
 	/**
 	 * Authored DropPod presentation BP (must derive from AGP_DropPod). Empty → native AGP_DropPod.
@@ -196,12 +176,6 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Building Drop|Placement", meta = (ClampMin = "100.0"))
 	float BuildingMaxDeployRadiusFromMainBaseCm = 5000.0f;
 
-	/** Resolve Worker payload: soft class if valid subclass, else native. */
-	TSubclassOf<AGP_Worker> ResolveWorkerPayloadClass(bool* bOutUsedAuthored = nullptr) const;
-
-	/** Resolve Salvage Walker payload: soft class if valid subclass, else native. */
-	TSubclassOf<AGP_SalvageWalker> ResolveSalvageWalkerPayloadClass(bool* bOutUsedAuthored = nullptr) const;
-
 	/** Resolve DropPod class: soft class if valid subclass, else native. */
 	TSubclassOf<AGP_DropPod> ResolveUnitDropPodClass(bool* bOutUsedAuthored = nullptr) const;
 
@@ -218,8 +192,6 @@ public:
 	}
 
 	/** True if soft ref is set but fails base-class / load checks (does not use invalid class). */
-	bool IsWorkerPayloadClassConfigInvalid() const;
-	bool IsSalvageWalkerPayloadClassConfigInvalid() const;
 	bool IsUnitDropPodClassConfigInvalid() const;
 	bool IsBuildingPayloadClassConfigInvalid() const;
 	bool IsDefensiveTurretPayloadClassConfigInvalid() const;

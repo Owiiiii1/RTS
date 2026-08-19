@@ -147,21 +147,31 @@ void UGP_OrbitalUnitDropContractTestRunner::OnWorldCleanup(UWorld* World, bool b
 
 void UGP_OrbitalUnitDropContractTestRunner::RestoreSettings()
 {
-	UGP_OrbitalUnitDropCatalog::Get().DebugClearAuthoredUnitDropOverrides();
-	if (!bSettingsMutated)
+	if (UGP_OrbitalUnitDropCatalog* Existing = UGP_OrbitalUnitDropCatalog::TryGetExisting())
 	{
-		return;
+		Existing->DebugClearAuthoredUnitDropOverrides();
+		Existing->DebugEndContractIsolation();
 	}
 	if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 	{
-		Settings->UnitDropDescentDurationSeconds = SavedDescent;
-		Settings->UnitDropCleanupDelaySeconds = SavedCleanup;
-		Settings->UnitDropSpawnAltitudeCm = SavedAltitude;
-		Settings->UnitDropPayloadDeployDelaySeconds = SavedDeployDelay;
-		UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(2.5f, 1.25f);
-		Settings->WorkerPayloadClass = SavedWorkerPayload;
-		Settings->SalvageWalkerPayloadClass = SavedWalkerPayload;
-		Settings->UnitDropPodClass = SavedDropPodClass;
+		if (bSettingsMutated)
+		{
+			Settings->UnitDropDescentDurationSeconds = SavedDescent;
+			Settings->UnitDropCleanupDelaySeconds = SavedCleanup;
+			Settings->UnitDropSpawnAltitudeCm = SavedAltitude;
+			Settings->UnitDropPayloadDeployDelaySeconds = SavedDeployDelay;
+			Settings->UnitDropPodClass = SavedDropPodClass;
+			if (UGP_OrbitalUnitDropCatalog* Existing = UGP_OrbitalUnitDropCatalog::TryGetExisting())
+			{
+				Existing->OverrideDeliveryTiming(2.5f, 1.25f);
+			}
+		}
+		Settings->WorkerDropDefinition = SavedWorkerDropDef;
+		Settings->SalvageWalkerDropDefinition = SavedWalkerDropDef;
+	}
+	if (UGP_OrbitalUnitDropCatalog* Existing = UGP_OrbitalUnitDropCatalog::TryGetExisting())
+	{
+		Existing->RefreshAuthoredBindings();
 	}
 	bSettingsMutated = false;
 }
@@ -315,9 +325,9 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			SavedCleanup = Settings->UnitDropCleanupDelaySeconds;
 			SavedAltitude = Settings->UnitDropSpawnAltitudeCm;
 			SavedDeployDelay = Settings->UnitDropPayloadDeployDelaySeconds;
-			SavedWorkerPayload = Settings->WorkerPayloadClass;
-			SavedWalkerPayload = Settings->SalvageWalkerPayloadClass;
 			SavedDropPodClass = Settings->UnitDropPodClass;
+			SavedWorkerDropDef = Settings->WorkerDropDefinition;
+			SavedWalkerDropDef = Settings->SalvageWalkerDropDefinition;
 			Settings->UnitDropDescentDurationSeconds = 0.25f;
 			Settings->UnitDropCleanupDelaySeconds = 0.05f;
 			Settings->UnitDropSpawnAltitudeCm = 400.0f;
@@ -325,17 +335,18 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			UGP_OrbitalUnitDropCatalog::Get().OverrideDeliveryTiming(
 				Settings->UnitDropDescentDurationSeconds,
 				Settings->UnitDropPayloadDeployDelaySeconds);
-			// Native fallback path for core slot/cost/spend checks.
-			Settings->WorkerPayloadClass.Reset();
-			Settings->SalvageWalkerPayloadClass.Reset();
 			Settings->UnitDropPodClass.Reset();
 			bSettingsMutated = true;
 
+			UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+			UnitDrops.DebugBeginContractIsolation();
+			const UClass* SettingsClass = UGP_OrbitalDeliverySettings::StaticClass();
 			bool bUsedAuthored = true;
-			Expect(Settings->ResolveWorkerPayloadClass(&bUsedAuthored) == AGP_Worker::StaticClass()
-				&& !bUsedAuthored, TEXT("F_FallbackNativeWorker"));
-			Expect(Settings->ResolveSalvageWalkerPayloadClass(&bUsedAuthored) == AGP_SalvageWalker::StaticClass()
-				&& !bUsedAuthored, TEXT("F_FallbackNativeWalker"));
+			Expect(SettingsClass->FindPropertyByName(TEXT("WorkerPayloadClass")) == nullptr
+				&& SettingsClass->FindPropertyByName(TEXT("SalvageWalkerPayloadClass")) == nullptr
+				&& UnitDrops.ResolveWorkerPayloadClass() == AGP_Worker::StaticClass()
+				&& UnitDrops.ResolveSalvageWalkerPayloadClass() == AGP_SalvageWalker::StaticClass(),
+				TEXT("Payload_UnconfiguredNativeAndSettingsAbsent"));
 			Expect(Settings->ResolveUnitDropPodClass(&bUsedAuthored) == AGP_DropPod::StaticClass()
 				&& !bUsedAuthored, TEXT("F_FallbackNativePod"));
 		}
@@ -651,28 +662,40 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			return;
 		}
 
-		// C: incompatible soft Worker class rejected → native fallback
-		Settings->WorkerPayloadClass = TSoftClassPtr<AGP_Worker>(
-			FSoftObjectPath(AGP_SalvageWalker::StaticClass()->GetPathName()));
-		Expect(Settings->IsWorkerPayloadClassConfigInvalid(), TEXT("C_IncompatibleWorkerSoftInvalid"));
-		bool bUsedAuthored = true;
-		Expect(Settings->ResolveWorkerPayloadClass(&bUsedAuthored) == AGP_Worker::StaticClass()
-			&& !bUsedAuthored, TEXT("C_IncompatibleWorkerFallsBackNative"));
-
 		// D: manifest is counts-only (no class field for client to choose)
 		FGP_UnitDropManifest CountsOnly;
 		CountsOnly.WorkerCount = 1;
 		CountsOnly.SalvageWalkerCount = 0;
 		Expect(CountsOnly.GetTotalUnitCount() == 1, TEXT("D_ManifestCountsOnly"));
 
-		// Configure approved stubs (A/B/E)
-		Settings->WorkerPayloadClass = AGP_OrbitalDropContractWorkerStub::StaticClass();
-		Settings->SalvageWalkerPayloadClass = AGP_OrbitalDropContractWalkerStub::StaticClass();
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UGP_UnitDefinitionCatalog& Units = UGP_UnitDefinitionCatalog::Get();
+		UGP_OrbitalUnitDropDefinition* StubWorkerDrop = NewObject<UGP_OrbitalUnitDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalUnitDrop_Worker_StubPayload")), RF_Transient);
+		StubWorkerDrop->Cost = 25.0f;
+		StubWorkerDrop->TransportSlotCost = 1;
+		StubWorkerDrop->DeliveryDescentSeconds = 0.25f;
+		StubWorkerDrop->PayloadDeployDelaySeconds = 0.0f;
+		StubWorkerDrop->UnitDefinition = Units.GetWorkerDefinition();
+		StubWorkerDrop->PayloadClass = AGP_OrbitalDropContractWorkerStub::StaticClass();
+		UnitDrops.DebugAssignLoadedAuthoredWorker(StubWorkerDrop);
+
+		UGP_OrbitalUnitDropDefinition* StubWalkerDrop = NewObject<UGP_OrbitalUnitDropDefinition>(
+			this, FName(TEXT("DA_GP_OrbitalUnitDrop_Walker_StubPayload")), RF_Transient);
+		StubWalkerDrop->Cost = 50.0f;
+		StubWalkerDrop->TransportSlotCost = 2;
+		StubWalkerDrop->DeliveryDescentSeconds = 0.25f;
+		StubWalkerDrop->PayloadDeployDelaySeconds = 0.0f;
+		StubWalkerDrop->UnitDefinition = Units.GetSalvageWalkerDefinition();
+		StubWalkerDrop->PayloadClass = AGP_OrbitalDropContractWalkerStub::StaticClass();
+		UnitDrops.DebugAssignLoadedAuthoredSalvageWalker(StubWalkerDrop);
+
 		Settings->UnitDropPodClass = AGP_OrbitalDropContractPodStub::StaticClass();
-		Expect(Settings->ResolveWorkerPayloadClass(&bUsedAuthored) == AGP_OrbitalDropContractWorkerStub::StaticClass()
-			&& bUsedAuthored, TEXT("A_ResolveWorkerStub"));
-		Expect(Settings->ResolveSalvageWalkerPayloadClass(&bUsedAuthored) == AGP_OrbitalDropContractWalkerStub::StaticClass()
-			&& bUsedAuthored, TEXT("B_ResolveWalkerStub"));
+		bool bUsedAuthored = true;
+		Expect(UnitDrops.ResolveWorkerPayloadClass() == AGP_OrbitalDropContractWorkerStub::StaticClass(),
+			TEXT("A_AuthoredReadyWorkerStubWins"));
+		Expect(UnitDrops.ResolveSalvageWalkerPayloadClass() == AGP_OrbitalDropContractWalkerStub::StaticClass(),
+			TEXT("B_AuthoredReadyWalkerStubWins"));
 		Expect(Settings->ResolveUnitDropPodClass(&bUsedAuthored) == AGP_OrbitalDropContractPodStub::StaticClass()
 			&& bUsedAuthored, TEXT("E_ResolvePodStub"));
 
@@ -786,15 +809,16 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		}
 		Expect(StubWalkers == 1, TEXT("B_StubWalkerSpawned"));
 
+		UGP_OrbitalUnitDropCatalog& UnitDrops = UGP_OrbitalUnitDropCatalog::Get();
+		UnitDrops.DebugClearAuthoredUnitDropOverrides();
+		UnitDrops.DebugBeginContractIsolation();
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
-			Settings->WorkerPayloadClass.Reset();
-			Settings->SalvageWalkerPayloadClass.Reset();
 			Settings->UnitDropPodClass.Reset();
-			bool bUsedAuthored = true;
-			Expect(Settings->ResolveWorkerPayloadClass(&bUsedAuthored) == AGP_Worker::StaticClass()
-				&& !bUsedAuthored, TEXT("F_FallbackNativeAfterClear"));
 		}
+		Expect(UnitDrops.ResolveWorkerPayloadClass() == AGP_Worker::StaticClass()
+			&& UnitDrops.ResolveSalvageWalkerPayloadClass() == AGP_SalvageWalker::StaticClass(),
+			TEXT("F_FallbackNativeAfterClear"));
 
 		++StageIndex;
 		ScheduleNext(0.05f);
@@ -837,7 +861,6 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 				Settings->UnitDropDescentDurationSeconds,
 				Settings->UnitDropPayloadDeployDelaySeconds);
 			Settings->UnitDropCleanupDelaySeconds = 0.10f;
-			Settings->WorkerPayloadClass.Reset();
 			Settings->UnitDropPodClass.Reset();
 		}
 
@@ -1000,7 +1023,6 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 
 		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
 		{
-			Settings->WorkerPayloadClass = AGP_Worker::StaticClass();
 			Settings->UnitDropDescentDurationSeconds = 0.20f;
 			Settings->UnitDropPayloadDeployDelaySeconds = 0.0f;
 			UnitDrops.OverrideDeliveryTiming(0.20f, 0.0f);
@@ -1077,7 +1099,8 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		Expect(UnitDrops.DebugDidRequestAsyncNestedPayloadClassLoad()
 			&& UnitDrops.IsWorkerDropDefinitionPending()
 			&& UnitDrops.GetWorkerDrop() != AuthoredWorkerDropDef
-			&& AuthoredWorkerDropDef->ResolveLoadedUnitDefinition() == AuthoredWorkerUnitDef,
+			&& AuthoredWorkerDropDef->ResolveLoadedUnitDefinition() == AuthoredWorkerUnitDef
+			&& UnitDrops.ResolveWorkerPayloadClass() == nullptr,
 			TEXT("Nested_PayloadClassPending"));
 
 		if (Expect(IsValid(OwnerPS), TEXT("Nested_PayloadOwnerAlive")))
@@ -1111,13 +1134,11 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 			&& UnitDrops.GetWorkerTransportSlotCost() == 3,
 			TEXT("Nested_AuthoredReadyUsesPayloadClass"));
 
-		if (UGP_OrbitalDeliverySettings* Settings = GetMutableDefault<UGP_OrbitalDeliverySettings>())
-		{
-			Expect(Settings->ResolveWorkerPayloadClass() == AGP_Worker::StaticClass(),
-				TEXT("Nested_DeprecatedSettingsRemainNativeWorker"));
-		}
-		Expect(UnitDrops.ResolveWorkerPayloadClass() == AGP_OrbitalDropContractWorkerStub::StaticClass(),
-			TEXT("Nested_AuthoredPayloadOutranksSettings"));
+		const UClass* SettingsClass = UGP_OrbitalDeliverySettings::StaticClass();
+		Expect(SettingsClass->FindPropertyByName(TEXT("WorkerPayloadClass")) == nullptr
+			&& SettingsClass->FindPropertyByName(TEXT("SalvageWalkerPayloadClass")) == nullptr
+			&& UnitDrops.ResolveWorkerPayloadClass() == AGP_OrbitalDropContractWorkerStub::StaticClass(),
+			TEXT("Nested_RemovedSettingsCannotInfluenceCatalog"));
 
 		for (TActorIterator<AGP_Worker> It(World); It; ++It)
 		{
@@ -1229,8 +1250,18 @@ void UGP_OrbitalUnitDropContractTestRunner::AdvanceStage()
 		UnitDrops.DebugAssignLoadedAuthoredWorker(AuthoredWorkerDropDef);
 		Expect(UnitDrops.DebugConsumeNestedPayloadClassLoadFailedLog()
 			&& !UnitDrops.IsWorkerDropDefinitionPending()
-			&& UnitDrops.GetWorkerDrop() == NativeWorker,
+			&& UnitDrops.GetWorkerDrop() == NativeWorker
+			&& UnitDrops.ResolveWorkerPayloadClass() == AGP_Worker::StaticClass(),
 			TEXT("Nested_InvalidPayloadSubclassNativeFallback"));
+
+		AuthoredWorkerDropDef->UnitDefinition = AuthoredWorkerUnitDef;
+		AuthoredWorkerDropDef->PayloadClass.Reset();
+		UnitDrops.DebugAssignLoadedAuthoredWorker(AuthoredWorkerDropDef);
+		Expect(UnitDrops.DebugConsumeNullPayloadClassLog()
+			&& !UnitDrops.IsWorkerDropDefinitionPending()
+			&& UnitDrops.GetWorkerDrop() == NativeWorker
+			&& UnitDrops.ResolveWorkerPayloadClass() == AGP_Worker::StaticClass(),
+			TEXT("Nested_NullPayloadClassNativeFallback"));
 
 		++StageIndex;
 		ScheduleNext(0.05f);

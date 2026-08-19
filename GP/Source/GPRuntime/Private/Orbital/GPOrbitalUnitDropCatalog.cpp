@@ -153,6 +153,7 @@ void UGP_OrbitalUnitDropCatalog::EnsureNativeCatalog()
 	NativeWorkerDrop->TransportSlotCost = NativeWorkerTransportSlotCost;
 	NativeWorkerDrop->DeliveryDescentSeconds = 2.5f;
 	NativeWorkerDrop->PayloadDeployDelaySeconds = 1.25f;
+	NativeWorkerDrop->PayloadClass = AGP_Worker::StaticClass();
 
 	NativeSalvageWalkerDrop = CreateNativeDrop(
 		FName(TEXT("DA_GP_OrbitalUnitDrop_SalvageWalker")),
@@ -162,6 +163,7 @@ void UGP_OrbitalUnitDropCatalog::EnsureNativeCatalog()
 	NativeSalvageWalkerDrop->TransportSlotCost = NativeSalvageWalkerTransportSlotCost;
 	NativeSalvageWalkerDrop->DeliveryDescentSeconds = 2.5f;
 	NativeSalvageWalkerDrop->PayloadDeployDelaySeconds = 1.25f;
+	NativeSalvageWalkerDrop->PayloadClass = AGP_SalvageWalker::StaticClass();
 
 	const int32 SlotCount = static_cast<int32>(EUnitAuthoredSlot::COUNT);
 	NativeSlotDrops.SetNum(SlotCount);
@@ -1033,18 +1035,6 @@ float UGP_OrbitalUnitDropCatalog::GetSalvageWalkerOrbitalDropCost() const
 
 TSubclassOf<AGP_UnitBase> UGP_OrbitalUnitDropCatalog::ResolveFallbackPayloadClass(EUnitAuthoredSlot Slot) const
 {
-	if (const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get())
-	{
-		if (Slot == EUnitAuthoredSlot::Worker)
-		{
-			return TSubclassOf<AGP_UnitBase>(Settings->ResolveWorkerPayloadClass().Get());
-		}
-		if (Slot == EUnitAuthoredSlot::SalvageWalker)
-		{
-			return TSubclassOf<AGP_UnitBase>(Settings->ResolveSalvageWalkerPayloadClass().Get());
-		}
-	}
-
 	if (Slot == EUnitAuthoredSlot::SalvageWalker)
 	{
 		return TSubclassOf<AGP_UnitBase>(AGP_SalvageWalker::StaticClass());
@@ -1054,6 +1044,10 @@ TSubclassOf<AGP_UnitBase> UGP_OrbitalUnitDropCatalog::ResolveFallbackPayloadClas
 
 TSubclassOf<AGP_Worker> UGP_OrbitalUnitDropCatalog::ResolveWorkerPayloadClass() const
 {
+	if (IsWorkerDropDefinitionPending())
+	{
+		return TSubclassOf<AGP_Worker>();
+	}
 	if (const UGP_OrbitalUnitDropDefinition* Drop = GetWorkerDrop())
 	{
 		if (TSubclassOf<AGP_UnitBase> Loaded = Drop->ResolveLoadedPayloadClass())
@@ -1070,6 +1064,10 @@ TSubclassOf<AGP_Worker> UGP_OrbitalUnitDropCatalog::ResolveWorkerPayloadClass() 
 
 TSubclassOf<AGP_SalvageWalker> UGP_OrbitalUnitDropCatalog::ResolveSalvageWalkerPayloadClass() const
 {
+	if (IsSalvageWalkerDropDefinitionPending())
+	{
+		return TSubclassOf<AGP_SalvageWalker>();
+	}
 	if (const UGP_OrbitalUnitDropDefinition* Drop = GetSalvageWalkerDrop())
 	{
 		if (TSubclassOf<AGP_UnitBase> Loaded = Drop->ResolveLoadedPayloadClass())

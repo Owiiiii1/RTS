@@ -5,8 +5,6 @@
 #include "Buildings/GPDefensiveTurret.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Orbital/GPDropPod.h"
-#include "Units/GPSalvageWalker.h"
-#include "Units/GPWorker.h"
 
 UGP_OrbitalDeliverySettings::UGP_OrbitalDeliverySettings()
 {
@@ -50,30 +48,6 @@ namespace GPOrbitalDeliverySettingsPrivate
 	}
 }
 
-TSubclassOf<AGP_Worker> UGP_OrbitalDeliverySettings::ResolveWorkerPayloadClass(bool* bOutUsedAuthored) const
-{
-	bool bHadSoft = false;
-	bool bInvalid = false;
-	UClass* Loaded = GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(WorkerPayloadClass, bHadSoft, bInvalid);
-	if (bOutUsedAuthored != nullptr)
-	{
-		*bOutUsedAuthored = Loaded != nullptr;
-	}
-	return Loaded != nullptr ? Loaded : AGP_Worker::StaticClass();
-}
-
-TSubclassOf<AGP_SalvageWalker> UGP_OrbitalDeliverySettings::ResolveSalvageWalkerPayloadClass(bool* bOutUsedAuthored) const
-{
-	bool bHadSoft = false;
-	bool bInvalid = false;
-	UClass* Loaded = GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(SalvageWalkerPayloadClass, bHadSoft, bInvalid);
-	if (bOutUsedAuthored != nullptr)
-	{
-		*bOutUsedAuthored = Loaded != nullptr;
-	}
-	return Loaded != nullptr ? Loaded : AGP_SalvageWalker::StaticClass();
-}
-
 TSubclassOf<AGP_DropPod> UGP_OrbitalDeliverySettings::ResolveUnitDropPodClass(bool* bOutUsedAuthored) const
 {
 	bool bHadSoft = false;
@@ -84,22 +58,6 @@ TSubclassOf<AGP_DropPod> UGP_OrbitalDeliverySettings::ResolveUnitDropPodClass(bo
 		*bOutUsedAuthored = Loaded != nullptr;
 	}
 	return Loaded != nullptr ? Loaded : AGP_DropPod::StaticClass();
-}
-
-bool UGP_OrbitalDeliverySettings::IsWorkerPayloadClassConfigInvalid() const
-{
-	bool bHadSoft = false;
-	bool bInvalid = false;
-	GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(WorkerPayloadClass, bHadSoft, bInvalid);
-	return bHadSoft && bInvalid;
-}
-
-bool UGP_OrbitalDeliverySettings::IsSalvageWalkerPayloadClassConfigInvalid() const
-{
-	bool bHadSoft = false;
-	bool bInvalid = false;
-	GPOrbitalDeliverySettingsPrivate::TryLoadSoftSubclass(SalvageWalkerPayloadClass, bHadSoft, bInvalid);
-	return bHadSoft && bInvalid;
 }
 
 bool UGP_OrbitalDeliverySettings::IsUnitDropPodClassConfigInvalid() const

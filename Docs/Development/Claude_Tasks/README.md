@@ -8,7 +8,7 @@
 
 > Стан станом на 2026-08-19. Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Configuration data ownership cleanup. **Current: UNIT_NUMERIC_COMPAT_CLEANUP_FINALIZED_READY_FOR_MERGE**.
+**Поточна фаза:** Configuration data ownership cleanup. **Current: UNIT_PAYLOAD_COMPAT_CLEANUP_READY_FOR_OPERATOR_VALIDATION**.
 
 **Status snapshot:**
 
@@ -18,9 +18,10 @@
 | **Unit Drop Nested Readiness** | **DONE / on `main`** @ `283297012c1cefe162028a7ba4166c02a81230cc` |
 | **Cleanup Slice A** Settings visibility truth | **DONE / on `main`** @ `f38e803771261c60d865949c693a52a73fbcedb2` |
 | **Cleanup Slice B** Dead overlap setting removal | **DONE / on `main`** @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507` |
-| **Cleanup Slice C** Unit numeric compatibility | **FINALIZED READY FOR MERGE** — [`GP-Unit-Numeric-Compat-Cleanup.md`](GP-Unit-Numeric-Compat-Cleanup.md) — **NOT MERGED** |
+| **Cleanup Slice C** Unit numeric compatibility | **DONE / on `main`** @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53` |
+| **Cleanup Slice D** Unit payload compatibility | **READY FOR OPERATOR VALIDATION** — [`GP-Unit-Payload-Compat-Cleanup.md`](GP-Unit-Payload-Compat-Cleanup.md) — **NOT MERGED** |
 
-**NEXT action для агента:** wait for merge authorization. Do **not** start payload / building / timing cleanup. Do **not** migrate authored assets. Do **not** start GP-S42B / GP-S42C / FoW.
+**NEXT action для агента:** wait for operator validation. Do **not** start building payload / timing cleanup. Do **not** migrate authored assets. Do **not** start GP-S42B / GP-S42C / FoW.
 
 ### Drift Warning
 

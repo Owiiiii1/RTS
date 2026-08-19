@@ -266,16 +266,15 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 			TEXT("Absent_WorkerOrbitalDropCost"));
 		Expect(FindProp(TEXT("SalvageWalkerOrbitalDropCost")) == nullptr,
 			TEXT("Absent_SalvageWalkerOrbitalDropCost"));
-		ExpectHiddenBridge(TEXT("WorkerPayloadClass"), TEXT("Hidden_WorkerPayloadClass"));
-		ExpectHiddenBridge(TEXT("SalvageWalkerPayloadClass"), TEXT("Hidden_SalvageWalkerPayloadClass"));
+		Expect(FindProp(TEXT("WorkerPayloadClass")) == nullptr,
+			TEXT("Absent_WorkerPayloadClass"));
+		Expect(FindProp(TEXT("SalvageWalkerPayloadClass")) == nullptr,
+			TEXT("Absent_SalvageWalkerPayloadClass"));
 		ExpectHiddenBridge(TEXT("BuildingOrbitalPurchaseCost"), TEXT("Hidden_BuildingOrbitalPurchaseCost"));
 		ExpectHiddenBridge(TEXT("BuildingPayloadClass"), TEXT("Hidden_BuildingPayloadClass"));
 		Expect(FindProp(TEXT("BuildingPlacementOverlapMarginCm")) == nullptr,
 			TEXT("Absent_BuildingPlacementOverlapMarginCm"));
 
-		Expect(FindProp(TEXT("WorkerPayloadClass")) != nullptr
-			&& FindProp(TEXT("WorkerPayloadClass"))->IsA<FSoftClassProperty>(),
-			TEXT("Type_WorkerPayloadClass"));
 		Expect(FindProp(TEXT("BuildingPayloadClass")) != nullptr
 			&& FindProp(TEXT("BuildingPayloadClass"))->IsA<FSoftClassProperty>(),
 			TEXT("Type_BuildingPayloadClass"));
@@ -320,16 +319,10 @@ void UGP_OrbitalDeliveryVisibilityContractTestRunner::AdvanceStage()
 		Expect(Settings != nullptr, TEXT("SettingsGet"));
 		if (Settings != nullptr)
 		{
-			bool bUsedWorker = false;
-			bool bUsedWalker = false;
 			bool bUsedBuilding = false;
 			bool bUsedTurret = false;
-			Settings->ResolveWorkerPayloadClass(&bUsedWorker);
-			Settings->ResolveSalvageWalkerPayloadClass(&bUsedWalker);
 			Settings->ResolveBuildingPayloadClass(&bUsedBuilding);
 			Settings->ResolveDefensiveTurretPayloadClass(&bUsedTurret);
-			(void)bUsedWorker;
-			(void)bUsedWalker;
 			(void)bUsedBuilding;
 			(void)bUsedTurret;
 			Expect(true, TEXT("ReadersUnchangedSmoke"));

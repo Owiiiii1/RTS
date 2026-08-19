@@ -405,8 +405,6 @@ void UGP_UnitCapLogisticsHubContractTestRunner::AdvanceStage()
 			UGP_BuildingDropCatalog::Get().OverrideDeliveryTiming(
 				Settings->BuildingDropDescentDurationSeconds,
 				Settings->BuildingDropPayloadDeployDelaySeconds);
-			Settings->WorkerPayloadClass.Reset();
-			Settings->SalvageWalkerPayloadClass.Reset();
 			Settings->UnitDropPodClass.Reset();
 			Settings->BuildingPayloadClass.Reset();
 			bSettingsMutated = true;

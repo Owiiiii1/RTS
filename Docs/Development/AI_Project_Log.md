@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — GP-S42A finalization
+
+Status: **GP-S42A_FINALIZED_READY_FOR_MERGE**
+
+- Same branch `feature/gp-s42a-wall-package-inventory` (base `origin/main` @ `c00e95ed46fb4aa738a1747576ee2d6b84ffe593`)
+- Operator PASS: Wall Package purchase/UnitDropZone/editor close; cold-start Logistics Hub READY + deploy
+- UnitCap mismatch attributed to operator-authored BuildingDefinition, not runtime
+- Final contracts Failures=0; GPEditor+UHT / GP Development / GP Shipping **PASS**
+- Shipping-only stub fix for Wall Package contract runner; no new features
+- **NOT MERGED.** Do not start GP-S42B/C or configuration/data ownership cleanup
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-18 — GP-S42A operator-feedback + shutdown-crash correction
 
 Status: **GP-S42A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**

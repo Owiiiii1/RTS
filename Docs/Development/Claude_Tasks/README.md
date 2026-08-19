@@ -6,9 +6,9 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-18 (GP-S42A). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
+> Стан станом на 2026-08-19 (GP-S42A). Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Wall Package implementation. **Current: GP-S42A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**.
+**Поточна фаза:** Wall Package implementation. **Current: GP-S42A_FINALIZED_READY_FOR_MERGE**.
 
 **Status snapshot:**
 
@@ -16,9 +16,9 @@
 |---|---|
 | GP-S01 … GP-S41M | **DONE / on `main`** |
 | **GP-0305R** Wall Package Delivery | **on `main`** @ `c00e95ed46fb4aa738a1747576ee2d6b84ffe593` — canon |
-| **GP-S42A** Wall Package Inventory | **READY FOR OPERATOR VALIDATION** — [`GP-S42A_Wall_Package_Inventory.md`](GP-S42A_Wall_Package_Inventory.md) — **NOT MERGED / NOT FINALIZED** |
+| **GP-S42A** Wall Package Inventory | **FINALIZED READY FOR MERGE** — [`GP-S42A_Wall_Package_Inventory.md`](GP-S42A_Wall_Package_Inventory.md) — **NOT MERGED** |
 
-**NEXT action для агента:** operator PIE validation of Buy Wall Package. Do **not** start GP-S42B / GP-S42C. Do **not** implement old pod-per-segment Wall. Do **not** start FoW.
+**NEXT action для агента:** wait for merge authorization. Do **not** start GP-S42B / GP-S42C. Do **not** start configuration/data ownership cleanup. Do **not** implement old pod-per-segment Wall. Do **not** start FoW.
 
 ### Drift Warning
 

@@ -883,4 +883,45 @@ void UGP_WallPackageInventoryContractTestRunner::AdvanceStage()
 	}
 }
 
+#else // UE_BUILD_SHIPPING
+
+void UGP_WallPackageInventoryContractTestRunner::BeginDestroy()
+{
+	Super::BeginDestroy();
+}
+void UGP_WallPackageInventoryContractTestRunner::Start(UWorld* InWorld) { (void)InWorld; }
+void UGP_WallPackageInventoryContractTestRunner::HandleStockChanged(int32 NewCount) { (void)NewCount; }
+void UGP_WallPackageInventoryContractTestRunner::HandlePendingChanged(bool bPending) { (void)bPending; }
+void UGP_WallPackageInventoryContractTestRunner::ScheduleNext(float DelaySeconds) { (void)DelaySeconds; }
+void UGP_WallPackageInventoryContractTestRunner::AdvanceStage() {}
+bool UGP_WallPackageInventoryContractTestRunner::Expect(bool bOk, const TCHAR* Label)
+{
+	(void)bOk;
+	(void)Label;
+	return true;
+}
+void UGP_WallPackageInventoryContractTestRunner::Abort(const TCHAR* Reason) { (void)Reason; }
+void UGP_WallPackageInventoryContractTestRunner::Finish() { bFinished = true; }
+void UGP_WallPackageInventoryContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	(void)World;
+	(void)bSessionEnded;
+	(void)bCleanupResources;
+}
+void UGP_WallPackageInventoryContractTestRunner::UnbindWorldCleanup() {}
+void UGP_WallPackageInventoryContractTestRunner::CleanupActors() {}
+void UGP_WallPackageInventoryContractTestRunner::BindInventoryDelegates() {}
+void UGP_WallPackageInventoryContractTestRunner::UnbindInventoryDelegates() {}
+void UGP_WallPackageInventoryContractTestRunner::CleanupCatalogIfExists() {}
+bool UGP_WallPackageInventoryContractTestRunner::WaitForStock(
+	class UGP_WallSegmentInventoryComponent* Inventory,
+	int32 ExpectedStock,
+	int32 RetryStage)
+{
+	(void)Inventory;
+	(void)ExpectedStock;
+	(void)RetryStage;
+	return false;
+}
+
 #endif

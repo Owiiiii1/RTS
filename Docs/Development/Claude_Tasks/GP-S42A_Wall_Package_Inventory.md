@@ -1,11 +1,11 @@
 # GP-S42A — Wall Package Data + MainBase Wall Inventory
 
 ## Status
-**GP-S42A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**
+**GP-S42A_FINALIZED_READY_FOR_MERGE**
 
 **NOT MERGED.**
 
-**NOT FINALIZED.**
+Operator **PASS**. Finalization candidate.
 
 **Code Allowed: YES**
 
@@ -27,15 +27,17 @@ Buy Wall Package (stock 0..4, full price) → one DropPod to MainBase **UnitDrop
 ## Deferred
 `AGP_Wall`, WallConnection, drag placement, WallTurret.
 
-## Validation (candidate)
+## Validation (finalization)
 
 | Check | Result |
 | --- | --- |
 | `GPEditor Win64 Development` + UHT | **PASS** |
+| `GP Win64 Development` | **PASS** |
+| `GP Win64 Shipping` | **PASS** |
 | `gp.Orbital.RunWallPackageInventoryContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Economy.RunEconomyLogisticsDataContractTest` | `Complete Failures=0 Cancelled=false` |
 | `gp.Building.RunOrbitalBuildingDropContractTest` | `Complete Failures=0 Cancelled=false` |
-| GUI editor close smoke | **NOT AUTOMATED** |
+| `gp.Building.RunMultiBuildingDataContractTest` | `Complete Failures=0 Cancelled=false` |
 
 ## Operator test
 1. PIE with MainBase and enough OrbitalFerronite.

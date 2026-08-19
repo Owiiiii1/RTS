@@ -39,7 +39,7 @@
 | Last closed / merged stage | **GP-S41M** on `main`; **GP-0305R** canon on `main` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | **GP-S42A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s42a-wall-package-inventory` (**NOT MERGED / NOT FINALIZED**) |
+| Current stage | **GP-S42A_FINALIZED_READY_FOR_MERGE** on `feature/gp-s42a-wall-package-inventory` (**NOT MERGED**) |
 
 ---
 
@@ -51,9 +51,9 @@
 
 **Closed on `main`:** GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon @ `c00e95ed46fb4aa738a1747576ee2d6b84ffe593`.
 
-**Current:** [`Claude_Tasks/GP-S42A_Wall_Package_Inventory.md`](Claude_Tasks/GP-S42A_Wall_Package_Inventory.md) — **GP-S42A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION**. **NOT MERGED. NOT FINALIZED.**
+**Current:** [`Claude_Tasks/GP-S42A_Wall_Package_Inventory.md`](Claude_Tasks/GP-S42A_Wall_Package_Inventory.md) — **GP-S42A_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
 
-**Do not** start GP-S42B / GP-S42C / FoW / Order Menu / Spectating. Do **not** implement old pod-per-segment Wall.
+**Do not** start GP-S42B / GP-S42C / FoW / Order Menu / Spectating / configuration-data ownership cleanup. Do **not** implement old pod-per-segment Wall.
 
 **Prior audits:** [`Roadmap_Reconciliation_Post_GP-S32R.md`](Roadmap_Reconciliation_Post_GP-S32R.md), [`Next_Slice_Audit_Post_GP-S30.md`](Next_Slice_Audit_Post_GP-S30.md).
 
@@ -79,7 +79,7 @@
 18. **GP-S40R** — Timed Retaliation Pursuit — **DONE / MERGED**
 19. **GP-S41M** — Movement Shortest Yaw — **DONE / MERGED** @ `5dd56cac…`
 20. **GP-0305R** — Wall Package Delivery Reconciliation — **on `main`** @ `c00e95ed…`
-21. **GP-S42A** — Wall Package Data + MainBase Wall Inventory — **READY FOR OPERATOR VALIDATION** (**NOT MERGED**)
+21. **GP-S42A** — Wall Package Data + MainBase Wall Inventory — **FINALIZED READY FOR MERGE** (**NOT MERGED**)
 
 ---
 
@@ -164,4 +164,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-SETUP-001, DOCS-001, GP-S01…GP-S41M and GP-0305R are on `main` @ `c00e95ed46fb4aa738a1747576ee2d6b84ffe593`. Current stage: **GP-S42A_IMPLEMENTATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-s42a-wall-package-inventory`. **NOT MERGED. NOT FINALIZED.** Do not start GP-S42B/C.
+SETUP-001, DOCS-001, GP-S01…GP-S41M and GP-0305R are on `main` @ `c00e95ed46fb4aa738a1747576ee2d6b84ffe593`. Current stage: **GP-S42A_FINALIZED_READY_FOR_MERGE** on `feature/gp-s42a-wall-package-inventory`. **NOT MERGED.** Do not start GP-S42B/C.

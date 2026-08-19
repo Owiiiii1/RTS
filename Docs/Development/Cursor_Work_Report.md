@@ -1,133 +1,87 @@
-# Cursor Work Report — Delivery Timing Ownership Cleanup
+# Cursor Work Report — Building Procurement + Payload Ownership
 
 ## Status
 
-**DELIVERY_TIMING_OWNERSHIP_CLEANUP_FINALIZED_READY_FOR_MERGE**
+**BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_BLOCKED_BY_AUTHORED_ASSET_MIGRATION**
 
 **NOT MERGED.**
 
 ## Branch / base / head
 
-- Branch: `feature/gp-delivery-timing-ownership-cleanup`
-- Base: `origin/main` @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`
+- Branch: `feature/gp-building-procurement-payload-ownership`
+- Base: `origin/main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`
 - Head: (this commit)
 
-## Operator PASS summary
+## Pre-change reference classification
 
-- Worker descent/deploy timing looks unchanged
-- Salvage Walker descent/deploy timing looks unchanged
-- Logistics Hub pod descent and payload deploy timing look unchanged
-- Defensive Turret timing looks unchanged
-- prices/currency deduction unchanged
-- payload class unchanged
-- placement unchanged
-- READY/inventory flow unchanged
+- Settings UPROPERTYs: `BuildingOrbitalPurchaseCost`, `BuildingPayloadClass`, `DefensiveTurretPayloadClass`
+- Settings helpers: `ResolveBuildingPayloadClass`, `ResolveDefensiveTurretPayloadClass`, `IsBuildingPayloadClassConfigInvalid`, `IsDefensiveTurretPayloadClassConfigInvalid`
+- Native catalog construction: Hub cost 100; Turret cost 150; native Turret `SpawnedClass` is set; native Hub `SpawnedClass` is currently empty
+- Legacy cost mutation: `SyncLegacyLogisticsHubCompatibility` copies `BuildingOrbitalPurchaseCost` onto the native Hub drop and is called during catalog creation/access and native Hub cost reads
+- Payload precedence: Turret settings override → `BuildingDefinition.SpawnedClass` → native Turret; Hub `BuildingDefinition.SpawnedClass` → settings fallback → native Hub
+- Building authority: obtains cost and payload only through `UGP_BuildingDropCatalog`
+- DropPod: receives and stores the already-resolved payload class; no settings reader
+- TEMP HUD / player controller: reads catalog `GetPurchaseCost` / `ResolvePayloadClass`
+- Contracts: visibility, building-drop, economy, UnitCap, BuildGrid, MultiBuilding, and Turret contain bridge assertions or isolation
+- Config text: `DefaultGame.ini` contains all three stale keys and configured BP classes
+- Docs: audit and prior task history describe the active compatibility bridges
+- Manual GConfig/string reader: none in `GP/Source`
+- Other production readers: none outside the settings → catalog → authority/HUD chain
 
-## Exact four removed settings fields
+## Authored asset migration safety gate
 
-Completely absent from `UGP_OrbitalDeliverySettings`:
+Inspected the configured assets using Unreal’s Python commandlet without modifying assets.
 
-- `UnitDropDescentDurationSeconds`
-- `UnitDropPayloadDeployDelaySeconds`
-- `BuildingDropDescentDurationSeconds`
-- `BuildingDropPayloadDeployDelaySeconds`
+### Logistics Hub — BLOCKING
 
-No replacement DeveloperSettings timing fields. No GConfig/string compatibility reader was added (`GP/Source` has no `GConfig`).
+- Drop: `/Game/GrimProtocol/DataAssets/Game/DA_GP_OrbitalDrop_LogisticsHUB`
+- Cost: `100`
+- BuildingDefinition: `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_LogisticsHUB`
+- Current `SpawnedClass`: **None**
+- Legacy bridge dependency: `BuildingPayloadClass=/Game/GrimProtocol/Blueprint/Buildings/BP_GP_LogisticsHUB.BP_GP_LogisticsHUB_C`
 
-## Unit timing ownership
+Required operator edit:
 
-- Authored Ready: `UGP_OrbitalUnitDropDefinition::DeliveryDescentSeconds` and `PayloadDeployDelaySeconds` are canonical
-- Native bootstrap owned by `UGP_OrbitalUnitDropCatalog` construction:
-  - Worker: **2.5 / 1.25**
-  - Salvage Walker: **2.5 / 1.25**
-- Mixed manifest still uses max `DeliveryDescentSeconds` and max `PayloadDeployDelaySeconds`
-- Configured authored Pending remains `DefinitionNotReady`
-- Blocked Pending purchase does not use native timing substitution
-- `ResolveManifestDeliveryTiming` and `GPUnitDropAuthority` no longer read Project Settings timing
+1. Open `DA_GP_Buildings_LogisticsHUB`
+2. Set `SpawnedClass` to `BP_GP_LogisticsHUB_C`
+3. Save the asset
+4. Rerun this same cleanup slice
 
-## Building timing ownership
+### Defensive Turret — READY
 
-- Authored Ready: `UGP_OrbitalDropDefinition::DeliveryDescentSeconds` and `PayloadDeployDelaySeconds` are canonical
-- Native building bootstrap: **2.5 / 2.0** on `UGP_BuildingDropCatalog` construction
-- Configured authored Pending remains `DefinitionNotReady`
-- `GPBuildingDropAuthority` no longer seeds timing from Project Settings; it uses `UGP_BuildingDropCatalog::ResolveDeliveryTiming`
+- Drop: `/Game/GrimProtocol/DataAssets/Game/DA_GP_OrbitalDrop_DefensiveTurret`
+- Cost: `150`
+- BuildingDefinition: `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_DefensiveTurret`
+- Current `SpawnedClass`: `/Game/GrimProtocol/Blueprint/Buildings/BP_GP_DefensiveTurret.BP_GP_DefensiveTurret_C`
+- Slot validation: valid `AGP_DefensiveTurret` subclass
 
-## Native unit timing
+## Runtime change result
 
-Worker and Salvage Walker native products: **2.5 / 1.25**
+Implementation stopped at the required safety gate.
 
-## Native building timing
+- No settings fields removed
+- No settings helper APIs removed
+- `SyncLegacyLogisticsHubCompatibility` remains
+- No cost ownership change
+- No payload ownership change
+- No async-readiness change
+- No authority, DropPod, vitals, footprint, grid, Wall Package, config, or content change
 
-Native building products: **2.5 / 2.0**
+## Validation
 
-## Authored precedence
-
-Authored Ready product timing wins for both unit and building catalogs.
-
-## Mixed manifest max semantics
-
-Preserved: max descent and max deploy delay across products in the unit manifest.
-
-## Pending behavior
-
-Configured authored product Pending remains `DefinitionNotReady` (no spend / spawn).
-
-## Wall Package unchanged
-
-Wall Package timing remains independently owned by `UGP_WallPackageDefinition` / `UGP_WallPackageCatalog::ResolveDeliveryTiming`. It does not consume the four removed settings fields.
-
-## Stale DefaultGame.ini keys untouched
-
-Committed `GP/Config/DefaultGame.ini` still contains:
-
-```
-UnitDropDescentDurationSeconds=10.000000
-UnitDropPayloadDeployDelaySeconds=5.000000
-BuildingDropDescentDurationSeconds=10.000000
-BuildingDropPayloadDeployDelaySeconds=5.000000
-```
-
-Intentionally not edited. After C++ removal they cannot populate runtime fields.
-
-## Final tests / results
-
-| Check | Result |
-| --- | --- |
-| `gp.Settings.RunOrbitalDeliveryVisibilityContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Resource.RunOrbitalUnitDropContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Building.RunOrbitalBuildingDropContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Economy.RunEconomyLogisticsDataContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Resource.RunUnitCapLogisticsHubContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Building.RunMultiBuildingDataContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Building.RunDefensiveTurretContractTest` | `Complete Failures=0 Cancelled=false` |
-| `gp.Building.RunBuildGridContractTest` | `Complete Failures=0 Cancelled=false` |
-
-Full suite not run.
-
-## Builds
-
-| Target | Result |
-| --- | --- |
-| `GPEditor Win64 Development` + UHT | **PASS** (up to date) |
-| `GP Win64 Development` | **PASS** |
-| `GP Win64 Shipping` | **PASS** |
+- Authored asset inspection: completed
+- Unreal contracts: not run because implementation was blocked before C++ changes
+- Full suite: not run; no runtime blast radius
+- GPEditor/UHT: not run; docs-only blocked result
 
 ## Protected-files confirmation
 
-Committed diff vs `origin/main` @ `75b13fc…` is delivery-timing C++ ownership, targeted contracts, and docs only:
-
-- no unit numeric ownership changes
-- no unit payload ownership changes
-- no `UnitDropPodClass` / `BuildingPayloadClass` / `DefensiveTurretPayloadClass` / `BuildingOrbitalPurchaseCost` changes
-- no `BuildingMaxDeployRadiusFromMainBaseCm` / altitude / spacing / cleanup delay changes
-- no footprint/grid ownership changes
-- no `UnitDefinitionAsset` semantics changes
-- no Wall Package ownership changes
-- no maps
-- no `DefaultGame.ini`
-- no `DefaultEngine.ini`
-- no Blueprint / DataAsset / material / content changes
-
-No new functionality in this finalization.
+- `GP/Config/DefaultGame.ini` untouched
+- `GP/Config/DefaultEngine.ini` untouched
+- maps untouched
+- Blueprints untouched
+- DataAssets untouched
+- materials/content untouched
+- existing protected local changes remain unstaged
 
 ## NOT MERGED

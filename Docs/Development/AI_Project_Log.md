@@ -1,5 +1,19 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-19 — Building procurement + payload ownership safety gate
+
+Status: **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_BLOCKED_BY_AUTHORED_ASSET_MIGRATION**
+
+- Branch: `feature/gp-building-procurement-payload-ownership` from `origin/main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`
+- Unreal asset probe confirmed authored Logistics Hub drop cost 100 and authored Defensive Turret drop cost 150
+- `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_LogisticsHUB` has empty `SpawnedClass`
+- The configured Hub chain therefore still depends on stale `BuildingPayloadClass=/Game/GrimProtocol/Blueprint/Buildings/BP_GP_LogisticsHUB.BP_GP_LogisticsHUB_C`
+- `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_DefensiveTurret` has valid `BP_GP_DefensiveTurret_C`
+- Required operator edit: set the Hub BuildingDefinition `SpawnedClass` to `BP_GP_LogisticsHUB_C`, save, then rerun this slice
+- No runtime bridge removal, C++ change, Unreal build, or contract run. **NOT MERGED.**
+- Task: `Docs/Development/Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-19 — Delivery timing ownership cleanup finalization
 
 Status: **DELIVERY_TIMING_OWNERSHIP_CLEANUP_FINALIZED_READY_FOR_MERGE**

@@ -499,6 +499,8 @@ Do not combine H, I, J, M, or N into one implementation slice.
 
 **Slice G implementation status (this combined delivery timing package):** `DELIVERY_TIMING_OWNERSHIP_CLEANUP_FINALIZED_READY_FOR_MERGE` on `feature/gp-delivery-timing-ownership-cleanup`. Removed four Project Settings timing fallback fields. Canonical authored unit timing is `UGP_OrbitalUnitDropDefinition`; native Worker/Walker bootstrap is 2.5 / 1.25. Canonical authored building timing is `UGP_OrbitalDropDefinition`; native building bootstrap is 2.5 / 2.0. Mixed unit manifests keep max aggregation. Pending remains `DefinitionNotReady`. Wall Package timing independently owned and unchanged. Stale `DefaultGame.ini` keys intentionally not touched. Payload/numeric/altitude/cleanup/building procurement unchanged. **NOT MERGED.**
 
+**Combined building procurement + payload ownership safety-gate status:** `BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_BLOCKED_BY_AUTHORED_ASSET_MIGRATION` on `feature/gp-building-procurement-payload-ownership`. Unreal inspection found configured Hub drop `/Game/GrimProtocol/DataAssets/Game/DA_GP_OrbitalDrop_LogisticsHUB` points to `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_LogisticsHUB`, whose `SpawnedClass` is empty. It still depends on `BuildingPayloadClass` resolving `BP_GP_LogisticsHUB_C`. Configured Defensive Turret `SpawnedClass` is valid. Required operator migration: assign `BP_GP_LogisticsHUB_C` to the Hub BuildingDefinition `SpawnedClass`, save, then rerun the cleanup. No runtime bridges removed. **NOT MERGED.**
+
 ## 10. Do Not Delete Yet
 
 The following fields look obsolete or duplicated but still have proven readers:

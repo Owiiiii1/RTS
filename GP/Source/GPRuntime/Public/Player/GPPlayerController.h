@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Command/GPCommandRequest.h"
+#include "FogOfWar/GPFoWPresentationTypes.h"
 #include "GameFramework/PlayerController.h"
 #include "Orbital/GPUnitDropManifest.h"
 #include "Orbital/GPOrbitalBuildingType.h"
@@ -13,6 +14,8 @@ class UGP_AbilitySystemComponent;
 class AGP_BuildingPlacementGhost;
 class AGP_CameraPawn;
 class UGP_CommandComponent;
+class UGP_FogOfWarComponent;
+class UGP_LocalFoWComponent;
 class UGP_MarqueeSelectionWidget;
 class UGP_TEMP_S28P_PlanetaryFerroniteHUD;
 class UGP_SelectionComponent;
@@ -24,6 +27,7 @@ class UInputAction;
 class UInputMappingContext;
 class UEnhancedInputComponent;
 struct FInputActionValue;
+enum class EGP_BuildingDropRejectReason : uint8;
 
 /**
  * Network-correct PlayerController.
@@ -43,6 +47,13 @@ public:
 
 	UGP_SelectionComponent* GetSelectionComponent() const;
 	UGP_CommandComponent* GetCommandComponent() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|FogOfWar|Local")
+	UGP_LocalFoWComponent* GetLocalFogOfWarComponent() const { return LocalFogOfWarComponent; }
+
+	/** Server-to-owning-client presentation state only. There is intentionally no client mutation RPC. */
+	UFUNCTION(Client, Reliable)
+	void Client_ReceiveFoWPresentationUpdate(const FGP_FoWPresentationUpdate& Update);
 
 	/** Phase D: submit candidate command for authoritative validate/normalize. No execution. */
 	UFUNCTION(Server, Reliable)
@@ -174,6 +185,7 @@ protected:
 	virtual void AcknowledgePossession(APawn* InPawn) override;
 	virtual void OnRep_PlayerState() override;
 	virtual void BeginPlayingState() override;
+	virtual void PostSeamlessTravel() override;
 	virtual void SetupInputComponent() override;
 
 	virtual void OnLocalPawnReady(APawn* InPawn);
@@ -283,6 +295,17 @@ private:
 	void BindBuildingInventoryEvents();
 	void UnbindBuildingInventoryEvents();
 
+	void BindAuthoritativeFoWUpdates();
+	void UnbindAuthoritativeFoWUpdates();
+	void BindFoWPlayerState(AGP_PlayerState* InPlayerState);
+	void UnbindFoWPlayerState();
+	void TrySendInitialFoWSnapshot();
+	void HandleAuthoritativeFoWTeamStateChanged(int32 TeamId, int64 Revision);
+	void HandleFoWPlayerTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
+	bool ApplyLocalFoWPlacementPreviewGate(
+		const FVector& SnappedGround,
+		EGP_BuildingDropRejectReason& InOutRejectReason) const;
+
 	void CancelAttackMoveModeFromRMB();
 	void UpdateAttackMoveInputOwnership();
 	bool SelectionHasAttackMoveEligibleUnit() const;
@@ -297,6 +320,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Commands", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_CommandComponent> CommandComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|FogOfWar", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UGP_LocalFoWComponent> LocalFogOfWarComponent;
 
 	void OnCameraPan(const FInputActionValue& Value);
 	void OnCameraZoom(const FInputActionValue& Value);
@@ -386,6 +412,13 @@ private:
 	FDelegateHandle MatchStateTagChangedHandle;
 	FDelegateHandle MatchResultChangedHandle;
 	int32 BoundPlanetaryTeamId = -1;
+
+	TWeakObjectPtr<UGP_FogOfWarComponent> BoundAuthoritativeFoW;
+	TWeakObjectPtr<AGP_PlayerState> BoundFoWPlayerState;
+	FDelegateHandle AuthoritativeFoWChangedHandle;
+	FDelegateHandle FoWPlayerTeamIdChangedHandle;
+	int32 LastSentFoWTeamId = -1;
+	int64 LastSentFoWRevision = -1;
 
 	/** Local-only building deploy ghost + mode (GP-S32R). */
 	UPROPERTY(Transient)

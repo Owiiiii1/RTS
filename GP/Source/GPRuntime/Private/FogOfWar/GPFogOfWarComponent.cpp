@@ -258,10 +258,111 @@ void UGP_FogOfWarComponent::MarkVisibleCircle(
 				continue;
 			}
 
+			if (!TeamGrid.Explored[Index])
+			{
+				TeamGrid.NewlyExplored.Add(Index);
+			}
 			TeamGrid.Visible[Index] = true;
 			TeamGrid.Explored[Index] = true;
 		}
 	}
+}
+
+void UGP_FogOfWarComponent::BuildRangesFromBits(
+	const TBitArray<>& Bits,
+	TArray<FGP_FoWCellRange>& OutRanges)
+{
+	OutRanges.Reset();
+	int32 RunStart = INDEX_NONE;
+	for (int32 Index = 0; Index <= Bits.Num(); ++Index)
+	{
+		const bool bSet = Index < Bits.Num() && Bits[Index];
+		if (bSet && RunStart == INDEX_NONE)
+		{
+			RunStart = Index;
+		}
+		else if (!bSet && RunStart != INDEX_NONE)
+		{
+			FGP_FoWCellRange& Range = OutRanges.AddDefaulted_GetRef();
+			Range.StartIndex = RunStart;
+			Range.NumCells = Index - RunStart;
+			RunStart = INDEX_NONE;
+		}
+	}
+}
+
+void UGP_FogOfWarComponent::BuildRangesFromIndices(
+	const TArray<int32>& Indices,
+	TArray<FGP_FoWCellRange>& OutRanges)
+{
+	OutRanges.Reset();
+	if (Indices.IsEmpty())
+	{
+		return;
+	}
+
+	TArray<int32> Sorted = Indices;
+	Sorted.Sort();
+	int32 RunStart = Sorted[0];
+	int32 Previous = Sorted[0];
+	for (int32 ArrayIndex = 1; ArrayIndex < Sorted.Num(); ++ArrayIndex)
+	{
+		const int32 Current = Sorted[ArrayIndex];
+		if (Current <= Previous)
+		{
+			continue;
+		}
+		if (Current != Previous + 1)
+		{
+			FGP_FoWCellRange& Range = OutRanges.AddDefaulted_GetRef();
+			Range.StartIndex = RunStart;
+			Range.NumCells = Previous - RunStart + 1;
+			RunStart = Current;
+		}
+		Previous = Current;
+	}
+
+	FGP_FoWCellRange& FinalRange = OutRanges.AddDefaulted_GetRef();
+	FinalRange.StartIndex = RunStart;
+	FinalRange.NumCells = Previous - RunStart + 1;
+}
+
+bool UGP_FogOfWarComponent::BuildPresentationUpdate(
+	int32 TeamId,
+	bool bInitialSnapshot,
+	FGP_FoWPresentationUpdate& OutUpdate) const
+{
+	OutUpdate = FGP_FoWPresentationUpdate();
+	if (!HasAuthoritativeOwner() || TeamId < 1)
+	{
+		return false;
+	}
+
+	const FTeamGrid* Grid = FindTeamGrid(TeamId);
+	if (Grid == nullptr && !bInitialSnapshot)
+	{
+		return false;
+	}
+
+	OutUpdate.bInitialSnapshot = bInitialSnapshot;
+	OutUpdate.TeamId = TeamId;
+	OutUpdate.Revision = Grid != nullptr ? Grid->Revision : 0;
+	OutUpdate.GridOriginWorldXY = GridOriginWorldXY;
+	OutUpdate.GridDimensions = GridDimensions;
+	OutUpdate.CellSizeCm = CellSizeCm;
+	if (bInitialSnapshot && Grid != nullptr)
+	{
+		BuildRangesFromBits(Grid->Explored, OutUpdate.ExploredRanges);
+	}
+	else if (Grid != nullptr)
+	{
+		BuildRangesFromIndices(Grid->NewlyExplored, OutUpdate.ExploredRanges);
+	}
+	if (Grid != nullptr)
+	{
+		BuildRangesFromBits(Grid->Visible, OutUpdate.VisibleRanges);
+	}
+	return true;
 }
 
 void UGP_FogOfWarComponent::RecomputeVisibilityNow()
@@ -294,8 +395,11 @@ void UGP_FogOfWarComponent::RecomputeVisibilityNow()
 		}
 	}
 
+	TMap<int32, TBitArray<>> PreviousVisibleByTeam;
 	for (TPair<int32, FTeamGrid>& Pair : TeamGrids)
 	{
+		PreviousVisibleByTeam.Add(Pair.Key, Pair.Value.Visible);
+		Pair.Value.NewlyExplored.Reset();
 		Pair.Value.Visible.Init(false, Pair.Value.Visible.Num());
 	}
 
@@ -320,6 +424,30 @@ void UGP_FogOfWarComponent::RecomputeVisibilityNow()
 			FindOrAddTeamGrid(Source->GetTeamId()),
 			Source->GetActorLocation(),
 			RadiusCm);
+	}
+
+	for (TPair<int32, FTeamGrid>& Pair : TeamGrids)
+	{
+		const TBitArray<>* PreviousVisible = PreviousVisibleByTeam.Find(Pair.Key);
+		bool bVisibleChanged = PreviousVisible == nullptr
+			|| PreviousVisible->Num() != Pair.Value.Visible.Num();
+		if (!bVisibleChanged && PreviousVisible != nullptr)
+		{
+			for (int32 Index = 0; Index < Pair.Value.Visible.Num(); ++Index)
+			{
+				if ((*PreviousVisible)[Index] != Pair.Value.Visible[Index])
+				{
+					bVisibleChanged = true;
+					break;
+				}
+			}
+		}
+
+		if (bVisibleChanged || !Pair.Value.NewlyExplored.IsEmpty())
+		{
+			++Pair.Value.Revision;
+			OnTeamStateChanged.Broadcast(Pair.Key, Pair.Value.Revision);
+		}
 	}
 }
 

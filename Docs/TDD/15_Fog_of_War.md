@@ -21,9 +21,15 @@ Current-compatible deviations from the older pseudocode:
 - FoW sight is owned only by `UGP_UnitDefinition` as `FogOfWarSightRadiusCm` and
   `bGrantsFogOfWarVision`; buildings inherit it through `UGP_BuildingDefinition::UnitDefinition`;
 - combat `SightRangeCm` remains a separate auto-acquire tuning field;
-- auto-acquire and server building-placement confirmation consume authority visibility now;
-- local mirror/rendering, selection gating, explicit-Attack last-known behavior, DropPod sight,
-  replication relevance, minimap, and CommonUI/MVVM remain later FoW slices.
+- auto-acquire and server building-placement confirmation consume authority visibility;
+- `UGP_LocalFoWComponent` now mirrors exactly one owning team from server-originated PlayerController
+  RPC updates; it stores metadata, monotonic Explored, replaceable Visible, and a guarded revision;
+- `UGP_FoWViewModel` + `UGP_FoWViewModelAdapter` provide the first push-based GPUIRuntime MVVM
+  projection, with a coarse revision notification for future region-based presentation consumers;
+- local building placement preview now consumes the trusted mirror conservatively while server
+  confirmation remains authoritative;
+- rendering, selection/inspect integration, explicit-Attack last-known behavior, DropPod sight,
+  replication relevance, minimap, and the full production HUD remain later FoW slices.
 
 ## Hard Rules
 
@@ -89,35 +95,40 @@ struct FGP_FoWGrid
 };
 ```
 
-Replication: server does **not** replicate raw `Bits` arrays — natively large + per-team-private. Replicates **only per-client filtered actors** via relevance API. Client's local FoW state — derived from "which actors am I seeing now" + persistent local cache of "where I've been".
+Replication: server does **not** replicate raw `Bits` arrays. The authoritative component exposes a
+read-only one-team extraction API. Each owning PlayerController receives only its TeamId's compressed
+row-major cell ranges. Actor relevance filtering remains a later networking slice.
 
 ### Per-Client State (Local Mirror)
 
 ```cpp
-// UGP_LocalFoWComponent (на AGP_PlayerController, local-only)
+// UGP_LocalFoWComponent (on AGP_PlayerController, presentation-only)
 UCLASS()
 class GPRUNTIME_API UGP_LocalFoWComponent : public UActorComponent
 {
     GENERATED_BODY()
 public:
-    /** Local mirror of server's ExploredByTeam[LocalTeam]. Updated via dedicated low-rate RPC. */
-    UPROPERTY()
-    FGP_FoWGrid LocalExplored;
-
-    /** Live visibility — derived from currently relevant own units / structures positions. */
-    UPROPERTY()
-    FGP_FoWGrid LocalVisible;
-
-    /** Called every render frame або 30 Hz to update VisibleByTeam from current sight sources. */
-    void RecomputeLocalVisibility();
-
-    /** Server pushes Explored grid diffs to client via Client_PushExploredDelta. */
-    UFUNCTION(Client, Reliable)
-    void Client_PushExploredDelta(const TArray<int32>& NewlyExploredCellIndices);
+    EGP_FoWState GetStateAtWorldLocation(FVector WorldLoc) const;
+    bool IsExplored(FVector WorldLoc) const;
+    bool IsVisible(FVector WorldLoc) const;
+    bool IsReady() const;
+    int32 GetLocalTeamId() const;
+    int64 GetRevision() const;
 };
 ```
 
-Client mirrors Explored locally for rendering (last-known state). Updates у `Client_PushExploredDelta` — sent on cell-explore event (rate-limited у server, e.g., bundle 0.5 s of new cells per push).
+Protocol:
+
+- initial reliable owner RPC: metadata + full current Explored/Visible ranges + revision;
+- ongoing reliable owner RPC at changed authoritative recomputes: newly Explored ranges + compact full
+  current Visible ranges + monotonically increasing revision;
+- stale/duplicate revisions and invalid ranges are rejected before mutation;
+- team/PlayerState/travel reset clears the old mirror; reconnect receives a complete initial snapshot;
+- no client-to-server FoW mutation RPC exists, and no mirror API accepts arbitrary TeamId.
+
+The full current Visible set makes removals deterministic without tombstones. Explored transmits only
+additions after initial sync. Contiguous range compression avoids sending a one-million-cell bitmap and
+fits the current circle-source topology; there is no per-frame RPC or widget polling.
 
 ### Sight Source Contract
 

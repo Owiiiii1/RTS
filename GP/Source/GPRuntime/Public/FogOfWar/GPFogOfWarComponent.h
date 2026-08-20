@@ -5,9 +5,15 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Containers/BitArray.h"
+#include "FogOfWar/GPFoWPresentationTypes.h"
 #include "GPFogOfWarComponent.generated.h"
 
 class AGP_UnitBase;
+
+DECLARE_MULTICAST_DELEGATE_TwoParams(
+	FOnGP_FoWTeamStateChanged,
+	int32 /*TeamId*/,
+	int64 /*Revision*/);
 
 /** Authoritative three-state Fog of War state for one team at one world location. */
 UENUM(BlueprintType)
@@ -64,6 +70,17 @@ public:
 	FIntPoint GetGridDimensions() const { return GridDimensions; }
 	float GetUpdateIntervalSeconds() const { return UpdateIntervalSeconds; }
 
+	/**
+	 * Authority-only read-only extraction for one owning-client presentation stream.
+	 * Initial snapshots include all explored cells; deltas include only cells first explored in Revision.
+	 */
+	bool BuildPresentationUpdate(
+		int32 TeamId,
+		bool bInitialSnapshot,
+		FGP_FoWPresentationUpdate& OutUpdate) const;
+
+	FOnGP_FoWTeamStateChanged OnTeamStateChanged;
+
 #if !UE_BUILD_SHIPPING
 	int32 DebugGetRegisteredSightSourceCount() const;
 	int32 DebugGetVisibleCellCountForTeam(int32 TeamId) const;
@@ -77,6 +94,8 @@ private:
 	{
 		TBitArray<> Explored;
 		TBitArray<> Visible;
+		TArray<int32> NewlyExplored;
+		int64 Revision = 0;
 	};
 
 	bool HasAuthoritativeOwner() const;
@@ -86,6 +105,10 @@ private:
 	const FTeamGrid* FindTeamGrid(int32 TeamId) const;
 	void PruneSightSources();
 	void MarkVisibleCircle(FTeamGrid& TeamGrid, const FVector& CenterWorld, float RadiusCm);
+	static void BuildRangesFromBits(const TBitArray<>& Bits, TArray<FGP_FoWCellRange>& OutRanges);
+	static void BuildRangesFromIndices(
+		const TArray<int32>& Indices,
+		TArray<FGP_FoWCellRange>& OutRanges);
 
 	/** Foundation-owned deterministic bounds until a canonical playable-area owner is introduced. */
 	UPROPERTY(EditDefaultsOnly, Category = "GP|FogOfWar|Grid", meta = (ClampMin = "50.0"))

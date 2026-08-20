@@ -1,5 +1,29 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — FoW trusted client mirror + production UI/MVVM foundation
+
+Status: **FOW_CLIENT_PRESENTATION_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch `feature/gp-fow-client-presentation-foundation` from exact `origin/main` baseline
+  `9d9caa5fc7665ad8dc62016aed7b77f5238761dc`
+- Added one-team `UGP_LocalFoWComponent` on PlayerController, populated only by server-originated owner
+  RPC with initial full snapshot and changed-recompute deltas
+- Range-compressed Explored additions + complete current Visible, monotonic revision, atomic validation,
+  stale/duplicate rejection, team/travel/PlayerState reset, and no client FoW mutation RPC
+- Added first production `UGP_FoWViewModel`, push adapter, and project CommonUI activatable base in
+  GPUIRuntime; dependency direction remains GPUIRuntime -> GPRuntime
+- Local building placement preview now conservatively consumes trusted visibility; server remains
+  authoritative
+- TEMP HUD unchanged; visual fog, minimap, full HUD, selection/inspect integration, last-known/relevance,
+  explicit-Attack integration, and DropPod vision remain deferred
+- New presentation contract and authoritative FoW/building-drop/BuildGrid/TEMP HUD regressions pass
+  with `Failures=0`; GPEditor Win64 Development + UHT **PASS**
+- Deterministic two-mirror isolation passed; live listen-server/two-player ownership and reconnect are
+  the operator gate. Protected authored Config/Content/map/Tools, including local LongRange 2000 cm FoW
+  sight, remain untouched. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-Client-Presentation-Foundation.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — Three-state per-team Fog of War runtime foundation finalization
 
 Status: **FOW_RUNTIME_FOUNDATION_FINALIZED_READY_FOR_MERGE**

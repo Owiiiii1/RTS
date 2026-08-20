@@ -17,6 +17,8 @@
 #include "EngineUtils.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
+#include "FogOfWar/GPFogOfWarComponent.h"
+#include "FogOfWar/GPLocalFoWComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "GameplayEffectTypes.h"
@@ -107,6 +109,7 @@ AGP_PlayerController::AGP_PlayerController()
 
 	SelectionComponent = CreateDefaultSubobject<UGP_SelectionComponent>(TEXT("SelectionComponent"));
 	CommandComponent = CreateDefaultSubobject<UGP_CommandComponent>(TEXT("CommandComponent"));
+	LocalFogOfWarComponent = CreateDefaultSubobject<UGP_LocalFoWComponent>(TEXT("LocalFogOfWarComponent"));
 
 	CameraMappingContext = TSoftObjectPtr<UInputMappingContext>(FSoftObjectPath(
 		TEXT("/Game/GrimProtocol/Input/Camera/IMC_GP_Camera.IMC_GP_Camera")));
@@ -159,9 +162,192 @@ UGP_CommandComponent* AGP_PlayerController::GetCommandComponent() const
 	return CommandComponent;
 }
 
+void AGP_PlayerController::Client_ReceiveFoWPresentationUpdate_Implementation(
+	const FGP_FoWPresentationUpdate& Update)
+{
+	if (!IsLocalController() || LocalFogOfWarComponent == nullptr)
+	{
+		return;
+	}
+
+	if (!LocalFogOfWarComponent->ApplyServerUpdate(Update))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("GP LocalFoW rejected server update: PC=%s Team=%d Revision=%lld Initial=%s"),
+			*GetName(),
+			Update.TeamId,
+			Update.Revision,
+			Update.bInitialSnapshot ? TEXT("true") : TEXT("false"));
+	}
+}
+
+void AGP_PlayerController::BindAuthoritativeFoWUpdates()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	AGP_GameState* GS = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	UGP_FogOfWarComponent* FoW = GS != nullptr ? GS->GetFogOfWarComponent() : nullptr;
+	if (BoundAuthoritativeFoW.Get() == FoW)
+	{
+		return;
+	}
+
+	UnbindAuthoritativeFoWUpdates();
+	if (FoW != nullptr)
+	{
+		BoundAuthoritativeFoW = FoW;
+		AuthoritativeFoWChangedHandle = FoW->OnTeamStateChanged.AddUObject(
+			this,
+			&ThisClass::HandleAuthoritativeFoWTeamStateChanged);
+	}
+}
+
+void AGP_PlayerController::UnbindAuthoritativeFoWUpdates()
+{
+	if (UGP_FogOfWarComponent* FoW = BoundAuthoritativeFoW.Get())
+	{
+		if (AuthoritativeFoWChangedHandle.IsValid())
+		{
+			FoW->OnTeamStateChanged.Remove(AuthoritativeFoWChangedHandle);
+		}
+	}
+	AuthoritativeFoWChangedHandle.Reset();
+	BoundAuthoritativeFoW.Reset();
+}
+
+void AGP_PlayerController::BindFoWPlayerState(AGP_PlayerState* InPlayerState)
+{
+	if (BoundFoWPlayerState.Get() == InPlayerState)
+	{
+		return;
+	}
+
+	const bool bReplacingPlayerState =
+		BoundFoWPlayerState.IsValid() && BoundFoWPlayerState.Get() != InPlayerState;
+	UnbindFoWPlayerState();
+	if (bReplacingPlayerState)
+	{
+		LastSentFoWTeamId = -1;
+		LastSentFoWRevision = -1;
+		if (IsLocalController() && LocalFogOfWarComponent != nullptr)
+		{
+			LocalFogOfWarComponent->ResetPresentation();
+		}
+	}
+	if (InPlayerState != nullptr)
+	{
+		BoundFoWPlayerState = InPlayerState;
+		FoWPlayerTeamIdChangedHandle = InPlayerState->OnTeamIdChanged.AddUObject(
+			this,
+			&ThisClass::HandleFoWPlayerTeamIdChanged);
+	}
+}
+
+void AGP_PlayerController::UnbindFoWPlayerState()
+{
+	if (AGP_PlayerState* BoundPlayerState = BoundFoWPlayerState.Get())
+	{
+		if (FoWPlayerTeamIdChangedHandle.IsValid())
+		{
+			BoundPlayerState->OnTeamIdChanged.Remove(FoWPlayerTeamIdChangedHandle);
+		}
+	}
+	FoWPlayerTeamIdChangedHandle.Reset();
+	BoundFoWPlayerState.Reset();
+}
+
+void AGP_PlayerController::TrySendInitialFoWSnapshot()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	const AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	UGP_FogOfWarComponent* FoW = BoundAuthoritativeFoW.Get();
+	const int32 TeamId = PS != nullptr ? PS->GetTeamId() : -1;
+	if (FoW == nullptr || TeamId < 1)
+	{
+		return;
+	}
+	if (LastSentFoWTeamId == TeamId && LastSentFoWRevision >= 0)
+	{
+		return;
+	}
+
+	FGP_FoWPresentationUpdate Update;
+	if (!FoW->BuildPresentationUpdate(TeamId, true, Update))
+	{
+		return;
+	}
+
+	Client_ReceiveFoWPresentationUpdate(Update);
+	LastSentFoWTeamId = TeamId;
+	LastSentFoWRevision = Update.Revision;
+}
+
+void AGP_PlayerController::HandleAuthoritativeFoWTeamStateChanged(int32 TeamId, int64 Revision)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	const AGP_PlayerState* PS = GetPlayerState<AGP_PlayerState>();
+	const int32 OwningTeamId = PS != nullptr ? PS->GetTeamId() : -1;
+	if (OwningTeamId < 1 || TeamId != OwningTeamId)
+	{
+		return;
+	}
+
+	if (LastSentFoWTeamId != OwningTeamId)
+	{
+		TrySendInitialFoWSnapshot();
+		return;
+	}
+	if (Revision <= LastSentFoWRevision)
+	{
+		return;
+	}
+
+	UGP_FogOfWarComponent* FoW = BoundAuthoritativeFoW.Get();
+	FGP_FoWPresentationUpdate Update;
+	if (FoW == nullptr || !FoW->BuildPresentationUpdate(OwningTeamId, false, Update))
+	{
+		return;
+	}
+
+	Client_ReceiveFoWPresentationUpdate(Update);
+	LastSentFoWRevision = Update.Revision;
+}
+
+void AGP_PlayerController::HandleFoWPlayerTeamIdChanged(int32 OldTeamId, int32 NewTeamId)
+{
+	(void)OldTeamId;
+	(void)NewTeamId;
+
+	LastSentFoWTeamId = -1;
+	LastSentFoWRevision = -1;
+	if (IsLocalController()
+		&& LocalFogOfWarComponent != nullptr
+		&& (!LocalFogOfWarComponent->IsReady()
+			|| LocalFogOfWarComponent->GetLocalTeamId() != NewTeamId))
+	{
+		LocalFogOfWarComponent->ResetPresentation();
+	}
+	TrySendInitialFoWSnapshot();
+}
+
 void AGP_PlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+
+	BindAuthoritativeFoWUpdates();
+	TrySendInitialFoWSnapshot();
 
 	if (IsLocalController())
 	{
@@ -175,6 +361,13 @@ void AGP_PlayerController::BeginPlay()
 
 void AGP_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	UnbindAuthoritativeFoWUpdates();
+	UnbindFoWPlayerState();
+	if (LocalFogOfWarComponent != nullptr)
+	{
+		LocalFogOfWarComponent->ResetPresentation();
+	}
+
 	CancelActiveMarquee(/*bLogCanceled=*/false);
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
@@ -303,6 +496,9 @@ void AGP_PlayerController::BeginPlayingState()
 {
 	Super::BeginPlayingState();
 
+	BindAuthoritativeFoWUpdates();
+	TrySendInitialFoWSnapshot();
+
 	if (!IsLocalController())
 	{
 		TryInitializePlayerStateLink();
@@ -325,6 +521,22 @@ void AGP_PlayerController::BeginPlayingState()
 
 	EnsurePlanetaryFerroniteHUD();
 	RefreshPlanetaryFerroniteHUDBinding();
+}
+
+void AGP_PlayerController::PostSeamlessTravel()
+{
+	Super::PostSeamlessTravel();
+
+	UnbindAuthoritativeFoWUpdates();
+	if (LocalFogOfWarComponent != nullptr)
+	{
+		LocalFogOfWarComponent->ResetPresentation();
+	}
+	LastSentFoWTeamId = -1;
+	LastSentFoWRevision = -1;
+	BindAuthoritativeFoWUpdates();
+	TryInitializePlayerStateLink();
+	TrySendInitialFoWSnapshot();
 }
 
 void AGP_PlayerController::SetupInputComponent()
@@ -430,6 +642,10 @@ void AGP_PlayerController::OnPlayerStateReady(APlayerState* InPlayerState)
 	UE_LOG(LogTemp, Log,
 		TEXT("AGP_PlayerController::OnPlayerStateReady: PlayerState ready (%s)."),
 		*GetNameSafe(InPlayerState));
+
+	BindFoWPlayerState(Cast<AGP_PlayerState>(InPlayerState));
+	BindAuthoritativeFoWUpdates();
+	TrySendInitialFoWSnapshot();
 
 	if (IsLocalController())
 	{
@@ -1660,6 +1876,20 @@ void AGP_PlayerController::ConfirmAttackMoveDestination()
 	Server_RequestCommand(Request);
 }
 
+bool AGP_PlayerController::ApplyLocalFoWPlacementPreviewGate(
+	const FVector& SnappedGround,
+	EGP_BuildingDropRejectReason& InOutRejectReason) const
+{
+	if (!IsLocalController()
+		|| LocalFogOfWarComponent == nullptr
+		|| !LocalFogOfWarComponent->AllowsLocalPlacementPreview(SnappedGround))
+	{
+		InOutRejectReason = EGP_BuildingDropRejectReason::NotVisible;
+		return false;
+	}
+	return true;
+}
+
 void AGP_PlayerController::ConfirmBuildingPlacement()
 {
 	if (!IsLocalController() || !bBuildingPlacementActive)
@@ -1689,6 +1919,11 @@ void AGP_PlayerController::ConfirmBuildingPlacement()
 		DropDef,
 		FTransform(FRotator::ZeroRotator, GroundLoc),
 		Preview);
+	if (Preview.bValid
+		&& !ApplyLocalFoWPlacementPreviewGate(Preview.SnappedGround, Preview.RejectReason))
+	{
+		Preview.bValid = false;
+	}
 
 	if (BuildingPlacementGhost != nullptr)
 	{
@@ -1803,6 +2038,11 @@ void AGP_PlayerController::UpdateBuildingPlacementGhost()
 		DropDef,
 		FTransform(FRotator::ZeroRotator, GroundLoc),
 		Preview);
+	if (Preview.bValid
+		&& !ApplyLocalFoWPlacementPreviewGate(Preview.SnappedGround, Preview.RejectReason))
+	{
+		Preview.bValid = false;
+	}
 
 	FIntPoint Footprint = Preview.FootprintSize.X > 0 ? Preview.FootprintSize : FIntPoint(1, 1);
 	FVector GhostLoc = Preview.FootprintSize.X > 0 ? Preview.SnappedActorLocation : GroundLoc;

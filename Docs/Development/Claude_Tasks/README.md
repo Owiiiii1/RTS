@@ -8,9 +8,9 @@
 
 > Стан станом на 2026-08-20. Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), and the current [`MVP roadmap reconciliation`](../MVP_Roadmap_Reconciliation_Post_Building_Vitals.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** first production Fog of War runtime foundation finalized after operator PASS. The
+**Поточна фаза:** trusted FoW owning-client mirror + first production CommonUI/MVVM foundation. The
 architecture/config cleanup phase is closed.
-**Current: FOW_RUNTIME_FOUNDATION_FINALIZED_READY_FOR_MERGE**.
+**Current: FOW_CLIENT_PRESENTATION_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**.
 
 **Status snapshot:**
 
@@ -27,9 +27,10 @@ architecture/config cleanup phase is closed.
 | **Cleanup Slice H — Building vitals definition ownership** | **DONE / on `main`** @ `b7e391a636749173c445f7994a41daf3c18ba902` |
 | **Post-vitals MVP roadmap reconciliation** | **FINALIZED READY FOR MERGE** — [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](../MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **NOT MERGED** |
 | **FoW runtime foundation** | **FINALIZED READY FOR MERGE** — [`GP-FoW-Runtime-Foundation.md`](GP-FoW-Runtime-Foundation.md) — **NOT MERGED** |
+| **FoW client presentation foundation** | **READY FOR OPERATOR VALIDATION** — [`GP-FoW-Client-Presentation-Foundation.md`](GP-FoW-Client-Presentation-Foundation.md) — **NOT MERGED / NOT FINALIZED** |
 
-**Exactly one NEXT production capability:** production UI foundation and trusted **FoW presentation**.
-Do not jump to SWARM, cleanup, or building redesign.
+**Exactly one current gate:** single-client and two-player PIE validation of the trusted FoW mirror and
+MVVM presentation foundation. Do not start visual fog/minimap before finalization.
 
 Do **not** start footprint/geometry cleanup; it is deferred pending building construction redesign.
 Do **not** implement SWARM now. SWARM is separate from the RTS AI Opponent and is

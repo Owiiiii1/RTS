@@ -56,6 +56,20 @@ PublicDependencyModuleNames.AddRange(new string[]
 | Buttons / list items | `UCommonButtonBase`, `UCommonListView` items | Reusable styles via `UCommonButtonStyle` DataAssets. |
 | ViewModels | `UMVVMViewModelBase` subclasses | Properties marked `UPROPERTY(FieldNotify)`. |
 
+### Current production foundation (2026-08-20)
+
+- `CommonUI` and `ModelViewViewModel` are enabled; `GPUIRuntime` already depends on both and depends
+  forward on `GPRuntime` / `GPGASRuntime`.
+- `UGP_ActivatableWidgetBase : UCommonActivatableWidget` is the first project-owned production CommonUI
+  base. No screen stack, HUD root, or authored Widget Blueprint is created by this foundation.
+- `UGP_FoWViewModel : UMVVMViewModelBase` is the first production ViewModel. It exposes local team,
+  grid metadata, readiness, and a coarse revision FieldNotify plus a read-only world-location query.
+- `UGP_FoWViewModelAdapter` binds directly to the local PlayerController's trusted
+  `UGP_LocalFoWComponent` update delegate. It has no Tick and never scans the world.
+- The server updates the owning-client mirror; the adapter projects that trusted replicated
+  presentation state into the ViewModel. Widgets remain read-only and never call FoW gameplay authority.
+- The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.
+
 ### MVVM Data Flow
 
 ```

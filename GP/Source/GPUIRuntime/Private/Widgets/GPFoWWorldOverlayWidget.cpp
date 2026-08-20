@@ -20,7 +20,8 @@ void UGP_FoWWorldOverlayWidget::InitializeWithPresentationOwner(
 
 void UGP_FoWWorldOverlayWidget::HandlePresentationDataChanged()
 {
-	bHasValidCache = false;
+	bHasValidMask = false;
+	bHasValidProjection = false;
 	InvalidateLayoutAndVolatility();
 }
 
@@ -69,18 +70,7 @@ int32 UGP_FoWWorldOverlayWidget::NativePaint(
 			OutDrawElements,
 			MaxLayer + 1,
 			bParentEnabled);
-		Owner->RecordOverlayStats(
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			1,
-			FIntPoint::ZeroValue,
-			FIntPoint::ZeroValue,
-			Owner->GetRenderSerial());
+		Owner->RecordOverlayStats(FGP_FoWWorldOverlayStats());
 		CachedRenderSerial = Owner->GetRenderSerial();
 		return MaxLayer + 1;
 	}
@@ -109,43 +99,83 @@ int32 UGP_FoWWorldOverlayWidget::NativePaint(
 		UWidgetLayoutLibrary::GetViewportScale(this),
 		KINDA_SMALL_NUMBER);
 
-	const bool bViewChanged = !bHasValidCache
+	const bool bViewChanged = !bHasValidProjection
 		|| CachedViewRect != ViewRect
 		|| !CachedViewProjection.Equals(ViewProjectionMatrix, 1.e-4)
 		|| !CachedLocalSize.Equals(LocalSize, 0.5f);
-	const bool bDataChanged = CachedRenderSerial != Owner->GetRenderSerial();
+	const bool bDataChanged = CachedRenderSerial != Owner->GetRenderSerial()
+		|| !bHasValidMask;
 
-	if (bViewChanged || bDataChanged)
+	FIntPoint ViewMinCell = FIntPoint::ZeroValue;
+	FIntPoint ViewMaxCell = FIntPoint::ZeroValue;
+	const bool bHaveViewCells = ComputeViewCellRange(
+		ViewProjectionMatrix.InverseFast(),
+		ViewRect,
+		Mirror,
+		ViewMinCell,
+		ViewMaxCell);
+
+	const bool bViewOutsideMask = bHaveViewCells && bHasValidMask
+		&& (ViewMinCell.X < CachedMaskMin.X
+			|| ViewMinCell.Y < CachedMaskMin.Y
+			|| ViewMaxCell.X > CachedMaskMax.X
+			|| ViewMaxCell.Y > CachedMaskMax.Y);
+	const bool bNeedMask = !bHasValidMask
+		|| bDataChanged
+		|| bViewOutsideMask
+		|| (Mirror != nullptr && Mirror->GetRevision() != CachedMaskRevision);
+
+	bLastMaskRebuilt = false;
+	bLastProjectionRebuilt = false;
+
+	if (!bHaveViewCells)
 	{
-		const bool bRebuilt = RebuildProjectedContours(
+		bConservativeFallback = true;
+	}
+	else if (bNeedMask)
+	{
+		bConservativeFallback = !RebuildWorldMask(Mirror, ViewMinCell, ViewMaxCell);
+		bLastMaskRebuilt = !bConservativeFallback;
+		bHasValidMask = !bConservativeFallback;
+	}
+
+	if (!bConservativeFallback && (bNeedMask || bViewChanged || !bHasValidProjection))
+	{
+		ProjectCachedWorldTriangles(
 			AllottedGeometry,
 			ViewProjectionMatrix,
-			ViewProjectionMatrix.InverseFast(),
 			ViewRect,
 			ViewportScale);
-
+		bLastProjectionRebuilt = true;
+		bHasValidProjection = true;
 		CachedViewProjection = ViewProjectionMatrix;
 		CachedViewRect = ViewRect;
 		CachedLocalSize = LocalSize;
 		CachedRenderSerial = Owner->GetRenderSerial();
-		bHasValidCache = true;
-		bConservativeFallback = !bRebuilt;
-		if (!bRebuilt)
-		{
-			Owner->RecordOverlayStats(
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				0,
-				1,
-				FIntPoint::ZeroValue,
-				FIntPoint::ZeroValue,
-				Owner->GetRenderSerial());
-		}
 	}
+
+	FGP_FoWWorldOverlayStats Stats;
+	const int32 ViewW = FMath::Max(0, CachedViewMax.X - CachedViewMin.X + 1);
+	const int32 ViewH = FMath::Max(0, CachedViewMax.Y - CachedViewMin.Y + 1);
+	const int32 PadW = FMath::Max(0, CachedMaskMax.X - CachedMaskMin.X + 1);
+	const int32 PadH = FMath::Max(0, CachedMaskMax.Y - CachedMaskMin.Y + 1);
+	Stats.SampledCells = ViewW * ViewH;
+	Stats.PaddedCells = PadW * PadH;
+	Stats.DistanceFieldDims = CachedGeometry.DistanceFieldDims;
+	Stats.ContourRawVertices = CachedGeometry.ContourRawVertices;
+	Stats.ContourSmoothedVertices = CachedGeometry.ContourSmoothedVertices;
+	Stats.OverlayVertices = CachedGeometry.WorldTriangles.Num();
+	Stats.OverlayTriangles = CachedGeometry.TriangleCount;
+	Stats.DrawBatches = CachedBatches.Num();
+	Stats.MinCell = CachedMaskMin;
+	Stats.MaxCell = CachedMaskMax;
+	Stats.ConsumedSerial = Owner->GetRenderSerial();
+	Stats.MaskRevision = CachedMaskRevision;
+	Stats.bMaskRebuilt = bLastMaskRebuilt;
+	Stats.bProjectionRebuilt = bLastProjectionRebuilt;
+	Stats.MaskRebuildMilliseconds = CachedGeometry.MaskRebuildMilliseconds;
+	Stats.DistanceFieldBytes = CachedGeometry.DistanceFieldBytes;
+	Owner->RecordOverlayStats(Stats);
 
 	if (bConservativeFallback)
 	{
@@ -191,18 +221,14 @@ int32 UGP_FoWWorldOverlayWidget::NativePaint(
 	return FMath::Max(MaxLayer, DrawLayer - 1);
 }
 
-bool UGP_FoWWorldOverlayWidget::RebuildProjectedContours(
-	const FGeometry& AllottedGeometry,
-	const FMatrix& ViewProjectionMatrix,
+bool UGP_FoWWorldOverlayWidget::ComputeViewCellRange(
 	const FMatrix& InverseViewProjectionMatrix,
 	const FIntRect& ViewRect,
-	float ViewportScale) const
+	const UGP_LocalFoWComponent* Mirror,
+	FIntPoint& OutMinCell,
+	FIntPoint& OutMaxCell) const
 {
-	ResetRenderCache();
-
-	UGP_FoWWorldPresentationSubsystem* Owner = PresentationOwner.Get();
-	UGP_LocalFoWComponent* Mirror = Owner != nullptr ? Owner->GetBoundMirror() : nullptr;
-	if (Owner == nullptr || Mirror == nullptr || !Mirror->IsReady())
+	if (Mirror == nullptr || !Mirror->IsReady())
 	{
 		return false;
 	}
@@ -257,34 +283,38 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedContours(
 		return false;
 	}
 
-	const int32 Pad = UGP_FoWWorldPresentationSubsystem::GetSamplePadCells();
-	const int32 MinX = FMath::Clamp(
-		FMath::FloorToInt((GroundBounds.Min.X - GridOrigin.X) / CellSize) - Pad,
-		0,
-		GridDimensions.X - 1);
-	const int32 MinY = FMath::Clamp(
-		FMath::FloorToInt((GroundBounds.Min.Y - GridOrigin.Y) / CellSize) - Pad,
-		0,
-		GridDimensions.Y - 1);
-	const int32 MaxX = FMath::Clamp(
-		FMath::FloorToInt((GroundBounds.Max.X - GridOrigin.X) / CellSize) + Pad,
-		0,
-		GridDimensions.X - 1);
-	const int32 MaxY = FMath::Clamp(
-		FMath::FloorToInt((GroundBounds.Max.Y - GridOrigin.Y) / CellSize) + Pad,
-		0,
-		GridDimensions.Y - 1);
+	OutMinCell = FIntPoint(
+		FMath::Clamp(FMath::FloorToInt((GroundBounds.Min.X - GridOrigin.X) / CellSize), 0, GridDimensions.X - 1),
+		FMath::Clamp(FMath::FloorToInt((GroundBounds.Min.Y - GridOrigin.Y) / CellSize), 0, GridDimensions.Y - 1));
+	OutMaxCell = FIntPoint(
+		FMath::Clamp(FMath::FloorToInt((GroundBounds.Max.X - GridOrigin.X) / CellSize), 0, GridDimensions.X - 1),
+		FMath::Clamp(FMath::FloorToInt((GroundBounds.Max.Y - GridOrigin.Y) / CellSize), 0, GridDimensions.Y - 1));
+	return OutMaxCell.X >= OutMinCell.X && OutMaxCell.Y >= OutMinCell.Y;
+}
 
-	if (MaxX < MinX || MaxY < MinY)
+bool UGP_FoWWorldOverlayWidget::RebuildWorldMask(
+	const UGP_LocalFoWComponent* Mirror,
+	const FIntPoint& ViewMinCell,
+	const FIntPoint& ViewMaxCell) const
+{
+	if (Mirror == nullptr || !Mirror->IsReady())
 	{
 		return false;
 	}
 
+	const FVector2D GridOrigin = Mirror->GetGridOriginWorldXY();
+	const FIntPoint GridDimensions = Mirror->GetGridDimensions();
+	const float CellSize = Mirror->GetCellSizeCm();
+	const int32 Pad = UGP_FoWWorldPresentationSubsystem::GetSamplePadCells();
+	const int32 MinX = FMath::Clamp(ViewMinCell.X - Pad, 0, GridDimensions.X - 1);
+	const int32 MinY = FMath::Clamp(ViewMinCell.Y - Pad, 0, GridDimensions.Y - 1);
+	const int32 MaxX = FMath::Clamp(ViewMaxCell.X + Pad, 0, GridDimensions.X - 1);
+	const int32 MaxY = FMath::Clamp(ViewMaxCell.Y + Pad, 0, GridDimensions.Y - 1);
 	const int32 Width = MaxX - MinX + 1;
 	const int32 Height = MaxY - MinY + 1;
-	const int64 PaddedCellCount64 = static_cast<int64>(Width) * static_cast<int64>(Height);
-	if (PaddedCellCount64 <= 0
-		|| PaddedCellCount64 > UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells())
+	const int64 CellCount = static_cast<int64>(Width) * static_cast<int64>(Height);
+	if (CellCount <= 0
+		|| CellCount > UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells())
 	{
 		return false;
 	}
@@ -292,10 +322,10 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedContours(
 	FGP_FoWContourField Field;
 	GPFoWContourField::ConfigureField(
 		Field,
-		MinX - 1,
-		MinY - 1,
-		Width + 2,
-		Height + 2,
+		MinX,
+		MinY,
+		Width,
+		Height,
 		CellSize,
 		GridOrigin);
 
@@ -309,52 +339,50 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedContours(
 				UGP_FoWWorldPresentationSubsystem::GetProjectionGroundZ());
 			GPFoWContourField::SetCell(
 				Field,
-				LocalX + 1,
-				LocalY + 1,
+				LocalX,
+				LocalY,
 				Mirror->GetStateAtWorldLocation(CellCenter));
 		}
 	}
 
-	GPFoWContourField::BuildCenterSamples(Field);
-
-	FGP_FoWContourGeometry Geometry;
-	GPFoWContourField::GenerateOverlayGeometry(Field, Geometry);
-	if (Geometry.TriangleCount > UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayTriangles()
-		|| Geometry.VisibleIsoSegments.Num() + Geometry.UnexploredIsoSegments.Num()
-			> UGP_FoWWorldPresentationSubsystem::GetMaximumIsoSegments())
+	if (!GPFoWContourField::RebuildPresentation(Field, CachedGeometry)
+		|| CachedGeometry.TriangleCount
+			> UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayTriangles())
 	{
+		CachedWorldTriangles.Reset();
 		return false;
 	}
 
-	for (int32 VertexIndex = 0; VertexIndex + 2 < Geometry.TriangleVertices.Num(); VertexIndex += 3)
+	CachedWorldTriangles = CachedGeometry.WorldTriangles;
+	CachedMaskMin = FIntPoint(MinX, MinY);
+	CachedMaskMax = FIntPoint(MaxX, MaxY);
+	CachedViewMin = ViewMinCell;
+	CachedViewMax = ViewMaxCell;
+	CachedMaskRevision = Mirror->GetRevision();
+	return true;
+}
+
+void UGP_FoWWorldOverlayWidget::ProjectCachedWorldTriangles(
+	const FGeometry& AllottedGeometry,
+	const FMatrix& ViewProjectionMatrix,
+	const FIntRect& ViewRect,
+	float ViewportScale) const
+{
+	ResetProjectionCache();
+	for (int32 VertexIndex = 0; VertexIndex + 2 < CachedWorldTriangles.Num(); VertexIndex += 3)
 	{
 		AddProjectedTriangle(
-			Geometry.TriangleVertices[VertexIndex],
-			Geometry.TriangleVertices[VertexIndex + 1],
-			Geometry.TriangleVertices[VertexIndex + 2],
+			CachedWorldTriangles[VertexIndex],
+			CachedWorldTriangles[VertexIndex + 1],
+			CachedWorldTriangles[VertexIndex + 2],
 			AllottedGeometry,
 			ViewProjectionMatrix,
 			ViewRect,
 			ViewportScale);
 	}
-
-	const int32 ViewportCellCount = FMath::Max(0, (Width - 2 * Pad) * (Height - 2 * Pad));
-	Owner->RecordOverlayStats(
-		ViewportCellCount > 0 ? ViewportCellCount : static_cast<int32>(PaddedCellCount64),
-		static_cast<int32>(PaddedCellCount64),
-		Geometry.VisibleIsoSegments.Num() + Geometry.UnexploredIsoSegments.Num(),
-		Geometry.TriangleVertices.Num(),
-		Geometry.TriangleCount,
-		Geometry.MixedCellCount,
-		Geometry.CoalescedQuadCount,
-		CachedBatches.Num(),
-		FIntPoint(MinX, MinY),
-		FIntPoint(MaxX, MaxY),
-		Owner->GetRenderSerial());
-	return true;
 }
 
-void UGP_FoWWorldOverlayWidget::ResetRenderCache() const
+void UGP_FoWWorldOverlayWidget::ResetProjectionCache() const
 {
 	CachedBatches.Reset();
 }

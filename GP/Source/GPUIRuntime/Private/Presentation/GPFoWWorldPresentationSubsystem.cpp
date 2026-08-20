@@ -66,14 +66,39 @@ const TCHAR* UGP_FoWWorldPresentationSubsystem::GetContourAlgorithmName()
 	return GPFoWContourField::GetAlgorithmName();
 }
 
-float UGP_FoWWorldPresentationSubsystem::GetConservativeBoundaryT()
+const TCHAR* UGP_FoWWorldPresentationSubsystem::GetMaskModelName()
 {
-	return GPFoWContourField::ConservativeBoundaryT;
+	return GPFoWContourField::GetMaskModelName();
 }
 
-int32 UGP_FoWWorldPresentationSubsystem::GetSubcellsPerCell()
+const TCHAR* UGP_FoWWorldPresentationSubsystem::GetDistanceTransformName()
 {
-	return GPFoWContourField::SubcellsPerCell;
+	return GPFoWContourField::GetDistanceTransformName();
+}
+
+float UGP_FoWWorldPresentationSubsystem::GetVisibleInwardBiasCells()
+{
+	return GPFoWContourField::VisibleInwardBiasCells;
+}
+
+float UGP_FoWWorldPresentationSubsystem::GetKnownInwardBiasCells()
+{
+	return GPFoWContourField::KnownInwardBiasCells;
+}
+
+float UGP_FoWWorldPresentationSubsystem::GetVisibleInwardBiasCm(float CellSizeCm)
+{
+	return GPFoWContourField::VisibleInwardBiasCells * CellSizeCm;
+}
+
+float UGP_FoWWorldPresentationSubsystem::GetKnownInwardBiasCm(float CellSizeCm)
+{
+	return GPFoWContourField::KnownInwardBiasCells * CellSizeCm;
+}
+
+float UGP_FoWWorldPresentationSubsystem::GetEdgeFeatherCm()
+{
+	return GPFoWContourField::EdgeFeatherCm;
 }
 
 int32 UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayTriangles()
@@ -84,6 +109,11 @@ int32 UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayTriangles()
 int32 UGP_FoWWorldPresentationSubsystem::GetMaximumIsoSegments()
 {
 	return GPFoWContourField::MaximumIsoSegments;
+}
+
+int32 UGP_FoWWorldPresentationSubsystem::GetMaximumSdfPixels()
+{
+	return GPFoWContourField::MaximumSdfPixels;
 }
 
 void UGP_FoWWorldPresentationSubsystem::SetVisualizationEnabled(bool bEnabled)
@@ -111,30 +141,10 @@ bool UGP_FoWWorldPresentationSubsystem::IsVisualDataDirty() const
 	return OverlayWidget == nullptr || OverlayWidget->GetConsumedRenderSerial() != RenderSerial;
 }
 
-void UGP_FoWWorldPresentationSubsystem::RecordOverlayStats(
-	int32 SampledCells,
-	int32 PaddedCells,
-	int32 ContourSegments,
-	int32 OverlayVertices,
-	int32 OverlayTriangles,
-	int32 MixedCells,
-	int32 CoalescedQuads,
-	int32 DrawBatches,
-	const FIntPoint& MinCell,
-	const FIntPoint& MaxCell,
-	uint64 ConsumedSerial)
+void UGP_FoWWorldPresentationSubsystem::RecordOverlayStats(const FGP_FoWWorldOverlayStats& Stats)
 {
-	LastSampledCellCount = SampledCells;
-	LastPaddedCellCount = PaddedCells;
-	LastContourSegmentCount = ContourSegments;
-	LastOverlayVertexCount = OverlayVertices;
-	LastOverlayTriangleCount = OverlayTriangles;
-	LastMixedCellCount = MixedCells;
-	LastCoalescedQuadCount = CoalescedQuads;
-	LastDrawBatchCount = DrawBatches;
-	LastSampledMinCell = MinCell;
-	LastSampledMaxCell = MaxCell;
-	LastConsumedRenderSerial = ConsumedSerial;
+	LastStats = Stats;
+	LastConsumedRenderSerial = Stats.ConsumedSerial;
 }
 
 void UGP_FoWWorldPresentationSubsystem::BindToPlayerController(
@@ -248,7 +258,7 @@ void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 			: nullptr;
 
 	UE_LOG(LogGPFoWWorldPresentation, Display,
-		TEXT("GP FoW VisualDump: World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d MirrorRevision=%lld Algorithm=%s Origin=%s Dims=%s CellSize=%.1f MaxSampledCells=%d SampledCells=%d PaddedCells=%d PadCells=%d ContourSegments=%d OverlayVertices=%d OverlayTriangles=%d MixedCells=%d CoalescedQuads=%d ConservativeBoundaryT=%.2f SubcellsPerCell=%d MaxTriangles=%d MaxIsoSegments=%d Batches=%d RegisteredUnitPresentations=%d UnitEvaluationInterval=%.2f RegionMin=%s RegionMax=%s Dirty=%s Cached=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
+		TEXT("GP FoW VisualDump: World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d MirrorRevision=%lld Algorithm=%s MaskModel=%s DistanceTransform=%s Origin=%s Dims=%s CellSize=%.1f MaxSampledCells=%d SampledCells=%d PaddedCells=%d PadCells=%d DistanceField=%s DistanceFieldBytes=%d ContourRawVertices=%d ContourSmoothedVertices=%d OverlayVertices=%d OverlayTriangles=%d VisibleInwardBiasCm=%.1f KnownInwardBiasCm=%.1f EdgeFeather=%.1fcm LastMaskRevision=%lld MaskRebuilt=%s ProjectionRebuilt=%s MaskRebuildMs=%.3f MaxTriangles=%d MaxSdfPixels=%d Batches=%d RegisteredUnitPresentations=%d UnitEvaluationInterval=%.2f RegionMin=%s RegionMax=%s Dirty=%s Cached=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
 		*GetNameSafe(GetWorld()),
 		IsRendererActive() ? TEXT("true") : TEXT("false"),
 		bVisualizationEnabled ? TEXT("true") : TEXT("false"),
@@ -256,27 +266,35 @@ void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 		Mirror != nullptr ? Mirror->GetLocalTeamId() : -1,
 		Mirror != nullptr ? Mirror->GetRevision() : -1,
 		GetContourAlgorithmName(),
+		GetMaskModelName(),
+		GetDistanceTransformName(),
 		*Origin.ToString(),
 		*Dimensions.ToString(),
 		CellSize,
 		GetMaximumSampledCells(),
-		LastSampledCellCount,
-		LastPaddedCellCount,
+		LastStats.SampledCells,
+		LastStats.PaddedCells,
 		GetSamplePadCells(),
-		LastContourSegmentCount,
-		LastOverlayVertexCount,
-		LastOverlayTriangleCount,
-		LastMixedCellCount,
-		LastCoalescedQuadCount,
-		GetConservativeBoundaryT(),
-		GetSubcellsPerCell(),
+		*LastStats.DistanceFieldDims.ToString(),
+		LastStats.DistanceFieldBytes,
+		LastStats.ContourRawVertices,
+		LastStats.ContourSmoothedVertices,
+		LastStats.OverlayVertices,
+		LastStats.OverlayTriangles,
+		GetVisibleInwardBiasCm(CellSize),
+		GetKnownInwardBiasCm(CellSize),
+		GetEdgeFeatherCm(),
+		LastStats.MaskRevision,
+		LastStats.bMaskRebuilt ? TEXT("true") : TEXT("false"),
+		LastStats.bProjectionRebuilt ? TEXT("true") : TEXT("false"),
+		LastStats.MaskRebuildMilliseconds,
 		GetMaximumOverlayTriangles(),
-		GetMaximumIsoSegments(),
-		LastDrawBatchCount,
+		GetMaximumSdfPixels(),
+		LastStats.DrawBatches,
 		UnitPresentation != nullptr ? UnitPresentation->GetRegisteredUnitCount() : 0,
 		UGP_LocalFoWUnitPresentationSubsystem::GetEvaluationIntervalSeconds(),
-		*LastSampledMinCell.ToString(),
-		*LastSampledMaxCell.ToString(),
+		*LastStats.MinCell.ToString(),
+		*LastStats.MaxCell.ToString(),
 		IsVisualDataDirty() ? TEXT("true") : TEXT("false"),
 		(!IsVisualDataDirty() && OverlayWidget != nullptr) ? TEXT("true") : TEXT("false"),
 		LastUpdateRevision,

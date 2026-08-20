@@ -254,23 +254,28 @@ namespace GPFoWWorldVisualizationContractPrivate
 			Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0));
 		const EGP_FoWState UnexploredBeforeSmoothing =
 			Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0));
-		Expect(UGP_FoWWorldPresentationSubsystem::GetConservativeBoundaryT() > 0.0f
-			&& UGP_FoWWorldPresentationSubsystem::GetConservativeBoundaryT() < 0.5f
+		Expect(UGP_FoWWorldPresentationSubsystem::GetVisibleInwardBiasCells() > 0.0f
+			&& UGP_FoWWorldPresentationSubsystem::GetVisibleInwardBiasCells() < 0.5f
+			&& UGP_FoWWorldPresentationSubsystem::GetKnownInwardBiasCells() > 0.0f
+			&& UGP_FoWWorldPresentationSubsystem::GetKnownInwardBiasCells() < 0.5f
 			&& FString(UGP_FoWWorldPresentationSubsystem::GetContourAlgorithmName())
-				.Contains(TEXT("MarchingSquares")),
-			TEXT("H8_ConservativeInsetMarchingSquares"));
+				.Contains(TEXT("SDF"))
+			&& FString(UGP_FoWWorldPresentationSubsystem::GetMaskModelName())
+				.Contains(TEXT("KnownMask+VisibleMask")),
+			TEXT("H8_ConservativeKnownVisibleSDF"));
 		{
 			FGP_FoWContourField TinyField;
 			GPFoWContourField::ConfigureField(
 				TinyField, 0, 0, 2, 1, 100.0f, FVector2D::ZeroVector);
 			GPFoWContourField::SetCell(TinyField, 0, 0, EGP_FoWState::Visible);
 			GPFoWContourField::SetCell(TinyField, 1, 0, EGP_FoWState::Unexplored);
-			GPFoWContourField::BuildCenterSamples(TinyField);
-			const float HiddenCenter = GPFoWContourField::SampleBilinearObscuration(
+			FGP_FoWContourGeometry TinyGeometry;
+			GPFoWContourField::RebuildPresentation(TinyField, TinyGeometry);
+			const float HiddenCenter = GPFoWContourField::SamplePresentationObscuration(
 				TinyField, FVector2D(150.0, 50.0));
-			const float VisibleCenter = GPFoWContourField::SampleBilinearObscuration(
+			const float VisibleCenter = GPFoWContourField::SamplePresentationObscuration(
 				TinyField, FVector2D(50.0, 50.0));
-			Expect(HiddenCenter >= 0.999f && VisibleCenter <= 0.5f + KINDA_SMALL_NUMBER,
+			Expect(HiddenCenter >= 0.999f && VisibleCenter <= KINDA_SMALL_NUMBER,
 				TEXT("H8B_HiddenCellCentersStayFullyObscured"));
 		}
 		Expect(Team1Mirror->GetRevision() == SmoothingRevisionBefore
@@ -279,10 +284,11 @@ namespace GPFoWWorldVisualizationContractPrivate
 			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0))
 				== UnexploredBeforeSmoothing,
 			TEXT("H9_SmoothingDoesNotMutateOrPromoteLocalFoWState"));
-		Expect(UGP_FoWWorldPresentationSubsystem::GetConservativeBoundaryT() < 0.5f
+		Expect(UGP_FoWWorldPresentationSubsystem::GetVisibleInwardBiasCells() < 0.5f
 			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayTriangles() == 65536
 			&& UGP_FoWWorldPresentationSubsystem::GetMaximumIsoSegments() == 32768
-			&& UGP_FoWWorldPresentationSubsystem::GetSubcellsPerCell() == 4,
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumSdfPixels() == 262144
+			&& UGP_FoWWorldPresentationSubsystem::GetEdgeFeatherCm() <= 40.0f,
 			TEXT("H10_ContourGeometryIsBounded"));
 
 		auto FillDiscreteCircle = [](
@@ -307,28 +313,71 @@ namespace GPFoWWorldVisualizationContractPrivate
 			}
 		};
 
-		auto SegmentIsDiagonal = [](const FGP_FoWContourSegment& Segment, float CellSize)
+		auto LargestLoop = [](const TArray<FGP_FoWContourLoop>& Loops) -> const FGP_FoWContourLoop*
 		{
-			const FVector2D Delta = Segment.End - Segment.Start;
-			return FMath::Abs(Delta.X) > 0.05f * CellSize
-				&& FMath::Abs(Delta.Y) > 0.05f * CellSize;
+			const FGP_FoWContourLoop* Best = nullptr;
+			int32 BestCount = 0;
+			for (const FGP_FoWContourLoop& Loop : Loops)
+			{
+				if (Loop.Points.Num() > BestCount)
+				{
+					BestCount = Loop.Points.Num();
+					Best = &Loop;
+				}
+			}
+			return Best;
 		};
 
-		auto CountDirectionBuckets = [](
-			const TArray<FGP_FoWContourSegment>& Segments)
+		auto RasterRadiusRange = [](
+			const FGP_FoWContourField& Field,
+			const FVector2D& Center,
+			EGP_FoWState InsideState,
+			float& OutMin,
+			float& OutMax)
 		{
-			TSet<int32> Buckets;
-			for (const FGP_FoWContourSegment& Segment : Segments)
+			OutMin = TNumericLimits<float>::Max();
+			OutMax = 0.0f;
+			for (int32 Y = 0; Y < Field.Height; ++Y)
 			{
-				const FVector2D Delta = Segment.End - Segment.Start;
-				if (Delta.SizeSquared() <= KINDA_SMALL_NUMBER)
+				for (int32 X = 0; X < Field.Width; ++X)
 				{
-					continue;
+					if (Field.Cells[Field.CellIndex(X, Y)] != InsideState)
+					{
+						continue;
+					}
+					bool bBoundary = false;
+					for (int32 DY = -1; DY <= 1 && !bBoundary; ++DY)
+					{
+						for (int32 DX = -1; DX <= 1; ++DX)
+						{
+							if (DX == 0 && DY == 0)
+							{
+								continue;
+							}
+							const int32 NX = X + DX;
+							const int32 NY = Y + DY;
+							if (NX < 0 || NY < 0 || NX >= Field.Width || NY >= Field.Height
+								|| Field.Cells[Field.CellIndex(NX, NY)] != InsideState)
+							{
+								bBoundary = true;
+								break;
+							}
+						}
+					}
+					if (!bBoundary)
+					{
+						continue;
+					}
+					for (int32 Corner = 0; Corner < 4; ++Corner)
+					{
+						const float CX = static_cast<float>(X + (Corner & 1)) * Field.CellSizeCm;
+						const float CY = static_cast<float>(Y + ((Corner >> 1) & 1)) * Field.CellSizeCm;
+						const float Radius = FVector2D::Distance(FVector2D(CX, CY), Center);
+						OutMin = FMath::Min(OutMin, Radius);
+						OutMax = FMath::Max(OutMax, Radius);
+					}
 				}
-				const float Angle = FMath::Atan2(Delta.Y, Delta.X);
-				Buckets.Add(FMath::RoundToInt(Angle / (PI / 8.0f)));
 			}
-			return Buckets.Num();
 		};
 
 		const float ContourCellSize = 200.0f;
@@ -336,75 +385,75 @@ namespace GPFoWWorldVisualizationContractPrivate
 		GPFoWContourField::ConfigureField(
 			CircleField, 0, 0, 31, 31, ContourCellSize, FVector2D::ZeroVector);
 		FillDiscreteCircle(CircleField, 15, 15, 8, EGP_FoWState::Visible);
-		GPFoWContourField::BuildCenterSamples(CircleField);
 		FGP_FoWContourGeometry CircleGeometry;
-		GPFoWContourField::GenerateOverlayGeometry(CircleField, CircleGeometry);
-		Expect(CircleGeometry.VisibleIsoSegments.Num() > 8
+		GPFoWContourField::RebuildPresentation(CircleField, CircleGeometry);
+		const FGP_FoWContourLoop* CircleLoop = LargestLoop(CircleGeometry.VisibleLoops);
+		Expect(CircleLoop != nullptr
+			&& CircleLoop->Points.Num() >= 12
 			&& CircleGeometry.TriangleCount > 0
-			&& CircleGeometry.TriangleVertices.Num() == CircleGeometry.TriangleCount * 3,
-			TEXT("W1_SyntheticCircleProducesInterpolatedContour"));
+			&& CircleGeometry.WorldTriangles.Num() == CircleGeometry.TriangleCount * 3
+			&& !GPFoWContourField::LoopHasSelfIntersection(*CircleLoop),
+			TEXT("W1_SyntheticCircleProducesClosedSmoothContour"));
 
-		int32 DiagonalSegments = 0;
-		int32 AxisAlignedSegments = 0;
-		for (const FGP_FoWContourSegment& Segment : CircleGeometry.VisibleIsoSegments)
-		{
-			if (SegmentIsDiagonal(Segment, ContourCellSize))
-			{
-				++DiagonalSegments;
-			}
-			else
-			{
-				++AxisAlignedSegments;
-			}
-		}
-		Expect(DiagonalSegments >= 8,
-			TEXT("W2_ContourContainsNonAxisAlignedEdges"));
-		Expect(DiagonalSegments >= 8
-			&& AxisAlignedSegments < CircleGeometry.VisibleIsoSegments.Num()
-			&& CountDirectionBuckets(CircleGeometry.VisibleIsoSegments) > 4
-			&& CircleGeometry.VisibleIsoSegments.Num() > 16,
+		Expect(CircleLoop != nullptr
+			&& GPFoWContourField::CountTangentBuckets(*CircleLoop) > 8,
+			TEXT("W2_ContourTangentDirectionsCoverBroadAngles"));
+		Expect(CircleLoop != nullptr
+			&& GPFoWContourField::CountLongCellStaircaseSteps(*CircleLoop, ContourCellSize) < 3
+			&& CircleGeometry.ContourSmoothedVertices > CircleGeometry.ContourRawVertices,
 			TEXT("W3_ContourDoesNotTraceCellRectangles"));
 
 		const FVector2D CircleCenter(15.5 * ContourCellSize, 15.5 * ContourCellSize);
+		float RasterMin = 0.0f;
+		float RasterMax = 0.0f;
+		RasterRadiusRange(
+			CircleField, CircleCenter, EGP_FoWState::Visible, RasterMin, RasterMax);
+		TArray<FVector2D> Resampled;
+		if (CircleLoop != nullptr)
+		{
+			GPFoWContourField::ResampleClosedLoopByArcLength(*CircleLoop, 64, Resampled);
+		}
 		float MinRadius = TNumericLimits<float>::Max();
 		float MaxRadius = 0.0f;
 		float RadiusSum = 0.0f;
-		int32 RadiusSamples = 0;
-		for (const FGP_FoWContourSegment& Segment : CircleGeometry.VisibleIsoSegments)
+		float RadiusSqSum = 0.0f;
+		for (const FVector2D& Point : Resampled)
 		{
-			const FVector2D Mid = (Segment.Start + Segment.End) * 0.5f;
-			const float Radius = FVector2D::Distance(Mid, CircleCenter);
+			const float Radius = FVector2D::Distance(Point, CircleCenter);
 			MinRadius = FMath::Min(MinRadius, Radius);
 			MaxRadius = FMath::Max(MaxRadius, Radius);
 			RadiusSum += Radius;
-			++RadiusSamples;
+			RadiusSqSum += Radius * Radius;
 		}
+		const int32 RadiusSamples = Resampled.Num();
 		const float MeanRadius = RadiusSamples > 0 ? RadiusSum / RadiusSamples : 0.0f;
-		Expect(RadiusSamples > 0
+		const float Variance = RadiusSamples > 0
+			? FMath::Max(0.0f, RadiusSqSum / RadiusSamples - MeanRadius * MeanRadius)
+			: 0.0f;
+		const float StdDev = FMath::Sqrt(Variance);
+		const float SmoothRange = MaxRadius - MinRadius;
+		const float RasterRange = RasterMax - RasterMin;
+		Expect(RadiusSamples == 64
 			&& MeanRadius > 6.0f * ContourCellSize
 			&& MeanRadius < 9.0f * ContourCellSize
-			&& (MaxRadius - MinRadius) < 2.2f * ContourCellSize,
-			TEXT("W4_VisualCircleRadiusVarianceIsBounded"));
+			&& StdDev < 0.35f * ContourCellSize
+			&& SmoothRange < 1.15f * ContourCellSize
+			&& SmoothRange < 0.85f * RasterRange,
+			TEXT("W4_VisualCircleRadiusVarianceImprovedOverRaster"));
 
 		FGP_FoWContourField UnionField;
 		GPFoWContourField::ConfigureField(
 			UnionField, 0, 0, 31, 31, ContourCellSize, FVector2D::ZeroVector);
 		FillDiscreteCircle(UnionField, 10, 15, 8, EGP_FoWState::Visible);
 		FillDiscreteCircle(UnionField, 20, 15, 8, EGP_FoWState::Visible);
-		GPFoWContourField::BuildCenterSamples(UnionField);
 		FGP_FoWContourGeometry UnionGeometry;
-		GPFoWContourField::GenerateOverlayGeometry(UnionField, UnionGeometry);
-		int32 UnionDiagonals = 0;
-		for (const FGP_FoWContourSegment& Segment : UnionGeometry.VisibleIsoSegments)
-		{
-			if (SegmentIsDiagonal(Segment, ContourCellSize))
-			{
-				++UnionDiagonals;
-			}
-		}
-		Expect(UnionDiagonals >= 8
-			&& CountDirectionBuckets(UnionGeometry.VisibleIsoSegments) > 4
-			&& UnionGeometry.VisibleIsoSegments.Num() > CircleGeometry.VisibleIsoSegments.Num() / 2,
+		GPFoWContourField::RebuildPresentation(UnionField, UnionGeometry);
+		const FGP_FoWContourLoop* UnionLoop = LargestLoop(UnionGeometry.VisibleLoops);
+		Expect(UnionLoop != nullptr
+			&& UnionGeometry.VisibleLoops.Num() == 1
+			&& GPFoWContourField::CountTangentBuckets(*UnionLoop) > 8
+			&& GPFoWContourField::CountLongCellStaircaseSteps(*UnionLoop, ContourCellSize) < 3
+			&& !GPFoWContourField::LoopHasSelfIntersection(*UnionLoop),
 			TEXT("W5_OverlappingCirclesProduceSmoothUnion"));
 
 		FGP_FoWContourField TrailField;
@@ -418,20 +467,29 @@ namespace GPFoWWorldVisualizationContractPrivate
 				GPFoWContourField::SetCell(TrailField, Index + 1, Index, EGP_FoWState::Explored);
 			}
 		}
-		GPFoWContourField::BuildCenterSamples(TrailField);
 		FGP_FoWContourGeometry TrailGeometry;
-		GPFoWContourField::GenerateOverlayGeometry(TrailField, TrailGeometry);
-		int32 TrailDiagonals = 0;
-		for (const FGP_FoWContourSegment& Segment : TrailGeometry.UnexploredIsoSegments)
-		{
-			if (SegmentIsDiagonal(Segment, ContourCellSize))
-			{
-				++TrailDiagonals;
-			}
-		}
-		Expect(TrailDiagonals >= 4
-			&& CountDirectionBuckets(TrailGeometry.UnexploredIsoSegments) > 4,
+		GPFoWContourField::RebuildPresentation(TrailField, TrailGeometry);
+		const FGP_FoWContourLoop* TrailLoop = LargestLoop(TrailGeometry.KnownLoops);
+		Expect(TrailLoop != nullptr
+			&& GPFoWContourField::CountTangentBuckets(*TrailLoop) > 6
+			&& GPFoWContourField::CountLongCellStaircaseSteps(*TrailLoop, ContourCellSize) < 3,
 			TEXT("W6_DiagonalExploredTrailIsNotSquareRunSilhouette"));
+
+		FGP_FoWContourField CornerField;
+		GPFoWContourField::ConfigureField(
+			CornerField, 0, 0, 16, 16, ContourCellSize, FVector2D::ZeroVector);
+		for (int32 Index = 3; Index <= 12; ++Index)
+		{
+			GPFoWContourField::SetCell(CornerField, Index, 3, EGP_FoWState::Explored);
+			GPFoWContourField::SetCell(CornerField, 3, Index, EGP_FoWState::Explored);
+		}
+		FGP_FoWContourGeometry CornerGeometry;
+		GPFoWContourField::RebuildPresentation(CornerField, CornerGeometry);
+		const FGP_FoWContourLoop* CornerLoop = LargestLoop(CornerGeometry.KnownLoops);
+		Expect(CornerLoop != nullptr
+			&& GPFoWContourField::CountTangentBuckets(*CornerLoop) > 6
+			&& GPFoWContourField::CountLongCellStaircaseSteps(*CornerLoop, ContourCellSize) < 3,
+			TEXT("W6B_RasterRightAngleCornerIsRounded"));
 
 		bool bHiddenCellsStayObscured = true;
 		for (int32 Y = 0; Y < CircleField.Height && bHiddenCellsStayObscured; ++Y)
@@ -445,7 +503,7 @@ namespace GPFoWWorldVisualizationContractPrivate
 				const FVector2D HiddenCenter(
 					(static_cast<double>(X) + 0.5) * ContourCellSize,
 					(static_cast<double>(Y) + 0.5) * ContourCellSize);
-				if (GPFoWContourField::SampleBilinearObscuration(CircleField, HiddenCenter)
+				if (GPFoWContourField::SamplePresentationObscuration(CircleField, HiddenCenter)
 					< 0.999f)
 				{
 					bHiddenCellsStayObscured = false;
@@ -453,7 +511,7 @@ namespace GPFoWWorldVisualizationContractPrivate
 				}
 			}
 		}
-		const float InteriorVisible = GPFoWContourField::SampleBilinearObscuration(
+		const float InteriorVisible = GPFoWContourField::SamplePresentationObscuration(
 			CircleField, CircleCenter);
 		Expect(bHiddenCellsStayObscured && InteriorVisible <= KINDA_SMALL_NUMBER,
 			TEXT("W7_ConservativeVisibleBoundaryDoesNotPromoteHiddenCells"));
@@ -465,9 +523,10 @@ namespace GPFoWWorldVisualizationContractPrivate
 				<= UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayTriangles()
 			&& CircleGeometry.VisibleIsoSegments.Num()
 				<= UGP_FoWWorldPresentationSubsystem::GetMaximumIsoSegments()
+			&& CircleGeometry.DistanceFieldDims.X * CircleGeometry.DistanceFieldDims.Y
+				<= UGP_FoWWorldPresentationSubsystem::GetMaximumSdfPixels()
 			&& UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() < 1000 * 1000
-			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 1
-			&& UGP_FoWWorldPresentationSubsystem::GetSubcellsPerCell() == 4,
+			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 6,
 			TEXT("W9_PerformanceCapsRemainBounded"));
 
 		FGP_FoWPresentationUpdate Team1Delta = Initial(1, 2);
@@ -517,7 +576,9 @@ namespace GPFoWWorldVisualizationContractPrivate
 		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() == 65536
 			&& UGP_FoWWorldPresentationSubsystem::GetMaximumQuadsPerBatch() == 8000
 			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayTriangles() == 65536
-			&& UGP_FoWWorldPresentationSubsystem::GetMaximumIsoSegments() == 32768,
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumIsoSegments() == 32768
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumSdfPixels() == 262144
+			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 6,
 			TEXT("P_ViewportWorkAndBatchingAreBounded"));
 
 		UGP_LocalFoWComponent* MillionCellMirror =
@@ -550,18 +611,25 @@ namespace GPFoWWorldVisualizationContractPrivate
 				: -1;
 		if (PresentationSubsystem != nullptr)
 		{
-			PresentationSubsystem->RecordOverlayStats(
-				64,
-				81,
-				12,
-				36,
-				12,
-				8,
-				4,
-				1,
-				FIntPoint(1, 1),
-				FIntPoint(8, 8),
-				PresentationSubsystem->GetRenderSerial());
+			FGP_FoWWorldOverlayStats CameraOnlyStats;
+			CameraOnlyStats.SampledCells = 64;
+			CameraOnlyStats.PaddedCells = 81;
+			CameraOnlyStats.DistanceFieldDims = FIntPoint(16, 16);
+			CameraOnlyStats.ContourRawVertices = 12;
+			CameraOnlyStats.ContourSmoothedVertices = 36;
+			CameraOnlyStats.OverlayVertices = 12;
+			CameraOnlyStats.OverlayTriangles = 8;
+			CameraOnlyStats.DrawBatches = 1;
+			CameraOnlyStats.MinCell = FIntPoint(1, 1);
+			CameraOnlyStats.MaxCell = FIntPoint(8, 8);
+			CameraOnlyStats.ConsumedSerial = PresentationSubsystem->GetRenderSerial();
+			CameraOnlyStats.MaskRevision = PresentationSubsystem->GetLastUpdateRevision();
+			CameraOnlyStats.bMaskRebuilt = false;
+			CameraOnlyStats.bProjectionRebuilt = true;
+			PresentationSubsystem->RecordOverlayStats(CameraOnlyStats);
+			Expect(!PresentationSubsystem->DidLastMaskRebuild()
+				&& PresentationSubsystem->DidLastProjectionRebuild(),
+				TEXT("S2_CameraOnlyProjectionDoesNotRebuildMask"));
 		}
 		Expect(PresentationSubsystem == nullptr
 			|| PresentationSubsystem->GetLastUpdateRevision() == ProductionRevisionBefore,

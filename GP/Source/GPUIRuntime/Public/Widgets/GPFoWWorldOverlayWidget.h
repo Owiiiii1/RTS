@@ -9,6 +9,7 @@
 #include "GPFoWWorldOverlayWidget.generated.h"
 
 class UGP_FoWWorldPresentationSubsystem;
+class UGP_LocalFoWComponent;
 
 struct FGP_FoWOverlayDrawBatch
 {
@@ -19,8 +20,8 @@ struct FGP_FoWOverlayDrawBatch
 /**
  * Source-only, hit-test-invisible viewport overlay for the local player's world FoW.
  *
- * Discrete LocalFoW cells are converted into a conservative cell-center scalar field. Dual marching
- * squares then emit interpolated contour triangles, cached until the mirror serial or view projection changes.
+ * Known/Visible signed-distance contours are cached in world space on LocalFoW revision (or when the
+ * view leaves the padded sample). Camera motion only reprojects those cached world triangles.
  */
 UCLASS(NotBlueprintable)
 class GPUIRUNTIME_API UGP_FoWWorldOverlayWidget : public UUserWidget
@@ -44,13 +45,22 @@ protected:
 		bool bParentEnabled) const override;
 
 private:
-	bool RebuildProjectedContours(
-		const FGeometry& AllottedGeometry,
-		const FMatrix& ViewProjectionMatrix,
+	bool ComputeViewCellRange(
 		const FMatrix& InverseViewProjectionMatrix,
 		const FIntRect& ViewRect,
+		const UGP_LocalFoWComponent* Mirror,
+		FIntPoint& OutMinCell,
+		FIntPoint& OutMaxCell) const;
+	bool RebuildWorldMask(
+		const UGP_LocalFoWComponent* Mirror,
+		const FIntPoint& ViewMinCell,
+		const FIntPoint& ViewMaxCell) const;
+	void ProjectCachedWorldTriangles(
+		const FGeometry& AllottedGeometry,
+		const FMatrix& ViewProjectionMatrix,
+		const FIntRect& ViewRect,
 		float ViewportScale) const;
-	void ResetRenderCache() const;
+	void ResetProjectionCache() const;
 	void AddProjectedTriangle(
 		const FGP_FoWContourVertex& A,
 		const FGP_FoWContourVertex& B,
@@ -68,10 +78,20 @@ private:
 	TWeakObjectPtr<UGP_FoWWorldPresentationSubsystem> PresentationOwner;
 
 	mutable TArray<FGP_FoWOverlayDrawBatch> CachedBatches;
+	mutable TArray<FGP_FoWContourVertex> CachedWorldTriangles;
+	mutable FGP_FoWContourGeometry CachedGeometry;
 	mutable FMatrix CachedViewProjection = FMatrix::Identity;
 	mutable FIntRect CachedViewRect;
 	mutable FVector2D CachedLocalSize = FVector2D::ZeroVector;
 	mutable uint64 CachedRenderSerial = 0;
-	mutable bool bHasValidCache = false;
+	mutable int64 CachedMaskRevision = -1;
+	mutable FIntPoint CachedMaskMin = FIntPoint::ZeroValue;
+	mutable FIntPoint CachedMaskMax = FIntPoint::ZeroValue;
+	mutable FIntPoint CachedViewMin = FIntPoint::ZeroValue;
+	mutable FIntPoint CachedViewMax = FIntPoint::ZeroValue;
+	mutable bool bHasValidProjection = false;
+	mutable bool bHasValidMask = false;
 	mutable bool bConservativeFallback = true;
+	mutable bool bLastMaskRebuilt = false;
+	mutable bool bLastProjectionRebuilt = false;
 };

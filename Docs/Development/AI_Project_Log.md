@@ -1,5 +1,23 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — FoW world visualization SDF contour rewrite
+
+Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Operator retest passed enemy hiding, full-health bars, and three FoW states, but rejected dual
+  marching squares: the silhouette still read as a 200 cm staircase with a wide blur.
+- Replaced `ConservativeDualMarchingSquares` with `ConservativeKnownVisibleSDFChaikin`: viewport-local
+  Known/Visible masks, Felzenszwalb SDF, inward iso (0.35–0.40 cell), Chaikin smoothing, narrow 28 cm
+  AA, Slate projected triangles. Mask cache is revision-driven; camera only reprojects world triangles.
+- Pad=6, SDF pixel cap 262,144. Hidden cell centers stay fully obscured. Gameplay grid/CellSize/sight
+  simulation unchanged. Implementation head `012bd641ed83b06f702c676ca7511ce50471c2c0`.
+- World visualization contract now includes resampled circle/union/trail/corner proofs W1–W9.
+  Focused contracts Failures=0; GPEditor Win64 Development + UHT **PASS**.
+- No Config/map/Blueprint/DataAsset/material/VFX/Tools/Content edit. LongRange local FoW radius 2000
+  untouched. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — FoW world visualization smooth-contour rewrite
 
 Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**

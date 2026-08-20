@@ -35,16 +35,15 @@ selection/inspect policy, minimap, and production HUD remain separate.
 
 - It binds only to the owning controller's `UGP_LocalFoWComponent`.
 - It creates one native `UGP_FoWWorldOverlayWidget` with a low player-screen Z order.
-- Mirror update/reset events increment a render serial and invalidate cached presentation.
-- The volatile widget observes view projection each paint; it only rebuilds geometry when the mirror
-  serial or camera/view projection changes.
-- It deprojects the player view to the Z=0 gameplay plane, samples only the intersecting FoW cells
-  (plus a one-cell LocalFoW pad), and builds a cell-center scalar field.
-- Dual marching squares interpolates between neighboring centers. Mixed dual quads are subdivided 4×
-  so bilinear isos become curved contours instead of 200 cm square outlines.
-- Uniform interiors coalesce into Slate triangles. Visible dual samples create a hole; Unexplored and
-  Explored fill the overlay.
-- Iso vertices use `ConservativeBoundaryT=0.42` from the clearer center toward the darker neighbor.
+- Mirror update/reset events increment a render serial and invalidate the **mask** cache (revision-driven).
+- The volatile widget observes view projection each paint. Camera motion **reprojects** cached world
+  triangles; the Known/Visible SDF mask rebuilds only on LocalFoW revision or when the view leaves the
+  padded sample.
+- It deprojects the player view to the Z=0 gameplay plane and samples only the intersecting FoW cells
+  (plus a six-cell LocalFoW pad).
+- KnownMask (Explored|Visible) and VisibleMask each get a Felzenszwalb signed distance field.
+  Inward iso-contours (`VisibleInwardBiasCells=0.40`, `KnownInwardBiasCells=0.35`) are Chaikin-smoothed
+  and filled as world triangles, with a narrow 28 cm AA ribbon.
 - NotReady, projection failure, or an over-budget view falls back to full-screen black.
 
 This works for perspective pan, zoom, yaw rotation, window/viewport changes, listen host, remote client,
@@ -61,7 +60,11 @@ and split local-player layers without global material state.
   under the perspective camera.
 - Per-cell widgets/components/UObjects: prohibited million-object/draw-call architecture.
 - 0.22-cell projected-run edge feather: operator-rejected; it only blurred square corners and left
-  the 200 cm cell silhouette intact. Replaced by dual marching-squares contour reconstruction.
+  the 200 cm cell silhouette intact.
+- Dual marching squares (`ConservativeDualMarchingSquares`): operator-rejected; the silhouette still
+  read as a 200 cm staircase with a wide blur. Not fixed by more blur, more MS subdivisions, T-only
+  tweaks, extra feather quads, or raising gameplay grid resolution. Replaced by Known/Visible SDF
+  iso-contours with Chaikin smoothing.
 
 ## Visual and performance contract
 
@@ -69,18 +72,19 @@ and split local-player layers without global material state.
 - Explored obscuration: `0.68`, neutral near-black tint.
 - Visible obscuration: `0.0`, no quad.
 - Gameplay cells remain 200 cm; no gameplay visibility expansion or state interpolation occurs.
-- Presentation reconstructs a continuous contour from discrete LocalFoW cell-center samples. Dual
-  marching squares with 4× mixed-quad subdivision interpolates diagonal/circular boundaries so they
-  no longer follow cell-square outlines.
-- Iso bias `ConservativeBoundaryT=0.42` (`< 0.5`) keeps every contour on the clearer side of a dual
-  edge: visual Visible may shrink slightly, but Unexplored cell centers stay fully obscured.
+- Presentation reconstructs a continuous contour from discrete LocalFoW Known/Visible masks via
+  Euclidean SDF iso-contours and Chaikin smoothing, so circular sight, unions, trails, and corners
+  do not follow 200 cm cell-square outlines.
+- Inward iso bias 0.35–0.40 cell (`< 0.5`) keeps contours inside Known/Visible: visual Visible may
+  shrink slightly, but Unexplored cell centers stay fully obscured.
+- Edge AA is a narrow 28 cm ribbon (~5–15 px), not a wide blur of a staircase.
 - Renderer owns no duplicate gameplay grid and performs no sight-circle computation.
 - No full one-million-cell presentation copy is allocated.
-- View sampling is capped at 65,536 cells.
+- View sampling is capped at 65,536 cells; SDF pixels are capped at 262,144; pad is 6 cells.
 - Overlay geometry is capped at 65,536 triangles and 32,768 iso segments; coalesced interiors use
   up to 8,000 quads per Slate draw batch.
-- Static camera + unchanged revision reuses cached vertices; camera changes rebuild only the bounded
-  view region.
+- Static camera + unchanged revision reuses cached world triangles and projected verts; camera changes
+  reproject only. The SDF mask rebuilds on LocalFoW revision or when the view leaves the padded sample.
 - Existing local mirror storage remains two one-million-bit arrays (~250 KB total).
 
 ## Lifecycle and multiplayer
@@ -129,9 +133,11 @@ A health update therefore cannot re-show a damaged enemy while LocalFoW presenta
 - `gp.FoW.VisualDump`
 - `gp.FoW.VisualEnable 0/1`
 
-`VisualDump` reports active/enabled/ready state, team/revision, contour algorithm, metadata, sample
-cap, current sampled/padded region, contour segment and overlay vertex/triangle counts, mixed dual
-quads, coalesced interiors, conservative T, subcells-per-cell, registered-unit count, 10 Hz
+`VisualDump` reports active/enabled/ready state, team/revision, Algorithm, MaskModel,
+DistanceTransform, Origin, Dims, CellSize, MaxSampledCells, SampledCells, PaddedCells, PadCells,
+DistanceField, DistanceFieldBytes, ContourRaw/Smoothed vertices, OverlayVertices/Triangles,
+VisibleInwardBiasCm, KnownInwardBiasCm, EdgeFeather, LastMaskRevision, MaskRebuilt,
+ProjectionRebuilt, MaskRebuildMs, MaxTriangles, MaxSdfPixels, registered-unit count, 10 Hz
 evaluation interval, dirty/cached serials, and consumed render serial.
 
 ## Validation
@@ -158,11 +164,11 @@ so their unrelated contracts were not escalated.
 8. In two-player listen-server PIE, move a damaged enemy between Visible and hidden cells. Confirm
    mesh/team/bar hide in Explored/Unexplored and restore with current state in Visible.
 9. Inspect Visible/Explored/Unexplored borders at normal zoom: an isolated sight region should read as
-   a smooth circle/curve, not a 200 cm checker of blurred squares. Overlapping sources should merge;
-   a moving explored trail should look like a rounded corridor.
+   a smooth circle/curve, not a 200 cm staircase with a wide blur. Overlapping sources should merge;
+   a moving explored trail should look like a rounded corridor. Edge AA should be a narrow ~28 cm band.
 10. Run `gp.FoW.VisualDump`; confirm Active/Ready/team/revision, algorithm
-    `ConservativeDualMarchingSquares`, conservative T=0.42, subcells=4, and bounded
-    sampled/contour/triangle stats.
+    `ConservativeKnownVisibleSDFChaikin`, MaskModel `KnownMask+VisibleMask`, DistanceTransform
+    `FelzenszwalbParabolicEDT`, pad=6, EdgeFeather=28cm, and MaskRebuilt vs ProjectionRebuilt.
 11. Toggle `gp.FoW.VisualEnable 0`, then `1`, for A/B confirmation.
 12. Confirm Team 1 and Team 2 still show different local masks.
 

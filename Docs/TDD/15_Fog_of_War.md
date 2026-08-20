@@ -31,7 +31,8 @@ Current-compatible deviations from the older pseudocode:
 - single-client transitions, same-coordinate two-player team isolation, and restart/reinitialization
   passed operator validation;
 - source-only world/terrain presentation reconstructs a continuous silhouette from discrete LocalFoW
-  cell-center samples via conservative dual marching squares and awaits operator visual validation;
+  Known/Visible masks via conservative SDF iso-contours and Chaikin smoothing, and awaits operator
+  visual validation;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
   relevance, minimap, and the full production HUD remain later FoW slices.
 
@@ -157,29 +158,27 @@ It owns one native `UGP_FoWWorldOverlayWidget` and binds only to that controller
 Current MVP rendering method:
 
 - perspective view corners are deprojected to the prototype's planar Z=0 gameplay ground;
-- only the intersecting cell rectangle, padded by one LocalFoW cell, is sampled from the trusted mirror;
-- a virtual Unexplored ring around that sample lets dual quads cover viewport cell edges;
-- scalar samples live at cell centers (`Visible=0`, `Explored=0.68`, `Unexplored=1.0`);
-- dual marching squares interpolates between neighboring centers; mixed dual quads are subdivided 4×
-  so bilinear isos form curved contours instead of cell-square outlines;
+- only the intersecting cell rectangle, padded by six LocalFoW cells, is sampled from the trusted mirror;
+- KnownMask (Explored|Visible) and VisibleMask each get a Felzenszwalb Euclidean signed distance field;
+- inward iso-contours (`VisibleInwardBiasCells=0.40`, `KnownInwardBiasCells=0.35`, both `< 0.5`) are
+  Chaikin-smoothed and snapped onto/inside the iso so circular sight, unions, trails, and corners do
+  not follow 200 cm cell-square outlines;
 - Unexplored uses opaque black (`Obscuration=1.0`);
 - Explored uses a dark neutral translucent overlay (`Obscuration=0.68`);
 - Visible emits no overlay (`Obscuration=0.0`);
-- iso vertices use `ConservativeBoundaryT=0.42` from the clearer center toward the darker neighbor
-  (must stay `< 0.5`), so contours remain inside the less-obscured cell and cannot promote hidden
-  gameplay cells;
+- a narrow 28 cm AA ribbon (~5–15 px) is the only edge feather; it is not a wide blur of a staircase;
 - NotReady, projection failure, and over-budget views fail closed to full-screen black;
-- mirror revision/reset changes invalidate via `OnLocalFoWUpdated`; camera projection changes are a
-  separate view-only invalidation path;
-- cached geometry is reused while both mirror serial and view projection remain unchanged.
+- mask rebuild is LocalFoW-revision-driven (or when the view leaves the padded sample); camera motion
+  only reprojects cached world triangles;
+- cached world geometry is reused while both mirror revision and padded sample remain valid.
 
 Bounds:
 
 - no renderer-side one-million-cell copy;
-- maximum 65,536 sampled view cells (plus one-cell LocalFoW pad; virtual ring is presentation-only);
+- maximum 65,536 sampled view cells (plus six-cell LocalFoW pad);
 - up to 8,000 coalesced quads per Slate draw batch;
-- maximum 65,536 overlay triangles and 32,768 iso segments;
-- mixed dual quads only, at 4 subcells per cell; uniform interiors coalesce;
+- maximum 65,536 overlay triangles, 32,768 iso segments, and 262,144 SDF pixels;
+- 2× SDF supersample of the padded viewport sample; uniform interiors fill with Known/Visible holes;
 - no cell UObject/component allocation.
 
 The current arena contains no Landscape and uses planar blockout ground. Meaningful elevation would
@@ -386,9 +385,9 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
 - 5 Hz sight tick × O(units × area_cells_covered). With 50 units × ~100 cells average = 25k cell ops/sec — acceptable.
 - Relevance check called by engine per actor per client. Cheap (per-cell bit query + team check).
 - Multicast and replication budget unchanged from existing.
-- World overlay: bounded viewport-local sampling (max 65,536 cells), dual marching-squares contours on
-  mixed dual quads (4 subcells, max 65,536 triangles / 32,768 iso segments), cached static-view
-  geometry, and no full-grid upload/copy.
+- World overlay: bounded viewport-local sampling (max 65,536 cells), Known/Visible SDF iso-contours
+  with Chaikin smoothing (max 65,536 triangles / 32,768 iso segments / 262,144 SDF pixels), revision-
+  driven mask cache with camera-only reprojection, and no full-grid upload/copy.
 
 ## Validation per Pillars
 

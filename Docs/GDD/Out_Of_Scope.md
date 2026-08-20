@@ -9,7 +9,8 @@
 - Campaign save/load (між матчами немає persistent state у MVP).
 - Replay system (запис і відтворення матчу).
 - Procedural maps (всі maps створюються hand-authored).
-- Fog of War як повна vision/memory система (basic visibility tag може бути для MVP).
+- Advanced/post-MVP Fog of War embellishments beyond the canonical three-state MVP
+  Unexplored/Explored/Actively Visible contract. The three-state runtime itself is **in MVP**.
 - Multi-resource economy (тільки Ferronite).
 - Large faction roster (тільки одна симетрична фракція + SWARM environmental threat).
 - Modding або generic RTS framework (custom games, scenario editor).

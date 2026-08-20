@@ -58,7 +58,10 @@ PC players, що цінують:
 - **Logistics Hub** (was "Assembly Yard"; orbital drop placement; +5 MaxUnits cap; expanded storage cap).
 - **Ferronite** як MVP resource у **two states**: Planetary (containers at base, not spendable) → Orbital (currency, spendable on orbital drops). Containers ship to orbit when full.
 - **3-Level Fog of War**: Unexplored / Explored / Actively Visible.
-- **SWARM waves**: intensity масштабується з total Ferronite **shipped to orbit** (per Pillar 6 — greed signals planet to attack harder; **не** time-based escalation).
+- **SWARM waves (MVP, final gameplay implementation stage):** pressure is driven by
+  `FerroniteThreatValue` — raw Planetary Ferronite currently stored in MainBase containers. Worker
+  drop-off raises it; container launch lowers it. `FerroniteScore` and `OrbitalFerronite` do not drive
+  SWARM pressure. Exact wave/director/roster/spawn/targeting rules are **DESIGN REQUIRED** before implementation.
 - **Orbital Delivery System**: spend Orbital Ferronite → select drop target → pod arrives → asset deployed.
 - 10-min match timer з **delivery-quota** win condition (highest Orbital Ferronite shipped wins if neither hits quota first).
 
@@ -106,12 +109,15 @@ Meta-rule (scope discipline):
 
 - 2 players joining via Steam, partying у lobby, starting match.
 - Кожен гравець керує Main Base + Workers, видобуває ферроніт з deposits, повертає workers у Main Base для drop-off, бачить score інкремент.
-- SWARM waves запускаються після ~60s, escalating у часі, цілять незахищені workers і buildings.
+- SWARM provides hostile PvE pressure driven by `FerroniteThreatValue`; its exact first-wave timing,
+  roster, spawning, scaling, targeting, multiplayer, and performance contract must be approved in the
+  mandatory design review before its final-MVP implementation stage.
 - Гравець може замовляти з орбіти Logistics Hub (для +5 cap + storage) і Defensive Turret (для оборони бази). Per [10_Orbital_Delivery](10_Orbital_Delivery.md).
 - Salvage Walker виконує move/attack команди, atackує SWARM і enemy units, отримує damage, помирає.
 - Building отримує damage, руйнується.
 - Match завершується на 10:00 timer expiry; server compute score, declare winner, replicate result.
-- Singleplayer: AI opponent виконує build → mine → produce → attack loop, генерує власний score.
+- Singleplayer: the separate RTS AI Opponent explores, mines, ships, orders orbital deliveries, defends,
+  and generates its own score. It is not SWARM.
 - No desync, no client-authoritative gameplay drift.
 - Match completes у 10 хвилин (hard cap, без extension).
 

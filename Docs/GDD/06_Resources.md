@@ -107,6 +107,11 @@ Greed-vs-Safety: **hoard = high score potential + high swarm danger; ship = safe
 
 Per [`01_Game_Pillars`](01_Game_Pillars.md) Pillar 6 — SWARM wave intensity / frequency / targeting масштабується від **`FerroniteThreatValue`** = обсягу raw Planetary Ferronite, що фізично зберігається у Main Base containers ПРЯМО ЗАРАЗ. Це fluctuating stock, не accumulator. Рій реагує на сирий метал, що лежить незахищеним на поверхні.
 
+> **Roadmap gate (2026-08-20):** SWARM is MVP's final gameplay implementation stage, separate from the
+> RTS AI Opponent. A dedicated design/reconciliation review is mandatory first. Curve names and wave
+> examples below express the established threat relationship, not approved final roster, spawning,
+> director, targeting, authority, replication, or balance answers.
+
 Implementation:
 
 - `FerroniteThreatValue` живе на `AGP_GameState` per player.

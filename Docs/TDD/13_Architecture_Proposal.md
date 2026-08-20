@@ -1,5 +1,12 @@
 # Architecture Proposal
 
+> **CURRENT-STATE NOTICE (2026-08-20):** this document remains the intended architecture reference, but
+> its historical S-number implementation order is superseded as an execution cursor by
+> [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](../Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md).
+> Current code decides whether a capability is DONE; an absent historical class name does not reopen it.
+> The cleanup phase ended with Building Vitals / Definition Ownership. Footprint/geometry cleanup is
+> deferred pending building construction redesign.
+
 ## Scope
 
 Consolidated **implementation-time** proposal для GrimProtocol MVP — мінімальний C++ class list, responsibility breakdown, owner modules, RPC inventory, Data Assets, Tags, Attributes, risks, implementation order. Цей документ — single source перед початком C++ work (per [`Claude_Tasks/GP-0601_Architecture_Proposal`](../Development/Claude_Tasks/GP-0601_Architecture_Proposal.md)).
@@ -99,8 +106,8 @@ Buildings are pawns (static units). No building owns a Production or Constructio
 | `AGP_FerroniteDeposit` | `AGP_BuildingBase` | Yes | Resource node, CurrentCapacity, ActiveMiners / WaitingMiners queue. `TeamId=0`, `bDamageable=false`. 3×3 footprint. |
 | `AGP_Wall` | `AGP_BuildingBase` | Yes | Defensive wall segment, 2×2 footprint. Hosts `UGP_WallConnectionComponent` для 8-dir auto-connect. Mountable surface для `WallTurret`. Instantiated from MainBase Wall inventory by Build Wall — **not** a DropPod payload. |
 | `AGP_WallTurret` | `AGP_BuildingBase` (or BP variant of `AGP_DefensiveTurret`) | Yes | Constrained 2×2 turret mounted on `AGP_Wall`. Lower HP / shorter range than 4×4 free-standing Turret. |
-| `AGP_DropReticle` | `AActor` | None | Local-only drop-targeting preview (free-standing drop targets). Material parameter tint. Grid-snapped. |
-| `AGP_GhostWallSegment` | `AActor` | None | Local-only wall drag-build preview (ghosts along A* path; length limited by Wall inventory). |
+| `AGP_BuildingPlacementGhost` | `AActor` | None | **Implemented** local-only building deploy preview: payload mesh, footprint cells, validity/status, grid-snapped. Supersedes the historical `AGP_DropReticle` shape. |
+| `AGP_GhostWallSegment` (design required) | `AActor` | None | Possible wall drag-build preview; exact surface construction interaction waits for the building-system redesign gate. |
 | `AGP_CinematicCameraPawn` (reserved name) | `APawn` | None | Reserved for post-MVP cinematic / end-of-match. Не implementuet у MVP. |
 
 ### GPRuntime — Components
@@ -156,7 +163,7 @@ Per [`10_Data_Assets`](10_Data_Assets.md) + [`ADR-0002`](../Architecture_Decisio
 | `UGP_CameraConfigDataAsset` | Camera tuning | GPRuntime |
 | `UGP_FeedbackBundle_*` | Per-system VFX/SFX/anim soft refs | GPUIRuntime / GPRuntime split TBD |
 | `UGP_NotificationConfig` | Toast metadata per tag | GPUIRuntime |
-| `UGP_SwarmDefinition` (post-MVP) | SWARM unit identity | GPRuntime |
+| `UGP_SwarmDefinition` (**MVP, design required**) | Possible SWARM unit identity; exact schema/roster is not approved and must be resolved by the final-gameplay-stage design review | GPRuntime |
 | `UGP_AIBehaviorDefinition` | AI thresholds, decision tick rate, action probabilities | GPRuntime |
 | `UGP_OrbitalDropDefinition` (family `DA_GP_OrbitalDrop_*`) | Building READY purchase: cost, tags, BuildingDefinition, timing. Not Wall Package. | GPRuntime |
 | `UGP_WallPackageDefinition` (`DA_GP_WallPackage`) | Wall Package: DisplayName, Icon, Cost, SegmentCount=5, delivery timing. Not READY. | GPRuntime |
@@ -410,11 +417,11 @@ Slice 8 — Buildings + Orbital Drops + Wall + Grid (post-pivot)
   GP-S39  AGP_MainBase (BP child з Storage + drop-zone marker, no production).
   GP-S40  AGP_LogisticsHub (orbital drop only; GE_GP_UnitCap_Plus5 + storage cap bonus).
   GP-S41  AGP_DefensiveTurret free-standing 4×4 (TargetingComponent + CombatComponent).
-  GP-S42A Wall Package Data + MainBase Wall Inventory (purchase, one rocket, stock 0..5, depot event, Build Wall availability). **Next implementation after GP-S41M.**
+  GP-S42A Wall Package Data + MainBase Wall Inventory (purchase, one rocket, stock 0..5, depot event, Build Wall availability). **DONE; historical sequence note only.**
   GP-S42B AGP_Wall + UGP_WallConnectionComponent (2×2, 8-dir bitfield, local neighbor refresh; no player drag).
   GP-S42C Wall Drag Placement (Build Wall mode, inventory-limited preview, atomic consume + spawn via BuildGrid / wall authority — **not** OrbitalDeliverySubsystem / DropPod).
   GP-S43  AGP_WallTurret variant (2×2 wall-mounted, later).
-  GP-S44  AGP_DropReticle (local building-deploy reticle). Ghost wall preview lives in S42C.
+  GP-S44  Building-deploy reticle capability is **DONE via AGP_BuildingPlacementGhost**; do not recreate the historical class. Ghost wall preview remains a separate S42C concern.
   GP-S45  **SUPERSEDED by GP-S42C** — old “sequential pod cascade / PathLength × cost” must not be implemented.
   GP-S46  UGP_GA_Repair (Worker channel ability — retained from pre-pivot for damage repair).
   GP-S46A Sell + Demolish (GP-0307): Server_SellBuilding / Server_DemolishWalls RPCs, UGP_BuildingDefinition.bSellable/SellRefundRate fields, GE_GP_RefundOrbital, demolish cursor mode UI integration.
@@ -452,6 +459,12 @@ Slice 13 — Match End + Polish
 ```
 
 Each `GP-S##` slice — окрема code task; не починається без зеленого світла.
+
+The block above is a **historical decomposition**, not the current execution order. Current dependency
+order is maintained in the post-vitals reconciliation: FoW runtime first; production UI/minimap; RTS AI
+Opponent; remaining bounded gameplay and redesign-approved building work; Steam/session and match
+completion; then a dedicated SWARM design gate and SWARM as the **last gameplay implementation stage of
+MVP**. SWARM and the RTS AI Opponent are separate systems. Full end-to-end validation follows SWARM.
 
 ## Pillar 8 — MVP Production Rule (Cross-Slice Gate)
 

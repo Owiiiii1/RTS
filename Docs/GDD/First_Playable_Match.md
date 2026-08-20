@@ -1,5 +1,11 @@
 # First Playable Match
 
+> **SWARM roadmap gate (2026-08-20):** SWARM remains in MVP and is the final gameplay implementation
+> stage, but a dedicated design/reconciliation review is mandatory before implementation. Grunt counts,
+> first-wave timing, spawn points, targeting, and escalation examples in this story are illustrative
+> placeholders until that review; they are not approved implementation requirements. SWARM is separate
+> from the player-like RTS AI Opponent.
+
 ## Scope
 
 Один end-to-end story, що описує **повний цикл** GrimProtocol матчу — від запуску гри до повернення у головне меню. Без gaps у правилах, без implicit decisions. Це **canonical reference** для всіх gameplay tasks Phase 1–5; будь-яке нове правило має відповідати цій story або призводити до її оновлення.

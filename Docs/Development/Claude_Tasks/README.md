@@ -6,9 +6,10 @@
 
 ## Cursor — NEXT Task
 
-> Стан станом на 2026-08-19. Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
+> Стан станом на 2026-08-20. Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), and the current [`MVP roadmap reconciliation`](../MVP_Roadmap_Reconciliation_Post_Building_Vitals.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Configuration data ownership cleanup. **Current: BUILDING_VITALS_DEFINITION_OWNERSHIP_FINALIZED_READY_FOR_MERGE**.
+**Поточна фаза:** post-vitals factual MVP roadmap. The architecture/config cleanup phase is closed.
+**Current: MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW**.
 
 **Status snapshot:**
 
@@ -22,9 +23,14 @@
 | **Cleanup Slice D** Unit payload compatibility | **DONE / on `main`** @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160` |
 | **Cleanup Slice G** Delivery timing ownership | **DONE / on `main`** @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65` |
 | **Building procurement + payload ownership** | **FINALIZED READY FOR MERGE** — [`GP-Building-Procurement-Payload-Ownership.md`](GP-Building-Procurement-Payload-Ownership.md) — **NOT MERGED** |
-| **Cleanup Slice H — Building vitals definition ownership** | **FINALIZED READY FOR MERGE** — [`GP-Building-Vitals-Definition-Ownership.md`](GP-Building-Vitals-Definition-Ownership.md) — **NOT MERGED** |
+| **Cleanup Slice H — Building vitals definition ownership** | **DONE / on `main`** @ `b7e391a636749173c445f7994a41daf3c18ba902` |
+| **Post-vitals MVP roadmap reconciliation** | **READY FOR REVIEW** — [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](../MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **NOT MERGED** |
 
-**NEXT action для оператора:** merge `feature/gp-building-vitals-definition-ownership`. Do **not** start footprint cleanup, GP-S42B / GP-S42C / FoW.
+**Exactly one NEXT production capability after this docs review:** three-state per-team **Fog of War runtime foundation**.
+
+Do **not** start footprint/geometry cleanup; it is deferred pending building construction redesign.
+Do **not** implement SWARM now. SWARM is separate from the RTS AI Opponent and is
+**MVP — FINAL IMPLEMENTATION STAGE; DESIGN REVIEW REQUIRED BEFORE IMPLEMENTATION**.
 
 ### Drift Warning
 

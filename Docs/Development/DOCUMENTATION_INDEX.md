@@ -10,12 +10,12 @@
 
 | Domain | Canonical path | Notes |
 | --- | --- | --- |
-| **Architecture** | `Docs/Architecture_Decisions/` (ADR wins) + `Docs/TDD/13_Architecture_Proposal.md` | ADR-0009 (Orbital Delivery) overrides pre-pivot building/production examples. |
+| **Architecture** | `Docs/Architecture_Decisions/` (ADR wins) + `Docs/TDD/13_Architecture_Proposal.md` | ADR-0009 overrides pre-pivot examples; current implementation order/status is reconciled by [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md). |
 | **Gameplay** | `Docs/GDD/` + `Docs/Game_Pitch.md` | Prefer `02`, `06`, `08`, `10`, `11`, `12` over stale fragments in `00` / `09` / `Out_Of_Scope`. |
 | **Workflow / process** | `GRIM_PROTOCOL_START_RULES.md` (root + `Docs/Development/`) + [`Risk_Based_Development_Workflow.md`](Risk_Based_Development_Workflow.md) + `/CONTRIBUTING.md` + `/STYLE.md` + `Docs/Development/Git_Workflow.md` + `Coding_Rules.md` | One stage at a time; operator validates in UE Editor. Test/build selection is risk-based. |
 | **Current status / NEXT** | `Docs/Development/AI_Project_Log.md` + **this file** + `Docs/Development/Claude_Tasks/README.md` (cursor) | Cursor must match disk/`AI_Project_Log`. |
 | **Engineering rules** | `/CONTRIBUTING.md`, `/STYLE.md`, `Docs/Development/Coding_Rules.md` | Review-blocking rules. |
-| **Implementation map** | `Docs/TDD/13_Architecture_Proposal.md` | Slice order S01… after foundation. |
+| **Implementation map** | [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) + `Docs/TDD/13_Architecture_Proposal.md` | Reconciliation owns current capability status/order; TDD/13 owns intended architecture and historical mapping. |
 
 ### Supporting indexes
 
@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | Current `origin/main` baseline: `71a7c700a1f4b066d30c0490365099c82ce91a41` |
+| Code baseline | Current `origin/main` baseline: `b7e391a636749173c445f7994a41daf3c18ba902` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **Building procurement + payload ownership** on `main` @ `71a7c700a1f4b066d30c0490365099c82ce91a41` |
+| Last closed / merged stage | **Building Vitals / Definition Ownership** on `main` @ `b7e391a636749173c445f7994a41daf3c18ba902` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-Building-Vitals-Definition-Ownership.md`](Claude_Tasks/GP-Building-Vitals-Definition-Ownership.md) — **BUILDING_VITALS_DEFINITION_OWNERSHIP_FINALIZED_READY_FOR_MERGE** |
+| Current stage | [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW** |
 
 ---
 
@@ -51,7 +51,11 @@
 
 **Closed on `main`:** Delivery timing ownership cleanup @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`; Unit payload compatibility cleanup @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`; Unit numeric compatibility cleanup @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`; Dead overlap setting removal @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`; Settings Visibility Truth @ `f38e803771261c60d865949c693a52a73fbcedb2`; Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current:** [`Claude_Tasks/GP-Building-Vitals-Definition-Ownership.md`](Claude_Tasks/GP-Building-Vitals-Definition-Ownership.md) — **BUILDING_VITALS_DEFINITION_OWNERSHIP_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
+**Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW**. Historical S-number order is no longer the execution cursor.
+
+**Exactly one NEXT production capability after review:** three-state per-team **Fog of War runtime foundation**.
+
+**Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 
 **Do not** implement old pod-per-segment Wall.
 
@@ -102,14 +106,13 @@
 | `UGP_ResourceGameplaySettings` + `GP/Config/DefaultGame.ini` (`[/Script/GPRuntime.GP_ResourceGameplaySettings]`) | Active — Project Settings → Game → GP Resource Gameplay (P2 + P3 `DropOffRetrySeconds`) |
 | `UGP_GameplayPresentationSettings` + `DefaultGame.ini` (`[/Script/GPRuntime.GP_GameplayPresentationSettings]`) | Active — Project Settings → Game → GP Gameplay Presentation (S29R team colors + health bar tunables) |
 | [`Configuration_Data_Ownership_Audit.md`](Configuration_Data_Ownership_Audit.md) | Current factual ownership/precedence audit; recommendations are not implemented architecture |
+| [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) | Current factual MVP capability matrix, remaining stages, historical mapping, and NEXT authority |
 
 ### Stale / needs cleanup (still in active tree)
 
 | Document | Issue |
 | --- | --- |
-| `Docs/GDD/00_Project_Overview.md` | Pre-pivot SWARM/success-criteria wording leftovers |
 | `Docs/GDD/09_UI_UX.md` | Build command / construction UX leftovers |
-| `Docs/GDD/Out_Of_Scope.md` | Still lists FoW as MVP exclusion; FoW is MVP (GDD/11, TDD/15) |
 | `Docs/GDD/01_Game_Pillars.md` | Residual “Build” feedback wording |
 | `Docs/TDD/00_Technical_Overview.md` | Common UI marked deferred; TDD/12 requires it |
 | `Docs/TDD/01_Module_Architecture.md` | Still mentions Production/Construction ownership |
@@ -134,8 +137,8 @@
 
 1. **Engine version (resolved in active rules):** process/start rules + SETUP-001 → **5.8.1**. Older gameplay/tech overviews said 5.7 — updated in DOCS-001 for active docs.
 2. **Task cursor vs disk:** Claude_Tasks claimed S01–S03 DONE / NEXT S04; disk has blank `GP` only → corrected to **NEXT = GP-S01**.
-3. **Economy / SWARM:** Canon = `FerroniteThreatValue` from planetary stock at base (`GDD/06`, ADR-0009). Conflict: `GDD/00` still implies SWARM scales with shipped Ferronite / time-escalation produce loop.
-4. **FoW MVP:** In MVP per GDD/11 + TDD/15 + Docs/README pivots. Conflict: `GDD/Out_Of_Scope.md` still excludes full FoW from MVP.
+3. **Economy / SWARM (resolved 2026-08-20):** `FerroniteThreatValue` from raw planetary stock at base is canonical; `GDD/00` was aligned. Final SWARM behavior remains DESIGN REQUIRED.
+4. **FoW MVP (resolved 2026-08-20):** three-state FoW is in MVP per GDD/11 + TDD/15; `GDD/Out_Of_Scope.md` now excludes only advanced embellishments.
 5. **Common UI enablement timing:** Mandatory per TDD/12 + CONTRIBUTING/README. Residual: TDD/00 still says deferred in places; `GP.uproject` lacks CommonUI until GP-S01 (expected).
 6. **CommonGame / Lyra UI stack (RESOLVED 2026-08-01):** Active docs previously listed `CommonGame` (+ often a separate `CommonInput` plugin entry) as mandatory. **Resolution:** blank UE 5.8.1 uses stock plugins `CommonUI` + `ModelViewViewModel` only; `CommonInput` is a module dependency provided with Common UI; `EnhancedInput` remains for gameplay IMC. `CommonGame` / `CommonUser` / Lyra foundation are **not** required and must not be imported (ADR-0005). Updated: GP-S01, TDD/12, TDD/13 (S47), GP-0401.
 7. **Local production vs orbital:** ADR-0009 / GDD orbital docs win. Residual Production/Construction references remain in CONTRIBUTING component list, TDD/01, ADR-0003 examples, GDD/09.
@@ -166,4 +169,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-Current baseline: `origin/main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`. Current stage: **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_FINALIZED_READY_FOR_MERGE** on `feature/gp-building-procurement-payload-ownership`. **NOT MERGED.**
+Current baseline: `origin/main` @ `b7e391a636749173c445f7994a41daf3c18ba902`. Current docs stage: **MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW** on `docs/gp-mvp-roadmap-reconciliation-post-vitals`. **NOT MERGED.** NEXT after review: three-state per-team Fog of War runtime foundation.

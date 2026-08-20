@@ -1,5 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — MVP roadmap reconciliation after Building Vitals
+
+Status: **MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW**
+
+- Docs-only branch `docs/gp-mvp-roadmap-reconciliation-post-vitals` from exact `origin/main` baseline `b7e391a636749173c445f7994a41daf3c18ba902`
+- Audited current production code and canonical GDD/TDD by capability rather than historical class/S-number
+- Historical S44 building-reticle capability is **DONE — SUPERSEDED IMPLEMENTATION SHAPE** via the current BuildingPlacementGhost/controller/BuildGrid/READY/DropPod flow; wall drag remains separate and missing
+- Architecture/config cleanup ends after Building Vitals; footprint/geometry ownership cleanup is **DEFERRED** pending building construction redesign
+- Current major gaps: FoW, production CommonUI/MVVM UI/minimap, RTS AI Opponent, Repair, Hub storage-cap bonus, redesign-approved wall surface systems, Sell/Demolish, Steam product flow, complete match return/disconnect flow, and SWARM
+- RTS AI Opponent and SWARM are separate. SWARM is **MVP — FINAL IMPLEMENTATION STAGE** and **DESIGN REVIEW REQUIRED BEFORE IMPLEMENTATION**
+- Exactly one recommended NEXT production capability: three-state per-team Fog of War runtime foundation
+- No runtime/source/config/content changes; no Unreal build or gameplay contracts required. **NOT MERGED.**
+- Roadmap: `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — Building vitals definition ownership finalization
 
 Status: **BUILDING_VITALS_DEFINITION_OWNERSHIP_FINALIZED_READY_FOR_MERGE**

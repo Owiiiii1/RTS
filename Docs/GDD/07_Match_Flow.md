@@ -1,5 +1,11 @@
 # Match Flow
 
+> **SWARM roadmap gate (2026-08-20):** SWARM is the final gameplay implementation stage of MVP and
+> requires a dedicated design/reconciliation review first. Timings, wave/director behavior, spawn
+> rules, roster, and targeting below are placeholders until that review. The established invariant is
+> only that `FerroniteThreatValue` reflects raw stock at MainBase (drop-off up, launch down);
+> `FerroniteScore` and `OrbitalFerronite` do not drive SWARM pressure.
+
 ## Match Length
 
 **MVP target: 10 хвилин per match (hard cap).** Швидкий, інтенсивний loop. Без soft cap, без tie-break extension у MVP.

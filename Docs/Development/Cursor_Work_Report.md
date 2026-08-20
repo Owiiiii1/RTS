@@ -1,115 +1,143 @@
-# Cursor Work Report — Building Vitals Definition Ownership
+# Cursor Work Report — MVP Roadmap Reconciliation Post Vitals
 
 ## Status
 
-**BUILDING_VITALS_DEFINITION_OWNERSHIP_FINALIZED_READY_FOR_MERGE**
+**MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW**
 
 **NOT MERGED.**
 
 ## Branch / base / head
 
-- Branch: `feature/gp-building-vitals-definition-ownership`
-- Base: `origin/main` @ `71a7c700a1f4b066d30c0490365099c82ce91a41`
-- Implementation head: `ff2e45f3748624636b6454c0ac0c75776e1da13f`
-- Final head: this finalization commit
+- Branch: `docs/gp-mvp-roadmap-reconciliation-post-vitals`
+- Exact base: `origin/main` @ `b7e391a636749173c445f7994a41daf3c18ba902`
+- Audited code head: `b7e391a636749173c445f7994a41daf3c18ba902`
+- Final documentation head: the commit containing this report
 
-## Operator PASS
+## Exact docs changed/added
 
-Cold/open Editor + PIE confirmed:
-
-- MainBase initializes at 1000/1000
-- Logistics Hub initializes at 500/500
-- Defensive Turret initializes at 400/400
-- building placement remained functional
-- Hub/Turret behavior remained normal
-
-## Final ownership chain
-
-`UGP_BuildingDefinition`
-→ `UnitDefinition`
-→ `AGP_UnitBase::UnitDefinitionAsset`
-→ existing async UnitDefinition pipeline
-→ GAS attributes.
-
-For a valid BuildingDefinition, nested UnitDefinition outranks actor/BP `UnitDefinitionAsset`, `BuildingDefinition.MaxHealth`, and actor `Default*` combat values. Runtime Health/MaxHealth/Damage/Armor/Resistance/Cooldown/Range remain GAS attributes after one-shot initialization.
-
-`BuildingDefinition.MaxHealth` remains a definition-level bootstrap/compatibility fallback only.
-
-## Initialization-order confirmation
-
-- UnitBase initializes ASC actor info first.
-- Non-building units keep the existing immediate UnitDefinition path (`ShouldDeferUnitDefinitionInitialization()` returns false).
-- Buildings with a non-empty unresolved `BuildingDefinitionAsset` defer UnitDefinition/GAS initialization.
-- BuildingDefinition completion copies a valid nested `UnitDefinition` onto `UnitDefinitionAsset`, then runs the existing UnitDefinition pipeline once.
-- Existing one-shot guards prevent temporary Default* GAS initialization and a second GAS apply.
-- Orbital DropPod assigns the catalog `BuildingDefinitionAsset` during deferred spawn, before `FinishSpawning` / BeginPlay.
-- Empty nested UnitDefinition preserves explicit actor UnitDefinitionAsset or actor Default* fallback.
-- Unresolved nested UnitDefinition remains pending without early Default* GAS init.
-- Nested load failure follows the existing UnitBase Default* fallback and does not hang.
-
-## Non-building compatibility confirmation
-
-Worker/Salvage Walker UnitDefinition semantics are unchanged. Unit DropPod still assigns `UnitDefinitionAsset` only when empty. `gp.Units.RunUnitDefinitionContractTest` and `gp.Resource.RunOrbitalUnitDropContractTest` both passed.
-
-Logistics Hub +5 unit cap, MainBase storage, and Defensive Turret combat remain on their existing owners. Footprint/grid/`PlacementFootprintBounds`/`NavigationObstacle`/snap/collision were not changed.
-
-## Exact test results
-
-All Failures=0, Cancelled=false:
-
-- `gp.Building.RunBuildingVitalsOwnershipContractTest`
-- `gp.Building.RunOrbitalBuildingDropContractTest`
-- `gp.Building.RunMultiBuildingDataContractTest`
-- `gp.Building.RunDefensiveTurretContractTest`
-- `gp.Resource.RunUnitCapLogisticsHubContractTest`
-- `gp.Units.RunUnitDefinitionContractTest`
-- `gp.Combat.RunHealthBarContractTest`
-- `gp.Combat.RunAutoAcquireContractTest`
-- `gp.Combat.RunAttackMoveContractTest`
-- `gp.Resource.RunOrbitalUnitDropContractTest`
-- `gp.Economy.RunEconomyLogisticsDataContractTest`
-
-## S28 contamination note
-
-`gp.Resource.RunS28RegressionSuite` was retried once because shared UnitBase lifecycle code changed. It still stopped in the Worker hauling child with Failures=15 after a hostile authored `BP_GP_SalvageWalkerLONGRAGE` in the locally modified prototype map auto-acquired and attacked the diagnostic worker. Protected map/content was not changed to force the suite. Escalation stopped there.
-
-## Builds
-
-- GPEditor Win64 Development + UHT: **PASS**
-- GP Win64 Development: **PASS**
-- GP Win64 Shipping: **PASS**
-
-## Exact final changed-file list
-
-Versus `origin/main` @ `71a7c700a1f4b066d30c0490365099c82ce91a41`:
-
+- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md` — added; current roadmap authority
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Claude_Tasks/GP-Building-Vitals-Definition-Ownership.md`
+- `Docs/Development/Claude_Task_Backlog.md`
 - `Docs/Development/Claude_Tasks/README.md`
+- `Docs/Development/Claude_Work_Plan.md`
 - `Docs/Development/Configuration_Data_Ownership_Audit.md`
-- `Docs/Development/Cursor_Work_Report.md`
 - `Docs/Development/DOCUMENTATION_INDEX.md`
-- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPBuildingVitalsOwnershipContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPOrbitalBuildingDropContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Orbital/GPDropPod.cpp`
-- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingVitalsOwnershipContractTest.h`
-- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `Docs/Development/Cursor_Work_Report.md`
+- `Docs/GDD/00_Project_Overview.md`
+- `Docs/GDD/06_Resources.md`
+- `Docs/GDD/07_Match_Flow.md`
+- `Docs/GDD/First_Playable_Match.md`
+- `Docs/GDD/Out_Of_Scope.md`
+- `Docs/TDD/13_Architecture_Proposal.md`
 
-No maps, Blueprints, DataAssets, materials, Config, or other Content files are in the committed diff.
+## Capability audit summary
 
-## Protected-content confirmation
+- **DONE:** camera, selection, Move, Attack, auto-acquire, timed retaliation, Attack-Move,
+  damage/health/death, health bars, and Salvage Walker.
+- **PARTIAL:** Stop is implemented in server validation/FSM cleanup, but no player input/smart-command
+  path emits it.
+- **DONE:** Ferronite deposit/mining/cargo, MainBase containers, per-team `FerroniteThreatValue`,
+  launch, `OrbitalFerronite`, and cumulative `FerroniteScore`.
+- **DONE:** unit catalog/manifest/DropPod, building catalog/purchase/READY, functional building ghost,
+  validation/snap/grid reservation/confirm/cancel, and building DropPod/payload spawn.
+- **DONE:** MainBase core role, Logistics Hub +5 cap, Defensive Turret, building DataAsset payload/vitals
+  ownership, Wall Package purchase/delivery/inventory, and quota/timer/annihilation/result mechanics.
+- **PARTIAL:** Logistics Hub lacks its canonical storage-cap bonus; UI uses a capable TEMP HUD but has no
+  production CommonUI/MVVM implementation; match flow lacks product-level start/return/disconnect.
+- **NOT STARTED:** FoW runtime, production HUD/Order Menu/minimap/notifications, RTS AI Opponent,
+  Worker Repair, wall actor/connection/drag placement/Wall Turret, Sell/Demolish, Steam sessions/menus,
+  production end screen, and SWARM runtime.
 
-Untouched and not staged:
+## Major historical roadmap corrections
 
-- `GP/Config/DefaultGame.ini`
-- `GP/Config/DefaultEngine.ini`
-- maps, Blueprints, DataAssets, materials, and untracked Content
-- locally edited Logistics Hub BuildingDefinition/DataAsset content
+- Historical S-numbers are task history/mapping, not the current execution cursor.
+- Combat through Attack-Move is implemented, often under superseding R-slice shapes.
+- No historical `UGP_CombatComponent`, `UGP_TargetingComponent`, or cooldown-GE class resurrection is
+  required where current capability is complete.
+- Building/grid/DropPod/DataAsset ownership capabilities are substantially beyond the post-S32R audit.
+- Match quota/timer/annihilation/result wiring is done; disconnect/product end flow remains.
+- GP-S42A Wall Package is done; wall surface construction is not.
 
-## Stop
+## S44 / building placement verdict
+
+**DONE — SUPERSEDED IMPLEMENTATION SHAPE.**
+
+`AGP_BuildingPlacementGhost` + `AGP_PlayerController` placement state + `GPBuildingDropAuthority` +
+`UGP_BuildGridSubsystem` + READY inventory + `AGP_DropPod` provide the functional building
+reticle/deployment capability. Pure visual polish is not an MVP blocker. Wall drag preview is a separate
+missing wall-surface capability and is not S44.
+
+## Footprint/geometry verdict
+
+**DEFERRED.**
+
+The cleanup phase ends with Building Vitals / Definition Ownership. No standalone footprint/geometry
+ownership cleanup is scheduled. Current footprint/grid/bounds/navigation/snap/collision behavior remains
+compatibility/runtime infrastructure until a building construction/placement redesign requires a
+concrete decision.
+
+## Exact remaining MVP capabilities
+
+1. Three-state per-team FoW and its gameplay consumers.
+2. Production CommonUI/MVVM HUD, Order Menu, minimap, notifications, and end screen.
+3. Primitive RTS AI Opponent: Explore/Mine/Ship/Order/Defend.
+4. Player-facing Stop command input/dispatch completion.
+5. Worker Repair.
+6. Logistics Hub storage-cap bonus.
+7. Redesign-approved wall actor/connection/Build Wall drag/Wall Turret surface system.
+8. Sell and Demolish.
+9. Steam session/lobby/host/find/join/travel/disconnect/menu flow.
+10. OpponentDisconnect result, return/session cleanup, and complete match product flow.
+11. Remaining MVP-readable feedback.
+12. SWARM after its mandatory design review, as the last gameplay implementation stage.
+
+## Exact recommended NEXT
+
+**Three-state per-team Fog of War runtime foundation.**
+
+It is a missing canonical MVP capability and a dependency for visibility-gated selection/combat/drop
+rules, production minimap, RTS AI Explore behavior, and later readable SWARM pressure. It does not
+depend on the deferred building redesign.
+
+## RTS AI Opponent
+
+**NOT STARTED.** No production `AGP_AIController`, `UGP_AIBehaviorDefinition`, or
+Explore/Mine/Ship/Order/Defend implementation exists. It is a player-like strategic economy opponent,
+not SWARM.
+
+## SWARM
+
+**MVP — FINAL IMPLEMENTATION STAGE.**
+
+**DESIGN REVIEW REQUIRED BEFORE IMPLEMENTATION.**
+
+No SWARM runtime implementation exists. The design gate must resolve the MVP definition, minimum roster,
+spawning and zones, director model, threat mapping, targeting/objectives, interactions, navigation,
+match scaling, authority/replication, victory/loss behavior, performance budget, and explicit exclusions.
+No final answers were invented in this docs pass.
+
+Established invariant only:
+
+- raw Planetary Ferronite currently stored at MainBase drives `FerroniteThreatValue`;
+- Worker drop-off raises threat;
+- container launch lowers threat;
+- `FerroniteScore` and `OrbitalFerronite` do not drive SWARM pressure.
+
+## Validation
+
+- Repository-wide source searches supported every newly claimed DONE/PARTIAL/NOT STARTED status.
+- Canonical GDD/TDD and completed task/reconciliation reports were cross-checked against production code.
+- Historical `Roadmap_Reconciliation_Post_GP-S32R.md` was preserved unchanged as a snapshot.
+- Updated Markdown references were checked for consistent relative targets.
+- `git diff --check` passed.
+- No Unreal build, UHT, or gameplay contract was run because this task is documentation-only.
+- Final staging/diff audit is restricted to Markdown under `Docs/`.
+
+## Protected files
+
+No production/source/config/content file belongs to this branch diff or commit. Existing local protected
+Config, map, Blueprint, DataAsset, material, VFX, and `Tools/` changes remain unstaged and untouched.
+
+## Merge state
 
 **NOT MERGED.**

@@ -7,6 +7,12 @@ Base: `origin/main` @ `d9e89605aae76446a5b41281df1c8f8773d67e4e`
 
 This is a factual, read-only architecture audit. It does not authorize field removal, migration, config edits, asset edits, or runtime changes.
 
+> **Roadmap disposition (2026-08-20):** the architecture/config cleanup phase ended with Building
+> Vitals / Definition Ownership. Remaining recommendations in this audit are technical-debt evidence,
+> not immediate MVP tasks. In particular, footprint/geometry ownership cleanup is deferred pending a
+> possible building construction/placement redesign. Current execution order is owned by
+> [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md).
+
 ## 1. Executive Summary
 
 The audit traced **48 exposed Project Settings fields** (29 orbital, 8 resource, 11 presentation including the two fields nested in `TeamStyles`) and **58 fields across six definition classes**, for **106 declared designer-facing settings/definition fields**, plus actor/CDO geometry and fallback chains.

@@ -1,5 +1,13 @@
 # Claude Task Backlog
 
+> **CURRENT ROADMAP AUTHORITY (2026-08-20):**
+> [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md).
+> The phase/S-number queue below is retained as task inventory and history; it is not the current
+> execution order. Classify the capability against current code before opening any historical task.
+> Immediate NEXT is the three-state per-team Fog of War runtime foundation. SWARM is a separate MVP
+> system from the RTS AI Opponent and is the final gameplay implementation stage, after a mandatory
+> design/reconciliation review.
+
 ## Scope
 
 Це індекс задач для Claude Code. Задачі виконуються **строго по одній**: Claude відкриває один task-файл, виконує тільки його scope, фіксує результат, зупиняється або переходить до наступної задачі тільки після явного дозволу.
@@ -96,7 +104,7 @@
 
 18. GP-0701 Expand TDD/12 UI Architecture — file created by GP-0401 з MVP HUD section; GP-0701 додає theme system, localization, settings panel, accessibility, scaling.
 19. GP-0702 Expand AI Architecture — `AGP_AIController` (per [ADR-0008](../Architecture_Decisions/ADR_0008_AI_Opponent_AAIController.md)) state machine deep dive: state transitions, decision-tick policies, `UGP_AIBehaviorDefinition` schema, drop-targeting heuristics, defense reaction thresholds. AI is **MVP** (per `project_ai_opponent_in_mvp`); це expansion task для AI nuance after Slice 11A implementation. Live або у TDD/16_AI_Architecture.md OR section у TDD/13.
-20. GP-0703 Update TDD for Delivery-Quota Win + SWARM-FerroniteThreatValue tie-in — refresh `GDD/08_Win_Lose_Conditions` from "score race" до delivery quota measured in `FerroniteScore` (`DeliveryQuotaFerroniteScore`) per [ADR-0009](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md). SWARM driven by `FerroniteThreatValue` (raw stock at base; up on drop-off, down on launch), not by shipping. Win-reason tags `GP.Match.WinReason.{DeliveryQuota,TimerScore,Annihilation,OpponentDisconnect}`. Update tie-break ladder. Update TDD/03 multiplayer notes.
+20. GP-0703 Historical docs task — delivery-quota/FerroniteThreatValue reconciliation is already reflected in current canon. **SWARM itself is MVP, not post-MVP:** it requires a dedicated design gate and is the final gameplay implementation stage per the current roadmap. Post-MVP applies only to explicitly deferred SWARM variants/depth.
 21. GP-0801 Corporate Doctrine Tree Design (post-MVP asymmetry) — pending file creation. Scope: design 5 doctrine axes (Mining / Logistics / Defensive / Extraction Efficiency / Automated Machinery), per Pillar 5. **Updated:** doctrines apply additive modifiers до orbital drop catalog / container throughput / SWARM resistance / mining rates. Use `gp-mechanics-validator` mandatory.
 22. GP-0802 Logistics Hub Content Rewrite — `GP-0304_Barracks.md` отримав SUPERSEDED header (filename retained для cursor stability — **не** renaming). Залишилось: написати повноцінний Logistics Hub task spec per orbital model (no local build, no production component, no construction speedup; passive +MaxUnits + container-cap contribution, arrives via orbital drop). References [`05_Buildings`](../GDD/05_Buildings.md), [`06_Building_Architecture`](../TDD/06_Building_Architecture.md).
 23. GP-0803 Game Pillars Adoption Pass — verify, що всі existing tasks references Pillar-driven validation per нової `01_Game_Pillars.md` версії. **Updated scope:** verify Pillar 8 (Simple Core, Combinatorial Depth) 5-question MVP gate applied у task acceptance criteria. Verify Technical Pillar correctly renumbered 8 → 9 across all docs. Verify orbital pivot consistency.

@@ -1,5 +1,12 @@
 # Claude Work Plan
 
+> **Current execution authority (2026-08-20):**
+> [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md).
+> This file's original stage sequence is process history, not proof that a capability remains missing.
+> Immediate NEXT is the three-state per-team Fog of War runtime foundation. Architecture/config cleanup
+> ended with Building Vitals / Definition Ownership; footprint cleanup is deferred pending a possible
+> building construction redesign.
+
 ## Scope
 
 Це покрокове завдання для Claude Code. Claude має рухатися поетапно, не генерувати gameplay C++ code до погодження і тримати зміни маленькими.
@@ -42,13 +49,12 @@
 
 - Створювати код маленькими кроками.
 - Один system slice за раз.
-- Спочатку base classes.
-- Потім GAS.
-- Потім CameraPawn.
-- Потім Selection.
-- Потім Commands.
-- Потім Unit/Building.
-- Потім Steam MVP.
+- Перевіряти capability status у current roadmap, а не продовжувати historical S-number механічно.
+- Поточний dependency path: FoW runtime → production UI/HUD + minimap → RTS AI Opponent → remaining
+  bounded gameplay/building work after its design gate → Steam MVP → match completion flow.
+- SWARM і RTS AI Opponent — різні системи.
+- SWARM: **MVP — FINAL IMPLEMENTATION STAGE; DESIGN REVIEW REQUIRED BEFORE IMPLEMENTATION**.
+- Після SWARM — full MVP end-to-end validation/stabilization.
 
 ## First Playable Target
 

@@ -1,5 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — FoW world visualization binding + GPU mask correction
+
+Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Operator FAIL: enemy hiding worked; terrain fog did not apply; severe stutter.
+- Root causes: RenderTarget pointer identity skipped blendable injection; AbsoluteWorldPosition sampled
+  the post-process quad; CPU 1M world queries + float planes + blur + lerp + dual upload.
+- Fix: PlayerIndex/ViewActor local-view injection; SceneDepth+SvPosition world reconstruct; packed
+  1000×1000 bulk LocalFoW extract; GPU 9-tap and GPU temporal lerp; one ping-pong upload/revision.
+- Measured MaskEncodeMs=3.422, MaskUploadMs=0.912. Focused contracts Failures=0; GPEditor Win64
+  Development + UHT **PASS**. Regenerated only `M_GP_FoW_PostProcess`. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+
 ## 2026-08-20 — FoW world visualization post-process texture mask
 
 Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**

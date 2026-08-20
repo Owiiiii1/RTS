@@ -12,9 +12,8 @@
 #include "Materials/MaterialExpressionScalarParameter.h"
 #include "Materials/MaterialExpressionSceneTexture.h"
 #include "Materials/MaterialExpressionSubtract.h"
-#include "Materials/MaterialExpressionTextureSampleParameter2D.h"
+#include "Materials/MaterialExpressionTextureObjectParameter.h"
 #include "Materials/MaterialExpressionVectorParameter.h"
-#include "Materials/MaterialExpressionWorldPosition.h"
 #include "Misc/PackageName.h"
 #include "Misc/FeedbackContext.h"
 #include "UObject/Package.h"
@@ -47,13 +46,12 @@ namespace GPFoWPostProcessMaterialSeedPrivate
 		return UMaterialEditingLibrary::ConnectMaterialExpressions(From, FromOutput, To, ToInput);
 	}
 
-	static void ConfigureTextureParameter(
-		UMaterialExpressionTextureSampleParameter2D* Sample,
+	static void ConfigureTextureObject(
+		UMaterialExpressionTextureObjectParameter* TextureObject,
 		const FName ParameterName)
 	{
-		Sample->ParameterName = ParameterName;
-		Sample->SamplerType = SAMPLERTYPE_LinearColor;
-		Sample->ConstCoordinate = 0;
+		TextureObject->ParameterName = ParameterName;
+		TextureObject->SamplerType = SAMPLERTYPE_LinearColor;
 	}
 
 	static UMaterial* GetOrCreateMaterial()
@@ -94,22 +92,47 @@ namespace GPFoWPostProcessMaterialSeedPrivate
 		Material->BlendableLocation = BL_SceneColorAfterTonemapping;
 		Material->SetShadingModel(MSM_Unlit);
 
-		UMaterialExpressionWorldPosition* WorldPosition = Cast<UMaterialExpressionWorldPosition>(
-			CreateExpr(Material, UMaterialExpressionWorldPosition::StaticClass(), -1400, 0));
+		UMaterialExpressionSceneTexture* SceneDepth = Cast<UMaterialExpressionSceneTexture>(
+			CreateExpr(Material, UMaterialExpressionSceneTexture::StaticClass(), -1600, -40));
+		SceneDepth->SceneTextureId = PPI_SceneDepth;
+
+		UMaterialExpressionCustom* ReconstructWorld = Cast<UMaterialExpressionCustom>(
+			CreateExpr(Material, UMaterialExpressionCustom::StaticClass(), -1320, 0));
+		ReconstructWorld->Description = TEXT("GPFoWReconstructSceneWorld");
+		ReconstructWorld->OutputType = CMOT_Float3;
+		ReconstructWorld->Code = TEXT(
+			"float DeviceZ = ConvertToDeviceZ(max(SceneDepth, 0.0));\n"
+			"float3 TranslatedWorld = SvPositionToTranslatedWorld(float4(Parameters.SvPosition.xy, DeviceZ, 1.0));\n"
+			"float3 WorldPosition = TranslatedWorld - ResolvedView.PreViewTranslation;\n"
+			"return WorldPosition;\n");
+		ReconstructWorld->Inputs.Reset();
+		{
+			FCustomInput& Input = ReconstructWorld->Inputs.AddDefaulted_GetRef();
+			Input.InputName = TEXT("SceneDepth");
+		}
+		UMaterialExpressionComponentMask* SceneDepthR = Cast<UMaterialExpressionComponentMask>(
+			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -1460, -40));
+		SceneDepthR->R = true;
+		SceneDepthR->G = false;
+		SceneDepthR->B = false;
+		SceneDepthR->A = false;
+		Connect(SceneDepth, TEXT("Color"), SceneDepthR, TEXT(""));
+		Connect(SceneDepthR, TEXT(""), ReconstructWorld, TEXT("SceneDepth"));
+
 		UMaterialExpressionComponentMask* WorldXY = Cast<UMaterialExpressionComponentMask>(
-			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -1180, 0));
+			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -1040, 0));
 		WorldXY->R = true;
 		WorldXY->G = true;
 		WorldXY->B = false;
 		WorldXY->A = false;
-		Connect(WorldPosition, TEXT(""), WorldXY, TEXT(""));
+		Connect(ReconstructWorld, TEXT(""), WorldXY, TEXT(""));
 
 		UMaterialExpressionVectorParameter* OriginParam = Cast<UMaterialExpressionVectorParameter>(
-			CreateExpr(Material, UMaterialExpressionVectorParameter::StaticClass(), -1400, 220));
+			CreateExpr(Material, UMaterialExpressionVectorParameter::StaticClass(), -1600, 220));
 		OriginParam->ParameterName = TEXT("FoWOriginXY");
 		OriginParam->DefaultValue = FLinearColor(-100000.0f, -100000.0f, 0.0f, 0.0f);
 		UMaterialExpressionComponentMask* OriginXY = Cast<UMaterialExpressionComponentMask>(
-			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -1180, 220));
+			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -1320, 220));
 		OriginXY->R = true;
 		OriginXY->G = true;
 		OriginXY->B = false;
@@ -117,11 +140,11 @@ namespace GPFoWPostProcessMaterialSeedPrivate
 		Connect(OriginParam, TEXT(""), OriginXY, TEXT(""));
 
 		UMaterialExpressionVectorParameter* InvExtentParam = Cast<UMaterialExpressionVectorParameter>(
-			CreateExpr(Material, UMaterialExpressionVectorParameter::StaticClass(), -1400, 440));
+			CreateExpr(Material, UMaterialExpressionVectorParameter::StaticClass(), -1600, 440));
 		InvExtentParam->ParameterName = TEXT("FoWInvExtentXY");
 		InvExtentParam->DefaultValue = FLinearColor(1.0f / 200000.0f, 1.0f / 200000.0f, 0.0f, 0.0f);
 		UMaterialExpressionComponentMask* InvExtentXY = Cast<UMaterialExpressionComponentMask>(
-			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -1180, 440));
+			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -1320, 440));
 		InvExtentXY->R = true;
 		InvExtentXY->G = true;
 		InvExtentXY->B = false;
@@ -129,53 +152,88 @@ namespace GPFoWPostProcessMaterialSeedPrivate
 		Connect(InvExtentParam, TEXT(""), InvExtentXY, TEXT(""));
 
 		UMaterialExpressionSubtract* WorldMinusOrigin = Cast<UMaterialExpressionSubtract>(
-			CreateExpr(Material, UMaterialExpressionSubtract::StaticClass(), -960, 40));
+			CreateExpr(Material, UMaterialExpressionSubtract::StaticClass(), -860, 40));
 		Connect(WorldXY, TEXT(""), WorldMinusOrigin, TEXT("A"));
 		Connect(OriginXY, TEXT(""), WorldMinusOrigin, TEXT("B"));
 
-		UMaterialExpressionMultiply* UV = Cast<UMaterialExpressionMultiply>(
-			CreateExpr(Material, UMaterialExpressionMultiply::StaticClass(), -760, 40));
-		Connect(WorldMinusOrigin, TEXT(""), UV, TEXT("A"));
-		Connect(InvExtentXY, TEXT(""), UV, TEXT("B"));
+		UMaterialExpressionMultiply* MaskUV = Cast<UMaterialExpressionMultiply>(
+			CreateExpr(Material, UMaterialExpressionMultiply::StaticClass(), -680, 40));
+		Connect(WorldMinusOrigin, TEXT(""), MaskUV, TEXT("A"));
+		Connect(InvExtentXY, TEXT(""), MaskUV, TEXT("B"));
 
-		UMaterialExpressionTextureSampleParameter2D* PreviousMask =
-			Cast<UMaterialExpressionTextureSampleParameter2D>(
-				CreateExpr(Material, UMaterialExpressionTextureSampleParameter2D::StaticClass(), -540, -180));
-		ConfigureTextureParameter(PreviousMask, TEXT("FoWPreviousMask"));
-		Connect(UV, TEXT(""), PreviousMask, TEXT("UVs"));
+		UMaterialExpressionTextureObjectParameter* PreviousMask =
+			Cast<UMaterialExpressionTextureObjectParameter>(
+				CreateExpr(Material, UMaterialExpressionTextureObjectParameter::StaticClass(), -680, -220));
+		ConfigureTextureObject(PreviousMask, TEXT("FoWPreviousMask"));
 
-		UMaterialExpressionTextureSampleParameter2D* TargetMask =
-			Cast<UMaterialExpressionTextureSampleParameter2D>(
-				CreateExpr(Material, UMaterialExpressionTextureSampleParameter2D::StaticClass(), -540, 160));
-		ConfigureTextureParameter(TargetMask, TEXT("FoWTargetMask"));
-		Connect(UV, TEXT(""), TargetMask, TEXT("UVs"));
+		UMaterialExpressionTextureObjectParameter* TargetMask =
+			Cast<UMaterialExpressionTextureObjectParameter>(
+				CreateExpr(Material, UMaterialExpressionTextureObjectParameter::StaticClass(), -680, 160));
+		ConfigureTextureObject(TargetMask, TEXT("FoWTargetMask"));
 
 		UMaterialExpressionSceneTexture* SceneColor = Cast<UMaterialExpressionSceneTexture>(
-			CreateExpr(Material, UMaterialExpressionSceneTexture::StaticClass(), -540, 460));
+			CreateExpr(Material, UMaterialExpressionSceneTexture::StaticClass(), -680, 460));
 		SceneColor->SceneTextureId = PPI_PostProcessInput0;
 
 		UMaterialExpressionScalarParameter* BlendAlpha = Cast<UMaterialExpressionScalarParameter>(
-			CreateExpr(Material, UMaterialExpressionScalarParameter::StaticClass(), -540, 640));
+			CreateExpr(Material, UMaterialExpressionScalarParameter::StaticClass(), -680, 640));
 		BlendAlpha->ParameterName = TEXT("FoWBlendAlpha");
 		BlendAlpha->DefaultValue = 1.0f;
 
 		UMaterialExpressionScalarParameter* Ready = Cast<UMaterialExpressionScalarParameter>(
-			CreateExpr(Material, UMaterialExpressionScalarParameter::StaticClass(), -540, 760));
+			CreateExpr(Material, UMaterialExpressionScalarParameter::StaticClass(), -680, 760));
 		Ready->ParameterName = TEXT("FoWReady");
 		Ready->DefaultValue = 0.0f;
 
 		UMaterialExpressionScalarParameter* ExploredDim = Cast<UMaterialExpressionScalarParameter>(
-			CreateExpr(Material, UMaterialExpressionScalarParameter::StaticClass(), -540, 880));
+			CreateExpr(Material, UMaterialExpressionScalarParameter::StaticClass(), -680, 880));
 		ExploredDim->ParameterName = TEXT("FoWExploredDim");
 		ExploredDim->DefaultValue = 0.35f;
 
+		UMaterialExpressionScalarParameter* TexelSize = Cast<UMaterialExpressionScalarParameter>(
+			CreateExpr(Material, UMaterialExpressionScalarParameter::StaticClass(), -680, 1000));
+		TexelSize->ParameterName = TEXT("FoWMaskTexelSize");
+		TexelSize->DefaultValue = 0.001f;
+
+		UMaterialExpressionScalarParameter* BlurRadius = Cast<UMaterialExpressionScalarParameter>(
+			CreateExpr(Material, UMaterialExpressionScalarParameter::StaticClass(), -680, 1120));
+		BlurRadius->ParameterName = TEXT("FoWBlurRadiusTexels");
+		BlurRadius->DefaultValue = 1.0f;
+
+		UMaterialExpressionScalarParameter* DebugMode = Cast<UMaterialExpressionScalarParameter>(
+			CreateExpr(Material, UMaterialExpressionScalarParameter::StaticClass(), -680, 1240));
+		DebugMode->ParameterName = TEXT("FoWDebugMode");
+		DebugMode->DefaultValue = 0.0f;
+
 		UMaterialExpressionCustom* Compose = Cast<UMaterialExpressionCustom>(
 			CreateExpr(Material, UMaterialExpressionCustom::StaticClass(), -120, 80));
-		Compose->Description = TEXT("GPFoWCompose");
+		Compose->Description = TEXT("GPFoWComposeGPU");
 		Compose->OutputType = CMOT_Float3;
 		Compose->Code = TEXT(
-			"float2 UV = (float2(WorldX, WorldY) - float2(OriginX, OriginY)) * float2(InvExtentX, InvExtentY);\n"
+			"if (DebugMode > 0.5) return float3(1.0, 0.0, 1.0);\n"
+			"float2 UV = MaskUV;\n"
 			"float InBounds = (UV.x >= 0.0 && UV.x <= 1.0 && UV.y >= 0.0 && UV.y <= 1.0) ? 1.0 : 0.0;\n"
+			"float2 Offset = float2(max(TexelSize, 1e-6), max(TexelSize, 1e-6)) * max(BlurRadiusTexels, 0.0);\n"
+			"float4 PrevMask = Texture2DSample(PrevTex, PrevTexSampler, UV);\n"
+			"PrevMask += Texture2DSample(PrevTex, PrevTexSampler, UV + float2(Offset.x, 0.0));\n"
+			"PrevMask += Texture2DSample(PrevTex, PrevTexSampler, UV - float2(Offset.x, 0.0));\n"
+			"PrevMask += Texture2DSample(PrevTex, PrevTexSampler, UV + float2(0.0, Offset.y));\n"
+			"PrevMask += Texture2DSample(PrevTex, PrevTexSampler, UV - float2(0.0, Offset.y));\n"
+			"PrevMask += Texture2DSample(PrevTex, PrevTexSampler, UV + float2(Offset.x, Offset.y));\n"
+			"PrevMask += Texture2DSample(PrevTex, PrevTexSampler, UV + float2(-Offset.x, Offset.y));\n"
+			"PrevMask += Texture2DSample(PrevTex, PrevTexSampler, UV + float2(Offset.x, -Offset.y));\n"
+			"PrevMask += Texture2DSample(PrevTex, PrevTexSampler, UV + float2(-Offset.x, -Offset.y));\n"
+			"PrevMask /= 9.0;\n"
+			"float4 TargetMask = Texture2DSample(TargetTex, TargetTexSampler, UV);\n"
+			"TargetMask += Texture2DSample(TargetTex, TargetTexSampler, UV + float2(Offset.x, 0.0));\n"
+			"TargetMask += Texture2DSample(TargetTex, TargetTexSampler, UV - float2(Offset.x, 0.0));\n"
+			"TargetMask += Texture2DSample(TargetTex, TargetTexSampler, UV + float2(0.0, Offset.y));\n"
+			"TargetMask += Texture2DSample(TargetTex, TargetTexSampler, UV - float2(0.0, Offset.y));\n"
+			"TargetMask += Texture2DSample(TargetTex, TargetTexSampler, UV + float2(Offset.x, Offset.y));\n"
+			"TargetMask += Texture2DSample(TargetTex, TargetTexSampler, UV + float2(-Offset.x, Offset.y));\n"
+			"TargetMask += Texture2DSample(TargetTex, TargetTexSampler, UV + float2(Offset.x, -Offset.y));\n"
+			"TargetMask += Texture2DSample(TargetTex, TargetTexSampler, UV + float2(-Offset.x, -Offset.y));\n"
+			"TargetMask /= 9.0;\n"
 			"float4 Mask = lerp(PrevMask, TargetMask, saturate(BlendAlpha));\n"
 			"float Known = saturate(Mask.r) * InBounds;\n"
 			"float Visible = saturate(Mask.g) * InBounds;\n"
@@ -193,78 +251,26 @@ namespace GPFoWPostProcessMaterialSeedPrivate
 			Input.InputName = Name;
 		};
 		AddInput(TEXT("SceneColor"));
-		AddInput(TEXT("PrevMask"));
-		AddInput(TEXT("TargetMask"));
+		AddInput(TEXT("PrevTex"));
+		AddInput(TEXT("TargetTex"));
+		AddInput(TEXT("MaskUV"));
 		AddInput(TEXT("BlendAlpha"));
-		AddInput(TEXT("WorldX"));
-		AddInput(TEXT("WorldY"));
-		AddInput(TEXT("OriginX"));
-		AddInput(TEXT("OriginY"));
-		AddInput(TEXT("InvExtentX"));
-		AddInput(TEXT("InvExtentY"));
 		AddInput(TEXT("Ready"));
 		AddInput(TEXT("ExploredDim"));
-
-		UMaterialExpressionComponentMask* WorldX = Cast<UMaterialExpressionComponentMask>(
-			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -760, 280));
-		WorldX->R = true;
-		WorldX->G = false;
-		WorldX->B = false;
-		WorldX->A = false;
-		Connect(WorldXY, TEXT(""), WorldX, TEXT(""));
-
-		UMaterialExpressionComponentMask* WorldY = Cast<UMaterialExpressionComponentMask>(
-			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -760, 380));
-		WorldY->R = false;
-		WorldY->G = true;
-		WorldY->B = false;
-		WorldY->A = false;
-		Connect(WorldXY, TEXT(""), WorldY, TEXT(""));
-
-		UMaterialExpressionComponentMask* OriginX = Cast<UMaterialExpressionComponentMask>(
-			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -760, 480));
-		OriginX->R = true;
-		OriginX->G = false;
-		OriginX->B = false;
-		OriginX->A = false;
-		Connect(OriginXY, TEXT(""), OriginX, TEXT(""));
-
-		UMaterialExpressionComponentMask* OriginY = Cast<UMaterialExpressionComponentMask>(
-			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -760, 580));
-		OriginY->R = false;
-		OriginY->G = true;
-		OriginY->B = false;
-		OriginY->A = false;
-		Connect(OriginXY, TEXT(""), OriginY, TEXT(""));
-
-		UMaterialExpressionComponentMask* InvX = Cast<UMaterialExpressionComponentMask>(
-			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -760, 680));
-		InvX->R = true;
-		InvX->G = false;
-		InvX->B = false;
-		InvX->A = false;
-		Connect(InvExtentXY, TEXT(""), InvX, TEXT(""));
-
-		UMaterialExpressionComponentMask* InvY = Cast<UMaterialExpressionComponentMask>(
-			CreateExpr(Material, UMaterialExpressionComponentMask::StaticClass(), -760, 780));
-		InvY->R = false;
-		InvY->G = true;
-		InvY->B = false;
-		InvY->A = false;
-		Connect(InvExtentXY, TEXT(""), InvY, TEXT(""));
+		AddInput(TEXT("TexelSize"));
+		AddInput(TEXT("BlurRadiusTexels"));
+		AddInput(TEXT("DebugMode"));
 
 		Connect(SceneColor, TEXT("Color"), Compose, TEXT("SceneColor"));
-		Connect(PreviousMask, TEXT("RGBA"), Compose, TEXT("PrevMask"));
-		Connect(TargetMask, TEXT("RGBA"), Compose, TEXT("TargetMask"));
+		Connect(PreviousMask, TEXT(""), Compose, TEXT("PrevTex"));
+		Connect(TargetMask, TEXT(""), Compose, TEXT("TargetTex"));
+		Connect(MaskUV, TEXT(""), Compose, TEXT("MaskUV"));
 		Connect(BlendAlpha, TEXT(""), Compose, TEXT("BlendAlpha"));
-		Connect(WorldX, TEXT(""), Compose, TEXT("WorldX"));
-		Connect(WorldY, TEXT(""), Compose, TEXT("WorldY"));
-		Connect(OriginX, TEXT(""), Compose, TEXT("OriginX"));
-		Connect(OriginY, TEXT(""), Compose, TEXT("OriginY"));
-		Connect(InvX, TEXT(""), Compose, TEXT("InvExtentX"));
-		Connect(InvY, TEXT(""), Compose, TEXT("InvExtentY"));
 		Connect(Ready, TEXT(""), Compose, TEXT("Ready"));
 		Connect(ExploredDim, TEXT(""), Compose, TEXT("ExploredDim"));
+		Connect(TexelSize, TEXT(""), Compose, TEXT("TexelSize"));
+		Connect(BlurRadius, TEXT(""), Compose, TEXT("BlurRadiusTexels"));
+		Connect(DebugMode, TEXT(""), Compose, TEXT("DebugMode"));
 
 		const bool bConnected = UMaterialEditingLibrary::ConnectMaterialProperty(
 			Compose,

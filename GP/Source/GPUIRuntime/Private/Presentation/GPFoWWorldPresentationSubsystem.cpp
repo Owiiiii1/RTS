@@ -2,8 +2,9 @@
 
 #include "Presentation/GPFoWWorldPresentationSubsystem.h"
 
-#include "Engine/GameViewportClient.h"
+#include "Camera/CameraComponent.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/Scene.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "FogOfWar/GPLocalFoWComponent.h"
@@ -12,14 +13,22 @@
 #include "HAL/PlatformTime.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "CoreGlobals.h"
 #include "Player/GPPlayerController.h"
 #include "SceneView.h"
 #include "SceneViewExtension.h"
 #include "RHI.h"
 #include "TextureResource.h"
-#include "UnrealClient.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPFoWWorldPresentation, Log, All);
+
+#if !UE_BUILD_SHIPPING
+static TAutoConsoleVariable<int32> CVarFoWVisualDebugMode(
+	TEXT("gp.FoW.VisualDebugMode"),
+	0,
+	TEXT("0=normal FoW composition. 1=fullscreen diagnostic tint proving post-process execution."),
+	ECVF_Default);
+#endif
 
 class FGP_FoWSceneViewExtension final : public FSceneViewExtensionBase
 {
@@ -39,27 +48,29 @@ public:
 
 	virtual void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override
 	{
+		(void)InViewFamily;
 		UGP_FoWWorldPresentationSubsystem* Presentation = Owner.Get();
-		if (Presentation == nullptr
-			|| !Presentation->IsVisualizationEnabled()
-			|| !InView.bIsGameView)
+		if (Presentation == nullptr)
 		{
 			return;
 		}
 
-		ULocalPlayer* LocalPlayer = Presentation->GetLocalPlayer();
-		UGameViewportClient* ViewportClient =
-			LocalPlayer != nullptr ? LocalPlayer->ViewportClient : nullptr;
-		FViewport* Viewport = ViewportClient != nullptr ? ViewportClient->Viewport : nullptr;
-		if (Viewport == nullptr || InViewFamily.RenderTarget != Viewport)
-		{
-			return;
-		}
-
-		if (UMaterialInstanceDynamic* MID = Presentation->GetPostProcessMID())
-		{
-			InView.FinalPostProcessSettings.AddBlendable(MID, 1.0f);
-		}
+		const AActor* ViewActor = InView.ViewActor;
+		const FString ViewDebugName = FString::Printf(
+			TEXT("PlayerIndex=%d ViewActor=%s GameView=%d SceneCapture=%d"),
+			InView.PlayerIndex,
+			*GetNameSafe(ViewActor),
+			InView.bIsGameView ? 1 : 0,
+			InView.bIsSceneCapture ? 1 : 0);
+		Presentation->TryInjectOwnedView(
+			InView.FinalPostProcessSettings,
+			InView.PlayerIndex,
+			ViewActor,
+			InView.bIsGameView,
+			InView.bIsSceneCapture,
+			InView.bIsReflectionCapture,
+			GFrameCounter,
+			*ViewDebugName);
 	}
 
 	virtual void BeginRenderViewFamily(FSceneViewFamily& InViewFamily) override
@@ -71,7 +82,6 @@ public:
 	{
 		const UGP_FoWWorldPresentationSubsystem* Presentation = Owner.Get();
 		return Presentation != nullptr
-			&& Presentation->IsVisualizationEnabled()
 			&& Context.GetWorld() != nullptr
 			&& Context.GetWorld() == Presentation->GetWorld();
 	}
@@ -84,7 +94,9 @@ void UGP_FoWWorldPresentationSubsystem::Initialize(FSubsystemCollectionBase& Col
 {
 	Super::Initialize(Collection);
 
-	EnsureMaskResources();
+	EnsureMaskResources(
+		GPFoWVisualMask::CanonicalMaskResolution,
+		GPFoWVisualMask::CanonicalMaskResolution);
 	ViewExtension = FSceneViewExtensions::NewExtension<FGP_FoWSceneViewExtension>(this);
 
 	ULocalPlayer* LocalPlayer = GetLocalPlayer();
@@ -96,6 +108,7 @@ void UGP_FoWWorldPresentationSubsystem::Initialize(FSubsystemCollectionBase& Col
 void UGP_FoWWorldPresentationSubsystem::Deinitialize()
 {
 	ViewExtension.Reset();
+	UnbindLocalCameraBlendable();
 	UnbindMirror();
 	ReleaseMaskResources();
 	Super::Deinitialize();
@@ -109,6 +122,7 @@ void UGP_FoWWorldPresentationSubsystem::PlayerControllerChanged(
 
 void UGP_FoWWorldPresentationSubsystem::Tick(float DeltaTime)
 {
+	RefreshLocalCameraBlendable();
 	if (!bVisualizationEnabled)
 	{
 		return;
@@ -127,7 +141,6 @@ bool UGP_FoWWorldPresentationSubsystem::IsTickable() const
 {
 	const UWorld* World = GetWorld();
 	return !HasAnyFlags(RF_ClassDefaultObject)
-		&& bVisualizationEnabled
 		&& World != nullptr
 		&& World->IsGameWorld();
 }
@@ -177,14 +190,24 @@ const TCHAR* UGP_FoWWorldPresentationSubsystem::GetSpatialFilterName()
 	return GPFoWVisualMask::GetSpatialFilterName();
 }
 
+const TCHAR* UGP_FoWWorldPresentationSubsystem::GetTemporalFilterName()
+{
+	return GPFoWVisualMask::GetTemporalFilterName();
+}
+
 const TCHAR* UGP_FoWWorldPresentationSubsystem::GetMaterialAssetPath()
 {
 	return GPFoWVisualMask::GetMaterialAssetPath();
 }
 
-int32 UGP_FoWWorldPresentationSubsystem::GetMaskTextureResolution()
+const TCHAR* UGP_FoWWorldPresentationSubsystem::GetWorldPositionMethodName()
 {
-	return GPFoWVisualMask::TextureResolution;
+	return GPFoWVisualMask::GetWorldPositionMethodName();
+}
+
+int32 UGP_FoWWorldPresentationSubsystem::GetCanonicalMaskResolution()
+{
+	return GPFoWVisualMask::CanonicalMaskResolution;
 }
 
 float UGP_FoWWorldPresentationSubsystem::GetBlendDurationSeconds()
@@ -192,14 +215,9 @@ float UGP_FoWWorldPresentationSubsystem::GetBlendDurationSeconds()
 	return GPFoWVisualMask::BlendDurationSeconds;
 }
 
-int32 UGP_FoWWorldPresentationSubsystem::GetSpatialBlurRadius()
+float UGP_FoWWorldPresentationSubsystem::GetBlurRadiusTexels()
 {
-	return GPFoWVisualMask::SpatialBlurRadius;
-}
-
-int32 UGP_FoWWorldPresentationSubsystem::GetSpatialBlurPasses()
-{
-	return GPFoWVisualMask::SpatialBlurPasses;
+	return GPFoWVisualMask::BlurRadiusTexels;
 }
 
 float UGP_FoWWorldPresentationSubsystem::GetExploredDimFactor()
@@ -207,14 +225,59 @@ float UGP_FoWWorldPresentationSubsystem::GetExploredDimFactor()
 	return GPFoWVisualMask::ExploredDimFactor;
 }
 
-int32 UGP_FoWWorldPresentationSubsystem::GetMaskBytesPerTexture()
+bool UGP_FoWWorldPresentationSubsystem::UsesCpuSpatialBlur()
 {
-	return GPFoWVisualMask::TextureResolution * GPFoWVisualMask::TextureResolution * 4;
+	return GPFoWVisualMask::UsesCpuSpatialBlur();
+}
+
+bool UGP_FoWWorldPresentationSubsystem::UsesCpuTemporalLerp()
+{
+	return GPFoWVisualMask::UsesCpuTemporalLerp();
+}
+
+bool UGP_FoWWorldPresentationSubsystem::UsesWorldLocationQueriesForEncode()
+{
+	return GPFoWVisualMask::UsesWorldLocationQueriesForEncode();
+}
+
+int32 UGP_FoWWorldPresentationSubsystem::GetMaskTextureResolution() const
+{
+	return MaskWidth;
+}
+
+int32 UGP_FoWWorldPresentationSubsystem::GetMaskBytesPerTexture() const
+{
+	return MaskWidth * MaskHeight * GPFoWVisualMask::BytesPerPackedTexel();
 }
 
 bool UGP_FoWWorldPresentationSubsystem::IsPostProcessBound() const
 {
-	return ViewExtension.IsValid() && PostProcessMID != nullptr && TemplateMaterial != nullptr;
+	return bVisualizationEnabled
+		&& PostProcessMID != nullptr
+		&& BlendableInjectionCount > 0;
+}
+
+int32 UGP_FoWWorldPresentationSubsystem::GetVisualDebugMode() const
+{
+#if !UE_BUILD_SHIPPING
+	if (bHasForcedVisualDebugMode)
+	{
+		return ForcedVisualDebugMode;
+	}
+	return CVarFoWVisualDebugMode.GetValueOnGameThread();
+#else
+	return 0;
+#endif
+}
+
+float UGP_FoWWorldPresentationSubsystem::GetMidDebugModeValue() const
+{
+	if (PostProcessMID == nullptr)
+	{
+		return 0.0f;
+	}
+
+	return PostProcessMID->K2_GetScalarParameterValue(TEXT("FoWDebugMode"));
 }
 
 void UGP_FoWWorldPresentationSubsystem::SetVisualizationEnabled(bool bEnabled)
@@ -225,6 +288,7 @@ void UGP_FoWWorldPresentationSubsystem::SetVisualizationEnabled(bool bEnabled)
 	}
 
 	bVisualizationEnabled = bEnabled;
+	RefreshLocalCameraBlendable();
 	UpdateMaterialParameters();
 }
 
@@ -234,17 +298,52 @@ void UGP_FoWWorldPresentationSubsystem::DebugAdvanceBlend(float DeltaSeconds)
 	UpdateMaterialParameters();
 }
 
+void UGP_FoWWorldPresentationSubsystem::DebugSetVisualDebugMode(int32 Mode)
+{
+	ForcedVisualDebugMode = Mode;
+	bHasForcedVisualDebugMode = true;
+#if !UE_BUILD_SHIPPING
+	if (IConsoleVariable* DebugModeCVar = CVarFoWVisualDebugMode.AsVariable())
+	{
+		DebugModeCVar->Set(Mode);
+	}
+#endif
+	UpdateMaterialParameters();
+}
+
+bool UGP_FoWWorldPresentationSubsystem::DebugPingPongUploadPackedMask(
+	const TArray<FColor>& Pixels,
+	int32 Width,
+	int32 Height)
+{
+	if (Width <= 0 || Height <= 0 || Pixels.Num() != Width * Height)
+	{
+		return false;
+	}
+
+	EnsureMaskResources(Width, Height);
+	Swap(PreviousMaskTexture, TargetMaskTexture);
+	UploadTargetMask(Pixels);
+	UpdateMaterialParameters();
+	return PreviousMaskTexture != nullptr
+		&& TargetMaskTexture != nullptr
+		&& PreviousMaskTexture != TargetMaskTexture;
+}
+
 void UGP_FoWWorldPresentationSubsystem::BindToPlayerController(
 	APlayerController* NewPlayerController)
 {
 	UnbindMirror();
-	EnsureMaskResources();
+	EnsureMaskResources(
+		GPFoWVisualMask::CanonicalMaskResolution,
+		GPFoWVisualMask::CanonicalMaskResolution);
 
 	AGP_PlayerController* GPPlayerController = Cast<AGP_PlayerController>(NewPlayerController);
 	if (GPPlayerController == nullptr || !GPPlayerController->IsLocalController())
 	{
 		LastUpdateRevision = -1;
 		ApplyConservativeBlackMask();
+		RefreshLocalCameraBlendable();
 		return;
 	}
 
@@ -253,6 +352,7 @@ void UGP_FoWWorldPresentationSubsystem::BindToPlayerController(
 	{
 		LastUpdateRevision = -1;
 		ApplyConservativeBlackMask();
+		RefreshLocalCameraBlendable();
 		return;
 	}
 
@@ -261,6 +361,7 @@ void UGP_FoWWorldPresentationSubsystem::BindToPlayerController(
 		this,
 		&ThisClass::HandleLocalFoWUpdated);
 	HandleLocalFoWUpdated(Mirror);
+	RefreshLocalCameraBlendable();
 }
 
 void UGP_FoWWorldPresentationSubsystem::UnbindMirror()
@@ -273,15 +374,23 @@ void UGP_FoWWorldPresentationSubsystem::UnbindMirror()
 	BoundMirror.Reset();
 }
 
-void UGP_FoWWorldPresentationSubsystem::EnsureMaskResources()
+void UGP_FoWWorldPresentationSubsystem::EnsureMaskResources(int32 Width, int32 Height)
 {
-	if (PreviousMaskTexture == nullptr)
+	const int32 ClampedWidth = FMath::Max(Width, 1);
+	const int32 ClampedHeight = FMath::Max(Height, 1);
+	const bool bSizeChanged = MaskWidth != ClampedWidth || MaskHeight != ClampedHeight;
+	MaskWidth = ClampedWidth;
+	MaskHeight = ClampedHeight;
+
+	if (bSizeChanged || PreviousMaskTexture == nullptr)
 	{
-		PreviousMaskTexture = CreateMaskTexture(TEXT("GPFoWPreviousMask"));
+		PreviousMaskTexture = CreateMaskTexture(TEXT("GPFoWPreviousMask"), MaskWidth, MaskHeight);
+		FillTextureBlack(PreviousMaskTexture, MaskWidth, MaskHeight);
 	}
-	if (TargetMaskTexture == nullptr)
+	if (bSizeChanged || TargetMaskTexture == nullptr)
 	{
-		TargetMaskTexture = CreateMaskTexture(TEXT("GPFoWTargetMask"));
+		TargetMaskTexture = CreateMaskTexture(TEXT("GPFoWTargetMask"), MaskWidth, MaskHeight);
+		FillTextureBlack(TargetMaskTexture, MaskWidth, MaskHeight);
 	}
 
 	if (TemplateMaterial == nullptr)
@@ -307,22 +416,18 @@ void UGP_FoWWorldPresentationSubsystem::EnsureMaskResources()
 
 void UGP_FoWWorldPresentationSubsystem::ReleaseMaskResources()
 {
+	UnbindLocalCameraBlendable();
 	PreviousMaskTexture = nullptr;
 	TargetMaskTexture = nullptr;
 	PostProcessMID = nullptr;
 	TemplateMaterial = nullptr;
-	PackedPreviousPixels.Reset();
 	PackedTargetPixels.Reset();
 	GPFoWVisualMask::ResetRuntime(MaskRuntime);
 }
 
-UTexture2D* UGP_FoWWorldPresentationSubsystem::CreateMaskTexture(const TCHAR* Name) const
+UTexture2D* UGP_FoWWorldPresentationSubsystem::CreateMaskTexture(const TCHAR* Name, int32 Width, int32 Height) const
 {
-	UTexture2D* Texture = UTexture2D::CreateTransient(
-		GPFoWVisualMask::TextureResolution,
-		GPFoWVisualMask::TextureResolution,
-		PF_B8G8R8A8,
-		Name);
+	UTexture2D* Texture = UTexture2D::CreateTransient(Width, Height, PF_B8G8R8A8, Name);
 	if (Texture == nullptr)
 	{
 		return nullptr;
@@ -333,21 +438,23 @@ UTexture2D* UGP_FoWWorldPresentationSubsystem::CreateMaskTexture(const TCHAR* Na
 	Texture->AddressX = TA_Clamp;
 	Texture->AddressY = TA_Clamp;
 	Texture->NeverStream = true;
+	Texture->CompressionSettings = TC_VectorDisplacementmap;
 	Texture->UpdateResource();
 	return Texture;
 }
 
 void UGP_FoWWorldPresentationSubsystem::UploadTexture(
 	UTexture2D* Texture,
-	const TArray<FColor>& Pixels)
+	const TArray<FColor>& Pixels,
+	int32 Width,
+	int32 Height)
 {
-	if (Texture == nullptr || Pixels.Num() != GetMaskTextureResolution() * GetMaskTextureResolution())
+	if (Texture == nullptr || Width <= 0 || Height <= 0 || Pixels.Num() != Width * Height)
 	{
 		return;
 	}
 
-	const int32 Width = GetMaskTextureResolution();
-	FUpdateTextureRegion2D* Region = new FUpdateTextureRegion2D(0, 0, 0, 0, Width, Width);
+	FUpdateTextureRegion2D* Region = new FUpdateTextureRegion2D(0, 0, 0, 0, Width, Height);
 	uint8* Copy = static_cast<uint8*>(FMemory::Malloc(Pixels.Num() * sizeof(FColor)));
 	FMemory::Memcpy(Copy, Pixels.GetData(), Pixels.Num() * sizeof(FColor));
 	Texture->UpdateTextureRegions(
@@ -364,14 +471,19 @@ void UGP_FoWWorldPresentationSubsystem::UploadTexture(
 		});
 }
 
-void UGP_FoWWorldPresentationSubsystem::UploadMaskTextures()
+void UGP_FoWWorldPresentationSubsystem::FillTextureBlack(UTexture2D* Texture, int32 Width, int32 Height)
+{
+	TArray<FColor> Black;
+	Black.Init(FColor(0, 0, 0, 255), Width * Height);
+	UploadTexture(Texture, Black, Width, Height);
+}
+
+void UGP_FoWWorldPresentationSubsystem::UploadTargetMask(const TArray<FColor>& Pixels)
 {
 	const double UploadStart = FPlatformTime::Seconds();
-	GPFoWVisualMask::PackRGBA(MaskRuntime.Previous, PackedPreviousPixels);
-	GPFoWVisualMask::PackRGBA(MaskRuntime.Target, PackedTargetPixels);
-	UploadTexture(PreviousMaskTexture, PackedPreviousPixels);
-	UploadTexture(TargetMaskTexture, PackedTargetPixels);
+	UploadTexture(TargetMaskTexture, Pixels, MaskWidth, MaskHeight);
 	MaskRuntime.LastUploadMilliseconds = (FPlatformTime::Seconds() - UploadStart) * 1000.0;
+	++MaskRuntime.TargetUploadCount;
 }
 
 void UGP_FoWWorldPresentationSubsystem::UpdateMaterialParameters()
@@ -383,21 +495,27 @@ void UGP_FoWWorldPresentationSubsystem::UpdateMaterialParameters()
 
 	const UGP_LocalFoWComponent* Mirror = BoundMirror.Get();
 	const bool bReady = bVisualizationEnabled && MaskRuntime.bReady && Mirror != nullptr && Mirror->IsReady();
-	const FVector2D Origin = MaskRuntime.Target.ExtentWorldXY.X > KINDA_SMALL_NUMBER
-		? MaskRuntime.Target.OriginWorldXY
+	const FVector2D Origin = MaskRuntime.ExtentWorldXY.X > KINDA_SMALL_NUMBER
+		? MaskRuntime.OriginWorldXY
 		: (Mirror != nullptr ? Mirror->GetGridOriginWorldXY() : FVector2D(-100000.0, -100000.0));
-	const FVector2D Extent = MaskRuntime.Target.ExtentWorldXY.X > KINDA_SMALL_NUMBER
-		? MaskRuntime.Target.ExtentWorldXY
+	const FVector2D Extent = MaskRuntime.ExtentWorldXY.X > KINDA_SMALL_NUMBER
+		? MaskRuntime.ExtentWorldXY
 		: FVector2D(200000.0, 200000.0);
 	const FVector2D InvExtent(
 		Extent.X > KINDA_SMALL_NUMBER ? 1.0 / Extent.X : 0.0,
 		Extent.Y > KINDA_SMALL_NUMBER ? 1.0 / Extent.Y : 0.0);
+	const float TexelSize = MaskWidth > 0 ? 1.0f / static_cast<float>(MaskWidth) : 0.001f;
 
 	PostProcessMID->SetTextureParameterValue(TEXT("FoWPreviousMask"), PreviousMaskTexture);
 	PostProcessMID->SetTextureParameterValue(TEXT("FoWTargetMask"), TargetMaskTexture);
 	PostProcessMID->SetScalarParameterValue(TEXT("FoWBlendAlpha"), MaskRuntime.BlendAlpha);
 	PostProcessMID->SetScalarParameterValue(TEXT("FoWReady"), bReady ? 1.0f : 0.0f);
 	PostProcessMID->SetScalarParameterValue(TEXT("FoWExploredDim"), GPFoWVisualMask::ExploredDimFactor);
+	PostProcessMID->SetScalarParameterValue(TEXT("FoWMaskTexelSize"), TexelSize);
+	PostProcessMID->SetScalarParameterValue(TEXT("FoWBlurRadiusTexels"), GPFoWVisualMask::BlurRadiusTexels);
+	PostProcessMID->SetScalarParameterValue(
+		TEXT("FoWDebugMode"),
+		bVisualizationEnabled ? static_cast<float>(GetVisualDebugMode()) : 0.0f);
 	PostProcessMID->SetVectorParameterValue(
 		TEXT("FoWOriginXY"),
 		FLinearColor(Origin.X, Origin.Y, 0.0f, 0.0f));
@@ -408,40 +526,56 @@ void UGP_FoWWorldPresentationSubsystem::UpdateMaterialParameters()
 
 void UGP_FoWWorldPresentationSubsystem::ApplyConservativeBlackMask()
 {
+	EnsureMaskResources(
+		GPFoWVisualMask::CanonicalMaskResolution,
+		GPFoWVisualMask::CanonicalMaskResolution);
 	GPFoWVisualMask::ResetRuntime(MaskRuntime);
-	FGP_FoWVisualMaskBuffers Black;
-	GPFoWVisualMask::ResetBuffers(
-		Black,
-		GetMaskTextureResolution(),
-		GetMaskTextureResolution(),
-		FVector2D(-100000.0, -100000.0),
-		FVector2D(200000.0, 200000.0));
-	MaskRuntime.Previous = Black;
-	MaskRuntime.Target = Black;
+	Swap(PreviousMaskTexture, TargetMaskTexture);
+	TArray<FColor> Black;
+	Black.Init(FColor(0, 0, 0, 255), MaskWidth * MaskHeight);
+	UploadTargetMask(Black);
+	MaskRuntime.Width = MaskWidth;
+	MaskRuntime.Height = MaskHeight;
+	MaskRuntime.OriginWorldXY = FVector2D(-100000.0, -100000.0);
+	MaskRuntime.ExtentWorldXY = FVector2D(200000.0, 200000.0);
 	MaskRuntime.BlendAlpha = 1.0f;
 	MaskRuntime.bReady = false;
 	LastUpdateRevision = -1;
-	UploadMaskTextures();
 	UpdateMaterialParameters();
 }
 
 void UGP_FoWWorldPresentationSubsystem::RebuildMaskFromMirror(const UGP_LocalFoWComponent* Mirror)
 {
-	const double BuildStart = FPlatformTime::Seconds();
-	FGP_FoWVisualMaskBuffers NewTarget;
-	GPFoWVisualMask::EncodeFromLocalFoW(
-		NewTarget,
-		Mirror,
-		GetMaskTextureResolution(),
-		GetMaskTextureResolution());
-	GPFoWVisualMask::ApplySpatialFilter(NewTarget);
-	MaskRuntime.LastBuildMilliseconds = (FPlatformTime::Seconds() - BuildStart) * 1000.0;
+	const double EncodeStart = FPlatformTime::Seconds();
+	FVector2D Origin = FVector2D::ZeroVector;
+	FVector2D Extent = FVector2D::ZeroVector;
+	int32 Width = 0;
+	int32 Height = 0;
+	const bool bEncoded = GPFoWVisualMask::EncodePackedFromLocalFoW(
+		PackedTargetPixels,
+		Width,
+		Height,
+		Origin,
+		Extent,
+		Mirror);
+	MaskRuntime.LastEncodeMilliseconds = (FPlatformTime::Seconds() - EncodeStart) * 1000.0;
+	if (!bEncoded)
+	{
+		ApplyConservativeBlackMask();
+		return;
+	}
+
+	EnsureMaskResources(Width, Height);
+	Swap(PreviousMaskTexture, TargetMaskTexture);
+	UploadTargetMask(PackedTargetPixels);
 	GPFoWVisualMask::BeginNewTarget(
 		MaskRuntime,
-		MoveTemp(NewTarget),
+		Width,
+		Height,
+		Origin,
+		Extent,
 		Mirror != nullptr ? Mirror->GetRevision() : -1);
 	LastUpdateRevision = MaskRuntime.MaskRevision;
-	UploadMaskTextures();
 	UpdateMaterialParameters();
 }
 
@@ -461,23 +595,177 @@ void UGP_FoWWorldPresentationSubsystem::HandleLocalFoWUpdated(UGP_LocalFoWCompon
 	RebuildMaskFromMirror(UpdatedMirror);
 }
 
+bool UGP_FoWWorldPresentationSubsystem::OwnsLocalGameView(
+	int32 ViewPlayerIndex,
+	const AActor* ViewActor,
+	bool bIsGameView,
+	bool bIsSceneCapture,
+	bool bIsReflectionCapture) const
+{
+	if (!bVisualizationEnabled || !bIsGameView || bIsSceneCapture || bIsReflectionCapture)
+	{
+		return false;
+	}
+
+	const ULocalPlayer* LocalPlayer = GetLocalPlayer();
+	const APlayerController* PlayerController =
+		LocalPlayer != nullptr ? LocalPlayer->GetPlayerController(GetWorld()) : nullptr;
+	if (LocalPlayer == nullptr || PlayerController == nullptr || !PlayerController->IsLocalController())
+	{
+		return false;
+	}
+
+	if (ViewPlayerIndex == LocalPlayer->GetControllerId()
+		|| ViewPlayerIndex == LocalPlayer->GetLocalPlayerIndex())
+	{
+		return true;
+	}
+
+	const AActor* ViewTarget = PlayerController->GetViewTarget();
+	return ViewActor != nullptr
+		&& (ViewActor == ViewTarget
+			|| ViewActor == PlayerController->GetPawn()
+			|| ViewActor == PlayerController);
+}
+
+bool UGP_FoWWorldPresentationSubsystem::SettingsContainLocalBlendable(
+	const FPostProcessSettings& Settings) const
+{
+	if (PostProcessMID == nullptr)
+	{
+		return false;
+	}
+
+	for (const FWeightedBlendable& Blendable : Settings.WeightedBlendables.Array)
+	{
+		if (Blendable.Object == PostProcessMID && Blendable.Weight > 0.0f)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UGP_FoWWorldPresentationSubsystem::IsBlendableBoundToLocalCamera() const
+{
+	const UCameraComponent* Camera = BoundCamera.Get();
+	return Camera != nullptr
+		&& PostProcessMID != nullptr
+		&& SettingsContainLocalBlendable(Camera->PostProcessSettings);
+}
+
+bool UGP_FoWWorldPresentationSubsystem::TryInjectOwnedView(
+	FPostProcessSettings& Settings,
+	int32 ViewPlayerIndex,
+	const AActor* ViewActor,
+	bool bIsGameView,
+	bool bIsSceneCapture,
+	bool bIsReflectionCapture,
+	uint64 FrameNumber,
+	const TCHAR* ViewDebugName)
+{
+	if (!OwnsLocalGameView(
+			ViewPlayerIndex,
+			ViewActor,
+			bIsGameView,
+			bIsSceneCapture,
+			bIsReflectionCapture))
+	{
+		return false;
+	}
+
+	RecordViewSeen(ViewDebugName);
+	if (PostProcessMID == nullptr)
+	{
+		return false;
+	}
+
+	if (!SettingsContainLocalBlendable(Settings))
+	{
+		Settings.AddBlendable(PostProcessMID, 1.0f);
+	}
+
+	RecordSuccessfulInjection(FrameNumber, ViewDebugName);
+	return SettingsContainLocalBlendable(Settings);
+}
+
+void UGP_FoWWorldPresentationSubsystem::RecordViewSeen(const TCHAR* ViewDebugName)
+{
+	++ActualViewsSeen;
+	(void)ViewDebugName;
+}
+
+void UGP_FoWWorldPresentationSubsystem::RecordSuccessfulInjection(
+	uint64 FrameNumber,
+	const TCHAR* ViewDebugName)
+{
+	++BlendableInjectionCount;
+	LastInjectedFrame = FrameNumber;
+	LastInjectedView = ViewDebugName != nullptr ? FString(ViewDebugName) : FString();
+}
+
+UCameraComponent* UGP_FoWWorldPresentationSubsystem::ResolveLocalCamera() const
+{
+	const ULocalPlayer* LocalPlayer = GetLocalPlayer();
+	const APlayerController* PlayerController =
+		LocalPlayer != nullptr ? LocalPlayer->GetPlayerController(GetWorld()) : nullptr;
+	AActor* ViewTarget = PlayerController != nullptr ? PlayerController->GetViewTarget() : nullptr;
+	if (ViewTarget == nullptr)
+	{
+		return nullptr;
+	}
+	return ViewTarget->FindComponentByClass<UCameraComponent>();
+}
+
+void UGP_FoWWorldPresentationSubsystem::UnbindLocalCameraBlendable()
+{
+	if (UCameraComponent* Camera = BoundCamera.Get())
+	{
+		if (PostProcessMID != nullptr)
+		{
+			Camera->RemoveBlendable(PostProcessMID);
+		}
+	}
+	BoundCamera.Reset();
+}
+
+void UGP_FoWWorldPresentationSubsystem::RefreshLocalCameraBlendable()
+{
+	UCameraComponent* Camera = ResolveLocalCamera();
+	if (BoundCamera.Get() != Camera)
+	{
+		UnbindLocalCameraBlendable();
+		BoundCamera = Camera;
+	}
+
+	if (Camera == nullptr || PostProcessMID == nullptr)
+	{
+		return;
+	}
+
+	if (!bVisualizationEnabled)
+	{
+		Camera->RemoveBlendable(PostProcessMID);
+		return;
+	}
+
+	Camera->AddOrUpdateBlendable(PostProcessMID, 1.0f);
+}
+
 #if !UE_BUILD_SHIPPING
 
 void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 {
 	const UGP_LocalFoWComponent* Mirror = BoundMirror.Get();
-	const FVector2D Origin = MaskRuntime.Target.OriginWorldXY;
-	const FVector2D Extent = MaskRuntime.Target.ExtentWorldXY;
-	const float SpatialRadiusCm = GetSpatialBlurRadius()
-		* (Extent.X > KINDA_SMALL_NUMBER
-			? static_cast<float>(Extent.X / GetMaskTextureResolution())
-			: 0.0f);
+	const FVector2D Origin = MaskRuntime.OriginWorldXY;
+	const FVector2D Extent = MaskRuntime.ExtentWorldXY;
 
 	UE_LOG(LogGPFoWWorldPresentation, Display,
-		TEXT("GP FoW VisualDump: Renderer=%s MaskModel=%s TextureResolution=%d WorldOrigin=%s WorldExtent=%s MaskRevision=%lld PreviousRevision=%lld BlendAlpha=%.3f BlendDuration=%.2f SpatialFilter=%s SpatialRadius=%d SpatialRadiusCm=%.1f MaskBuildMs=%.3f MaskUploadMs=%.3f LocalTeam=%d Ready=%s PostProcessBound=%s OldSlateRendererActive=%s CellSize=%.1f Dims=%dx%d Interval=n/a MaskBytes=%d MaskTextures=2 BuildCount=%d Enabled=%s Material=%s"),
+		TEXT("GP FoW VisualDump: Renderer=%s MaskModel=%s TextureResolution=%dx%d WorldOrigin=%s WorldExtent=%s MaskRevision=%lld PreviousRevision=%lld BlendAlpha=%.3f BlendDuration=%.2f SpatialFilter=%s TemporalFilter=%s BlurRadiusTexels=%.2f MaskEncodeMs=%.3f MaskUploadMs=%.3f LocalTeam=%d Ready=%s PostProcessBound=%s ActualViewsSeen=%d BlendableInjectionCount=%d LastInjectedFrame=%llu LastInjectedView=%s CameraBlendable=%s OldSlateRendererActive=%s CellSize=%.1f Dims=%dx%d Interval=n/a MaskBytes=%d MaskTextures=2 TargetUploads=%d BuildCount=%d Enabled=%s DebugMode=%d WorldPosition=%s Material=%s"),
 		GetRendererName(),
 		GetMaskModelName(),
-		GetMaskTextureResolution(),
+		MaskWidth,
+		MaskHeight,
 		*Origin.ToString(),
 		*Extent.ToString(),
 		MaskRuntime.MaskRevision,
@@ -485,20 +773,28 @@ void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 		MaskRuntime.BlendAlpha,
 		GetBlendDurationSeconds(),
 		GetSpatialFilterName(),
-		GetSpatialBlurRadius(),
-		SpatialRadiusCm,
-		MaskRuntime.LastBuildMilliseconds,
+		GetTemporalFilterName(),
+		GetBlurRadiusTexels(),
+		MaskRuntime.LastEncodeMilliseconds,
 		MaskRuntime.LastUploadMilliseconds,
 		Mirror != nullptr ? Mirror->GetLocalTeamId() : -1,
 		Mirror != nullptr && Mirror->IsReady() && MaskRuntime.bReady ? TEXT("true") : TEXT("false"),
 		IsPostProcessBound() ? TEXT("true") : TEXT("false"),
+		ActualViewsSeen,
+		BlendableInjectionCount,
+		LastInjectedFrame,
+		*LastInjectedView,
+		IsBlendableBoundToLocalCamera() ? TEXT("true") : TEXT("false"),
 		IsOldSlateRendererActive() ? TEXT("true") : TEXT("false"),
 		Mirror != nullptr ? Mirror->GetCellSizeCm() : 0.0f,
 		Mirror != nullptr ? Mirror->GetGridDimensions().X : 0,
 		Mirror != nullptr ? Mirror->GetGridDimensions().Y : 0,
 		GetMaskBytesPerTexture(),
+		MaskRuntime.TargetUploadCount,
 		MaskRuntime.BuildCount,
 		bVisualizationEnabled ? TEXT("true") : TEXT("false"),
+		GetVisualDebugMode(),
+		GetWorldPositionMethodName(),
 		*GetNameSafe(TemplateMaterial));
 }
 

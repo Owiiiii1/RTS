@@ -7,32 +7,18 @@
 
 class UGP_LocalFoWComponent;
 
-struct FGP_FoWVisualMaskBuffers
+struct FGP_FoWVisualMaskRuntime
 {
-	TArray<float> Known;
-	TArray<float> Visible;
 	int32 Width = 0;
 	int32 Height = 0;
 	FVector2D OriginWorldXY = FVector2D::ZeroVector;
 	FVector2D ExtentWorldXY = FVector2D::ZeroVector;
-
-	int32 GetCount() const { return Width * Height; }
-
-	int32 Index(int32 X, int32 Y) const
-	{
-		return Y * Width + X;
-	}
-};
-
-struct FGP_FoWVisualMaskRuntime
-{
-	FGP_FoWVisualMaskBuffers Previous;
-	FGP_FoWVisualMaskBuffers Target;
 	float BlendAlpha = 1.0f;
 	int64 MaskRevision = -1;
 	int64 PreviousRevision = -1;
 	int32 BuildCount = 0;
-	double LastBuildMilliseconds = 0.0;
+	int32 TargetUploadCount = 0;
+	double LastEncodeMilliseconds = 0.0;
 	double LastUploadMilliseconds = 0.0;
 	bool bReady = false;
 };
@@ -40,15 +26,15 @@ struct FGP_FoWVisualMaskRuntime
 /**
  * Presentation-only Known/Visible FoW mask helpers.
  *
- * Gameplay LocalFoW bits are never mutated. Texture resolution is independent of gameplay CellSize.
+ * Runtime encoding is a packed 1:1 LocalFoW cell dump. Spatial blur and temporal interpolation
+ * happen on the GPU. These helpers never mutate gameplay bits.
  */
 namespace GPFoWVisualMask
 {
-	constexpr int32 TextureResolution = 1024;
-	constexpr int32 SpatialBlurRadius = 1;
-	constexpr int32 SpatialBlurPasses = 2;
+	constexpr int32 CanonicalMaskResolution = 1000;
 	constexpr float BlendDurationSeconds = 0.20f;
 	constexpr float ExploredDimFactor = 0.35f;
+	constexpr float BlurRadiusTexels = 1.0f;
 	constexpr float UnexploredObscuration = 1.0f;
 	constexpr float ExploredObscuration = 1.0f - ExploredDimFactor;
 	constexpr float VisibleObscuration = 0.0f;
@@ -65,12 +51,42 @@ namespace GPFoWVisualMask
 
 	inline const TCHAR* GetSpatialFilterName()
 	{
-		return TEXT("SeparableBox");
+		return TEXT("GPUBilinear9Tap");
+	}
+
+	inline const TCHAR* GetTemporalFilterName()
+	{
+		return TEXT("GPULerpBlendAlpha");
 	}
 
 	inline const TCHAR* GetMaterialAssetPath()
 	{
 		return TEXT("/Game/GrimProtocol/FogOfWar/M_GP_FoW_PostProcess.M_GP_FoW_PostProcess");
+	}
+
+	inline const TCHAR* GetWorldPositionMethodName()
+	{
+		return TEXT("SceneDepthSvPositionReconstruct");
+	}
+
+	inline bool UsesCpuSpatialBlur()
+	{
+		return false;
+	}
+
+	inline bool UsesCpuTemporalLerp()
+	{
+		return false;
+	}
+
+	inline bool UsesWorldLocationQueriesForEncode()
+	{
+		return false;
+	}
+
+	inline int32 BytesPerPackedTexel()
+	{
+		return 4;
 	}
 
 	float ObscurationForState(EGP_FoWState State);
@@ -79,6 +95,7 @@ namespace GPFoWVisualMask
 		float Known,
 		float Visible,
 		bool bReady);
+	FLinearColor ComposeSceneColorFromPacked(const FLinearColor& SceneColor, const FColor& Packed, bool bReady);
 
 	FVector2D WorldXYToUV(
 		const FVector2D& WorldXY,
@@ -90,45 +107,51 @@ namespace GPFoWVisualMask
 		const FVector2D& ExtentWorldXY);
 	bool IsUVInBounds(const FVector2D& UV);
 
-	void ResetBuffers(
-		FGP_FoWVisualMaskBuffers& Buffers,
-		int32 Width,
-		int32 Height,
-		const FVector2D& OriginWorldXY,
-		const FVector2D& ExtentWorldXY);
-	void EncodeFromStates(
-		FGP_FoWVisualMaskBuffers& OutBuffers,
+	FColor PackCell(bool bKnown, bool bVisible);
+	void EncodePackedFromStates(
+		TArray<FColor>& OutPixels,
+		int32& OutWidth,
+		int32& OutHeight,
 		const TArray<EGP_FoWState>& Cells,
 		int32 GridWidth,
 		int32 GridHeight,
 		float CellSizeCm,
-		const FVector2D& OriginWorldXY,
-		int32 TextureWidth,
-		int32 TextureHeight);
-	void EncodeFromLocalFoW(
-		FGP_FoWVisualMaskBuffers& OutBuffers,
-		const UGP_LocalFoWComponent* Mirror,
-		int32 TextureWidth,
-		int32 TextureHeight);
-	void ApplySpatialFilter(FGP_FoWVisualMaskBuffers& Buffers);
-	void SampleBilinear(
-		const FGP_FoWVisualMaskBuffers& Buffers,
+		const FVector2D& OriginWorldXY);
+	bool EncodePackedFromLocalFoW(
+		TArray<FColor>& OutPixels,
+		int32& OutWidth,
+		int32& OutHeight,
+		FVector2D& OutOriginWorldXY,
+		FVector2D& OutExtentWorldXY,
+		const UGP_LocalFoWComponent* Mirror);
+
+	void SamplePackedBilinear(
+		const TArray<FColor>& Pixels,
+		int32 Width,
+		int32 Height,
 		const FVector2D& WorldXY,
+		const FVector2D& OriginWorldXY,
+		const FVector2D& ExtentWorldXY,
 		float& OutKnown,
 		float& OutVisible);
-	void LerpBuffers(
-		const FGP_FoWVisualMaskBuffers& From,
-		const FGP_FoWVisualMaskBuffers& To,
-		float Alpha,
-		FGP_FoWVisualMaskBuffers& Out);
-	void PackRGBA(const FGP_FoWVisualMaskBuffers& Buffers, TArray<FColor>& OutPixels);
+	void SamplePacked9Tap(
+		const TArray<FColor>& Pixels,
+		int32 Width,
+		int32 Height,
+		const FVector2D& WorldXY,
+		const FVector2D& OriginWorldXY,
+		const FVector2D& ExtentWorldXY,
+		float BlurRadiusTexelsIn,
+		float& OutKnown,
+		float& OutVisible);
 
 	void ResetRuntime(FGP_FoWVisualMaskRuntime& Runtime);
-	void BeginNewTarget(FGP_FoWVisualMaskRuntime& Runtime, FGP_FoWVisualMaskBuffers&& NewTarget, int64 Revision);
+	void BeginNewTarget(
+		FGP_FoWVisualMaskRuntime& Runtime,
+		int32 Width,
+		int32 Height,
+		const FVector2D& OriginWorldXY,
+		const FVector2D& ExtentWorldXY,
+		int64 Revision);
 	void AdvanceBlend(FGP_FoWVisualMaskRuntime& Runtime, float DeltaSeconds);
-	void SampleVisual(
-		const FGP_FoWVisualMaskRuntime& Runtime,
-		const FVector2D& WorldXY,
-		float& OutKnown,
-		float& OutVisible);
 }

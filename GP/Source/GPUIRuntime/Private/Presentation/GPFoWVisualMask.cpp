@@ -3,60 +3,23 @@
 #include "Presentation/GPFoWVisualMask.h"
 
 #include "FogOfWar/GPLocalFoWComponent.h"
-#include "HAL/PlatformTime.h"
 
 namespace GPFoWVisualMask
 {
-	static void BoxBlurSeparable(TArray<float>& Values, int32 Width, int32 Height, int32 Radius)
-	{
-		if (Radius <= 0 || Width <= 0 || Height <= 0 || Values.Num() != Width * Height)
-		{
-			return;
-		}
-
-		TArray<float> Temp;
-		Temp.SetNumUninitialized(Values.Num());
-		const float InvKernel = 1.0f / static_cast<float>(Radius * 2 + 1);
-
-		for (int32 Y = 0; Y < Height; ++Y)
-		{
-			for (int32 X = 0; X < Width; ++X)
-			{
-				float Sum = 0.0f;
-				for (int32 Offset = -Radius; Offset <= Radius; ++Offset)
-				{
-					const int32 SampleX = FMath::Clamp(X + Offset, 0, Width - 1);
-					Sum += Values[Y * Width + SampleX];
-				}
-				Temp[Y * Width + X] = Sum * InvKernel;
-			}
-		}
-
-		for (int32 X = 0; X < Width; ++X)
-		{
-			for (int32 Y = 0; Y < Height; ++Y)
-			{
-				float Sum = 0.0f;
-				for (int32 Offset = -Radius; Offset <= Radius; ++Offset)
-				{
-					const int32 SampleY = FMath::Clamp(Y + Offset, 0, Height - 1);
-					Sum += Temp[SampleY * Width + X];
-				}
-				Values[Y * Width + X] = Sum * InvKernel;
-			}
-		}
-	}
-
-	static float SampleChannelBilinear(
-		const TArray<float>& Values,
+	static void SamplePackedChannelBilinear(
+		const TArray<FColor>& Pixels,
 		int32 Width,
 		int32 Height,
 		float Fx,
-		float Fy)
+		float Fy,
+		float& OutKnown,
+		float& OutVisible)
 	{
-		if (Width <= 0 || Height <= 0 || Values.Num() != Width * Height)
+		OutKnown = 0.0f;
+		OutVisible = 0.0f;
+		if (Width <= 0 || Height <= 0 || Pixels.Num() != Width * Height)
 		{
-			return 0.0f;
+			return;
 		}
 
 		const int32 X0 = FMath::Clamp(FMath::FloorToInt(Fx), 0, Width - 1);
@@ -65,11 +28,26 @@ namespace GPFoWVisualMask
 		const int32 Y1 = FMath::Min(Y0 + 1, Height - 1);
 		const float TX = FMath::Clamp(Fx - static_cast<float>(X0), 0.0f, 1.0f);
 		const float TY = FMath::Clamp(Fy - static_cast<float>(Y0), 0.0f, 1.0f);
-		const float V00 = Values[Y0 * Width + X0];
-		const float V10 = Values[Y0 * Width + X1];
-		const float V01 = Values[Y1 * Width + X0];
-		const float V11 = Values[Y1 * Width + X1];
-		return FMath::Lerp(FMath::Lerp(V00, V10, TX), FMath::Lerp(V01, V11, TX), TY);
+
+		auto KnownAt = [&Pixels, Width](int32 X, int32 Y)
+		{
+			return Pixels[Y * Width + X].R / 255.0f;
+		};
+		auto VisibleAt = [&Pixels, Width](int32 X, int32 Y)
+		{
+			return Pixels[Y * Width + X].G / 255.0f;
+		};
+
+		const float K00 = KnownAt(X0, Y0);
+		const float K10 = KnownAt(X1, Y0);
+		const float K01 = KnownAt(X0, Y1);
+		const float K11 = KnownAt(X1, Y1);
+		const float V00 = VisibleAt(X0, Y0);
+		const float V10 = VisibleAt(X1, Y0);
+		const float V01 = VisibleAt(X0, Y1);
+		const float V11 = VisibleAt(X1, Y1);
+		OutKnown = FMath::Lerp(FMath::Lerp(K00, K10, TX), FMath::Lerp(K01, K11, TX), TY);
+		OutVisible = FMath::Lerp(FMath::Lerp(V00, V10, TX), FMath::Lerp(V01, V11, TX), TY);
 	}
 
 	float ObscurationForState(EGP_FoWState State)
@@ -103,6 +81,14 @@ namespace GPFoWVisualMask
 		return FMath::Lerp(FLinearColor(0.0f, 0.0f, 0.0f, SceneColor.A), Lit, ClampedKnown);
 	}
 
+	FLinearColor ComposeSceneColorFromPacked(
+		const FLinearColor& SceneColor,
+		const FColor& Packed,
+		bool bReady)
+	{
+		return ComposeSceneColor(SceneColor, Packed.R / 255.0f, Packed.G / 255.0f, bReady);
+	}
+
 	FVector2D WorldXYToUV(
 		const FVector2D& WorldXY,
 		const FVector2D& OriginWorldXY,
@@ -133,173 +119,142 @@ namespace GPFoWVisualMask
 		return UV.X >= 0.0 && UV.X <= 1.0 && UV.Y >= 0.0 && UV.Y <= 1.0;
 	}
 
-	void ResetBuffers(
-		FGP_FoWVisualMaskBuffers& Buffers,
-		int32 Width,
-		int32 Height,
-		const FVector2D& OriginWorldXY,
-		const FVector2D& ExtentWorldXY)
+	FColor PackCell(bool bKnown, bool bVisible)
 	{
-		Buffers.Width = FMath::Max(Width, 0);
-		Buffers.Height = FMath::Max(Height, 0);
-		Buffers.OriginWorldXY = OriginWorldXY;
-		Buffers.ExtentWorldXY = ExtentWorldXY;
-		Buffers.Known.Init(0.0f, Buffers.GetCount());
-		Buffers.Visible.Init(0.0f, Buffers.GetCount());
+		return FColor(bKnown ? 255 : 0, bVisible ? 255 : 0, 0, 255);
 	}
 
-	void EncodeFromStates(
-		FGP_FoWVisualMaskBuffers& OutBuffers,
+	void EncodePackedFromStates(
+		TArray<FColor>& OutPixels,
+		int32& OutWidth,
+		int32& OutHeight,
 		const TArray<EGP_FoWState>& Cells,
 		int32 GridWidth,
 		int32 GridHeight,
 		float CellSizeCm,
-		const FVector2D& OriginWorldXY,
-		int32 TextureWidth,
-		int32 TextureHeight)
+		const FVector2D& OriginWorldXY)
 	{
-		const FVector2D Extent(
-			static_cast<double>(GridWidth) * CellSizeCm,
-			static_cast<double>(GridHeight) * CellSizeCm);
-		ResetBuffers(OutBuffers, TextureWidth, TextureHeight, OriginWorldXY, Extent);
-		if (GridWidth <= 0 || GridHeight <= 0 || CellSizeCm <= KINDA_SMALL_NUMBER
-			|| Cells.Num() != GridWidth * GridHeight
-			|| OutBuffers.GetCount() <= 0)
+		(void)CellSizeCm;
+		(void)OriginWorldXY;
+		OutWidth = FMath::Max(GridWidth, 0);
+		OutHeight = FMath::Max(GridHeight, 0);
+		const int32 Count = OutWidth * OutHeight;
+		OutPixels.SetNum(Count);
+		if (Count <= 0 || Cells.Num() != Count)
 		{
+			OutPixels.Reset();
+			OutWidth = 0;
+			OutHeight = 0;
 			return;
 		}
 
-		for (int32 TexelY = 0; TexelY < OutBuffers.Height; ++TexelY)
+		for (int32 Index = 0; Index < Count; ++Index)
 		{
-			for (int32 TexelX = 0; TexelX < OutBuffers.Width; ++TexelX)
-			{
-				const FVector2D UV(
-					(static_cast<double>(TexelX) + 0.5) / static_cast<double>(OutBuffers.Width),
-					(static_cast<double>(TexelY) + 0.5) / static_cast<double>(OutBuffers.Height));
-				const FVector2D WorldXY = UVToWorldXY(UV, OriginWorldXY, Extent);
-				const int32 CellX = FMath::Clamp(
-					FMath::FloorToInt((WorldXY.X - OriginWorldXY.X) / CellSizeCm),
-					0,
-					GridWidth - 1);
-				const int32 CellY = FMath::Clamp(
-					FMath::FloorToInt((WorldXY.Y - OriginWorldXY.Y) / CellSizeCm),
-					0,
-					GridHeight - 1);
-				const EGP_FoWState State = Cells[CellY * GridWidth + CellX];
-				const int32 Index = OutBuffers.Index(TexelX, TexelY);
-				OutBuffers.Known[Index] =
-					(State == EGP_FoWState::Explored || State == EGP_FoWState::Visible) ? 1.0f : 0.0f;
-				OutBuffers.Visible[Index] = State == EGP_FoWState::Visible ? 1.0f : 0.0f;
-			}
+			const EGP_FoWState State = Cells[Index];
+			OutPixels[Index] = PackCell(
+				State == EGP_FoWState::Explored || State == EGP_FoWState::Visible,
+				State == EGP_FoWState::Visible);
 		}
 	}
 
-	void EncodeFromLocalFoW(
-		FGP_FoWVisualMaskBuffers& OutBuffers,
-		const UGP_LocalFoWComponent* Mirror,
-		int32 TextureWidth,
-		int32 TextureHeight)
+	bool EncodePackedFromLocalFoW(
+		TArray<FColor>& OutPixels,
+		int32& OutWidth,
+		int32& OutHeight,
+		FVector2D& OutOriginWorldXY,
+		FVector2D& OutExtentWorldXY,
+		const UGP_LocalFoWComponent* Mirror)
 	{
-		if (Mirror == nullptr || !Mirror->IsReady())
+		OutPixels.Reset();
+		OutWidth = 0;
+		OutHeight = 0;
+		OutOriginWorldXY = FVector2D::ZeroVector;
+		OutExtentWorldXY = FVector2D::ZeroVector;
+		if (Mirror == nullptr || !Mirror->IsReady() || !Mirror->BuildPresentationMaskRGBA(OutPixels))
 		{
-			ResetBuffers(
-				OutBuffers,
-				TextureWidth,
-				TextureHeight,
-				FVector2D::ZeroVector,
-				FVector2D::ZeroVector);
-			return;
+			return false;
 		}
 
-		const FIntPoint GridDimensions = Mirror->GetGridDimensions();
-		const float CellSizeCm = Mirror->GetCellSizeCm();
-		const FVector2D Origin = Mirror->GetGridOriginWorldXY();
-		const FVector2D Extent(
-			static_cast<double>(GridDimensions.X) * CellSizeCm,
-			static_cast<double>(GridDimensions.Y) * CellSizeCm);
-		ResetBuffers(OutBuffers, TextureWidth, TextureHeight, Origin, Extent);
-		if (GridDimensions.X <= 0 || GridDimensions.Y <= 0 || CellSizeCm <= KINDA_SMALL_NUMBER
-			|| OutBuffers.GetCount() <= 0)
-		{
-			return;
-		}
-
-		for (int32 TexelY = 0; TexelY < OutBuffers.Height; ++TexelY)
-		{
-			for (int32 TexelX = 0; TexelX < OutBuffers.Width; ++TexelX)
-			{
-				const FVector2D UV(
-					(static_cast<double>(TexelX) + 0.5) / static_cast<double>(OutBuffers.Width),
-					(static_cast<double>(TexelY) + 0.5) / static_cast<double>(OutBuffers.Height));
-				const FVector2D WorldXY = UVToWorldXY(UV, Origin, Extent);
-				const EGP_FoWState State = Mirror->GetStateAtWorldLocation(
-					FVector(WorldXY.X, WorldXY.Y, 0.0));
-				const int32 Index = OutBuffers.Index(TexelX, TexelY);
-				OutBuffers.Known[Index] =
-					(State == EGP_FoWState::Explored || State == EGP_FoWState::Visible) ? 1.0f : 0.0f;
-				OutBuffers.Visible[Index] = State == EGP_FoWState::Visible ? 1.0f : 0.0f;
-			}
-		}
+		const FIntPoint Dimensions = Mirror->GetGridDimensions();
+		OutWidth = Dimensions.X;
+		OutHeight = Dimensions.Y;
+		OutOriginWorldXY = Mirror->GetGridOriginWorldXY();
+		OutExtentWorldXY = FVector2D(
+			static_cast<double>(Dimensions.X) * Mirror->GetCellSizeCm(),
+			static_cast<double>(Dimensions.Y) * Mirror->GetCellSizeCm());
+		return OutPixels.Num() == OutWidth * OutHeight && OutWidth > 0 && OutHeight > 0;
 	}
 
-	void ApplySpatialFilter(FGP_FoWVisualMaskBuffers& Buffers)
-	{
-		for (int32 Pass = 0; Pass < SpatialBlurPasses; ++Pass)
-		{
-			BoxBlurSeparable(Buffers.Known, Buffers.Width, Buffers.Height, SpatialBlurRadius);
-			BoxBlurSeparable(Buffers.Visible, Buffers.Width, Buffers.Height, SpatialBlurRadius);
-		}
-	}
-
-	void SampleBilinear(
-		const FGP_FoWVisualMaskBuffers& Buffers,
+	void SamplePackedBilinear(
+		const TArray<FColor>& Pixels,
+		int32 Width,
+		int32 Height,
 		const FVector2D& WorldXY,
+		const FVector2D& OriginWorldXY,
+		const FVector2D& ExtentWorldXY,
 		float& OutKnown,
 		float& OutVisible)
 	{
 		OutKnown = 0.0f;
 		OutVisible = 0.0f;
-		const FVector2D UV = WorldXYToUV(WorldXY, Buffers.OriginWorldXY, Buffers.ExtentWorldXY);
-		if (!IsUVInBounds(UV) || Buffers.Width <= 0 || Buffers.Height <= 0)
+		const FVector2D UV = WorldXYToUV(WorldXY, OriginWorldXY, ExtentWorldXY);
+		if (!IsUVInBounds(UV) || Width <= 0 || Height <= 0)
 		{
 			return;
 		}
 
-		const float Fx = static_cast<float>(UV.X * Buffers.Width - 0.5);
-		const float Fy = static_cast<float>(UV.Y * Buffers.Height - 0.5);
-		OutKnown = SampleChannelBilinear(Buffers.Known, Buffers.Width, Buffers.Height, Fx, Fy);
-		OutVisible = SampleChannelBilinear(Buffers.Visible, Buffers.Width, Buffers.Height, Fx, Fy);
+		const float Fx = static_cast<float>(UV.X * Width - 0.5);
+		const float Fy = static_cast<float>(UV.Y * Height - 0.5);
+		SamplePackedChannelBilinear(Pixels, Width, Height, Fx, Fy, OutKnown, OutVisible);
 	}
 
-	void LerpBuffers(
-		const FGP_FoWVisualMaskBuffers& From,
-		const FGP_FoWVisualMaskBuffers& To,
-		float Alpha,
-		FGP_FoWVisualMaskBuffers& Out)
+	void SamplePacked9Tap(
+		const TArray<FColor>& Pixels,
+		int32 Width,
+		int32 Height,
+		const FVector2D& WorldXY,
+		const FVector2D& OriginWorldXY,
+		const FVector2D& ExtentWorldXY,
+		float BlurRadiusTexelsIn,
+		float& OutKnown,
+		float& OutVisible)
 	{
-		const float ClampedAlpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
-		if (From.Width != To.Width || From.Height != To.Height || From.GetCount() != To.GetCount())
+		OutKnown = 0.0f;
+		OutVisible = 0.0f;
+		const FVector2D UV = WorldXYToUV(WorldXY, OriginWorldXY, ExtentWorldXY);
+		if (!IsUVInBounds(UV) || Width <= 0 || Height <= 0)
 		{
-			Out = To;
 			return;
 		}
 
-		Out = To;
-		for (int32 Index = 0; Index < Out.GetCount(); ++Index)
+		const float Radius = FMath::Max(BlurRadiusTexelsIn, 0.0f);
+		const float TexelX = 1.0f / static_cast<float>(Width);
+		const float TexelY = 1.0f / static_cast<float>(Height);
+		float KnownSum = 0.0f;
+		float VisibleSum = 0.0f;
+		int32 TapCount = 0;
+		for (int32 OffsetY = -1; OffsetY <= 1; ++OffsetY)
 		{
-			Out.Known[Index] = FMath::Lerp(From.Known[Index], To.Known[Index], ClampedAlpha);
-			Out.Visible[Index] = FMath::Lerp(From.Visible[Index], To.Visible[Index], ClampedAlpha);
+			for (int32 OffsetX = -1; OffsetX <= 1; ++OffsetX)
+			{
+				const FVector2D TapUV(
+					FMath::Clamp(UV.X + OffsetX * TexelX * Radius, 0.0, 1.0),
+					FMath::Clamp(UV.Y + OffsetY * TexelY * Radius, 0.0, 1.0));
+				const float Fx = static_cast<float>(TapUV.X * Width - 0.5);
+				const float Fy = static_cast<float>(TapUV.Y * Height - 0.5);
+				float Known = 0.0f;
+				float Visible = 0.0f;
+				SamplePackedChannelBilinear(Pixels, Width, Height, Fx, Fy, Known, Visible);
+				KnownSum += Known;
+				VisibleSum += Visible;
+				++TapCount;
+			}
 		}
-	}
 
-	void PackRGBA(const FGP_FoWVisualMaskBuffers& Buffers, TArray<FColor>& OutPixels)
-	{
-		OutPixels.SetNum(Buffers.GetCount());
-		for (int32 Index = 0; Index < Buffers.GetCount(); ++Index)
+		if (TapCount > 0)
 		{
-			const uint8 Known = static_cast<uint8>(FMath::Clamp(Buffers.Known[Index], 0.0f, 1.0f) * 255.0f + 0.5f);
-			const uint8 Visible = static_cast<uint8>(FMath::Clamp(Buffers.Visible[Index], 0.0f, 1.0f) * 255.0f + 0.5f);
-			OutPixels[Index] = FColor(Known, Visible, 0, 255);
+			OutKnown = KnownSum / static_cast<float>(TapCount);
+			OutVisible = VisibleSum / static_cast<float>(TapCount);
 		}
 	}
 
@@ -310,30 +265,20 @@ namespace GPFoWVisualMask
 
 	void BeginNewTarget(
 		FGP_FoWVisualMaskRuntime& Runtime,
-		FGP_FoWVisualMaskBuffers&& NewTarget,
+		int32 Width,
+		int32 Height,
+		const FVector2D& OriginWorldXY,
+		const FVector2D& ExtentWorldXY,
 		int64 Revision)
 	{
-		if (Runtime.Target.GetCount() > 0)
-		{
-			FGP_FoWVisualMaskBuffers Baked;
-			LerpBuffers(Runtime.Previous, Runtime.Target, Runtime.BlendAlpha, Baked);
-			Runtime.Previous = MoveTemp(Baked);
-		}
-		else
-		{
-			ResetBuffers(
-				Runtime.Previous,
-				NewTarget.Width,
-				NewTarget.Height,
-				NewTarget.OriginWorldXY,
-				NewTarget.ExtentWorldXY);
-		}
-
 		Runtime.PreviousRevision = Runtime.MaskRevision;
-		Runtime.Target = MoveTemp(NewTarget);
+		Runtime.Width = Width;
+		Runtime.Height = Height;
+		Runtime.OriginWorldXY = OriginWorldXY;
+		Runtime.ExtentWorldXY = ExtentWorldXY;
 		Runtime.BlendAlpha = 0.0f;
 		Runtime.MaskRevision = Revision;
-		Runtime.bReady = true;
+		Runtime.bReady = Width > 0 && Height > 0;
 		++Runtime.BuildCount;
 	}
 
@@ -349,22 +294,5 @@ namespace GPFoWVisualMask
 			Runtime.BlendAlpha + FMath::Max(DeltaSeconds, 0.0f) / BlendDurationSeconds,
 			0.0f,
 			1.0f);
-	}
-
-	void SampleVisual(
-		const FGP_FoWVisualMaskRuntime& Runtime,
-		const FVector2D& WorldXY,
-		float& OutKnown,
-		float& OutVisible)
-	{
-		float PreviousKnown = 0.0f;
-		float PreviousVisible = 0.0f;
-		float TargetKnown = 0.0f;
-		float TargetVisible = 0.0f;
-		SampleBilinear(Runtime.Previous, WorldXY, PreviousKnown, PreviousVisible);
-		SampleBilinear(Runtime.Target, WorldXY, TargetKnown, TargetVisible);
-		const float Alpha = FMath::Clamp(Runtime.BlendAlpha, 0.0f, 1.0f);
-		OutKnown = FMath::Lerp(PreviousKnown, TargetKnown, Alpha);
-		OutVisible = FMath::Lerp(PreviousVisible, TargetVisible, Alpha);
 	}
 }

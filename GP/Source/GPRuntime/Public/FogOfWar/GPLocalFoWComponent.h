@@ -52,6 +52,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|FogOfWar|Local")
 	bool IsVisible(const FVector& WorldLocation) const;
 
+	/**
+	 * Read-only packed presentation mask. One texel per gameplay cell.
+	 * R = Explored || Visible, G = Visible, B = 0, A = 255.
+	 * Does not query by TeamId and does not mutate gameplay/presentation bits.
+	 */
+	bool BuildPresentationMaskRGBA(TArray<FColor>& OutPixels) const;
+
 	/** Conservative presentation gate: not-ready and non-Visible both deny local placement preview. */
 	UFUNCTION(BlueprintPure, Category = "GP|FogOfWar|Local")
 	bool AllowsLocalPlacementPreview(const FVector& WorldLocation) const;
@@ -70,6 +77,7 @@ public:
 #if !UE_BUILD_SHIPPING
 	int32 DebugGetExploredCellCount() const { return Explored.CountSetBits(); }
 	int32 DebugGetVisibleCellCount() const { return Visible.CountSetBits(); }
+	int32 DebugConsumeWorldLocationQueryCount() const;
 	void DebugDumpToLog() const;
 #endif
 
@@ -87,4 +95,8 @@ private:
 	float CellSizeCm = 0.0f;
 	TBitArray<> Explored;
 	TBitArray<> Visible;
+
+#if !UE_BUILD_SHIPPING
+	mutable int32 DebugWorldLocationQueryCount = 0;
+#endif
 };

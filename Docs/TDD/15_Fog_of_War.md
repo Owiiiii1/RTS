@@ -30,9 +30,10 @@ Current-compatible deviations from the older pseudocode:
   confirmation remains authoritative;
 - single-client transitions, same-coordinate two-player team isolation, and restart/reinitialization
   passed operator validation;
-- source-only world/terrain presentation uses a per-LocalPlayer 1024² Known/Visible post-process
-  texture mask (spatial box blur + 0.20 s temporal blend) and awaits operator visual validation;
-  gameplay FoW remains 200 cm / 5 Hz; a 50 cm / 10 Hz grid change is deferred;
+- source-only world/terrain presentation uses a per-LocalPlayer 1000² packed Known/Visible
+  post-process mask (GPU 9-tap + 0.20 s GPU temporal lerp, one upload per revision) after an operator
+  FAIL of RenderTarget-pointer binding and CPU million-sample filtering; gameplay FoW remains 200 cm /
+  5 Hz; a 50 cm / 10 Hz grid change is deferred;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
   relevance, minimap, and the full production HUD remain later FoW slices.
 
@@ -158,13 +159,15 @@ blendable. The Slate/SDF/contour/raster overlay path was removed.
 
 Current MVP rendering method:
 
-- on LocalFoW revision, encode Known (Explored|Visible) and Visible into a 1024×1024 RGBA8 texture
-  covering the current FoW origin/extent (~195 cm / visual texel);
-- keep Previous and Target textures; lerp in the material over 0.20 s;
-- 2-pass separable box blur, radius 1 texel, on the CPU mask before upload;
+- on LocalFoW revision, bulk-extract a packed 1000×1000 BGRA8 mask (one texel per gameplay cell;
+  R=Known, G=Visible) without 1M world-location queries;
+- ping-pong Previous/Target GPU textures and upload the new target only; lerp in the material over 0.20 s;
+- GPU bilinear + 9-tap mask sampling (`FoWMaskTexelSize`, `FoWBlurRadiusTexels`);
 - Unexplored: black; Explored: SceneColor × 0.35; Visible: unchanged SceneColor;
 - NotReady forces `FoWReady=0` (full black);
-- camera pan/zoom/yaw does not rebuild the mask; world XY → UV is evaluated in the shader;
+- local-view injection uses PlayerIndex / ViewActor, not RenderTarget pointer identity;
+- scene-pixel world XY is reconstructed from SceneDepth + SvPosition, not AbsoluteWorldPosition;
+- camera pan/zoom/yaw does not rebuild the mask;
 - each LocalPlayer owns distinct textures and a unique MID (no shared PostProcessVolume).
 
 Bounds:
@@ -378,9 +381,9 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
 - 5 Hz sight tick × O(units × area_cells_covered). With 50 units × ~100 cells average = 25k cell ops/sec — acceptable.
 - Relevance check called by engine per actor per client. Cheap (per-cell bit query + team check).
 - Multicast and replication budget unchanged from existing.
-- World FoW presentation: 1024² Known/Visible mask textures per LocalPlayer, 2-pass separable box
-  blur, 0.20 s temporal lerp, one after-tonemap post-process pass. CPU rebuild/upload only on LocalFoW
-  revision. Camera motion does not rebuild the mask.
+- World FoW presentation: 1000² packed mask textures per LocalPlayer, GPU 9-tap + 0.20 s GPU lerp,
+  one after-tonemap post-process pass, one target upload per LocalFoW revision. Camera motion does not
+  rebuild the mask.
 
 ## Validation per Pillars
 

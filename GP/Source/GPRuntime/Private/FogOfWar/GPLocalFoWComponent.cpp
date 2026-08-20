@@ -203,8 +203,39 @@ int32 UGP_LocalFoWComponent::WorldLocationToIndex(const FVector& WorldLocation) 
 	return Y * GridDimensions.X + X;
 }
 
+bool UGP_LocalFoWComponent::BuildPresentationMaskRGBA(TArray<FColor>& OutPixels) const
+{
+	OutPixels.Reset();
+	if (!bReady || GridDimensions.X <= 0 || GridDimensions.Y <= 0)
+	{
+		return false;
+	}
+
+	const int32 NumCells = GridDimensions.X * GridDimensions.Y;
+	if (Explored.Num() != NumCells || Visible.Num() != NumCells)
+	{
+		return false;
+	}
+
+	OutPixels.SetNumUninitialized(NumCells);
+	for (int32 Index = 0; Index < NumCells; ++Index)
+	{
+		const bool bVisible = Visible[Index];
+		const bool bKnown = bVisible || Explored[Index];
+		OutPixels[Index] = FColor(
+			bKnown ? 255 : 0,
+			bVisible ? 255 : 0,
+			0,
+			255);
+	}
+	return true;
+}
+
 EGP_FoWState UGP_LocalFoWComponent::GetStateAtWorldLocation(const FVector& WorldLocation) const
 {
+#if !UE_BUILD_SHIPPING
+	++DebugWorldLocationQueryCount;
+#endif
 	const int32 Index = WorldLocationToIndex(WorldLocation);
 	if (Index == INDEX_NONE || Index >= Explored.Num() || Index >= Visible.Num())
 	{
@@ -233,6 +264,13 @@ bool UGP_LocalFoWComponent::AllowsLocalPlacementPreview(const FVector& WorldLoca
 }
 
 #if !UE_BUILD_SHIPPING
+
+int32 UGP_LocalFoWComponent::DebugConsumeWorldLocationQueryCount() const
+{
+	const int32 Count = DebugWorldLocationQueryCount;
+	DebugWorldLocationQueryCount = 0;
+	return Count;
+}
 
 void UGP_LocalFoWComponent::DebugDumpToLog() const
 {

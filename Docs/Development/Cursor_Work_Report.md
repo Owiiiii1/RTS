@@ -1,4 +1,4 @@
-# Cursor Work Report — FoW Post-Process Texture Mask
+# Cursor Work Report — FoW Post-Process Binding + GPU Mask
 
 ## Status
 
@@ -10,152 +10,151 @@
 
 - Branch: `feature/gp-fow-world-visualization`
 - Exact base: `origin/main` @ `7847c3ce27a571d92f7629369cc8d361bd981387`
-- Implementation head: `f715ac71a7450255e36bb997c8f43987ffad989c`
-- Final branch head: this report-record commit
-
-## Aborted 50 cm / 10 Hz plan
-
-The previous prompt to change canonical gameplay FoW from 200 cm / 5 Hz to 50 cm / 10 Hz
-(4000×4000) was **aborted by the operator before any implementation changes**.
-
-This correction did **not** implement that plan.
+- Previous failed operator head: `34086e8` / `f715ac7`
+- Implementation head: this report-record commit
 
 Gameplay FoW remains:
 
 - CellSize = **200 cm**
-- Grid origin = (-100000, -100000)
 - Dims = **1000×1000**
 - Authoritative recompute = **0.20 sec / 5 Hz**
-- LocalFoW mirror protocol unchanged
-- Authored UnitDefinition values unchanged (operator-local LongRange sight radius 2000 preserved)
 
-Visual smoothness is now a presentation-only problem. A future 50 cm / 10 Hz grid is deferred until
-**after** operator evaluation of this renderer.
+Do not change UnitDefinitions. Operator-local LongRange `Fog Of War Sight Radius = 2000` is preserved.
 
-## Rejected Slate / SDF history
+## Operator failure
 
-Operator testing rejected the native world-geometry path:
+1. **Terrain fog absent.** Enemy FoW presentation hiding worked (hidden enemy absent in non-Visible, appears when local player gains visibility). The level stayed normally visible: Unexplored was not black; Explored/Visible terrain distinction was effectively absent.
+2. **Severe stutter.** The game noticeably hitching on LocalFoW revisions.
 
-- visible 200 cm staircase;
-- square silhouette despite smoothing;
-- excessive blur;
-- camera-dependent full-black failures;
-- horizontal striping / invalid projected artifacts;
-- too much custom geometry for a simple mask.
+Both treated as implementation defects. Gameplay FoW resolution/rate was not changed.
 
-Deleted for this slice:
+## Root cause of post-process not visibly applying
 
-- SDF / marching squares / Chaikin contour code (already gone from the raster rewrite);
-- viewport-local 10× presentation raster (`GPFoWPresentationRaster`);
-- projected Slate run geometry (`UGP_FoWWorldOverlayWidget`);
-- screen-projection / sample-rect cache.
+Two independent defects:
 
-Do not continue tuning that renderer.
+1. **View binding.** `FGP_FoWSceneViewExtension::SetupView` required `InViewFamily.RenderTarget == LocalPlayer->ViewportClient->Viewport` before `AddBlendable()`. That pointer identity is not proof of the LocalPlayer game view in PIE/runtime, so the MID often never entered the rendered game view. `IsPostProcessBound()` previously meant only ViewExtension + MID + template existence, not actual injection.
+2. **World position.** `UMaterialExpressionWorldPosition` at `BL_SceneColorAfterTonemapping` samples the post-process fullscreen primitive, not the scene pixel. Mask UV then tracks camera/quad position. If the camera sits in a Visible cell, the whole screen looks unfogged — matching the operator report.
 
-## New post-process texture architecture
+Enemy hiding is a separate presentation gate (`UGP_LocalFoWUnitPresentationSubsystem`) and was never going through this material, which is why it still worked.
 
-LocalFoW → client runtime world-space mask textures → spatial smoothing + temporal interpolation →
-post-process material → SceneColor obscuration.
+## Exact corrected local-view binding
 
-Owner: `UGP_FoWWorldPresentationSubsystem` (`ULocalPlayerSubsystem` + `FTickableGameObject`).
+UE 5.8 `ULocalPlayer::CalcSceneView` sets `ViewInitOptions.PlayerIndex = GetControllerId()` and `ViewActor = PlayerController->GetViewTarget()`.
 
-Per local view, `FGP_FoWSceneViewExtension` adds that player's MID to
-`FSceneView::FinalPostProcessSettings` when the view family render target matches the LocalPlayer
-viewport. No map `PostProcessVolume`. No Material Parameter Collection.
+Owned local game view now means:
 
-## Material asset
+- `InView.bIsGameView`
+- not scene capture / not reflection capture
+- `InView.PlayerIndex == LocalPlayer->GetControllerId()` **or** `GetLocalPlayerIndex()`
+- fallback: `ViewActor` is the local ViewTarget, pawn, or PlayerController
 
-- `/Game/GrimProtocol/FogOfWar/M_GP_FoW_PostProcess`
-- Seeded reproducibly by `-run=GPFoWPostProcessMaterialSeed`
-- Domain: Post Process
-- Blendable location: `BL_SceneColorAfterTonemapping`
-- Dynamic instance created per LocalPlayer (`UMaterialInstanceDynamic`)
+The matching view receives that LocalPlayer's MID only (Team 1 MID / Team 2 MID; no global shared MID).
 
-No existing material asset was modified.
+Secondary local-only route: the view-target `UCameraComponent` gets `AddOrUpdateBlendable(MID)` so PIE/standalone camera post-process also carries the owned MID. View-extension `SetupView` confirms or adds the blendable without double-applying if it is already present in `FinalPostProcessSettings`.
 
-## Runtime texture ownership
+`gp.FoW.VisualEnable 0` skips injection and removes the camera blendable. Enemy hiding stays.
 
-Per LocalPlayer subsystem:
+## Actual blendable injection proof
 
-- `PreviousMaskTexture` — `UTexture2D` 1024×1024 `PF_B8G8R8A8`, bilinear, clamp, non-sRGB
-- `TargetMaskTexture` — same
-- CPU `FGP_FoWVisualMaskRuntime` Previous/Target Known+Visible float buffers
-- Upload only on LocalFoW revision via `UpdateTextureRegions`
+`PostProcessBound=true` now means a successful owned-view injection (`BlendableInjectionCount > 0`), not resource existence.
 
-Texture resolution is presentation-only (~195 cm / texel over 200000 cm). 2048² was not used;
-1024² is the starting MVP size.
+`gp.FoW.VisualDump` reports:
 
-## Known / Visible encoding
+- `ActualViewsSeen=`
+- `BlendableInjectionCount=`
+- `LastInjectedFrame=`
+- `LastInjectedView=`
 
-- R = KnownMask (Explored OR Visible)
-- G = VisibleMask (currently Visible)
-- B unused, A=255
+Contract `X2` injects into a synthetic local game view using the same ownership function and proves the MID is in `FPostProcessSettings`. Debug mode `1` reaches the MID, then restores `0`.
 
-Composition (CPU helper matches the material):
+## World-position reconstruction verdict
 
-- Ready=0 or Known=0 → black
-- Known=1, Visible=0 → SceneColor × 0.35 (dim/grey)
-- Visible=1 → unchanged SceneColor
+`UMaterialExpressionWorldPosition` is **not** used.
 
-Gameplay queries continue to use exact LocalFoW / authority bits.
+The material reconstructs **scene-pixel** world XY from:
 
-## Spatial smoothing
+- `PPI_SceneDepth` linear depth
+- `ConvertToDeviceZ`
+- `SvPositionToTranslatedWorld(SvPosition.xy, DeviceZ)`
+- minus `ResolvedView.PreViewTranslation`
 
-- Filter: separable box
-- Radius: 1 texel
-- Passes: 2
-- Approximate band: ~195–400 cm depending on bilinear sampling
-- Operates on the texture-domain mask, not screen geometry
-- Does not mutate LocalFoW
+Mask UV = `(WorldXY - FoWOriginXY) * FoWInvExtentXY` for that reconstructed scene pixel, not camera/quad position.
 
-## Temporal interpolation
+## Old CPU cost analysis
 
-- Blend duration: **0.20 s**
-- On LocalFoW revision: bake current lerp into Previous, upload new Target, `BlendAlpha=0`
-- Tick advances alpha; material lerps Previous→Target
-- Gameplay visibility stays exact at the new revision; only the terrain edge interpolates
-- Not per-frame FoW recompute
+On every LocalFoW revision the failed path did:
 
-## Per-player isolation
+- ~1024×1024 `GetStateAtWorldLocation()` world queries
+- four ~1M float planes (Previous/Target × Known/Visible)
+- CPU separable box blur
+- CPU million-element temporal lerp / bake
+- RGBA pack
+- **two** full texture uploads
 
-- One subsystem / two textures / one MID per `ULocalPlayer`
-- Scene-view extension skips views whose render target is not that LocalPlayer viewport
-- Team 1 listen host and Team 2 remote client cannot share a mask resource
-- Contract proves two mirrors encode distinct Known/Visible buffers
+That is the stutter.
 
-## Camera integration
+## New bulk LocalFoW extraction
 
-Camera pan / zoom / yaw / viewport resize do **not** rebuild the mask.
+`UGP_LocalFoWComponent::BuildPresentationMaskRGBA(TArray<FColor>& OutPixels) const`
 
-The shader reconstructs world XY and samples the world-mapped texture. This eliminates, by
-architecture:
+- read-only
+- no TeamId query
+- no mutation
+- sequential bit-array walk, one texel per gameplay cell
+- `R = Explored || Visible`, `G = Visible`
 
-- left-side striping from projected Slate spans;
-- losing the mask when the camera leaves a sampled rectangle;
-- permanent conservative black after pan;
-- invalid projected geometry.
+No 1M `GetStateAtWorldLocation` on the encode path.
 
-NotReady still forces full black (`FoWReady=0`).
+## New packed mask representation
 
-## Performance
+Runtime CPU state is the packed target pixel array only. No Previous/Target Known/Visible float[1M] planes.
 
-| Item | Value |
-| --- | --- |
-| Texture resolution | 1024×1024 |
-| Bytes per texture | 4,194,304 (RGBA8) |
-| GPU mask textures | 2 (Previous + Target) |
-| CPU float planes | Previous/Target × Known/Visible |
-| Rebuild trigger | LocalFoW revision only (5 Hz authority → client deltas) |
-| Spatial filter | 2-pass box, r=1, on 1024² |
-| Temporal cost | scalar `BlendAlpha` per tick |
-| Post-process | one after-tonemap blendable per local game view |
-| Per-frame whole-world CPU | none |
+## GPU spatial smoothing
 
-Focused visualization contract ExecCmd wall time was **183 ms** for the entire proof (spawns + CPU
-masks + resource checks), not a per-frame cost. Exact live `MaskBuildMs` / `MaskUploadMs` are
-printed by `gp.FoW.VisualDump` after PIE.
+Material 9-tap mask sample around UV, plus hardware bilinear. Params:
 
-## Validation
+- `FoWMaskTexelSize`
+- `FoWBlurRadiusTexels` (1 texel)
+
+No CPU spatial blur at runtime.
+
+## GPU temporal interpolation
+
+Two GPU textures, ping-pong on revision:
+
+1. swap Previous/Target resource pointers (previous becomes prior target)
+2. upload the new exact mask into the new Target only
+3. `BlendAlpha = 0`
+4. shader `lerp(Previous, Target, BlendAlpha)` over **0.20 s**
+
+Between revisions: scalar `BlendAlpha` only.
+
+## Texture format / resolution
+
+- Resolution: **1000×1000** (one texel = one LocalFoW cell). No 1000→1024 resample.
+- Format: **BGRA8** (`PF_B8G8R8A8`), bilinear, clamp, non-sRGB. RG8 was not used because the proven transient `UpdateTextureRegions` path is BGRA8.
+- ~4 MB per texture; one target upload per revision (~4 MB), not two.
+
+Composition (GPU, same as CPU helper):
+
+- Ready=false or Known≈0 → black
+- Known≈1, Visible≈0 → SceneColor × 0.35
+- Visible≈1 → SceneColor
+
+## One-upload-per-revision proof
+
+Contract `Z1`: capture Previous/Target pointers and upload count, ping-pong one packed upload, prove pointers swapped and `TargetUploadCount` increased by exactly 1.
+
+## Measured EncodeMs / UploadMs
+
+Contract-measured 1000×1000 packed encode + last target upload:
+
+- **MaskEncodeMs = 3.422**
+- **MaskUploadMs = 0.912**
+
+Operator-visible stutter from million-element CPU blur/lerp/dual upload should be gone.
+
+## Exact tests / build
 
 | Command | Result |
 | --- | --- |
@@ -167,39 +166,21 @@ printed by `gp.FoW.VisualDump` after PIE.
 | `gp.Building.RunOrbitalBuildingDropContractTest` | **PASS**, Failures=0 |
 | `gp.Building.RunBuildGridContractTest` | **PASS**, Failures=0 |
 | GPEditor Win64 Development + UHT | **PASS** |
+| `-run=GPFoWPostProcessMaterialSeed` | **PASS** (result 0) |
 
-No dedicated camera contract exists; camera integration is covered by the visualization contract
-(`Y_CameraMotionDoesNotRebuildLocalFoWMask`) and the scene-view extension design.
+No GP Win64 Development / Shipping.
 
-No GP Win64 Development / Shipping (reserved for finalization after operator PASS).
+## Changed files / assets
 
-## Changed files
-
-Production:
-
-- `GP/Source/GPUIRuntime/Public/Presentation/GPFoWVisualMask.h` (new)
-- `GP/Source/GPUIRuntime/Private/Presentation/GPFoWVisualMask.cpp` (new)
+- `GP/Source/GPRuntime/Public/FogOfWar/GPLocalFoWComponent.h`
+- `GP/Source/GPRuntime/Private/FogOfWar/GPLocalFoWComponent.cpp`
+- `GP/Source/GPUIRuntime/Public/Presentation/GPFoWVisualMask.h`
+- `GP/Source/GPUIRuntime/Private/Presentation/GPFoWVisualMask.cpp`
 - `GP/Source/GPUIRuntime/Public/Presentation/GPFoWWorldPresentationSubsystem.h`
 - `GP/Source/GPUIRuntime/Private/Presentation/GPFoWWorldPresentationSubsystem.cpp`
-- `GP/Source/GPUIRuntime/Public/Presentation/GPFoWPresentationRaster.h` (deleted)
-- `GP/Source/GPUIRuntime/Private/Presentation/GPFoWPresentationRaster.cpp` (deleted)
-- `GP/Source/GPUIRuntime/Public/Widgets/GPFoWWorldOverlayWidget.h` (deleted)
-- `GP/Source/GPUIRuntime/Private/Widgets/GPFoWWorldOverlayWidget.cpp` (deleted)
-- `GP/Source/GPUIRuntime/GPUIRuntime.Build.cs`
-- `GP/Source/GPEditor/Public/FogOfWar/GPFoWPostProcessMaterialSeedCommandlet.h` (new)
-- `GP/Source/GPEditor/Private/FogOfWar/GPFoWPostProcessMaterialSeedCommandlet.cpp` (new)
-- `GP/Source/GPEditor/GPEditor.Build.cs`
-
-Contracts:
-
+- `GP/Source/GPEditor/Private/FogOfWar/GPFoWPostProcessMaterialSeedCommandlet.cpp`
 - `GP/Source/GPUIRuntime/Private/Debug/GPFoWWorldVisualizationContractTest.cpp`
-
-New authored asset:
-
-- `GP/Content/GrimProtocol/FogOfWar/M_GP_FoW_PostProcess.uasset`
-
-Documentation:
-
+- `GP/Content/GrimProtocol/FogOfWar/M_GP_FoW_PostProcess.uasset` (regenerated only)
 - `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/TDD/15_Fog_of_War.md`
@@ -209,25 +190,18 @@ Documentation:
 
 ## Protected content
 
-No edits under `GP/Config`, existing maps, Blueprints, DataAssets, materials, VFX, or `Tools` were
-staged or committed.
+No edits under `GP/Config`, existing maps, Blueprints, DataAssets, materials, VFX, or `Tools` were staged or committed.
 
-Existing local Config, map, Blueprint, DataAsset, material, VFX, Tools, and other Content changes
-remain unstaged and untouched. The operator-local LongRange Salvage Walker UnitDefinition with
-`Fog Of War Sight Radius = 2000` was not committed, reverted, restored, stashed, cleaned, or modified.
+Existing local Config, map, Blueprint, DataAsset, material, VFX, Tools, and other Content changes remain unstaged and untouched. The operator-local LongRange Salvage Walker UnitDefinition with `Fog Of War Sight Radius = 2000` was not committed, reverted, restored, stashed, cleaned, or modified.
 
-The only new authored asset is `/Game/GrimProtocol/FogOfWar/M_GP_FoW_PostProcess`.
+The only authored FoW material touched is `/Game/GrimProtocol/FogOfWar/M_GP_FoW_PostProcess`.
 
 ## Operator retest
 
-1. Team 1 PIE: starting vision normal; Unexplored black; no full-map flash.
-2. Move Worker / LongRange: Visible clears, Explored stays dim/grey, never returns to Unexplored.
-3. Pan, zoom, yaw, fast pan past the previous view: world-locked mask, no striping, no full-black.
-4. Isolated sight should read softer than a hard 200 cm square (spatial + 0.20 s temporal).
-5. Own damaged health bar policy unchanged; enemy mesh/bar hidden in Explored/Unexplored.
-6. Two-player listen PIE: distinct Team 1 / Team 2 masks; no shared volume.
-7. `gp.FoW.VisualDump`: `Renderer=PostProcessTextureMask`, `MaskModel=Known+Visible`,
-   `TextureResolution=1024`, `OldSlateRendererActive=false`, `PostProcessBound=true`, `CellSize=200`.
-8. `gp.FoW.VisualEnable 0` then `1`.
+1. Team 1 PIE: Unexplored black; Explored dim; Visible normal. No full-map unfogged terrain.
+2. Optional `gp.FoW.VisualDebugMode 1` should full-screen tint, then `0` restores FoW.
+3. Move units: terrain states update; camera pan/zoom/yaw does not rebuild the mask.
+4. Enemy hiding still independent of terrain fog. `gp.FoW.VisualEnable 0` removes terrain fog only.
+5. No hitch on FoW revision. `gp.FoW.VisualDump`: `TextureResolution=1000x1000`, `PostProcessBound=true`, `BlendableInjectionCount>0`, `SpatialFilter=GPUBilinear9Tap`, `CellSize=200`.
 
 **NOT MERGED. NOT FINALIZED.**

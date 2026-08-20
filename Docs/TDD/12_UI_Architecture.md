@@ -74,8 +74,8 @@ PublicDependencyModuleNames.AddRange(new string[]
 - Listen-host and remote-client team isolation plus restart/reinitialization passed operator validation.
 - `UGP_FoWWorldPresentationSubsystem` is the first specialized world-presentation consumer. It binds
   directly to the trusted one-team LocalFoW mirror, not gameplay authority, and injects a per-local-player
-  post-process Known/Visible texture mask. Gameplay FoW stays 200 cm / 5 Hz; visual smoothness is
-  texture-domain spatial blur plus 0.20 s temporal interpolation.
+  post-process Known/Visible packed mask (1000², 1:1 with LocalFoW). Gameplay FoW stays 200 cm / 5 Hz;
+  visual smoothness is GPU 9-tap sampling plus 0.20 s GPU temporal interpolation.
 - This direct mirror binding is intentionally limited to the project-owned world renderer. Ordinary
   HUD/minimap widgets still consume ViewModels.
 - The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.

@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "Presentation/GPFoWContourField.h"
+#include "Presentation/GPFoWPresentationRaster.h"
 #include "Rendering/RenderingCommon.h"
 #include "GPFoWWorldOverlayWidget.generated.h"
 
@@ -20,8 +20,8 @@ struct FGP_FoWOverlayDrawBatch
 /**
  * Source-only, hit-test-invisible viewport overlay for the local player's world FoW.
  *
- * Known/Visible signed-distance contours are cached in world space on LocalFoW revision (or when the
- * view leaves the padded sample). Camera motion only reprojects those cached world triangles.
+ * Rebuilds a viewport-local high-resolution presentation raster whenever the LocalFoW revision or
+ * camera/view projection changes. Camera motion resamples; it does not freeze a prior contour cache.
  */
 UCLASS(NotBlueprintable)
 class GPUIRUNTIME_API UGP_FoWWorldOverlayWidget : public UUserWidget
@@ -45,26 +45,21 @@ protected:
 		bool bParentEnabled) const override;
 
 private:
-	bool ComputeViewCellRange(
+	bool RebuildProjectedOverlay(
+		const FGeometry& AllottedGeometry,
+		const FMatrix& ViewProjectionMatrix,
+		const FMatrix& InverseViewProjectionMatrix,
+		const FIntRect& ViewRect,
+		float ViewportScale) const;
+	bool ComputePaddedViewCells(
 		const FMatrix& InverseViewProjectionMatrix,
 		const FIntRect& ViewRect,
 		const UGP_LocalFoWComponent* Mirror,
 		FIntPoint& OutMinCell,
 		FIntPoint& OutMaxCell) const;
-	bool RebuildWorldMask(
-		const UGP_LocalFoWComponent* Mirror,
-		const FIntPoint& ViewMinCell,
-		const FIntPoint& ViewMaxCell) const;
-	void ProjectCachedWorldTriangles(
-		const FGeometry& AllottedGeometry,
-		const FMatrix& ViewProjectionMatrix,
-		const FIntRect& ViewRect,
-		float ViewportScale) const;
-	void ResetProjectionCache() const;
-	void AddProjectedTriangle(
-		const FGP_FoWContourVertex& A,
-		const FGP_FoWContourVertex& B,
-		const FGP_FoWContourVertex& C,
+	void ResetRenderCache() const;
+	void AddProjectedQuad(
+		const FGP_FoWPresentationQuad& Quad,
 		const FGeometry& AllottedGeometry,
 		const FMatrix& ViewProjectionMatrix,
 		const FIntRect& ViewRect,
@@ -78,20 +73,15 @@ private:
 	TWeakObjectPtr<UGP_FoWWorldPresentationSubsystem> PresentationOwner;
 
 	mutable TArray<FGP_FoWOverlayDrawBatch> CachedBatches;
-	mutable TArray<FGP_FoWContourVertex> CachedWorldTriangles;
-	mutable FGP_FoWContourGeometry CachedGeometry;
+	mutable FGP_FoWPresentationGeometry CachedGeometry;
 	mutable FMatrix CachedViewProjection = FMatrix::Identity;
 	mutable FIntRect CachedViewRect;
 	mutable FVector2D CachedLocalSize = FVector2D::ZeroVector;
 	mutable uint64 CachedRenderSerial = 0;
 	mutable int64 CachedMaskRevision = -1;
-	mutable FIntPoint CachedMaskMin = FIntPoint::ZeroValue;
-	mutable FIntPoint CachedMaskMax = FIntPoint::ZeroValue;
-	mutable FIntPoint CachedViewMin = FIntPoint::ZeroValue;
-	mutable FIntPoint CachedViewMax = FIntPoint::ZeroValue;
-	mutable bool bHasValidProjection = false;
-	mutable bool bHasValidMask = false;
+	mutable FIntPoint CachedMinCell = FIntPoint::ZeroValue;
+	mutable FIntPoint CachedMaxCell = FIntPoint::ZeroValue;
+	mutable bool bHasValidCache = false;
 	mutable bool bConservativeFallback = true;
-	mutable bool bLastMaskRebuilt = false;
-	mutable bool bLastProjectionRebuilt = false;
+	mutable bool bLastCameraResample = false;
 };

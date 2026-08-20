@@ -13,22 +13,25 @@ class UGP_LocalFoWComponent;
 
 struct FGP_FoWWorldOverlayStats
 {
-	int32 SampledCells = 0;
+	int32 SampledGameplayCells = 0;
 	int32 PaddedCells = 0;
-	FIntPoint DistanceFieldDims = FIntPoint::ZeroValue;
-	int32 ContourRawVertices = 0;
-	int32 ContourSmoothedVertices = 0;
+	int32 SuperSample = 0;
+	FIntPoint RasterDims = FIntPoint::ZeroValue;
+	int32 RasterPixels = 0;
+	int32 RasterBytes = 0;
+	int32 BlurRadiusSamples = 0;
+	float BlurRadiusCm = 0.0f;
+	float PresentationTexelWorldSize = 0.0f;
 	int32 OverlayVertices = 0;
-	int32 OverlayTriangles = 0;
+	int32 OverlayQuads = 0;
 	int32 DrawBatches = 0;
 	FIntPoint MinCell = FIntPoint::ZeroValue;
 	FIntPoint MaxCell = FIntPoint::ZeroValue;
 	uint64 ConsumedSerial = 0;
 	int64 MaskRevision = -1;
-	bool bMaskRebuilt = false;
-	bool bProjectionRebuilt = false;
-	double MaskRebuildMilliseconds = 0.0;
-	int32 DistanceFieldBytes = 0;
+	bool bCameraResample = false;
+	bool bFallbackActive = false;
+	double RebuildMilliseconds = 0.0;
 };
 
 /**
@@ -59,36 +62,33 @@ public:
 	uint64 GetRenderSerial() const { return RenderSerial; }
 	int64 GetLastUpdateRevision() const { return LastUpdateRevision; }
 
-	int32 GetLastSampledCellCount() const { return LastStats.SampledCells; }
+	int32 GetLastSampledCellCount() const { return LastStats.SampledGameplayCells; }
 	int32 GetLastPaddedCellCount() const { return LastStats.PaddedCells; }
-	int32 GetLastContourRawVertexCount() const { return LastStats.ContourRawVertices; }
-	int32 GetLastContourSmoothedVertexCount() const { return LastStats.ContourSmoothedVertices; }
 	int32 GetLastOverlayVertexCount() const { return LastStats.OverlayVertices; }
-	int32 GetLastOverlayTriangleCount() const { return LastStats.OverlayTriangles; }
+	int32 GetLastOverlayQuadCount() const { return LastStats.OverlayQuads; }
 	int32 GetLastDrawBatchCount() const { return LastStats.DrawBatches; }
 	FIntPoint GetLastSampledMinCell() const { return LastStats.MinCell; }
 	FIntPoint GetLastSampledMaxCell() const { return LastStats.MaxCell; }
-	FIntPoint GetLastDistanceFieldDims() const { return LastStats.DistanceFieldDims; }
-	bool DidLastMaskRebuild() const { return LastStats.bMaskRebuilt; }
-	bool DidLastProjectionRebuild() const { return LastStats.bProjectionRebuilt; }
+	FIntPoint GetLastRasterDims() const { return LastStats.RasterDims; }
+	int32 GetLastRasterPixels() const { return LastStats.RasterPixels; }
+	bool DidLastCameraResample() const { return LastStats.bCameraResample; }
+	bool WasLastFallbackActive() const { return LastStats.bFallbackActive; }
 	int64 GetLastMaskRevision() const { return LastStats.MaskRevision; }
 	bool IsVisualDataDirty() const;
 
 	static constexpr int32 GetMaximumSampledCells() { return 65536; }
 	static constexpr int32 GetMaximumQuadsPerBatch() { return 8000; }
-	static constexpr int32 GetSamplePadCells() { return 6; }
+	static constexpr int32 GetSamplePadCells() { return 2; }
 	static constexpr float GetProjectionGroundZ() { return 0.0f; }
-	static const TCHAR* GetContourAlgorithmName();
+	static const TCHAR* GetPresentationAlgorithmName();
 	static const TCHAR* GetMaskModelName();
-	static const TCHAR* GetDistanceTransformName();
-	static float GetVisibleInwardBiasCells();
-	static float GetKnownInwardBiasCells();
-	static float GetVisibleInwardBiasCm(float CellSizeCm);
-	static float GetKnownInwardBiasCm(float CellSizeCm);
-	static float GetEdgeFeatherCm();
-	static int32 GetMaximumOverlayTriangles();
-	static int32 GetMaximumIsoSegments();
-	static int32 GetMaximumSdfPixels();
+	static const TCHAR* GetInterpolationName();
+	static const TCHAR* GetBlurName();
+	static int32 GetTargetSuperSample();
+	static int32 GetMinimumSuperSample();
+	static int32 GetBlurRadiusSamples();
+	static int32 GetMaximumPresentationPixels();
+	static int32 GetMaximumOverlayQuads();
 
 	void RecordOverlayStats(const FGP_FoWWorldOverlayStats& Stats);
 

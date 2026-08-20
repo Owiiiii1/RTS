@@ -8,7 +8,7 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "Player/GPPlayerController.h"
-#include "Presentation/GPFoWContourField.h"
+#include "Presentation/GPFoWPresentationRaster.h"
 #include "Presentation/GPLocalFoWUnitPresentationSubsystem.h"
 #include "Widgets/GPFoWWorldOverlayWidget.h"
 
@@ -42,17 +42,17 @@ void UGP_FoWWorldPresentationSubsystem::PlayerControllerChanged(
 
 float UGP_FoWWorldPresentationSubsystem::GetObscurationForState(EGP_FoWState State)
 {
-	return GPFoWContourField::ObscurationForState(State);
+	return GPFoWPresentationRaster::ObscurationForState(State);
 }
 
 FLinearColor UGP_FoWWorldPresentationSubsystem::GetOverlayColorForState(EGP_FoWState State)
 {
-	return GPFoWContourField::OverlayColorForObscuration(GetObscurationForState(State));
+	return GPFoWPresentationRaster::OverlayColorForObscuration(GetObscurationForState(State));
 }
 
 FLinearColor UGP_FoWWorldPresentationSubsystem::GetOverlayColorForObscuration(float Obscuration)
 {
-	return GPFoWContourField::OverlayColorForObscuration(Obscuration);
+	return GPFoWPresentationRaster::OverlayColorForObscuration(Obscuration);
 }
 
 bool UGP_FoWWorldPresentationSubsystem::RequiresConservativeFullObscuration(
@@ -61,59 +61,49 @@ bool UGP_FoWWorldPresentationSubsystem::RequiresConservativeFullObscuration(
 	return Mirror == nullptr || !Mirror->IsReady();
 }
 
-const TCHAR* UGP_FoWWorldPresentationSubsystem::GetContourAlgorithmName()
+const TCHAR* UGP_FoWWorldPresentationSubsystem::GetPresentationAlgorithmName()
 {
-	return GPFoWContourField::GetAlgorithmName();
+	return GPFoWPresentationRaster::GetAlgorithmName();
 }
 
 const TCHAR* UGP_FoWWorldPresentationSubsystem::GetMaskModelName()
 {
-	return GPFoWContourField::GetMaskModelName();
+	return GPFoWPresentationRaster::GetMaskModelName();
 }
 
-const TCHAR* UGP_FoWWorldPresentationSubsystem::GetDistanceTransformName()
+const TCHAR* UGP_FoWWorldPresentationSubsystem::GetInterpolationName()
 {
-	return GPFoWContourField::GetDistanceTransformName();
+	return GPFoWPresentationRaster::GetInterpolationName();
 }
 
-float UGP_FoWWorldPresentationSubsystem::GetVisibleInwardBiasCells()
+const TCHAR* UGP_FoWWorldPresentationSubsystem::GetBlurName()
 {
-	return GPFoWContourField::VisibleInwardBiasCells;
+	return GPFoWPresentationRaster::GetBlurName();
 }
 
-float UGP_FoWWorldPresentationSubsystem::GetKnownInwardBiasCells()
+int32 UGP_FoWWorldPresentationSubsystem::GetTargetSuperSample()
 {
-	return GPFoWContourField::KnownInwardBiasCells;
+	return GPFoWPresentationRaster::TargetSuperSample;
 }
 
-float UGP_FoWWorldPresentationSubsystem::GetVisibleInwardBiasCm(float CellSizeCm)
+int32 UGP_FoWWorldPresentationSubsystem::GetMinimumSuperSample()
 {
-	return GPFoWContourField::VisibleInwardBiasCells * CellSizeCm;
+	return GPFoWPresentationRaster::MinimumSuperSample;
 }
 
-float UGP_FoWWorldPresentationSubsystem::GetKnownInwardBiasCm(float CellSizeCm)
+int32 UGP_FoWWorldPresentationSubsystem::GetBlurRadiusSamples()
 {
-	return GPFoWContourField::KnownInwardBiasCells * CellSizeCm;
+	return GPFoWPresentationRaster::BlurRadiusSamples;
 }
 
-float UGP_FoWWorldPresentationSubsystem::GetEdgeFeatherCm()
+int32 UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels()
 {
-	return GPFoWContourField::EdgeFeatherCm;
+	return GPFoWPresentationRaster::MaximumPresentationPixels;
 }
 
-int32 UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayTriangles()
+int32 UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads()
 {
-	return GPFoWContourField::MaximumOverlayTriangles;
-}
-
-int32 UGP_FoWWorldPresentationSubsystem::GetMaximumIsoSegments()
-{
-	return GPFoWContourField::MaximumIsoSegments;
-}
-
-int32 UGP_FoWWorldPresentationSubsystem::GetMaximumSdfPixels()
-{
-	return GPFoWContourField::MaximumSdfPixels;
+	return GPFoWPresentationRaster::MaximumOverlayQuads;
 }
 
 void UGP_FoWWorldPresentationSubsystem::SetVisualizationEnabled(bool bEnabled)
@@ -247,10 +237,6 @@ void UGP_FoWWorldPresentationSubsystem::HandleLocalFoWUpdated(
 void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 {
 	const UGP_LocalFoWComponent* Mirror = BoundMirror.Get();
-	const FIntPoint Dimensions =
-		Mirror != nullptr ? Mirror->GetGridDimensions() : FIntPoint::ZeroValue;
-	const FVector2D Origin =
-		Mirror != nullptr ? Mirror->GetGridOriginWorldXY() : FVector2D::ZeroVector;
 	const float CellSize = Mirror != nullptr ? Mirror->GetCellSizeCm() : 0.0f;
 	const UGP_LocalFoWUnitPresentationSubsystem* UnitPresentation =
 		GetWorld() != nullptr
@@ -258,45 +244,39 @@ void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 			: nullptr;
 
 	UE_LOG(LogGPFoWWorldPresentation, Display,
-		TEXT("GP FoW VisualDump: World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d MirrorRevision=%lld Algorithm=%s MaskModel=%s DistanceTransform=%s Origin=%s Dims=%s CellSize=%.1f MaxSampledCells=%d SampledCells=%d PaddedCells=%d PadCells=%d DistanceField=%s DistanceFieldBytes=%d ContourRawVertices=%d ContourSmoothedVertices=%d OverlayVertices=%d OverlayTriangles=%d VisibleInwardBiasCm=%.1f KnownInwardBiasCm=%.1f EdgeFeather=%.1fcm LastMaskRevision=%lld MaskRebuilt=%s ProjectionRebuilt=%s MaskRebuildMs=%.3f MaxTriangles=%d MaxSdfPixels=%d Batches=%d RegisteredUnitPresentations=%d UnitEvaluationInterval=%.2f RegionMin=%s RegionMax=%s Dirty=%s Cached=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
+		TEXT("GP FoW VisualDump: World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d Algorithm=%s GameplayCellSize=%.1f PresentationSupersample=%d PresentationTexelWorldSize=%.1f SampledGameplayCells=%d RasterDims=%s RasterPixels=%d RasterBytes=%d BlurRadiusSamples=%d BlurRadiusCm=%.1f MaskRevision=%lld CameraResample=%s FallbackActive=%s RegisteredEnemyPresentation=%d LocalTeamId=%d RebuildMs=%.3f Interpolation=%s Blur=%s MaskModel=%s PadCells=%d OverlayQuads=%d OverlayVertices=%d MaxPixels=%d MaxQuads=%d RegionMin=%s RegionMax=%s Dirty=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
 		*GetNameSafe(GetWorld()),
 		IsRendererActive() ? TEXT("true") : TEXT("false"),
 		bVisualizationEnabled ? TEXT("true") : TEXT("false"),
 		Mirror != nullptr && Mirror->IsReady() ? TEXT("true") : TEXT("false"),
 		Mirror != nullptr ? Mirror->GetLocalTeamId() : -1,
-		Mirror != nullptr ? Mirror->GetRevision() : -1,
-		GetContourAlgorithmName(),
-		GetMaskModelName(),
-		GetDistanceTransformName(),
-		*Origin.ToString(),
-		*Dimensions.ToString(),
+		GetPresentationAlgorithmName(),
 		CellSize,
-		GetMaximumSampledCells(),
-		LastStats.SampledCells,
-		LastStats.PaddedCells,
-		GetSamplePadCells(),
-		*LastStats.DistanceFieldDims.ToString(),
-		LastStats.DistanceFieldBytes,
-		LastStats.ContourRawVertices,
-		LastStats.ContourSmoothedVertices,
-		LastStats.OverlayVertices,
-		LastStats.OverlayTriangles,
-		GetVisibleInwardBiasCm(CellSize),
-		GetKnownInwardBiasCm(CellSize),
-		GetEdgeFeatherCm(),
+		LastStats.SuperSample,
+		LastStats.PresentationTexelWorldSize,
+		LastStats.SampledGameplayCells,
+		*LastStats.RasterDims.ToString(),
+		LastStats.RasterPixels,
+		LastStats.RasterBytes,
+		LastStats.BlurRadiusSamples,
+		LastStats.BlurRadiusCm,
 		LastStats.MaskRevision,
-		LastStats.bMaskRebuilt ? TEXT("true") : TEXT("false"),
-		LastStats.bProjectionRebuilt ? TEXT("true") : TEXT("false"),
-		LastStats.MaskRebuildMilliseconds,
-		GetMaximumOverlayTriangles(),
-		GetMaximumSdfPixels(),
-		LastStats.DrawBatches,
+		LastStats.bCameraResample ? TEXT("true") : TEXT("false"),
+		LastStats.bFallbackActive ? TEXT("true") : TEXT("false"),
 		UnitPresentation != nullptr ? UnitPresentation->GetRegisteredUnitCount() : 0,
-		UGP_LocalFoWUnitPresentationSubsystem::GetEvaluationIntervalSeconds(),
+		Mirror != nullptr ? Mirror->GetLocalTeamId() : -1,
+		LastStats.RebuildMilliseconds,
+		GetInterpolationName(),
+		GetBlurName(),
+		GetMaskModelName(),
+		GetSamplePadCells(),
+		LastStats.OverlayQuads,
+		LastStats.OverlayVertices,
+		GetMaximumPresentationPixels(),
+		GetMaximumOverlayQuads(),
 		*LastStats.MinCell.ToString(),
 		*LastStats.MaxCell.ToString(),
 		IsVisualDataDirty() ? TEXT("true") : TEXT("false"),
-		(!IsVisualDataDirty() && OverlayWidget != nullptr) ? TEXT("true") : TEXT("false"),
 		LastUpdateRevision,
 		LastConsumedRenderSerial,
 		RenderSerial);

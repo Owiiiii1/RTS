@@ -1,6 +1,6 @@
 # GP — Fog of War Runtime Foundation
 
-**Status:** `FOW_RUNTIME_FOUNDATION_READY_FOR_OPERATOR_VALIDATION`
+**Status:** `FOW_RUNTIME_FOUNDATION_FINALIZED_READY_FOR_MERGE`
 **Branch:** `feature/gp-fow-runtime-foundation`
 **Base:** `origin/main` @ `de718725115ddd636b56092bd6197cf0f7a65950`
 **Scope:** first production three-state per-team Fog of War slice
@@ -103,7 +103,7 @@ Non-shipping commands:
 - `gp.FoW.DebugDump` — logs registered sources, team, location, radius, grant/dead state, and grid config.
 - `gp.FoW.QueryState <TeamId> <WorldX> <WorldY>` — logs authoritative state at a location.
 
-## Validation
+## Final validation
 
 - `gp.FoW.RunRuntimeFoundationContractTest` — `Failures=0`
 - `gp.Combat.RunAutoAcquireContractTest` — `Failures=0`
@@ -116,25 +116,32 @@ Non-shipping commands:
 - `gp.Building.RunBuildingVitalsOwnershipContractTest` — `Failures=0`
 - `gp.Resource.RunOrbitalUnitDropContractTest` — `Failures=0`
 - GPEditor Win64 Development + UHT — **PASS**
+- GP Win64 Development — **PASS**
+- GP Win64 Shipping — **PASS**
 
 The shared GameState/UnitBase surface justified a broad affected-contract set. The full historical
 resource suite was not run: the selected contracts cover the changed authority, definition, combat,
 building-placement, and fixed unit-drop boundaries directly, without introducing the known authored-map
 contamination of that suite.
 
-## Operator check
+## Operator validation
 
-1. PIE as Team 1. Run `gp.FoW.DebugDump`; note MainBase and Worker locations.
-2. Run `gp.FoW.QueryState 1 <WorkerX> <WorkerY>`: expect `Visible`.
-3. Move the Worker outward, query its new location: expect `Visible`.
-4. Query its old location after the Worker leaves all friendly sight: expect `Explored`.
-5. Query an untouched in-bounds location: expect `Unexplored`.
-6. Put an enemy outside all friendly sight but within combat scan range: no auto-acquire.
-7. Move friendly vision onto that enemy: auto-acquire resumes.
-8. Confirm an orbital building in a queried `Unexplored`/`Explored` location: authority rejects it.
-9. Confirm the same building at an otherwise-valid queried `Visible` location: deployment is accepted.
+- **PASS** in cold/open Editor + PIE.
+- `gp.FoW.DebugDump`: authority service active, 17 sources, 200 cm cells, 0.20 s updates, and
+  independent Team 1 / Team 2 sources.
+- Team 1 query at `(-1800, -2300)` returned `Visible`; untouched `(20000, 20000)` returned
+  `Unexplored`; moving friendly sight away downgraded the prior cell to `Explored`.
+- Hidden enemies were not auto-acquired; visible enemies were auto-acquired normally.
+- Authority rejected non-Visible building placement and accepted otherwise-valid Visible placement.
+- The authored LongRange definition initially combined 2000 cm attack/combat sight with 900 cm FoW
+  sight, so its 900 cm visibility limit was correct. The operator locally changed its FoW sight to
+  2000 cm and confirmed expected long-range visibility/fire. That `.uasset` adjustment is not a runtime
+  fix and is not committed.
 
-## Stop condition
+## Final state
 
-Await operator PASS. Do not run GP Development/Shipping, implement presentation/relevancy/last-known
-state, or merge this branch before finalization.
+The authoritative runtime foundation is finalized and ready for merge. Full Fog of War remains
+incomplete: trusted client presentation/mirror, rendering, minimap/UI, last-known behavior, relevance
+hiding, selection/inspect presentation gating, and DropPod temporary vision remain future work.
+
+**NOT MERGED.**

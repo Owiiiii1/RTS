@@ -1,5 +1,25 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — Three-state per-team Fog of War runtime foundation finalization
+
+Status: **FOW_RUNTIME_FOUNDATION_FINALIZED_READY_FOR_MERGE**
+
+- Operator PASS: authority debug dump showed 17 registered sources, 200 cm cells, 0.20 s updates, and
+  independent Team 1 / Team 2 sources
+- Queries proved `Visible`, untouched `Unexplored`, and `Visible -> Explored` after friendly sight left
+- Auto-acquire FoW gating and authority building-placement rejection/acceptance both passed
+- The authored LongRange definition's 900 cm FoW sight correctly limited visibility despite 2000 cm
+  attack/combat sight; the operator's local 2000 cm FoW adjustment restored expected long-range fire
+- The LongRange `.uasset` adjustment remains untracked local content and is not committed
+- FoW contract plus all nine directly affected regressions passed with `Failures=0`
+- GPEditor + UHT, GP Win64 Development, and GP Win64 Shipping all **PASS**
+- The authority runtime foundation is done; client mirror/rendering, last-known/relevance, selection
+  presentation, minimap/UI, explicit-attack integration, and DropPod vision remain
+- Protected Config, map, Blueprint, DataAsset, material, VFX, Tools, and untracked Content remain
+  untouched. **NOT MERGED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-Runtime-Foundation.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — Three-state per-team Fog of War runtime foundation
 
 Status: **FOW_RUNTIME_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**

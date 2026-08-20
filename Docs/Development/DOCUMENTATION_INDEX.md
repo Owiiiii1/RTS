@@ -39,7 +39,7 @@
 | Last closed / merged stage | **Building Vitals / Definition Ownership** on `main` @ `b7e391a636749173c445f7994a41daf3c18ba902` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-FoW-Runtime-Foundation.md`](Claude_Tasks/GP-FoW-Runtime-Foundation.md) — **FOW_RUNTIME_FOUNDATION_READY_FOR_OPERATOR_VALIDATION** |
+| Current stage | [`Claude_Tasks/GP-FoW-Runtime-Foundation.md`](Claude_Tasks/GP-FoW-Runtime-Foundation.md) — **FOW_RUNTIME_FOUNDATION_FINALIZED_READY_FOR_MERGE** |
 
 ---
 
@@ -53,8 +53,8 @@
 
 **Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE**. Historical S-number order is no longer the execution cursor.
 
-**Exactly one current gate:** operator validation of the three-state per-team **Fog of War runtime
-foundation**. Do not begin minimap/presentation/relevance follow-up before finalization.
+**Exactly one NEXT production capability:** production UI foundation and trusted **FoW presentation**.
+Do not jump to SWARM, cleanup, or building redesign.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 
@@ -172,5 +172,5 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 ## Stop
 
 Current baseline: `origin/main` @ `de718725115ddd636b56092bd6197cf0f7a65950`. Current stage:
-**FOW_RUNTIME_FOUNDATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-fow-runtime-foundation`.
-**NOT MERGED. NOT FINALIZED.** NEXT: operator validation of the current FoW runtime foundation.
+**FOW_RUNTIME_FOUNDATION_FINALIZED_READY_FOR_MERGE** on `feature/gp-fow-runtime-foundation`.
+**NOT MERGED.** NEXT: production UI foundation and trusted FoW presentation.

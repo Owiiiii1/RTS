@@ -1,187 +1,173 @@
-# Cursor Work Report — Fog of War Runtime Foundation
+# Cursor Work Report — Fog of War Runtime Foundation Finalization
 
 ## Status
 
-**FOW_RUNTIME_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**
+**FOW_RUNTIME_FOUNDATION_FINALIZED_READY_FOR_MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.**
 
 ## Branch / baseline / head
 
 - Branch: `feature/gp-fow-runtime-foundation`
 - Exact base: `origin/main` @ `de718725115ddd636b56092bd6197cf0f7a65950`
-- Candidate head: the implementation commit containing this report (`git rev-parse HEAD` after commit)
+- Final validated implementation head before this report-only finalization update:
+  `b38f8ecc2352a411024f0f86d335f5e6d1ede446`
+- Final branch head: the finalization documentation commit containing this report
 
-## Factual pre-change architecture
+## Operator validation — PASS
 
-- `AGP_GameState` owned match state and authority registries but no FoW service.
-- `UGP_UnitDefinition::SightRangeCm` was combat auto-acquire tuning; no FoW vision owner existed.
-- Auto-acquire scanned valid hostile units without FoW filtering.
-- Building authority validated MainBase radius, grid, navigation, and environment but not visibility.
-- Unit drops use a fixed MainBase UnitDropZone, not a free-world landing selection.
-- BuildGrid has 200 cm cells but no bounded playable-area authority.
+- `gp.FoW.DebugDump` showed the authoritative service active with 17 registered sight sources,
+  `CellSize=200`, `UpdateInterval=0.20`, and independent Team 1 / Team 2 sources.
+- `gp.FoW.QueryState 1 -1800 -2300` returned `Visible`.
+- `gp.FoW.QueryState 1 20000 20000` returned `Unexplored`.
+- A previously Visible area transitioned to `Explored` after friendly sight moved away.
+- Hidden-enemy auto-acquire gating passed; moving the target into friendly visibility restored normal
+  acquisition/fire.
+- Authority rejected orbital building placement at non-Visible/Unexplored locations and accepted an
+  otherwise-valid Visible location.
 
-## Runtime owner and semantics
+### LongRange authored DataAsset finding
 
-- Chosen owner: non-replicated `UGP_FogOfWarComponent` default subobject on `AGP_GameState`.
-- States: `Unexplored`, `Explored`, `Visible`.
-- `Visible` always accumulates into `Explored`; current visibility may clear to `Explored`; explored bits
-  never clear during the match.
-- Each playable TeamId has an independent grid. There is no allied sharing.
-- Invalid teams, client-side authority queries, non-finite locations, and out-of-bounds locations safely
-  return `Unexplored`.
-- Raw `TBitArray` grids are authority-only and are not replicated.
+`BP_GP_SalvageWalkerLONGRAGE` initially used:
 
-## Grid/world-bounds ownership
+- Attack Range: 2000 cm
+- combat Sight Range: 2000 cm
+- Fog Of War Sight Radius: 900 cm
 
-- Cell size: 200 cm.
-- No canonical playable-area/map-bounds owner was found.
-- Temporary foundation owner: FoW component origin `(-100000, -100000)`, dimensions `1000 x 1000`.
-- FoW coordinates remain separate from deferred BuildGrid footprint/geometry ownership.
+The actor correctly did not auto-acquire beyond its 900 cm FoW visibility. This was not a runtime defect.
+The operator manually changed the local authored LongRange UnitDefinition FoW sight radius to 2000 cm;
+the target then became Visible and long-range auto-acquire/fire worked at 2000 cm.
 
-## Sight-source ownership and authored safety
+The corresponding local
+`GP/Content/GrimProtocol/DataAssets/Units/DA_GP_Unit_SalvageWalkerLONGRAGE.uasset` remains untracked and
+is not committed, staged, reverted, stashed, cleaned, restored, or otherwise modified by finalization.
 
-- Canonical owner: `UGP_UnitDefinition::FogOfWarSightRadiusCm` and
-  `UGP_UnitDefinition::bGrantsFogOfWarVision`.
-- Building flow: `UGP_BuildingDefinition -> UnitDefinition -> AGP_UnitBase`; no duplicate building sight
-  fields were added.
-- Combat `SightRangeCm` remains independent.
-- Native/fallback values: MainBase 3000, Worker 600, Salvage Walker 900, Logistics Hub 900, Defensive
-  Turret 900 cm; all grant vision.
-- Read-only Unreal inspection:
-  - `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_MainBase`: 900 / true
-  - `/Game/GrimProtocol/DataAssets/Units/DA_GP_Unit_Worker`: 900 / true
-  - `/Game/GrimProtocol/DataAssets/Units/DA_GP_Unit_SalvageWalker`: 900 / true
-  - `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_LogisticsHUB`: 900 / true
-  - `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_DefensiveTurret`: 900 / true
-- Result: no authored-asset migration required; no DataAsset was edited.
+## Final authority and state semantics
 
-## Update model
+- `UGP_FogOfWarComponent` remains the GameState-owned authoritative runtime owner.
+- Compact `TBitArray` state remains independent per team; there is no allied sharing.
+- `Visible` is accumulated into `Explored`, so `Visible => Explored`.
+- Current `Visible` state may clear to `Explored`; `Explored` never clears during a match.
+- Invalid teams, non-finite/out-of-bounds locations, clients, and non-authority owners fail safely as
+  `Unexplored`; client queries do not become gameplay authority.
+- Raw bit grids are not replicated.
 
-- Authority recomputes at 0.2 seconds / 5 Hz.
-- Definition-ready live units/buildings self-register.
-- Death and EndPlay unregister; team changes refresh immediately.
-- Recompute scans only the bounded weak registry. It does not perform per-frame all-world discovery.
-- Circle coverage only; no LOS occlusion, height, cones, stealth, or allied vision.
+## Sight ownership and update model
 
-## Gameplay consumers integrated
+- `UGP_UnitDefinition::FogOfWarSightRadiusCm` and `bGrantsFogOfWarVision` remain the single canonical
+  FoW sight owner.
+- Buildings consume those values through `UGP_BuildingDefinition -> UnitDefinition -> AGP_UnitBase`;
+  BuildingDefinition has no duplicate FoW fields.
+- Combat `SightRangeCm` remains distinct from FoW sight radius.
+- Authority recomputes every 0.20 seconds / 5 Hz from the bounded registered-source list.
+- Definition-ready live sources register; death/EndPlay unregister; non-vision actors contribute
+  nothing. No per-frame whole-world source scan was introduced.
 
-### Auto-acquire
+## Final gameplay behavior
 
-`UGP_UnitCommandComponent::FindNearestAutoAcquireTarget` rejects a hostile candidate unless its current
-location is `Visible` to the owner team. Existing range, priority, LOS-at-fire, cooldown, damage,
-retaliation, and Attack-Move behavior remain unchanged.
+- Auto-acquire requires the hostile target's current location to be Visible to the attacker's team.
+  Existing eligibility, deterministic priority, LOS-at-fire, range, cooldown, damage, retaliation,
+  explicit Attack, and Attack-Move semantics remain otherwise unchanged.
+- Building authority requires the snapped landing location to be Visible and returns `NotVisible`
+  otherwise; client preview remains non-authoritative.
+- Unit drop remains unchanged at the owning MainBase UnitDropZone; no free-placement flow or temporary
+  DropPod vision was added.
+- No footprint/geometry cleanup or building redesign entered this slice.
 
-### Orbital building placement
+## Deferred FoW capability
 
-Authority confirmation rejects a non-Visible snapped landing location with `NotVisible`. Remote-client
-preview remains optimistic because a trusted client FoW mirror is out of scope; server confirmation is
-authoritative.
+- trusted client FoW mirror / presentation state
+- visual fog and explored/visible terrain presentation
+- last-known state and visual snapshots
+- network relevancy hiding
+- selection/inspect visibility presentation gating
+- explicit-Attack last-known chase/re-engage
+- minimap FoW
+- production CommonUI/MVVM FoW UI
+- temporary in-flight DropPod vision
 
-### Unit drop
+## Final contracts and regressions
 
-Unchanged. Unit drops land at the owning MainBase UnitDropZone and expose no free-placement target.
-Temporary in-flight DropPod vision is deferred.
+All final runs completed with `Failures=0`:
 
-## Explicit Attack / last-known verdict
+- `gp.FoW.RunRuntimeFoundationContractTest` — **PASS**
+- `gp.Combat.RunAutoAcquireContractTest` — **PASS**
+- `gp.Combat.RunAttackMoveContractTest` — **PASS**
+- `gp.Combat.RunRetaliationPursuitContractTest` — **PASS**
+- `gp.Building.RunOrbitalBuildingDropContractTest` — **PASS**
+- `gp.Building.RunBuildGridContractTest` — **PASS**
+- `gp.Building.RunDefensiveTurretContractTest` — **PASS**
+- `gp.Units.RunUnitDefinitionContractTest` — **PASS**
+- `gp.Building.RunBuildingVitalsOwnershipContractTest` — **PASS**
+- `gp.Resource.RunOrbitalUnitDropContractTest` — **PASS**
 
-Audited, not implemented in this foundation. Full hidden-target pursuit, last-known location, fire
-transition, and re-engage behavior require one coherent last-known model. Explicit Attack and retaliation
-semantics were not partially rewritten.
+No additional focused contract became directly affected during the final factual review. The ten
+selected contracts cover the changed GameState, UnitDefinition/UnitBase, combat, building-placement,
+BuildGrid, building-vitals, turret, and fixed unit-drop boundaries. No new regression triggered the
+workflow's full-suite escalation criteria, and unrelated historical suites were not forced against
+protected authored map/content.
 
-## Replication and local selection verdict
+## Final builds
 
-Broad `IsNetRelevantFor` filtering, persistent last-known static actor state, local FoW mirror, and hidden
-enemy local selection/inspect gating are deferred. No client-computed state is used for gameplay.
+- `GPEditor Win64 Development + UHT` — **PASS**
+- `GP Win64 Development` — **PASS**
+- `GP Win64 Shipping` — **PASS**
 
-## Deferred FoW pieces
+No production code changed after these successful builds.
 
-- local/client FoW mirror and explored deltas
-- fog mask/terrain rendering
-- last-known visual snapshots and unit blip fading
-- production minimap and FoW layers
-- CommonUI/MVVM FoW UI
-- selection/inspect gating that depends on trusted client state
-- explicit-Attack last-known integration
-- broad replication relevance hiding
-- in-flight DropPod vision
-- LOS/height/cone/stealth/allied vision
+## Exact branch changed-file list
 
-## Changed production/test files
-
-- `GP/Source/GPRuntime/Public/FogOfWar/GPFogOfWarComponent.h`
-- `GP/Source/GPRuntime/Private/FogOfWar/GPFogOfWarComponent.cpp`
-- `GP/Source/GPRuntime/Public/FogOfWar/GPFoWRuntimeFoundationContractTest.h`
-- `GP/Source/GPRuntime/Private/Debug/GPFoWRuntimeFoundationContractTest.cpp`
-- `GP/Source/GPRuntime/Public/Game/GPGameState.h`
-- `GP/Source/GPRuntime/Private/Game/GPGameState.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitDefinition.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitDefinitionCatalog.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
-- `GP/Source/GPRuntime/Private/Units/GPWorker.cpp`
-- `GP/Source/GPRuntime/Private/Units/GPSalvageWalker.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/GPMainBase.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/GPLogisticsHub.cpp`
-- `GP/Source/GPRuntime/Private/Buildings/GPDefensiveTurret.cpp`
-- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
-- `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropAuthority.h`
-- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropAuthority.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
-
-## Changed documentation
+Documentation:
 
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/Development/Claude_Tasks/GP-FoW-Runtime-Foundation.md`
 - `Docs/Development/Claude_Tasks/README.md`
-- `Docs/Development/DOCUMENTATION_INDEX.md`
 - `Docs/Development/Cursor_Work_Report.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/TDD/15_Fog_of_War.md`
 
-## Contract and regression results
+Production and contract code:
 
-- `gp.FoW.RunRuntimeFoundationContractTest` — **PASS**, `Failures=0`
-- `gp.Combat.RunAutoAcquireContractTest` — **PASS**, `Failures=0`
-- `gp.Combat.RunAttackMoveContractTest` — **PASS**, `Failures=0`
-- `gp.Combat.RunRetaliationPursuitContractTest` — **PASS**, `Failures=0`
-- `gp.Building.RunOrbitalBuildingDropContractTest` — **PASS**, `Failures=0`
-- `gp.Building.RunBuildGridContractTest` — **PASS**, `Failures=0`
-- `gp.Building.RunDefensiveTurretContractTest` — **PASS**, `Failures=0`
-- `gp.Units.RunUnitDefinitionContractTest` — **PASS**, `Failures=0`
-- `gp.Building.RunBuildingVitalsOwnershipContractTest` — **PASS**, `Failures=0`
-- `gp.Resource.RunOrbitalUnitDropContractTest` — **PASS**, `Failures=0`
-
-## Risk/escalation decision
-
-The shared `AGP_GameState`, `AGP_UnitBase`, definition, combat, and placement surface triggered broader
-affected regression coverage. Ten focused contracts cover the changed invariants. The historical full
-resource suite was not run because it adds unrelated scope and has known authored-map contamination;
-no selected regression exposed an unresolved cross-system failure.
-
-## Build
-
-- GPEditor Win64 Development + UHT — **PASS**
-- GP Development / Shipping — intentionally deferred until operator PASS finalization
+- `GP/Source/GPRuntime/Private/Buildings/GPDefensiveTurret.cpp`
+- `GP/Source/GPRuntime/Private/Buildings/GPLogisticsHub.cpp`
+- `GP/Source/GPRuntime/Private/Buildings/GPMainBase.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPFoWRuntimeFoundationContractTest.cpp`
+- `GP/Source/GPRuntime/Private/FogOfWar/GPFogOfWarComponent.cpp`
+- `GP/Source/GPRuntime/Private/Game/GPGameState.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropAuthority.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPSalvageWalker.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPUnitDefinitionCatalog.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPWorker.cpp`
+- `GP/Source/GPRuntime/Public/FogOfWar/GPFoWRuntimeFoundationContractTest.h`
+- `GP/Source/GPRuntime/Public/FogOfWar/GPFogOfWarComponent.h`
+- `GP/Source/GPRuntime/Public/Game/GPGameState.h`
+- `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropAuthority.h`
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `GP/Source/GPRuntime/Public/Units/GPUnitDefinition.h`
 
 ## Protected-content confirmation
 
-No `GP/Config/DefaultEngine.ini`, `GP/Config/DefaultGame.ini`, map, Blueprint, DataAsset, material, VFX,
-untracked Content, or `Tools/` file was modified, staged, reverted, stashed, reset, restored, or cleaned
-by this slice. Existing local protected changes remain local and untouched.
+The branch diff contains no Config, map, Blueprint, DataAsset, material, VFX, Tools, or other authored
+Content file. Existing local protected changes remain outside the branch and untouched. In particular,
+the operator's local LongRange FoW sight adjustment is not committed.
 
-## Exact operator test
+No destructive Git operation, broad stash, reset, clean, restore, or authored-content mutation was
+performed.
 
-1. PIE as Team 1 and run `gp.FoW.DebugDump`; record MainBase/Worker coordinates.
-2. Query a Worker coordinate with `gp.FoW.QueryState 1 X Y`: expect `Visible`.
-3. Move that Worker outward; query the new coordinate: expect `Visible`.
-4. After all friendly sight leaves the old coordinate, query it: expect `Explored`.
-5. Query an untouched in-bounds coordinate: expect `Unexplored`.
-6. Place an enemy inside combat scan range but outside all friendly sight: no auto-acquire.
-7. Move friendly sight onto the enemy: auto-acquire works.
-8. Confirm an orbital building at a queried non-Visible location: authority rejects.
-9. Confirm at an otherwise-valid queried Visible location: authority accepts.
+## Roadmap state after this slice
 
-## Merge/finalization state
+Done:
 
-**NOT MERGED. NOT FINALIZED.**
+- authoritative three-state per-team runtime foundation
+- registered sight sources and persistent Explored state
+- auto-acquire visibility gating
+- authority building-placement visibility gating
+
+Full Fog of War is not marked done. The next production capability remains the production UI
+foundation and trusted FoW presentation stage. SWARM and building redesign remain outside this slice.
+
+**NOT MERGED.**

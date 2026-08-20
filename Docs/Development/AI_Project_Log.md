@@ -1,5 +1,19 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — FoW 100 cm / 2000×2000 + no viewport crop
+
+Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**
+
+- CellSize 50 / Dims 4000 was 16× the original 200 cm / 1000×1000 grid and too slow. Canonical grid is
+  now CellSize=100, Dims=2000×2000, Interval=0.10 (exactly 4× original cell count).
+- Removed MinCell++/MaxCell-- crop in `RebuildProjectedOverlay`. Sample cap is 65536; if the full
+  viewport region exceeds it, that frame is conservative full black, never a partial reveal.
+- Renderer remains PerCellBlurredQuadRenderer. GPEditor Win64 Development + UHT **PASS**. **NOT MERGED.
+  NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+
 ## 2026-08-20 — FoW per-cell blurred quad renderer
 
 Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**

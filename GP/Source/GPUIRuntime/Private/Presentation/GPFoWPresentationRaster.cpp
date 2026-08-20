@@ -196,7 +196,8 @@ namespace GPFoWPresentationRaster
 						Solid,
 						Solid))
 				{
-					break;
+					OutGeometry = FGP_FoWPresentationGeometry();
+					return false;
 				}
 				++OutGeometry.CellTiles;
 
@@ -209,101 +210,133 @@ namespace GPFoWPresentationRaster
 				const bool bFeatherNorth = ShouldFeatherToward(
 					State, NeighborState(Field, LocalX, LocalY + 1));
 
-				if (bFeatherWest
-					&& TryAddQuad(
-						OutGeometry,
-						FVector2D(MinX - Feather, MinY),
-						FVector2D(MinX, MaxY),
-						Transparent,
-						Solid,
-						Solid,
-						Transparent))
+				if (bFeatherWest)
 				{
+					if (!TryAddQuad(
+							OutGeometry,
+							FVector2D(MinX - Feather, MinY),
+							FVector2D(MinX, MaxY),
+							Transparent,
+							Solid,
+							Solid,
+							Transparent))
+					{
+						OutGeometry = FGP_FoWPresentationGeometry();
+						return false;
+					}
 					++OutGeometry.FeatherQuads;
 				}
-				if (bFeatherEast
-					&& TryAddQuad(
-						OutGeometry,
-						FVector2D(MaxX, MinY),
-						FVector2D(MaxX + Feather, MaxY),
-						Solid,
-						Transparent,
-						Transparent,
-						Solid))
+				if (bFeatherEast)
 				{
+					if (!TryAddQuad(
+							OutGeometry,
+							FVector2D(MaxX, MinY),
+							FVector2D(MaxX + Feather, MaxY),
+							Solid,
+							Transparent,
+							Transparent,
+							Solid))
+					{
+						OutGeometry = FGP_FoWPresentationGeometry();
+						return false;
+					}
 					++OutGeometry.FeatherQuads;
 				}
-				if (bFeatherSouth
-					&& TryAddQuad(
-						OutGeometry,
-						FVector2D(MinX, MinY - Feather),
-						FVector2D(MaxX, MinY),
-						Transparent,
-						Transparent,
-						Solid,
-						Solid))
+				if (bFeatherSouth)
 				{
+					if (!TryAddQuad(
+							OutGeometry,
+							FVector2D(MinX, MinY - Feather),
+							FVector2D(MaxX, MinY),
+							Transparent,
+							Transparent,
+							Solid,
+							Solid))
+					{
+						OutGeometry = FGP_FoWPresentationGeometry();
+						return false;
+					}
 					++OutGeometry.FeatherQuads;
 				}
-				if (bFeatherNorth
-					&& TryAddQuad(
-						OutGeometry,
-						FVector2D(MinX, MaxY),
-						FVector2D(MaxX, MaxY + Feather),
-						Solid,
-						Solid,
-						Transparent,
-						Transparent))
+				if (bFeatherNorth)
 				{
+					if (!TryAddQuad(
+							OutGeometry,
+							FVector2D(MinX, MaxY),
+							FVector2D(MaxX, MaxY + Feather),
+							Solid,
+							Solid,
+							Transparent,
+							Transparent))
+					{
+						OutGeometry = FGP_FoWPresentationGeometry();
+						return false;
+					}
 					++OutGeometry.FeatherQuads;
 				}
 
-				if (bFeatherWest && bFeatherSouth
-					&& TryAddQuad(
-						OutGeometry,
-						FVector2D(MinX - Feather, MinY - Feather),
-						FVector2D(MinX, MinY),
-						Transparent,
-						Transparent,
-						Solid,
-						Transparent))
+				if (bFeatherWest && bFeatherSouth)
 				{
+					if (!TryAddQuad(
+							OutGeometry,
+							FVector2D(MinX - Feather, MinY - Feather),
+							FVector2D(MinX, MinY),
+							Transparent,
+							Transparent,
+							Solid,
+							Transparent))
+					{
+						OutGeometry = FGP_FoWPresentationGeometry();
+						return false;
+					}
 					++OutGeometry.FeatherQuads;
 				}
-				if (bFeatherEast && bFeatherSouth
-					&& TryAddQuad(
-						OutGeometry,
-						FVector2D(MaxX, MinY - Feather),
-						FVector2D(MaxX + Feather, MinY),
-						Transparent,
-						Transparent,
-						Transparent,
-						Solid))
+				if (bFeatherEast && bFeatherSouth)
 				{
+					if (!TryAddQuad(
+							OutGeometry,
+							FVector2D(MaxX, MinY - Feather),
+							FVector2D(MaxX + Feather, MinY),
+							Transparent,
+							Transparent,
+							Transparent,
+							Solid))
+					{
+						OutGeometry = FGP_FoWPresentationGeometry();
+						return false;
+					}
 					++OutGeometry.FeatherQuads;
 				}
-				if (bFeatherEast && bFeatherNorth
-					&& TryAddQuad(
-						OutGeometry,
-						FVector2D(MaxX, MaxY),
-						FVector2D(MaxX + Feather, MaxY + Feather),
-						Solid,
-						Transparent,
-						Transparent,
-						Transparent))
+				if (bFeatherEast && bFeatherNorth)
 				{
+					if (!TryAddQuad(
+							OutGeometry,
+							FVector2D(MaxX, MaxY),
+							FVector2D(MaxX + Feather, MaxY + Feather),
+							Solid,
+							Transparent,
+							Transparent,
+							Transparent))
+					{
+						OutGeometry = FGP_FoWPresentationGeometry();
+						return false;
+					}
 					++OutGeometry.FeatherQuads;
 				}
-				if (bFeatherWest && bFeatherNorth
-					&& TryAddQuad(
-						OutGeometry,
-						FVector2D(MinX - Feather, MaxY),
-						FVector2D(MinX, MaxY + Feather),
-						Transparent,
-						Solid,
-						Transparent,
-						Transparent))
+				if (bFeatherWest && bFeatherNorth)
 				{
+					if (!TryAddQuad(
+							OutGeometry,
+							FVector2D(MinX - Feather, MaxY),
+							FVector2D(MinX, MaxY + Feather),
+							Transparent,
+							Solid,
+							Transparent,
+							Transparent))
+					{
+						OutGeometry = FGP_FoWPresentationGeometry();
+						return false;
+					}
 					++OutGeometry.FeatherQuads;
 				}
 			}

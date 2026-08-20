@@ -29,7 +29,7 @@ enum class EGP_FoWState : uint8
  *
  * Runtime state is deliberately not replicated in this foundation slice. Later client presentation,
  * last-known state, and relevancy work consume the query API without becoming gameplay authority.
- * Canonical MVP grid: 50 cm cells, 4000 x 4000, 0.10 s (10 Hz) authority recompute.
+ * Canonical MVP grid: 100 cm cells, 2000 x 2000, 0.10 s (10 Hz) authority recompute.
  */
 UCLASS(ClassGroup = (GP), meta = (BlueprintSpawnableComponent))
 class GPRUNTIME_API UGP_FogOfWarComponent : public UActorComponent
@@ -113,13 +113,13 @@ private:
 
 	/** Foundation-owned deterministic bounds until a canonical playable-area owner is introduced. */
 	UPROPERTY(EditDefaultsOnly, Category = "GP|FogOfWar|Grid", meta = (ClampMin = "50.0"))
-	float CellSizeCm = 50.0f;
+	float CellSizeCm = 100.0f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "GP|FogOfWar|Grid")
 	FVector2D GridOriginWorldXY = FVector2D(-100000.0f, -100000.0f);
 
 	UPROPERTY(EditDefaultsOnly, Category = "GP|FogOfWar|Grid", meta = (ClampMin = "1"))
-	FIntPoint GridDimensions = FIntPoint(4000, 4000);
+	FIntPoint GridDimensions = FIntPoint(2000, 2000);
 
 	UPROPERTY(EditDefaultsOnly, Category = "GP|FogOfWar|Runtime", meta = (ClampMin = "0.05"))
 	float UpdateIntervalSeconds = 0.1f;

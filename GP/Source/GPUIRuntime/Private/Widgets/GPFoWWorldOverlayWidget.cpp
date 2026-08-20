@@ -331,22 +331,17 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedOverlay(
 
 	int32 Width = MaxCell.X - MinCell.X + 1;
 	int32 Height = MaxCell.Y - MinCell.Y + 1;
-	while (static_cast<int64>(Width) * Height
-			> UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells()
-		&& Width > 4 && Height > 4)
-	{
-		++MinCell.X;
-		++MinCell.Y;
-		--MaxCell.X;
-		--MaxCell.Y;
-		Width = MaxCell.X - MinCell.X + 1;
-		Height = MaxCell.Y - MinCell.Y + 1;
-	}
-
 	const int64 SampledCellCount64 = static_cast<int64>(Width) * static_cast<int64>(Height);
 	if (SampledCellCount64 <= 0
 		|| SampledCellCount64 > UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells())
 	{
+		ResetRenderCache();
+		CachedGeometry = FGP_FoWPresentationGeometry();
+		CachedMinCell = MinCell;
+		CachedMaxCell = MaxCell;
+		bHasValidCache = false;
+		bConservativeFallback = true;
+		CachedMaskRevision = Mirror->GetRevision();
 		return false;
 	}
 
@@ -381,6 +376,11 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedOverlay(
 	FGP_FoWPresentationGeometry NewGeometry;
 	if (!GPFoWPresentationRaster::RebuildPresentation(Field, NewGeometry))
 	{
+		ResetRenderCache();
+		CachedGeometry = FGP_FoWPresentationGeometry();
+		bHasValidCache = false;
+		bConservativeFallback = true;
+		CachedMaskRevision = Mirror->GetRevision();
 		return false;
 	}
 

@@ -292,8 +292,8 @@ namespace GPFoWWorldVisualizationContractPrivate
 			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0))
 				== UnexploredBeforeSmoothing,
 			TEXT("H9_SmoothingDoesNotMutateOrPromoteLocalFoWState"));
-		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() == 16384
-			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() == 98304
+		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() == 65536
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() == 262144
 			&& UGP_FoWWorldPresentationSubsystem::GetMaximumQuadsPerBatch() == 8000
 			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 1
 			&& UGP_FoWWorldPresentationSubsystem::GetFeatherFraction() > 0.25f
@@ -390,8 +390,8 @@ namespace GPFoWWorldVisualizationContractPrivate
 			&& ShiftGeometry.Quads.Num() >= ShiftGeometry.CellTiles,
 			TEXT("W6_OutsidePriorSampleRebuildsPerCellTiles"));
 
-		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() < 4000 * 4000
-			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() < 4000 * 4000,
+		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() < 2000 * 2000
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() < 2000 * 2000,
 			TEXT("W7_NoFullWorldMaskOrTileAllocation"));
 		Expect(CircleGeometry.Quads.Num()
 				<= UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads()
@@ -449,9 +449,9 @@ namespace GPFoWWorldVisualizationContractPrivate
 			&& UGP_FoWWorldOverlayWidget::StaticClass()->IsChildOf(
 				UUserWidget::StaticClass()),
 			TEXT("O_NoPerCellComponentOrUObjectModel"));
-		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() == 16384
+		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() == 65536
 			&& UGP_FoWWorldPresentationSubsystem::GetMaximumQuadsPerBatch() == 8000
-			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() == 98304
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() == 262144
 			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 1
 			&& !UGP_FoWWorldPresentationSubsystem::IsMaskProjectionActive(),
 			TEXT("P_ViewportWorkAndBatchingAreBounded"));
@@ -459,12 +459,12 @@ namespace GPFoWWorldVisualizationContractPrivate
 		UGP_LocalFoWComponent* MillionCellMirror =
 			NewObject<UGP_LocalFoWComponent>(GetTransientPackage());
 		FGP_FoWPresentationUpdate MillionCellInitial =
-			Initial(1, 1, FIntPoint(4000, 4000), 50.0f);
+			Initial(1, 1, FIntPoint(2000, 2000), 100.0f);
 		Expect(MillionCellMirror != nullptr
 			&& MillionCellMirror->ApplyServerUpdate(MillionCellInitial)
-			&& MillionCellMirror->GetGridDimensions() == FIntPoint(4000, 4000)
+			&& MillionCellMirror->GetGridDimensions() == FIntPoint(2000, 2000)
 			&& UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells()
-				< 4000 * 4000,
+				< 2000 * 2000,
 			TEXT("Q_MillionCellGridUsesViewportLocalRepresentation"));
 
 		AGP_PlayerController* GPPlayerController =
@@ -552,10 +552,10 @@ namespace GPFoWWorldVisualizationContractPrivate
 				== AuthorityBefore,
 			TEXT("V_RendererDoesNotMutateGameplayAuthority"));
 		Expect(AuthorityFoW == nullptr
-			|| (FMath::IsNearlyEqual(AuthorityFoW->GetCellSizeCm(), 50.0f)
-				&& AuthorityFoW->GetGridDimensions() == FIntPoint(4000, 4000)
+			|| (FMath::IsNearlyEqual(AuthorityFoW->GetCellSizeCm(), 100.0f)
+				&& AuthorityFoW->GetGridDimensions() == FIntPoint(2000, 2000)
 				&& FMath::IsNearlyEqual(AuthorityFoW->GetUpdateIntervalSeconds(), 0.1f)),
-			TEXT("V2_GameplayGridIs50cmTenHz4000"));
+			TEXT("V2_GameplayGridIs100cmTenHz2000"));
 
 		if (OwnUnit != nullptr)
 		{

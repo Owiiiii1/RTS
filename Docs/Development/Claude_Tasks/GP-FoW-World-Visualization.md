@@ -27,10 +27,11 @@ Correct target: **simple per-cell renderer**.
 
 ## Canonical gameplay grid
 
-- CellSize = **50 cm**
-- Dims = **4000 × 4000**
+- CellSize = **100 cm**
+- Dims = **2000 × 2000**
 - Interval = **0.10 sec (10 Hz)**
 - world origin unchanged `(-100000, -100000)`
+- 4× the original 200 cm / 1000×1000 cell count (not 16×)
 
 ## Active renderer
 
@@ -42,7 +43,8 @@ Correct target: **simple per-cell renderer**.
 - Algorithm=`PerCellFeatheredQuads`
 - only Unexplored and Explored cells emit tiles
 - neighbor-aware edge/corner feathers
-- viewport-local sample cap 16384 cells / 98304 quads
+- viewport-local sample cap 65536 cells / 262144 quads
+- visible region is never cropped; over-cap frames are full black
 
 Enemy LocalFoW gating remains a separate presentation gate.
 
@@ -58,8 +60,8 @@ Enemy LocalFoW gating remains a separate presentation gate.
 
 `gp.FoW.DebugDump`, `gp.FoW.LocalDump`, and `gp.FoW.VisualDump` report:
 
-- CellSize=50
-- Dims=4000x4000
+- CellSize=100
+- Dims=2000x2000
 - Interval=0.10
 - Renderer=PerCellBlurredQuadRenderer
 - PostProcessActive=false
@@ -67,14 +69,8 @@ Enemy LocalFoW gating remains a separate presentation gate.
 
 ## Validation
 
-- `gp.FoW.RunRuntimeFoundationContractTest` — **PASS**, `Failures=0`
-- `gp.FoW.RunClientPresentationFoundationContractTest` — **PASS**, `Failures=0`
-- `gp.FoW.RunWorldVisualizationContractTest` — **PASS**, `Failures=0`
-- `gp.Combat.RunHealthBarContractTest` — **PASS**, `Failures=0`
-- `gp.Combat.RunTeamColorContractTest` — **PASS**, `Failures=0`
-- `gp.Building.RunOrbitalBuildingDropContractTest` — **PASS**, `Failures=0`
-- `gp.Building.RunBuildGridContractTest` — **PASS**, `Failures=0`
-- GPEditor Win64 Development + UHT — **PASS**
+- GPEditor Win64 Development + UHT — **PASS** (this correction)
+- Focused contract re-run not requested for this grid/crop correction; expects updated to 100 cm / 2000×2000 / 0.10
 
 No Config, maps, Blueprints, DataAssets, VFX, or Tools were modified.
 LongRange UnitDefinition sight=2000 was not touched.

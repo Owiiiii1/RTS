@@ -13,7 +13,7 @@ recompute, and the public three-state query API.
 Current-compatible deviations from the older pseudocode:
 
 - no canonical map-bounds actor exists yet, so the component temporarily owns deterministic grid bounds
-  (50 cm cells, origin `-100000/-100000`, dimensions `4000 x 4000`);
+  (100 cm cells, origin `-100000/-100000`, dimensions `2000 x 2000`);
 - active team grids are discovered from PlayerStates and registered sources; there is no `MatchTeams`
   production collection;
 - sight sources register after async UnitDefinition readiness and unregister on death/EndPlay; the
@@ -33,7 +33,7 @@ Current-compatible deviations from the older pseudocode:
 - source-only world/terrain presentation is a viewport-local **PerCellBlurredQuadRenderer**
   (`UGP_FoWWorldPresentationSubsystem` + `UGP_FoWWorldOverlayWidget` + one feathered quad tile per
   non-Visible cell). Post-process and fullscreen/sampled mask approaches are abandoned. Canonical
-  gameplay grid is 50 cm / 10 Hz / 4000×4000;
+  gameplay grid is 100 cm / 10 Hz / 2000×2000;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
   relevance, minimap, and the full production HUD remain later FoW slices.
 
@@ -45,7 +45,7 @@ Current-compatible deviations from the older pseudocode:
 3. **Standard UE relevance API (future).** Later actor hiding uses `IsNetRelevantFor` /
    `bOnlyRelevantToOwner`; the trusted mirror does not itself hide replicated actors.
 4. **Bit-grid storage.** Authority and local mirror use `TBitArray` internally; raw arrays are never
-   replicated. Current deterministic gameplay cell size is 50 cm (10 Hz, 4000×4000, same world origin).
+   replicated. Current deterministic gameplay cell size is 100 cm (10 Hz, 2000×2000, same world origin).
    Visual smoothness is a presentation-only per-cell feathered quad overlay; post-process and
    fullscreen mask paths are abandoned.
 5. **No client-side FoW gameplay.** Client can render fog mask, but server arbiters all visibility-gated logic.
@@ -63,7 +63,7 @@ class GPRUNTIME_API UGP_FogOfWarComponent : public UActorComponent
 {
     GENERATED_BODY()
 public:
-    /** Cell size у cm. Production default 50 cm (older snippet showed 200). */
+    /** Cell size у cm. Production default 100 cm (older snippet showed 200). */
     UPROPERTY(EditDefaultsOnly)
     int32 CellSize = 200;
 
@@ -139,12 +139,12 @@ Protocol:
 - no client-to-server FoW mutation RPC exists, and no mirror API accepts arbitrary TeamId.
 
 The full current Visible set makes removals deterministic without tombstones. Explored transmits only
-additions after initial sync. Contiguous range compression avoids sending a 16-million-cell bitmap and
+additions after initial sync. Contiguous range compression avoids sending a 4-million-cell bitmap and
 fits the current circle-source topology; there is no per-frame RPC or widget polling.
 
 Payload facts:
 
-- the grid is bounded to 16,000,000 cells (4000×4000 at 50 cm);
+- the grid is bounded to 4,000,000 cells (2000×2000 at 100 cm);
 - each run stores two `int32` values (8 bytes before RPC serialization overhead);
 - one isolated circular source normally contributes at most one run per intersected row
   (`2 * ceil(Radius / CellSize) + 1` before overlap merging);
@@ -161,18 +161,20 @@ overlay (`UGP_FoWWorldOverlayWidget`). Renderer name: **PerCellBlurredQuadRender
 Operator rejected the sampled/projected mask overlay (left-side striping) and the earlier post-process
 experiment. SDF / contour / Chaikin / marching-squares remain abandoned. Current temporary MVP stop:
 
-- gameplay grid: CellSize=50 cm, Dims=4000×4000, Interval=0.10 s;
+- gameplay grid: CellSize=100 cm, Dims=2000×2000, Interval=0.10 s;
 - visual: one world-space quad tile per Unexplored/Explored cell in the current view;
 - Visible cells are not drawn;
 - each tile has a neighbor-aware feathered edge so adjacent tiles blend;
-- the look remains cell-based; cells are 50 cm with soft edges;
+- the look remains cell-based; cells are 100 cm with soft edges;
 - no post-process material, no world-position reconstruction, no fullscreen mask, no coalesced strip surface.
 
 Bounds:
 
-- sampled gameplay cells capped at 16384;
-- overlay quads capped at 98304;
-- no full-world 4000×4000 allocation;
+- sampled gameplay cells capped at 65536;
+- overlay quads capped at 262144;
+- the visible FoW region is never cropped to fit the cap; if the full viewport region exceeds the
+  sampled-cell cap, that frame uses conservative full-black fallback;
+- no full-world 2000×2000 allocation;
 - no cell UObject/component allocation.
 
 Enemy world presentation remains a separate temporary local gate, not replication relevance:
@@ -369,12 +371,12 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
 
 ## Performance Budget
 
-- 10 Hz sight tick × O(units × area_cells_covered). With 50 units and 50 cm cells, per-source coverage
-  is 16× denser than the former 200 cm grid; authority work stays circle-fill, not a full 16M scan.
+- 10 Hz sight tick × O(units × area_cells_covered). With 50 units and 100 cm cells, per-source coverage
+  is 4× denser than the former 200 cm grid; authority work stays circle-fill, not a full 4M scan.
 - Relevance check called by engine per actor per client. Cheap (per-cell bit query + team check).
 - Multicast and replication budget unchanged from existing.
-- World FoW presentation: viewport-local per-cell feathered quads (max 16384 sampled cells, 98304
-  overlay quads). Camera pan/zoom/rotate rebuilds tiles; it does not rebuild authority FoW.
+- World FoW presentation: viewport-local per-cell feathered quads (max 65536 sampled cells, 262144
+  overlay quads). The visible region is never cropped; over-cap frames fall back to full black.
 
 ## Validation per Pillars
 

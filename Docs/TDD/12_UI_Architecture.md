@@ -75,7 +75,7 @@ PublicDependencyModuleNames.AddRange(new string[]
 - `UGP_FoWWorldPresentationSubsystem` is the first specialized world-presentation consumer. It binds
   directly to the trusted one-team LocalFoW mirror, not gameplay authority, and paints a viewport-local
   **PerCellBlurredQuadRenderer** (one feathered world-space tile per non-Visible cell). Gameplay
-  FoW is 50 cm / 10 Hz / 4000×4000. Post-process and fullscreen/sampled mask approaches are abandoned.
+  FoW is 100 cm / 10 Hz / 2000×2000. Post-process and fullscreen/sampled mask approaches are abandoned.
 - This direct mirror binding is intentionally limited to the project-owned world renderer. Ordinary
   HUD/minimap widgets still consume ViewModels.
 - The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.

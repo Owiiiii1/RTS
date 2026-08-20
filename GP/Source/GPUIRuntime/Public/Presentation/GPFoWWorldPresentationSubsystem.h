@@ -70,7 +70,7 @@ public:
 	int64 GetLastMaskRevision() const { return LastStats.MaskRevision; }
 	bool IsVisualDataDirty() const;
 
-	static constexpr int32 GetMaximumSampledCells() { return 16384; }
+	static constexpr int32 GetMaximumSampledCells() { return 65536; }
 	static constexpr int32 GetMaximumQuadsPerBatch() { return 8000; }
 	static constexpr int32 GetSamplePadCells() { return 1; }
 	static constexpr float GetProjectionGroundZ() { return 0.0f; }

@@ -52,8 +52,8 @@ namespace GPFoWPresentationRaster
 	constexpr float UnexploredObscuration = 1.0f;
 	constexpr float FeatherFraction = 0.45f;
 	constexpr int32 SamplePadCells = 1;
-	constexpr int32 MaximumSampledCells = 16384;
-	constexpr int32 MaximumOverlayQuads = 98304;
+	constexpr int32 MaximumSampledCells = 65536;
+	constexpr int32 MaximumOverlayQuads = 262144;
 	constexpr int32 MaximumQuadsPerBatch = 8000;
 
 	inline const TCHAR* GetRendererName()

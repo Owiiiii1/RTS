@@ -11,7 +11,8 @@
 - Branch: `feature/gp-fow-world-visualization`
 - Exact base: `origin/main` @ `7847c3ce27a571d92f7629369cc8d361bd981387`
 - Prior correction head (enemy hiding / health-bar composition / square feather): `857a97a4abe49ae25e9dabfa33746712d5248acc`
-- Contour rewrite implementation/report head: commit containing this report
+- Contour rewrite implementation head: `9b7f62632992eaf673b4113703f649e4b16a220f`
+- Final branch head: report-record commit following the validated contour rewrite head
 
 ## Operator retest of the previous slice
 

@@ -3,6 +3,8 @@
 #include "FogOfWar/GPLocalFoWComponent.h"
 
 #include "Engine/World.h"
+#include "FogOfWar/GPFogOfWarComponent.h"
+#include "Game/GPGameState.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "Player/GPPlayerController.h"
@@ -203,39 +205,8 @@ int32 UGP_LocalFoWComponent::WorldLocationToIndex(const FVector& WorldLocation) 
 	return Y * GridDimensions.X + X;
 }
 
-bool UGP_LocalFoWComponent::BuildPresentationMaskRGBA(TArray<FColor>& OutPixels) const
-{
-	OutPixels.Reset();
-	if (!bReady || GridDimensions.X <= 0 || GridDimensions.Y <= 0)
-	{
-		return false;
-	}
-
-	const int32 NumCells = GridDimensions.X * GridDimensions.Y;
-	if (Explored.Num() != NumCells || Visible.Num() != NumCells)
-	{
-		return false;
-	}
-
-	OutPixels.SetNumUninitialized(NumCells);
-	for (int32 Index = 0; Index < NumCells; ++Index)
-	{
-		const bool bVisible = Visible[Index];
-		const bool bKnown = bVisible || Explored[Index];
-		OutPixels[Index] = FColor(
-			bKnown ? 255 : 0,
-			bVisible ? 255 : 0,
-			0,
-			255);
-	}
-	return true;
-}
-
 EGP_FoWState UGP_LocalFoWComponent::GetStateAtWorldLocation(const FVector& WorldLocation) const
 {
-#if !UE_BUILD_SHIPPING
-	++DebugWorldLocationQueryCount;
-#endif
 	const int32 Index = WorldLocationToIndex(WorldLocation);
 	if (Index == INDEX_NONE || Index >= Explored.Num() || Index >= Visible.Num())
 	{
@@ -265,18 +236,17 @@ bool UGP_LocalFoWComponent::AllowsLocalPlacementPreview(const FVector& WorldLoca
 
 #if !UE_BUILD_SHIPPING
 
-int32 UGP_LocalFoWComponent::DebugConsumeWorldLocationQueryCount() const
-{
-	const int32 Count = DebugWorldLocationQueryCount;
-	DebugWorldLocationQueryCount = 0;
-	return Count;
-}
-
 void UGP_LocalFoWComponent::DebugDumpToLog() const
 {
 	const UWorld* World = GetWorld();
+	const AGP_GameState* GameState =
+		World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
+	const UGP_FogOfWarComponent* AuthorityFoW =
+		GameState != nullptr ? GameState->GetFogOfWarComponent() : nullptr;
+	const float Interval =
+		AuthorityFoW != nullptr ? AuthorityFoW->GetUpdateIntervalSeconds() : 0.0f;
 	UE_LOG(LogGPLocalFogOfWar, Display,
-		TEXT("GP LocalFoW Dump: World=%s NetMode=%s Owner=%s Ready=%s LocalTeam=%d Revision=%lld CellSize=%.1f Origin=%s Dims=%s Explored=%d Visible=%d"),
+		TEXT("GP LocalFoW Dump: Renderer=BlurredRasterOverlay PostProcessActive=false World=%s NetMode=%s Owner=%s Ready=%s LocalTeam=%d Revision=%lld CellSize=%.1f Dims=%dx%d Interval=%.2f Origin=%s Explored=%d Visible=%d"),
 		*GetNameSafe(World),
 		World != nullptr ? GPLocalFogOfWarPrivate::NetModeToString(World->GetNetMode()) : TEXT("None"),
 		*GetNameSafe(GetOwner()),
@@ -284,8 +254,10 @@ void UGP_LocalFoWComponent::DebugDumpToLog() const
 		LocalTeamId,
 		Revision,
 		CellSizeCm,
+		GridDimensions.X,
+		GridDimensions.Y,
+		Interval,
 		*GridOriginWorldXY.ToString(),
-		*GridDimensions.ToString(),
 		DebugGetExploredCellCount(),
 		DebugGetVisibleCellCount());
 }

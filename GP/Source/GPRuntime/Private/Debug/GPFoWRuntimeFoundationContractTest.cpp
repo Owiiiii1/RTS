@@ -317,9 +317,10 @@ void UGP_FoWRuntimeFoundationContractTestRunner::AdvanceStage()
 	case 0:
 	{
 		Expect(World->GetNetMode() != NM_Client, TEXT("Authority_ServerWorld"));
-		Expect(FMath::IsNearlyEqual(FoW->GetUpdateIntervalSeconds(), 0.2f, KINDA_SMALL_NUMBER),
-			TEXT("Update_RateFiveHz"));
-		Expect(FoW->GetCellSizeCm() == 200.0f, TEXT("Grid_CellSize200"));
+		Expect(FMath::IsNearlyEqual(FoW->GetUpdateIntervalSeconds(), 0.1f, KINDA_SMALL_NUMBER),
+			TEXT("Update_RateTenHz"));
+		Expect(FoW->GetCellSizeCm() == 50.0f, TEXT("Grid_CellSize50"));
+		Expect(FoW->GetGridDimensions() == FIntPoint(4000, 4000), TEXT("Grid_Dims4000"));
 
 		const FVector Seed(-70000.0f, -20000.0f, 100.0f);
 		FIntPoint SeedCell;

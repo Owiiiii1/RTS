@@ -73,9 +73,9 @@ PublicDependencyModuleNames.AddRange(new string[]
   presentation state into the ViewModel. Widgets remain read-only and never call FoW gameplay authority.
 - Listen-host and remote-client team isolation plus restart/reinitialization passed operator validation.
 - `UGP_FoWWorldPresentationSubsystem` is the first specialized world-presentation consumer. It binds
-  directly to the trusted one-team LocalFoW mirror, not gameplay authority, and injects a per-local-player
-  post-process Known/Visible packed mask (1000², 1:1 with LocalFoW). Gameplay FoW stays 200 cm / 5 Hz;
-  visual smoothness is GPU 9-tap sampling plus 0.20 s GPU temporal interpolation.
+  directly to the trusted one-team LocalFoW mirror, not gameplay authority, and paints a viewport-local
+  **BlurredRasterOverlay** (bilinear upsample + separable box blur + coalesced Slate quads). Gameplay
+  FoW is 50 cm / 10 Hz / 4000×4000. The post-process texture/material experiment is abandoned.
 - This direct mirror binding is intentionally limited to the project-owned world renderer. Ordinary
   HUD/minimap widgets still consume ViewModels.
 - The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.
@@ -150,13 +150,12 @@ UI код live у `GPUIRuntime`. Per [`01_Module_Architecture`](01_Module_Archit
 7. **Common UI activation stack** для будь-якого modal (OrderMenu, EndOfMatch, Pause). Не raw `AddToViewport` для screens.
 
 Specialized exception: FoW world presentation is a native local-player adapter, not an interactive HUD
-screen. `UGP_FoWWorldPresentationSubsystem` may read the trusted local mirror to rebuild a Known/Visible
-runtime mask texture and bind a per-view post-process material instance, but cannot read authority or
-mutate gameplay. Camera motion must not rebuild that mask. The paired
-`UGP_LocalFoWUnitPresentationSubsystem` is likewise a native world-presentation adapter: UnitBase
-actors lifecycle-register, LocalFoW revisions push immediate reevaluation, and a bounded 10 Hz
-registered-list pass catches movement across a static visibility edge. It only composes local
-primitive/health/combat presentation and never changes actor replication or gameplay state.
+screen. `UGP_FoWWorldPresentationSubsystem` may read the trusted local mirror to rebuild a viewport-local
+blurred raster overlay, but cannot read authority or mutate gameplay. Camera motion resamples that
+overlay. The paired `UGP_LocalFoWUnitPresentationSubsystem` is likewise a native world-presentation
+adapter: UnitBase actors lifecycle-register, LocalFoW revisions push immediate reevaluation, and a
+bounded 10 Hz registered-list pass catches movement across a static visibility edge. It only composes
+local primitive/health/combat presentation and never changes actor replication or gameplay state.
 
 ## Detailed MVP HUD Rules (GP-0401)
 

@@ -13,8 +13,6 @@ public class GPUIRuntime : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
-			"RHI",
-			"RenderCore",
 			"UMG",
 			"Slate",
 			"SlateCore",

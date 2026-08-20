@@ -481,12 +481,13 @@ int32 UGP_FogOfWarComponent::DebugGetExploredCellCountForTeam(int32 TeamId) cons
 void UGP_FogOfWarComponent::DebugDumpToLog() const
 {
 	UE_LOG(LogGPFogOfWar, Display,
-		TEXT("GP FoW Dump: Sources=%d CellSize=%.1f Origin=%s Dims=%s Interval=%.2f"),
+		TEXT("GP FoW Dump: Renderer=BlurredRasterOverlay PostProcessActive=false Sources=%d CellSize=%.1f Dims=%dx%d Interval=%.2f Origin=%s"),
 		DebugGetRegisteredSightSourceCount(),
 		GetCellSizeCm(),
-		*GetGridOriginWorldXY().ToString(),
-		*GetGridDimensions().ToString(),
-		GetUpdateIntervalSeconds());
+		GetGridDimensions().X,
+		GetGridDimensions().Y,
+		GetUpdateIntervalSeconds(),
+		*GetGridOriginWorldXY().ToString());
 
 	for (const TWeakObjectPtr<AGP_UnitBase>& Entry : SightSources)
 	{

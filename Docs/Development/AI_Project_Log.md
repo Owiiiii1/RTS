@@ -1,5 +1,21 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — FoW blurred raster overlay + 50 cm / 10 Hz grid
+
+Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Operator stopped the post-process direction (terrain fog absent + stutter) and reverted conceptually
+  to the earlier square/blurred overlay. SDF/contour/marching-squares remain abandoned.
+- Adopted the previously deferred 4× denser gameplay grid: CellSize=50, Dims=4000×4000, Interval=0.10.
+- Active renderer: `BlurredRasterOverlay` (`UGP_FoWWorldPresentationSubsystem` + overlay widget +
+  bilinear upsample / separable box blur). Post-process material, visual mask, and seed commandlet
+  removed. `PostProcessActive=false`.
+- Focused contracts Failures=0; GPEditor Win64 Development + UHT **PASS**. No Config/map/Blueprint/
+  DataAsset/VFX/Tools edit. LongRange local FoW radius 2000 untouched. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+
 ## 2026-08-20 — FoW world visualization binding + GPU mask correction
 
 Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**

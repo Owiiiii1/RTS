@@ -113,6 +113,11 @@ namespace GPFoWClientPresentationContractPrivate
 		Expect(AuthorityFoW == nullptr
 			|| AuthorityFoW->GetStateForTeamAtWorldLocation(1, CellLocation(0, 0)) == AuthorityStateBefore,
 			TEXT("I3_LocalMirrorCannotMutateAuthority"));
+		Expect(AuthorityFoW == nullptr
+			|| (FMath::IsNearlyEqual(AuthorityFoW->GetCellSizeCm(), 50.0f)
+				&& AuthorityFoW->GetGridDimensions() == FIntPoint(4000, 4000)
+				&& FMath::IsNearlyEqual(AuthorityFoW->GetUpdateIntervalSeconds(), 0.1f)),
+			TEXT("I4_CanonicalGameplayGridIs50cmTenHz4000"));
 		Expect(ViewModel != nullptr
 			&& ViewModel->bIsReady
 			&& ViewModel->LocalTeamId == 1

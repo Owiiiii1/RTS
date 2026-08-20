@@ -122,9 +122,9 @@ current execution order.
 
 | Capability | Status | Factual evidence / boundary |
 | --- | --- | --- |
-| Per-team Unexplored/Explored/Visible runtime | **DONE — FOUNDATION** | `UGP_FogOfWarComponent` owns authority-only per-team bit grids, 5 Hz registered-source recompute, sticky exploration, and public server queries; contract and operator validation passed. Client mirror/rendering/relevance remain separate capability work. |
-| Trusted owning-client mirror + FoW MVVM | **DONE — FOUNDATION** | Owner-only initial/delta range sync, revision guards, one-team `UGP_LocalFoWComponent`, `UGP_FoWViewModel`, adapter, CommonUI base, and local placement preview passed contracts, final builds, and two-player operator isolation. No visual fog/minimap/HUD was added. |
-| Visual world/terrain FoW | **PARTIAL — OPERATOR VALIDATION PENDING** | Per-LocalPlayer 1000² packed post-process mask, PlayerIndex/ViewActor local-view injection, GPU spatial/temporal filter. Previous operator FAIL: terrain fog absent + stutter. Gameplay FoW remains 200 cm / 5 Hz. Contracts and Editor build pass; PIE terrain readability is the current gate. |
+| Per-team Unexplored/Explored/Visible runtime | **DONE — FOUNDATION** | `UGP_FogOfWarComponent` owns authority-only per-team bit grids, 10 Hz registered-source recompute, sticky exploration, and public server queries; contract and operator validation passed. Canonical grid: 50 cm / 4000×4000 / 0.10 s. Client rendering/relevance remain separate capability work. |
+| Trusted owning-client mirror + FoW MVVM | **DONE — FOUNDATION** | Owner-only initial/delta range sync, revision guards, one-team `UGP_LocalFoWComponent`, `UGP_FoWViewModel`, adapter, CommonUI base, and local placement preview passed contracts, final builds, and two-player operator isolation. |
+| Visual world/terrain FoW | **PARTIAL — OPERATOR VALIDATION PENDING** | Operator stopped the post-process direction. Current stop: viewport-local BlurredRasterOverlay (square cells, strong blur) plus 4× denser gameplay grid (50 cm / 10 Hz / 4000×4000). Post-process path removed. Contracts and Editor build pass; PIE terrain readability is the current gate. |
 | FoW-gated selection/combat/drop placement | **PARTIAL** | Server auto-acquire and orbital building placement consume active visibility. Enemy local selection, explicit-Attack last-known behavior, unit-drop pod vision, and broad relevance filtering remain deferred FoW integration. |
 | Last-known state and minimap layers | **NOT STARTED** | Design only. |
 

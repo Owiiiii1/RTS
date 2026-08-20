@@ -10,54 +10,76 @@ Make the trusted one-team local FoW physically visible over the current MVP aren
 
 - Unexplored: opaque black;
 - Explored: dim/grey terrain;
-- Visible: unchanged SceneColor.
+- Visible: unchanged world.
 
-This slice is presentation-only. Gameplay FoW remains **200 cm / 5 Hz / 1000×1000**.
+This slice is presentation-only for the overlay, plus the adopted denser gameplay grid.
 
-## Operator FAIL of the previous post-process head
+## Operator decision (temporary MVP stop)
 
-Enemy hiding worked. Terrain fog did not visibly apply (map stayed fully lit). The game stuttered.
+The post-process texture renderer is **rejected and abandoned**.
 
-Root causes:
+We stop on the earlier simple working approach, plus the previously deferred denser grid:
 
-- view-family `RenderTarget` pointer identity was not the LocalPlayer game view, so `AddBlendable()` often never ran;
-- `UMaterialExpressionWorldPosition` at after-tonemap sampled the post-process quad, not scene pixels;
-- CPU encoded via ~1M world queries, four float planes, CPU blur, CPU temporal lerp, and two texture uploads.
+- square/cell-based FoW visualization;
+- strong blur / soft edges;
+- no post-process material;
+- no SDF / contour / marching-squares reconstruction;
+- no camera-bound post-process binding.
 
-## Corrected architecture
+Canonical gameplay grid:
 
-`UGP_FoWWorldPresentationSubsystem` remains the local-player owner.
+- CellSize = **50 cm**
+- Dims = **4000 × 4000**
+- Interval = **0.10 sec (10 Hz)**
+- same world origin `(-100000, -100000)`
 
-- Local view identity: `FSceneView::PlayerIndex` vs `ULocalPlayer::GetControllerId()` / `GetLocalPlayerIndex()`, plus ViewActor fallback. Camera `AddOrUpdateBlendable` is the secondary local-only route.
-- `PostProcessBound` means actual owned-view injection (`BlendableInjectionCount > 0`).
-- CPU: `BuildPresentationMaskRGBA` packed 1000×1000 RG-in-BGRA8, one texel per cell.
-- GPU: bilinear + 9-tap spatial; `lerp(Previous, Target, BlendAlpha)` temporal over 0.20 s.
-- Ping-pong: one target upload per revision.
-- Scene-pixel world XY from SceneDepth + `SvPositionToTranslatedWorld`.
-- `gp.FoW.VisualDebugMode 1` full-screen diagnostic tint; `0` is normal FoW.
-- `gp.FoW.VisualEnable 0` removes terrain fog only.
+## Active renderer
 
-Measured contract encode/upload: **MaskEncodeMs=3.422**, **MaskUploadMs=0.912**.
+Exactly one terrain FoW renderer is active:
+
+`UGP_FoWWorldPresentationSubsystem` + `UGP_FoWWorldOverlayWidget` + `GPFoWPresentationRaster`
+
+- **Renderer=`BlurredRasterOverlay`**
+- **PostProcessActive=false**
+- Algorithm=`BilinearUpsampleSeparableBoxBlur`
+- viewport-local sample cap 65536 cells / 262144 presentation pixels
+- target supersample 4 (≈12.5 cm texels) and separable box blur radius 12
+- coalesced Slate quads; camera pan/zoom/rotate resamples
+
+Enemy visibility gating by LocalFoW remains a separate local presentation gate.
+
+## Removed / abandoned
+
+- post-process terrain fog renderer
+- runtime FoW texture / mask presentation path (`GPFoWVisualMask`, `BuildPresentationMaskRGBA`)
+- post-process camera binding and debug tint
+- world-position reconstruction material path
+- `M_GP_FoW_PostProcess` and its seed commandlet
+- SDF / contour / Chaikin / marching squares
+- hybrid post-process + overlay competition
 
 ## Diagnostics
 
-`gp.FoW.VisualDump` reports Renderer, MaskModel, TextureResolution, WorldOrigin, WorldExtent,
-MaskRevision, BlendAlpha, SpatialFilter=`GPUBilinear9Tap`, TemporalFilter=`GPULerpBlendAlpha`,
-MaskEncodeMs, MaskUploadMs, PostProcessBound, ActualViewsSeen, BlendableInjectionCount,
-LastInjectedFrame, LastInjectedView, CameraBlendable, DebugMode, WorldPosition method.
+`gp.FoW.DebugDump`, `gp.FoW.LocalDump`, and `gp.FoW.VisualDump` report:
+
+- CellSize=50
+- Dims=4000x4000
+- Interval=0.10
+- Renderer=BlurredRasterOverlay
+- PostProcessActive=false
 
 ## Validation
 
-- `gp.FoW.RunWorldVisualizationContractTest` — **PASS**, `Failures=0`
-- `gp.FoW.RunClientPresentationFoundationContractTest` — **PASS**, `Failures=0`
 - `gp.FoW.RunRuntimeFoundationContractTest` — **PASS**, `Failures=0`
+- `gp.FoW.RunClientPresentationFoundationContractTest` — **PASS**, `Failures=0`
+- `gp.FoW.RunWorldVisualizationContractTest` — **PASS**, `Failures=0`
 - `gp.Combat.RunHealthBarContractTest` — **PASS**, `Failures=0`
 - `gp.Combat.RunTeamColorContractTest` — **PASS**, `Failures=0`
 - `gp.Building.RunOrbitalBuildingDropContractTest` — **PASS**, `Failures=0`
 - `gp.Building.RunBuildGridContractTest` — **PASS**, `Failures=0`
 - GPEditor Win64 Development + UHT — **PASS**
 
-The only authored asset is `/Game/GrimProtocol/FogOfWar/M_GP_FoW_PostProcess`.
-Existing maps, Blueprints, DataAssets, materials, VFX, Config, and Tools were not modified.
+No Config, maps, Blueprints, DataAssets, materials, VFX, or Tools were modified.
+LongRange UnitDefinition sight=2000 was not touched.
 
 **NOT MERGED. NOT FINALIZED.**

@@ -7,13 +7,13 @@ Engineering implementation of 3-level FoW (per [`../GDD/11_Fog_of_War`](../GDD/1
 ## Current production foundations — finalized (2026-08-20)
 
 The first production slice uses `UGP_FogOfWarComponent` as a non-replicated default subobject of
-`AGP_GameState`. It owns authority-only per-team `TBitArray` storage, a 5 Hz registered-sight-source
+`AGP_GameState`. It owns authority-only per-team `TBitArray` storage, a 10 Hz registered-sight-source
 recompute, and the public three-state query API.
 
 Current-compatible deviations from the older pseudocode:
 
 - no canonical map-bounds actor exists yet, so the component temporarily owns deterministic grid bounds
-  (200 cm cells, origin `-100000/-100000`, dimensions `1000 x 1000`);
+  (50 cm cells, origin `-100000/-100000`, dimensions `4000 x 4000`);
 - active team grids are discovered from PlayerStates and registered sources; there is no `MatchTeams`
   production collection;
 - sight sources register after async UnitDefinition readiness and unregister on death/EndPlay; the
@@ -30,10 +30,10 @@ Current-compatible deviations from the older pseudocode:
   confirmation remains authoritative;
 - single-client transitions, same-coordinate two-player team isolation, and restart/reinitialization
   passed operator validation;
-- source-only world/terrain presentation uses a per-LocalPlayer 1000² packed Known/Visible
-  post-process mask (GPU 9-tap + 0.20 s GPU temporal lerp, one upload per revision) after an operator
-  FAIL of RenderTarget-pointer binding and CPU million-sample filtering; gameplay FoW remains 200 cm /
-  5 Hz; a 50 cm / 10 Hz grid change is deferred;
+- source-only world/terrain presentation is a viewport-local **BlurredRasterOverlay**
+  (`UGP_FoWWorldPresentationSubsystem` + `UGP_FoWWorldOverlayWidget` + bilinear upsample + separable
+  box blur). The post-process texture/material experiment is abandoned. Canonical gameplay grid is
+  50 cm / 10 Hz / 4000×4000;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
   relevance, minimap, and the full production HUD remain later FoW slices.
 
@@ -45,8 +45,9 @@ Current-compatible deviations from the older pseudocode:
 3. **Standard UE relevance API (future).** Later actor hiding uses `IsNetRelevantFor` /
    `bOnlyRelevantToOwner`; the trusted mirror does not itself hide replicated actors.
 4. **Bit-grid storage.** Authority and local mirror use `TBitArray` internally; raw arrays are never
-   replicated. Current deterministic gameplay cell size remains 200 cm (5 Hz). Visual smoothness is a
-   presentation-only post-process texture; 50 cm / 10 Hz is not approved yet.
+   replicated. Current deterministic gameplay cell size is 50 cm (10 Hz, 4000×4000, same world origin).
+   Visual smoothness is a presentation-only viewport-local blurred raster overlay; the post-process
+   texture path is abandoned.
 5. **No client-side FoW gameplay.** Client can render fog mask, but server arbiters all visibility-gated logic.
 6. **No tick-poll у widgets.** FoW reads through `UGP_FoWViewModel` and reacts to coarse Revision
    FieldNotify (Common UI + MVVM per TDD/12).
@@ -62,7 +63,7 @@ class GPRUNTIME_API UGP_FogOfWarComponent : public UActorComponent
 {
     GENERATED_BODY()
 public:
-    /** Cell size у cm. DA-driven, default 200 cm. */
+    /** Cell size у cm. Production default 50 cm (older snippet showed 200). */
     UPROPERTY(EditDefaultsOnly)
     int32 CellSize = 200;
 
@@ -138,53 +139,42 @@ Protocol:
 - no client-to-server FoW mutation RPC exists, and no mirror API accepts arbitrary TeamId.
 
 The full current Visible set makes removals deterministic without tombstones. Explored transmits only
-additions after initial sync. Contiguous range compression avoids sending a one-million-cell bitmap and
+additions after initial sync. Contiguous range compression avoids sending a 16-million-cell bitmap and
 fits the current circle-source topology; there is no per-frame RPC or widget polling.
 
 Payload facts:
 
-- the grid is bounded to 1,000,000 cells;
+- the grid is bounded to 16,000,000 cells (4000×4000 at 50 cm);
 - each run stores two `int32` values (8 bytes before RPC serialization overhead);
 - one isolated circular source normally contributes at most one run per intersected row
   (`2 * ceil(Radius / CellSize) + 1` before overlap merging);
-- there is no separate chunk/byte cap; an alternating-cell theoretical worst case is 500,000 runs
-  (~4 MB before serialization), so highly fragmented large reconnect snapshots remain a future
+- there is no separate chunk/byte cap; highly fragmented large reconnect snapshots remain a future
   scalability concern outside the validated MVP match scale.
 
 ### World / Terrain Visualization
 
 `UGP_FoWWorldPresentationSubsystem` is one `ULocalPlayerSubsystem` per local player in `GPUIRuntime`.
-It binds only to that controller's `UGP_LocalFoWComponent` and injects a per-view post-process
-blendable. The Slate/SDF/contour/raster overlay path was removed.
+It binds only to that controller's `UGP_LocalFoWComponent` and drives a hit-test-invisible Slate
+overlay (`UGP_FoWWorldOverlayWidget`). Renderer name: **BlurredRasterOverlay**. `PostProcessActive=false`.
 
-Current MVP rendering method:
+Operator stopped the post-process texture experiment (terrain fog did not apply; stutter). SDF /
+contour / Chaikin / marching-squares reconstruction is also abandoned. Current temporary MVP stop:
 
-- on LocalFoW revision, bulk-extract a packed 1000×1000 BGRA8 mask (one texel per gameplay cell;
-  R=Known, G=Visible) without 1M world-location queries;
-- ping-pong Previous/Target GPU textures and upload the new target only; lerp in the material over 0.20 s;
-- GPU bilinear + 9-tap mask sampling (`FoWMaskTexelSize`, `FoWBlurRadiusTexels`);
-- Unexplored: black; Explored: SceneColor × 0.35; Visible: unchanged SceneColor;
-- NotReady forces `FoWReady=0` (full black);
-- local-view injection uses PlayerIndex / ViewActor, not RenderTarget pointer identity;
-- scene-pixel world XY is reconstructed from SceneDepth + SvPosition, not AbsoluteWorldPosition;
-- camera pan/zoom/yaw does not rebuild the mask;
-- each LocalPlayer owns distinct textures and a unique MID (no shared PostProcessVolume).
+- gameplay grid: CellSize=50 cm, Dims=4000×4000, Interval=0.10 s;
+- visual: square cells from LocalFoW, Unexplored black, Explored dim grey, Visible clear;
+- viewport-local bilinear upsample (target 4×) + separable box blur (12 samples) + coalesced Slate quads;
+- the look may remain cell-based; cells are much smaller and edges are strongly blurred;
+- no post-process material, no world-position reconstruction, no camera blendable binding.
 
 Bounds:
 
-- presentation texture is independent of the 1000×1000 gameplay grid;
-- 2 GPU textures × 4,194,304 bytes plus CPU float working buffers;
-- rebuild/upload only on LocalFoW revision, not per frame;
-- no cell UObject/component allocation;
-- old Slate world renderer is inactive.
+- sampled gameplay cells capped at 65536;
+- presentation pixels capped at 262144;
+- overlay quads capped at 16384;
+- no full-world 4000×4000 raster;
+- no cell UObject/component allocation.
 
-Gameplay FoW remains 200 cm / 5 Hz. A 50 cm / 10 Hz grid change is deferred until this renderer is
-operator-evaluated. The current arena contains no Landscape and uses planar blockout ground.
-
-No material, render target, map, Blueprint, or global Material Parameter Collection is required. This
-keeps masks isolated per LocalPlayer/listen client and avoids global team-state leakage.
-
-Enemy world presentation is a separate temporary local gate, not replication relevance:
+Enemy world presentation remains a separate temporary local gate, not replication relevance:
 
 - each `AGP_UnitBase` registers with `UGP_LocalFoWUnitPresentationSubsystem`; no `TActorIterator` or
   whole-world discovery is used;
@@ -219,7 +209,7 @@ bool bGrantsFogOfWarVision = true;   // explicit flag
 
 ## Sight Tick (Server)
 
-`UGP_FogOfWarComponent::TickComponent` (5 Hz server tick):
+`UGP_FogOfWarComponent::TickComponent` (10 Hz server tick):
 
 ```
 for each TeamId у MatchTeams:
@@ -341,7 +331,7 @@ UPROPERTY(BlueprintReadOnly, FieldNotify, Getter)
 TArray<FGP_MinimapCellRender> Cells;
 ```
 
-VM Adapter polls `UGP_LocalFoWComponent` snapshot at 5 Hz (matches sight tick).
+VM Adapter polls `UGP_LocalFoWComponent` snapshot at 10 Hz (matches sight tick).
 
 ## Tag Surface
 
@@ -372,18 +362,18 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
 - ❌ Client decides visibility — server-only.
 - ❌ Last-known state writes to live state.
 - ❌ Ordinary HUD widget code calling FoW authority/mirror directly — use `UGP_FoWViewModel`.
-- ✅ The dedicated world FoW post-process adapter may read its one bound `UGP_LocalFoWComponent`; it is
+- ✅ The dedicated world FoW overlay adapter may read its one bound `UGP_LocalFoWComponent`; it is
   the project-owned presentation adapter, not gameplay authority or a general HUD widget.
 - ❌ Removing `Explored` flag once set (no re-fog у MVP).
 
 ## Performance Budget
 
-- 5 Hz sight tick × O(units × area_cells_covered). With 50 units × ~100 cells average = 25k cell ops/sec — acceptable.
+- 10 Hz sight tick × O(units × area_cells_covered). With 50 units and 50 cm cells, per-source coverage
+  is 16× denser than the former 200 cm grid; authority work stays circle-fill, not a full 16M scan.
 - Relevance check called by engine per actor per client. Cheap (per-cell bit query + team check).
 - Multicast and replication budget unchanged from existing.
-- World FoW presentation: 1000² packed mask textures per LocalPlayer, GPU 9-tap + 0.20 s GPU lerp,
-  one after-tonemap post-process pass, one target upload per LocalFoW revision. Camera motion does not
-  rebuild the mask.
+- World FoW presentation: viewport-local blurred raster overlay (max 65536 sampled cells, 262144
+  presentation pixels). Camera pan/zoom/rotate resamples the overlay; it does not rebuild authority FoW.
 
 ## Validation per Pillars
 
@@ -411,7 +401,7 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
 | 9 | Combat re-engage | Attack target → target hides → attacker moves to last-known → target re-emerges → re-engage. |
 | 10 | Minimap layers | All 3 layers rendered correctly з proper alpha. |
 | 11 | Drop pod telegraph | Pod adds temporary vision at landing site (DropDef.bPodGrantsVision = true). Pod destroyed → vision contribution gone. |
-| 12 | Performance | 50 actors, 5 Hz sight tick, no frame-time spike > 1 ms server-side. |
+| 12 | Performance | 50 actors, 10 Hz sight tick, no frame-time spike > 1 ms server-side. |
 
 ## Out of MVP
 

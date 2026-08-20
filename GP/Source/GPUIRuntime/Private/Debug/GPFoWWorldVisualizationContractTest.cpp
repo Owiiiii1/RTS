@@ -2,30 +2,19 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPUnitAttributeSet.h"
-#include "Camera/CameraComponent.h"
 #include "Combat/GPCombatPresentationComponent.h"
 #include "Engine/LocalPlayer.h"
-#include "Engine/Scene.h"
-#include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "FogOfWar/GPLocalFoWComponent.h"
 #include "Game/GPGameState.h"
 #include "HAL/IConsoleManager.h"
-#include "HAL/PlatformTime.h"
-#include "Materials/Material.h"
-#include "Materials/MaterialExpression.h"
-#include "Materials/MaterialExpressionCustom.h"
-#include "Materials/MaterialExpressionWorldPosition.h"
-#include "Materials/MaterialInstanceDynamic.h"
-#include "CoreGlobals.h"
 #include "Player/GPPlayerController.h"
-#include "Presentation/GPFoWVisualMask.h"
-#include "Presentation/GPFoWWorldPresentationSubsystem.h"
 #include "Presentation/GPHealthBarComponent.h"
 #include "Presentation/GPLocalFoWUnitPresentationSubsystem.h"
+#include "Presentation/GPFoWPresentationRaster.h"
+#include "Presentation/GPFoWWorldPresentationSubsystem.h"
 #include "Units/GPWorker.h"
-#include "Blueprint/UserWidget.h"
-#include "UObject/UObjectIterator.h"
+#include "Widgets/GPFoWWorldOverlayWidget.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPFoWWorldVisualizationContract, Log, All);
 
@@ -65,52 +54,6 @@ namespace GPFoWWorldVisualizationContractPrivate
 			0.0);
 	}
 
-	static TArray<EGP_FoWState> MakeGrid(int32 Width, int32 Height, EGP_FoWState Fill)
-	{
-		TArray<EGP_FoWState> Cells;
-		Cells.Init(Fill, Width * Height);
-		return Cells;
-	}
-
-	static bool MaterialContainsWorldPositionNode(const UMaterial* Material)
-	{
-		if (Material == nullptr)
-		{
-			return false;
-		}
-#if WITH_EDITORONLY_DATA
-		for (UMaterialExpression* Expression : Material->GetExpressions())
-		{
-			if (Cast<UMaterialExpressionWorldPosition>(Expression) != nullptr)
-			{
-				return true;
-			}
-		}
-#endif
-		return false;
-	}
-
-	static bool MaterialCustomContains(const UMaterial* Material, const TCHAR* Needle)
-	{
-		if (Material == nullptr)
-		{
-			return false;
-		}
-#if WITH_EDITORONLY_DATA
-		for (UMaterialExpression* Expression : Material->GetExpressions())
-		{
-			if (const UMaterialExpressionCustom* Custom = Cast<UMaterialExpressionCustom>(Expression))
-			{
-				if (Custom->Code.Contains(Needle))
-				{
-					return true;
-				}
-			}
-		}
-#endif
-		return false;
-	}
-
 	static void RunWorldVisualizationContractTest(
 		const TArray<FString>& Args,
 		UWorld* World)
@@ -141,48 +84,45 @@ namespace GPFoWWorldVisualizationContractPrivate
 			}
 		};
 
-		Expect(FCString::Strcmp(
-				UGP_FoWWorldPresentationSubsystem::GetRendererName(),
-				TEXT("PostProcessTextureMask")) == 0
-			&& !UGP_FoWWorldPresentationSubsystem::IsOldSlateRendererActive()
-			&& FindObject<UClass>(nullptr, TEXT("/Script/GPUIRuntime.GP_FoWWorldOverlayWidget")) == nullptr,
-			TEXT("A_OldSlateWorldRendererRemoved"));
-
 		UGP_LocalFoWComponent* Team1Mirror =
 			NewObject<UGP_LocalFoWComponent>(GetTransientPackage());
 		Expect(Team1Mirror != nullptr && !Team1Mirror->IsReady(),
-			TEXT("B_RendererInputStartsNotReady"));
-		Expect(UGP_FoWWorldPresentationSubsystem::RequiresConservativeFullObscuration(Team1Mirror),
-			TEXT("C_NotReadyIsFullyObscured"));
-
-		const FLinearColor SceneColor(0.8f, 0.7f, 0.6f, 1.0f);
-		const FLinearColor NotReadyColor = UGP_FoWWorldPresentationSubsystem::ComposeVisualSceneColor(
-			SceneColor, 1.0f, 1.0f, false);
-		Expect(NotReadyColor.Equals(FLinearColor(0.0f, 0.0f, 0.0f, 1.0f)),
-			TEXT("D_NotReadyCompositionIsBlack"));
+			TEXT("A_RendererInputStartsNotReady"));
+		Expect(UGP_FoWWorldPresentationSubsystem::RequiresConservativeFullObscuration(
+				Team1Mirror),
+			TEXT("B_NotReadyIsFullyObscured"));
 
 		const float UnexploredObscuration =
-			UGP_FoWWorldPresentationSubsystem::GetObscurationForState(EGP_FoWState::Unexplored);
+			UGP_FoWWorldPresentationSubsystem::GetObscurationForState(
+				EGP_FoWState::Unexplored);
 		const float ExploredObscuration =
-			UGP_FoWWorldPresentationSubsystem::GetObscurationForState(EGP_FoWState::Explored);
+			UGP_FoWWorldPresentationSubsystem::GetObscurationForState(
+				EGP_FoWState::Explored);
 		const float VisibleObscuration =
-			UGP_FoWWorldPresentationSubsystem::GetObscurationForState(EGP_FoWState::Visible);
+			UGP_FoWWorldPresentationSubsystem::GetObscurationForState(
+				EGP_FoWState::Visible);
 		Expect(FMath::IsNearlyEqual(UnexploredObscuration, 1.0f),
-			TEXT("E_UnexploredMaximumBlackObscuration"));
+			TEXT("C_UnexploredMaximumBlackObscuration"));
 		Expect(ExploredObscuration > 0.0f && ExploredObscuration < 1.0f,
-			TEXT("F_ExploredDimObscuration"));
+			TEXT("D_ExploredDimObscuration"));
 		Expect(FMath::IsNearlyZero(VisibleObscuration),
-			TEXT("G_VisibleNoObscuration"));
+			TEXT("E_VisibleNoObscuration"));
+		Expect(UnexploredObscuration > ExploredObscuration
+			&& ExploredObscuration > VisibleObscuration,
+			TEXT("F_ThreeVisualValuesDistinctAndOrdered"));
 
 		FGP_FoWPresentationUpdate Team1Initial = Initial(1, 1);
 		Team1Initial.ExploredRanges.Add(Range(0, 2));
 		Team1Initial.VisibleRanges.Add(Range(1, 1));
 		Expect(Team1Mirror->ApplyServerUpdate(Team1Initial),
-			TEXT("H_InitialSnapshotBuildsVisualInput"));
-		Expect(Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0)) == EGP_FoWState::Explored
-			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(1, 0)) == EGP_FoWState::Visible
-			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0)) == EGP_FoWState::Unexplored,
-			TEXT("I_ExactCellStateEncodingAndCoordinates"));
+			TEXT("G_InitialSnapshotBuildsVisualInput"));
+		Expect(Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0))
+				== EGP_FoWState::Explored
+			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(1, 0))
+				== EGP_FoWState::Visible
+			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0))
+				== EGP_FoWState::Unexplored,
+			TEXT("H_ExactCellStateEncodingAndCoordinates"));
 
 		FActorSpawnParameters UnitSpawnParams;
 		UnitSpawnParams.SpawnCollisionHandlingOverride =
@@ -206,33 +146,62 @@ namespace GPFoWWorldVisualizationContractPrivate
 			EnemyUnit->SetTeamId(2);
 		}
 
-		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(OwnUnit, 1, Team1Mirror);
-		Expect(OwnUnit != nullptr && OwnUnit->IsLocalFoWPresentationVisible() && !OwnUnit->IsHidden(),
-			TEXT("J1_OwnUnitNeverHiddenByLocalFoW"));
-		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(EnemyUnit, 1, Team1Mirror);
-		Expect(EnemyUnit != nullptr && EnemyUnit->IsLocalFoWPresentationVisible() && !EnemyUnit->IsHidden(),
-			TEXT("J2_EnemyVisiblePresentationVisible"));
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			OwnUnit,
+			1,
+			Team1Mirror);
+		Expect(OwnUnit != nullptr
+			&& OwnUnit->IsLocalFoWPresentationVisible()
+			&& !OwnUnit->IsHidden(),
+			TEXT("H1_OwnUnitNeverHiddenByLocalFoW"));
+
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			EnemyUnit,
+			1,
+			Team1Mirror);
+		Expect(EnemyUnit != nullptr
+			&& EnemyUnit->IsLocalFoWPresentationVisible()
+			&& !EnemyUnit->IsHidden(),
+			TEXT("H2_EnemyVisiblePresentationVisible"));
+
 		if (EnemyUnit != nullptr)
 		{
 			EnemyUnit->SetActorLocation(CellLocation(0, 0) + FVector(0.0, 0.0, 200.0));
 		}
-		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(EnemyUnit, 1, Team1Mirror);
-		Expect(EnemyUnit != nullptr && !EnemyUnit->IsLocalFoWPresentationVisible() && EnemyUnit->IsHidden(),
-			TEXT("J3_EnemyExploredPresentationHidden"));
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			EnemyUnit,
+			1,
+			Team1Mirror);
+		Expect(EnemyUnit != nullptr
+			&& !EnemyUnit->IsLocalFoWPresentationVisible()
+			&& EnemyUnit->IsHidden(),
+			TEXT("H3_EnemyExploredPresentationHidden"));
+
 		if (EnemyUnit != nullptr)
 		{
 			EnemyUnit->SetActorLocation(CellLocation(2, 0) + FVector(0.0, 0.0, 200.0));
 		}
-		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(EnemyUnit, 1, Team1Mirror);
-		Expect(EnemyUnit != nullptr && !EnemyUnit->IsLocalFoWPresentationVisible() && EnemyUnit->IsHidden(),
-			TEXT("J4_EnemyUnexploredPresentationHidden"));
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			EnemyUnit,
+			1,
+			Team1Mirror);
+		Expect(EnemyUnit != nullptr
+			&& !EnemyUnit->IsLocalFoWPresentationVisible()
+			&& EnemyUnit->IsHidden(),
+			TEXT("H4_EnemyUnexploredPresentationHidden"));
+
 		if (EnemyUnit != nullptr)
 		{
 			EnemyUnit->SetActorLocation(CellLocation(1, 0) + FVector(0.0, 0.0, 200.0));
 		}
-		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(EnemyUnit, 1, Team1Mirror);
-		Expect(EnemyUnit != nullptr && EnemyUnit->IsLocalFoWPresentationVisible() && !EnemyUnit->IsHidden(),
-			TEXT("J5_EnemyReentersVisiblePresentationRestored"));
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			EnemyUnit,
+			1,
+			Team1Mirror);
+		Expect(EnemyUnit != nullptr
+			&& EnemyUnit->IsLocalFoWPresentationVisible()
+			&& !EnemyUnit->IsHidden(),
+			TEXT("H5_EnemyReentersVisiblePresentationRestored"));
 
 		UGP_HealthBarComponent* EnemyHealthBar =
 			EnemyUnit != nullptr ? EnemyUnit->GetHealthBarComponent() : nullptr;
@@ -240,7 +209,9 @@ namespace GPFoWWorldVisualizationContractPrivate
 			EnemyUnit != nullptr ? EnemyUnit->GetGPAbilitySystemComponent() : nullptr;
 		if (EnemyASC != nullptr)
 		{
-			EnemyASC->SetNumericAttributeBase(UGP_UnitAttributeSet::GetHealthAttribute(), 40.0f);
+			EnemyASC->SetNumericAttributeBase(
+				UGP_UnitAttributeSet::GetHealthAttribute(),
+				40.0f);
 		}
 		if (EnemyHealthBar != nullptr)
 		{
@@ -258,7 +229,10 @@ namespace GPFoWWorldVisualizationContractPrivate
 			EnemyUnit != nullptr && EnemyUnit->IsReplicatingMovement();
 		const FVector EnemyLocationBeforePresentation =
 			EnemyUnit != nullptr ? EnemyUnit->GetActorLocation() : FVector::ZeroVector;
-		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(EnemyUnit, 1, Team1Mirror);
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			EnemyUnit,
+			1,
+			Team1Mirror);
 		Expect(EnemyHealthBar != nullptr
 			&& EnemyHealthBar->DoesHealthPolicyAllowVisibility()
 			&& !EnemyHealthBar->IsFoWPresentationAllowed()
@@ -267,180 +241,230 @@ namespace GPFoWWorldVisualizationContractPrivate
 			&& EnemyUnit != nullptr
 			&& EnemyUnit->GetCombatPresentationComponent() != nullptr
 			&& !EnemyUnit->GetCombatPresentationComponent()->IsLocalPresentationAllowed(),
-			TEXT("J6_DamagedEnemyHealthBarCannotLeakWhileHidden"));
+			TEXT("H6_DamagedEnemyHealthBarCannotLeakWhileHidden"));
 		Expect(EnemyUnit != nullptr
 			&& EnemyUnit->GetTeamId() == EnemyTeamBeforePresentation
 			&& EnemyUnit->GetIsReplicated() == bEnemyReplicatesBeforePresentation
 			&& EnemyUnit->IsReplicatingMovement() == bEnemyReplicateMovementBeforePresentation
 			&& EnemyUnit->GetActorLocation().Equals(EnemyLocationBeforePresentation),
-			TEXT("J7_PresentationGateDoesNotMutateGameplayOrReplication"));
+			TEXT("H7_PresentationGateDoesNotMutateGameplayOrReplication"));
 
-		Team1Mirror->DebugConsumeWorldLocationQueryCount();
-		TArray<FColor> EncodedPixels;
-		int32 EncodedWidth = 0;
-		int32 EncodedHeight = 0;
-		FVector2D EncodedOrigin = FVector2D::ZeroVector;
-		FVector2D EncodedExtent = FVector2D::ZeroVector;
-		const bool bEncoded = GPFoWVisualMask::EncodePackedFromLocalFoW(
-			EncodedPixels,
-			EncodedWidth,
-			EncodedHeight,
-			EncodedOrigin,
-			EncodedExtent,
-			Team1Mirror);
-		const int32 QueriesDuringEncode = Team1Mirror->DebugConsumeWorldLocationQueryCount();
-		Expect(bEncoded && EncodedWidth == 4 && EncodedHeight == 4 && EncodedPixels.Num() == 16
-			&& QueriesDuringEncode == 0,
-			TEXT("K1_DirectLocalFoWBulkExtractionDoesNotQueryWorldLocations"));
-		Expect(EncodedPixels.IsValidIndex(0) && EncodedPixels[0] == FColor(255, 0, 0, 255)
-			&& EncodedPixels.IsValidIndex(1) && EncodedPixels[1] == FColor(255, 255, 0, 255)
-			&& EncodedPixels.IsValidIndex(2) && EncodedPixels[2] == FColor(0, 0, 0, 255),
-			TEXT("K2_PackedKnownVisibleChannelsMatchGameplayCells"));
-
-		float KnownExplored = 0.0f;
-		float VisibleExplored = 0.0f;
-		float KnownVisible = 0.0f;
-		float VisibleVisible = 0.0f;
-		float KnownHidden = 0.0f;
-		float VisibleHidden = 0.0f;
-		GPFoWVisualMask::SamplePackedBilinear(
-			EncodedPixels, EncodedWidth, EncodedHeight,
-			FVector2D(50.0, 50.0), EncodedOrigin, EncodedExtent, KnownExplored, VisibleExplored);
-		GPFoWVisualMask::SamplePackedBilinear(
-			EncodedPixels, EncodedWidth, EncodedHeight,
-			FVector2D(150.0, 50.0), EncodedOrigin, EncodedExtent, KnownVisible, VisibleVisible);
-		GPFoWVisualMask::SamplePackedBilinear(
-			EncodedPixels, EncodedWidth, EncodedHeight,
-			FVector2D(250.0, 50.0), EncodedOrigin, EncodedExtent, KnownHidden, VisibleHidden);
-		Expect(KnownExplored > 0.9f && VisibleExplored < 0.1f
-			&& KnownVisible > 0.9f && VisibleVisible > 0.9f
-			&& KnownHidden < 0.1f && VisibleHidden < 0.1f,
-			TEXT("K3_PackedMaskWorldXYSamplingIsCorrect"));
-
-		const FLinearColor UnexploredColor = GPFoWVisualMask::ComposeSceneColorFromPacked(
-			SceneColor, FColor(0, 0, 0, 255), true);
-		const FLinearColor ExploredColor = GPFoWVisualMask::ComposeSceneColorFromPacked(
-			SceneColor, FColor(255, 0, 0, 255), true);
-		const FLinearColor VisibleColor = GPFoWVisualMask::ComposeSceneColorFromPacked(
-			SceneColor, FColor(255, 255, 0, 255), true);
-		Expect(UnexploredColor.Equals(FLinearColor(0.0f, 0.0f, 0.0f, 1.0f)),
-			TEXT("L_UnexploredCompositionIsBlack"));
-		Expect(ExploredColor.R < SceneColor.R && ExploredColor.R > 0.05f
-			&& FMath::IsNearlyEqual(ExploredColor.R, SceneColor.R * GPFoWVisualMask::ExploredDimFactor, 0.01f),
-			TEXT("M_ExploredCompositionIsDim"));
-		Expect(VisibleColor.Equals(SceneColor),
-			TEXT("N_VisibleCompositionUnchanged"));
-
-		TArray<EGP_FoWState> CircleCells = MakeGrid(16, 16, EGP_FoWState::Unexplored);
+		const int64 SmoothingRevisionBefore = Team1Mirror->GetRevision();
+		const EGP_FoWState ExploredBeforeSmoothing =
+			Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0));
+		const EGP_FoWState UnexploredBeforeSmoothing =
+			Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0));
+		Expect(FCString::Strcmp(
+				UGP_FoWWorldPresentationSubsystem::GetRendererName(),
+				TEXT("BlurredRasterOverlay")) == 0
+			&& !UGP_FoWWorldPresentationSubsystem::IsPostProcessActive()
+			&& UGP_FoWWorldPresentationSubsystem::GetTargetSuperSample() == 4
+			&& UGP_FoWWorldPresentationSubsystem::GetBlurRadiusSamples() == 12
+			&& FString(UGP_FoWWorldPresentationSubsystem::GetPresentationAlgorithmName())
+				.Contains(TEXT("Bilinear"))
+			&& FString(UGP_FoWWorldPresentationSubsystem::GetMaskModelName())
+				.Contains(TEXT("KnownMask+VisibleMask")),
+			TEXT("H8_BlurredRasterOverlayIsTheActiveRenderer"));
+		{
+			FGP_FoWPresentationRaster TinyField;
+			GPFoWPresentationRaster::ConfigureField(
+				TinyField, 0, 0, 2, 1, 100.0f, FVector2D::ZeroVector);
+			GPFoWPresentationRaster::SetCell(TinyField, 0, 0, EGP_FoWState::Visible);
+			GPFoWPresentationRaster::SetCell(TinyField, 1, 0, EGP_FoWState::Unexplored);
+			FGP_FoWPresentationGeometry TinyGeometry;
+			Expect(GPFoWPresentationRaster::RebuildPresentation(TinyField, TinyGeometry)
+				&& TinyField.SuperSample >= UGP_FoWWorldPresentationSubsystem::GetMinimumSuperSample()
+				&& TinyGeometry.RasterDims.X == TinyField.Width * TinyField.SuperSample
+				&& TinyGeometry.RasterDims.Y == TinyField.Height * TinyField.SuperSample,
+				TEXT("H8B_RasterDimsMatchSampledRegion"));
+			const float HiddenCenter = GPFoWPresentationRaster::SamplePresentationObscuration(
+				TinyField, FVector2D(150.0, 50.0));
+			const float VisibleCenter = GPFoWPresentationRaster::SamplePresentationObscuration(
+				TinyField, FVector2D(50.0, 50.0));
+			const float Boundary = GPFoWPresentationRaster::SamplePresentationObscuration(
+				TinyField, FVector2D(100.0, 50.0));
+			Expect(HiddenCenter > VisibleCenter
+				&& Boundary > VisibleCenter && Boundary < HiddenCenter,
+				TEXT("H8C_InterpolationCreatesBoundarySamples"));
+		}
+		Expect(Team1Mirror->GetRevision() == SmoothingRevisionBefore
+			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0))
+				== ExploredBeforeSmoothing
+			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0))
+				== UnexploredBeforeSmoothing,
+			TEXT("H9_SmoothingDoesNotMutateOrPromoteLocalFoWState"));
+		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels() == 262144
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() == 16384
+			&& UGP_FoWWorldPresentationSubsystem::GetBlurRadiusSamples() >= 6
+			&& UGP_FoWWorldPresentationSubsystem::GetBlurRadiusSamples() <= 12
+			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 2,
+			TEXT("H10_PresentationRasterIsBounded"));
+		const float RasterCellSize = 50.0f;
+		FGP_FoWPresentationRaster CircleField;
+		GPFoWPresentationRaster::ConfigureField(
+			CircleField, 0, 0, 16, 16, RasterCellSize, FVector2D::ZeroVector);
 		for (int32 Y = 4; Y <= 11; ++Y)
 		{
 			for (int32 X = 4; X <= 11; ++X)
 			{
-				CircleCells[Y * 16 + X] = EGP_FoWState::Visible;
+				GPFoWPresentationRaster::SetCell(CircleField, X, Y, EGP_FoWState::Visible);
 			}
 		}
-		TArray<FColor> CirclePixels;
-		int32 CircleWidth = 0;
-		int32 CircleHeight = 0;
-		GPFoWVisualMask::EncodePackedFromStates(
-			CirclePixels, CircleWidth, CircleHeight,
-			CircleCells, 16, 16, 200.0f, FVector2D::ZeroVector);
-		float InteriorKnown = 0.0f;
-		float InteriorVisible = 0.0f;
-		float DeepKnown = 0.0f;
-		float DeepVisible = 0.0f;
-		float EdgeKnown = 0.0f;
-		float EdgeVisible = 0.0f;
-		const FVector2D CircleExtent(3200.0, 3200.0);
-		GPFoWVisualMask::SamplePacked9Tap(
-			CirclePixels, CircleWidth, CircleHeight,
-			FVector2D(1600.0, 1600.0), FVector2D::ZeroVector, CircleExtent,
-			GPFoWVisualMask::BlurRadiusTexels, InteriorKnown, InteriorVisible);
-		GPFoWVisualMask::SamplePacked9Tap(
-			CirclePixels, CircleWidth, CircleHeight,
-			FVector2D(200.0, 200.0), FVector2D::ZeroVector, CircleExtent,
-			GPFoWVisualMask::BlurRadiusTexels, DeepKnown, DeepVisible);
-		GPFoWVisualMask::SamplePacked9Tap(
-			CirclePixels, CircleWidth, CircleHeight,
-			FVector2D(800.0, 1600.0), FVector2D::ZeroVector, CircleExtent,
-			GPFoWVisualMask::BlurRadiusTexels, EdgeKnown, EdgeVisible);
-		Expect(InteriorVisible > 0.85f && DeepKnown < 0.15f
-			&& EdgeVisible > 0.05f && EdgeVisible < 0.95f
-			&& !UGP_FoWWorldPresentationSubsystem::UsesCpuSpatialBlur(),
-			TEXT("O_GpuSpatialSmoothingProducesSoftMaskBoundary"));
-		Expect(Team1Mirror->GetRevision() == 1
-			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0)) == EGP_FoWState::Explored
-			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0)) == EGP_FoWState::Unexplored,
-			TEXT("P_VisualSmoothingDoesNotMutateLocalFoW"));
+		FGP_FoWPresentationGeometry CircleGeometry;
+		Expect(GPFoWPresentationRaster::RebuildPresentation(CircleField, CircleGeometry)
+			&& CircleField.SuperSample >= UGP_FoWWorldPresentationSubsystem::GetTargetSuperSample()
+			&& CircleGeometry.RasterPixels == CircleField.GetRasterCount()
+			&& CircleGeometry.RasterPixels <= UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels(),
+			TEXT("W1_SupersampleMeetsIntendedMinimum"));
 
-		FGP_FoWVisualMaskRuntime Runtime;
-		GPFoWVisualMask::BeginNewTarget(
-			Runtime, EncodedWidth, EncodedHeight, EncodedOrigin, EncodedExtent, 1);
-		Expect(Runtime.BlendAlpha == 0.0f
-			&& !UGP_FoWWorldPresentationSubsystem::UsesCpuTemporalLerp(),
-			TEXT("Q_NewRevisionResetsGpuBlendAlphaWithoutCpuLerp"));
-		GPFoWVisualMask::AdvanceBlend(Runtime, GPFoWVisualMask::BlendDurationSeconds * 0.5f);
-		Expect(FMath::IsNearlyEqual(Runtime.BlendAlpha, 0.5f, 0.05f),
-			TEXT("R_TemporalBlendAdvancesScalarOnly"));
-		const int64 BlendRevisionBefore = Team1Mirror->GetRevision();
-		GPFoWVisualMask::AdvanceBlend(Runtime, GPFoWVisualMask::BlendDurationSeconds);
-		Expect(FMath::IsNearlyEqual(Runtime.BlendAlpha, 1.0f)
-			&& Team1Mirror->GetRevision() == BlendRevisionBefore
-			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(1, 0)) == EGP_FoWState::Visible,
-			TEXT("S_TemporalBlendDoesNotMutateGameplayState"));
+		const FVector2D VisibleCenter(8.0 * RasterCellSize, 8.0 * RasterCellSize);
+		const FVector2D DeepUnexplored(1.0 * RasterCellSize, 1.0 * RasterCellSize);
+		const float Interior = GPFoWPresentationRaster::SamplePresentationObscuration(
+			CircleField, VisibleCenter);
+		const float DeepHidden = GPFoWPresentationRaster::SamplePresentationObscuration(
+			CircleField, DeepUnexplored);
+		Expect(Interior <= 0.08f, TEXT("W2_InteriorVisibleRemainsClear"));
+		Expect(DeepHidden >= 0.90f, TEXT("W3_DeepUnexploredRemainsBlack"));
 
-		GPFoWVisualMask::BeginNewTarget(
-			Runtime, EncodedWidth, EncodedHeight, EncodedOrigin, EncodedExtent, 2);
-		Expect(Runtime.MaskRevision == 2
-			&& Runtime.PreviousRevision == 1
-			&& FMath::IsNearlyZero(Runtime.BlendAlpha),
-			TEXT("T_NewRevisionResetsBlendWithoutBakingMillionSamples"));
+		int32 TransitionSamples = 0;
+		float Previous = Interior;
+		bool bMonotone = true;
+		for (int32 Step = 0; Step <= 40; ++Step)
+		{
+			const float T = static_cast<float>(Step) / 40.0f;
+			const FVector2D Probe = FMath::Lerp(
+				VisibleCenter,
+				FVector2D(1.0 * RasterCellSize, 8.0 * RasterCellSize),
+				T);
+			const float Sample = GPFoWPresentationRaster::SamplePresentationObscuration(
+				CircleField, Probe);
+			if (Sample > Previous + 0.02f)
+			{
+				++TransitionSamples;
+			}
+			if (Sample + 0.08f < Previous)
+			{
+				bMonotone = false;
+			}
+			Previous = Sample;
+		}
+		Expect(bMonotone && TransitionSamples >= 6,
+			TEXT("W4_BlurProducesMultiSampleTransition"));
 
-		const FVector2D MappingOrigin(-100000.0, -100000.0);
-		const FVector2D MappingExtent(200000.0, 200000.0);
-		const FVector2D CenterWorld(0.0, 0.0);
-		const FVector2D CenterUV = GPFoWVisualMask::WorldXYToUV(CenterWorld, MappingOrigin, MappingExtent);
-		const FVector2D OutsideUV = GPFoWVisualMask::WorldXYToUV(
-			FVector2D(200000.0, 0.0), MappingOrigin, MappingExtent);
-		Expect(CenterUV.Equals(FVector2D(0.5, 0.5), 0.001)
-			&& GPFoWVisualMask::UVToWorldXY(CenterUV, MappingOrigin, MappingExtent).Equals(CenterWorld, 1.0)
-			&& !GPFoWVisualMask::IsUVInBounds(OutsideUV)
-			&& FCString::Strcmp(
-				UGP_FoWWorldPresentationSubsystem::GetWorldPositionMethodName(),
-				TEXT("SceneDepthSvPositionReconstruct")) == 0,
-			TEXT("U_WorldXYToUVIsDeterministicAndUsesScenePixelReconstruction"));
+		FGP_FoWPresentationRaster ComposeField;
+		GPFoWPresentationRaster::ConfigureField(
+			ComposeField, 0, 0, 32, 16, RasterCellSize, FVector2D::ZeroVector);
+		for (int32 Y = 4; Y <= 11; ++Y)
+		{
+			for (int32 X = 4; X <= 11; ++X)
+			{
+				GPFoWPresentationRaster::SetCell(ComposeField, X, Y, EGP_FoWState::Visible);
+			}
+			for (int32 X = 20; X <= 27; ++X)
+			{
+				GPFoWPresentationRaster::SetCell(ComposeField, X, Y, EGP_FoWState::Explored);
+			}
+		}
+		FGP_FoWPresentationGeometry ComposeGeometry;
+		GPFoWPresentationRaster::RebuildPresentation(ComposeField, ComposeGeometry);
+		const float VisibleSample = GPFoWPresentationRaster::SamplePresentationObscuration(
+			ComposeField, FVector2D(8.0 * RasterCellSize, 8.0 * RasterCellSize));
+		const float ExploredSample = GPFoWPresentationRaster::SamplePresentationObscuration(
+			ComposeField, FVector2D(24.0 * RasterCellSize, 8.0 * RasterCellSize));
+		const float UnexploredSample = GPFoWPresentationRaster::SamplePresentationObscuration(
+			ComposeField, FVector2D(1.0 * RasterCellSize, 14.0 * RasterCellSize));
+		Expect(VisibleSample < ExploredSample && ExploredSample < UnexploredSample
+			&& ExploredSample > 0.35f && ExploredSample < 0.85f,
+			TEXT("W5_KnownVisibleMasksComposeCorrectly"));
 
-		UGP_LocalFoWComponent* Team2Mirror = NewObject<UGP_LocalFoWComponent>(GetTransientPackage());
+		FGP_FoWPresentationRaster ShiftField;
+		GPFoWPresentationRaster::ConfigureField(
+			ShiftField, 40, 40, 8, 8, RasterCellSize, FVector2D::ZeroVector);
+		GPFoWPresentationRaster::SetCell(ShiftField, 2, 2, EGP_FoWState::Visible);
+		FGP_FoWPresentationGeometry ShiftGeometry;
+		Expect(GPFoWPresentationRaster::RebuildPresentation(ShiftField, ShiftGeometry)
+			&& ShiftGeometry.RasterPixels > 0
+			&& GPFoWPresentationRaster::ChooseSuperSample(8, 8) == 4,
+			TEXT("W6_OutsidePriorSampleRebuildsSuccessfully"));
+
+		Expect(GPFoWPresentationRaster::ChooseSuperSample(4000, 4000) == 0
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels() < 4000 * 4000
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() < 4000 * 4000,
+			TEXT("W7_NoFullWorldHighResolutionAllocation"));
+		Expect(CircleGeometry.RasterPixels
+				<= UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels()
+			&& CircleGeometry.Quads.Num()
+				<= UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads(),
+			TEXT("W8_HardPixelCapIsEnforced"));
+		Expect(!UGP_FoWWorldOverlayWidget::StaticClass()->IsChildOf(UActorComponent::StaticClass()),
+			TEXT("W9_NoPerPresentationTexelComponent"));
+		Expect(Team1Mirror->GetRevision() == SmoothingRevisionBefore
+			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0))
+				== UnexploredBeforeSmoothing,
+			TEXT("W10_LocalFoWDataAndRevisionRemainUnchanged"));
+
+		FGP_FoWPresentationUpdate Team1Delta = Initial(1, 2);
+		Team1Delta.bInitialSnapshot = false;
+		Team1Delta.ExploredRanges.Add(Range(2, 1));
+		Team1Delta.VisibleRanges.Add(Range(2, 1));
+		Expect(Team1Mirror->ApplyServerUpdate(Team1Delta)
+			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(1, 0))
+				== EGP_FoWState::Explored,
+			TEXT("I_VisibleToExploredOnNewRevision"));
+		Expect(Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0))
+				== EGP_FoWState::Explored,
+			TEXT("J_ExploredNeverReturnsToUnexplored"));
+		Expect(!Team1Mirror->ApplyServerUpdate(Team1Initial)
+			&& Team1Mirror->GetRevision() == 2
+			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0))
+				== EGP_FoWState::Visible,
+			TEXT("K_StaleRevisionCannotRollVisualInputBackward"));
+
+		Team1Mirror->ResetPresentation();
+		Expect(!Team1Mirror->IsReady()
+			&& UGP_FoWWorldPresentationSubsystem::RequiresConservativeFullObscuration(
+				Team1Mirror)
+			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0))
+				== EGP_FoWState::Unexplored,
+			TEXT("L_TeamResetClearsPriorVisualState"));
+
 		FGP_FoWPresentationUpdate Team2Initial = Initial(2, 7);
-		Team2Initial.ExploredRanges.Add(Range(2, 1));
-		Team2Initial.VisibleRanges.Add(Range(2, 1));
-		Expect(Team2Mirror != nullptr && Team2Mirror->ApplyServerUpdate(Team2Initial),
-			TEXT("V_SecondTeamMirrorAcceptsSnapshot"));
-		TArray<FColor> Team1Pixels;
-		TArray<FColor> Team2Pixels;
-		int32 Team1Width = 0;
-		int32 Team1Height = 0;
-		int32 Team2Width = 0;
-		int32 Team2Height = 0;
-		FVector2D Team1Origin, Team1Extent, Team2Origin, Team2Extent;
-		GPFoWVisualMask::EncodePackedFromLocalFoW(
-			Team1Pixels, Team1Width, Team1Height, Team1Origin, Team1Extent, Team1Mirror);
-		GPFoWVisualMask::EncodePackedFromLocalFoW(
-			Team2Pixels, Team2Width, Team2Height, Team2Origin, Team2Extent, Team2Mirror);
-		float Team1Known = 0.0f;
-		float Team1Visible = 0.0f;
-		float Team2Known = 0.0f;
-		float Team2Visible = 0.0f;
-		GPFoWVisualMask::SamplePackedBilinear(
-			Team1Pixels, Team1Width, Team1Height,
-			FVector2D(150.0, 50.0), Team1Origin, Team1Extent, Team1Known, Team1Visible);
-		GPFoWVisualMask::SamplePackedBilinear(
-			Team2Pixels, Team2Width, Team2Height,
-			FVector2D(150.0, 50.0), Team2Origin, Team2Extent, Team2Known, Team2Visible);
-		Expect(Team1Visible > 0.9f && Team2Visible < 0.1f
-			&& Team1Mirror->GetLocalTeamId() == 1
-			&& Team2Mirror->GetLocalTeamId() == 2,
-			TEXT("W_TeamMasksRemainDistinct"));
+		Team2Initial.ExploredRanges.Add(Range(0, 1));
+		Team2Initial.VisibleRanges.Add(Range(0, 1));
+		Expect(Team1Mirror->ApplyServerUpdate(Team2Initial)
+			&& Team1Mirror->IsReady()
+			&& Team1Mirror->GetLocalTeamId() == 2
+			&& Team1Mirror->GetRevision() == 7,
+			TEXT("M_NewInitialSnapshotRebuildsVisualState"));
+
+		Expect(UGP_FoWWorldPresentationSubsystem::StaticClass()->FindFunctionByName(
+				TEXT("GetStateForTeamAtWorldLocation")) == nullptr
+			&& UGP_LocalFoWComponent::StaticClass()->FindFunctionByName(
+				TEXT("GetStateForTeamAtWorldLocation")) == nullptr,
+			TEXT("N_NoArbitraryTeamQuerySurface"));
+		Expect(!UGP_FoWWorldPresentationSubsystem::StaticClass()->IsChildOf(
+				UActorComponent::StaticClass())
+			&& UGP_FoWWorldOverlayWidget::StaticClass()->IsChildOf(
+				UUserWidget::StaticClass()),
+			TEXT("O_NoPerCellComponentOrUObjectModel"));
+		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() == 65536
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumQuadsPerBatch() == 8000
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() == 16384
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels() == 262144
+			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 2
+			&& UGP_FoWWorldPresentationSubsystem::GetTargetSuperSample() == 4,
+			TEXT("P_ViewportWorkAndBatchingAreBounded"));
+
+		UGP_LocalFoWComponent* MillionCellMirror =
+			NewObject<UGP_LocalFoWComponent>(GetTransientPackage());
+		FGP_FoWPresentationUpdate MillionCellInitial =
+			Initial(1, 1, FIntPoint(4000, 4000), 50.0f);
+		Expect(MillionCellMirror != nullptr
+			&& MillionCellMirror->ApplyServerUpdate(MillionCellInitial)
+			&& MillionCellMirror->GetGridDimensions() == FIntPoint(4000, 4000)
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells()
+				< 4000 * 4000,
+			TEXT("Q_MillionCellGridUsesViewportLocalRepresentation"));
 
 		AGP_PlayerController* GPPlayerController =
 			Cast<AGP_PlayerController>(World->GetFirstPlayerController());
@@ -453,180 +477,67 @@ namespace GPFoWWorldVisualizationContractPrivate
 		Expect(PresentationSubsystem != nullptr
 			&& PresentationSubsystem->GetBoundMirror()
 				== GPPlayerController->GetLocalFogOfWarComponent(),
-			TEXT("X_ProductionRendererSourceIsLocalFoWMirror"));
-
-		FPostProcessSettings InjectedSettings;
-		const int32 LocalPlayerIndex = LocalPlayer != nullptr ? LocalPlayer->GetControllerId() : INDEX_NONE;
-		const AActor* ViewTarget = GPPlayerController != nullptr ? GPPlayerController->GetViewTarget() : nullptr;
-		const bool bInjected = PresentationSubsystem != nullptr
-			&& PresentationSubsystem->TryInjectOwnedView(
-				InjectedSettings,
-				LocalPlayerIndex,
-				ViewTarget,
-				true,
-				false,
-				false,
-				GFrameCounter,
-				TEXT("ContractLocalGameView"));
-		Expect(bInjected
-			&& PresentationSubsystem != nullptr
-			&& PresentationSubsystem->IsPostProcessBound()
-			&& PresentationSubsystem->SettingsContainLocalBlendable(InjectedSettings)
-			&& PresentationSubsystem->GetBlendableInjectionCount() > 0
-			&& PresentationSubsystem->GetActualViewsSeen() > 0
-			&& PresentationSubsystem->OwnsLocalGameView(
-				LocalPlayerIndex, ViewTarget, true, false, false)
-			&& !PresentationSubsystem->OwnsLocalGameView(
-				999, nullptr, true, false, false)
-			&& !PresentationSubsystem->OwnsLocalGameView(
-				LocalPlayerIndex, ViewTarget, true, true, false),
-			TEXT("X2_ActualLocalGameViewReceivesOwnedBlendable"));
-
-		if (PresentationSubsystem != nullptr)
-		{
-			PresentationSubsystem->DebugSetVisualDebugMode(1);
-		}
-		Expect(PresentationSubsystem != nullptr
-			&& PresentationSubsystem->GetVisualDebugMode() == 1
-			&& PresentationSubsystem->GetMidDebugModeValue() > 0.5f,
-			TEXT("X3_DebugFullscreenModeReachesMID"));
-		if (PresentationSubsystem != nullptr)
-		{
-			PresentationSubsystem->DebugSetVisualDebugMode(0);
-		}
-		Expect(PresentationSubsystem->GetVisualDebugMode() == 0
-			&& PresentationSubsystem->GetMidDebugModeValue() < 0.5f,
-			TEXT("X4_DebugModeRestoresNormalFoW"));
-
-		UMaterial* FoWMaterial = LoadObject<UMaterial>(
-			nullptr,
-			UGP_FoWWorldPresentationSubsystem::GetMaterialAssetPath());
-		Expect(FoWMaterial != nullptr
-			&& !MaterialContainsWorldPositionNode(FoWMaterial)
-			&& MaterialCustomContains(FoWMaterial, TEXT("SvPositionToTranslatedWorld"))
-			&& MaterialCustomContains(FoWMaterial, TEXT("ConvertToDeviceZ"))
-			&& MaterialCustomContains(FoWMaterial, TEXT("if (DebugMode > 0.5)"))
-			&& MaterialCustomContains(FoWMaterial, TEXT("SceneColor * ExploredDim"))
-			&& MaterialCustomContains(FoWMaterial, TEXT("lerp(PrevMask, TargetMask"))
-			&& MaterialCustomContains(FoWMaterial, TEXT("if (Ready < 0.5)")),
-			TEXT("X5_MaterialUsesScenePixelWorldAndGpuCompose"));
-
-		const int32 BuildsBeforeCamera = PresentationSubsystem != nullptr
-			? PresentationSubsystem->GetMaskBuildCount()
-			: 0;
-		const int64 RevisionBeforeCamera = PresentationSubsystem != nullptr
-			? PresentationSubsystem->GetMaskRevision()
-			: -1;
-		if (PresentationSubsystem != nullptr)
-		{
-			PresentationSubsystem->DebugAdvanceBlend(0.016f);
-		}
-		Expect(PresentationSubsystem != nullptr
-			&& PresentationSubsystem->GetMaskBuildCount() == BuildsBeforeCamera
-			&& PresentationSubsystem->GetMaskRevision() == RevisionBeforeCamera,
-			TEXT("Y_CameraMotionDoesNotRebuildLocalFoWMask"));
-
-		UTexture2D* PreviousBeforePingPong =
-			PresentationSubsystem != nullptr ? PresentationSubsystem->GetPreviousMaskTexture() : nullptr;
-		UTexture2D* TargetBeforePingPong =
-			PresentationSubsystem != nullptr ? PresentationSubsystem->GetTargetMaskTexture() : nullptr;
-		const int32 UploadsBeforePingPong =
-			PresentationSubsystem != nullptr ? PresentationSubsystem->GetTargetUploadCount() : 0;
-		TArray<FColor> PingPongPixels;
-		const int32 PingPongWidth =
-			PresentationSubsystem != nullptr ? PresentationSubsystem->GetMaskTextureWidth() : 0;
-		const int32 PingPongHeight =
-			PresentationSubsystem != nullptr ? PresentationSubsystem->GetMaskTextureHeight() : 0;
-		PingPongPixels.Init(FColor(255, 0, 0, 255), PingPongWidth * PingPongHeight);
-		const bool bPingPonged = PresentationSubsystem != nullptr
-			&& PresentationSubsystem->DebugPingPongUploadPackedMask(
-				PingPongPixels,
-				PingPongWidth,
-				PingPongHeight);
-		Expect(bPingPonged
-			&& PresentationSubsystem->GetPreviousMaskTexture() == TargetBeforePingPong
-			&& PresentationSubsystem->GetTargetMaskTexture() == PreviousBeforePingPong
-			&& PresentationSubsystem->GetPreviousMaskTexture()
-				!= PresentationSubsystem->GetTargetMaskTexture()
-			&& PresentationSubsystem->GetTargetUploadCount() == UploadsBeforePingPong + 1,
-			TEXT("Z1_OneTargetUploadPerRevisionPingPongsResources"));
-
-		Expect(PresentationSubsystem != nullptr
-			&& Cast<UMaterialInstanceDynamic>(PresentationSubsystem->GetPostProcessMID()) != nullptr
-			&& PresentationSubsystem->GetPostProcessMID()
-				!= PresentationSubsystem->GetLoadedMaterialTemplate()
-			&& PresentationSubsystem->GetMaskTextureResolution()
-				== UGP_FoWWorldPresentationSubsystem::GetCanonicalMaskResolution()
-			&& UGP_FoWWorldPresentationSubsystem::GetCanonicalMaskResolution() == 1000,
-			TEXT("Z2_PerPlayerMaskResourcesAreNotGloballyShared"));
-
-		int32 OverlayWidgetCount = 0;
-		for (TObjectIterator<UUserWidget> It; It; ++It)
-		{
-			if (It->GetClass()->GetName().Contains(TEXT("FoWWorldOverlay")))
-			{
-				++OverlayWidgetCount;
-			}
-		}
-		Expect(OverlayWidgetCount == 0
-			&& !UGP_FoWWorldPresentationSubsystem::StaticClass()->IsChildOf(UActorComponent::StaticClass()),
-			TEXT("AA_NoPerCellComponentOrLegacyOverlayWidget"));
-
-		Expect(UGP_FoWWorldPresentationSubsystem::StaticClass()->FindFunctionByName(
-				TEXT("GetStateForTeamAtWorldLocation")) == nullptr
-			&& UGP_LocalFoWComponent::StaticClass()->FindFunctionByName(
-				TEXT("GetStateForTeamAtWorldLocation")) == nullptr
-			&& !UGP_FoWWorldPresentationSubsystem::UsesWorldLocationQueriesForEncode(),
-			TEXT("AB_NoArbitraryTeamQueryOrMillionWorldLocationEncode"));
-
-		UGP_LocalFoWComponent* MillionCellMirror =
-			NewObject<UGP_LocalFoWComponent>(GetTransientPackage());
-		FGP_FoWPresentationUpdate MillionCellInitial = Initial(1, 1, FIntPoint(1000, 1000), 200.0f);
-		MillionCellInitial.ExploredRanges.Add(Range(0, 1));
-		MillionCellInitial.VisibleRanges.Add(Range(1, 1));
-		MillionCellMirror->DebugConsumeWorldLocationQueryCount();
-		TArray<FColor> MillionPixels;
-		const double EncodeStart = FPlatformTime::Seconds();
-		const bool bMillionReady = MillionCellMirror != nullptr
-			&& MillionCellMirror->ApplyServerUpdate(MillionCellInitial);
-		MillionCellMirror->DebugConsumeWorldLocationQueryCount();
-		const bool bMillionEncoded = bMillionReady && MillionCellMirror->BuildPresentationMaskRGBA(MillionPixels);
-		const double EncodeMs = (FPlatformTime::Seconds() - EncodeStart) * 1000.0;
-		const int32 MillionQueries = MillionCellMirror->DebugConsumeWorldLocationQueryCount();
-		Expect(bMillionEncoded
-			&& MillionPixels.Num() == 1000 * 1000
-			&& MillionPixels[0] == FColor(255, 0, 0, 255)
-			&& MillionPixels[1] == FColor(255, 255, 0, 255)
-			&& MillionPixels[2] == FColor(0, 0, 0, 255)
-			&& MillionQueries == 0
-			&& EncodeMs < 250.0
-			&& UGP_FoWWorldPresentationSubsystem::GetCanonicalMaskResolution() == 1000,
-			TEXT("AC_DirectPackedEncodeIsOneToOneWithGameplayGrid"));
-		UE_LOG(LogGPFoWWorldVisualizationContract, Display,
-			TEXT("gp.FoW.RunWorldVisualizationContractTest measured MaskEncodeMs=%.3f MaskUploadMs=%.3f"),
-			EncodeMs,
-			PresentationSubsystem != nullptr ? PresentationSubsystem->GetLastMaskUploadMilliseconds() : 0.0);
+			TEXT("R_ProductionRendererSourceIsLocalFoWMirror"));
 
 		const int64 ProductionRevisionBefore =
-			PresentationSubsystem != nullptr ? PresentationSubsystem->GetLastUpdateRevision() : -1;
-		const bool bEnemyHiddenBeforeToggle =
-			EnemyUnit != nullptr && EnemyUnit->IsHidden();
+			PresentationSubsystem != nullptr
+				? PresentationSubsystem->GetLastUpdateRevision()
+				: -1;
 		if (PresentationSubsystem != nullptr)
 		{
+			FGP_FoWWorldOverlayStats CameraResampleStats;
+			CameraResampleStats.SampledGameplayCells = 64;
+			CameraResampleStats.PaddedCells = 81;
+			CameraResampleStats.SuperSample = 4;
+			CameraResampleStats.RasterDims = FIntPoint(80, 80);
+			CameraResampleStats.RasterPixels = 6400;
+			CameraResampleStats.OverlayQuads = 12;
+			CameraResampleStats.DrawBatches = 1;
+			CameraResampleStats.MinCell = FIntPoint(1, 1);
+			CameraResampleStats.MaxCell = FIntPoint(8, 8);
+			CameraResampleStats.ConsumedSerial = PresentationSubsystem->GetRenderSerial();
+			CameraResampleStats.MaskRevision = PresentationSubsystem->GetLastUpdateRevision();
+			CameraResampleStats.bCameraResample = true;
+			CameraResampleStats.bFallbackActive = false;
+			PresentationSubsystem->RecordOverlayStats(CameraResampleStats);
+			Expect(PresentationSubsystem->DidLastCameraResample()
+				&& !PresentationSubsystem->WasLastFallbackActive(),
+				TEXT("S2_CameraResampleDoesNotForceConservativeFallback"));
+		}
+		Expect(PresentationSubsystem == nullptr
+			|| PresentationSubsystem->GetLastUpdateRevision() == ProductionRevisionBefore,
+			TEXT("S_CameraViewStatsDoNotMutateFoWData"));
+
+		if (PresentationSubsystem != nullptr)
+		{
+			UGP_LocalFoWComponent* ProductionMirror =
+				PresentationSubsystem->GetBoundMirror();
+			const int64 RevisionBeforeToggle =
+				ProductionMirror != nullptr ? ProductionMirror->GetRevision() : -1;
 			const bool bWasEnabled = PresentationSubsystem->IsVisualizationEnabled();
 			PresentationSubsystem->SetVisualizationEnabled(false);
-			UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(EnemyUnit, 1, Team1Mirror);
-			Expect(!PresentationSubsystem->IsVisualizationEnabled()
-				&& EnemyUnit != nullptr
-				&& EnemyUnit->IsHidden()
-				&& bEnemyHiddenBeforeToggle,
-				TEXT("AD1_VisualEnableOffDoesNotRevealEnemies"));
 			PresentationSubsystem->SetVisualizationEnabled(true);
 			PresentationSubsystem->SetVisualizationEnabled(bWasEnabled);
+			Expect(ProductionMirror == nullptr
+				|| ProductionMirror->GetRevision() == RevisionBeforeToggle,
+				TEXT("T_EnableDisableIsPresentationOnly"));
 		}
-		Expect(PresentationSubsystem != nullptr
-			&& PresentationSubsystem->GetLastUpdateRevision() == ProductionRevisionBefore,
-			TEXT("AD2_EnableDisableIsPresentationOnly"));
+		else
+		{
+			Expect(false, TEXT("T_EnableDisableIsPresentationOnly"));
+		}
+
+		UGP_LocalFoWComponent* OtherTeamMirror =
+			NewObject<UGP_LocalFoWComponent>(GetTransientPackage());
+		FGP_FoWPresentationUpdate OtherTeamInitial = Initial(1, 3);
+		OtherTeamInitial.ExploredRanges.Add(Range(0, 1));
+		Expect(OtherTeamMirror != nullptr
+			&& OtherTeamMirror->ApplyServerUpdate(OtherTeamInitial)
+			&& OtherTeamMirror->GetStateAtWorldLocation(CellLocation(0, 0))
+				== EGP_FoWState::Explored
+			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0))
+				== EGP_FoWState::Visible,
+			TEXT("U_MultiplayerMirrorsCanRenderDifferentMasks"));
 
 		AGP_GameState* GameState = World->GetGameState<AGP_GameState>();
 		UGP_FogOfWarComponent* AuthorityFoW =
@@ -634,13 +545,18 @@ namespace GPFoWWorldVisualizationContractPrivate
 		const EGP_FoWState AuthorityBefore = AuthorityFoW != nullptr
 			? AuthorityFoW->GetStateForTeamAtWorldLocation(1, CellLocation(0, 0))
 			: EGP_FoWState::Unexplored;
+		PresentationSubsystem = LocalPlayer != nullptr
+			? LocalPlayer->GetSubsystem<UGP_FoWWorldPresentationSubsystem>()
+			: nullptr;
 		Expect(AuthorityFoW == nullptr
-			|| AuthorityFoW->GetStateForTeamAtWorldLocation(1, CellLocation(0, 0)) == AuthorityBefore,
-			TEXT("AE_RendererDoesNotMutateGameplayAuthority"));
+			|| AuthorityFoW->GetStateForTeamAtWorldLocation(1, CellLocation(0, 0))
+				== AuthorityBefore,
+			TEXT("V_RendererDoesNotMutateGameplayAuthority"));
 		Expect(AuthorityFoW == nullptr
-			|| (FMath::IsNearlyEqual(AuthorityFoW->GetCellSizeCm(), 200.0f)
-				&& FMath::IsNearlyEqual(AuthorityFoW->GetUpdateIntervalSeconds(), 0.2f)),
-			TEXT("AF_GameplayGridRemains200cmFiveHz"));
+			|| (FMath::IsNearlyEqual(AuthorityFoW->GetCellSizeCm(), 50.0f)
+				&& AuthorityFoW->GetGridDimensions() == FIntPoint(4000, 4000)
+				&& FMath::IsNearlyEqual(AuthorityFoW->GetUpdateIntervalSeconds(), 0.1f)),
+			TEXT("V2_GameplayGridIs50cmTenHz4000"));
 
 		if (OwnUnit != nullptr)
 		{

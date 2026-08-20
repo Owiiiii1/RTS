@@ -1,223 +1,174 @@
-# Cursor Work Report — FoW Client Presentation Foundation Finalization
+# Cursor Work Report — Fog of War World Visualization
 
 ## Status
 
-**FOW_CLIENT_PRESENTATION_FOUNDATION_FINALIZED_READY_FOR_MERGE**
+**FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**
 
-**NOT MERGED.**
+**NOT MERGED. NOT FINALIZED.**
 
 ## Branch / base / head
 
-- Branch: `feature/gp-fow-client-presentation-foundation`
-- Exact base: `9d9caa5fc7665ad8dc62016aed7b77f5238761dc`
-- Validated implementation head before finalization docs:
-  `30edb117bda035172646c83e6235e5c60817b748`
-- Finalization documentation/report head: `c248f2c46a2f010e388dd5eb9a18c66c415fb702`
-- Final branch head: documentation-only head-record commit following the finalization report
+- Branch: `feature/gp-fow-world-visualization`
+- Exact base: `origin/main` @ `7847c3ce27a571d92f7629369cc8d361bd981387`
+- Implementation/report head: commit containing this report
 
-## Operator validation — PASS
+## Factual pre-change rendering audit
 
-Single-player/listen-server local mirror:
+- No project-owned FoW post-process material, scene overlay, render target, runtime texture, procedural
+  mask mesh, Slate/UMG world FoW overlay, or screen-space projection renderer existed.
+- No tracked FoW/post-process/render-target asset exists under `/Game/GrimProtocol`.
+- `UGP_MarqueeSelectionWidget` provided a source-only native Slate painting precedent, not a reusable
+  world FoW renderer.
+- Camera is perspective (`UCameraComponent` default projection), with spring-arm zoom 1200–4500 cm,
+  -45 to -65 degree pitch interpolation, yaw rotation, camera-relative pan, and viewport edge scrolling.
+- Read-only `obj list class=Landscape` on `L_PrototypeArena` returned zero objects. Current gameplay
+  ground is an effectively planar primitive blockout around Z=0; no meaningful terrain elevation was
+  found that invalidates flat XY projection for this MVP map.
+- Source-only rendering was viable.
 
-- `gp.FoW.LocalDump`: `Ready=true`, `LocalTeam=1`, advancing revision
-- `CellSize=200`
-- `Origin=(-100000,-100000)`
-- `Dims=1000x1000`
-- `gp.FoW.LocalQueryState -1790 -2620` -> `Visible`
+## Selected rendering architecture
 
-Visible removal and persistent exploration:
+One `UGP_FoWWorldPresentationSubsystem` per `ULocalPlayer` in `GPUIRuntime` is the visual owner.
+It creates one native `UGP_FoWWorldOverlayWidget` at low player-screen Z order.
 
-- point approximately `(-1130,1637)` was `Visible` at revision 105
-- after the LongRange Salvage Walker moved beyond its FoW radius, the same point was `Explored` at
-  revision 172
-- this proves current Visible replacement/removal and monotonic Explored on the local mirror
+The widget:
 
-Building placement:
+- deprojects the current perspective view to planar Z=0;
+- computes a clamped view-local FoW cell rectangle;
+- samples only that region from the bound `UGP_LocalFoWComponent`;
+- coalesces horizontally contiguous equal non-Visible states;
+- projects each run into one Slate quad;
+- caches geometry until mirror render serial or camera/view projection changes.
 
-- non-Visible terrain locally reported blocked / Not Visible
-- Visible terrain remained placeable
-- independent server authority confirmation remained functional
+The method supports pan, zoom, yaw rotation, viewport resize, listen host, remote client, and
+per-LocalPlayer layers without a global render mask.
 
-Two-player listen-server PIE:
+## Rejected alternatives
 
-- remote client: `NetMode=Client`, `Ready=true`, `LocalTeam=2`, revision 3
-- listen host: `NetMode=ListenServer`, `Ready=true`, `LocalTeam=1`, revision 13
-- same coordinate `(1800,-670)`: Team 2 remote client `Visible`; Team 1 listen host `Unexplored`
-- this directly proves Team 1 did not receive Team 2 current visibility
+- Post-process material/runtime texture: no reusable material exists; requires a new authored material
+  or custom depth-reconstruction shader and a larger rendering architecture.
+- Material Parameter Collection: global world state risks one team's mask leaking into another local
+  view.
+- Full one-million-cell texture: needs a material consumer and large upload policy even though the
+  camera sees a small bounded region.
+- World procedural/decal mesh: prone to z-fighting, weak at obscuring tall actors, and less robust under
+  perspective projection.
+- Per-cell widget/component/UObject: prohibited million-object/draw-call model.
 
-Restart/reinitialization:
+## Data source / authority
 
-- repeated PIE restart/recreation consistently returned a Ready mirror with the correct local team
-- reconnect/reinitialization operator gate: **PASS**
+- Sole data source: owning controller's trusted `UGP_LocalFoWComponent`.
+- No server `UGP_FogOfWarComponent` query.
+- No unit/actor scan, TeamId inference, sight-circle recomputation, or duplicate gameplay grid.
+- No gameplay mutation/RPC.
+- Authority runtime and client mirror protocol are unchanged.
 
-## Final authority audit
+## Update model and lifecycle
 
-- `UGP_FogOfWarComponent` remains the GameState-owned server authority.
-- Authority state remains non-replicated and uses per-team `TBitArray` internally.
-- `UGP_LocalFoWComponent` is presentation-only; no gameplay authority consumes it.
-- No client-to-server FoW mutation RPC exists.
-- Server building placement validation still reads authoritative FoW independently.
-- Local placement preview cannot bypass server validation.
-- Auto-acquire and all other server gameplay consumers remain on authoritative FoW.
+- DATA: `OnLocalFoWUpdated` increments a render serial and invalidates cached runs.
+- VIEW: the volatile overlay compares view-projection matrix, view rect, and local size each paint;
+  only a changed view rebuilds geometry.
+- Static camera + unchanged mirror reuses cached vertices.
+- LocalPlayer subsystem follows PlayerController replacement and recreates its owning-player widget.
+- Mirror reset/travel/team change invalidates to conservative black.
+- New ready snapshot/delta rebuilds on the next paint.
+- PIE restart recreates LocalPlayer subsystem/widget through standard engine lifecycle.
 
-## Final client mirror architecture
+## Visual mapping
 
-- `UGP_LocalFoWComponent` is a non-replicated PlayerController default subobject.
-- It stores exactly one local team: grid metadata, Explored, Visible, readiness, and revision.
-- It has no map of all teams and no arbitrary TeamId query API.
-- Initial snapshot for a valid owning team contains metadata, complete Explored, complete current
-  Visible, and authoritative revision.
-- Ongoing updates contain newly Explored plus complete current Visible and a monotonically increasing
-  revision.
-- Visible replacement supports additions/removals; removed Visible remains Explored.
-- Explored only accumulates.
-- Invalid metadata/ranges reject atomically.
-- Stale/duplicate revisions, team mismatches, and grid mismatches reject before mutation.
-- Listen host and remote client use the same server-originated owning-client RPC flow.
+- Unexplored: black, obscuration `1.0`.
+- Explored: neutral near-black tint, obscuration `0.68`; terrain remains readable but clearly dim.
+- Visible: obscuration `0.0`; no overlay geometry.
+- Hard authoritative 200 cm cell boundaries; no cosmetic expansion of gameplay visibility.
+- Transitions are mirror revision-driven: Unexplored -> Visible, Visible -> Explored, Explored ->
+  Visible.
+- Explored monotonicity remains owned/proven by LocalFoW.
 
-## Sync ownership / PlayerController lifecycle
+## NotReady / failure behavior
 
-`AGP_PlayerController` is the only sync/publishing owner:
+NotReady, missing mirror, invalid projection, view with no valid ground intersection, or sample budget
+overflow renders full-screen opaque black. This prevents a startup/full-reveal leak.
 
-- binds the authoritative FoW change delegate on authority
-- sends one owning-client reliable RPC when that team revision changes
-- sends a complete initial snapshot for a new/reinitialized owning controller
-- handles BeginPlay, PlayerState readiness/replacement, TeamId changes, BeginPlayingState,
-  seamless travel, and EndPlay reset/unbind
-- contains no second FoW timer or polling loop
+`gp.FoW.VisualEnable 0` intentionally disables presentation for non-shipping A/B diagnostics only and
+does not mutate mirror or authority state.
 
-`UGP_LocalFoWComponent` and its ViewModel adapter never tick. The authoritative 0.20 s recompute is the
-only periodic FoW loop.
+## Grid / memory / performance
 
-## Bandwidth model
+- Grid: origin `(-100000,-100000)`, 1000 x 1000, 200 cm, 1,000,000 cells.
+- Existing mirror storage: two bit arrays, approximately 250 KB total.
+- Renderer allocates no second full-grid representation.
+- Maximum sampled view cells: 65,536.
+- Maximum coalesced quads per Slate batch: 8,000.
+- Worst sampled checkerboard remains bounded to at most 65,536 runs and nine batches.
+- Typical current prototype offscreen observation: 1,248 sampled cells, 26 runs, one batch.
+- Typical cached geometry in that observation: 104 vertices and 156 indices (only a few KB).
+- Camera motion rebuilds bounded view geometry; no whole-grid per-frame polling/upload.
 
-- No raw `TBitArray` is replicated.
-- No one-million-cell bitmap is sent every update.
-- Row-major contiguous runs are encoded as `{StartIndex, NumCells}`.
-- Initial state is sent once; ongoing state is sent only on authoritative team revision changes,
-  normally at the 5 Hz recompute cadence.
-- Explored sends additions after initial sync; Visible sends a compact current replacement.
-- The grid is bounded to 1,000,000 cells.
-- Each run is two `int32` values: 8 bytes before UE RPC serialization overhead.
-- Circular vision normally contributes at most one run per intersected row per isolated source:
-  `2 * ceil(Radius / CellSize) + 1` before overlap merging.
-- No hard chunk/byte cap exists. The theoretical alternating-cell worst case is 500,000 runs
-  (~4 MB before serialization), so highly fragmented large reconnect snapshots remain a future
-  scalability concern outside the operator-validated MVP match scale.
-- There is no per-frame FoW RPC.
+## Multiplayer isolation
 
-## Team isolation guarantees
+- Each LocalPlayer owns a distinct subsystem, widget, and one-team LocalFoW binding.
+- No static/global mask and no Material Parameter Collection.
+- Listen host and remote client therefore project only their own trusted mirror.
+- Two-player visual difference remains an operator PIE gate; lower-level different-mirror state and
+  renderer isolation are contract-covered.
 
-- Server extraction uses only the owning PlayerState TeamId.
-- The payload carries one TeamId; the mirror stores one team.
-- Team/PlayerState/travel reset clears prior-team bits.
-- A different team requires a complete initial snapshot.
-- No local API can request another TeamId.
-- Contract isolation and real same-coordinate two-player operator isolation both passed.
+## Authored assets
 
-## GPUIRuntime / MVVM audit
+No new authored asset was required or created.
 
-- Dependency remains `GPUIRuntime -> GPRuntime -> GPGASRuntime`.
-- GPRuntime has no dependency on GPUIRuntime.
-- `UGP_FoWViewModel : UMVVMViewModelBase` remains read-only presentation state.
-- `UGP_FoWViewModelAdapter` subscribes to `OnLocalFoWUpdated`; it does not poll or scan the world.
-- `Revision` remains the coarse FieldNotify invalidation mechanism for per-cell consumers.
-- `UGP_ActivatableWidgetBase : UCommonActivatableWidget` remains the minimal justified project base.
-- No router, screen stack, HUD root, or authored Widget Blueprint was added.
-- `UGP_TEMP_S28P_PlanetaryFerroniteHUD` lifecycle and behavior remain unchanged; its focused regression
-  passed.
+No existing map, Blueprint, DataAsset, material, VFX, Config, Tools, or other Content file was modified
+or staged by this slice.
 
-## Building placement preview
+## Diagnostics
 
-- Trusted local visibility is presentation-only.
-- NotReady and non-Visible both produce local NotVisible preview rejection.
-- Visible permits the preview to continue through its other local checks.
-- Authority confirmation independently reruns server validation.
-- No authored material, ghost asset, Blueprint, or map was changed.
+- `gp.FoW.VisualDump`
+- `gp.FoW.VisualEnable 0/1`
 
-## Completed capability state
+Final render-offscreen dump:
 
-Done:
+- `Active=true`
+- `Ready=true`
+- `LocalTeam=1`
+- method `ViewportLocalProjectedSlateRuns`
+- `Dims=1000x1000`, `CellSize=200`
+- 1,248 sampled cells, 26 runs, one batch
+- `Dirty=false`
 
-- authoritative three-state per-team FoW runtime
-- trusted one-team local mirror
-- server-originated initial/delta presentation sync
-- stale/invalid revision protection
-- team isolation and restart/reinitialization
-- FoW MVVM ViewModel/adapter foundation
-- project CommonUI activatable base
-- local FoW-aware building placement preview
+## Known limitation
 
-Still remaining:
+This is world/terrain pixel obscuration, not actor networking policy. Hidden enemy actors may still
+replicate and relevance/selection behavior is not solved. Opaque Unexplored overlay naturally covers
+scene pixels, but actor relevance, last-known snapshots, and hidden selection remain separate
+capabilities.
 
-- visual black/grey world FoW and terrain presentation
-- render target/post-process/decal fog
-- minimap and minimap FoW
-- last-known snapshots / unit blip fading
-- replication relevance hiding
-- hidden-enemy selection/inspect presentation
-- explicit Attack last-known pursuit/re-engage
-- full production HUD
-- Order Menu
-- notifications and end screen
+Planar Z=0 projection is factual for the current arena. A future meaningfully elevated terrain map
+would require a depth-aware projection upgrade without changing gameplay FoW state.
+
+## Explicitly deferred
+
+- minimap / minimap FoW
+- `IsNetRelevantFor` actor hiding
+- last-known building/deposit snapshots
+- dynamic-unit five-second marker
+- hidden enemy selection/inspect policy
+- explicit Attack last-known pursuit
 - DropPod temporary sight
-- SWARM
-- building redesign
+- full production HUD, Order Menu, notifications, end screen
+- AI Opponent, SWARM, building redesign
 
-## Final contracts / regressions
+## Exact changed files
 
-- `gp.FoW.RunClientPresentationFoundationContractTest` — **PASS**, `Failures=0`
-- `gp.FoW.RunRuntimeFoundationContractTest` — **PASS**, `Failures=0`
-- `gp.Building.RunOrbitalBuildingDropContractTest` — **PASS**, `Failures=0`
-- `gp.Building.RunBuildGridContractTest` — **PASS**, `Failures=0`
-- `gp.Resource.RunPlanetaryFerroniteHUDContractTest` — **PASS**, `Failures=0`
+Production:
 
-No separate PlayerController/network automation command exists. The focused presentation contract,
-TEMP HUD lifecycle regression, and real two-player operator PIE cover the directly affected seams.
-
-## Final builds
-
-- GPEditor Win64 Development + UHT — **PASS**
-- GP Win64 Development — **PASS**
-- GP Win64 Shipping — **PASS**
-
-No target was rebuilt after a successful result.
-
-## Risk / escalation verdict
-
-The factual blast radius is PlayerController owner RPC/lifecycle, FoW snapshot extraction and revision
-tracking, local placement preview, and the first GPUIRuntime ViewModel/base. All five focused contracts,
-the real two-player operator isolation test, and all three final builds passed.
-
-No failure or shared-framework regression triggered full historical-suite escalation. UnitDefinition,
-vitals, movement, combat FSM, and unrelated economy suites were not rerun because those paths did not
-change.
-
-## Exact changed files in the slice
-
-Runtime:
-
-- `GP/Source/GPRuntime/Public/FogOfWar/GPFoWPresentationTypes.h`
-- `GP/Source/GPRuntime/Public/FogOfWar/GPLocalFoWComponent.h`
-- `GP/Source/GPRuntime/Private/FogOfWar/GPLocalFoWComponent.cpp`
-- `GP/Source/GPRuntime/Public/FogOfWar/GPFogOfWarComponent.h`
-- `GP/Source/GPRuntime/Private/FogOfWar/GPFogOfWarComponent.cpp`
-- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-
-UI runtime:
-
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPFoWViewModel.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPFoWViewModel.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPFoWViewModelAdapter.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPFoWViewModelAdapter.cpp`
-- `GP/Source/GPUIRuntime/Public/Widgets/GPActivatableWidgetBase.h`
-- `GP/Source/GPUIRuntime/Private/Widgets/GPActivatableWidgetBase.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPFoWClientPresentationFoundationContractTest.cpp`
+- `GP/Source/GPUIRuntime/Public/Presentation/GPFoWWorldPresentationSubsystem.h`
+- `GP/Source/GPUIRuntime/Private/Presentation/GPFoWWorldPresentationSubsystem.cpp`
+- `GP/Source/GPUIRuntime/Public/Widgets/GPFoWWorldOverlayWidget.h`
+- `GP/Source/GPUIRuntime/Private/Widgets/GPFoWWorldOverlayWidget.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPFoWWorldVisualizationContractTest.cpp`
 
 Documentation:
 
-- `Docs/Development/Claude_Tasks/GP-FoW-Client-Presentation-Foundation.md`
+- `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/TDD/15_Fog_of_War.md`
@@ -226,19 +177,46 @@ Documentation:
 - `Docs/Development/DOCUMENTATION_INDEX.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Protected-content confirmation
+## Validation
 
-The branch diff from base contains no Config, map, Blueprint, DataAsset, material, VFX, Tools, or other
-authored Content.
+- `gp.FoW.RunWorldVisualizationContractTest` — **PASS**, `Failures=0`
+- `gp.FoW.RunClientPresentationFoundationContractTest` — **PASS**, `Failures=0`
+- `gp.FoW.RunRuntimeFoundationContractTest` — **PASS**, `Failures=0`
+- Render-offscreen lifecycle/paint/diagnostic smoke — **PASS**
+- GPEditor Win64 Development + UHT — **PASS**
 
-All pre-existing local protected changes remain untouched. In particular, the operator-local LongRange
-Salvage Walker UnitDefinition with `Fog Of War Sight Radius = 2000` remains untracked and was not
-staged, committed, reverted, stashed, cleaned, restored, or otherwise modified.
+The focused contract proves conservative NotReady, exact ordered state mapping, revision transitions,
+sticky Explored, stale rejection, reset/new snapshot, one-team source, no authority mutation,
+no per-cell object model, bounded million-grid behavior, view-only changes, A/B toggle safety, and
+different local masks.
 
-## Roadmap after finalization
+## Risk / escalation
 
-The authority and trusted-client FoW foundations are done. Visual world Fog of War presentation is the
-next bounded production capability. This does not mark minimap, full production HUD, relevance,
-last-known behavior, or the complete FoW feature done.
+Blast radius is confined to new GPUIRuntime LocalPlayer presentation classes and its contract. No
+PlayerController, mirror protocol, authority, placement, TEMP HUD, gameplay, or replication source
+changed. The slice contract and both directly coupled FoW foundation regressions passed. No failure or
+expanded shared behavior triggered broader-suite, HUD, or building-placement escalation.
 
-**NOT MERGED.**
+GP Development and Shipping are reserved for finalization after operator PASS.
+
+## Protected content
+
+All existing local authored/untracked changes remain untouched. The operator-local LongRange Salvage
+Walker UnitDefinition with `Fog Of War Sight Radius = 2000` remains untracked and was not committed,
+reverted, stashed, cleaned, restored, or modified.
+
+## Operator test
+
+1. Start normal Team 1 PIE.
+2. Confirm only starting sight regions are normal and untouched terrain is black.
+3. Move a Worker/LongRange unit outward; black becomes Visible.
+4. Move away; old area becomes dim/grey, not black.
+5. Move back; dim/grey becomes fully Visible.
+6. Pan, zoom, and rotate; verify world alignment.
+7. Run `gp.FoW.VisualDump`; confirm active/ready/team/revision and bounded region.
+8. Toggle `gp.FoW.VisualEnable 0`, then `1`, for A/B.
+9. Run two-player listen-server PIE and confirm Team 1/Team 2 masks differ.
+
+No authored asset editing is required.
+
+**NOT MERGED. NOT FINALIZED.**

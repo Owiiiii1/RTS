@@ -1,0 +1,129 @@
+# GP — Fog of War World Visualization
+
+**Status:** `FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION`
+**Branch:** `feature/gp-fow-world-visualization`
+**Base:** `origin/main` @ `7847c3ce27a571d92f7629369cc8d361bd981387`
+
+## Goal
+
+Make the trusted one-team local FoW physically visible over the current MVP arena:
+
+- Unexplored: opaque black;
+- Explored: dark neutral overlay, terrain still readable;
+- Visible: no overlay.
+
+This slice is presentation-only. Authority, sight computation, replication relevance, last-known state,
+selection/inspect policy, minimap, and production HUD remain separate.
+
+## Pre-change rendering audit
+
+- No project-owned FoW material, post-process material, render target, runtime texture, procedural FoW
+  mesh, world overlay, or screen-space FoW renderer existed under production source/tracked
+  `/Game/GrimProtocol`.
+- Existing `UGP_MarqueeSelectionWidget::NativePaint` established a source-only Slate draw pattern, but
+  no reusable world projection/mask owner existed.
+- `AGP_CameraPawn` is perspective: spring-arm zoom 1200–4500 cm, pitch interpolates from -45 to -65
+  degrees, unrestricted yaw rotation, camera-relative pan, and viewport edge scrolling.
+- Read-only runtime audit found zero `Landscape` objects in `L_PrototypeArena`; current gameplay ground
+  is the planar blockout around Z=0. Meaningful terrain elevation requiring depth reconstruction is not
+  present in the MVP arena.
+- Source-only implementation was viable; no authored material/map/Blueprint asset was required.
+
+## Selected architecture
+
+`UGP_FoWWorldPresentationSubsystem` is the single local-player owner in `GPUIRuntime`.
+
+- It binds only to the owning controller's `UGP_LocalFoWComponent`.
+- It creates one native `UGP_FoWWorldOverlayWidget` with a low player-screen Z order.
+- Mirror update/reset events increment a render serial and invalidate cached presentation.
+- The volatile widget observes view projection each paint; it only rebuilds geometry when the mirror
+  serial or camera/view projection changes.
+- It deprojects the player view to the Z=0 gameplay plane, samples only the intersecting FoW cells,
+  horizontally coalesces equal non-Visible states, and projects each run as one Slate quad.
+- Visible runs create no geometry. Unexplored/Explored runs use opaque/translucent neutral overlays.
+- NotReady, projection failure, or an over-budget view falls back to full-screen black.
+
+This works for perspective pan, zoom, yaw rotation, window/viewport changes, listen host, remote client,
+and split local-player layers without global material state.
+
+## Rejected alternatives
+
+- Post-process material + runtime mask: no reusable material exists; it would require a new authored
+  material or custom depth-reconstruction shader and materially more rendering infrastructure.
+- Material Parameter Collection: global world state could leak one local team's mask across local views.
+- Full one-million-cell runtime texture: requires a material consumer and full/large texture upload
+  policy despite the camera viewing only a small region.
+- World procedural/decal mesh: can z-fight, does not reliably obscure tall actors, and is less robust
+  under the perspective camera.
+- Per-cell widgets/components/UObjects: prohibited million-object/draw-call architecture.
+
+## Visual and performance contract
+
+- Unexplored obscuration: `1.0`, color black.
+- Explored obscuration: `0.68`, neutral near-black tint.
+- Visible obscuration: `0.0`, no quad.
+- Gameplay cells remain 200 cm; no visibility expansion or interpolation occurs.
+- Renderer owns no duplicate grid and performs no unit scan or sight-circle computation.
+- No full one-million-cell presentation copy is allocated.
+- View sampling is capped at 65,536 cells.
+- Horizontal runs are batched at up to 8,000 quads per Slate draw batch.
+- Static camera + unchanged revision reuses cached vertices; camera changes rebuild only the bounded
+  view region.
+- Offscreen prototype smoke: 1,248 sampled cells, 26 overlay runs, one draw batch.
+- Existing local mirror storage remains two one-million-bit arrays (~250 KB total).
+
+## Lifecycle and multiplayer
+
+- `ULocalPlayerSubsystem` follows local PlayerController replacement automatically.
+- Mirror NotReady/reset remains conservatively black.
+- New ready snapshots and newer deltas invalidate the renderer via `OnLocalFoWUpdated`.
+- Every local player owns a separate subsystem/widget/mirror; no global mask or MPC is used.
+- `gp.FoW.VisualEnable 0/1` changes presentation only.
+- Seamless travel and PIE recreation are handled through LocalPlayer/PlayerController and mirror reset
+  lifecycles.
+
+## Diagnostics
+
+- `gp.FoW.VisualDump`
+- `gp.FoW.VisualEnable 0/1`
+
+`VisualDump` reports active/enabled/ready state, team/revision, method, metadata, sample cap, current
+sampled region, run/batch counts, dirty state, and consumed render serial.
+
+## Validation
+
+- `gp.FoW.RunWorldVisualizationContractTest` — **PASS**, `Failures=0`
+- `gp.FoW.RunClientPresentationFoundationContractTest` — **PASS**, `Failures=0`
+- `gp.FoW.RunRuntimeFoundationContractTest` — **PASS**, `Failures=0`
+- Render-offscreen lifecycle/paint diagnostic — **PASS** (`Active=true`, `Dirty=false`, 1,248 cells,
+  26 runs, one batch)
+- GPEditor Win64 Development + UHT — **PASS**
+
+No PlayerController, building-placement, TEMP HUD, gameplay authority, or replication code changed, so
+their unrelated contracts were not escalated.
+
+## Operator test
+
+1. Start normal Team 1 PIE.
+2. Confirm starting sight regions are normal and untouched territory is black.
+3. Move a Worker or LongRange unit outward; black cells become normal Visible.
+4. Move away; previously seen cells become dim/grey, never black.
+5. Return; dim/grey cells become normal Visible.
+6. Pan, zoom, and rotate; confirm the mask remains aligned.
+7. Run `gp.FoW.VisualDump`; confirm Active/Ready/team/revision and bounded sample stats.
+8. Toggle `gp.FoW.VisualEnable 0`, then `1`, for A/B confirmation.
+9. In two-player listen-server PIE, confirm Team 1 and Team 2 show different local masks.
+
+## Deferred
+
+- enemy actor replication relevance/hiding
+- hidden selection/inspect policy
+- last-known static/dynamic state
+- explicit Attack last-known behavior
+- minimap/minimap FoW
+- full production HUD, Order Menu, notifications, end screen
+- DropPod temporary sight
+
+No authored asset was created or modified.
+
+**NOT MERGED. NOT FINALIZED.**

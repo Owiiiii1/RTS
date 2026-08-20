@@ -1,5 +1,28 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — Fog of War visual world / terrain presentation
+
+Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**
+
+- New branch `feature/gp-fow-world-visualization` from exact `origin/main`
+  `7847c3ce27a571d92f7629369cc8d361bd981387`
+- Rendering audit found no reusable project FoW material/texture/overlay and no Landscape in the planar
+  prototype arena; the perspective RTS camera pans, zooms 1200–4500 cm, pitches -45 to -65, and rotates
+- Added one local-player `UGP_FoWWorldPresentationSubsystem` and source-only native Slate overlay in
+  GPUIRuntime; it consumes only `UGP_LocalFoWComponent`
+- Unexplored is opaque black, Explored is 0.68 dark neutral overlay, Visible creates no overlay;
+  NotReady/projection/budget fallback is conservative black
+- Mirror changes are push/revision-driven; camera changes rebuild only the bounded view region, with
+  65,536 sampled-cell cap, horizontal run coalescing, and 8,000-quad batches
+- Render-offscreen smoke was active/ready with 1,248 sampled cells, 26 runs, and one draw batch
+- New visualization contract plus trusted-client and authority FoW regressions pass with `Failures=0`;
+  GPEditor Win64 Development + UHT **PASS**
+- No PlayerController/gameplay authority change and no authored material, map, Blueprint, DataAsset,
+  Config, VFX, Tools, or Content edit. Actor relevance/last-known/selection/minimap/HUD remain deferred.
+  **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — FoW trusted client mirror + production UI/MVVM foundation
 
 Status: **FOW_CLIENT_PRESENTATION_FOUNDATION_FINALIZED_READY_FOR_MERGE**

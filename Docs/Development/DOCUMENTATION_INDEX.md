@@ -39,7 +39,7 @@
 | Last closed / merged stage | **Building Vitals / Definition Ownership** on `main` @ `b7e391a636749173c445f7994a41daf3c18ba902` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-FoW-Client-Presentation-Foundation.md`](Claude_Tasks/GP-FoW-Client-Presentation-Foundation.md) — **FOW_CLIENT_PRESENTATION_FOUNDATION_FINALIZED_READY_FOR_MERGE** |
+| Current stage | [`Claude_Tasks/GP-FoW-World-Visualization.md`](Claude_Tasks/GP-FoW-World-Visualization.md) — **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION** |
 
 ---
 
@@ -53,8 +53,8 @@
 
 **Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE**. Historical S-number order is no longer the execution cursor.
 
-**Exactly one NEXT production capability:** visual world Fog of War presentation on the finalized
-trusted client mirror. Full minimap/HUD remains separate work.
+**Exactly one current gate:** normal and two-player PIE validation of black Unexplored, dim Explored,
+Visible restoration, camera alignment, and per-team visual isolation.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 
@@ -171,7 +171,7 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-Current baseline: `origin/main` @ `9d9caa5fc7665ad8dc62016aed7b77f5238761dc`. Current stage:
-**FOW_CLIENT_PRESENTATION_FOUNDATION_FINALIZED_READY_FOR_MERGE** on
-`feature/gp-fow-client-presentation-foundation`.
-**NOT MERGED.** NEXT: visual world FoW presentation on the finalized trusted mirror.
+Current baseline: `origin/main` @ `7847c3ce27a571d92f7629369cc8d361bd981387`. Current stage:
+**FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION** on
+`feature/gp-fow-world-visualization`.
+**NOT MERGED. NOT FINALIZED.** NEXT: operator visual PIE validation.

@@ -8,9 +8,9 @@
 
 > Стан станом на 2026-08-20. Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), and the current [`MVP roadmap reconciliation`](../MVP_Roadmap_Reconciliation_Post_Building_Vitals.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** trusted FoW owning-client mirror + first production CommonUI/MVVM foundation. The
-architecture/config cleanup phase is closed.
-**Current: FOW_CLIENT_PRESENTATION_FOUNDATION_FINALIZED_READY_FOR_MERGE**.
+**Поточна фаза:** visual world / terrain Fog of War presentation. The architecture/config cleanup phase
+is closed.
+**Current: FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**.
 
 **Status snapshot:**
 
@@ -28,9 +28,10 @@ architecture/config cleanup phase is closed.
 | **Post-vitals MVP roadmap reconciliation** | **FINALIZED READY FOR MERGE** — [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](../MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **NOT MERGED** |
 | **FoW runtime foundation** | **FINALIZED READY FOR MERGE** — [`GP-FoW-Runtime-Foundation.md`](GP-FoW-Runtime-Foundation.md) — **NOT MERGED** |
 | **FoW client presentation foundation** | **FINALIZED READY FOR MERGE** — [`GP-FoW-Client-Presentation-Foundation.md`](GP-FoW-Client-Presentation-Foundation.md) — **NOT MERGED** |
+| **FoW world visualization** | **READY FOR OPERATOR VALIDATION** — [`GP-FoW-World-Visualization.md`](GP-FoW-World-Visualization.md) — **NOT MERGED / NOT FINALIZED** |
 
-**Exactly one NEXT production capability:** visual world Fog of War presentation on the finalized
-trusted client mirror. Full minimap/HUD remains separate work.
+**Exactly one current gate:** normal and two-player PIE validation of black Unexplored, dim Explored,
+Visible restoration, camera alignment, and per-team visual isolation.
 
 Do **not** start footprint/geometry cleanup; it is deferred pending building construction redesign.
 Do **not** implement SWARM now. SWARM is separate from the RTS AI Opponent and is

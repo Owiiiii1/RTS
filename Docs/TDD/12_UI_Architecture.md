@@ -72,6 +72,12 @@ PublicDependencyModuleNames.AddRange(new string[]
 - The server updates the owning-client mirror; the adapter projects that trusted replicated
   presentation state into the ViewModel. Widgets remain read-only and never call FoW gameplay authority.
 - Listen-host and remote-client team isolation plus restart/reinitialization passed operator validation.
+- `UGP_FoWWorldPresentationSubsystem` + native `UGP_FoWWorldOverlayWidget` are the first specialized
+  world-presentation consumer. They bind directly to the trusted one-team LocalFoW mirror, not gameplay
+  authority, and project bounded/coalesced Slate geometry behind normal HUD layers.
+- This direct mirror binding is intentionally limited to the project-owned world renderer: camera
+  reprojection is not a conventional HUD FieldNotify problem. Ordinary HUD/minimap widgets still
+  consume ViewModels.
 - The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.
 
 ### MVVM Data Flow
@@ -142,6 +148,10 @@ UI код live у `GPUIRuntime`. Per [`01_Module_Architecture`](01_Module_Archit
 5. **Cosmetic feedback ≠ gameplay truth.** UI може предіктивно показати pulse decal / sound, але authority — server.
 6. **Widget never queries ASC / Actor state.** Direct reads of attributes, components, transforms — banned. Все через VM.
 7. **Common UI activation stack** для будь-якого modal (OrderMenu, EndOfMatch, Pause). Не raw `AddToViewport` для screens.
+
+Specialized exception: the hit-test-invisible FoW world overlay is a native viewport presentation
+adapter, not an interactive HUD screen. It may read the trusted local mirror directly for bounded
+camera reprojection, but cannot read authority or mutate gameplay.
 
 ## Detailed MVP HUD Rules (GP-0401)
 

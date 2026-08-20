@@ -12,11 +12,14 @@ Engineering-canonical UI architecture for GrimProtocol. Currently scoped до MV
 
 - UE **Common UI** plugin для widget hierarchy, input routing, focus stack, activation system.
 - **MVVM** pattern (UE `ModelViewViewModel` plugin) для data binding.
-- **Server updates only ViewModels.** Widgets bind to ViewModel properties; widgets never query gameplay components, attributes, або actor state напряму.
+- **Authoritative state reaches widgets only through ViewModels.** Replication/trusted mirrors feed
+  adapters, adapters update ViewModels, and widgets never query gameplay components, attributes, або
+  actor state напряму.
 
 ### Required Project Setup (Prerequisite)
 
-These are **mandatory project-setup prerequisites** that MUST be enabled before any UI work begins. This document **states the requirement**; the actual `GP.uproject` / `*.Build.cs` edits are a **separate engineering task** (NOT performed in this documentation pass).
+These mandatory prerequisites are enabled in the current project. Keep them intact for all production
+UI work.
 
 **1. `GP.uproject` — enable stock UE 5.8.1 plugins only:**
 
@@ -56,7 +59,7 @@ PublicDependencyModuleNames.AddRange(new string[]
 | Buttons / list items | `UCommonButtonBase`, `UCommonListView` items | Reusable styles via `UCommonButtonStyle` DataAssets. |
 | ViewModels | `UMVVMViewModelBase` subclasses | Properties marked `UPROPERTY(FieldNotify)`. |
 
-### Current production foundation (2026-08-20)
+### Current production foundation — finalized (2026-08-20)
 
 - `CommonUI` and `ModelViewViewModel` are enabled; `GPUIRuntime` already depends on both and depends
   forward on `GPRuntime` / `GPGASRuntime`.
@@ -68,6 +71,7 @@ PublicDependencyModuleNames.AddRange(new string[]
   `UGP_LocalFoWComponent` update delegate. It has no Tick and never scans the world.
 - The server updates the owning-client mirror; the adapter projects that trusted replicated
   presentation state into the ViewModel. Widgets remain read-only and never call FoW gameplay authority.
+- Listen-host and remote-client team isolation plus restart/reinitialization passed operator validation.
 - The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.
 
 ### MVVM Data Flow

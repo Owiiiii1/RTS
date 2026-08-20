@@ -4,7 +4,7 @@
 
 Engineering implementation of 3-level FoW (per [`../GDD/11_Fog_of_War`](../GDD/11_Fog_of_War.md)). Replaces previous "no FoW у MVP" decision (pivot 2026-05-16). Visibility grid, sight scan, replication relevance, selection/combat/drop interactions, minimap rendering.
 
-## Current production foundation (2026-08-20)
+## Current production foundations — finalized (2026-08-20)
 
 The first production slice uses `UGP_FogOfWarComponent` as a non-replicated default subobject of
 `AGP_GameState`. It owns authority-only per-team `TBitArray` storage, a 5 Hz registered-sight-source
@@ -28,17 +28,23 @@ Current-compatible deviations from the older pseudocode:
   projection, with a coarse revision notification for future region-based presentation consumers;
 - local building placement preview now consumes the trusted mirror conservatively while server
   confirmation remains authoritative;
+- single-client transitions, same-coordinate two-player team isolation, and restart/reinitialization
+  passed operator validation;
 - rendering, selection/inspect integration, explicit-Attack last-known behavior, DropPod sight,
   replication relevance, minimap, and the full production HUD remain later FoW slices.
 
 ## Hard Rules
 
-1. **Server-authoritative.** Visibility computed server-side. Client receives relevance-filtered actors і per-team visibility bitmap.
+1. **Server-authoritative.** Visibility is computed server-side. The owning client receives only its
+   trusted presentation ranges; actor relevance filtering is a later slice.
 2. **Per-team grids.** Each team has independent Explored і Visible bitmaps. No allied vision sharing (no allies у MVP).
-3. **Standard UE relevance API.** Use `IsNetRelevantFor` / `bOnlyRelevantToOwner` overrides; не custom replication channel.
-4. **Bit-grid storage.** `TBitArray` per team per state. Cell size DA-driven (placeholder 2 m).
+3. **Standard UE relevance API (future).** Later actor hiding uses `IsNetRelevantFor` /
+   `bOnlyRelevantToOwner`; the trusted mirror does not itself hide replicated actors.
+4. **Bit-grid storage.** Authority and local mirror use `TBitArray` internally; raw arrays are never
+   replicated. Current deterministic cell size is 200 cm.
 5. **No client-side FoW gameplay.** Client can render fog mask, but server arbiters all visibility-gated logic.
-6. **No tick-poll у widgets.** FoW reads через `UGP_FoWVM` (Common UI + MVVM per TDD/12).
+6. **No tick-poll у widgets.** FoW reads through `UGP_FoWViewModel` and reacts to coarse Revision
+   FieldNotify (Common UI + MVVM per TDD/12).
 
 ## Data Structures
 
@@ -130,6 +136,16 @@ The full current Visible set makes removals deterministic without tombstones. Ex
 additions after initial sync. Contiguous range compression avoids sending a one-million-cell bitmap and
 fits the current circle-source topology; there is no per-frame RPC or widget polling.
 
+Payload facts:
+
+- the grid is bounded to 1,000,000 cells;
+- each run stores two `int32` values (8 bytes before RPC serialization overhead);
+- one isolated circular source normally contributes at most one run per intersected row
+  (`2 * ceil(Radius / CellSize) + 1` before overlap merging);
+- there is no separate chunk/byte cap; an alternating-cell theoretical worst case is 500,000 runs
+  (~4 MB before serialization), so highly fragmented large reconnect snapshots remain a future
+  scalability concern outside the validated MVP match scale.
+
 ### Sight Source Contract
 
 Actors з sight contribute via interface OR property:
@@ -165,15 +181,18 @@ for each TeamId у MatchTeams:
 
     VisibleByTeam[TeamId] = NewVisible
 
-for each PlayerController:
-    if NewlyExploredCells[PC.TeamId].Num() > 0:
-        PC->Client_PushExploredDelta(NewlyExploredCells[PC.TeamId])
-        NewlyExploredCells[PC.TeamId].Empty()
+for each changed TeamId:
+    increment TeamGrid.Revision
+    broadcast OnTeamStateChanged(TeamId, Revision)
+
+each authoritative PlayerController subscribed for its owning TeamId:
+    initial: send metadata + all Explored runs + current Visible runs
+    update: send newly Explored runs + current Visible runs
 ```
 
-Drop pod telegraph: pod actor у flight contributes temporary sight (per `DropDef.bPodGrantsVision = true`, default true).
+DropPod temporary sight is a deferred target; current in-flight pods do not contribute FoW vision.
 
-## Replication Relevance
+## Replication Relevance — target design, not implemented
 
 Override на key actor types:
 
@@ -196,20 +215,21 @@ virtual bool IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget
 }
 ```
 
-Engine handles connection-level filtering. Hidden enemies — not replicated to opponent client. Cheat-resistant.
+This remains the target connection-level filtering model. It is not part of either finalized foundation;
+hidden enemy actors may still replicate until the dedicated relevance/last-known slice.
 
 **Buildings:** `IsNetRelevantFor` similar, але once explored, last-known state persists локально (no unrelevance once seen — buildings static, OK to keep).
 
 **FerroniteDeposits:** same as buildings.
 
-## Selection / Inspect Interaction (Updates to GP-0202)
+## Selection / Inspect Interaction — target design, not implemented
 
 - `UGP_SelectionComponent::TrySelectAt(FVector Loc)`:
-  - HitActor — only relevant actors hit (engine relevance filters network already).
-  - For local hit testing на actively-visible actors: standard line trace.
-  - Hidden enemies → not hit by trace (they're not у local scene since relevance-culled).
-- `Inspect`: only `Visible` enemy can be inspected.
-- Control group recall з member у hidden zone: keep entry; member's `IsValid()` returns true server-side, але local client sees "unknown position" placeholder. UI shows greyed-out portrait. On re-sight, position resyncs.
+  - after relevance filtering exists, line traces should only hit relevant/actively-visible enemies;
+  - until then, future local selection/inspect presentation must consult the trusted mirror explicitly.
+- `Inspect` target rule: only a `Visible` enemy can be inspected.
+- Control group target rule: hidden members keep identity but present unknown position/grey state until
+  re-sighted. This behavior is not implemented by the current foundations.
 
 ## Combat Interaction (Updates to GP-0204)
 

@@ -2,7 +2,7 @@
 
 ## 2026-08-20 — FoW trusted client mirror + production UI/MVVM foundation
 
-Status: **FOW_CLIENT_PRESENTATION_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**
+Status: **FOW_CLIENT_PRESENTATION_FOUNDATION_FINALIZED_READY_FOR_MERGE**
 
 - Branch `feature/gp-fow-client-presentation-foundation` from exact `origin/main` baseline
   `9d9caa5fc7665ad8dc62016aed7b77f5238761dc`
@@ -16,11 +16,15 @@ Status: **FOW_CLIENT_PRESENTATION_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**
   authoritative
 - TEMP HUD unchanged; visual fog, minimap, full HUD, selection/inspect integration, last-known/relevance,
   explicit-Attack integration, and DropPod vision remain deferred
-- New presentation contract and authoritative FoW/building-drop/BuildGrid/TEMP HUD regressions pass
-  with `Failures=0`; GPEditor Win64 Development + UHT **PASS**
-- Deterministic two-mirror isolation passed; live listen-server/two-player ownership and reconnect are
-  the operator gate. Protected authored Config/Content/map/Tools, including local LongRange 2000 cm FoW
-  sight, remain untouched. **NOT MERGED. NOT FINALIZED.**
+- Operator PASS: Team 1 listen host and Team 2 remote client both became Ready with correct teams;
+  same-coordinate `(1800,-670)` was Team 2 Visible and Team 1 Unexplored
+- Operator also proved local Visible -> Explored (`(-1130,1637)`, revision 105 -> 172), local placement
+  NotVisible feedback, authority confirmation, and restart/reinitialization
+- Final presentation, authority FoW, building-drop, BuildGrid, and TEMP HUD regressions pass with
+  `Failures=0`; GPEditor + UHT, GP Development, and GP Shipping all **PASS**
+- No broader suite escalation: focused networking/controller/UI blast radius remained green
+- Protected authored Config/Content/map/Tools, including local LongRange 2000 cm FoW sight, remain
+  untouched. Visual fog/minimap/full HUD and other deferred FoW integrations remain. **NOT MERGED.**
 - Task: `Docs/Development/Claude_Tasks/GP-FoW-Client-Presentation-Foundation.md`
 - Report: `Docs/Development/Cursor_Work_Report.md`
 

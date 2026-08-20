@@ -5,9 +5,8 @@
 **Baseline:** `origin/main` @ `b7e391a636749173c445f7994a41daf3c18ba902`
 **Audit date:** 2026-08-20
 **Scope:** documentation/roadmap reconciliation only. No runtime, Config, Content, Blueprint, DataAsset, map, or placement implementation changes.
-**Current execution checkpoint:** the authoritative FoW runtime is finalized. The trusted owning-client
-mirror and first GPUIRuntime CommonUI/MVVM foundation are implemented on
-`feature/gp-fow-client-presentation-foundation` and await operator validation. Visual fog, minimap, and
+**Current execution checkpoint:** the authoritative FoW runtime plus trusted owning-client mirror and
+first GPUIRuntime CommonUI/MVVM foundation are finalized after operator PASS. Visual fog, minimap, and
 the full production HUD are not implemented.
 
 ## 1. Why reconciliation is required
@@ -123,7 +122,7 @@ current execution order.
 | Capability | Status | Factual evidence / boundary |
 | --- | --- | --- |
 | Per-team Unexplored/Explored/Visible runtime | **DONE — FOUNDATION** | `UGP_FogOfWarComponent` owns authority-only per-team bit grids, 5 Hz registered-source recompute, sticky exploration, and public server queries; contract and operator validation passed. Client mirror/rendering/relevance remain separate capability work. |
-| Trusted owning-client mirror + FoW MVVM | **PARTIAL — OPERATOR VALIDATION PENDING** | Owner-only initial/delta range sync, revision guards, one-team `UGP_LocalFoWComponent`, `UGP_FoWViewModel`, adapter, and CommonUI base are implemented. Live two-client PIE isolation is the current gate; no visual fog/minimap/HUD was added. |
+| Trusted owning-client mirror + FoW MVVM | **DONE — FOUNDATION** | Owner-only initial/delta range sync, revision guards, one-team `UGP_LocalFoWComponent`, `UGP_FoWViewModel`, adapter, CommonUI base, and local placement preview passed contracts, final builds, and two-player operator isolation. No visual fog/minimap/HUD was added. |
 | FoW-gated selection/combat/drop placement | **PARTIAL** | Server auto-acquire and orbital building placement consume active visibility. Enemy local selection, explicit-Attack last-known behavior, unit-drop pod vision, and broad relevance filtering remain deferred FoW integration. |
 | Last-known state and minimap layers | **NOT STARTED** | Design only. |
 
@@ -189,6 +188,8 @@ must remain separate from the RTS AI Opponent.
   and temporary result display.
 - Authoritative three-state per-team FoW runtime, registered sight sources, persistent exploration,
   auto-acquire visibility gating, and authority building-placement visibility gating.
+- Trusted one-team client FoW mirror, server-originated snapshot/delta sync, stale revision protection,
+  team isolation, FoW ViewModel/CommonUI foundation, and local FoW-aware placement preview.
 
 Do not schedule another implementation slice merely to recreate an obsolete historical class name.
 
@@ -196,8 +197,8 @@ Do not schedule another implementation slice merely to recreate an obsolete hist
 
 These are factual product gaps, not an implied strict order:
 
-1. Validate/finalize the trusted FoW client mirror/MVVM foundation, then add visual terrain state,
-   remaining visibility consumers, replication relevance policy, and last-known rules.
+1. Add visual terrain FoW, then remaining visibility consumers, replication relevance policy, and
+   last-known rules on the finalized trusted mirror foundation.
 2. Complete the production CommonUI/MVVM HUD, Order Menu, minimap, notifications, and end-of-match flow.
 3. Primitive RTS AI Opponent (`Explore / Mine / Ship / Order / Defend`).
 4. Player-facing Stop command input/dispatch completion.
@@ -232,21 +233,19 @@ construction redesign requires it.
 
 This order replaces mechanical continuation of the historical Slice 8 -> 13 sequence:
 
-1. **Trusted FoW client mirror + first UI/MVVM foundation** — implementation candidate complete;
-   operator validation/finalization is the current gate.
-2. **Visual FoW and production UI consumers** — visual terrain fog and remaining trusted presentation
+1. **Visual FoW and production UI consumers** — visual terrain fog and remaining trusted presentation
    consumers, followed by required HUD readouts, Order Menu, notifications, and minimap FoW.
-3. **RTS AI Opponent** — Explore/Mine/Ship/Order/Defend using completed authority APIs and FoW.
-4. **Remaining bounded core-loop gameplay** — player-facing Stop completion, Worker Repair, Logistics
+2. **RTS AI Opponent** — Explore/Mine/Ship/Order/Defend using completed authority APIs and FoW.
+3. **Remaining bounded core-loop gameplay** — player-facing Stop completion, Worker Repair, Logistics
    Hub storage-cap bonus, and necessary feedback.
-5. **Building-system design gate**, then only approved remaining surface-building capabilities
+4. **Building-system design gate**, then only approved remaining surface-building capabilities
    (Wall/connection/Build Wall/Wall Turret and lifecycle operations). Do not pre-emptively clean geometry.
-6. **Steam multiplayer product flow** — sessions, lobby, host/find/join, travel, disconnect, and menus.
-7. **Match completion product flow** — production end screen, OpponentDisconnect result, cleanup/
+5. **Steam multiplayer product flow** — sessions, lobby, host/find/join, travel, disconnect, and menus.
+6. **Match completion product flow** — production end screen, OpponentDisconnect result, cleanup/
    return, and singleplayer/multiplayer completion checks.
-8. **SWARM design/reconciliation gate.**
-9. **SWARM implementation — last gameplay implementation stage of MVP.**
-10. **Full MVP end-to-end validation and stabilization.**
+7. **SWARM design/reconciliation gate.**
+8. **SWARM implementation — last gameplay implementation stage of MVP.**
+9. **Full MVP end-to-end validation and stabilization.**
 
 Small slices may subdivide a stage, but dependency order and capability status take precedence over old
 S-number titles.
@@ -330,8 +329,8 @@ After SWARM implementation:
 | S45 | Old per-segment pod cascade **SUPERSEDED — DO NOT IMPLEMENT**. |
 | S46 | Worker Repair **REMAINING**. |
 | S46A | Sell/Demolish **REMAINING**. |
-| S47 | CommonUI/MVVM prerequisites **PARTIAL**; production bases remain. |
-| S48 | FoW authority runtime foundation **DONE**; trusted client mirror/MVVM **PARTIAL — OPERATOR VALIDATION PENDING**; visual fog/relevance/last-known remain. |
+| S47 | CommonUI/MVVM prerequisites and first project activatable/ViewModel base **DONE — FOUNDATION**; full production HUD remains. |
+| S48 | FoW authority runtime and trusted client mirror/MVVM foundations **DONE**; visual fog/relevance/last-known remain. |
 | S49-S53 | Production VMs/adapters/HUD/minimap/Order Menu **REMAINING**; TEMP HUD does not close them. |
 | S54-S56 | RTS AI Opponent **REMAINING** and distinct from SWARM. |
 | S57-S60 | Feedback pass **PARTIAL**; implement only MVP-readable gaps. |
@@ -343,19 +342,19 @@ After SWARM implementation:
 
 ## 11. Immediate NEXT recommendation
 
-**Exactly one current gate: operator validation and finalization of the trusted FoW client mirror +
-production UI/MVVM foundation.**
+**Exactly one NEXT production capability: visual world Fog of War presentation on the finalized trusted
+client mirror.**
 
 Reason:
 
-- the authoritative FoW runtime foundation has passed contract, regression, build, and operator validation;
-- the one-team mirror, range sync, revision guards, ViewModel, adapter, and CommonUI base now require
-  live single-client and two-client PIE proof;
-- this bounded stage consumes the existing authority query without expanding into rendering, last-known,
-  or relevance work;
+- authoritative and trusted-client FoW foundations passed contracts, final builds, single-client
+  transition checks, same-coordinate two-player isolation, and restart/reinitialization;
+- visual black/grey terrain presentation is the next dependency that can now consume trusted local state;
+- minimap, full HUD, last-known state, selection/inspect integration, and relevance remain separate
+  bounded work;
 - it is a dependency for readable player feedback and the RTS AI Opponent's Explore/visibility behavior;
 - it is independent of the deferred building-construction/footprint redesign;
 - it is a concrete gameplay capability, not another cleanup package.
 
-Do not start production minimap/UI presentation until the current authority grid, source lifecycle,
-auto-acquire gate, and building-placement gate pass operator validation and finalization.
+Implement visual world FoW as a bounded next slice on the finalized authority/mirror APIs. Do not
+conflate that work with minimap, full HUD, last-known state, or replication relevance.

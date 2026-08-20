@@ -10,7 +10,7 @@
 
 **Поточна фаза:** trusted FoW owning-client mirror + first production CommonUI/MVVM foundation. The
 architecture/config cleanup phase is closed.
-**Current: FOW_CLIENT_PRESENTATION_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**.
+**Current: FOW_CLIENT_PRESENTATION_FOUNDATION_FINALIZED_READY_FOR_MERGE**.
 
 **Status snapshot:**
 
@@ -27,10 +27,10 @@ architecture/config cleanup phase is closed.
 | **Cleanup Slice H — Building vitals definition ownership** | **DONE / on `main`** @ `b7e391a636749173c445f7994a41daf3c18ba902` |
 | **Post-vitals MVP roadmap reconciliation** | **FINALIZED READY FOR MERGE** — [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](../MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **NOT MERGED** |
 | **FoW runtime foundation** | **FINALIZED READY FOR MERGE** — [`GP-FoW-Runtime-Foundation.md`](GP-FoW-Runtime-Foundation.md) — **NOT MERGED** |
-| **FoW client presentation foundation** | **READY FOR OPERATOR VALIDATION** — [`GP-FoW-Client-Presentation-Foundation.md`](GP-FoW-Client-Presentation-Foundation.md) — **NOT MERGED / NOT FINALIZED** |
+| **FoW client presentation foundation** | **FINALIZED READY FOR MERGE** — [`GP-FoW-Client-Presentation-Foundation.md`](GP-FoW-Client-Presentation-Foundation.md) — **NOT MERGED** |
 
-**Exactly one current gate:** single-client and two-player PIE validation of the trusted FoW mirror and
-MVVM presentation foundation. Do not start visual fog/minimap before finalization.
+**Exactly one NEXT production capability:** visual world Fog of War presentation on the finalized
+trusted client mirror. Full minimap/HUD remains separate work.
 
 Do **not** start footprint/geometry cleanup; it is deferred pending building construction redesign.
 Do **not** implement SWARM now. SWARM is separate from the RTS AI Opponent and is

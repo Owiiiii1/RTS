@@ -8,6 +8,7 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "Player/GPPlayerController.h"
+#include "Presentation/GPFoWContourField.h"
 #include "Presentation/GPLocalFoWUnitPresentationSubsystem.h"
 #include "Widgets/GPFoWWorldOverlayWidget.h"
 
@@ -41,28 +42,17 @@ void UGP_FoWWorldPresentationSubsystem::PlayerControllerChanged(
 
 float UGP_FoWWorldPresentationSubsystem::GetObscurationForState(EGP_FoWState State)
 {
-	switch (State)
-	{
-	case EGP_FoWState::Visible:
-		return 0.0f;
-	case EGP_FoWState::Explored:
-		return 0.68f;
-	default:
-		return 1.0f;
-	}
+	return GPFoWContourField::ObscurationForState(State);
 }
 
 FLinearColor UGP_FoWWorldPresentationSubsystem::GetOverlayColorForState(EGP_FoWState State)
 {
-	switch (State)
-	{
-	case EGP_FoWState::Visible:
-		return FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);
-	case EGP_FoWState::Explored:
-		return FLinearColor(0.025f, 0.025f, 0.035f, GetObscurationForState(State));
-	default:
-		return FLinearColor(0.0f, 0.0f, 0.0f, GetObscurationForState(State));
-	}
+	return GPFoWContourField::OverlayColorForObscuration(GetObscurationForState(State));
+}
+
+FLinearColor UGP_FoWWorldPresentationSubsystem::GetOverlayColorForObscuration(float Obscuration)
+{
+	return GPFoWContourField::OverlayColorForObscuration(Obscuration);
 }
 
 bool UGP_FoWWorldPresentationSubsystem::RequiresConservativeFullObscuration(
@@ -71,29 +61,29 @@ bool UGP_FoWWorldPresentationSubsystem::RequiresConservativeFullObscuration(
 	return Mirror == nullptr || !Mirror->IsReady();
 }
 
-bool UGP_FoWWorldPresentationSubsystem::ShouldAddConservativeFeather(
-	EGP_FoWState Current,
-	EGP_FoWState Neighbor)
+const TCHAR* UGP_FoWWorldPresentationSubsystem::GetContourAlgorithmName()
 {
-	return GetObscurationForState(Neighbor) > GetObscurationForState(Current);
+	return GPFoWContourField::GetAlgorithmName();
 }
 
-float UGP_FoWWorldPresentationSubsystem::GetConservativeFeatherBoundaryAlpha(
-	EGP_FoWState Current,
-	EGP_FoWState MoreObscuredNeighbor)
+float UGP_FoWWorldPresentationSubsystem::GetConservativeBoundaryT()
 {
-	const float CurrentObscuration = GetObscurationForState(Current);
-	const float NeighborObscuration = GetObscurationForState(MoreObscuredNeighbor);
-	if (NeighborObscuration <= CurrentObscuration
-		|| CurrentObscuration >= 1.0f - KINDA_SMALL_NUMBER)
-	{
-		return 0.0f;
-	}
+	return GPFoWContourField::ConservativeBoundaryT;
+}
 
-	return FMath::Clamp(
-		(NeighborObscuration - CurrentObscuration) / (1.0f - CurrentObscuration),
-		0.0f,
-		1.0f);
+int32 UGP_FoWWorldPresentationSubsystem::GetSubcellsPerCell()
+{
+	return GPFoWContourField::SubcellsPerCell;
+}
+
+int32 UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayTriangles()
+{
+	return GPFoWContourField::MaximumOverlayTriangles;
+}
+
+int32 UGP_FoWWorldPresentationSubsystem::GetMaximumIsoSegments()
+{
+	return GPFoWContourField::MaximumIsoSegments;
 }
 
 void UGP_FoWWorldPresentationSubsystem::SetVisualizationEnabled(bool bEnabled)
@@ -123,16 +113,24 @@ bool UGP_FoWWorldPresentationSubsystem::IsVisualDataDirty() const
 
 void UGP_FoWWorldPresentationSubsystem::RecordOverlayStats(
 	int32 SampledCells,
-	int32 OverlayRuns,
-	int32 FeatherQuads,
+	int32 PaddedCells,
+	int32 ContourSegments,
+	int32 OverlayVertices,
+	int32 OverlayTriangles,
+	int32 MixedCells,
+	int32 CoalescedQuads,
 	int32 DrawBatches,
 	const FIntPoint& MinCell,
 	const FIntPoint& MaxCell,
 	uint64 ConsumedSerial)
 {
 	LastSampledCellCount = SampledCells;
-	LastOverlayRunCount = OverlayRuns;
-	LastFeatherQuadCount = FeatherQuads;
+	LastPaddedCellCount = PaddedCells;
+	LastContourSegmentCount = ContourSegments;
+	LastOverlayVertexCount = OverlayVertices;
+	LastOverlayTriangleCount = OverlayTriangles;
+	LastMixedCellCount = MixedCells;
+	LastCoalescedQuadCount = CoalescedQuads;
 	LastDrawBatchCount = DrawBatches;
 	LastSampledMinCell = MinCell;
 	LastSampledMaxCell = MaxCell;
@@ -250,27 +248,37 @@ void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 			: nullptr;
 
 	UE_LOG(LogGPFoWWorldPresentation, Display,
-		TEXT("GP FoW VisualDump: World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d MirrorRevision=%lld Method=ViewportLocalProjectedSlateRuns Origin=%s Dims=%s CellSize=%.1f MaxSampledCells=%d SampledCells=%d Runs=%d FeatherQuads=%d SmoothingCellFraction=%.2f Batches=%d RegisteredUnitPresentations=%d UnitEvaluationInterval=%.2f RegionMin=%s RegionMax=%s Dirty=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
+		TEXT("GP FoW VisualDump: World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d MirrorRevision=%lld Algorithm=%s Origin=%s Dims=%s CellSize=%.1f MaxSampledCells=%d SampledCells=%d PaddedCells=%d PadCells=%d ContourSegments=%d OverlayVertices=%d OverlayTriangles=%d MixedCells=%d CoalescedQuads=%d ConservativeBoundaryT=%.2f SubcellsPerCell=%d MaxTriangles=%d MaxIsoSegments=%d Batches=%d RegisteredUnitPresentations=%d UnitEvaluationInterval=%.2f RegionMin=%s RegionMax=%s Dirty=%s Cached=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
 		*GetNameSafe(GetWorld()),
 		IsRendererActive() ? TEXT("true") : TEXT("false"),
 		bVisualizationEnabled ? TEXT("true") : TEXT("false"),
 		Mirror != nullptr && Mirror->IsReady() ? TEXT("true") : TEXT("false"),
 		Mirror != nullptr ? Mirror->GetLocalTeamId() : -1,
 		Mirror != nullptr ? Mirror->GetRevision() : -1,
+		GetContourAlgorithmName(),
 		*Origin.ToString(),
 		*Dimensions.ToString(),
 		CellSize,
 		GetMaximumSampledCells(),
 		LastSampledCellCount,
-		LastOverlayRunCount,
-		LastFeatherQuadCount,
-		GetSmoothingWidthCellFraction(),
+		LastPaddedCellCount,
+		GetSamplePadCells(),
+		LastContourSegmentCount,
+		LastOverlayVertexCount,
+		LastOverlayTriangleCount,
+		LastMixedCellCount,
+		LastCoalescedQuadCount,
+		GetConservativeBoundaryT(),
+		GetSubcellsPerCell(),
+		GetMaximumOverlayTriangles(),
+		GetMaximumIsoSegments(),
 		LastDrawBatchCount,
 		UnitPresentation != nullptr ? UnitPresentation->GetRegisteredUnitCount() : 0,
 		UGP_LocalFoWUnitPresentationSubsystem::GetEvaluationIntervalSeconds(),
 		*LastSampledMinCell.ToString(),
 		*LastSampledMaxCell.ToString(),
 		IsVisualDataDirty() ? TEXT("true") : TEXT("false"),
+		(!IsVisualDataDirty() && OverlayWidget != nullptr) ? TEXT("true") : TEXT("false"),
 		LastUpdateRevision,
 		LastConsumedRenderSerial,
 		RenderSerial);

@@ -4,11 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Presentation/GPFoWContourField.h"
 #include "Rendering/RenderingCommon.h"
 #include "GPFoWWorldOverlayWidget.generated.h"
 
 class UGP_FoWWorldPresentationSubsystem;
-enum class EGP_FoWState : uint8;
 
 struct FGP_FoWOverlayDrawBatch
 {
@@ -16,19 +16,11 @@ struct FGP_FoWOverlayDrawBatch
 	TArray<SlateIndex> Indices;
 };
 
-enum class EGP_FoWFeatherEdge : uint8
-{
-	MinX,
-	MaxX,
-	MinY,
-	MaxY
-};
-
 /**
  * Source-only, hit-test-invisible viewport overlay for the local player's world FoW.
  *
- * The widget coalesces horizontal cell runs into projected quads. It caches those quads until either
- * the trusted mirror revision/reset changes or the view projection changes.
+ * Discrete LocalFoW cells are converted into a conservative cell-center scalar field. Dual marching
+ * squares then emit interpolated contour triangles, cached until the mirror serial or view projection changes.
  */
 UCLASS(NotBlueprintable)
 class GPUIRUNTIME_API UGP_FoWWorldOverlayWidget : public UUserWidget
@@ -52,35 +44,17 @@ protected:
 		bool bParentEnabled) const override;
 
 private:
-	bool RebuildProjectedRuns(
+	bool RebuildProjectedContours(
 		const FGeometry& AllottedGeometry,
 		const FMatrix& ViewProjectionMatrix,
 		const FMatrix& InverseViewProjectionMatrix,
 		const FIntRect& ViewRect,
 		float ViewportScale) const;
 	void ResetRenderCache() const;
-	void AddProjectedRun(
-		int32 StartX,
-		int32 EndXExclusive,
-		int32 CellY,
-		const FLinearColor& Color,
-		const FGeometry& AllottedGeometry,
-		const FMatrix& ViewProjectionMatrix,
-		const FIntRect& ViewRect,
-		float ViewportScale) const;
-	void AddProjectedFeather(
-		int32 CellX,
-		int32 CellY,
-		EGP_FoWState CurrentState,
-		EGP_FoWState MoreObscuredNeighbor,
-		EGP_FoWFeatherEdge Edge,
-		const FGeometry& AllottedGeometry,
-		const FMatrix& ViewProjectionMatrix,
-		const FIntRect& ViewRect,
-		float ViewportScale) const;
-	void AddProjectedQuad(
-		const FVector (&WorldCorners)[4],
-		const FLinearColor (&VertexColors)[4],
+	void AddProjectedTriangle(
+		const FGP_FoWContourVertex& A,
+		const FGP_FoWContourVertex& B,
+		const FGP_FoWContourVertex& C,
 		const FGeometry& AllottedGeometry,
 		const FMatrix& ViewProjectionMatrix,
 		const FIntRect& ViewRect,

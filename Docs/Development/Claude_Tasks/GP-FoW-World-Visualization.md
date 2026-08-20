@@ -38,11 +38,13 @@ selection/inspect policy, minimap, and production HUD remain separate.
 - Mirror update/reset events increment a render serial and invalidate cached presentation.
 - The volatile widget observes view projection each paint; it only rebuilds geometry when the mirror
   serial or camera/view projection changes.
-- It deprojects the player view to the Z=0 gameplay plane, samples only the intersecting FoW cells,
-  horizontally coalesces equal non-Visible states, and projects each run as one Slate quad.
-- Visible runs create no geometry. Unexplored/Explored runs use opaque/translucent neutral overlays.
-- Conservative edge feather quads are generated only inside the less-obscured side of a state
-  boundary. Hidden cells keep their full base obscuration.
+- It deprojects the player view to the Z=0 gameplay plane, samples only the intersecting FoW cells
+  (plus a one-cell LocalFoW pad), and builds a cell-center scalar field.
+- Dual marching squares interpolates between neighboring centers. Mixed dual quads are subdivided 4×
+  so bilinear isos become curved contours instead of 200 cm square outlines.
+- Uniform interiors coalesce into Slate triangles. Visible dual samples create a hole; Unexplored and
+  Explored fill the overlay.
+- Iso vertices use `ConservativeBoundaryT=0.42` from the clearer center toward the darker neighbor.
 - NotReady, projection failure, or an over-budget view falls back to full-screen black.
 
 This works for perspective pan, zoom, yaw rotation, window/viewport changes, listen host, remote client,
@@ -58,6 +60,8 @@ and split local-player layers without global material state.
 - World procedural/decal mesh: can z-fight, does not reliably obscure tall actors, and is less robust
   under the perspective camera.
 - Per-cell widgets/components/UObjects: prohibited million-object/draw-call architecture.
+- 0.22-cell projected-run edge feather: operator-rejected; it only blurred square corners and left
+  the 200 cm cell silhouette intact. Replaced by dual marching-squares contour reconstruction.
 
 ## Visual and performance contract
 
@@ -65,18 +69,18 @@ and split local-player layers without global material state.
 - Explored obscuration: `0.68`, neutral near-black tint.
 - Visible obscuration: `0.0`, no quad.
 - Gameplay cells remain 200 cm; no gameplay visibility expansion or state interpolation occurs.
-- A 0.22-cell presentation band (44 cm at the current 200 cm cell size) darkens the less-obscured
-  side toward its more-obscured neighbor. This shrinks visual disclosure conservatively instead of
-  revealing hidden-cell pixels.
+- Presentation reconstructs a continuous contour from discrete LocalFoW cell-center samples. Dual
+  marching squares with 4× mixed-quad subdivision interpolates diagonal/circular boundaries so they
+  no longer follow cell-square outlines.
+- Iso bias `ConservativeBoundaryT=0.42` (`< 0.5`) keeps every contour on the clearer side of a dual
+  edge: visual Visible may shrink slightly, but Unexplored cell centers stay fully obscured.
 - Renderer owns no duplicate gameplay grid and performs no sight-circle computation.
 - No full one-million-cell presentation copy is allocated.
 - View sampling is capped at 65,536 cells.
-- Horizontal runs are batched at up to 8,000 quads per Slate draw batch.
-- Feather geometry is capped at 32,768 quads and uses the same Slate batches. The temporary sampled
-  state cache is bounded by the 65,536-cell viewport cap; no UObject/component is created per cell.
+- Overlay geometry is capped at 65,536 triangles and 32,768 iso segments; coalesced interiors use
+  up to 8,000 quads per Slate draw batch.
 - Static camera + unchanged revision reuses cached vertices; camera changes rebuild only the bounded
   view region.
-- Offscreen prototype smoke: 1,248 sampled cells, 26 overlay runs, one draw batch.
 - Existing local mirror storage remains two one-million-bit arrays (~250 KB total).
 
 ## Lifecycle and multiplayer
@@ -125,9 +129,10 @@ A health update therefore cannot re-show a damaged enemy while LocalFoW presenta
 - `gp.FoW.VisualDump`
 - `gp.FoW.VisualEnable 0/1`
 
-`VisualDump` reports active/enabled/ready state, team/revision, method, metadata, sample cap, current
-sampled region, run/feather/batch counts, registered-unit count, 10 Hz evaluation interval, dirty
-state, and consumed render serial.
+`VisualDump` reports active/enabled/ready state, team/revision, contour algorithm, metadata, sample
+cap, current sampled/padded region, contour segment and overlay vertex/triangle counts, mixed dual
+quads, coalesced interiors, conservative T, subcells-per-cell, registered-unit count, 10 Hz
+evaluation interval, dirty/cached serials, and consumed render serial.
 
 ## Validation
 
@@ -152,9 +157,12 @@ so their unrelated contracts were not escalated.
 7. Damage an own unit/building: bar appears; heal to full: bar hides; death/zero remains hidden.
 8. In two-player listen-server PIE, move a damaged enemy between Visible and hidden cells. Confirm
    mesh/team/bar hide in Explored/Unexplored and restore with current state in Visible.
-9. Inspect Visible/Explored/Unexplored borders at normal zoom: confirm the 44 cm conservative dark-side
-   feather removes the strongest square edge without revealing hidden-cell scene detail.
-10. Run `gp.FoW.VisualDump`; confirm Active/Ready/team/revision and bounded run/feather/registry stats.
+9. Inspect Visible/Explored/Unexplored borders at normal zoom: an isolated sight region should read as
+   a smooth circle/curve, not a 200 cm checker of blurred squares. Overlapping sources should merge;
+   a moving explored trail should look like a rounded corridor.
+10. Run `gp.FoW.VisualDump`; confirm Active/Ready/team/revision, algorithm
+    `ConservativeDualMarchingSquares`, conservative T=0.42, subcells=4, and bounded
+    sampled/contour/triangle stats.
 11. Toggle `gp.FoW.VisualEnable 0`, then `1`, for A/B confirmation.
 12. Confirm Team 1 and Team 2 still show different local masks.
 

@@ -1,5 +1,22 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — FoW world visualization smooth-contour rewrite
+
+Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Operator retest passed enemy hiding, full-health bars, and three FoW states, but rejected the 0.22-cell
+  square-edge feather: the silhouette still read as 200 cm cells.
+- Replaced projected-run + feather quads with `ConservativeDualMarchingSquares`: LocalFoW cell-center
+  samples, dual marching squares, 4× mixed-quad subdivision, Slate projected triangles.
+- Conservative iso bias T=0.42 (`< 0.5`) keeps contours on the clearer side of a dual edge; Unexplored
+  cell centers stay fully obscured; gameplay grid/CellSize/sight simulation unchanged.
+- World visualization contract now includes synthetic circle/union/diagonal-trail proofs W1–W9.
+  Focused contracts Failures=0; GPEditor Win64 Development + UHT **PASS**.
+- No Config/map/Blueprint/DataAsset/material/VFX/Tools/Content edit. LongRange local FoW radius 2000
+  untouched. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — Fog of War visual world / terrain presentation
 
 Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**

@@ -1,4 +1,4 @@
-# Cursor Work Report — FoW World Visualization Operator Correction
+# Cursor Work Report — FoW Smooth Contour Reconstruction
 
 ## Status
 
@@ -10,130 +10,113 @@
 
 - Branch: `feature/gp-fow-world-visualization`
 - Exact base: `origin/main` @ `7847c3ce27a571d92f7629369cc8d361bd981387`
-- Validated correction implementation head: `857a97a4abe49ae25e9dabfa33746712d5248acc`
-- Final branch head: report-record commit following the validated correction head
+- Prior correction head (enemy hiding / health-bar composition / square feather): `857a97a4abe49ae25e9dabfa33746712d5248acc`
+- Contour rewrite implementation/report head: commit containing this report
 
-## Operator defect
+## Operator retest of the previous slice
 
-Two-player PIE proved that terrain masks were team-isolated, but replicated enemy unit mesh/team
-presentation and health bars remained visible through black Unexplored fog. The original viewport
-overlay obscured terrain pixels but was not an actor-presentation policy.
+- Enemy presentation hiding = PASS
+- Full-health health-bar policy = PASS
+- Three FoW states = PASS
 
-## Enemy presentation hiding architecture
+## Previous square-feather approach — rejected
 
-`UGP_LocalFoWUnitPresentationSubsystem` is a presentation-only `UWorldSubsystem` in `GPRuntime`.
+The 0.22-cell (44 cm) projected-run edge feather only blurred square corners. The FoW silhouette
+still read as a 200 cm checker/grid at normal gameplay zoom. Isolated circular sight still looked
+like a block of squares, not a circle. That is not the requested visual result.
 
-- Every `AGP_UnitBase` lifecycle-registers in `BeginPlay` and unregisters in `EndPlay`; no
-  `TActorIterator`, whole-world discovery, or per-unit Tick was added.
-- It binds to the local `AGP_PlayerController`'s trusted one-team `UGP_LocalFoWComponent`.
-- LocalFoW update/reset events immediately reevaluate the registered weak list.
-- A repeating 0.1-second/10 Hz bounded registered-list evaluation catches replicated actor movement
-  across a static FoW boundary when the FoW grid revision itself does not change.
-- Own-team actors are always presentation-allowed, independent of LocalFoW state.
-- Cross-team UnitBase actors (units and buildings) are allowed only when their current location is
-  LocalFoW `Visible`; `Explored`, `Unexplored`, and NotReady deny presentation.
-- Actor `SetActorHiddenInGame` gates all authored/generated primitive visuals and team-tinted meshes.
-- `UGP_HealthBarComponent` receives an explicit LocalFoW gate.
-- `UGP_CombatPresentationComponent` suppresses hidden actors' local cosmetic/debug presentation.
-- Restore clears only the actor-level FoW hidden flag, reapplies current health policy, and refreshes
-  the current team tint.
+The feather path was removed. Gameplay CellSize, LocalFoW revision/state, and sight simulation were
+not changed to compensate.
 
-The gate does not destroy actors, disable collision, alter transforms/TeamId/death/combat, issue RPCs,
-or change replication flags.
+## New contour reconstruction algorithm
 
-## Distinction from replication relevance
+`ConservativeDualMarchingSquares` in `GPFoWContourField`.
 
-This is temporary local presentation hiding. Enemy actors still replicate and remain gameplay actors.
-No `IsNetRelevantFor`, replication graph, dormancy, last-known snapshot, or server relevance policy
-was added. Dedicated relevance/last-known work remains deferred.
+Pipeline:
 
-## Health-bar policy and composition
+1. Discrete LocalFoW grid remains the only source of truth (`UGP_LocalFoWComponent`).
+2. Viewport-local sample rectangle + 1 LocalFoW pad, plus a virtual Unexplored ring so dual quads
+   cover viewport cell edges.
+3. Scalar presentation field at **cell centers**: Visible=0.0, Explored=0.68, Unexplored=1.0.
+4. Dual marching squares interpolates between neighboring centers. Mixed dual quads are subdivided
+   4× and bilinear-sampled so the iso is a curve, not one diagonal cut per square.
+5. Uniform interiors coalesce. Geometry is projected through the existing world→screen Slate path.
 
-Health and MaxHealth continue to update through existing GAS attribute delegates; no polling was added.
+No sight-source query, actor scan, second FoW simulation, CellSize change, or authored material.
 
-- `Health >= MaxHealth` within `max(KINDA_SMALL_NUMBER, abs(MaxHealth) * 1e-4)` — hidden.
-- `0 < Health < MaxHealth - tolerance`, alive — health-policy visible.
-- `Health <= 0`, invalid MaxHealth, or dead — hidden.
+## Why this produces genuinely rounded boundaries
 
-Final visibility is:
+Neighboring cell-center samples form a continuous scalar field. A discrete circular Visible mask
+therefore yields an interpolated iso that crosses cell edges at sub-cell positions, including
+non-axis-aligned directions. 4× subdivision traces the bilinear iso inside each mixed dual quad, so
+overlapping disks merge as a smooth union and a diagonal explored trail reads as a rounded corridor
+rather than a square-run silhouette.
 
-`owner/death allows && LocalFoW presentation allows && damaged-health policy allows`
+## Conservative visibility rule
 
-Therefore a damage delegate cannot independently re-show an enemy health bar while FoW denies that
-enemy. When the enemy becomes Visible again, the bar returns only if the actor is still damaged/alive.
-The policy applies to all units/buildings using `UGP_HealthBarComponent`.
+`ConservativeBoundaryT = 0.42` (must remain `< 0.5`).
 
-## Conservative smoothing
+Each iso vertex is placed 42% of the way from the clearer cell center toward the darker neighbor.
+The shared dual edge is at 50%, so the contour stays inside the less-obscured cell:
 
-The source-only Slate projected-run renderer remains in place. It now:
+- visual Visible may shrink slightly (~0.08 cell / ~16 cm on a 200 cm grid at a 1-cell boundary);
+- it does not create a useful information leak into gameplay Unexplored/non-Visible cells;
+- a gameplay Unexplored cell center remains fully obscured (sample = 1.0).
 
-1. samples the same LocalFoW enum states for the bounded viewport rectangle;
-2. emits the existing exact base overlay runs;
-3. detects only edges where a neighboring cell is more obscured;
-4. adds a black alpha-gradient quad inside the less-obscured cell.
+Saddles stay separated. LocalFoW data and revision are never written.
 
-Smoothing width is `0.22` cell = **44 cm** at the current 200 cm gameplay cell size. Projected pixel
-width varies naturally with camera zoom/pitch.
+## Visual quality tests (synthetic LocalFoW masks only)
 
-- Visible -> Explored: a dark gradient extends 44 cm into Visible; Explored stays at 0.68.
-- Visible -> Unexplored: a black gradient extends 44 cm into Visible; Unexplored stays fully black.
-- Explored -> Unexplored: additional black gradient extends 44 cm into Explored; Unexplored stays
-  fully black.
+`gp.FoW.RunWorldVisualizationContractTest` W1–W9:
 
-This conservative direction may reduce visually clear area near an edge but never reveals a hidden
-cell. It does not interpolate or promote LocalFoW state, recompute sight circles, change the 200 cm
-grid, or affect combat/drop/placement visibility.
+1. discrete circle → interpolated contour (not four rectangle sides)
+2. non-axis-aligned edges exist
+3. more than four direction buckets; not a cell-rectangle trace
+4. radial distance variance bounded (mean ~6–9 cells for r=8; range `< 2.2` cells)
+5. overlapping circular masks produce a smooth union
+6. diagonal explored trail is not a square-run silhouette
+7. Unexplored cell centers stay ≥ 0.999; interior Visible stays ~0
+8. LocalFoW data/revision unchanged
+9. sampled-cell / triangle / iso-segment caps remain bounded
 
-## Performance impact
+H1–H7 enemy/health presentation proofs remain.
 
-- Sample work remains viewport-local and capped at 65,536 cells.
-- One temporary plain `EGP_FoWState` array is capped at 65,536 entries; no per-cell UObject/component.
-- Base runs remain coalesced and use 8,000 quads per Slate batch.
-- Feather geometry is perimeter-driven in normal masks and hard-capped at 32,768 quads.
-- Static camera + unchanged mirror serial reuses cached base/feather vertices.
-- Unit presentation reevaluates only a lifecycle-registered weak list at 10 Hz plus immediate mirror
-  events; there is no world scan and no per-frame actor scan.
+## Performance bounds
 
-## Gameplay visibility proof
+| Item | Bound / rule |
+| --- | --- |
+| Sampled LocalFoW cells | viewport rectangle, max 65,536 |
+| LocalFoW pad | +1 cell |
+| Virtual Unexplored ring | +1 presentation-only dual-coverage ring |
+| Mixed-quad subcells | 4 |
+| Iso segments | max 32,768 |
+| Overlay triangles | max 65,536 |
+| Slate batch | 8,000 quads/batch equivalent |
+| Rebuild | LocalFoW render serial **or** camera/view projection change |
+| Cache | reuse while serial + view unchanged |
 
-The focused contract records LocalFoW revision and hidden-cell states before smoothing-policy calls
-and verifies they remain unchanged. It also verifies the presentation gate does not change actor team,
-location, replication enabled, or movement replication. Authoritative
-`UGP_FogOfWarComponent` regressions remain green.
+No per-cell UObject/component, no world scan, no 1M-cell per-frame processing.
+
+`gp.FoW.VisualDump` reports algorithm, sampled/padded cells, pad, contour segments, overlay
+vertices/triangles, mixed/coalesced counts, conservative T, subcells, dirty/cached serials.
 
 ## Validation
 
 - `gp.FoW.RunWorldVisualizationContractTest` — **PASS**, `Failures=0`
-  - own unit never FoW-hidden;
-  - enemy Visible/Explored/Unexplored/Visible presentation transitions;
-  - damaged hidden enemy health-bar suppression;
-  - gameplay/replication values unchanged;
-  - conservative smoothing direction, no LocalFoW mutation/promotion, bounded geometry.
 - `gp.FoW.RunClientPresentationFoundationContractTest` — **PASS**, `Failures=0`
 - `gp.FoW.RunRuntimeFoundationContractTest` — **PASS**, `Failures=0`
 - `gp.Combat.RunHealthBarContractTest` — **PASS**, `Failures=0`
-  - full-health unit/building hidden, damaged visible, FoW composition, zero hidden.
 - `gp.Combat.RunTeamColorContractTest` — **PASS**, `Failures=0`
 - GPEditor Win64 Development + UHT — **PASS**
-  - initial full correction build: succeeded;
-  - final incremental build after VisualDump diagnostics: succeeded.
 
-No focused unit-visual or combat-presentation contract exists. Team-color and health-bar contracts
-cover the directly affected presentation components. No failure triggered broader-suite escalation.
-GP Development and Shipping remain reserved for finalization after operator PASS.
+No GP Win64 Development / Shipping (reserved for finalization after operator PASS).
 
-## Changed files in correction head
+## Changed files
 
 Production:
 
-- `GP/Source/GPRuntime/Public/Presentation/GPLocalFoWUnitPresentationSubsystem.h`
-- `GP/Source/GPRuntime/Private/Presentation/GPLocalFoWUnitPresentationSubsystem.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
-- `GP/Source/GPRuntime/Public/Presentation/GPHealthBarComponent.h`
-- `GP/Source/GPRuntime/Private/Presentation/GPHealthBarComponent.cpp`
-- `GP/Source/GPRuntime/Public/Combat/GPCombatPresentationComponent.h`
-- `GP/Source/GPRuntime/Private/Combat/GPCombatPresentationComponent.cpp`
+- `GP/Source/GPUIRuntime/Public/Presentation/GPFoWContourField.h` (new)
+- `GP/Source/GPUIRuntime/Private/Presentation/GPFoWContourField.cpp` (new)
 - `GP/Source/GPUIRuntime/Public/Presentation/GPFoWWorldPresentationSubsystem.h`
 - `GP/Source/GPUIRuntime/Private/Presentation/GPFoWWorldPresentationSubsystem.cpp`
 - `GP/Source/GPUIRuntime/Public/Widgets/GPFoWWorldOverlayWidget.h`
@@ -141,7 +124,6 @@ Production:
 
 Contracts:
 
-- `GP/Source/GPRuntime/Private/Debug/GPHealthBarContractTest.cpp`
 - `GP/Source/GPUIRuntime/Private/Debug/GPFoWWorldVisualizationContractTest.cpp`
 
 Documentation:
@@ -150,11 +132,11 @@ Documentation:
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/TDD/15_Fog_of_War.md`
 - `Docs/TDD/12_UI_Architecture.md`
-- `Docs/Development/Cursor_Work_Report.md` (this report-record update)
+- `Docs/Development/Cursor_Work_Report.md` (this report)
 
 ## Protected content
 
-Factual base-to-correction-head diff under `GP/Config`, `GP/Content`, and `Tools` is empty.
+No edits under `GP/Config`, `GP/Content`, or `Tools` were staged or committed.
 
 Existing local Config, map, Blueprint, DataAsset, material, VFX, Tools, and other Content changes
 remain unstaged and untouched. The operator-local LongRange Salvage Walker UnitDefinition with
@@ -162,23 +144,13 @@ remain unstaged and untouched. The operator-local LongRange Salvage Walker UnitD
 
 ## Updated operator retest
 
-1. Start two-player listen-server PIE in separate player windows.
-2. Confirm each player still has a distinct black/grey/visible terrain mask.
-3. For each player, confirm own units remain rendered even outside that player's LocalFoW.
-4. Damage an own unit/building: bar appears; restore full health: bar hides; zero/dead stays hidden.
-5. Move a damaged enemy from Visible into Explored and Unexplored:
-   - mesh/authored primitives disappear;
-   - team presentation disappears;
-   - health bar disappears;
-   - no leftover combat presentation is visible.
-6. Move the enemy back into Visible: current mesh/team state returns and the health bar returns only
-   if still damaged/alive.
-7. Observe Visible/Explored, Visible/Unexplored, and Explored/Unexplored borders at normal zoom:
-   confirm softer 44 cm transitions and no meaningful scene reveal inside hidden cells.
-8. Run `gp.FoW.VisualDump`; confirm Ready/team/revision, registered presentation count, 0.10-second
-   evaluation interval, bounded sampled/run/feather/batch counts.
-9. Confirm commands, combat, server placement validation, and replication behavior remain unchanged.
-
-No authored asset editing is required.
+1. Isolated Worker / LongRange sight should read as a round region (900 cm / 2000 cm), not a 200 cm
+   square block.
+2. Overlapping sources should merge into a smooth union.
+3. A moving unit's explored trail should look like a rounded corridor/capsule, not a checker.
+4. Unexplored stays black; Explored dim/grey; Visible normal.
+5. Own units always visible; enemies only in LocalFoW Visible; full-HP bars hidden.
+6. Two-player masks remain team-isolated. Building placement and authoritative FoW unchanged.
+7. `gp.FoW.VisualDump` shows `ConservativeDualMarchingSquares`, T=0.42, SubcellsPerCell=4.
 
 **NOT MERGED. NOT FINALIZED.**

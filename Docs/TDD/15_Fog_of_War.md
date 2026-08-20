@@ -30,8 +30,8 @@ Current-compatible deviations from the older pseudocode:
   confirmation remains authoritative;
 - single-client transitions, same-coordinate two-player team isolation, and restart/reinitialization
   passed operator validation;
-- source-only world/terrain presentation is now implemented as viewport-local projected Slate runs from
-  the trusted mirror and awaits operator visual validation;
+- source-only world/terrain presentation reconstructs a continuous silhouette from discrete LocalFoW
+  cell-center samples via conservative dual marching squares and awaits operator visual validation;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
   relevance, minimap, and the full production HUD remain later FoW slices.
 
@@ -157,14 +157,17 @@ It owns one native `UGP_FoWWorldOverlayWidget` and binds only to that controller
 Current MVP rendering method:
 
 - perspective view corners are deprojected to the prototype's planar Z=0 gameplay ground;
-- only the intersecting cell rectangle is sampled from LocalFoW;
-- equal non-Visible horizontal cell runs are coalesced and projected as Slate quads;
+- only the intersecting cell rectangle, padded by one LocalFoW cell, is sampled from the trusted mirror;
+- a virtual Unexplored ring around that sample lets dual quads cover viewport cell edges;
+- scalar samples live at cell centers (`Visible=0`, `Explored=0.68`, `Unexplored=1.0`);
+- dual marching squares interpolates between neighboring centers; mixed dual quads are subdivided 4×
+  so bilinear isos form curved contours instead of cell-square outlines;
 - Unexplored uses opaque black (`Obscuration=1.0`);
 - Explored uses a dark neutral translucent overlay (`Obscuration=0.68`);
 - Visible emits no overlay (`Obscuration=0.0`);
-- each boundary adds a presentation-only 0.22-cell feather (44 cm at the current 200 cm cell size)
-  inside the less-obscured cell; the more-obscured cell retains its full base overlay, so smoothing
-  can only darken additional pixels and cannot expand gameplay visibility;
+- iso vertices use `ConservativeBoundaryT=0.42` from the clearer center toward the darker neighbor
+  (must stay `< 0.5`), so contours remain inside the less-obscured cell and cannot promote hidden
+  gameplay cells;
 - NotReady, projection failure, and over-budget views fail closed to full-screen black;
 - mirror revision/reset changes invalidate via `OnLocalFoWUpdated`; camera projection changes are a
   separate view-only invalidation path;
@@ -173,10 +176,11 @@ Current MVP rendering method:
 Bounds:
 
 - no renderer-side one-million-cell copy;
-- maximum 65,536 sampled view cells;
+- maximum 65,536 sampled view cells (plus one-cell LocalFoW pad; virtual ring is presentation-only);
 - up to 8,000 coalesced quads per Slate draw batch;
-- maximum 32,768 conservative feather quads;
-- no cell UObject/component allocation; sampled states use a temporary bounded plain enum array.
+- maximum 65,536 overlay triangles and 32,768 iso segments;
+- mixed dual quads only, at 4 subcells per cell; uniform interiors coalesce;
+- no cell UObject/component allocation.
 
 The current arena contains no Landscape and uses planar blockout ground. Meaningful elevation would
 require a later depth-aware projection design; gameplay FoW cell resolution/state must not change for
@@ -382,8 +386,9 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
 - 5 Hz sight tick × O(units × area_cells_covered). With 50 units × ~100 cells average = 25k cell ops/sec — acceptable.
 - Relevance check called by engine per actor per client. Cheap (per-cell bit query + team check).
 - Multicast and replication budget unchanged from existing.
-- World overlay: bounded viewport-local sampling (max 65,536 cells), horizontal run coalescing, cached
-  static-view geometry, and no full-grid upload/copy.
+- World overlay: bounded viewport-local sampling (max 65,536 cells), dual marching-squares contours on
+  mixed dual quads (4 subcells, max 65,536 triangles / 32,768 iso segments), cached static-view
+  geometry, and no full-grid upload/copy.
 
 ## Validation per Pillars
 

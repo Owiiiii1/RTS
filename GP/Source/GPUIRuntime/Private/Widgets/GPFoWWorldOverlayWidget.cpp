@@ -33,7 +33,7 @@ void UGP_FoWWorldOverlayWidget::NativeConstruct()
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 
 	// Paint every view frame so camera projection changes are observed. FoW data itself remains
-	// event/revision-driven and projected runs are cached while both view and revision are unchanged.
+	// event/revision-driven and projected contours are cached while both view and revision are unchanged.
 	bIsVolatile = true;
 }
 
@@ -71,7 +71,11 @@ int32 UGP_FoWWorldOverlayWidget::NativePaint(
 			bParentEnabled);
 		Owner->RecordOverlayStats(
 			0,
-			1,
+			0,
+			0,
+			0,
+			0,
+			0,
 			0,
 			1,
 			FIntPoint::ZeroValue,
@@ -113,7 +117,7 @@ int32 UGP_FoWWorldOverlayWidget::NativePaint(
 
 	if (bViewChanged || bDataChanged)
 	{
-		const bool bRebuilt = RebuildProjectedRuns(
+		const bool bRebuilt = RebuildProjectedContours(
 			AllottedGeometry,
 			ViewProjectionMatrix,
 			ViewProjectionMatrix.InverseFast(),
@@ -130,7 +134,11 @@ int32 UGP_FoWWorldOverlayWidget::NativePaint(
 		{
 			Owner->RecordOverlayStats(
 				0,
-				1,
+				0,
+				0,
+				0,
+				0,
+				0,
 				0,
 				1,
 				FIntPoint::ZeroValue,
@@ -183,7 +191,7 @@ int32 UGP_FoWWorldOverlayWidget::NativePaint(
 	return FMath::Max(MaxLayer, DrawLayer - 1);
 }
 
-bool UGP_FoWWorldOverlayWidget::RebuildProjectedRuns(
+bool UGP_FoWWorldOverlayWidget::RebuildProjectedContours(
 	const FGeometry& AllottedGeometry,
 	const FMatrix& ViewProjectionMatrix,
 	const FMatrix& InverseViewProjectionMatrix,
@@ -249,20 +257,21 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedRuns(
 		return false;
 	}
 
+	const int32 Pad = UGP_FoWWorldPresentationSubsystem::GetSamplePadCells();
 	const int32 MinX = FMath::Clamp(
-		FMath::FloorToInt((GroundBounds.Min.X - GridOrigin.X) / CellSize) - 1,
+		FMath::FloorToInt((GroundBounds.Min.X - GridOrigin.X) / CellSize) - Pad,
 		0,
 		GridDimensions.X - 1);
 	const int32 MinY = FMath::Clamp(
-		FMath::FloorToInt((GroundBounds.Min.Y - GridOrigin.Y) / CellSize) - 1,
+		FMath::FloorToInt((GroundBounds.Min.Y - GridOrigin.Y) / CellSize) - Pad,
 		0,
 		GridDimensions.Y - 1);
 	const int32 MaxX = FMath::Clamp(
-		FMath::FloorToInt((GroundBounds.Max.X - GridOrigin.X) / CellSize) + 1,
+		FMath::FloorToInt((GroundBounds.Max.X - GridOrigin.X) / CellSize) + Pad,
 		0,
 		GridDimensions.X - 1);
 	const int32 MaxY = FMath::Clamp(
-		FMath::FloorToInt((GroundBounds.Max.Y - GridOrigin.Y) / CellSize) + 1,
+		FMath::FloorToInt((GroundBounds.Max.Y - GridOrigin.Y) / CellSize) + Pad,
 		0,
 		GridDimensions.Y - 1);
 
@@ -271,145 +280,73 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedRuns(
 		return false;
 	}
 
-	const int64 SampledCellCount64 =
-		static_cast<int64>(MaxX - MinX + 1) * static_cast<int64>(MaxY - MinY + 1);
-	if (SampledCellCount64 <= 0
-		|| SampledCellCount64 > UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells())
+	const int32 Width = MaxX - MinX + 1;
+	const int32 Height = MaxY - MinY + 1;
+	const int64 PaddedCellCount64 = static_cast<int64>(Width) * static_cast<int64>(Height);
+	if (PaddedCellCount64 <= 0
+		|| PaddedCellCount64 > UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells())
 	{
 		return false;
 	}
 
-	const int32 SampleWidth = MaxX - MinX + 1;
-	TArray<EGP_FoWState> SampledStates;
-	SampledStates.SetNumUninitialized(static_cast<int32>(SampledCellCount64));
-	auto StateIndex = [MinX, MinY, SampleWidth](int32 X, int32 Y)
-	{
-		return (Y - MinY) * SampleWidth + (X - MinX);
-	};
+	FGP_FoWContourField Field;
+	GPFoWContourField::ConfigureField(
+		Field,
+		MinX - 1,
+		MinY - 1,
+		Width + 2,
+		Height + 2,
+		CellSize,
+		GridOrigin);
 
-	for (int32 Y = MinY; Y <= MaxY; ++Y)
+	for (int32 LocalY = 0; LocalY < Height; ++LocalY)
 	{
-		for (int32 X = MinX; X <= MaxX; ++X)
+		for (int32 LocalX = 0; LocalX < Width; ++LocalX)
 		{
 			const FVector CellCenter(
-				GridOrigin.X + (static_cast<double>(X) + 0.5) * CellSize,
-				GridOrigin.Y + (static_cast<double>(Y) + 0.5) * CellSize,
+				GridOrigin.X + (static_cast<double>(MinX + LocalX) + 0.5) * CellSize,
+				GridOrigin.Y + (static_cast<double>(MinY + LocalY) + 0.5) * CellSize,
 				UGP_FoWWorldPresentationSubsystem::GetProjectionGroundZ());
-			SampledStates[StateIndex(X, Y)] = Mirror->GetStateAtWorldLocation(CellCenter);
+			GPFoWContourField::SetCell(
+				Field,
+				LocalX + 1,
+				LocalY + 1,
+				Mirror->GetStateAtWorldLocation(CellCenter));
 		}
 	}
 
-	int32 OverlayRuns = 0;
-	for (int32 Y = MinY; Y <= MaxY; ++Y)
+	GPFoWContourField::BuildCenterSamples(Field);
+
+	FGP_FoWContourGeometry Geometry;
+	GPFoWContourField::GenerateOverlayGeometry(Field, Geometry);
+	if (Geometry.TriangleCount > UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayTriangles()
+		|| Geometry.VisibleIsoSegments.Num() + Geometry.UnexploredIsoSegments.Num()
+			> UGP_FoWWorldPresentationSubsystem::GetMaximumIsoSegments())
 	{
-		int32 RunStartX = INDEX_NONE;
-		int32 CurrentRunEndX = MinX;
-		EGP_FoWState RunState = EGP_FoWState::Visible;
-
-		auto FlushRun = [&]()
-		{
-			if (RunStartX == INDEX_NONE)
-			{
-				return;
-			}
-
-			AddProjectedRun(
-				RunStartX,
-				CurrentRunEndX,
-				Y,
-				UGP_FoWWorldPresentationSubsystem::GetOverlayColorForState(RunState),
-				AllottedGeometry,
-				ViewProjectionMatrix,
-				ViewRect,
-				ViewportScale);
-			++OverlayRuns;
-			RunStartX = INDEX_NONE;
-		};
-
-		for (int32 X = MinX; X <= MaxX; ++X)
-		{
-			CurrentRunEndX = X;
-			const EGP_FoWState State = SampledStates[StateIndex(X, Y)];
-
-			if (State == EGP_FoWState::Visible)
-			{
-				FlushRun();
-				continue;
-			}
-
-			if (RunStartX == INDEX_NONE)
-			{
-				RunStartX = X;
-				RunState = State;
-				continue;
-			}
-
-			if (State != RunState)
-			{
-				FlushRun();
-				RunStartX = X;
-				RunState = State;
-			}
-		}
-
-		CurrentRunEndX = MaxX + 1;
-		FlushRun();
+		return false;
 	}
 
-	int32 FeatherQuads = 0;
-	auto TryAddFeather = [&](
-		int32 X,
-		int32 Y,
-		int32 NeighborX,
-		int32 NeighborY,
-		EGP_FoWFeatherEdge Edge)
+	for (int32 VertexIndex = 0; VertexIndex + 2 < Geometry.TriangleVertices.Num(); VertexIndex += 3)
 	{
-		if (FeatherQuads >= UGP_FoWWorldPresentationSubsystem::GetMaximumFeatherQuads()
-			|| NeighborX < MinX
-			|| NeighborX > MaxX
-			|| NeighborY < MinY
-			|| NeighborY > MaxY)
-		{
-			return;
-		}
-
-		const EGP_FoWState CurrentState = SampledStates[StateIndex(X, Y)];
-		const EGP_FoWState NeighborState = SampledStates[StateIndex(NeighborX, NeighborY)];
-		if (!UGP_FoWWorldPresentationSubsystem::ShouldAddConservativeFeather(
-				CurrentState,
-				NeighborState))
-		{
-			return;
-		}
-
-		AddProjectedFeather(
-			X,
-			Y,
-			CurrentState,
-			NeighborState,
-			Edge,
+		AddProjectedTriangle(
+			Geometry.TriangleVertices[VertexIndex],
+			Geometry.TriangleVertices[VertexIndex + 1],
+			Geometry.TriangleVertices[VertexIndex + 2],
 			AllottedGeometry,
 			ViewProjectionMatrix,
 			ViewRect,
 			ViewportScale);
-		++FeatherQuads;
-	};
-
-	for (int32 Y = MinY; Y <= MaxY; ++Y)
-	{
-		for (int32 X = MinX; X <= MaxX; ++X)
-		{
-			TryAddFeather(X, Y, X - 1, Y, EGP_FoWFeatherEdge::MinX);
-			TryAddFeather(X, Y, X + 1, Y, EGP_FoWFeatherEdge::MaxX);
-			TryAddFeather(X, Y, X, Y - 1, EGP_FoWFeatherEdge::MinY);
-			TryAddFeather(X, Y, X, Y + 1, EGP_FoWFeatherEdge::MaxY);
-		}
 	}
 
+	const int32 ViewportCellCount = FMath::Max(0, (Width - 2 * Pad) * (Height - 2 * Pad));
 	Owner->RecordOverlayStats(
-		static_cast<int32>(SampledCellCount64),
-		OverlayRuns,
-		FeatherQuads,
+		ViewportCellCount > 0 ? ViewportCellCount : static_cast<int32>(PaddedCellCount64),
+		static_cast<int32>(PaddedCellCount64),
+		Geometry.VisibleIsoSegments.Num() + Geometry.UnexploredIsoSegments.Num(),
+		Geometry.TriangleVertices.Num(),
+		Geometry.TriangleCount,
+		Geometry.MixedCellCount,
+		Geometry.CoalescedQuadCount,
 		CachedBatches.Num(),
 		FIntPoint(MinX, MinY),
 		FIntPoint(MaxX, MaxY),
@@ -422,156 +359,25 @@ void UGP_FoWWorldOverlayWidget::ResetRenderCache() const
 	CachedBatches.Reset();
 }
 
-void UGP_FoWWorldOverlayWidget::AddProjectedRun(
-	int32 StartX,
-	int32 EndXExclusive,
-	int32 CellY,
-	const FLinearColor& Color,
+void UGP_FoWWorldOverlayWidget::AddProjectedTriangle(
+	const FGP_FoWContourVertex& A,
+	const FGP_FoWContourVertex& B,
+	const FGP_FoWContourVertex& C,
 	const FGeometry& AllottedGeometry,
 	const FMatrix& ViewProjectionMatrix,
 	const FIntRect& ViewRect,
 	float ViewportScale) const
 {
-	if (StartX >= EndXExclusive || Color.A <= 0.0f)
-	{
-		return;
-	}
-
-	UGP_FoWWorldPresentationSubsystem* Owner = PresentationOwner.Get();
-	UGP_LocalFoWComponent* Mirror = Owner != nullptr ? Owner->GetBoundMirror() : nullptr;
-	if (Mirror == nullptr)
-	{
-		return;
-	}
-
-	const FVector2D GridOrigin = Mirror->GetGridOriginWorldXY();
-	const float CellSize = Mirror->GetCellSizeCm();
-	const double WorldMinX = GridOrigin.X + static_cast<double>(StartX) * CellSize;
-	const double WorldMaxX = GridOrigin.X + static_cast<double>(EndXExclusive) * CellSize;
-	const double WorldMinY = GridOrigin.Y + static_cast<double>(CellY) * CellSize;
-	const double WorldMaxY = GridOrigin.Y + static_cast<double>(CellY + 1) * CellSize;
+	const FGP_FoWContourVertex Source[3] = {A, B, C};
+	FVector2f LocalCorners[3];
+	FLinearColor Colors[3];
 	const double GroundZ = UGP_FoWWorldPresentationSubsystem::GetProjectionGroundZ();
 
-	const FVector WorldCorners[] =
-	{
-		FVector(WorldMinX, WorldMinY, GroundZ),
-		FVector(WorldMaxX, WorldMinY, GroundZ),
-		FVector(WorldMaxX, WorldMaxY, GroundZ),
-		FVector(WorldMinX, WorldMaxY, GroundZ)
-	};
-	const FLinearColor VertexColors[] = {Color, Color, Color, Color};
-	AddProjectedQuad(
-		WorldCorners,
-		VertexColors,
-		AllottedGeometry,
-		ViewProjectionMatrix,
-		ViewRect,
-		ViewportScale);
-}
-
-void UGP_FoWWorldOverlayWidget::AddProjectedFeather(
-	int32 CellX,
-	int32 CellY,
-	EGP_FoWState CurrentState,
-	EGP_FoWState MoreObscuredNeighbor,
-	EGP_FoWFeatherEdge Edge,
-	const FGeometry& AllottedGeometry,
-	const FMatrix& ViewProjectionMatrix,
-	const FIntRect& ViewRect,
-	float ViewportScale) const
-{
-	UGP_FoWWorldPresentationSubsystem* Owner = PresentationOwner.Get();
-	const UGP_LocalFoWComponent* Mirror =
-		Owner != nullptr ? Owner->GetBoundMirror() : nullptr;
-	if (Mirror == nullptr)
-	{
-		return;
-	}
-
-	const float BoundaryAlpha =
-		UGP_FoWWorldPresentationSubsystem::GetConservativeFeatherBoundaryAlpha(
-			CurrentState,
-			MoreObscuredNeighbor);
-	if (BoundaryAlpha <= 0.0f)
-	{
-		return;
-	}
-
-	const FVector2D GridOrigin = Mirror->GetGridOriginWorldXY();
-	const double CellSize = Mirror->GetCellSizeCm();
-	const double FeatherWidth =
-		CellSize * UGP_FoWWorldPresentationSubsystem::GetSmoothingWidthCellFraction();
-	double WorldMinX = GridOrigin.X + static_cast<double>(CellX) * CellSize;
-	double WorldMaxX = WorldMinX + CellSize;
-	double WorldMinY = GridOrigin.Y + static_cast<double>(CellY) * CellSize;
-	double WorldMaxY = WorldMinY + CellSize;
-
-	FLinearColor VertexColors[] =
-	{
-		FLinearColor(0.0f, 0.0f, 0.0f, 0.0f),
-		FLinearColor(0.0f, 0.0f, 0.0f, 0.0f),
-		FLinearColor(0.0f, 0.0f, 0.0f, 0.0f),
-		FLinearColor(0.0f, 0.0f, 0.0f, 0.0f)
-	};
-	const FLinearColor BoundaryColor(0.0f, 0.0f, 0.0f, BoundaryAlpha);
-
-	switch (Edge)
-	{
-	case EGP_FoWFeatherEdge::MinX:
-		WorldMaxX = WorldMinX + FeatherWidth;
-		VertexColors[0] = BoundaryColor;
-		VertexColors[3] = BoundaryColor;
-		break;
-	case EGP_FoWFeatherEdge::MaxX:
-		WorldMinX = WorldMaxX - FeatherWidth;
-		VertexColors[1] = BoundaryColor;
-		VertexColors[2] = BoundaryColor;
-		break;
-	case EGP_FoWFeatherEdge::MinY:
-		WorldMaxY = WorldMinY + FeatherWidth;
-		VertexColors[0] = BoundaryColor;
-		VertexColors[1] = BoundaryColor;
-		break;
-	case EGP_FoWFeatherEdge::MaxY:
-		WorldMinY = WorldMaxY - FeatherWidth;
-		VertexColors[2] = BoundaryColor;
-		VertexColors[3] = BoundaryColor;
-		break;
-	default:
-		return;
-	}
-
-	const double GroundZ = UGP_FoWWorldPresentationSubsystem::GetProjectionGroundZ();
-	const FVector WorldCorners[] =
-	{
-		FVector(WorldMinX, WorldMinY, GroundZ),
-		FVector(WorldMaxX, WorldMinY, GroundZ),
-		FVector(WorldMaxX, WorldMaxY, GroundZ),
-		FVector(WorldMinX, WorldMaxY, GroundZ)
-	};
-	AddProjectedQuad(
-		WorldCorners,
-		VertexColors,
-		AllottedGeometry,
-		ViewProjectionMatrix,
-		ViewRect,
-		ViewportScale);
-}
-
-void UGP_FoWWorldOverlayWidget::AddProjectedQuad(
-	const FVector (&WorldCorners)[4],
-	const FLinearColor (&VertexColors)[4],
-	const FGeometry& AllottedGeometry,
-	const FMatrix& ViewProjectionMatrix,
-	const FIntRect& ViewRect,
-	float ViewportScale) const
-{
-	FVector2f LocalCorners[4];
-	for (int32 CornerIndex = 0; CornerIndex < 4; ++CornerIndex)
+	for (int32 CornerIndex = 0; CornerIndex < 3; ++CornerIndex)
 	{
 		FVector2D ScreenPosition;
 		if (!FSceneView::ProjectWorldToScreen(
-				WorldCorners[CornerIndex],
+				FVector(Source[CornerIndex].WorldXY.X, Source[CornerIndex].WorldXY.Y, GroundZ),
 				ViewRect,
 				ViewProjectionMatrix,
 				ScreenPosition,
@@ -583,10 +389,17 @@ void UGP_FoWWorldOverlayWidget::AddProjectedQuad(
 		ScreenPosition -= FVector2D(ViewRect.Min);
 		ScreenPosition /= ViewportScale;
 		LocalCorners[CornerIndex] = FVector2f(ScreenPosition);
+		Colors[CornerIndex] = UGP_FoWWorldPresentationSubsystem::GetOverlayColorForObscuration(
+			Source[CornerIndex].Obscuration);
+	}
+
+	if (Colors[0].A <= 0.0f && Colors[1].A <= 0.0f && Colors[2].A <= 0.0f)
+	{
+		return;
 	}
 
 	if (CachedBatches.IsEmpty()
-		|| CachedBatches.Last().Vertices.Num() + 4
+		|| CachedBatches.Last().Vertices.Num() + 3
 			> UGP_FoWWorldPresentationSubsystem::GetMaximumQuadsPerBatch() * 4)
 	{
 		CachedBatches.AddDefaulted();
@@ -598,20 +411,14 @@ void UGP_FoWWorldOverlayWidget::AddProjectedQuad(
 		AllottedGeometry.GetAccumulatedRenderTransform();
 
 	Batch.Vertices.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(
-		SlateRenderTransform, LocalCorners[0], FVector2f(0.0f, 0.0f), VertexColors[0].ToFColor(true)));
+		SlateRenderTransform, LocalCorners[0], FVector2f(0.0f, 0.0f), Colors[0].ToFColor(true)));
 	Batch.Vertices.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(
-		SlateRenderTransform, LocalCorners[1], FVector2f(1.0f, 0.0f), VertexColors[1].ToFColor(true)));
+		SlateRenderTransform, LocalCorners[1], FVector2f(1.0f, 0.0f), Colors[1].ToFColor(true)));
 	Batch.Vertices.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(
-		SlateRenderTransform, LocalCorners[2], FVector2f(1.0f, 1.0f), VertexColors[2].ToFColor(true)));
-	Batch.Vertices.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(
-		SlateRenderTransform, LocalCorners[3], FVector2f(0.0f, 1.0f), VertexColors[3].ToFColor(true)));
-
+		SlateRenderTransform, LocalCorners[2], FVector2f(1.0f, 1.0f), Colors[2].ToFColor(true)));
 	Batch.Indices.Add(BaseIndex + 0);
 	Batch.Indices.Add(BaseIndex + 1);
 	Batch.Indices.Add(BaseIndex + 2);
-	Batch.Indices.Add(BaseIndex + 0);
-	Batch.Indices.Add(BaseIndex + 2);
-	Batch.Indices.Add(BaseIndex + 3);
 }
 
 void UGP_FoWWorldOverlayWidget::DrawConservativeFullObscuration(

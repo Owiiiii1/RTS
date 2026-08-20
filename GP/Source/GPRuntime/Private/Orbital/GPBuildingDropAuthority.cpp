@@ -12,6 +12,7 @@
 #include "CollisionQueryParams.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "FogOfWar/GPFogOfWarComponent.h"
 #include "Game/GPGameState.h"
 #include "GameFramework/Pawn.h"
 #include "Orbital/GPBuildingDropCatalog.h"
@@ -175,6 +176,18 @@ bool GPBuildingDropAuthority::ValidateBuildingPlacement(
 	{
 		OutReject = EGP_BuildingDropRejectReason::OutOfDeployRadius;
 		return false;
+	}
+
+	// Remote clients do not own an authoritative FoW mirror in this foundation slice.
+	// Their preview stays optimistic; authority confirmation always performs this gate.
+	if (World->GetNetMode() != NM_Client)
+	{
+		UGP_FogOfWarComponent* FoW = GS != nullptr ? GS->GetFogOfWarComponent() : nullptr;
+		if (FoW == nullptr || !FoW->IsVisibleToTeam(TeamId, SnappedGround))
+		{
+			OutReject = EGP_BuildingDropRejectReason::NotVisible;
+			return false;
+		}
 	}
 
 	EGP_GridRejectReason GridReason = EGP_GridRejectReason::Free;
@@ -454,6 +467,8 @@ const TCHAR* GPBuildingDropAuthority::GetPlacementPreviewStatusLabel(
 		return TEXT("BLOCKED: OUT OF RANGE");
 	case EGP_BuildingDropRejectReason::NotNavigable:
 		return TEXT("BLOCKED: NOT NAVIGABLE");
+	case EGP_BuildingDropRejectReason::NotVisible:
+		return TEXT("BLOCKED: NOT VISIBLE");
 	case EGP_BuildingDropRejectReason::PlacementOverlap:
 		return TEXT("BLOCKED: WORLD");
 	default:

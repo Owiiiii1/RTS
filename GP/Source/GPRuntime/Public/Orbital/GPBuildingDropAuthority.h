@@ -33,6 +33,7 @@ enum class EGP_BuildingDropRejectReason : uint8
 	GridOccupied,
 	InvalidFootprint,
 	NotNavigable,
+	NotVisible,
 	DefinitionNotReady
 };
 

@@ -78,6 +78,8 @@ void UGP_UnitDefinitionCatalog::EnsureNativeCatalog()
 	WorkerDefinition->AttackRangeCm = 250.0f;
 	WorkerDefinition->AttackCooldownSeconds = 1.0f;
 	WorkerDefinition->SightRangeCm = 900.0f;
+	WorkerDefinition->FogOfWarSightRadiusCm = 600.0f;
+	WorkerDefinition->bGrantsFogOfWarVision = true;
 	WorkerDefinition->AutoAcquireScanIntervalSeconds = 0.35f;
 	WorkerDefinition->AttackFacingRotationSpeedDegreesPerSecond = 360.0f;
 	WorkerDefinition->MoveSpeedCmPerSecond = 600.0f;
@@ -95,6 +97,8 @@ void UGP_UnitDefinitionCatalog::EnsureNativeCatalog()
 	SalvageWalkerDefinition->AttackRangeCm = 600.0f;
 	SalvageWalkerDefinition->AttackCooldownSeconds = 1.0f;
 	SalvageWalkerDefinition->SightRangeCm = 900.0f;
+	SalvageWalkerDefinition->FogOfWarSightRadiusCm = 900.0f;
+	SalvageWalkerDefinition->bGrantsFogOfWarVision = true;
 	SalvageWalkerDefinition->AutoAcquireScanIntervalSeconds = 0.35f;
 	SalvageWalkerDefinition->AttackFacingRotationSpeedDegreesPerSecond = 360.0f;
 	SalvageWalkerDefinition->MoveSpeedCmPerSecond = 250.0f;
@@ -112,6 +116,8 @@ void UGP_UnitDefinitionCatalog::EnsureNativeCatalog()
 	DefensiveTurretDefinition->AttackRangeCm = 600.0f;
 	DefensiveTurretDefinition->AttackCooldownSeconds = 1.0f;
 	DefensiveTurretDefinition->SightRangeCm = 600.0f;
+	DefensiveTurretDefinition->FogOfWarSightRadiusCm = 900.0f;
+	DefensiveTurretDefinition->bGrantsFogOfWarVision = true;
 	DefensiveTurretDefinition->AutoAcquireScanIntervalSeconds = 0.35f;
 	DefensiveTurretDefinition->AttackFacingRotationSpeedDegreesPerSecond = 360.0f;
 	DefensiveTurretDefinition->MoveSpeedCmPerSecond = 0.0f;
@@ -123,6 +129,8 @@ void UGP_UnitDefinitionCatalog::EnsureNativeCatalog()
 		NSLOCTEXT("GPUnitDefinitionCatalog", "MainBase", "Main Base"));
 	MainBaseDefinition->MaxHealth = 100.0f;
 	MainBaseDefinition->InitialHealth = 100.0f;
+	MainBaseDefinition->FogOfWarSightRadiusCm = 3000.0f;
+	MainBaseDefinition->bGrantsFogOfWarVision = true;
 	MainBaseDefinition->MoveSpeedCmPerSecond = 0.0f;
 	MainBaseDefinition->RetaliationPursuitSeconds = 5.0f;
 	MainBaseDefinition->CargoCapacity = 0.0f;
@@ -132,6 +140,8 @@ void UGP_UnitDefinitionCatalog::EnsureNativeCatalog()
 		NSLOCTEXT("GPUnitDefinitionCatalog", "LogisticsHub", "Logistics Hub"));
 	LogisticsHubDefinition->MaxHealth = 500.0f;
 	LogisticsHubDefinition->InitialHealth = 500.0f;
+	LogisticsHubDefinition->FogOfWarSightRadiusCm = 900.0f;
+	LogisticsHubDefinition->bGrantsFogOfWarVision = true;
 	LogisticsHubDefinition->MoveSpeedCmPerSecond = 0.0f;
 	LogisticsHubDefinition->RetaliationPursuitSeconds = 5.0f;
 	LogisticsHubDefinition->CargoCapacity = 0.0f;

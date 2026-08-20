@@ -4,6 +4,27 @@
 
 Engineering implementation of 3-level FoW (per [`../GDD/11_Fog_of_War`](../GDD/11_Fog_of_War.md)). Replaces previous "no FoW у MVP" decision (pivot 2026-05-16). Visibility grid, sight scan, replication relevance, selection/combat/drop interactions, minimap rendering.
 
+## Current production foundation (2026-08-20)
+
+The first production slice uses `UGP_FogOfWarComponent` as a non-replicated default subobject of
+`AGP_GameState`. It owns authority-only per-team `TBitArray` storage, a 5 Hz registered-sight-source
+recompute, and the public three-state query API.
+
+Current-compatible deviations from the older pseudocode:
+
+- no canonical map-bounds actor exists yet, so the component temporarily owns deterministic grid bounds
+  (200 cm cells, origin `-100000/-100000`, dimensions `1000 x 1000`);
+- active team grids are discovered from PlayerStates and registered sources; there is no `MatchTeams`
+  production collection;
+- sight sources register after async UnitDefinition readiness and unregister on death/EndPlay; the
+  runtime does not discover every actor each update;
+- FoW sight is owned only by `UGP_UnitDefinition` as `FogOfWarSightRadiusCm` and
+  `bGrantsFogOfWarVision`; buildings inherit it through `UGP_BuildingDefinition::UnitDefinition`;
+- combat `SightRangeCm` remains a separate auto-acquire tuning field;
+- auto-acquire and server building-placement confirmation consume authority visibility now;
+- local mirror/rendering, selection gating, explicit-Attack last-known behavior, DropPod sight,
+  replication relevance, minimap, and CommonUI/MVVM remain later FoW slices.
+
 ## Hard Rules
 
 1. **Server-authoritative.** Visibility computed server-side. Client receives relevance-filtered actors і per-team visibility bitmap.
@@ -103,15 +124,16 @@ Client mirrors Explored locally for rendering (last-known state). Updates у `Cl
 Actors з sight contribute via interface OR property:
 
 ```cpp
-// In UGP_UnitDefinition / UGP_BuildingDefinition:
+// In UGP_UnitDefinition. Buildings resolve this through BuildingDefinition.UnitDefinition.
 UPROPERTY(EditAnywhere, Category = "GP|Vision")
-float SightRadius = 0.f;     // cm
+float FogOfWarSightRadiusCm = 900.f; // cm
 
 UPROPERTY(EditAnywhere, Category = "GP|Vision")
-bool bGrantsVision = false;  // explicit flag
+bool bGrantsFogOfWarVision = true;   // explicit flag
 ```
 
-`AGP_UnitBase::IsSightSource()` returns `bGrantsVision && SightRadius > 0 && !HasTag(GP.Unit.State.Dead)`.
+`AGP_UnitBase::GrantsFogOfWarVision()` requires definition readiness,
+`bGrantsFogOfWarVision && FogOfWarSightRadiusCm > 0`, and a live actor.
 
 ## Sight Tick (Server)
 
@@ -250,9 +272,9 @@ GP.Capability.AlwaysVisible  // reserved post-MVP for special landmarks
 
 | DataAsset | Field | Type |
 | --- | --- | --- |
-| `UGP_UnitDefinition` | `SightRadius`, `bGrantsVision` | scalars / bool |
-| `UGP_BuildingDefinition` | `SightRadius`, `bGrantsVision` | scalars / bool |
-| `UGP_OrbitalDropDefinition` | `bPodGrantsVision` | bool |
+| `UGP_UnitDefinition` | `FogOfWarSightRadiusCm`, `bGrantsFogOfWarVision` | scalars / bool |
+| `UGP_BuildingDefinition` | `UnitDefinition` bridge | soft definition ref |
+| `UGP_OrbitalDropDefinition` | `bPodGrantsVision` | bool — deferred after runtime foundation |
 | `UGP_FactionDefinition` | `InitialFoWReveal` | optional initial-explored radius around landing |
 
 Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — all values are DA-driven, soft refs only.

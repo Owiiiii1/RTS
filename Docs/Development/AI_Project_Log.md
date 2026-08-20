@@ -1,5 +1,23 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — Three-state per-team Fog of War runtime foundation
+
+Status: **FOW_RUNTIME_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch `feature/gp-fow-runtime-foundation` from exact `origin/main` baseline `de718725115ddd636b56092bd6197cf0f7a65950`
+- Added `UGP_FogOfWarComponent` on `AGP_GameState`: authority-only per-team Unexplored/Explored/Visible bit grids, sticky exploration, 5 Hz registered-source recompute, and safe query API
+- No canonical map-bounds owner exists; the foundation temporarily owns deterministic 200 cm / 1000x1000 bounds independently of BuildGrid footprint ownership
+- FoW sight is canonical on `UGP_UnitDefinition` (`FogOfWarSightRadiusCm`, `bGrantsFogOfWarVision`); buildings inherit through `BuildingDefinition.UnitDefinition`
+- Native sight: MainBase 3000, Worker 600, Salvage Walker 900, Logistics Hub 900, Defensive Turret 900
+- Read-only Unreal inspection: all five authored UnitDefinitions resolve non-zero 900 cm sight and vision enabled; no authored migration or `.uasset` edit required
+- Live definition-ready units/buildings self-register; death/EndPlay unregister; team changes refresh; no per-frame all-world scan
+- Auto-acquire rejects hidden enemies. Server orbital building placement rejects non-Visible landing locations. Fixed MainBase UnitDropZone behavior is unchanged
+- Local mirror/rendering/minimap/CommonUI, selection gating, explicit-Attack last-known behavior, pod vision, and broad relevancy filtering are deferred
+- FoW contract plus auto-acquire, Attack-Move, retaliation, building-drop, BuildGrid, turret, UnitDefinition, building-vitals, and unit-drop regressions pass with `Failures=0`
+- GPEditor Win64 Development + UHT **PASS**. Protected Config/Content/map/Tools changes untouched. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-Runtime-Foundation.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — MVP roadmap reconciliation finalization
 
 Status: **MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE**

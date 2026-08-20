@@ -15,6 +15,8 @@ AGP_DefensiveTurret::AGP_DefensiveTurret()
 	DefaultDamage = 20.0f;
 	DefaultAttackCooldown = 1.0f;
 	DefaultAttackRange = 600.0f;
+	FallbackFogOfWarSightRadiusCm = 900.0f;
+	bFallbackGrantsFogOfWarVision = true;
 
 	if (UGP_UnitCommandComponent* Command = GetUnitCommandComponent())
 	{

@@ -66,6 +66,9 @@ void UGP_MiningEffectStateProbe::HandleMiningEffectStateChanged(
 
 AGP_Worker::AGP_Worker()
 {
+	FallbackFogOfWarSightRadiusCm = 600.0f;
+	bFallbackGrantsFogOfWarVision = true;
+
 	CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleComponent"));
 	SetRootComponent(CapsuleComponent);
 	CapsuleComponent->InitCapsuleSize(42.0f, 88.0f);

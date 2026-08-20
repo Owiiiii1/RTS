@@ -151,6 +151,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Definition")
 	bool IsUnitDefinitionLoadPending() const { return bUnitDefinitionLoadPending; }
 
+	/** Canonical resolved definition value, or actor compatibility fallback after empty/load-failed definition. */
+	UFUNCTION(BlueprintPure, Category = "GP|FogOfWar")
+	float GetFogOfWarSightRadiusCm() const;
+
+	/** False while definition ownership is unresolved, after death, or when the canonical definition opts out. */
+	UFUNCTION(BlueprintPure, Category = "GP|FogOfWar")
+	bool GrantsFogOfWarVision() const;
+
 	/**
 	 * Canonical duration for GP-S40R retaliation pursuit. 0 disables.
 	 * After ready: definition value, or 5.0 fallback when empty-ref / load failure.
@@ -189,6 +197,7 @@ protected:
 	void CancelPendingUnitDefinitionLoad();
 	void InitializeCombatAttributesIfNeeded();
 	void ApplyUnitDefinitionComponentTuningIfNeeded();
+	void RefreshFogOfWarSightSourceRegistration();
 	void HandleDeathInternal();
 	virtual void NotifyAuthorityDeath();
 	void ApplyClientDeadPresentation();
@@ -233,6 +242,14 @@ protected:
 	/** Compatibility fallback when UnitDefinitionAsset is empty. Prefer UGP_UnitDefinition. */
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Combat|Defaults|Fallback")
 	float DefaultAttackRange = 250.0f;
+
+	/** Compatibility fallback used only when no UnitDefinition can be resolved. */
+	UPROPERTY(EditDefaultsOnly, Category = "GP|FogOfWar|Defaults|Fallback", meta = (ClampMin = "0.0"))
+	float FallbackFogOfWarSightRadiusCm = 900.0f;
+
+	/** Compatibility fallback used only when no UnitDefinition can be resolved. */
+	UPROPERTY(EditDefaultsOnly, Category = "GP|FogOfWar|Defaults|Fallback")
+	bool bFallbackGrantsFogOfWarVision = true;
 
 	/** Seconds until Destroy after death. 0 = remain indefinitely. */
 	UPROPERTY(EditDefaultsOnly, Category = "GP|Death")

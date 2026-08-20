@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | Current `origin/main` baseline: `b7e391a636749173c445f7994a41daf3c18ba902` |
+| Code baseline | Current `origin/main` baseline: `de718725115ddd636b56092bd6197cf0f7a65950` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
 | Last closed / merged stage | **Building Vitals / Definition Ownership** on `main` @ `b7e391a636749173c445f7994a41daf3c18ba902` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE** |
+| Current stage | [`Claude_Tasks/GP-FoW-Runtime-Foundation.md`](Claude_Tasks/GP-FoW-Runtime-Foundation.md) — **FOW_RUNTIME_FOUNDATION_READY_FOR_OPERATOR_VALIDATION** |
 
 ---
 
@@ -53,7 +53,8 @@
 
 **Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE**. Historical S-number order is no longer the execution cursor.
 
-**Exactly one NEXT production capability after merge:** three-state per-team **Fog of War runtime foundation**.
+**Exactly one current gate:** operator validation of the three-state per-team **Fog of War runtime
+foundation**. Do not begin minimap/presentation/relevance follow-up before finalization.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 
@@ -107,6 +108,7 @@
 | `UGP_GameplayPresentationSettings` + `DefaultGame.ini` (`[/Script/GPRuntime.GP_GameplayPresentationSettings]`) | Active — Project Settings → Game → GP Gameplay Presentation (S29R team colors + health bar tunables) |
 | [`Configuration_Data_Ownership_Audit.md`](Configuration_Data_Ownership_Audit.md) | Current factual ownership/precedence audit; recommendations are not implemented architecture |
 | [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) | Current factual MVP capability matrix, remaining stages, historical mapping, and NEXT authority |
+| [`Claude_Tasks/GP-FoW-Runtime-Foundation.md`](Claude_Tasks/GP-FoW-Runtime-Foundation.md) | Current implementation candidate and operator validation contract |
 
 ### Stale / needs cleanup (still in active tree)
 
@@ -169,4 +171,6 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-Current baseline: `origin/main` @ `b7e391a636749173c445f7994a41daf3c18ba902`. Current docs stage: **MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE** on `docs/gp-mvp-roadmap-reconciliation-post-vitals`. **NOT MERGED.** NEXT after merge: three-state per-team Fog of War runtime foundation.
+Current baseline: `origin/main` @ `de718725115ddd636b56092bd6197cf0f7a65950`. Current stage:
+**FOW_RUNTIME_FOUNDATION_READY_FOR_OPERATOR_VALIDATION** on `feature/gp-fow-runtime-foundation`.
+**NOT MERGED. NOT FINALIZED.** NEXT: operator validation of the current FoW runtime foundation.

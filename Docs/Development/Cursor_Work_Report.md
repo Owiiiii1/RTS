@@ -1,155 +1,187 @@
-# Cursor Work Report — MVP Roadmap Reconciliation Finalization
+# Cursor Work Report — Fog of War Runtime Foundation
 
 ## Status
 
-**MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE**
+**FOW_RUNTIME_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**
 
-**NOT MERGED.**
+**NOT MERGED. NOT FINALIZED.**
 
-## Branch / base / final head
+## Branch / baseline / head
 
-- Branch: `docs/gp-mvp-roadmap-reconciliation-post-vitals`
-- Exact base: `origin/main` @ `b7e391a636749173c445f7994a41daf3c18ba902`
-- Reviewed reconciliation head: `25f0131ed28b0ae3c24a0e79fee805bc3148a74a`
-- Final head SHA: the finalization commit containing this report (resolve with `git rev-parse HEAD`)
+- Branch: `feature/gp-fow-runtime-foundation`
+- Exact base: `origin/main` @ `de718725115ddd636b56092bd6197cf0f7a65950`
+- Candidate head: the implementation commit containing this report (`git rev-parse HEAD` after commit)
 
-## Final docs changed/added on branch
+## Factual pre-change architecture
 
-- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md` — added; current roadmap authority
+- `AGP_GameState` owned match state and authority registries but no FoW service.
+- `UGP_UnitDefinition::SightRangeCm` was combat auto-acquire tuning; no FoW vision owner existed.
+- Auto-acquire scanned valid hostile units without FoW filtering.
+- Building authority validated MainBase radius, grid, navigation, and environment but not visibility.
+- Unit drops use a fixed MainBase UnitDropZone, not a free-world landing selection.
+- BuildGrid has 200 cm cells but no bounded playable-area authority.
+
+## Runtime owner and semantics
+
+- Chosen owner: non-replicated `UGP_FogOfWarComponent` default subobject on `AGP_GameState`.
+- States: `Unexplored`, `Explored`, `Visible`.
+- `Visible` always accumulates into `Explored`; current visibility may clear to `Explored`; explored bits
+  never clear during the match.
+- Each playable TeamId has an independent grid. There is no allied sharing.
+- Invalid teams, client-side authority queries, non-finite locations, and out-of-bounds locations safely
+  return `Unexplored`.
+- Raw `TBitArray` grids are authority-only and are not replicated.
+
+## Grid/world-bounds ownership
+
+- Cell size: 200 cm.
+- No canonical playable-area/map-bounds owner was found.
+- Temporary foundation owner: FoW component origin `(-100000, -100000)`, dimensions `1000 x 1000`.
+- FoW coordinates remain separate from deferred BuildGrid footprint/geometry ownership.
+
+## Sight-source ownership and authored safety
+
+- Canonical owner: `UGP_UnitDefinition::FogOfWarSightRadiusCm` and
+  `UGP_UnitDefinition::bGrantsFogOfWarVision`.
+- Building flow: `UGP_BuildingDefinition -> UnitDefinition -> AGP_UnitBase`; no duplicate building sight
+  fields were added.
+- Combat `SightRangeCm` remains independent.
+- Native/fallback values: MainBase 3000, Worker 600, Salvage Walker 900, Logistics Hub 900, Defensive
+  Turret 900 cm; all grant vision.
+- Read-only Unreal inspection:
+  - `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_MainBase`: 900 / true
+  - `/Game/GrimProtocol/DataAssets/Units/DA_GP_Unit_Worker`: 900 / true
+  - `/Game/GrimProtocol/DataAssets/Units/DA_GP_Unit_SalvageWalker`: 900 / true
+  - `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_LogisticsHUB`: 900 / true
+  - `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_DefensiveTurret`: 900 / true
+- Result: no authored-asset migration required; no DataAsset was edited.
+
+## Update model
+
+- Authority recomputes at 0.2 seconds / 5 Hz.
+- Definition-ready live units/buildings self-register.
+- Death and EndPlay unregister; team changes refresh immediately.
+- Recompute scans only the bounded weak registry. It does not perform per-frame all-world discovery.
+- Circle coverage only; no LOS occlusion, height, cones, stealth, or allied vision.
+
+## Gameplay consumers integrated
+
+### Auto-acquire
+
+`UGP_UnitCommandComponent::FindNearestAutoAcquireTarget` rejects a hostile candidate unless its current
+location is `Visible` to the owner team. Existing range, priority, LOS-at-fire, cooldown, damage,
+retaliation, and Attack-Move behavior remain unchanged.
+
+### Orbital building placement
+
+Authority confirmation rejects a non-Visible snapped landing location with `NotVisible`. Remote-client
+preview remains optimistic because a trusted client FoW mirror is out of scope; server confirmation is
+authoritative.
+
+### Unit drop
+
+Unchanged. Unit drops land at the owning MainBase UnitDropZone and expose no free-placement target.
+Temporary in-flight DropPod vision is deferred.
+
+## Explicit Attack / last-known verdict
+
+Audited, not implemented in this foundation. Full hidden-target pursuit, last-known location, fire
+transition, and re-engage behavior require one coherent last-known model. Explicit Attack and retaliation
+semantics were not partially rewritten.
+
+## Replication and local selection verdict
+
+Broad `IsNetRelevantFor` filtering, persistent last-known static actor state, local FoW mirror, and hidden
+enemy local selection/inspect gating are deferred. No client-computed state is used for gameplay.
+
+## Deferred FoW pieces
+
+- local/client FoW mirror and explored deltas
+- fog mask/terrain rendering
+- last-known visual snapshots and unit blip fading
+- production minimap and FoW layers
+- CommonUI/MVVM FoW UI
+- selection/inspect gating that depends on trusted client state
+- explicit-Attack last-known integration
+- broad replication relevance hiding
+- in-flight DropPod vision
+- LOS/height/cone/stealth/allied vision
+
+## Changed production/test files
+
+- `GP/Source/GPRuntime/Public/FogOfWar/GPFogOfWarComponent.h`
+- `GP/Source/GPRuntime/Private/FogOfWar/GPFogOfWarComponent.cpp`
+- `GP/Source/GPRuntime/Public/FogOfWar/GPFoWRuntimeFoundationContractTest.h`
+- `GP/Source/GPRuntime/Private/Debug/GPFoWRuntimeFoundationContractTest.cpp`
+- `GP/Source/GPRuntime/Public/Game/GPGameState.h`
+- `GP/Source/GPRuntime/Private/Game/GPGameState.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitDefinition.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitDefinitionCatalog.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPWorker.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPSalvageWalker.cpp`
+- `GP/Source/GPRuntime/Private/Buildings/GPMainBase.cpp`
+- `GP/Source/GPRuntime/Private/Buildings/GPLogisticsHub.cpp`
+- `GP/Source/GPRuntime/Private/Buildings/GPDefensiveTurret.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `GP/Source/GPRuntime/Public/Orbital/GPBuildingDropAuthority.h`
+- `GP/Source/GPRuntime/Private/Orbital/GPBuildingDropAuthority.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPBuildGridContractTest.cpp`
+
+## Changed documentation
+
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Claude_Task_Backlog.md`
+- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
+- `Docs/Development/Claude_Tasks/GP-FoW-Runtime-Foundation.md`
 - `Docs/Development/Claude_Tasks/README.md`
-- `Docs/Development/Claude_Work_Plan.md`
-- `Docs/Development/Configuration_Data_Ownership_Audit.md`
 - `Docs/Development/DOCUMENTATION_INDEX.md`
 - `Docs/Development/Cursor_Work_Report.md`
-- `Docs/GDD/00_Project_Overview.md`
-- `Docs/GDD/06_Resources.md`
-- `Docs/GDD/07_Match_Flow.md`
-- `Docs/GDD/First_Playable_Match.md`
-- `Docs/GDD/Out_Of_Scope.md`
-- `Docs/TDD/13_Architecture_Proposal.md`
+- `Docs/TDD/15_Fog_of_War.md`
 
-## Roadmap authority confirmation
+## Contract and regression results
 
-`Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md` is the current factual MVP
-capability/status/order authority. Historical S-number order is task inventory and history, not the
-execution cursor. Current production capability takes precedence over obsolete class/task names.
+- `gp.FoW.RunRuntimeFoundationContractTest` — **PASS**, `Failures=0`
+- `gp.Combat.RunAutoAcquireContractTest` — **PASS**, `Failures=0`
+- `gp.Combat.RunAttackMoveContractTest` — **PASS**, `Failures=0`
+- `gp.Combat.RunRetaliationPursuitContractTest` — **PASS**, `Failures=0`
+- `gp.Building.RunOrbitalBuildingDropContractTest` — **PASS**, `Failures=0`
+- `gp.Building.RunBuildGridContractTest` — **PASS**, `Failures=0`
+- `gp.Building.RunDefensiveTurretContractTest` — **PASS**, `Failures=0`
+- `gp.Units.RunUnitDefinitionContractTest` — **PASS**, `Failures=0`
+- `gp.Building.RunBuildingVitalsOwnershipContractTest` — **PASS**, `Failures=0`
+- `gp.Resource.RunOrbitalUnitDropContractTest` — **PASS**, `Failures=0`
 
-`Docs/Development/Roadmap_Reconciliation_Post_GP-S32R.md` remains unchanged on this branch and is
-explicitly preserved as a historical snapshot.
+## Risk/escalation decision
 
-## Exact remaining MVP capability list
+The shared `AGP_GameState`, `AGP_UnitBase`, definition, combat, and placement surface triggered broader
+affected regression coverage. Ten focused contracts cover the changed invariants. The historical full
+resource suite was not run because it adds unrelated scope and has known authored-map contamination;
+no selected regression exposed an unresolved cross-system failure.
 
-1. Three-state per-team Fog of War, its authoritative query API, and gameplay consumers.
-2. Production CommonUI/MVVM shell, HUD, Order Menu, minimap, notifications, and end-of-match flow.
-3. Primitive RTS AI Opponent: Explore/Mine/Ship/Order/Defend.
-4. Player-facing Stop command input/dispatch completion.
-5. Steam 2-player session/lobby/host/find/join/travel/disconnect flow.
-6. Worker Repair.
-7. Logistics Hub storage-cap bonus.
-8. Redesign-approved Wall actor/connection/Build Wall inventory consumption/drag placement/Wall Turret.
-9. Sell and Demolish lifecycle operations.
-10. OpponentDisconnect result and complete match return/session cleanup.
-11. Remaining feedback/presentation necessary for readable MVP play.
-12. SWARM, only after every preceding gameplay system is complete enough for an end-to-end match.
+## Build
 
-## Exact accepted implementation order
+- GPEditor Win64 Development + UHT — **PASS**
+- GP Development / Shipping — intentionally deferred until operator PASS finalization
 
-1. Fog of War runtime foundation.
-2. Production UI foundation and HUD.
-3. Minimap and FoW presentation.
-4. RTS AI Opponent.
-5. Remaining bounded core-loop gameplay: player-facing Stop, Worker Repair, Logistics Hub storage-cap
-   bonus, and necessary feedback.
-6. Building-system design gate, then only approved Wall/surface-building/lifecycle capabilities.
-7. Steam multiplayer product flow.
-8. Match completion product flow.
-9. SWARM design/reconciliation gate.
-10. SWARM implementation — last gameplay implementation stage of MVP.
-11. Full MVP end-to-end validation and stabilization.
+## Protected-content confirmation
 
-## Exact NEXT capability
+No `GP/Config/DefaultEngine.ini`, `GP/Config/DefaultGame.ini`, map, Blueprint, DataAsset, material, VFX,
+untracked Content, or `Tools/` file was modified, staged, reverted, stashed, reset, restored, or cleaned
+by this slice. Existing local protected changes remain local and untouched.
 
-**Three-state per-team Fog of War runtime foundation.**
+## Exact operator test
 
-No Fog of War implementation was started in this documentation finalization.
+1. PIE as Team 1 and run `gp.FoW.DebugDump`; record MainBase/Worker coordinates.
+2. Query a Worker coordinate with `gp.FoW.QueryState 1 X Y`: expect `Visible`.
+3. Move that Worker outward; query the new coordinate: expect `Visible`.
+4. After all friendly sight leaves the old coordinate, query it: expect `Explored`.
+5. Query an untouched in-bounds coordinate: expect `Unexplored`.
+6. Place an enemy inside combat scan range but outside all friendly sight: no auto-acquire.
+7. Move friendly sight onto the enemy: auto-acquire works.
+8. Confirm an orbital building at a queried non-Visible location: authority rejects.
+9. Confirm at an otherwise-valid queried Visible location: authority accepts.
 
-## S44 verdict
+## Merge/finalization state
 
-**DONE — SUPERSEDED IMPLEMENTATION SHAPE.**
-
-`AGP_BuildingPlacementGhost`, `AGP_PlayerController`, `GPBuildingDropAuthority`,
-`UGP_BuildGridSubsystem`, READY inventory, and `AGP_DropPod` provide the functional building
-reticle/deployment capability. The obsolete `AGP_DropReticle` class name is not an implementation gap.
-Wall drag/preview is a separate redesign-dependent capability.
-
-## Footprint/geometry verdict
-
-**DEFERRED pending building construction/placement redesign.**
-
-No standalone footprint/geometry cleanup is scheduled. Existing footprint/grid/bounds/navigation/
-snap/collision behavior remains compatibility/runtime infrastructure until a concrete redesign requires
-an ownership decision. No building redesign was started.
-
-## RTS AI Opponent verdict
-
-**NOT STARTED; separate from SWARM.**
-
-The RTS AI Opponent is the player-like strategic participant that Explore/Mine/Ship/Order/Defend through
-the same authority/economy rules. No `AGP_AIController`, `UGP_AIBehaviorDefinition`, or state runtime is
-present.
-
-## SWARM verdict and mandatory gate
-
-**MVP — FINAL IMPLEMENTATION STAGE.**
-
-**DESIGN REVIEW REQUIRED BEFORE IMPLEMENTATION.**
-
-Only the threat input is implemented: raw Planetary Ferronite currently in MainBase containers drives
-`FerroniteThreatValue`; Worker drop-off raises it and container launch lowers it. `FerroniteScore` and
-`OrbitalFerronite` do not drive SWARM pressure.
-
-No SWARM classes, director, waves, DataAssets, design answers, or runtime were added. The mandatory gate
-must resolve the exact MVP definition, roster, spawning/zones, wave/director model, threat mapping,
-targeting/objectives, interactions, navigation, match scaling, server authority, replication,
-victory/loss interaction, performance budget, and explicit exclusions.
-
-SWARM implementation remains the last gameplay implementation stage. Full MVP end-to-end
-validation/stabilization follows SWARM.
-
-## Documentation validation results
-
-- Re-read and cross-checked the roadmap, canonical backlog/work plan, TDD/13, required GDD pages,
-  documentation index, and task cursor.
-- No current-authority contradiction was found for NEXT, S44, footprint deferral, wall redesign
-  dependency, RTS AI versus SWARM, the SWARM design gate, or final validation order.
-- Repository-wide searches found old S42/S44 statuses only in explicitly historical task/audit records;
-  they were not rewritten as current authority.
-- Repository-wide searches found no current statement that makes historical Slice 8 -> 13 the active
-  execution cursor.
-- Repository-wide searches found no current statement that aliases SWARM with the RTS AI Opponent or
-  schedules SWARM before remaining MVP gameplay.
-- Added/changed relative Markdown links resolve to existing roadmap/index/GDD/TDD targets.
-- `git diff --check`: **PASS**.
-- Historical `Roadmap_Reconciliation_Post_GP-S32R.md`: **UNCHANGED**.
-- No Unreal build, UHT, or gameplay contract was run; none is required for this docs-only finalization.
-
-## Final diff audit
-
-The committed branch diff from `b7e391a636749173c445f7994a41daf3c18ba902` contains Markdown files
-under `Docs/` only.
-
-No branch changes exist under:
-
-- `GP/Source/`
-- `GP/Config/`
-- `GP/Content/`
-- `GP/GP.uproject`
-
-Existing local protected Config, map, Blueprint, DataAsset, material, VFX, and `Tools/` changes remain
-unstaged and untouched.
-
-## Merge state
-
-**NOT MERGED.**
+**NOT MERGED. NOT FINALIZED.**

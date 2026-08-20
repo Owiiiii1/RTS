@@ -46,6 +46,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Combat", meta = (ClampMin = "0.0"))
 	float SightRangeCm = 900.0f;
 
+	/**
+	 * Per-team Fog of War reveal radius. Separate from combat SightRangeCm so scouting and
+	 * auto-acquire balance can evolve independently.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Vision", meta = (ClampMin = "0.0"))
+	float FogOfWarSightRadiusCm = 900.0f;
+
+	/** Whether a live actor using this definition contributes authoritative Fog of War vision. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Vision")
+	bool bGrantsFogOfWarVision = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Combat", meta = (ClampMin = "0.05"))
 	float AutoAcquireScanIntervalSeconds = 0.35f;
 

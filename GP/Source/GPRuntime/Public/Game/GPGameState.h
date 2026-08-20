@@ -11,6 +11,7 @@
 
 class AGP_MainBase;
 class AGP_ResourceNode;
+class UGP_FogOfWarComponent;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGP_MatchStateTagChanged, FGameplayTag /*OldTag*/, FGameplayTag /*NewTag*/);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGP_MatchTimeRemainingChanged, float /*OldTime*/, float /*NewTime*/);
@@ -136,6 +137,10 @@ public:
 	bool AreEconomicOrdersAllowed() const;
 
 	static bool AreEconomicOrdersAllowedInWorld(const UWorld* World);
+
+	/** Server-authoritative three-state per-team Fog of War service. Runtime bit grids are not replicated. */
+	UFUNCTION(BlueprintPure, Category = "GP|FogOfWar")
+	UGP_FogOfWarComponent* GetFogOfWarComponent() const { return FogOfWarComponent; }
 
 	// --- Authority-only mutation (no RPCs) ---
 
@@ -339,6 +344,9 @@ protected:
 	static bool IsWinReasonBranchTag(const FGameplayTag& Tag);
 
 private:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|FogOfWar", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UGP_FogOfWarComponent> FogOfWarComponent;
+
 	/** Authority-only weak registry; not replicated. */
 	TArray<TWeakObjectPtr<AGP_MainBase>> RegisteredMainBases;
 

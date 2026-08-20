@@ -2403,8 +2403,8 @@ void UGP_BuildGridContractTestRunner::AdvanceStage()
 			UClass::StaticClass(), nullptr, TEXT("/Script/GPRuntime.GP_Wall"));
 		Expect(WallClass == nullptr, TEXT("Y_NoWallClass"));
 		const UObject* FoWClass = StaticFindObject(
-			UClass::StaticClass(), nullptr, TEXT("/Script/GPRuntime.GP_FogOfWarSubsystem"));
-		Expect(FoWClass == nullptr, TEXT("Y_FoWPlacementDeferred"));
+			UClass::StaticClass(), nullptr, TEXT("/Script/GPRuntime.GP_FogOfWarComponent"));
+		Expect(FoWClass != nullptr, TEXT("Y_FoWRuntimeFoundationPresent"));
 
 		Finish();
 		break;

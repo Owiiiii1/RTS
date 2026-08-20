@@ -14,6 +14,8 @@
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/StreamableManager.h"
 #include "Engine/World.h"
+#include "FogOfWar/GPFogOfWarComponent.h"
+#include "Game/GPGameState.h"
 #include "GameplayEffectExtension.h"
 #include "Net/UnrealNetwork.h"
 #include "Player/GPPlayerState.h"
@@ -240,6 +242,16 @@ void AGP_UnitBase::BeginPlay()
 
 void AGP_UnitBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (HasAuthority())
+	{
+		if (AGP_GameState* GameState = GetWorld() != nullptr ? GetWorld()->GetGameState<AGP_GameState>() : nullptr)
+		{
+			if (UGP_FogOfWarComponent* FoW = GameState->GetFogOfWarComponent())
+			{
+				FoW->UnregisterSightSource(this);
+			}
+		}
+	}
 	CancelPendingUnitDefinitionLoad();
 	UnregisterPlayerUnitCap();
 	Super::EndPlay(EndPlayReason);
@@ -247,6 +259,13 @@ void AGP_UnitBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AGP_UnitBase::NotifyAuthorityDeath()
 {
+	if (AGP_GameState* GameState = GetWorld() != nullptr ? GetWorld()->GetGameState<AGP_GameState>() : nullptr)
+	{
+		if (UGP_FogOfWarComponent* FoW = GameState->GetFogOfWarComponent())
+		{
+			FoW->UnregisterSightSource(this);
+		}
+	}
 	UnregisterPlayerUnitCap();
 }
 
@@ -375,6 +394,36 @@ const UGP_UnitDefinition* AGP_UnitBase::ResolveLoadedUnitDefinition() const
 		Loaded = UnitDefinitionAsset.ToSoftObjectPath().ResolveObject();
 	}
 	return Cast<UGP_UnitDefinition>(Loaded);
+}
+
+float AGP_UnitBase::GetFogOfWarSightRadiusCm() const
+{
+	if (!bUnitDefinitionReady)
+	{
+		return 0.0f;
+	}
+	if (const UGP_UnitDefinition* Definition = ResolveLoadedUnitDefinition())
+	{
+		return FMath::Max(0.0f, Definition->FogOfWarSightRadiusCm);
+	}
+	return FMath::Max(0.0f, FallbackFogOfWarSightRadiusCm);
+}
+
+bool AGP_UnitBase::GrantsFogOfWarVision() const
+{
+	if (!bUnitDefinitionReady || IsDead())
+	{
+		return false;
+	}
+	if (const UGP_UnitDefinition* Definition = ResolveLoadedUnitDefinition())
+	{
+		return Definition->bGrantsFogOfWarVision
+			&& FMath::IsFinite(Definition->FogOfWarSightRadiusCm)
+			&& Definition->FogOfWarSightRadiusCm > KINDA_SMALL_NUMBER;
+	}
+	return bFallbackGrantsFogOfWarVision
+		&& FMath::IsFinite(FallbackFogOfWarSightRadiusCm)
+		&& FallbackFogOfWarSightRadiusCm > KINDA_SMALL_NUMBER;
 }
 
 float AGP_UnitBase::GetRetaliationPursuitSeconds() const
@@ -518,6 +567,31 @@ void AGP_UnitBase::CompleteUnitDefinitionInitialization(const UGP_UnitDefinition
 	if (UGP_UnitCommandComponent* Command = GetUnitCommandComponent())
 	{
 		Command->RefreshCombatAutoAcquireTimer();
+	}
+	RefreshFogOfWarSightSourceRegistration();
+}
+
+void AGP_UnitBase::RefreshFogOfWarSightSourceRegistration()
+{
+	if (!HasAuthority() || GetWorld() == nullptr)
+	{
+		return;
+	}
+
+	AGP_GameState* GameState = GetWorld()->GetGameState<AGP_GameState>();
+	UGP_FogOfWarComponent* FoW = GameState != nullptr ? GameState->GetFogOfWarComponent() : nullptr;
+	if (FoW == nullptr)
+	{
+		return;
+	}
+
+	if (bUnitDefinitionReady && !IsDead())
+	{
+		FoW->RegisterSightSource(this);
+	}
+	else
+	{
+		FoW->UnregisterSightSource(this);
 	}
 }
 
@@ -713,6 +787,7 @@ void AGP_UnitBase::NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId)
 		TeamPresentationComponent->RefreshTeamPresentation();
 	}
 	TryRegisterPlayerUnitCap();
+	RefreshFogOfWarSightSourceRegistration();
 }
 
 bool AGP_UnitBase::IsNeutral() const

@@ -15,6 +15,9 @@
 
 AGP_LogisticsHub::AGP_LogisticsHub()
 {
+	FallbackFogOfWarSightRadiusCm = 900.0f;
+	bFallbackGrantsFogOfWarVision = true;
+
 	CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleComponent"));
 	SetRootComponent(CapsuleComponent);
 	CapsuleComponent->InitCapsuleSize(80.0f, 120.0f);

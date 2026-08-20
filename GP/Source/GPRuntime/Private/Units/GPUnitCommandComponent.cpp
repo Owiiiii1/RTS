@@ -13,6 +13,7 @@
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "FogOfWar/GPFogOfWarComponent.h"
 #include "Game/GPGameState.h"
 #include "GameFramework/Actor.h"
 #include "Resources/GPCargoComponent.h"
@@ -807,6 +808,15 @@ AGP_UnitBase* UGP_UnitCommandComponent::FindNearestAutoAcquireTarget(
 		AGP_UnitBase* ValidTarget = nullptr;
 		EGP_AttackTerminalReason Reason = EGP_AttackTerminalReason::InvalidTarget;
 		if (!ValidateAttackTarget(Candidate, ValidTarget, Reason) || ValidTarget == nullptr)
+		{
+			continue;
+		}
+
+		const AGP_GameState* GameState = World->GetGameState<AGP_GameState>();
+		const UGP_FogOfWarComponent* FoW =
+			GameState != nullptr ? GameState->GetFogOfWarComponent() : nullptr;
+		if (FoW == nullptr
+			|| !FoW->IsVisibleToTeam(OwnerUnit->GetTeamId(), ValidTarget->GetActorLocation()))
 		{
 			continue;
 		}

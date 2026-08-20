@@ -15,6 +15,8 @@ AGP_SalvageWalker::AGP_SalvageWalker()
 	DefaultDamage = 20.0f;
 	DefaultAttackCooldown = 1.0f;
 	DefaultAttackRange = 600.0f;
+	FallbackFogOfWarSightRadiusCm = 900.0f;
+	bFallbackGrantsFogOfWarVision = true;
 
 	if (UGP_UnitCommandComponent* Command = GetUnitCommandComponent())
 	{

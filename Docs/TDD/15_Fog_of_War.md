@@ -30,9 +30,8 @@ Current-compatible deviations from the older pseudocode:
   confirmation remains authoritative;
 - single-client transitions, same-coordinate two-player team isolation, and restart/reinitialization
   passed operator validation;
-- source-only world/terrain presentation reconstructs a continuous silhouette from discrete LocalFoW
-  Known/Visible masks via conservative SDF iso-contours and Chaikin smoothing, and awaits operator
-  visual validation;
+- source-only world/terrain presentation bilinearly upsamples a viewport-local Known/Visible raster
+  (~10×, 20 cm texels, separable 160 cm blur) and awaits operator visual validation;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
   relevance, minimap, and the full production HUD remain later FoW slices.
 
@@ -157,28 +156,26 @@ It owns one native `UGP_FoWWorldOverlayWidget` and binds only to that controller
 
 Current MVP rendering method:
 
-- perspective view corners are deprojected to the prototype's planar Z=0 gameplay ground;
-- only the intersecting cell rectangle, padded by six LocalFoW cells, is sampled from the trusted mirror;
-- KnownMask (Explored|Visible) and VisibleMask each get a Felzenszwalb Euclidean signed distance field;
-- inward iso-contours (`VisibleInwardBiasCells=0.40`, `KnownInwardBiasCells=0.35`, both `< 0.5`) are
-  Chaikin-smoothed and snapped onto/inside the iso so circular sight, unions, trails, and corners do
-  not follow 200 cm cell-square outlines;
+- perspective view corners (plus view center) are deprojected to the prototype's planar Z=0 ground;
+  skyward rays use a look-direction fallback so camera motion does not force full-black;
+- only the intersecting cell rectangle, padded by two LocalFoW cells, is sampled from the trusted mirror;
+- KnownMask (Explored|Visible) and VisibleMask are bilinearly upsampled (~10× → 20 cm texels) and
+  separable-box-blurred (8 texels / 160 cm);
 - Unexplored uses opaque black (`Obscuration=1.0`);
 - Explored uses a dark neutral translucent overlay (`Obscuration=0.68`);
 - Visible emits no overlay (`Obscuration=0.0`);
-- a narrow 28 cm AA ribbon (~5–15 px) is the only edge feather; it is not a wide blur of a staircase;
-- NotReady, projection failure, and over-budget views fail closed to full-screen black;
-- mask rebuild is LocalFoW-revision-driven (or when the view leaves the padded sample); camera motion
-  only reprojects cached world triangles;
-- cached world geometry is reused while both mirror revision and padded sample remain valid.
+- coalesced horizontal runs become Slate quads; not one primitive per presentation texel;
+- NotReady still fails closed to full-screen black;
+- camera pan/zoom/yaw resamples the current viewport-local raster;
+- if a rebuild fails, the last successful overlay is kept instead of permanent full-black.
 
 Bounds:
 
 - no renderer-side one-million-cell copy;
-- maximum 65,536 sampled view cells (plus six-cell LocalFoW pad);
+- maximum 65,536 sampled view cells (plus two-cell LocalFoW pad);
 - up to 8,000 coalesced quads per Slate draw batch;
-- maximum 65,536 overlay triangles, 32,768 iso segments, and 262,144 SDF pixels;
-- 2× SDF supersample of the padded viewport sample; uniform interiors fill with Known/Visible holes;
+- maximum 16,384 overlay quads and 262,144 presentation pixels;
+- 10× presentation supersample (minimum 4× if the pixel cap requires it);
 - no cell UObject/component allocation.
 
 The current arena contains no Landscape and uses planar blockout ground. Meaningful elevation would
@@ -385,9 +382,9 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
 - 5 Hz sight tick × O(units × area_cells_covered). With 50 units × ~100 cells average = 25k cell ops/sec — acceptable.
 - Relevance check called by engine per actor per client. Cheap (per-cell bit query + team check).
 - Multicast and replication budget unchanged from existing.
-- World overlay: bounded viewport-local sampling (max 65,536 cells), Known/Visible SDF iso-contours
-  with Chaikin smoothing (max 65,536 triangles / 32,768 iso segments / 262,144 SDF pixels), revision-
-  driven mask cache with camera-only reprojection, and no full-grid upload/copy.
+- World overlay: bounded viewport-local sampling (max 65,536 cells), bilinear 10× Known/Visible raster
+  with separable box blur (max 262,144 presentation pixels / 16,384 coalesced quads), camera resample
+  of the current view, and no full-grid upload/copy.
 
 ## Validation per Pillars
 

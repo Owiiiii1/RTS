@@ -151,7 +151,7 @@ UI код live у `GPUIRuntime`. Per [`01_Module_Architecture`](01_Module_Archit
 
 Specialized exception: the hit-test-invisible FoW world overlay is a native viewport presentation
 adapter, not an interactive HUD screen. It may read the trusted local mirror directly for bounded
-camera reprojection and conservative Known/Visible SDF contour reconstruction, but cannot read
+camera reprojection and a viewport-local bilinear Known/Visible presentation raster, but cannot read
 authority or mutate gameplay. The paired
 `UGP_LocalFoWUnitPresentationSubsystem` is likewise a native world-presentation adapter: UnitBase
 actors lifecycle-register, LocalFoW revisions push immediate reevaluation, and a bounded 10 Hz

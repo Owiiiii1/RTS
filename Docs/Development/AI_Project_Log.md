@@ -1,5 +1,22 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — FoW world visualization high-res presentation raster
+
+Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Operator rejected SDF/Chaikin contours: 200 cm staircase remained, and camera motion could drop the
+  overlay into conservative full-black. Further SDF tuning was not allowed.
+- Replaced contour extraction with `BilinearUpsampleSeparableBoxBlur`: viewport-local Known/Visible
+  raster, 10× supersample (20 cm texels), separable box blur (8 texels / 160 cm), coalesced Slate runs.
+  Gameplay CellSize stays 200 cm. Implementation head `a30c4bb5393ba1f4c31b6c17d54cc368a912ad75`.
+- Camera deproject no longer fails the whole frame on one skyward corner; last successful overlay is
+  kept if a rebuild fails. Deleted Felzenszwalb/Chaikin/iso/loop code.
+- Focused contracts Failures=0; GPEditor Win64 Development + UHT **PASS**.
+- No Config/map/Blueprint/DataAsset/material/VFX/Tools/Content edit. LongRange local FoW radius 2000
+  untouched. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — FoW world visualization SDF contour rewrite
 
 Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**

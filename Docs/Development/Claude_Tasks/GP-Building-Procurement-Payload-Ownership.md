@@ -1,6 +1,6 @@
 # GP — Building Procurement + Payload Ownership Cleanup
 
-Status: **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**
+Status: **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_FINALIZED_READY_FOR_MERGE**
 
 Branch: `feature/gp-building-procurement-payload-ownership` from `origin/main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`
 
@@ -48,4 +48,4 @@ Canonical payload is `UGP_OrbitalDropDefinition` → `UGP_BuildingDefinition::Sp
 
 Authority still obtains payload only through `UGP_BuildingDropCatalog::ResolvePayloadClass()`. DropPod receives the already-resolved class.
 
-Stale `DefaultGame.ini` keys were left inert. **NOT MERGED. NOT FINALIZED.**
+Stale `DefaultGame.ini` keys were left inert. Operator PASS. **NOT MERGED.**

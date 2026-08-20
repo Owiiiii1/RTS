@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — Building procurement + payload ownership finalization
+
+Status: **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_FINALIZED_READY_FOR_MERGE**
+
+- Same branch `feature/gp-building-procurement-payload-ownership` (base `origin/main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`)
+- Operator PASS: Hub 100 + authored `BP_GP_LogisticsHUB` deploy, Hub placement/footprint/+5 unit cap unchanged; Turret 150 + authored `BP_GP_DefensiveTurret` deploy, combat and placement/footprint unchanged
+- Final contracts Failures=0: settings visibility, building-drop (includes SpawnedClass cold-load/failure), MultiBuilding, Turret, BuildGrid, UnitCap/Hub, economy/logistics
+- GPEditor+UHT / GP Development / GP Shipping **PASS**
+- Stale `DefaultGame.ini` keys left untouched. Protected authored DataAssets not staged. **NOT MERGED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — Building procurement + payload ownership cleanup
 
 Status: **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**

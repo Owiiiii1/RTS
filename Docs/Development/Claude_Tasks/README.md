@@ -8,7 +8,7 @@
 
 > Стан станом на 2026-08-19. Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Configuration data ownership cleanup. **Current: BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**.
+**Поточна фаза:** Configuration data ownership cleanup. **Current: BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_FINALIZED_READY_FOR_MERGE**.
 
 **Status snapshot:**
 
@@ -21,9 +21,9 @@
 | **Cleanup Slice C** Unit numeric compatibility | **DONE / on `main`** @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53` |
 | **Cleanup Slice D** Unit payload compatibility | **DONE / on `main`** @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160` |
 | **Cleanup Slice G** Delivery timing ownership | **DONE / on `main`** @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65` |
-| **Building procurement + payload ownership** | **READY FOR OPERATOR VALIDATION** — [`GP-Building-Procurement-Payload-Ownership.md`](GP-Building-Procurement-Payload-Ownership.md) — **NOT MERGED / NOT FINALIZED** |
+| **Building procurement + payload ownership** | **FINALIZED READY FOR MERGE** — [`GP-Building-Procurement-Payload-Ownership.md`](GP-Building-Procurement-Payload-Ownership.md) — **NOT MERGED** |
 
-**NEXT action для оператора:** PIE-validate Hub/Turret purchase, payload class, and READY/deploy after the Project Settings cost/payload bridges were removed. Do **not** start GP-S42B / GP-S42C / FoW.
+**NEXT action для оператора:** merge `feature/gp-building-procurement-payload-ownership`. Do **not** start GP-S42B / GP-S42C / FoW.
 
 ### Drift Warning
 

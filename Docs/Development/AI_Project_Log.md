@@ -1,5 +1,21 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — MVP roadmap reconciliation finalization
+
+Status: **MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE**
+
+- Same docs-only branch `docs/gp-mvp-roadmap-reconciliation-post-vitals` from exact `origin/main` baseline `b7e391a636749173c445f7994a41daf3c18ba902`
+- Review PASS; accepted roadmap decisions remain unchanged
+- Current roadmap remains capability-based; historical S-number order is not the execution cursor
+- S44 building-reticle capability remains DONE — SUPERSEDED IMPLEMENTATION SHAPE; wall drag remains separate and redesign-dependent
+- Footprint/geometry cleanup remains DEFERRED pending building construction/placement redesign
+- RTS AI Opponent remains separate from SWARM
+- SWARM remains **MVP — FINAL IMPLEMENTATION STAGE** with **DESIGN REVIEW REQUIRED BEFORE IMPLEMENTATION**; full MVP validation follows SWARM
+- Exactly one NEXT production capability after merge remains the three-state per-team Fog of War runtime foundation
+- Markdown/link/search validation passed; branch diff is Docs Markdown only. No build/UHT/gameplay tests required. **NOT MERGED.**
+- Roadmap: `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — MVP roadmap reconciliation after Building Vitals
 
 Status: **MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW**

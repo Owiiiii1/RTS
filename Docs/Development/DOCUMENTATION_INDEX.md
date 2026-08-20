@@ -39,7 +39,7 @@
 | Last closed / merged stage | **Building Vitals / Definition Ownership** on `main` @ `b7e391a636749173c445f7994a41daf3c18ba902` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW** |
+| Current stage | [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE** |
 
 ---
 
@@ -51,9 +51,9 @@
 
 **Closed on `main`:** Delivery timing ownership cleanup @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`; Unit payload compatibility cleanup @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`; Unit numeric compatibility cleanup @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`; Dead overlap setting removal @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`; Settings Visibility Truth @ `f38e803771261c60d865949c693a52a73fbcedb2`; Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW**. Historical S-number order is no longer the execution cursor.
+**Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE**. Historical S-number order is no longer the execution cursor.
 
-**Exactly one NEXT production capability after review:** three-state per-team **Fog of War runtime foundation**.
+**Exactly one NEXT production capability after merge:** three-state per-team **Fog of War runtime foundation**.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 
@@ -169,4 +169,4 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-Current baseline: `origin/main` @ `b7e391a636749173c445f7994a41daf3c18ba902`. Current docs stage: **MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW** on `docs/gp-mvp-roadmap-reconciliation-post-vitals`. **NOT MERGED.** NEXT after review: three-state per-team Fog of War runtime foundation.
+Current baseline: `origin/main` @ `b7e391a636749173c445f7994a41daf3c18ba902`. Current docs stage: **MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE** on `docs/gp-mvp-roadmap-reconciliation-post-vitals`. **NOT MERGED.** NEXT after merge: three-state per-team Fog of War runtime foundation.

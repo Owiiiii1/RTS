@@ -1,19 +1,19 @@
-# Cursor Work Report — MVP Roadmap Reconciliation Post Vitals
+# Cursor Work Report — MVP Roadmap Reconciliation Finalization
 
 ## Status
 
-**MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW**
+**MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE**
 
 **NOT MERGED.**
 
-## Branch / base / head
+## Branch / base / final head
 
 - Branch: `docs/gp-mvp-roadmap-reconciliation-post-vitals`
 - Exact base: `origin/main` @ `b7e391a636749173c445f7994a41daf3c18ba902`
-- Audited code head: `b7e391a636749173c445f7994a41daf3c18ba902`
-- Final documentation head: the commit containing this report
+- Reviewed reconciliation head: `25f0131ed28b0ae3c24a0e79fee805bc3148a74a`
+- Final head SHA: the finalization commit containing this report (resolve with `git rev-parse HEAD`)
 
-## Exact docs changed/added
+## Final docs changed/added on branch
 
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md` — added; current roadmap authority
 - `Docs/Development/AI_Project_Log.md`
@@ -30,113 +30,125 @@
 - `Docs/GDD/Out_Of_Scope.md`
 - `Docs/TDD/13_Architecture_Proposal.md`
 
-## Capability audit summary
+## Roadmap authority confirmation
 
-- **DONE:** camera, selection, Move, Attack, auto-acquire, timed retaliation, Attack-Move,
-  damage/health/death, health bars, and Salvage Walker.
-- **PARTIAL:** Stop is implemented in server validation/FSM cleanup, but no player input/smart-command
-  path emits it.
-- **DONE:** Ferronite deposit/mining/cargo, MainBase containers, per-team `FerroniteThreatValue`,
-  launch, `OrbitalFerronite`, and cumulative `FerroniteScore`.
-- **DONE:** unit catalog/manifest/DropPod, building catalog/purchase/READY, functional building ghost,
-  validation/snap/grid reservation/confirm/cancel, and building DropPod/payload spawn.
-- **DONE:** MainBase core role, Logistics Hub +5 cap, Defensive Turret, building DataAsset payload/vitals
-  ownership, Wall Package purchase/delivery/inventory, and quota/timer/annihilation/result mechanics.
-- **PARTIAL:** Logistics Hub lacks its canonical storage-cap bonus; UI uses a capable TEMP HUD but has no
-  production CommonUI/MVVM implementation; match flow lacks product-level start/return/disconnect.
-- **NOT STARTED:** FoW runtime, production HUD/Order Menu/minimap/notifications, RTS AI Opponent,
-  Worker Repair, wall actor/connection/drag placement/Wall Turret, Sell/Demolish, Steam sessions/menus,
-  production end screen, and SWARM runtime.
+`Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md` is the current factual MVP
+capability/status/order authority. Historical S-number order is task inventory and history, not the
+execution cursor. Current production capability takes precedence over obsolete class/task names.
 
-## Major historical roadmap corrections
+`Docs/Development/Roadmap_Reconciliation_Post_GP-S32R.md` remains unchanged on this branch and is
+explicitly preserved as a historical snapshot.
 
-- Historical S-numbers are task history/mapping, not the current execution cursor.
-- Combat through Attack-Move is implemented, often under superseding R-slice shapes.
-- No historical `UGP_CombatComponent`, `UGP_TargetingComponent`, or cooldown-GE class resurrection is
-  required where current capability is complete.
-- Building/grid/DropPod/DataAsset ownership capabilities are substantially beyond the post-S32R audit.
-- Match quota/timer/annihilation/result wiring is done; disconnect/product end flow remains.
-- GP-S42A Wall Package is done; wall surface construction is not.
+## Exact remaining MVP capability list
 
-## S44 / building placement verdict
-
-**DONE — SUPERSEDED IMPLEMENTATION SHAPE.**
-
-`AGP_BuildingPlacementGhost` + `AGP_PlayerController` placement state + `GPBuildingDropAuthority` +
-`UGP_BuildGridSubsystem` + READY inventory + `AGP_DropPod` provide the functional building
-reticle/deployment capability. Pure visual polish is not an MVP blocker. Wall drag preview is a separate
-missing wall-surface capability and is not S44.
-
-## Footprint/geometry verdict
-
-**DEFERRED.**
-
-The cleanup phase ends with Building Vitals / Definition Ownership. No standalone footprint/geometry
-ownership cleanup is scheduled. Current footprint/grid/bounds/navigation/snap/collision behavior remains
-compatibility/runtime infrastructure until a building construction/placement redesign requires a
-concrete decision.
-
-## Exact remaining MVP capabilities
-
-1. Three-state per-team FoW and its gameplay consumers.
-2. Production CommonUI/MVVM HUD, Order Menu, minimap, notifications, and end screen.
+1. Three-state per-team Fog of War, its authoritative query API, and gameplay consumers.
+2. Production CommonUI/MVVM shell, HUD, Order Menu, minimap, notifications, and end-of-match flow.
 3. Primitive RTS AI Opponent: Explore/Mine/Ship/Order/Defend.
 4. Player-facing Stop command input/dispatch completion.
-5. Worker Repair.
-6. Logistics Hub storage-cap bonus.
-7. Redesign-approved wall actor/connection/Build Wall drag/Wall Turret surface system.
-8. Sell and Demolish.
-9. Steam session/lobby/host/find/join/travel/disconnect/menu flow.
-10. OpponentDisconnect result, return/session cleanup, and complete match product flow.
-11. Remaining MVP-readable feedback.
-12. SWARM after its mandatory design review, as the last gameplay implementation stage.
+5. Steam 2-player session/lobby/host/find/join/travel/disconnect flow.
+6. Worker Repair.
+7. Logistics Hub storage-cap bonus.
+8. Redesign-approved Wall actor/connection/Build Wall inventory consumption/drag placement/Wall Turret.
+9. Sell and Demolish lifecycle operations.
+10. OpponentDisconnect result and complete match return/session cleanup.
+11. Remaining feedback/presentation necessary for readable MVP play.
+12. SWARM, only after every preceding gameplay system is complete enough for an end-to-end match.
 
-## Exact recommended NEXT
+## Exact accepted implementation order
+
+1. Fog of War runtime foundation.
+2. Production UI foundation and HUD.
+3. Minimap and FoW presentation.
+4. RTS AI Opponent.
+5. Remaining bounded core-loop gameplay: player-facing Stop, Worker Repair, Logistics Hub storage-cap
+   bonus, and necessary feedback.
+6. Building-system design gate, then only approved Wall/surface-building/lifecycle capabilities.
+7. Steam multiplayer product flow.
+8. Match completion product flow.
+9. SWARM design/reconciliation gate.
+10. SWARM implementation — last gameplay implementation stage of MVP.
+11. Full MVP end-to-end validation and stabilization.
+
+## Exact NEXT capability
 
 **Three-state per-team Fog of War runtime foundation.**
 
-It is a missing canonical MVP capability and a dependency for visibility-gated selection/combat/drop
-rules, production minimap, RTS AI Explore behavior, and later readable SWARM pressure. It does not
-depend on the deferred building redesign.
+No Fog of War implementation was started in this documentation finalization.
 
-## RTS AI Opponent
+## S44 verdict
 
-**NOT STARTED.** No production `AGP_AIController`, `UGP_AIBehaviorDefinition`, or
-Explore/Mine/Ship/Order/Defend implementation exists. It is a player-like strategic economy opponent,
-not SWARM.
+**DONE — SUPERSEDED IMPLEMENTATION SHAPE.**
 
-## SWARM
+`AGP_BuildingPlacementGhost`, `AGP_PlayerController`, `GPBuildingDropAuthority`,
+`UGP_BuildGridSubsystem`, READY inventory, and `AGP_DropPod` provide the functional building
+reticle/deployment capability. The obsolete `AGP_DropReticle` class name is not an implementation gap.
+Wall drag/preview is a separate redesign-dependent capability.
+
+## Footprint/geometry verdict
+
+**DEFERRED pending building construction/placement redesign.**
+
+No standalone footprint/geometry cleanup is scheduled. Existing footprint/grid/bounds/navigation/
+snap/collision behavior remains compatibility/runtime infrastructure until a concrete redesign requires
+an ownership decision. No building redesign was started.
+
+## RTS AI Opponent verdict
+
+**NOT STARTED; separate from SWARM.**
+
+The RTS AI Opponent is the player-like strategic participant that Explore/Mine/Ship/Order/Defend through
+the same authority/economy rules. No `AGP_AIController`, `UGP_AIBehaviorDefinition`, or state runtime is
+present.
+
+## SWARM verdict and mandatory gate
 
 **MVP — FINAL IMPLEMENTATION STAGE.**
 
 **DESIGN REVIEW REQUIRED BEFORE IMPLEMENTATION.**
 
-No SWARM runtime implementation exists. The design gate must resolve the MVP definition, minimum roster,
-spawning and zones, director model, threat mapping, targeting/objectives, interactions, navigation,
-match scaling, authority/replication, victory/loss behavior, performance budget, and explicit exclusions.
-No final answers were invented in this docs pass.
+Only the threat input is implemented: raw Planetary Ferronite currently in MainBase containers drives
+`FerroniteThreatValue`; Worker drop-off raises it and container launch lowers it. `FerroniteScore` and
+`OrbitalFerronite` do not drive SWARM pressure.
 
-Established invariant only:
+No SWARM classes, director, waves, DataAssets, design answers, or runtime were added. The mandatory gate
+must resolve the exact MVP definition, roster, spawning/zones, wave/director model, threat mapping,
+targeting/objectives, interactions, navigation, match scaling, server authority, replication,
+victory/loss interaction, performance budget, and explicit exclusions.
 
-- raw Planetary Ferronite currently stored at MainBase drives `FerroniteThreatValue`;
-- Worker drop-off raises threat;
-- container launch lowers threat;
-- `FerroniteScore` and `OrbitalFerronite` do not drive SWARM pressure.
+SWARM implementation remains the last gameplay implementation stage. Full MVP end-to-end
+validation/stabilization follows SWARM.
 
-## Validation
+## Documentation validation results
 
-- Repository-wide source searches supported every newly claimed DONE/PARTIAL/NOT STARTED status.
-- Canonical GDD/TDD and completed task/reconciliation reports were cross-checked against production code.
-- Historical `Roadmap_Reconciliation_Post_GP-S32R.md` was preserved unchanged as a snapshot.
-- Updated Markdown references were checked for consistent relative targets.
-- `git diff --check` passed.
-- No Unreal build, UHT, or gameplay contract was run because this task is documentation-only.
-- Final staging/diff audit is restricted to Markdown under `Docs/`.
+- Re-read and cross-checked the roadmap, canonical backlog/work plan, TDD/13, required GDD pages,
+  documentation index, and task cursor.
+- No current-authority contradiction was found for NEXT, S44, footprint deferral, wall redesign
+  dependency, RTS AI versus SWARM, the SWARM design gate, or final validation order.
+- Repository-wide searches found old S42/S44 statuses only in explicitly historical task/audit records;
+  they were not rewritten as current authority.
+- Repository-wide searches found no current statement that makes historical Slice 8 -> 13 the active
+  execution cursor.
+- Repository-wide searches found no current statement that aliases SWARM with the RTS AI Opponent or
+  schedules SWARM before remaining MVP gameplay.
+- Added/changed relative Markdown links resolve to existing roadmap/index/GDD/TDD targets.
+- `git diff --check`: **PASS**.
+- Historical `Roadmap_Reconciliation_Post_GP-S32R.md`: **UNCHANGED**.
+- No Unreal build, UHT, or gameplay contract was run; none is required for this docs-only finalization.
 
-## Protected files
+## Final diff audit
 
-No production/source/config/content file belongs to this branch diff or commit. Existing local protected
-Config, map, Blueprint, DataAsset, material, VFX, and `Tools/` changes remain unstaged and untouched.
+The committed branch diff from `b7e391a636749173c445f7994a41daf3c18ba902` contains Markdown files
+under `Docs/` only.
+
+No branch changes exist under:
+
+- `GP/Source/`
+- `GP/Config/`
+- `GP/Content/`
+- `GP/GP.uproject`
+
+Existing local protected Config, map, Blueprint, DataAsset, material, VFX, and `Tools/` changes remain
+unstaged and untouched.
 
 ## Merge state
 

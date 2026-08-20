@@ -1,9 +1,9 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `MVP_ROADMAP_RECONCILIATION_POST_VITALS_READY_FOR_REVIEW`  
-**Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor  
-**Baseline:** `origin/main` @ `b7e391a636749173c445f7994a41daf3c18ba902`  
-**Audit date:** 2026-08-20  
+**Status:** `MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE`
+**Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
+**Baseline:** `origin/main` @ `b7e391a636749173c445f7994a41daf3c18ba902`
+**Audit date:** 2026-08-20
 **Scope:** documentation/roadmap reconciliation only. No runtime, Config, Content, Blueprint, DataAsset, map, or placement implementation changes.
 
 ## 1. Why reconciliation is required
@@ -245,7 +245,7 @@ S-number titles.
 
 ## 8. SWARM final-MVP stage
 
-**Status: MVP — FINAL IMPLEMENTATION STAGE**  
+**Status: MVP — FINAL IMPLEMENTATION STAGE**
 **Gate: DESIGN REVIEW REQUIRED BEFORE IMPLEMENTATION**
 
 SWARM must not be implemented from the current placeholders. The dedicated design/reconciliation gate
@@ -348,4 +348,3 @@ Reason:
 
 Scope the next slice to authoritative Unexplored/Explored/Actively Visible state and consumers required to
 prove the contract. Production minimap/UI presentation can follow on the completed visibility foundation.
-

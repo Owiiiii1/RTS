@@ -6,6 +6,7 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPPlayerAttributeSet.h"
+#include "AttributeSets/GPUnitAttributeSet.h"
 #include "Buildings/GPBuildingDefinition.h"
 #include "Buildings/GPBuildingBase.h"
 #include "Buildings/GPDefensiveTurret.h"
@@ -31,6 +32,7 @@
 #include "Player/GPSelectionComponent.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "TimerManager.h"
+#include "Units/GPUnitDefinition.h"
 #include "UObject/Package.h"
 #include "UObject/StrongObjectPtr.h"
 #include "Units/GPWorker.h"
@@ -607,6 +609,17 @@ void UGP_OrbitalBuildingDropContractTestRunner::AdvanceStage()
 		if (IsValid(Hub))
 		{
 			Expect(Hub->GetTeamId() == ContractTeam, TEXT("H_TeamId"));
+			const UGP_BuildingDefinition* AssignedBuildingDef = Hub->ResolveLoadedBuildingDefinition();
+			const UGP_UnitDefinition* AssignedUnitDef = AssignedBuildingDef != nullptr
+				? AssignedBuildingDef->ResolveLoadedUnitDefinition()
+				: nullptr;
+			const UGP_UnitAttributeSet* UnitAttrs = Hub->GetUnitAttributeSet();
+			Expect(AssignedBuildingDef != nullptr
+				&& AssignedUnitDef != nullptr
+				&& Hub->ResolveLoadedUnitDefinition() == AssignedUnitDef
+				&& UnitAttrs != nullptr
+				&& FMath::IsNearlyEqual(UnitAttrs->GetMaxHealth(), AssignedUnitDef->MaxHealth, 0.01f),
+				TEXT("H_OrbitalBuildingDefinitionWiresCanonicalVitals"));
 			const float HalfH = GPBuildingGroundPlacement::GetGroundSpawnOffsetZForBuildingClass(Hub->GetClass());
 			const float BottomZ = Hub->GetActorLocation().Z - HalfH;
 			Expect(FMath::IsNearlyEqual(BottomZ, ValidDeployLocation.Z, 8.0f), TEXT("I_GroundCapsuleBottom"));

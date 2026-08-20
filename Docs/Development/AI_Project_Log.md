@@ -1,5 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — Building vitals definition ownership
+
+Status: **BUILDING_VITALS_DEFINITION_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch `feature/gp-building-vitals-definition-ownership` from `origin/main` @ `71a7c700a1f4b066d30c0490365099c82ce91a41`
+- Authored safety gate passed: MainBase, Logistics Hub, and Defensive Turret BuildingDefinitions all have resolved UnitDefinitions (1000 / 500 / 400 MaxHealth respectively)
+- Buildings with a BuildingDefinition now defer inherited UnitDefinition/GAS initialization until the BuildingDefinition resolves, then `BuildingDefinition.UnitDefinition` overwrites actor/BP `UnitDefinitionAsset` and enters the existing async UnitDefinition pipeline
+- Empty nested UnitDefinition preserves an explicit actor UnitDefinitionAsset or actor Default* fallback; unresolved nested refs remain pending; load failure uses existing Default* fallback
+- `BuildingDefinition.MaxHealth` remains a bootstrap/compatibility fallback for definition-level queries only
+- Orbital DropPod assigns the catalog BuildingDefinition before `FinishSpawning`; unit DropPod semantics are unchanged
+- New building-vitals ownership contract and all directly affected contracts pass. Broader combat/unit regressions pass; S28 resource suite escalation was attempted but is invalid in the locally modified prototype map because an authored hostile Salvage Walker kills the hauling fixture
+- GPEditor Win64 Development + UHT **PASS**. Protected config/content/map changes untouched. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-Building-Vitals-Definition-Ownership.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — Building procurement + payload ownership finalization
 
 Status: **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_FINALIZED_READY_FOR_MERGE**

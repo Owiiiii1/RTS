@@ -1,152 +1,177 @@
-# Cursor Work Report — Building Procurement + Payload Ownership
+# Cursor Work Report — Building Vitals Definition Ownership
 
 ## Status
 
-**BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_FINALIZED_READY_FOR_MERGE**
+**BUILDING_VITALS_DEFINITION_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**
 
-**NOT MERGED.**
+**NOT MERGED. NOT FINALIZED.**
 
 ## Branch / base / head
 
-- Branch: `feature/gp-building-procurement-payload-ownership`
-- Base: `origin/main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`
-- Head: this finalization commit (implementation `12736422435b578ec9adda713d3208ec41c90dad`)
+- Branch: `feature/gp-building-vitals-definition-ownership`
+- Base: `origin/main` @ `71a7c700a1f4b066d30c0490365099c82ce91a41`
+- Head: this implementation/report commit
 
-## Operator PASS summary
+## Pre-change ownership and initialization order
 
-Cold/open Editor + PIE confirmed:
+`AGP_BuildingBase::BeginPlay()` called `AGP_UnitBase::BeginPlay()` first. UnitBase initialized ASC
+actor info and immediately ran its UnitDefinition pipeline. Because no production path copied
+`BuildingDefinition.UnitDefinition` into actor `UnitDefinitionAsset`, buildings could permanently
+initialize GAS from a BP/CDO UnitDefinitionAsset or actor `Default*`. BuildingDefinition initialization
+ran afterward and only notified storage/unit-cap consumers.
 
-- Logistics Hub price unchanged at 100
-- authored `BP_GP_LogisticsHUB` deploys correctly
-- Hub placement / footprint unchanged
-- Hub still grants +5 unit cap
-- Defensive Turret price unchanged at 150
-- authored `BP_GP_DefensiveTurret` deploys correctly
-- turret combat still works
-- Turret placement / footprint unchanged
+`ResolveCanonicalMaxHealth()` had no production caller. Health bars and combat read runtime GAS only.
 
-## Authored asset safety-gate summary
+## Authored asset safety gate
 
-Read-only Unreal inspection of configured authored chains:
+Read-only Unreal inspection passed:
 
-- Hub drop `/Game/GrimProtocol/DataAssets/Game/DA_GP_OrbitalDrop_LogisticsHUB` → BuildingDefinition `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_LogisticsHUB` → `SpawnedClass` `/Game/GrimProtocol/Blueprint/Buildings/BP_GP_LogisticsHUB.BP_GP_LogisticsHUB_C` (`BP_GP_LogisticsHUB_C`, valid `AGP_LogisticsHub` subclass)
-- Turret drop `/Game/GrimProtocol/DataAssets/Game/DA_GP_OrbitalDrop_DefensiveTurret` → BuildingDefinition `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_DefensiveTurret` → `SpawnedClass` `/Game/GrimProtocol/Blueprint/Buildings/BP_GP_DefensiveTurret.BP_GP_DefensiveTurret_C` (`BP_GP_DefensiveTurret_C`, valid `AGP_DefensiveTurret` subclass)
+- MainBase: BuildingDefinition
+  `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_MainBase`;
+  UnitDefinition `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_MainBase`;
+  resolved; MaxHealth/InitialHealth 1000/1000, Damage 0, Armor 0, Resistance 0, Cooldown 1, Range 0
+- Logistics Hub: BuildingDefinition
+  `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_LogisticsHUB`;
+  UnitDefinition `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_LogisticsHUB`;
+  resolved; 500/500, Damage 0, Armor 0, Resistance 0, Cooldown 1, Range 0
+- Defensive Turret: BuildingDefinition
+  `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_DefensiveTurret`;
+  UnitDefinition `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_DefensiveTurret`;
+  resolved; 400/400, Damage 20, Armor 0, Resistance 0, Cooldown 1, Range 900
 
-## Exact removed settings fields
+Matching Blueprint CDO BuildingDefinition/UnitDefinition refs also resolved. Native MainBase/Hub/Turret
+BuildingDefinitions already link native UnitDefinitions. No authored migration required.
 
-- `BuildingOrbitalPurchaseCost`
-- `BuildingPayloadClass`
-- `DefensiveTurretPayloadClass`
+## Canonical chain and precedence
 
-## Exact removed helper APIs
+`UGP_BuildingDefinition`
+→ `UnitDefinition`
+→ `AGP_UnitBase::UnitDefinitionAsset`
+→ existing async UnitDefinition pipeline
+→ GAS.
 
-- `ResolveBuildingPayloadClass(...)`
-- `ResolveDefensiveTurretPayloadClass(...)`
-- `IsBuildingPayloadClassConfigInvalid()`
-- `IsDefensiveTurretPayloadClassConfigInvalid()`
+For a valid BuildingDefinition, nested UnitDefinition now outranks:
 
-`TryLoadSoftSubclass` remains only for `UnitDropPodClass`.
+- Blueprint/CDO or instance `UnitDefinitionAsset`
+- `BuildingDefinition.MaxHealth`
+- actor `DefaultMaxHealth`, `DefaultHealth`, `DefaultDamage`, `DefaultArmor`,
+  `DefaultDamageResistance`, `DefaultAttackCooldown`, and `DefaultAttackRange`
 
-## `SyncLegacyLogisticsHubCompatibility` removal
+`UGP_UnitDefinition` remains the source for vitals/combat, sight, movement, cargo, and retaliation
+tuning supported by the existing UnitBase pipeline.
 
-Fully removed, including catalog create/access and native Hub cost-read call sites. No remaining production references.
+## Lifecycle implementation
 
-## Canonical cost ownership
+- UnitBase initializes ASC actor info first.
+- A virtual gate defaults false, preserving all non-building units.
+- BuildingBase returns true while a non-empty BuildingDefinition is unresolved.
+- On BuildingDefinition completion, a non-empty nested UnitDefinition overwrites actor
+  `UnitDefinitionAsset`.
+- BuildingBase then calls the existing UnitDefinition initializer.
+- Existing one-shot guards (`bUnitDefinitionReady`, `bDefinitionTuningApplied`,
+  `bCombatAttributesInitialized`) guarantee no temporary defaults and no second GAS initialization.
+- `NotifyBuildingDefinitionReady()` runs afterward; MainBase storage and Hub unit-cap behavior remain
+  on their existing one-shot/readiness paths.
 
-Canonical cost is authored `UGP_OrbitalDropDefinition::Cost`.
+## Compatibility, pending, and failure semantics
 
-Native bootstrap:
+- Empty BuildingDefinition UnitDefinition: preserve explicit actor UnitDefinitionAsset; otherwise
+  actor `Default*`; warning diagnostic.
+- Unresolved BuildingDefinition: UnitDefinition/GAS initialization remains deferred.
+- Unresolved nested UnitDefinition: existing async UnitDefinition load remains pending; GAS attributes
+  remain uninitialized rather than using defaults early.
+- Nested UnitDefinition load failure: existing UnitBase diagnostic and actor Default* fallback; no hang.
+- Empty BuildingDefinitionAsset: existing actor UnitDefinitionAsset/default behavior.
+- Non-building units: unchanged because their lifecycle gate returns false.
 
-- Logistics Hub = 100
-- Defensive Turret = 150
-- Wall = 25
-- Wall Turret = 75
+## BuildingDefinition.MaxHealth policy
 
-No Project Settings mutation path remains.
+Retained as explicit bootstrap/compatibility fallback for definition-level
+`ResolveCanonicalMaxHealth()` queries. It is not a spawned-building GAS source when UnitDefinition is
+valid. Removing it would require separate authored-data proof and offers no benefit in this slice.
 
-## Canonical payload ownership
+## Spawn paths
 
-`UGP_OrbitalDropDefinition` → `UGP_BuildingDefinition` → `SpawnedClass`.
+- Orbital: BuildingDropAuthority still resolves only product/payload. DropPod assigns the catalog
+  BuildingDefinition during deferred building spawn, before `FinishSpawning`; BuildingBase owns the
+  UnitDefinition bridge and GAS sequencing.
+- Pre-placed/MainBase: authored MainBase BP has BuildingDefinitionAsset configured, so the same bridge
+  applies without orbital spawn.
+- DropPod unit payload semantics are unchanged.
 
-Native ownership:
+## Unchanged systems
 
-- Hub BuildingDefinition `SpawnedClass` = `AGP_LogisticsHub`
-- Turret BuildingDefinition `SpawnedClass` = `AGP_DefensiveTurret`
+- Runtime Health/MaxHealth/Damage/Armor/Resistance/Cooldown/Range remain GAS attributes.
+- Damage application, death, retaliation, health bar, replication, effects architecture unchanged.
+- Logistics Hub UnitCapBonus, MainBase storage/container capacity/count, building tags, and payload
+  SpawnedClass remain on existing owners.
+- FootprintCells, PlacementFootprintBounds, BuildGrid fallbacks/reservation, replicated footprint,
+  NavigationObstacle, placement offsets, snapping, and collision explicitly unchanged.
 
-Authored configured confirmation:
+## Production files changed
 
-- Hub: `BP_GP_LogisticsHUB_C`, valid `AGP_LogisticsHub` subclass
-- Turret: `BP_GP_DefensiveTurret_C`, valid `AGP_DefensiveTurret` subclass
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
+- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h` (comments/policy only)
+- `GP/Source/GPRuntime/Private/Orbital/GPDropPod.cpp`
 
-## Slot validation rules
+## Test files changed/added
 
-- Hub rejects arbitrary non-`AGP_LogisticsHub` subclasses
-- Turret rejects arbitrary non-`AGP_DefensiveTurret` subclasses
+- added `GP/Source/GPRuntime/Public/Buildings/GPBuildingVitalsOwnershipContractTest.h`
+- added `GP/Source/GPRuntime/Private/Debug/GPBuildingVitalsOwnershipContractTest.cpp`
+- updated `GP/Source/GPRuntime/Private/Debug/GPOrbitalBuildingDropContractTest.cpp`
 
-## SpawnedClass async-readiness behavior
+## Tests
 
-`SpawnedClass` is a soft class. Configured authored Hub/Turret cannot become Ready until `SpawnedClass` is loaded, resolved, and valid for the slot. Async loading only. No `LoadSynchronous` in `BuildingDropCatalog`.
+Failures=0, Cancelled=false:
 
-## Pending / Failed semantics
-
-- Unresolved class stays Pending
-- Purchase remains `DefinitionNotReady`
-- No native substitution while Pending
-- Invalid/missing class transitions to Failed and uses native fallback
-- Never stuck Pending
-
-## Authority / DropPod flow
-
-`GPBuildingDropAuthority` still obtains payload from `UGP_BuildingDropCatalog::ResolvePayloadClass()`. DropPod receives the already-resolved payload. No direct Project Settings payload read remains.
-
-## Vitals unchanged
-
-No changes to `BuildingDefinition.UnitDefinition`, `UnitDefinitionAsset`, `BuildingDefinition.MaxHealth`, `UnitDefinition.MaxHealth`, `DefaultMaxHealth`, or GAS initialization.
-
-## Footprint unchanged
-
-No changes to `FootprintCells`, `PlacementFootprintBounds`, BuildGrid fallback ownership, replicated footprint ownership, `NavigationObstacle`, or placement offsets.
-
-Delivery timing, `UnitDropPodClass`, `PodTransportSlotCapacity`, building altitude, cleanup delay, deploy radius, and Wall Package ownership are unchanged.
-
-## Stale INI keys untouched
-
-`GP/Config/DefaultGame.ini` and `GP/Config/DefaultEngine.ini` were not modified. Stale keys `BuildingOrbitalPurchaseCost`, `BuildingPayloadClass`, and `DefensiveTurretPayloadClass` remain inert leftover text. No GConfig reader, string compatibility lookup, or migration shim.
-
-Committed diff vs `origin/main` is source/tests/docs only. No maps, Blueprint, DataAsset, material, or other Content files.
-
-## Final tests / results
-
-All Failures=0, Cancelled=false:
-
-- `gp.Settings.RunOrbitalDeliveryVisibilityContractTest`
-- `gp.Building.RunOrbitalBuildingDropContractTest` (includes SpawnedClass cold-load/failure coverage; no distinct extra command)
+- `gp.Building.RunBuildingVitalsOwnershipContractTest`
+- `gp.Building.RunOrbitalBuildingDropContractTest`
 - `gp.Building.RunMultiBuildingDataContractTest`
 - `gp.Building.RunDefensiveTurretContractTest`
-- `gp.Building.RunBuildGridContractTest`
 - `gp.Resource.RunUnitCapLogisticsHubContractTest`
+- `gp.Units.RunUnitDefinitionContractTest`
 - `gp.Economy.RunEconomyLogisticsDataContractTest`
+- `gp.Combat.RunHealthBarContractTest`
+- `gp.Combat.RunAutoAcquireContractTest`
+- `gp.Combat.RunAttackMoveContractTest`
+- `gp.Resource.RunOrbitalUnitDropContractTest`
 
-## Full-suite escalation decision
+## Regression/full-suite escalation decision
 
-**Not escalated.** `Docs/Development/Risk_Based_Development_Workflow.md` reserves the full suite for cross-cutting architecture, shared authority/state infrastructure, replication/GAS, major refactors, milestone/RC, or unexpected targeted-regression breakage. Finalization reran the slice contract plus high-risk affected regressions. No new regression appeared.
+Escalated because shared `AGP_UnitBase::BeginPlay` received a virtual gate. Direct building,
+UnitDefinition, combat, health-bar, economy, and non-building orbital-unit contracts all passed.
 
-## Builds
+`gp.Resource.RunS28RegressionSuite` was additionally attempted. It stopped at Worker hauling with 15
+failures after a hostile authored `BP_GP_SalvageWalkerLONGRAGE` in the locally modified prototype map
+attacked and killed the hauling fixture. Running the hauling contract alone reproduced the same 15
+failures and hostile-map interference. The result is environment/content contamination, not a
+vitals-ownership failure; protected map/content was not changed to force the suite.
 
-- GPEditor Win64 Development + UHT **PASS**
-- GP Win64 Development **PASS**
-- GP Win64 Shipping **PASS**
+No further full-suite escalation was useful without modifying protected local content.
 
-## Protected-files confirmation
+## Build
 
-- `GP/Config/DefaultGame.ini` untouched by this slice
-- `GP/Config/DefaultEngine.ini` untouched by this slice
-- Maps / Blueprints / materials / untracked Content left local
+- GPEditor Win64 Development + UHT: **PASS**
+- GP Development / Shipping: not run; reserved for finalization after operator PASS
 
-## Local authored Logistics Hub DataAsset confirmation
+## Protected files
 
-The locally edited Logistics Hub DataAsset remains local and was not staged, committed, reverted, stashed, reset, or restored.
+Untouched and not staged:
 
-## Stop
+- `GP/Config/DefaultGame.ini`
+- `GP/Config/DefaultEngine.ini`
+- maps, Blueprints, DataAssets, materials, and all untracked Content
+- locally edited Logistics Hub BuildingDefinition/DataAsset content
 
-**NOT MERGED.**
+The temporary read-only asset-inspection script was deleted after use.
+
+## Operator validation required
+
+Cold-open Editor → PIE. Verify MainBase has stable normal health; deploy Hub (500/500, +5 cap) and
+Turret (400/400, combat/cooldown/range); damage both and verify health bar/death; verify no placement
+or footprint regression. `GP UnitCombatAttributesInitialized` log lines expose initialized GAS values.
+
+**NOT MERGED. NOT FINALIZED.**

@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | Current `origin/main` baseline: `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65` |
+| Code baseline | Current `origin/main` baseline: `71a7c700a1f4b066d30c0490365099c82ce91a41` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **Delivery timing ownership cleanup (Cleanup Slice G)** on `main` @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65` |
+| Last closed / merged stage | **Building procurement + payload ownership** on `main` @ `71a7c700a1f4b066d30c0490365099c82ce91a41` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md`](Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md) — **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_FINALIZED_READY_FOR_MERGE** |
+| Current stage | [`Claude_Tasks/GP-Building-Vitals-Definition-Ownership.md`](Claude_Tasks/GP-Building-Vitals-Definition-Ownership.md) — **BUILDING_VITALS_DEFINITION_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION** |
 
 ---
 
@@ -51,7 +51,7 @@
 
 **Closed on `main`:** Delivery timing ownership cleanup @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`; Unit payload compatibility cleanup @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`; Unit numeric compatibility cleanup @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`; Dead overlap setting removal @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`; Settings Visibility Truth @ `f38e803771261c60d865949c693a52a73fbcedb2`; Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current:** [`Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md`](Claude_Tasks/GP-Building-Procurement-Payload-Ownership.md) — **BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
+**Current:** [`Claude_Tasks/GP-Building-Vitals-Definition-Ownership.md`](Claude_Tasks/GP-Building-Vitals-Definition-Ownership.md) — **BUILDING_VITALS_DEFINITION_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**. **NOT MERGED. NOT FINALIZED.**
 
 **Do not** implement old pod-per-segment Wall.
 

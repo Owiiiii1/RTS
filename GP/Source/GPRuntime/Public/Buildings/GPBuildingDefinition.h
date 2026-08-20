@@ -41,8 +41,9 @@ public:
 	TSoftObjectPtr<UGP_UnitDefinition> UnitDefinition;
 
 	/**
-	 * Compatibility fallback MaxHealth when UnitDefinition is empty.
-	 * Canonical after GP-S38D: UnitDefinition.MaxHealth via ResolveCanonicalMaxHealth().
+	 * Bootstrap/compatibility fallback for definition-level queries when UnitDefinition is empty.
+	 * Spawned building GAS is initialized from UnitDefinition through AGP_BuildingBase, or from
+	 * AGP_UnitBase actor defaults only when the canonical UnitDefinition is absent/load-failed.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Vitals|Fallback", meta = (ClampMin = "1.0"))
 	float MaxHealth = 500.0f;
@@ -86,6 +87,6 @@ public:
 	/** Already-loaded UnitDefinition only. Does not LoadSynchronous. */
 	const UGP_UnitDefinition* ResolveLoadedUnitDefinition() const;
 
-	/** UnitDefinition.MaxHealth when loaded; otherwise compatibility MaxHealth. */
+	/** Definition-level helper only: loaded UnitDefinition.MaxHealth, otherwise compatibility MaxHealth. */
 	float ResolveCanonicalMaxHealth() const;
 };

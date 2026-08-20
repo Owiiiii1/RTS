@@ -168,6 +168,7 @@ public:
 	void DebugForceUnresolvedSoftDefinitionLoad(UGP_UnitDefinition* InjectedDefinition, bool bHoldCompletion);
 	bool DebugDidRequestAsyncUnitDefinitionLoad() const { return bDebugDidRequestAsyncUnitDefinitionLoad; }
 	void DebugCompletePendingUnitDefinitionLoad();
+	int32 DebugGetCombatAttributesInitializationCount() const { return DebugCombatAttributesInitializationCount; }
 #endif
 
 protected:
@@ -178,6 +179,8 @@ protected:
 	void OnRep_IsDead();
 
 	void InitializeAbilitySystemActorInfo();
+	/** Derived actors may wait for an upstream definition owner before selecting UnitDefinitionAsset. */
+	virtual bool ShouldDeferUnitDefinitionInitialization() const;
 	void BeginUnitDefinitionInitialization();
 	void RequestAsyncUnitDefinitionLoad();
 	void HandleUnitDefinitionLoaded();
@@ -278,5 +281,6 @@ private:
 	bool bDebugForceUnresolvedSoftPath = false;
 	bool bDebugHoldAsyncCompletion = false;
 	bool bDebugDidRequestAsyncUnitDefinitionLoad = false;
+	int32 DebugCombatAttributesInitializationCount = 0;
 #endif
 };

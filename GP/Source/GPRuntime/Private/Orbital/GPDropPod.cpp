@@ -592,15 +592,9 @@ void AGP_DropPod::AuthoritySpawnBuildingPayload()
 		{
 			if (UGP_BuildingDefinition* BuildingDef = Drop->ResolveLoadedBuildingDefinition())
 			{
-				bool bAssignCatalogBuildingDef = Building->BuildingDefinitionAsset.IsNull();
-#if !UE_BUILD_SHIPPING
-				bAssignCatalogBuildingDef = bAssignCatalogBuildingDef
-					|| UGP_BuildingDropCatalog::Get().IsContractIsolationActive();
-#endif
-				if (bAssignCatalogBuildingDef)
-				{
-					Building->BuildingDefinitionAsset = BuildingDef;
-				}
+				// The purchased product's BuildingDefinition is canonical for the spawned
+				// building, including the nested UnitDefinition used for GAS initialization.
+				Building->BuildingDefinitionAsset = BuildingDef;
 			}
 		}
 	}

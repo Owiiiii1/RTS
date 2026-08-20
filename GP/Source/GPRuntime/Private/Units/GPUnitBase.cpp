@@ -232,7 +232,10 @@ void AGP_UnitBase::BeginPlay()
 	Super::BeginPlay();
 	AttachHealthBarToOwnerRoot();
 	InitializeAbilitySystemActorInfo();
-	BeginUnitDefinitionInitialization();
+	if (!ShouldDeferUnitDefinitionInitialization())
+	{
+		BeginUnitDefinitionInitialization();
+	}
 }
 
 void AGP_UnitBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -377,6 +380,11 @@ const UGP_UnitDefinition* AGP_UnitBase::ResolveLoadedUnitDefinition() const
 float AGP_UnitBase::GetRetaliationPursuitSeconds() const
 {
 	return FMath::Max(0.0f, ResolvedRetaliationPursuitSeconds);
+}
+
+bool AGP_UnitBase::ShouldDeferUnitDefinitionInitialization() const
+{
+	return false;
 }
 
 #if !UE_BUILD_SHIPPING
@@ -646,6 +654,9 @@ void AGP_UnitBase::InitializeCombatAttributesIfNeeded()
 	AbilitySystemComponent->SetNumericAttributeBase(UGP_UnitAttributeSet::GetAttackRangeAttribute(), Range);
 
 	bCombatAttributesInitialized = true;
+#if !UE_BUILD_SHIPPING
+	++DebugCombatAttributesInitializationCount;
+#endif
 
 	const UWorld* World = GetWorld();
 	UE_LOG(LogGPCombat, Log,

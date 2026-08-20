@@ -143,6 +143,7 @@ protected:
 	void FinishBuildingDefinitionLoadResolve();
 	void CompleteBuildingDefinitionInitialization(const UGP_BuildingDefinition* DefinitionOrNull);
 	void CancelPendingBuildingDefinitionLoad();
+	virtual bool ShouldDeferUnitDefinitionInitialization() const override;
 	virtual void NotifyBuildingDefinitionReady();
 
 private:

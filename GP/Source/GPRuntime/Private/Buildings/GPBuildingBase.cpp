@@ -361,7 +361,26 @@ void AGP_BuildingBase::CompleteBuildingDefinitionInitialization(const UGP_Buildi
 	bBuildingDefinitionLoadPending = false;
 	bBuildingDefinitionReady = true;
 	BuildingDefinitionLoadHandle.Reset();
-	(void)DefinitionOrNull;
+
+	if (DefinitionOrNull != nullptr && !DefinitionOrNull->UnitDefinition.IsNull())
+	{
+		// BuildingDefinition is the canonical owner for building vitals. This intentionally
+		// outranks any Blueprint/CDO UnitDefinitionAsset inherited by the spawned class.
+		UnitDefinitionAsset = DefinitionOrNull->UnitDefinition;
+	}
+	else if (DefinitionOrNull != nullptr)
+	{
+		UE_LOG(LogGPBuildGridRegister, Warning,
+			TEXT("GP BuildingDefinitionUnitDefinitionMissing: Building=%s Definition=%s "
+				"UsingActorUnitDefinitionOrDefaults=%s"),
+			*GetName(),
+			*GetNameSafe(DefinitionOrNull),
+			UnitDefinitionAsset.IsNull() ? TEXT("Defaults") : TEXT("ActorUnitDefinitionAsset"));
+	}
+
+	// UnitBase deliberately deferred this while a BuildingDefinition was unresolved.
+	// Empty/load-failed BuildingDefinitions preserve the existing actor-definition/default fallback.
+	BeginUnitDefinitionInitialization();
 	NotifyBuildingDefinitionReady();
 }
 
@@ -384,6 +403,11 @@ void AGP_BuildingBase::CancelPendingBuildingDefinitionLoad()
 
 void AGP_BuildingBase::NotifyBuildingDefinitionReady()
 {
+}
+
+bool AGP_BuildingBase::ShouldDeferUnitDefinitionInitialization() const
+{
+	return !BuildingDefinitionAsset.IsNull() && !bBuildingDefinitionReady;
 }
 
 #if !UE_BUILD_SHIPPING

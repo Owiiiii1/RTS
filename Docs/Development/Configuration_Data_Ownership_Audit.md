@@ -16,7 +16,7 @@ The largest ownership problems are:
 1. **Build footprint has five active representations.** Payload/live `PlacementFootprintBounds` normally wins; `BuildingDefinition.FootprintCells`, two non-identical class fallback tables, and replicated grid AABBs remain active.
 2. **Orbital acquisition still has eight deprecated-but-active Project Settings bridges.** Unit costs, slots, payload classes, Logistics Hub cost, and Logistics Hub payload remain runtime fallbacks.
 3. **Building payload class precedence contradicts the nominal DataAsset SoT.** A configured Defensive Turret settings class outranks `BuildingDefinition.SpawnedClass`; Hub settings remain the fallback when its spawned class is empty.
-4. **Building vitals are not fully connected.** `BuildingDefinition.UnitDefinition` is the documented owner, but spawned buildings receive the BuildingDefinition only; its nested UnitDefinition is not automatically copied to `AGP_UnitBase::UnitDefinitionAsset`. BP/CDO `Default*` values can therefore remain effective.
+4. **Building vitals wiring is implemented pending operator validation.** `BuildingDefinition.UnitDefinition` is copied to `AGP_UnitBase::UnitDefinitionAsset` after BuildingDefinition readiness and before one-shot GAS initialization. Empty/load-failed refs retain explicit compatibility fallbacks.
 5. **Actor-owned geometry/tuning remains a second database.** MainBase drop-off range, placement bounds, navigation obstacle, capsule dimensions, and drop-zone transforms are actor/BP/CDO authored and can disagree with DataAssets.
 6. **One Project Settings field is proven dead:** `BuildingPlacementOverlapMarginCm` is editor-visible and config-backed but has no runtime or test reader.
 7. **Some presentation metadata is unused:** `UGP_ResourceDefinition::Tint` and several Icon/Description fields have no current production reader.
@@ -37,7 +37,7 @@ Status vocabulary: `CANONICAL`, `DUPLICATED`, `COMPATIBILITY`, `DEPRECATED_ACTIV
 | System | Parameter | Current Locations | Runtime Readers | Current Precedence | Effective SoT | Status | Recommended SoT | Migration Risk |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Unit | Vitals/combat/movement/cargo/retaliation | `UGP_UnitDefinition`; `AGP_UnitBase::Default*`; component defaults; native catalog | `GPUnitBase.cpp:491-646` | loaded UnitDefinition → actor/component fallback | UnitDefinition when loaded | DUPLICATED | `UGP_UnitDefinition` | MEDIUM: migrate BP defaults and retain bootstrap |
-| Building | MaxHealth | `UnitDefinition.MaxHealth`; `BuildingDefinition.MaxHealth`; actor `DefaultMaxHealth`; native catalogs | `GPUnitBase.cpp:623-638`; `ResolveCanonicalMaxHealth()` is currently test-only | actor UnitDefinitionAsset → actor default; BuildingDefinition resolver is not in spawn initialization | BP/CDO or explicitly authored actor UnitDefinitionAsset | AMBIGUOUS | linked `UGP_UnitDefinition.MaxHealth` | HIGH: wire nested definition, migrate BPs, update combat contracts |
+| Building | Vitals/combat initialization | `BuildingDefinition.UnitDefinition`; actor `UnitDefinitionAsset`; actor `Default*`; `BuildingDefinition.MaxHealth` compatibility metadata | `GPBuildingBase.cpp` bridges nested definition; existing `GPUnitBase.cpp` async pipeline initializes GAS | valid BuildingDefinition.UnitDefinition → actor UnitDefinitionAsset → actor Default*; BuildingDefinition.MaxHealth is not a GAS source | linked `UGP_UnitDefinition` when valid | CANONICAL | linked `UGP_UnitDefinition` | MEDIUM: retain explicit empty/load-failure fallback |
 | Building | Storage capacity/count | `BuildingDefinition`; `UGP_StorageComponent` 100×5; MainBase fallback 100×5; native catalog | `GPMainBase.cpp:92-106` | loaded BuildingDefinition → MainBase/component fallback | BuildingDefinition when loaded | DUPLICATED | `UGP_BuildingDefinition` | MEDIUM |
 | Building | Logistics Hub UnitCapBonus | `BuildingDefinition.UnitCapBonus`; class fallback 5; native catalog 5 | `GPLogisticsHub.cpp:85-137` | loaded BuildingDefinition → 5 | BuildingDefinition when loaded | DUPLICATED | `UGP_BuildingDefinition` | LOW |
 | Building | Spawned payload class | `BuildingDefinition.SpawnedClass`; Hub/Turret settings classes; native class | `GPBuildingDropCatalog.cpp:956-1008` | Turret settings → BuildingDefinition → native; Hub BuildingDefinition → settings → native | depends on slot | AMBIGUOUS | `UGP_BuildingDefinition.SpawnedClass` | HIGH: authored BP migration |
@@ -501,6 +501,8 @@ Do not combine H, I, J, M, or N into one implementation slice.
 
 **Combined building procurement + payload ownership implementation status:** `BUILDING_PROCUREMENT_PAYLOAD_OWNERSHIP_FINALIZED_READY_FOR_MERGE` on `feature/gp-building-procurement-payload-ownership`. Operator PASS after Hub/Turret authored payload migration. Removed `BuildingOrbitalPurchaseCost`, `BuildingPayloadClass`, `DefensiveTurretPayloadClass`, the settings payload helper APIs, and `SyncLegacyLogisticsHubCompatibility`. Canonical cost is `UGP_OrbitalDropDefinition.Cost`. Canonical payload is `UGP_BuildingDefinition.SpawnedClass`. Native Hub/Turret bootstrap own `AGP_LogisticsHub` / `AGP_DefensiveTurret` and costs 100 / 150. Hub/Turret Ready requires async-resolved slot-valid `SpawnedClass`. Stale `DefaultGame.ini` keys intentionally not touched. Protected authored DataAssets not committed. **NOT MERGED.**
 
+**Slice H implementation status:** `BUILDING_VITALS_DEFINITION_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION` on `feature/gp-building-vitals-definition-ownership`. Valid `UGP_BuildingDefinition.UnitDefinition` now outranks actor/BP `UnitDefinitionAsset` and actor `Default*` values for buildings. `AGP_BuildingBase` defers the existing `AGP_UnitBase` async definition/GAS pipeline until its BuildingDefinition resolves, then wires the nested soft reference and initializes once. Empty nested refs retain explicit actor-definition/default compatibility; unresolved refs remain pending; load failure follows the existing Default* policy. `BuildingDefinition.MaxHealth` remains definition-level bootstrap/compatibility only. Footprint/geometry is unchanged. **NOT MERGED. NOT FINALIZED.**
+
 ## 10. Do Not Delete Yet
 
 The following fields look obsolete or duplicated but still have proven readers:
@@ -508,9 +510,9 @@ The following fields look obsolete or duplicated but still have proven readers:
 - Stale `DefaultGame.ini` keys `WorkerTransportSlotCost`, `SalvageWalkerTransportSlotCost`, `WorkerOrbitalDropCost`, `SalvageWalkerOrbitalDropCost`, `WorkerPayloadClass`, `SalvageWalkerPayloadClass`, `UnitDropDescentDurationSeconds`, `UnitDropPayloadDeployDelaySeconds`, `BuildingDropDescentDurationSeconds`, `BuildingDropPayloadDeployDelaySeconds`, `BuildingOrbitalPurchaseCost`, `BuildingPayloadClass`, `DefensiveTurretPayloadClass` — leftover text after C++ removal; no production GConfig/string reader. Config hygiene later.
 - `UnitDropPodClass` — all three orbital product families use it.
 - `BuildingDropSpawnAltitudeCm`, `BuildingDropCleanupDelaySeconds` — building and Wall Package.
-- `BuildingDefinition.MaxHealth` — compatibility resolver/tests, even though live vitals wiring is incomplete.
+- `BuildingDefinition.MaxHealth` — bootstrap/compatibility resolver and tests; live building GAS uses the linked UnitDefinition when valid.
 - `BuildingDefinition.FootprintCells` — active fallback and invalid-footprint contract.
-- actor `Default*` combat fields — live fallback whenever UnitDefinitionAsset is empty.
+- actor `Default*` combat fields — live fallback when UnitDefinitionAsset is empty or its async load fails.
 - component Cargo/Storage defaults — live fallback during missing/failed definition paths.
 - `AGP_MainBase::DropOffRangeCm` and command cache — active haul gate.
 - native unit/building/drop/package catalog entries — cold-start/failure bootstrap.
@@ -530,7 +532,7 @@ The following may be removed later only after confirming asset/UI intent:
 
 - `TDD/10` says balance is not hardcoded, but native bootstrap and actor/component fallbacks duplicate values.
 - `TDD/10` says orbital settings contain global tuning + soft references only, but deprecated active balance/payload bridges remain.
-- GP-S39E/TDD building-vitals ownership omits the missing nested UnitDefinition-to-actor propagation.
+- Older GP-S39E/TDD building-vitals text may omit the implemented nested UnitDefinition-to-actor propagation.
 - `TDD/06` contains a stale claim that occupancy is inferred from `FootprintCells + actor location`; live bounds and subsystem occupancy now win.
 - MainBase drop-off is described as building data in places but is actor-owned.
 - `TDD/12` target UI ownership is GPUIRuntime/MVVM; current TEMP HUD is in GPRuntime and directly binds gameplay objects.

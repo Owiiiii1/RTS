@@ -10,7 +10,8 @@
 
 - Branch: `feature/gp-fow-client-presentation-foundation`
 - Exact base: `origin/main` @ `9d9caa5fc7665ad8dc62016aed7b77f5238761dc`
-- Candidate head: implementation commit containing this report (`git rev-parse HEAD` after commit)
+- Validated implementation/report head: `b19d7befbd3177ead332e2e41a4b508cc3e36ca8`
+- Final branch head: documentation-only head-record commit following the validated implementation
 
 ## Factual pre-change UI architecture
 

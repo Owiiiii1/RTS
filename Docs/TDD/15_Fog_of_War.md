@@ -30,8 +30,9 @@ Current-compatible deviations from the older pseudocode:
   confirmation remains authoritative;
 - single-client transitions, same-coordinate two-player team isolation, and restart/reinitialization
   passed operator validation;
-- source-only world/terrain presentation bilinearly upsamples a viewport-local Known/Visible raster
-  (~10×, 20 cm texels, separable 160 cm blur) and awaits operator visual validation;
+- source-only world/terrain presentation uses a per-LocalPlayer 1024² Known/Visible post-process
+  texture mask (spatial box blur + 0.20 s temporal blend) and awaits operator visual validation;
+  gameplay FoW remains 200 cm / 5 Hz; a 50 cm / 10 Hz grid change is deferred;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
   relevance, minimap, and the full production HUD remain later FoW slices.
 
@@ -43,7 +44,8 @@ Current-compatible deviations from the older pseudocode:
 3. **Standard UE relevance API (future).** Later actor hiding uses `IsNetRelevantFor` /
    `bOnlyRelevantToOwner`; the trusted mirror does not itself hide replicated actors.
 4. **Bit-grid storage.** Authority and local mirror use `TBitArray` internally; raw arrays are never
-   replicated. Current deterministic cell size is 200 cm.
+   replicated. Current deterministic gameplay cell size remains 200 cm (5 Hz). Visual smoothness is a
+   presentation-only post-process texture; 50 cm / 10 Hz is not approved yet.
 5. **No client-side FoW gameplay.** Client can render fog mask, but server arbiters all visibility-gated logic.
 6. **No tick-poll у widgets.** FoW reads through `UGP_FoWViewModel` and reacts to coarse Revision
    FieldNotify (Common UI + MVVM per TDD/12).
@@ -151,36 +153,30 @@ Payload facts:
 ### World / Terrain Visualization
 
 `UGP_FoWWorldPresentationSubsystem` is one `ULocalPlayerSubsystem` per local player in `GPUIRuntime`.
-It owns one native `UGP_FoWWorldOverlayWidget` and binds only to that controller's
-`UGP_LocalFoWComponent`.
+It binds only to that controller's `UGP_LocalFoWComponent` and injects a per-view post-process
+blendable. The Slate/SDF/contour/raster overlay path was removed.
 
 Current MVP rendering method:
 
-- perspective view corners (plus view center) are deprojected to the prototype's planar Z=0 ground;
-  skyward rays use a look-direction fallback so camera motion does not force full-black;
-- only the intersecting cell rectangle, padded by two LocalFoW cells, is sampled from the trusted mirror;
-- KnownMask (Explored|Visible) and VisibleMask are bilinearly upsampled (~10× → 20 cm texels) and
-  separable-box-blurred (8 texels / 160 cm);
-- Unexplored uses opaque black (`Obscuration=1.0`);
-- Explored uses a dark neutral translucent overlay (`Obscuration=0.68`);
-- Visible emits no overlay (`Obscuration=0.0`);
-- coalesced horizontal runs become Slate quads; not one primitive per presentation texel;
-- NotReady still fails closed to full-screen black;
-- camera pan/zoom/yaw resamples the current viewport-local raster;
-- if a rebuild fails, the last successful overlay is kept instead of permanent full-black.
+- on LocalFoW revision, encode Known (Explored|Visible) and Visible into a 1024×1024 RGBA8 texture
+  covering the current FoW origin/extent (~195 cm / visual texel);
+- keep Previous and Target textures; lerp in the material over 0.20 s;
+- 2-pass separable box blur, radius 1 texel, on the CPU mask before upload;
+- Unexplored: black; Explored: SceneColor × 0.35; Visible: unchanged SceneColor;
+- NotReady forces `FoWReady=0` (full black);
+- camera pan/zoom/yaw does not rebuild the mask; world XY → UV is evaluated in the shader;
+- each LocalPlayer owns distinct textures and a unique MID (no shared PostProcessVolume).
 
 Bounds:
 
-- no renderer-side one-million-cell copy;
-- maximum 65,536 sampled view cells (plus two-cell LocalFoW pad);
-- up to 8,000 coalesced quads per Slate draw batch;
-- maximum 16,384 overlay quads and 262,144 presentation pixels;
-- 10× presentation supersample (minimum 4× if the pixel cap requires it);
-- no cell UObject/component allocation.
+- presentation texture is independent of the 1000×1000 gameplay grid;
+- 2 GPU textures × 4,194,304 bytes plus CPU float working buffers;
+- rebuild/upload only on LocalFoW revision, not per frame;
+- no cell UObject/component allocation;
+- old Slate world renderer is inactive.
 
-The current arena contains no Landscape and uses planar blockout ground. Meaningful elevation would
-require a later depth-aware projection design; gameplay FoW cell resolution/state must not change for
-that presentation upgrade.
+Gameplay FoW remains 200 cm / 5 Hz. A 50 cm / 10 Hz grid change is deferred until this renderer is
+operator-evaluated. The current arena contains no Landscape and uses planar blockout ground.
 
 No material, render target, map, Blueprint, or global Material Parameter Collection is required. This
 keeps masks isolated per LocalPlayer/listen client and avoids global team-state leakage.
@@ -373,8 +369,8 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
 - ❌ Client decides visibility — server-only.
 - ❌ Last-known state writes to live state.
 - ❌ Ordinary HUD widget code calling FoW authority/mirror directly — use `UGP_FoWViewModel`.
-- ✅ The dedicated native world overlay may read its one bound `UGP_LocalFoWComponent`; it is the
-  project-owned presentation adapter, not gameplay authority or a general HUD widget.
+- ✅ The dedicated world FoW post-process adapter may read its one bound `UGP_LocalFoWComponent`; it is
+  the project-owned presentation adapter, not gameplay authority or a general HUD widget.
 - ❌ Removing `Explored` flag once set (no re-fog у MVP).
 
 ## Performance Budget
@@ -382,9 +378,9 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
 - 5 Hz sight tick × O(units × area_cells_covered). With 50 units × ~100 cells average = 25k cell ops/sec — acceptable.
 - Relevance check called by engine per actor per client. Cheap (per-cell bit query + team check).
 - Multicast and replication budget unchanged from existing.
-- World overlay: bounded viewport-local sampling (max 65,536 cells), bilinear 10× Known/Visible raster
-  with separable box blur (max 262,144 presentation pixels / 16,384 coalesced quads), camera resample
-  of the current view, and no full-grid upload/copy.
+- World FoW presentation: 1024² Known/Visible mask textures per LocalPlayer, 2-pass separable box
+  blur, 0.20 s temporal lerp, one after-tonemap post-process pass. CPU rebuild/upload only on LocalFoW
+  revision. Camera motion does not rebuild the mask.
 
 ## Validation per Pillars
 

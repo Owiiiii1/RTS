@@ -24,6 +24,7 @@ public class GPEditor : ModuleRules
 			"AssetRegistry",
 			"NavigationSystem",
 			"GameplayTags",
+			"MaterialEditor",
 			"GPGASRuntime",
 			"GPRuntime"
 		});

@@ -72,12 +72,12 @@ PublicDependencyModuleNames.AddRange(new string[]
 - The server updates the owning-client mirror; the adapter projects that trusted replicated
   presentation state into the ViewModel. Widgets remain read-only and never call FoW gameplay authority.
 - Listen-host and remote-client team isolation plus restart/reinitialization passed operator validation.
-- `UGP_FoWWorldPresentationSubsystem` + native `UGP_FoWWorldOverlayWidget` are the first specialized
-  world-presentation consumer. They bind directly to the trusted one-team LocalFoW mirror, not gameplay
-  authority, and project bounded/coalesced Slate geometry behind normal HUD layers.
-- This direct mirror binding is intentionally limited to the project-owned world renderer: camera
-  reprojection is not a conventional HUD FieldNotify problem. Ordinary HUD/minimap widgets still
-  consume ViewModels.
+- `UGP_FoWWorldPresentationSubsystem` is the first specialized world-presentation consumer. It binds
+  directly to the trusted one-team LocalFoW mirror, not gameplay authority, and injects a per-local-player
+  post-process Known/Visible texture mask. Gameplay FoW stays 200 cm / 5 Hz; visual smoothness is
+  texture-domain spatial blur plus 0.20 s temporal interpolation.
+- This direct mirror binding is intentionally limited to the project-owned world renderer. Ordinary
+  HUD/minimap widgets still consume ViewModels.
 - The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.
 
 ### MVVM Data Flow
@@ -149,10 +149,10 @@ UI код live у `GPUIRuntime`. Per [`01_Module_Architecture`](01_Module_Archit
 6. **Widget never queries ASC / Actor state.** Direct reads of attributes, components, transforms — banned. Все через VM.
 7. **Common UI activation stack** для будь-якого modal (OrderMenu, EndOfMatch, Pause). Не raw `AddToViewport` для screens.
 
-Specialized exception: the hit-test-invisible FoW world overlay is a native viewport presentation
-adapter, not an interactive HUD screen. It may read the trusted local mirror directly for bounded
-camera reprojection and a viewport-local bilinear Known/Visible presentation raster, but cannot read
-authority or mutate gameplay. The paired
+Specialized exception: FoW world presentation is a native local-player adapter, not an interactive HUD
+screen. `UGP_FoWWorldPresentationSubsystem` may read the trusted local mirror to rebuild a Known/Visible
+runtime mask texture and bind a per-view post-process material instance, but cannot read authority or
+mutate gameplay. Camera motion must not rebuild that mask. The paired
 `UGP_LocalFoWUnitPresentationSubsystem` is likewise a native world-presentation adapter: UnitBase
 actors lifecycle-register, LocalFoW revisions push immediate reevaluation, and a bounded 10 Hz
 registered-list pass catches movement across a static visibility edge. It only composes local

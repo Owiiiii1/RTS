@@ -4,44 +4,29 @@
 
 #include "CoreMinimal.h"
 #include "FogOfWar/GPFogOfWarComponent.h"
+#include "Presentation/GPFoWVisualMask.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
+#include "Tickable.h"
 #include "GPFoWWorldPresentationSubsystem.generated.h"
 
 class APlayerController;
-class UGP_FoWWorldOverlayWidget;
+class FSceneViewExtensionBase;
 class UGP_LocalFoWComponent;
-
-struct FGP_FoWWorldOverlayStats
-{
-	int32 SampledGameplayCells = 0;
-	int32 PaddedCells = 0;
-	int32 SuperSample = 0;
-	FIntPoint RasterDims = FIntPoint::ZeroValue;
-	int32 RasterPixels = 0;
-	int32 RasterBytes = 0;
-	int32 BlurRadiusSamples = 0;
-	float BlurRadiusCm = 0.0f;
-	float PresentationTexelWorldSize = 0.0f;
-	int32 OverlayVertices = 0;
-	int32 OverlayQuads = 0;
-	int32 DrawBatches = 0;
-	FIntPoint MinCell = FIntPoint::ZeroValue;
-	FIntPoint MaxCell = FIntPoint::ZeroValue;
-	uint64 ConsumedSerial = 0;
-	int64 MaskRevision = -1;
-	bool bCameraResample = false;
-	bool bFallbackActive = false;
-	double RebuildMilliseconds = 0.0;
-};
+class UMaterialInstanceDynamic;
+class UMaterialInterface;
+class UTexture2D;
 
 /**
  * Local-player owner for source-only world/terrain Fog of War presentation.
  *
- * The subsystem reads exactly one trusted UGP_LocalFoWComponent. It never computes visibility and has
- * no gameplay mutation path.
+ * Builds a Known/Visible runtime mask texture from exactly one trusted UGP_LocalFoWComponent and
+ * injects a per-view post-process blendable. It never computes visibility and has no gameplay
+ * mutation path.
  */
 UCLASS()
-class GPUIRUNTIME_API UGP_FoWWorldPresentationSubsystem : public ULocalPlayerSubsystem
+class GPUIRUNTIME_API UGP_FoWWorldPresentationSubsystem
+	: public ULocalPlayerSubsystem
+	, public FTickableGameObject
 {
 	GENERATED_BODY()
 
@@ -50,47 +35,54 @@ public:
 	virtual void Deinitialize() override;
 	virtual void PlayerControllerChanged(APlayerController* NewPlayerController) override;
 
+	virtual void Tick(float DeltaTime) override;
+	virtual TStatId GetStatId() const override;
+	virtual bool IsTickable() const override;
+	virtual bool IsTickableInEditor() const override { return false; }
+	virtual bool IsTickableWhenPaused() const override { return true; }
+	virtual ETickableTickType GetTickableTickType() const override;
+
 	static float GetObscurationForState(EGP_FoWState State);
-	static FLinearColor GetOverlayColorForState(EGP_FoWState State);
-	static FLinearColor GetOverlayColorForObscuration(float Obscuration);
+	static FLinearColor ComposeVisualSceneColor(
+		const FLinearColor& SceneColor,
+		float Known,
+		float Visible,
+		bool bReady);
 	static bool RequiresConservativeFullObscuration(const UGP_LocalFoWComponent* Mirror);
+	static bool IsOldSlateRendererActive() { return false; }
 
 	void SetVisualizationEnabled(bool bEnabled);
 	bool IsVisualizationEnabled() const { return bVisualizationEnabled; }
 	bool IsRendererActive() const;
 	UGP_LocalFoWComponent* GetBoundMirror() const { return BoundMirror.Get(); }
-	uint64 GetRenderSerial() const { return RenderSerial; }
 	int64 GetLastUpdateRevision() const { return LastUpdateRevision; }
 
-	int32 GetLastSampledCellCount() const { return LastStats.SampledGameplayCells; }
-	int32 GetLastPaddedCellCount() const { return LastStats.PaddedCells; }
-	int32 GetLastOverlayVertexCount() const { return LastStats.OverlayVertices; }
-	int32 GetLastOverlayQuadCount() const { return LastStats.OverlayQuads; }
-	int32 GetLastDrawBatchCount() const { return LastStats.DrawBatches; }
-	FIntPoint GetLastSampledMinCell() const { return LastStats.MinCell; }
-	FIntPoint GetLastSampledMaxCell() const { return LastStats.MaxCell; }
-	FIntPoint GetLastRasterDims() const { return LastStats.RasterDims; }
-	int32 GetLastRasterPixels() const { return LastStats.RasterPixels; }
-	bool DidLastCameraResample() const { return LastStats.bCameraResample; }
-	bool WasLastFallbackActive() const { return LastStats.bFallbackActive; }
-	int64 GetLastMaskRevision() const { return LastStats.MaskRevision; }
-	bool IsVisualDataDirty() const;
-
-	static constexpr int32 GetMaximumSampledCells() { return 65536; }
-	static constexpr int32 GetMaximumQuadsPerBatch() { return 8000; }
-	static constexpr int32 GetSamplePadCells() { return 2; }
-	static constexpr float GetProjectionGroundZ() { return 0.0f; }
-	static const TCHAR* GetPresentationAlgorithmName();
+	static const TCHAR* GetRendererName();
 	static const TCHAR* GetMaskModelName();
-	static const TCHAR* GetInterpolationName();
-	static const TCHAR* GetBlurName();
-	static int32 GetTargetSuperSample();
-	static int32 GetMinimumSuperSample();
-	static int32 GetBlurRadiusSamples();
-	static int32 GetMaximumPresentationPixels();
-	static int32 GetMaximumOverlayQuads();
+	static const TCHAR* GetSpatialFilterName();
+	static const TCHAR* GetMaterialAssetPath();
+	static int32 GetMaskTextureResolution();
+	static float GetBlendDurationSeconds();
+	static int32 GetSpatialBlurRadius();
+	static int32 GetSpatialBlurPasses();
+	static float GetExploredDimFactor();
+	static int32 GetMaskBytesPerTexture();
 
-	void RecordOverlayStats(const FGP_FoWWorldOverlayStats& Stats);
+	UTexture2D* GetPreviousMaskTexture() const { return PreviousMaskTexture; }
+	UTexture2D* GetTargetMaskTexture() const { return TargetMaskTexture; }
+	UMaterialInstanceDynamic* GetPostProcessMID() const { return PostProcessMID; }
+	UMaterialInterface* GetLoadedMaterialTemplate() const { return TemplateMaterial; }
+	float GetBlendAlpha() const { return MaskRuntime.BlendAlpha; }
+	int64 GetMaskRevision() const { return MaskRuntime.MaskRevision; }
+	int64 GetPreviousMaskRevision() const { return MaskRuntime.PreviousRevision; }
+	int32 GetMaskBuildCount() const { return MaskRuntime.BuildCount; }
+	double GetLastMaskBuildMilliseconds() const { return MaskRuntime.LastBuildMilliseconds; }
+	double GetLastMaskUploadMilliseconds() const { return MaskRuntime.LastUploadMilliseconds; }
+	bool IsPostProcessBound() const;
+	bool IsMaskReady() const { return MaskRuntime.bReady; }
+	const FGP_FoWVisualMaskRuntime& GetMaskRuntime() const { return MaskRuntime; }
+
+	void DebugAdvanceBlend(float DeltaSeconds);
 
 #if !UE_BUILD_SHIPPING
 	void DebugDumpToLog() const;
@@ -99,19 +91,36 @@ public:
 private:
 	void BindToPlayerController(APlayerController* NewPlayerController);
 	void UnbindMirror();
-	void EnsureOverlayWidget(APlayerController* OwningController);
-	void RemoveOverlayWidget();
+	void EnsureMaskResources();
+	void ReleaseMaskResources();
 	void HandleLocalFoWUpdated(UGP_LocalFoWComponent* UpdatedMirror);
+	void RebuildMaskFromMirror(const UGP_LocalFoWComponent* Mirror);
+	void ApplyConservativeBlackMask();
+	void UploadMaskTextures();
+	void UpdateMaterialParameters();
+	UTexture2D* CreateMaskTexture(const TCHAR* Name) const;
+	void UploadTexture(UTexture2D* Texture, const TArray<FColor>& Pixels);
 
 	UPROPERTY(Transient)
-	TObjectPtr<UGP_FoWWorldOverlayWidget> OverlayWidget;
+	TObjectPtr<UTexture2D> PreviousMaskTexture;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> TargetMaskTexture;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> TemplateMaterial;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> PostProcessMID;
 
 	TWeakObjectPtr<UGP_LocalFoWComponent> BoundMirror;
 	FDelegateHandle MirrorUpdatedHandle;
+	TSharedPtr<FSceneViewExtensionBase, ESPMode::ThreadSafe> ViewExtension;
+
+	FGP_FoWVisualMaskRuntime MaskRuntime;
+	TArray<FColor> PackedPreviousPixels;
+	TArray<FColor> PackedTargetPixels;
 
 	bool bVisualizationEnabled = true;
-	uint64 RenderSerial = 1;
 	int64 LastUpdateRevision = -1;
-	FGP_FoWWorldOverlayStats LastStats;
-	uint64 LastConsumedRenderSerial = 0;
 };

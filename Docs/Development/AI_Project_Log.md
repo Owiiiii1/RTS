@@ -1,5 +1,21 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — FoW world visualization post-process texture mask
+
+Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**
+
+- 50 cm / 10 Hz gameplay-grid plan was aborted before any implementation. Gameplay FoW remains 200 cm
+  / 5 Hz / 1000×1000. LocalFoW protocol unchanged.
+- Operator-rejected Slate/SDF/contour/10× raster path deleted (staircase, striping, camera full-black).
+- Replaced with per-LocalPlayer Known/Visible 1024² runtime textures, 2-pass separable box blur,
+  0.20 s temporal lerp, and `M_GP_FoW_PostProcess` injected via scene-view extension. No map volume.
+- Focused contracts Failures=0; GPEditor Win64 Development + UHT **PASS**.
+- New authored asset only: `/Game/GrimProtocol/FogOfWar/M_GP_FoW_PostProcess`. Existing Config/Content
+  /Tools/maps/Blueprints/DataAssets/materials/VFX untouched. LongRange local FoW radius 2000 untouched.
+  **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — FoW world visualization high-res presentation raster
 
 Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**

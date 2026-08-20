@@ -40,6 +40,10 @@ public:
 	uint32 GetAuthorityNextPresentationSequence() const;
 	uint32 GetLastProcessedPresentationSequence() const;
 
+	/** Local-only gate used by trusted FoW presentation. Authority event sequencing is unchanged. */
+	void SetLocalPresentationAllowed(bool bAllowed) { bLocalPresentationAllowed = bAllowed; }
+	bool IsLocalPresentationAllowed() const { return bLocalPresentationAllowed; }
+
 protected:
 	UFUNCTION(NetMulticast, Unreliable)
 	void Multicast_CombatPresentationEvent(FGP_CombatPresentationEvent Event);
@@ -53,4 +57,6 @@ private:
 
 	/** Local last accepted sequence for duplicate/stale suppression (serial arithmetic). */
 	uint32 LastProcessedPresentationSequence = 0;
+
+	bool bLocalPresentationAllowed = true;
 };

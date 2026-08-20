@@ -8,11 +8,20 @@
 #include "GPFoWWorldOverlayWidget.generated.h"
 
 class UGP_FoWWorldPresentationSubsystem;
+enum class EGP_FoWState : uint8;
 
 struct FGP_FoWOverlayDrawBatch
 {
 	TArray<FSlateVertex> Vertices;
 	TArray<SlateIndex> Indices;
+};
+
+enum class EGP_FoWFeatherEdge : uint8
+{
+	MinX,
+	MaxX,
+	MinY,
+	MaxY
 };
 
 /**
@@ -55,6 +64,23 @@ private:
 		int32 EndXExclusive,
 		int32 CellY,
 		const FLinearColor& Color,
+		const FGeometry& AllottedGeometry,
+		const FMatrix& ViewProjectionMatrix,
+		const FIntRect& ViewRect,
+		float ViewportScale) const;
+	void AddProjectedFeather(
+		int32 CellX,
+		int32 CellY,
+		EGP_FoWState CurrentState,
+		EGP_FoWState MoreObscuredNeighbor,
+		EGP_FoWFeatherEdge Edge,
+		const FGeometry& AllottedGeometry,
+		const FMatrix& ViewProjectionMatrix,
+		const FIntRect& ViewRect,
+		float ViewportScale) const;
+	void AddProjectedQuad(
+		const FVector (&WorldCorners)[4],
+		const FLinearColor (&VertexColors)[4],
 		const FGeometry& AllottedGeometry,
 		const FMatrix& ViewProjectionMatrix,
 		const FIntRect& ViewRect,

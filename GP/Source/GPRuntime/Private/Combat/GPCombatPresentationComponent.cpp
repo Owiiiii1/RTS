@@ -194,6 +194,16 @@ void UGP_CombatPresentationComponent::HandleCombatPresentationEvent(const FGP_Co
 		return;
 	}
 
+	if (!bLocalPresentationAllowed)
+	{
+		UE_LOG(LogGPCombatPresentation, Verbose,
+			TEXT("GP CombatPresentationSuppressedByLocalFoW: Source=%s Sequence=%u AttackSerial=%u"),
+			*GetNameSafe(GetOwner()),
+			Event.PresentationSequence,
+			Event.AttackSerial);
+		return;
+	}
+
 	AGP_UnitBase* SourceUnit = Cast<AGP_UnitBase>(GetOwner());
 	PlayCombatPresentationDebug(Event, SourceUnit);
 }

@@ -41,6 +41,8 @@ selection/inspect policy, minimap, and production HUD remain separate.
 - It deprojects the player view to the Z=0 gameplay plane, samples only the intersecting FoW cells,
   horizontally coalesces equal non-Visible states, and projects each run as one Slate quad.
 - Visible runs create no geometry. Unexplored/Explored runs use opaque/translucent neutral overlays.
+- Conservative edge feather quads are generated only inside the less-obscured side of a state
+  boundary. Hidden cells keep their full base obscuration.
 - NotReady, projection failure, or an over-budget view falls back to full-screen black.
 
 This works for perspective pan, zoom, yaw rotation, window/viewport changes, listen host, remote client,
@@ -62,11 +64,16 @@ and split local-player layers without global material state.
 - Unexplored obscuration: `1.0`, color black.
 - Explored obscuration: `0.68`, neutral near-black tint.
 - Visible obscuration: `0.0`, no quad.
-- Gameplay cells remain 200 cm; no visibility expansion or interpolation occurs.
-- Renderer owns no duplicate grid and performs no unit scan or sight-circle computation.
+- Gameplay cells remain 200 cm; no gameplay visibility expansion or state interpolation occurs.
+- A 0.22-cell presentation band (44 cm at the current 200 cm cell size) darkens the less-obscured
+  side toward its more-obscured neighbor. This shrinks visual disclosure conservatively instead of
+  revealing hidden-cell pixels.
+- Renderer owns no duplicate gameplay grid and performs no sight-circle computation.
 - No full one-million-cell presentation copy is allocated.
 - View sampling is capped at 65,536 cells.
 - Horizontal runs are batched at up to 8,000 quads per Slate draw batch.
+- Feather geometry is capped at 32,768 quads and uses the same Slate batches. The temporary sampled
+  state cache is bounded by the 65,536-cell viewport cap; no UObject/component is created per cell.
 - Static camera + unchanged revision reuses cached vertices; camera changes rebuild only the bounded
   view region.
 - Offscreen prototype smoke: 1,248 sampled cells, 26 overlay runs, one draw batch.
@@ -82,25 +89,57 @@ and split local-player layers without global material state.
 - Seamless travel and PIE recreation are handled through LocalPlayer/PlayerController and mirror reset
   lifecycles.
 
+## Enemy presentation correction
+
+Operator two-player PIE found that replicated enemy mesh/team/health presentation could remain visible
+through black Unexplored terrain.
+
+`UGP_LocalFoWUnitPresentationSubsystem` now owns a presentation-only registry in each game world:
+
+- `AGP_UnitBase` registers/unregisters through BeginPlay/EndPlay; there is no world actor discovery.
+- LocalFoW update/reset events evaluate registered actors immediately.
+- A bounded 10 Hz registered-list pass catches replicated enemy movement across a static FoW edge
+  when no FoW grid revision changes.
+- own-team and neutral presentation stays allowed;
+- cross-team unit/building presentation is allowed only at a LocalFoW `Visible` location;
+- the gate uses actor `SetActorHiddenInGame` for all primitive/authored visuals, explicitly composes
+  with the health bar, suppresses local combat debug presentation, and refreshes team tint on restore.
+
+This does not destroy actors, disable collision, alter combat, mutate TeamId/transform, change
+replication, or implement `IsNetRelevantFor`. Hidden actors still replicate; relevance and last-known
+snapshots remain dedicated later slices.
+
+## Health-bar composition
+
+`UGP_HealthBarComponent` remains attribute-delegate driven:
+
+- full (`Health >= MaxHealth` within `max(KINDA_SMALL_NUMBER, abs(MaxHealth) * 1e-4)`) — hidden;
+- damaged and alive (`0 < Health < MaxHealth - tolerance`) — health-policy visible;
+- zero/dead — hidden.
+
+Final component visibility is `owner/death gate && FoW presentation gate && damaged-health policy`.
+A health update therefore cannot re-show a damaged enemy while LocalFoW presentation denies it.
+
 ## Diagnostics
 
 - `gp.FoW.VisualDump`
 - `gp.FoW.VisualEnable 0/1`
 
 `VisualDump` reports active/enabled/ready state, team/revision, method, metadata, sample cap, current
-sampled region, run/batch counts, dirty state, and consumed render serial.
+sampled region, run/feather/batch counts, registered-unit count, 10 Hz evaluation interval, dirty
+state, and consumed render serial.
 
 ## Validation
 
 - `gp.FoW.RunWorldVisualizationContractTest` — **PASS**, `Failures=0`
 - `gp.FoW.RunClientPresentationFoundationContractTest` — **PASS**, `Failures=0`
 - `gp.FoW.RunRuntimeFoundationContractTest` — **PASS**, `Failures=0`
-- Render-offscreen lifecycle/paint diagnostic — **PASS** (`Active=true`, `Dirty=false`, 1,248 cells,
-  26 runs, one batch)
+- `gp.Combat.RunHealthBarContractTest` — **PASS**, `Failures=0`
+- `gp.Combat.RunTeamColorContractTest` — **PASS**, `Failures=0`
 - GPEditor Win64 Development + UHT — **PASS**
 
-No PlayerController, building-placement, TEMP HUD, gameplay authority, or replication code changed, so
-their unrelated contracts were not escalated.
+No PlayerController, building-placement, TEMP HUD, gameplay authority, or replication policy changed,
+so their unrelated contracts were not escalated.
 
 ## Operator test
 
@@ -110,13 +149,18 @@ their unrelated contracts were not escalated.
 4. Move away; previously seen cells become dim/grey, never black.
 5. Return; dim/grey cells become normal Visible.
 6. Pan, zoom, and rotate; confirm the mask remains aligned.
-7. Run `gp.FoW.VisualDump`; confirm Active/Ready/team/revision and bounded sample stats.
-8. Toggle `gp.FoW.VisualEnable 0`, then `1`, for A/B confirmation.
-9. In two-player listen-server PIE, confirm Team 1 and Team 2 show different local masks.
+7. Damage an own unit/building: bar appears; heal to full: bar hides; death/zero remains hidden.
+8. In two-player listen-server PIE, move a damaged enemy between Visible and hidden cells. Confirm
+   mesh/team/bar hide in Explored/Unexplored and restore with current state in Visible.
+9. Inspect Visible/Explored/Unexplored borders at normal zoom: confirm the 44 cm conservative dark-side
+   feather removes the strongest square edge without revealing hidden-cell scene detail.
+10. Run `gp.FoW.VisualDump`; confirm Active/Ready/team/revision and bounded run/feather/registry stats.
+11. Toggle `gp.FoW.VisualEnable 0`, then `1`, for A/B confirmation.
+12. Confirm Team 1 and Team 2 still show different local masks.
 
 ## Deferred
 
-- enemy actor replication relevance/hiding
+- enemy actor replication relevance (`IsNetRelevantFor`) and last-known representation
 - hidden selection/inspect policy
 - last-known static/dynamic state
 - explicit Attack last-known behavior

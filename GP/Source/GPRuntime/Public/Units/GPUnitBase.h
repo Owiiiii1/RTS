@@ -76,6 +76,10 @@ public:
 
 	UGP_HealthBarComponent* GetHealthBarComponent() const;
 
+	/** Local presentation-only FoW gate. Does not change replication, collision, or gameplay state. */
+	void SetLocalFoWPresentationVisible(bool bVisible);
+	bool IsLocalFoWPresentationVisible() const { return bLocalFoWPresentationVisible; }
+
 	UFUNCTION(BlueprintPure, Category = "GP|Team")
 	int32 GetTeamId() const;
 
@@ -289,6 +293,7 @@ private:
 	float ResolvedRetaliationPursuitSeconds = FallbackRetaliationPursuitSeconds;
 	bool bDeathHandled = false;
 	bool bCountedTowardPlayerUnitCap = false;
+	bool bLocalFoWPresentationVisible = true;
 	TWeakObjectPtr<class AGP_PlayerState> UnitCapOwnerWeak;
 
 	UPROPERTY(Transient)

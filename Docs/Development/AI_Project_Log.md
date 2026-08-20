@@ -14,11 +14,20 @@ Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**
   NotReady/projection/budget fallback is conservative black
 - Mirror changes are push/revision-driven; camera changes rebuild only the bounded view region, with
   65,536 sampled-cell cap, horizontal run coalescing, and 8,000-quad batches
-- Render-offscreen smoke was active/ready with 1,248 sampled cells, 26 runs, and one draw batch
-- New visualization contract plus trusted-client and authority FoW regressions pass with `Failures=0`;
-  GPEditor Win64 Development + UHT **PASS**
-- No PlayerController/gameplay authority change and no authored material, map, Blueprint, DataAsset,
-  Config, VFX, Tools, or Content edit. Actor relevance/last-known/selection/minimap/HUD remain deferred.
+- Operator two-player PIE found enemy mesh/health presentation leaking through Unexplored fog.
+  Correction adds lifecycle registration plus LocalFoW-event/10 Hz bounded registered-list evaluation;
+  cross-team actor primitives, health, team tint, and local combat presentation now compose behind
+  current `Visible`, while own-team presentation is never FoW-hidden.
+- Health bars are now event-driven damaged-only (`0 < Health < MaxHealth` outside full-health
+  tolerance) and compose with the FoW gate; full, zero, dead, or locally hidden bars stay hidden.
+- Source-only 0.22-cell/44 cm conservative feathering darkens only the less-obscured side of state
+  boundaries; hidden cells and the 200 cm gameplay grid remain unchanged. Feather geometry is capped
+  at 32,768 quads.
+- Visualization, trusted-client, authority FoW, health-bar, and team-color contracts pass with
+  `Failures=0`; GPEditor Win64 Development + UHT **PASS**.
+- No PlayerController/gameplay authority/replication-policy change and no authored material, map,
+  Blueprint, DataAsset, Config, VFX, Tools, or Content edit. `IsNetRelevantFor`, last-known,
+  selection/minimap/HUD remain deferred.
   **NOT MERGED. NOT FINALIZED.**
 - Task: `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
 - Report: `Docs/Development/Cursor_Work_Report.md`

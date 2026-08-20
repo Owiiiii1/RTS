@@ -202,8 +202,9 @@ bool UGP_HealthBarContractTestRunner::ValidateActorHealthBar(AGP_UnitBase* Owner
 	const FVector2D Draw = Bar->GetDrawSize();
 	Check(Draw.X > 1.0f && Draw.Y > 1.0f, TEXT("_DrawSizeNonZero"));
 
-	Check(Bar->IsVisible(), TEXT("_VisibleAtFullHealth"));
-	Check(!Bar->bHiddenInGame, TEXT("_NotHiddenInGameAtFullHealth"));
+	Check(!Bar->IsVisible(), TEXT("_HiddenAtFullHealth"));
+	Check(Bar->bHiddenInGame, TEXT("_HiddenInGameAtFullHealth"));
+	Check(!Bar->DoesHealthPolicyAllowVisibility(), TEXT("_FullHealthPolicyHidden"));
 
 	if (HealthWidget != nullptr)
 	{
@@ -303,6 +304,19 @@ void UGP_HealthBarContractTestRunner::AdvanceStage()
 		Bar->RefreshHealthBarFromAttributes();
 		Expect(FMath::IsNearlyEqual(Bar->GetDisplayedHealthRatio(), 0.4f, 0.01f), TEXT("B_DamageLowerRatio"));
 		Expect(FMath::IsNearlyEqual(Bar->GetDrawSize().X, FrameDrawSizeX, 0.01f), TEXT("C_FrameWidthUnchanged"));
+		Expect(Bar->DoesHealthPolicyAllowVisibility()
+			&& Bar->IsComposedHealthBarVisible()
+			&& Bar->IsVisible()
+			&& !Bar->bHiddenInGame,
+			TEXT("B_DamagedHealthBarVisible"));
+		Bar->SetFoWPresentationAllowed(false);
+		Expect(!Bar->IsComposedHealthBarVisible()
+			&& !Bar->IsVisible()
+			&& Bar->bHiddenInGame,
+			TEXT("B2_FoWGateOverridesDamagedHealth"));
+		Bar->SetFoWPresentationAllowed(true);
+		Expect(Bar->IsComposedHealthBarVisible() && Bar->IsVisible(),
+			TEXT("B3_FoWRestoreReappliesDamagedHealthPolicy"));
 		Expect(true, TEXT("F_AttributeEventUpdates"));
 		++StageIndex;
 		ScheduleNext(0.05f);
@@ -343,6 +357,11 @@ void UGP_HealthBarContractTestRunner::AdvanceStage()
 		ASC->SetNumericAttributeBase(UGP_UnitAttributeSet::GetHealthAttribute(), 0.0f);
 		Bar->RefreshHealthBarFromAttributes();
 		Expect(FMath::IsNearlyEqual(Bar->GetDisplayedHealthRatio(), 0.0f, 0.01f), TEXT("D_ZeroHealthZeroFill"));
+		Expect(!Bar->DoesHealthPolicyAllowVisibility()
+			&& !Bar->IsComposedHealthBarVisible()
+			&& !Bar->IsVisible()
+			&& Bar->bHiddenInGame,
+			TEXT("D_ZeroHealthHidden"));
 		Finish();
 		break;
 	}

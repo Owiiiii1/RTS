@@ -6,6 +6,7 @@
 #include "AttributeSets/GPUnitAttributeSet.h"
 #include "Combat/GPCombatPresentationComponent.h"
 #include "Presentation/GPHealthBarComponent.h"
+#include "Presentation/GPLocalFoWUnitPresentationSubsystem.h"
 #include "Presentation/GPTeamPresentationComponent.h"
 #include "Combat/GPDamageApplication.h"
 #include "Command/GPUnitCommand.h"
@@ -179,6 +180,30 @@ UGP_HealthBarComponent* AGP_UnitBase::GetHealthBarComponent() const
 	return HealthBarComponent;
 }
 
+void AGP_UnitBase::SetLocalFoWPresentationVisible(bool bVisible)
+{
+	if (bLocalFoWPresentationVisible == bVisible)
+	{
+		return;
+	}
+
+	bLocalFoWPresentationVisible = bVisible;
+	SetActorHiddenInGame(!bVisible);
+
+	if (HealthBarComponent != nullptr)
+	{
+		HealthBarComponent->SetFoWPresentationAllowed(bVisible);
+	}
+	if (CombatPresentationComponent != nullptr)
+	{
+		CombatPresentationComponent->SetLocalPresentationAllowed(bVisible);
+	}
+	if (bVisible && TeamPresentationComponent != nullptr)
+	{
+		TeamPresentationComponent->RefreshTeamPresentation();
+	}
+}
+
 UAbilitySystemComponent* AGP_UnitBase::GetAbilitySystemComponent() const
 {
 	return AbilitySystemComponent;
@@ -238,10 +263,26 @@ void AGP_UnitBase::BeginPlay()
 	{
 		BeginUnitDefinitionInitialization();
 	}
+	if (UWorld* World = GetWorld())
+	{
+		if (UGP_LocalFoWUnitPresentationSubsystem* Presentation =
+			World->GetSubsystem<UGP_LocalFoWUnitPresentationSubsystem>())
+		{
+			Presentation->RegisterUnit(this);
+		}
+	}
 }
 
 void AGP_UnitBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (UWorld* World = GetWorld())
+	{
+		if (UGP_LocalFoWUnitPresentationSubsystem* Presentation =
+			World->GetSubsystem<UGP_LocalFoWUnitPresentationSubsystem>())
+		{
+			Presentation->UnregisterUnit(this);
+		}
+	}
 	if (HasAuthority())
 	{
 		if (AGP_GameState* GameState = GetWorld() != nullptr ? GetWorld()->GetGameState<AGP_GameState>() : nullptr)
@@ -788,6 +829,14 @@ void AGP_UnitBase::NotifyTeamIdChanged(int32 OldTeamId, int32 NewTeamId)
 	}
 	TryRegisterPlayerUnitCap();
 	RefreshFogOfWarSightSourceRegistration();
+	if (UWorld* World = GetWorld())
+	{
+		if (UGP_LocalFoWUnitPresentationSubsystem* Presentation =
+			World->GetSubsystem<UGP_LocalFoWUnitPresentationSubsystem>())
+		{
+			Presentation->NotifyUnitTeamChanged(this);
+		}
+	}
 }
 
 bool AGP_UnitBase::IsNeutral() const
@@ -1108,6 +1157,14 @@ void AGP_UnitBase::OnRep_TeamId()
 	if (TeamPresentationComponent != nullptr)
 	{
 		TeamPresentationComponent->RefreshTeamPresentation();
+	}
+	if (UWorld* World = GetWorld())
+	{
+		if (UGP_LocalFoWUnitPresentationSubsystem* Presentation =
+			World->GetSubsystem<UGP_LocalFoWUnitPresentationSubsystem>())
+		{
+			Presentation->NotifyUnitTeamChanged(this);
+		}
 	}
 }
 

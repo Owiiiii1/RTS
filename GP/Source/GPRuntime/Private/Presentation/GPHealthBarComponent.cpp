@@ -200,10 +200,12 @@ void UGP_HealthBarComponent::RefreshHealthBarFromAttributes()
 	const AGP_UnitBase* Unit = Cast<AGP_UnitBase>(GetOwner());
 	const UGP_UnitAttributeSet* Attrs = Unit != nullptr ? Unit->GetUnitAttributeSet() : nullptr;
 	float Ratio = 0.0f;
+	float Health = 0.0f;
+	float MaxHealth = 0.0f;
 	if (Attrs != nullptr)
 	{
-		const float MaxHealth = Attrs->GetMaxHealth();
-		const float Health = Attrs->GetHealth();
+		MaxHealth = Attrs->GetMaxHealth();
+		Health = Attrs->GetHealth();
 		Ratio = (MaxHealth > KINDA_SMALL_NUMBER) ? (Health / MaxHealth) : 0.0f;
 	}
 	DisplayedHealthRatio = FMath::Clamp(Ratio, 0.0f, 1.0f);
@@ -216,27 +218,49 @@ void UGP_HealthBarComponent::RefreshHealthBarFromAttributes()
 		Bar->SetHealthRatio(DisplayedHealthRatio);
 	}
 
-	if (Unit != nullptr && Unit->IsDead())
-	{
-		SetHealthBarVisible(false);
-	}
-	else if (DisplayedHealthRatio <= 0.0f)
-	{
-		SetHealthBarVisible(false);
-	}
-	else
-	{
-		SetHealthBarVisible(true);
-	}
+	const float FullHealthTolerance =
+		FMath::Max(KINDA_SMALL_NUMBER, FMath::Abs(MaxHealth) * 1.e-4f);
+	bHealthPolicyAllowsVisibility =
+		Unit != nullptr
+		&& !Unit->IsDead()
+		&& MaxHealth > KINDA_SMALL_NUMBER
+		&& Health > KINDA_SMALL_NUMBER
+		&& Health < MaxHealth - FullHealthTolerance;
+	ApplyComposedVisibility();
 
 	RequestRedraw();
 }
 
 void UGP_HealthBarComponent::SetHealthBarVisible(bool bShowHealthBar)
 {
-	SetVisibility(bShowHealthBar, true);
-	SetHiddenInGame(!bShowHealthBar, true);
-	if (bShowHealthBar)
+	bOwnerAllowsVisibility = bShowHealthBar;
+	ApplyComposedVisibility();
+}
+
+void UGP_HealthBarComponent::SetFoWPresentationAllowed(bool bAllowed)
+{
+	if (bFoWPresentationAllowed == bAllowed)
+	{
+		return;
+	}
+
+	bFoWPresentationAllowed = bAllowed;
+	ApplyComposedVisibility();
+}
+
+bool UGP_HealthBarComponent::IsComposedHealthBarVisible() const
+{
+	return bOwnerAllowsVisibility
+		&& bFoWPresentationAllowed
+		&& bHealthPolicyAllowsVisibility;
+}
+
+void UGP_HealthBarComponent::ApplyComposedVisibility()
+{
+	const bool bShow = IsComposedHealthBarVisible();
+	SetVisibility(bShow, true);
+	SetHiddenInGame(!bShow, true);
+	if (bShow)
 	{
 		RequestRedraw();
 	}

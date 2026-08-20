@@ -30,6 +30,10 @@ public:
 	static float GetObscurationForState(EGP_FoWState State);
 	static FLinearColor GetOverlayColorForState(EGP_FoWState State);
 	static bool RequiresConservativeFullObscuration(const UGP_LocalFoWComponent* Mirror);
+	static bool ShouldAddConservativeFeather(EGP_FoWState Current, EGP_FoWState Neighbor);
+	static float GetConservativeFeatherBoundaryAlpha(
+		EGP_FoWState Current,
+		EGP_FoWState MoreObscuredNeighbor);
 
 	void SetVisualizationEnabled(bool bEnabled);
 	bool IsVisualizationEnabled() const { return bVisualizationEnabled; }
@@ -40,6 +44,7 @@ public:
 
 	int32 GetLastSampledCellCount() const { return LastSampledCellCount; }
 	int32 GetLastOverlayRunCount() const { return LastOverlayRunCount; }
+	int32 GetLastFeatherQuadCount() const { return LastFeatherQuadCount; }
 	int32 GetLastDrawBatchCount() const { return LastDrawBatchCount; }
 	FIntPoint GetLastSampledMinCell() const { return LastSampledMinCell; }
 	FIntPoint GetLastSampledMaxCell() const { return LastSampledMaxCell; }
@@ -47,11 +52,14 @@ public:
 
 	static constexpr int32 GetMaximumSampledCells() { return 65536; }
 	static constexpr int32 GetMaximumQuadsPerBatch() { return 8000; }
+	static constexpr int32 GetMaximumFeatherQuads() { return 32768; }
+	static constexpr float GetSmoothingWidthCellFraction() { return 0.22f; }
 	static constexpr float GetProjectionGroundZ() { return 0.0f; }
 
 	void RecordOverlayStats(
 		int32 SampledCells,
 		int32 OverlayRuns,
+		int32 FeatherQuads,
 		int32 DrawBatches,
 		const FIntPoint& MinCell,
 		const FIntPoint& MaxCell,
@@ -79,6 +87,7 @@ private:
 	int64 LastUpdateRevision = -1;
 	int32 LastSampledCellCount = 0;
 	int32 LastOverlayRunCount = 0;
+	int32 LastFeatherQuadCount = 0;
 	int32 LastDrawBatchCount = 0;
 	FIntPoint LastSampledMinCell = FIntPoint::ZeroValue;
 	FIntPoint LastSampledMaxCell = FIntPoint::ZeroValue;

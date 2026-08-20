@@ -8,6 +8,7 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "Player/GPPlayerController.h"
+#include "Presentation/GPLocalFoWUnitPresentationSubsystem.h"
 #include "Widgets/GPFoWWorldOverlayWidget.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPFoWWorldPresentation, Log, All);
@@ -70,6 +71,31 @@ bool UGP_FoWWorldPresentationSubsystem::RequiresConservativeFullObscuration(
 	return Mirror == nullptr || !Mirror->IsReady();
 }
 
+bool UGP_FoWWorldPresentationSubsystem::ShouldAddConservativeFeather(
+	EGP_FoWState Current,
+	EGP_FoWState Neighbor)
+{
+	return GetObscurationForState(Neighbor) > GetObscurationForState(Current);
+}
+
+float UGP_FoWWorldPresentationSubsystem::GetConservativeFeatherBoundaryAlpha(
+	EGP_FoWState Current,
+	EGP_FoWState MoreObscuredNeighbor)
+{
+	const float CurrentObscuration = GetObscurationForState(Current);
+	const float NeighborObscuration = GetObscurationForState(MoreObscuredNeighbor);
+	if (NeighborObscuration <= CurrentObscuration
+		|| CurrentObscuration >= 1.0f - KINDA_SMALL_NUMBER)
+	{
+		return 0.0f;
+	}
+
+	return FMath::Clamp(
+		(NeighborObscuration - CurrentObscuration) / (1.0f - CurrentObscuration),
+		0.0f,
+		1.0f);
+}
+
 void UGP_FoWWorldPresentationSubsystem::SetVisualizationEnabled(bool bEnabled)
 {
 	if (bVisualizationEnabled == bEnabled)
@@ -98,6 +124,7 @@ bool UGP_FoWWorldPresentationSubsystem::IsVisualDataDirty() const
 void UGP_FoWWorldPresentationSubsystem::RecordOverlayStats(
 	int32 SampledCells,
 	int32 OverlayRuns,
+	int32 FeatherQuads,
 	int32 DrawBatches,
 	const FIntPoint& MinCell,
 	const FIntPoint& MaxCell,
@@ -105,6 +132,7 @@ void UGP_FoWWorldPresentationSubsystem::RecordOverlayStats(
 {
 	LastSampledCellCount = SampledCells;
 	LastOverlayRunCount = OverlayRuns;
+	LastFeatherQuadCount = FeatherQuads;
 	LastDrawBatchCount = DrawBatches;
 	LastSampledMinCell = MinCell;
 	LastSampledMaxCell = MaxCell;
@@ -216,9 +244,13 @@ void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 	const FVector2D Origin =
 		Mirror != nullptr ? Mirror->GetGridOriginWorldXY() : FVector2D::ZeroVector;
 	const float CellSize = Mirror != nullptr ? Mirror->GetCellSizeCm() : 0.0f;
+	const UGP_LocalFoWUnitPresentationSubsystem* UnitPresentation =
+		GetWorld() != nullptr
+			? GetWorld()->GetSubsystem<UGP_LocalFoWUnitPresentationSubsystem>()
+			: nullptr;
 
 	UE_LOG(LogGPFoWWorldPresentation, Display,
-		TEXT("GP FoW VisualDump: World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d MirrorRevision=%lld Method=ViewportLocalProjectedSlateRuns Origin=%s Dims=%s CellSize=%.1f MaxSampledCells=%d SampledCells=%d Runs=%d Batches=%d RegionMin=%s RegionMax=%s Dirty=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
+		TEXT("GP FoW VisualDump: World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d MirrorRevision=%lld Method=ViewportLocalProjectedSlateRuns Origin=%s Dims=%s CellSize=%.1f MaxSampledCells=%d SampledCells=%d Runs=%d FeatherQuads=%d SmoothingCellFraction=%.2f Batches=%d RegisteredUnitPresentations=%d UnitEvaluationInterval=%.2f RegionMin=%s RegionMax=%s Dirty=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
 		*GetNameSafe(GetWorld()),
 		IsRendererActive() ? TEXT("true") : TEXT("false"),
 		bVisualizationEnabled ? TEXT("true") : TEXT("false"),
@@ -231,7 +263,11 @@ void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 		GetMaximumSampledCells(),
 		LastSampledCellCount,
 		LastOverlayRunCount,
+		LastFeatherQuadCount,
+		GetSmoothingWidthCellFraction(),
 		LastDrawBatchCount,
+		UnitPresentation != nullptr ? UnitPresentation->GetRegisteredUnitCount() : 0,
+		UGP_LocalFoWUnitPresentationSubsystem::GetEvaluationIntervalSeconds(),
 		*LastSampledMinCell.ToString(),
 		*LastSampledMaxCell.ToString(),
 		IsVisualDataDirty() ? TEXT("true") : TEXT("false"),

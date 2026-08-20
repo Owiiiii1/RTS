@@ -40,6 +40,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GP|Presentation|Health")
 	void SetHealthBarVisible(bool bShowHealthBar);
 
+	/** Local-only FoW composition gate. A damaged bar cannot override this gate. */
+	void SetFoWPresentationAllowed(bool bAllowed);
+	bool IsFoWPresentationAllowed() const { return bFoWPresentationAllowed; }
+	bool DoesHealthPolicyAllowVisibility() const { return bHealthPolicyAllowsVisibility; }
+	bool IsComposedHealthBarVisible() const;
+
 private:
 	void BindAttributeDelegates();
 	void UnbindAttributeDelegates();
@@ -47,8 +53,12 @@ private:
 	void HandleMaxHealthChanged(const FOnAttributeChangeData& Data);
 	void ApplyWidgetColors();
 	void EnsureWidgetInstance();
+	void ApplyComposedVisibility();
 
 	float DisplayedHealthRatio = 1.0f;
+	bool bOwnerAllowsVisibility = true;
+	bool bFoWPresentationAllowed = true;
+	bool bHealthPolicyAllowsVisibility = false;
 	FDelegateHandle HealthChangedHandle;
 	FDelegateHandle MaxHealthChangedHandle;
 	TWeakObjectPtr<UGP_AbilitySystemComponent> BoundASC;

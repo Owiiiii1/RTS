@@ -1,12 +1,18 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+#include "AbilitySystem/GPAbilitySystemComponent.h"
+#include "AttributeSets/GPUnitAttributeSet.h"
+#include "Combat/GPCombatPresentationComponent.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "FogOfWar/GPLocalFoWComponent.h"
 #include "Game/GPGameState.h"
 #include "HAL/IConsoleManager.h"
 #include "Player/GPPlayerController.h"
+#include "Presentation/GPHealthBarComponent.h"
+#include "Presentation/GPLocalFoWUnitPresentationSubsystem.h"
 #include "Presentation/GPFoWWorldPresentationSubsystem.h"
+#include "Units/GPWorker.h"
 #include "Widgets/GPFoWWorldOverlayWidget.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPFoWWorldVisualizationContract, Log, All);
@@ -117,6 +123,162 @@ namespace GPFoWWorldVisualizationContractPrivate
 				== EGP_FoWState::Unexplored,
 			TEXT("H_ExactCellStateEncodingAndCoordinates"));
 
+		FActorSpawnParameters UnitSpawnParams;
+		UnitSpawnParams.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AGP_Worker* OwnUnit = World->SpawnActor<AGP_Worker>(
+			AGP_Worker::StaticClass(),
+			CellLocation(2, 0) + FVector(0.0, 0.0, 200.0),
+			FRotator::ZeroRotator,
+			UnitSpawnParams);
+		AGP_Worker* EnemyUnit = World->SpawnActor<AGP_Worker>(
+			AGP_Worker::StaticClass(),
+			CellLocation(1, 0) + FVector(0.0, 0.0, 200.0),
+			FRotator::ZeroRotator,
+			UnitSpawnParams);
+		if (OwnUnit != nullptr)
+		{
+			OwnUnit->SetTeamId(1);
+		}
+		if (EnemyUnit != nullptr)
+		{
+			EnemyUnit->SetTeamId(2);
+		}
+
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			OwnUnit,
+			1,
+			Team1Mirror);
+		Expect(OwnUnit != nullptr
+			&& OwnUnit->IsLocalFoWPresentationVisible()
+			&& !OwnUnit->IsHidden(),
+			TEXT("H1_OwnUnitNeverHiddenByLocalFoW"));
+
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			EnemyUnit,
+			1,
+			Team1Mirror);
+		Expect(EnemyUnit != nullptr
+			&& EnemyUnit->IsLocalFoWPresentationVisible()
+			&& !EnemyUnit->IsHidden(),
+			TEXT("H2_EnemyVisiblePresentationVisible"));
+
+		if (EnemyUnit != nullptr)
+		{
+			EnemyUnit->SetActorLocation(CellLocation(0, 0) + FVector(0.0, 0.0, 200.0));
+		}
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			EnemyUnit,
+			1,
+			Team1Mirror);
+		Expect(EnemyUnit != nullptr
+			&& !EnemyUnit->IsLocalFoWPresentationVisible()
+			&& EnemyUnit->IsHidden(),
+			TEXT("H3_EnemyExploredPresentationHidden"));
+
+		if (EnemyUnit != nullptr)
+		{
+			EnemyUnit->SetActorLocation(CellLocation(2, 0) + FVector(0.0, 0.0, 200.0));
+		}
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			EnemyUnit,
+			1,
+			Team1Mirror);
+		Expect(EnemyUnit != nullptr
+			&& !EnemyUnit->IsLocalFoWPresentationVisible()
+			&& EnemyUnit->IsHidden(),
+			TEXT("H4_EnemyUnexploredPresentationHidden"));
+
+		if (EnemyUnit != nullptr)
+		{
+			EnemyUnit->SetActorLocation(CellLocation(1, 0) + FVector(0.0, 0.0, 200.0));
+		}
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			EnemyUnit,
+			1,
+			Team1Mirror);
+		Expect(EnemyUnit != nullptr
+			&& EnemyUnit->IsLocalFoWPresentationVisible()
+			&& !EnemyUnit->IsHidden(),
+			TEXT("H5_EnemyReentersVisiblePresentationRestored"));
+
+		UGP_HealthBarComponent* EnemyHealthBar =
+			EnemyUnit != nullptr ? EnemyUnit->GetHealthBarComponent() : nullptr;
+		UGP_AbilitySystemComponent* EnemyASC =
+			EnemyUnit != nullptr ? EnemyUnit->GetGPAbilitySystemComponent() : nullptr;
+		if (EnemyASC != nullptr)
+		{
+			EnemyASC->SetNumericAttributeBase(
+				UGP_UnitAttributeSet::GetHealthAttribute(),
+				40.0f);
+		}
+		if (EnemyHealthBar != nullptr)
+		{
+			EnemyHealthBar->RefreshHealthBarFromAttributes();
+		}
+		if (EnemyUnit != nullptr)
+		{
+			EnemyUnit->SetActorLocation(CellLocation(0, 0) + FVector(0.0, 0.0, 200.0));
+		}
+		const int32 EnemyTeamBeforePresentation =
+			EnemyUnit != nullptr ? EnemyUnit->GetTeamId() : INDEX_NONE;
+		const bool bEnemyReplicatesBeforePresentation =
+			EnemyUnit != nullptr && EnemyUnit->GetIsReplicated();
+		const bool bEnemyReplicateMovementBeforePresentation =
+			EnemyUnit != nullptr && EnemyUnit->IsReplicatingMovement();
+		const FVector EnemyLocationBeforePresentation =
+			EnemyUnit != nullptr ? EnemyUnit->GetActorLocation() : FVector::ZeroVector;
+		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
+			EnemyUnit,
+			1,
+			Team1Mirror);
+		Expect(EnemyHealthBar != nullptr
+			&& EnemyHealthBar->DoesHealthPolicyAllowVisibility()
+			&& !EnemyHealthBar->IsFoWPresentationAllowed()
+			&& !EnemyHealthBar->IsComposedHealthBarVisible()
+			&& !EnemyHealthBar->IsVisible()
+			&& EnemyUnit != nullptr
+			&& EnemyUnit->GetCombatPresentationComponent() != nullptr
+			&& !EnemyUnit->GetCombatPresentationComponent()->IsLocalPresentationAllowed(),
+			TEXT("H6_DamagedEnemyHealthBarCannotLeakWhileHidden"));
+		Expect(EnemyUnit != nullptr
+			&& EnemyUnit->GetTeamId() == EnemyTeamBeforePresentation
+			&& EnemyUnit->GetIsReplicated() == bEnemyReplicatesBeforePresentation
+			&& EnemyUnit->IsReplicatingMovement() == bEnemyReplicateMovementBeforePresentation
+			&& EnemyUnit->GetActorLocation().Equals(EnemyLocationBeforePresentation),
+			TEXT("H7_PresentationGateDoesNotMutateGameplayOrReplication"));
+
+		const int64 SmoothingRevisionBefore = Team1Mirror->GetRevision();
+		const EGP_FoWState ExploredBeforeSmoothing =
+			Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0));
+		const EGP_FoWState UnexploredBeforeSmoothing =
+			Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0));
+		Expect(
+			UGP_FoWWorldPresentationSubsystem::ShouldAddConservativeFeather(
+				EGP_FoWState::Visible,
+				EGP_FoWState::Explored)
+			&& UGP_FoWWorldPresentationSubsystem::ShouldAddConservativeFeather(
+				EGP_FoWState::Visible,
+				EGP_FoWState::Unexplored)
+			&& UGP_FoWWorldPresentationSubsystem::ShouldAddConservativeFeather(
+				EGP_FoWState::Explored,
+				EGP_FoWState::Unexplored)
+			&& !UGP_FoWWorldPresentationSubsystem::ShouldAddConservativeFeather(
+				EGP_FoWState::Unexplored,
+				EGP_FoWState::Visible),
+			TEXT("H8_SmoothingOnlyDarkensLessObscuredSide"));
+		Expect(Team1Mirror->GetRevision() == SmoothingRevisionBefore
+			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0))
+				== ExploredBeforeSmoothing
+			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0))
+				== UnexploredBeforeSmoothing,
+			TEXT("H9_SmoothingDoesNotMutateOrPromoteLocalFoWState"));
+		Expect(UGP_FoWWorldPresentationSubsystem::GetSmoothingWidthCellFraction() > 0.0f
+			&& UGP_FoWWorldPresentationSubsystem::GetSmoothingWidthCellFraction() < 0.5f
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumFeatherQuads()
+				<= UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() * 4,
+			TEXT("H10_SmoothingWidthAndGeometryAreBounded"));
+
 		FGP_FoWPresentationUpdate Team1Delta = Initial(1, 2);
 		Team1Delta.bInitialSnapshot = false;
 		Team1Delta.ExploredRanges.Add(Range(2, 1));
@@ -162,7 +324,8 @@ namespace GPFoWWorldVisualizationContractPrivate
 				UUserWidget::StaticClass()),
 			TEXT("O_NoPerCellComponentOrUObjectModel"));
 		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() == 65536
-			&& UGP_FoWWorldPresentationSubsystem::GetMaximumQuadsPerBatch() == 8000,
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumQuadsPerBatch() == 8000
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumFeatherQuads() == 32768,
 			TEXT("P_ViewportWorkAndBatchingAreBounded"));
 
 		UGP_LocalFoWComponent* MillionCellMirror =
@@ -198,6 +361,7 @@ namespace GPFoWWorldVisualizationContractPrivate
 			PresentationSubsystem->RecordOverlayStats(
 				64,
 				8,
+				1,
 				1,
 				FIntPoint(1, 1),
 				FIntPoint(8, 8),
@@ -251,6 +415,15 @@ namespace GPFoWWorldVisualizationContractPrivate
 			|| AuthorityFoW->GetStateForTeamAtWorldLocation(1, CellLocation(0, 0))
 				== AuthorityBefore,
 			TEXT("V_RendererDoesNotMutateGameplayAuthority"));
+
+		if (OwnUnit != nullptr)
+		{
+			OwnUnit->Destroy();
+		}
+		if (EnemyUnit != nullptr)
+		{
+			EnemyUnit->Destroy();
+		}
 
 		UE_LOG(LogGPFoWWorldVisualizationContract, Log,
 			TEXT("gp.FoW.RunWorldVisualizationContractTest: Complete Failures=%d Cancelled=false"),

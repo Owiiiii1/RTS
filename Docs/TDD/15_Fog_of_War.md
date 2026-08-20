@@ -162,6 +162,9 @@ Current MVP rendering method:
 - Unexplored uses opaque black (`Obscuration=1.0`);
 - Explored uses a dark neutral translucent overlay (`Obscuration=0.68`);
 - Visible emits no overlay (`Obscuration=0.0`);
+- each boundary adds a presentation-only 0.22-cell feather (44 cm at the current 200 cm cell size)
+  inside the less-obscured cell; the more-obscured cell retains its full base overlay, so smoothing
+  can only darken additional pixels and cannot expand gameplay visibility;
 - NotReady, projection failure, and over-budget views fail closed to full-screen black;
 - mirror revision/reset changes invalidate via `OnLocalFoWUpdated`; camera projection changes are a
   separate view-only invalidation path;
@@ -172,8 +175,8 @@ Bounds:
 - no renderer-side one-million-cell copy;
 - maximum 65,536 sampled view cells;
 - up to 8,000 coalesced quads per Slate draw batch;
-- no cell UObject/component allocation and no actor/unit scan;
-- render-offscreen prototype observation: 1,248 cells, 26 runs, one batch.
+- maximum 32,768 conservative feather quads;
+- no cell UObject/component allocation; sampled states use a temporary bounded plain enum array.
 
 The current arena contains no Landscape and uses planar blockout ground. Meaningful elevation would
 require a later depth-aware projection design; gameplay FoW cell resolution/state must not change for
@@ -181,6 +184,23 @@ that presentation upgrade.
 
 No material, render target, map, Blueprint, or global Material Parameter Collection is required. This
 keeps masks isolated per LocalPlayer/listen client and avoids global team-state leakage.
+
+Enemy world presentation is a separate temporary local gate, not replication relevance:
+
+- each `AGP_UnitBase` registers with `UGP_LocalFoWUnitPresentationSubsystem`; no `TActorIterator` or
+  whole-world discovery is used;
+- LocalFoW revisions trigger immediate registered-list evaluation;
+- a 10 Hz bounded registered-list pass catches replicated actor movement across unchanged FoW;
+- own-team actors remain presented; cross-team actors are locally presented only while their current
+  location is `Visible`;
+- actor hidden-in-game state covers authored/generated primitives and team tint, while health and
+  combat presentation have explicit local gates;
+- `UGP_HealthBarComponent` composes `owner/death && LocalFoW && damaged-health`: full health (within
+  `max(KINDA_SMALL_NUMBER, abs(MaxHealth) * 1e-4)`), zero, and dead are hidden; only damaged living
+  actors may show a bar.
+
+This local gate does not destroy actors, change collision, mutate gameplay, or alter replication.
+Enemy actors still replicate. `IsNetRelevantFor` filtering and last-known snapshots remain deferred.
 
 ### Sight Source Contract
 

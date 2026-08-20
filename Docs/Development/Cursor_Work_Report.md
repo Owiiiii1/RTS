@@ -10,7 +10,8 @@
 
 - Branch: `feature/gp-fow-world-visualization`
 - Exact base: `origin/main` @ `7847c3ce27a571d92f7629369cc8d361bd981387`
-- Implementation/report head: commit containing this report
+- Validated implementation/report head: `48c7958896aa6b9c07f3c48492e29f5f5d5e13e1`
+- Final branch head: documentation-only head-record commit following this validated implementation
 
 ## Factual pre-change rendering audit
 

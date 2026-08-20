@@ -286,6 +286,20 @@ namespace GPFoWWorldVisualizationContractPrivate
 				&& Boundary > VisibleCenter && Boundary < HiddenCenter,
 				TEXT("H8C_FeatheredTileEdgesBlendTowardVisible"));
 		}
+		{
+			FGP_FoWPresentationRaster CornerField;
+			GPFoWPresentationRaster::ConfigureField(
+				CornerField, 0, 0, 2, 2, 50.0f, FVector2D::ZeroVector);
+			GPFoWPresentationRaster::SetCell(CornerField, 0, 0, EGP_FoWState::Visible);
+			GPFoWPresentationRaster::SetCell(CornerField, 1, 0, EGP_FoWState::Visible);
+			GPFoWPresentationRaster::SetCell(CornerField, 0, 1, EGP_FoWState::Visible);
+			GPFoWPresentationRaster::SetCell(CornerField, 1, 1, EGP_FoWState::Unexplored);
+			FGP_FoWPresentationGeometry CornerGeometry;
+			Expect(GPFoWPresentationRaster::RebuildPresentation(CornerField, CornerGeometry)
+				&& CornerGeometry.CellTiles == 1
+				&& CornerGeometry.FeatherQuads >= 6,
+				TEXT("H8D_ExposedOuterCornersUseRoundedFeather"));
+		}
 		Expect(Team1Mirror->GetRevision() == SmoothingRevisionBefore
 			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0))
 				== ExploredBeforeSmoothing
@@ -296,8 +310,10 @@ namespace GPFoWWorldVisualizationContractPrivate
 			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() == 262144
 			&& UGP_FoWWorldPresentationSubsystem::GetMaximumQuadsPerBatch() == 8000
 			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 1
-			&& UGP_FoWWorldPresentationSubsystem::GetFeatherFraction() > 0.25f
-			&& UGP_FoWWorldPresentationSubsystem::GetFeatherFraction() < 0.6f,
+			&& UGP_FoWWorldPresentationSubsystem::GetFeatherFraction() > 0.45f
+			&& UGP_FoWWorldPresentationSubsystem::GetFeatherFraction() < 0.7f
+			&& UGP_FoWWorldPresentationSubsystem::GetInnerFeatherFraction() > 0.15f
+			&& UGP_FoWWorldPresentationSubsystem::GetInnerFeatherFraction() < 0.35f,
 			TEXT("H10_PerCellRendererIsBounded"));
 		const float RasterCellSize = 50.0f;
 		FGP_FoWPresentationRaster CircleField;

@@ -425,10 +425,10 @@ void UGP_FoWWorldOverlayWidget::AddProjectedQuad(
 	const double GroundZ = UGP_FoWWorldPresentationSubsystem::GetProjectionGroundZ();
 	const FVector WorldCorners[] =
 	{
-		FVector(Quad.WorldMin.X, Quad.WorldMin.Y, GroundZ),
-		FVector(Quad.WorldMax.X, Quad.WorldMin.Y, GroundZ),
-		FVector(Quad.WorldMax.X, Quad.WorldMax.Y, GroundZ),
-		FVector(Quad.WorldMin.X, Quad.WorldMax.Y, GroundZ)
+		FVector(Quad.WorldCorners[0].X, Quad.WorldCorners[0].Y, GroundZ),
+		FVector(Quad.WorldCorners[1].X, Quad.WorldCorners[1].Y, GroundZ),
+		FVector(Quad.WorldCorners[2].X, Quad.WorldCorners[2].Y, GroundZ),
+		FVector(Quad.WorldCorners[3].X, Quad.WorldCorners[3].Y, GroundZ)
 	};
 
 	FVector2f LocalCorners[4];

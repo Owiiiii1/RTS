@@ -93,6 +93,11 @@ float UGP_FoWWorldPresentationSubsystem::GetFeatherFraction()
 	return GPFoWPresentationRaster::FeatherFraction;
 }
 
+float UGP_FoWWorldPresentationSubsystem::GetInnerFeatherFraction()
+{
+	return GPFoWPresentationRaster::InnerFeatherFraction;
+}
+
 int32 UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads()
 {
 	return GPFoWPresentationRaster::MaximumOverlayQuads;
@@ -242,7 +247,7 @@ void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 			: nullptr;
 
 	UE_LOG(LogGPFoWWorldPresentation, Display,
-		TEXT("GP FoW VisualDump: Renderer=%s PostProcessActive=%s MaskProjectionActive=%s World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d Algorithm=%s CellSize=%.1f Dims=%dx%d Interval=%.2f SampledGameplayCells=%d CellTiles=%d VisibleCellsSkipped=%d FeatherQuads=%d FeatherCm=%.1f FeatherFraction=%.2f OverlayQuads=%d OverlayVertices=%d MaxSampledCells=%d MaxQuads=%d MaskRevision=%lld CameraResample=%s FallbackActive=%s RegisteredEnemyPresentation=%d RebuildMs=%.3f Blur=%s PadCells=%d RegionMin=%s RegionMax=%s Dirty=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
+		TEXT("GP FoW VisualDump: Renderer=%s PostProcessActive=%s MaskProjectionActive=%s World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d Algorithm=%s CellSize=%.1f Dims=%dx%d Interval=%.2f SampledGameplayCells=%d CellTiles=%d VisibleCellsSkipped=%d FeatherQuads=%d FeatherCm=%.1f FeatherFraction=%.2f InnerFeatherFraction=%.2f OverlayQuads=%d OverlayVertices=%d MaxSampledCells=%d MaxQuads=%d MaskRevision=%lld CameraResample=%s FallbackActive=%s RegisteredEnemyPresentation=%d RebuildMs=%.3f Blur=%s PadCells=%d RegionMin=%s RegionMax=%s Dirty=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
 		GetRendererName(),
 		IsPostProcessActive() ? TEXT("true") : TEXT("false"),
 		IsMaskProjectionActive() ? TEXT("true") : TEXT("false"),
@@ -262,6 +267,7 @@ void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 		LastStats.FeatherQuads,
 		LastStats.FeatherCm,
 		GetFeatherFraction(),
+		GetInnerFeatherFraction(),
 		LastStats.OverlayQuads,
 		LastStats.OverlayVertices,
 		GetMaximumSampledCells(),

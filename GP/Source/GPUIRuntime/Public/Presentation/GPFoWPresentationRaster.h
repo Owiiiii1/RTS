@@ -7,8 +7,7 @@
 
 struct FGP_FoWPresentationQuad
 {
-	FVector2D WorldMin = FVector2D::ZeroVector;
-	FVector2D WorldMax = FVector2D::ZeroVector;
+	FVector2D WorldCorners[4];
 	FLinearColor CornerColors[4];
 };
 
@@ -50,7 +49,9 @@ namespace GPFoWPresentationRaster
 {
 	constexpr float ExploredObscuration = 0.68f;
 	constexpr float UnexploredObscuration = 1.0f;
-	constexpr float FeatherFraction = 0.45f;
+	constexpr float FeatherFraction = 0.55f;
+	constexpr float InnerFeatherFraction = 0.22f;
+	constexpr int32 CornerSegments = 4;
 	constexpr int32 SamplePadCells = 1;
 	constexpr int32 MaximumSampledCells = 65536;
 	constexpr int32 MaximumOverlayQuads = 262144;

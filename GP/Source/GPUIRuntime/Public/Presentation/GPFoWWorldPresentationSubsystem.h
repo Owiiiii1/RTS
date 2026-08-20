@@ -82,6 +82,7 @@ public:
 	static const TCHAR* GetInterpolationName();
 	static const TCHAR* GetBlurName();
 	static float GetFeatherFraction();
+	static float GetInnerFeatherFraction();
 	static int32 GetMaximumOverlayQuads();
 
 	void RecordOverlayStats(const FGP_FoWWorldOverlayStats& Stats);

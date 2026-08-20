@@ -2,130 +2,60 @@
 
 ## Status
 
-**BUILDING_VITALS_DEFINITION_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**
+**BUILDING_VITALS_DEFINITION_OWNERSHIP_FINALIZED_READY_FOR_MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.**
 
 ## Branch / base / head
 
 - Branch: `feature/gp-building-vitals-definition-ownership`
 - Base: `origin/main` @ `71a7c700a1f4b066d30c0490365099c82ce91a41`
-- Head: this implementation/report commit
+- Implementation head: `ff2e45f3748624636b6454c0ac0c75776e1da13f`
+- Final head: this finalization commit
 
-## Pre-change ownership and initialization order
+## Operator PASS
 
-`AGP_BuildingBase::BeginPlay()` called `AGP_UnitBase::BeginPlay()` first. UnitBase initialized ASC
-actor info and immediately ran its UnitDefinition pipeline. Because no production path copied
-`BuildingDefinition.UnitDefinition` into actor `UnitDefinitionAsset`, buildings could permanently
-initialize GAS from a BP/CDO UnitDefinitionAsset or actor `Default*`. BuildingDefinition initialization
-ran afterward and only notified storage/unit-cap consumers.
+Cold/open Editor + PIE confirmed:
 
-`ResolveCanonicalMaxHealth()` had no production caller. Health bars and combat read runtime GAS only.
+- MainBase initializes at 1000/1000
+- Logistics Hub initializes at 500/500
+- Defensive Turret initializes at 400/400
+- building placement remained functional
+- Hub/Turret behavior remained normal
 
-## Authored asset safety gate
-
-Read-only Unreal inspection passed:
-
-- MainBase: BuildingDefinition
-  `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_MainBase`;
-  UnitDefinition `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_MainBase`;
-  resolved; MaxHealth/InitialHealth 1000/1000, Damage 0, Armor 0, Resistance 0, Cooldown 1, Range 0
-- Logistics Hub: BuildingDefinition
-  `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_LogisticsHUB`;
-  UnitDefinition `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_LogisticsHUB`;
-  resolved; 500/500, Damage 0, Armor 0, Resistance 0, Cooldown 1, Range 0
-- Defensive Turret: BuildingDefinition
-  `/Game/GrimProtocol/DataAssets/Buildings/DA_Buildings/DA_GP_Buildings_DefensiveTurret`;
-  UnitDefinition `/Game/GrimProtocol/DataAssets/Buildings/DA_Units/DA_GP_Unit_DefensiveTurret`;
-  resolved; 400/400, Damage 20, Armor 0, Resistance 0, Cooldown 1, Range 900
-
-Matching Blueprint CDO BuildingDefinition/UnitDefinition refs also resolved. Native MainBase/Hub/Turret
-BuildingDefinitions already link native UnitDefinitions. No authored migration required.
-
-## Canonical chain and precedence
+## Final ownership chain
 
 `UGP_BuildingDefinition`
 → `UnitDefinition`
 → `AGP_UnitBase::UnitDefinitionAsset`
 → existing async UnitDefinition pipeline
-→ GAS.
+→ GAS attributes.
 
-For a valid BuildingDefinition, nested UnitDefinition now outranks:
+For a valid BuildingDefinition, nested UnitDefinition outranks actor/BP `UnitDefinitionAsset`, `BuildingDefinition.MaxHealth`, and actor `Default*` combat values. Runtime Health/MaxHealth/Damage/Armor/Resistance/Cooldown/Range remain GAS attributes after one-shot initialization.
 
-- Blueprint/CDO or instance `UnitDefinitionAsset`
-- `BuildingDefinition.MaxHealth`
-- actor `DefaultMaxHealth`, `DefaultHealth`, `DefaultDamage`, `DefaultArmor`,
-  `DefaultDamageResistance`, `DefaultAttackCooldown`, and `DefaultAttackRange`
+`BuildingDefinition.MaxHealth` remains a definition-level bootstrap/compatibility fallback only.
 
-`UGP_UnitDefinition` remains the source for vitals/combat, sight, movement, cargo, and retaliation
-tuning supported by the existing UnitBase pipeline.
-
-## Lifecycle implementation
+## Initialization-order confirmation
 
 - UnitBase initializes ASC actor info first.
-- A virtual gate defaults false, preserving all non-building units.
-- BuildingBase returns true while a non-empty BuildingDefinition is unresolved.
-- On BuildingDefinition completion, a non-empty nested UnitDefinition overwrites actor
-  `UnitDefinitionAsset`.
-- BuildingBase then calls the existing UnitDefinition initializer.
-- Existing one-shot guards (`bUnitDefinitionReady`, `bDefinitionTuningApplied`,
-  `bCombatAttributesInitialized`) guarantee no temporary defaults and no second GAS initialization.
-- `NotifyBuildingDefinitionReady()` runs afterward; MainBase storage and Hub unit-cap behavior remain
-  on their existing one-shot/readiness paths.
+- Non-building units keep the existing immediate UnitDefinition path (`ShouldDeferUnitDefinitionInitialization()` returns false).
+- Buildings with a non-empty unresolved `BuildingDefinitionAsset` defer UnitDefinition/GAS initialization.
+- BuildingDefinition completion copies a valid nested `UnitDefinition` onto `UnitDefinitionAsset`, then runs the existing UnitDefinition pipeline once.
+- Existing one-shot guards prevent temporary Default* GAS initialization and a second GAS apply.
+- Orbital DropPod assigns the catalog `BuildingDefinitionAsset` during deferred spawn, before `FinishSpawning` / BeginPlay.
+- Empty nested UnitDefinition preserves explicit actor UnitDefinitionAsset or actor Default* fallback.
+- Unresolved nested UnitDefinition remains pending without early Default* GAS init.
+- Nested load failure follows the existing UnitBase Default* fallback and does not hang.
 
-## Compatibility, pending, and failure semantics
+## Non-building compatibility confirmation
 
-- Empty BuildingDefinition UnitDefinition: preserve explicit actor UnitDefinitionAsset; otherwise
-  actor `Default*`; warning diagnostic.
-- Unresolved BuildingDefinition: UnitDefinition/GAS initialization remains deferred.
-- Unresolved nested UnitDefinition: existing async UnitDefinition load remains pending; GAS attributes
-  remain uninitialized rather than using defaults early.
-- Nested UnitDefinition load failure: existing UnitBase diagnostic and actor Default* fallback; no hang.
-- Empty BuildingDefinitionAsset: existing actor UnitDefinitionAsset/default behavior.
-- Non-building units: unchanged because their lifecycle gate returns false.
+Worker/Salvage Walker UnitDefinition semantics are unchanged. Unit DropPod still assigns `UnitDefinitionAsset` only when empty. `gp.Units.RunUnitDefinitionContractTest` and `gp.Resource.RunOrbitalUnitDropContractTest` both passed.
 
-## BuildingDefinition.MaxHealth policy
+Logistics Hub +5 unit cap, MainBase storage, and Defensive Turret combat remain on their existing owners. Footprint/grid/`PlacementFootprintBounds`/`NavigationObstacle`/snap/collision were not changed.
 
-Retained as explicit bootstrap/compatibility fallback for definition-level
-`ResolveCanonicalMaxHealth()` queries. It is not a spawned-building GAS source when UnitDefinition is
-valid. Removing it would require separate authored-data proof and offers no benefit in this slice.
+## Exact test results
 
-## Spawn paths
-
-- Orbital: BuildingDropAuthority still resolves only product/payload. DropPod assigns the catalog
-  BuildingDefinition during deferred building spawn, before `FinishSpawning`; BuildingBase owns the
-  UnitDefinition bridge and GAS sequencing.
-- Pre-placed/MainBase: authored MainBase BP has BuildingDefinitionAsset configured, so the same bridge
-  applies without orbital spawn.
-- DropPod unit payload semantics are unchanged.
-
-## Unchanged systems
-
-- Runtime Health/MaxHealth/Damage/Armor/Resistance/Cooldown/Range remain GAS attributes.
-- Damage application, death, retaliation, health bar, replication, effects architecture unchanged.
-- Logistics Hub UnitCapBonus, MainBase storage/container capacity/count, building tags, and payload
-  SpawnedClass remain on existing owners.
-- FootprintCells, PlacementFootprintBounds, BuildGrid fallbacks/reservation, replicated footprint,
-  NavigationObstacle, placement offsets, snapping, and collision explicitly unchanged.
-
-## Production files changed
-
-- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
-- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h` (comments/policy only)
-- `GP/Source/GPRuntime/Private/Orbital/GPDropPod.cpp`
-
-## Test files changed/added
-
-- added `GP/Source/GPRuntime/Public/Buildings/GPBuildingVitalsOwnershipContractTest.h`
-- added `GP/Source/GPRuntime/Private/Debug/GPBuildingVitalsOwnershipContractTest.cpp`
-- updated `GP/Source/GPRuntime/Private/Debug/GPOrbitalBuildingDropContractTest.cpp`
-
-## Tests
-
-Failures=0, Cancelled=false:
+All Failures=0, Cancelled=false:
 
 - `gp.Building.RunBuildingVitalsOwnershipContractTest`
 - `gp.Building.RunOrbitalBuildingDropContractTest`
@@ -133,45 +63,53 @@ Failures=0, Cancelled=false:
 - `gp.Building.RunDefensiveTurretContractTest`
 - `gp.Resource.RunUnitCapLogisticsHubContractTest`
 - `gp.Units.RunUnitDefinitionContractTest`
-- `gp.Economy.RunEconomyLogisticsDataContractTest`
 - `gp.Combat.RunHealthBarContractTest`
 - `gp.Combat.RunAutoAcquireContractTest`
 - `gp.Combat.RunAttackMoveContractTest`
 - `gp.Resource.RunOrbitalUnitDropContractTest`
+- `gp.Economy.RunEconomyLogisticsDataContractTest`
 
-## Regression/full-suite escalation decision
+## S28 contamination note
 
-Escalated because shared `AGP_UnitBase::BeginPlay` received a virtual gate. Direct building,
-UnitDefinition, combat, health-bar, economy, and non-building orbital-unit contracts all passed.
+`gp.Resource.RunS28RegressionSuite` was retried once because shared UnitBase lifecycle code changed. It still stopped in the Worker hauling child with Failures=15 after a hostile authored `BP_GP_SalvageWalkerLONGRAGE` in the locally modified prototype map auto-acquired and attacked the diagnostic worker. Protected map/content was not changed to force the suite. Escalation stopped there.
 
-`gp.Resource.RunS28RegressionSuite` was additionally attempted. It stopped at Worker hauling with 15
-failures after a hostile authored `BP_GP_SalvageWalkerLONGRAGE` in the locally modified prototype map
-attacked and killed the hauling fixture. Running the hauling contract alone reproduced the same 15
-failures and hostile-map interference. The result is environment/content contamination, not a
-vitals-ownership failure; protected map/content was not changed to force the suite.
-
-No further full-suite escalation was useful without modifying protected local content.
-
-## Build
+## Builds
 
 - GPEditor Win64 Development + UHT: **PASS**
-- GP Development / Shipping: not run; reserved for finalization after operator PASS
+- GP Win64 Development: **PASS**
+- GP Win64 Shipping: **PASS**
 
-## Protected files
+## Exact final changed-file list
+
+Versus `origin/main` @ `71a7c700a1f4b066d30c0490365099c82ce91a41`:
+
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Claude_Tasks/GP-Building-Vitals-Definition-Ownership.md`
+- `Docs/Development/Claude_Tasks/README.md`
+- `Docs/Development/Configuration_Data_Ownership_Audit.md`
+- `Docs/Development/Cursor_Work_Report.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `GP/Source/GPRuntime/Private/Buildings/GPBuildingBase.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPBuildingVitalsOwnershipContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPOrbitalBuildingDropContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Orbital/GPDropPod.cpp`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingBase.h`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
+- `GP/Source/GPRuntime/Public/Buildings/GPBuildingVitalsOwnershipContractTest.h`
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+
+No maps, Blueprints, DataAssets, materials, Config, or other Content files are in the committed diff.
+
+## Protected-content confirmation
 
 Untouched and not staged:
 
 - `GP/Config/DefaultGame.ini`
 - `GP/Config/DefaultEngine.ini`
-- maps, Blueprints, DataAssets, materials, and all untracked Content
+- maps, Blueprints, DataAssets, materials, and untracked Content
 - locally edited Logistics Hub BuildingDefinition/DataAsset content
 
-The temporary read-only asset-inspection script was deleted after use.
+## Stop
 
-## Operator validation required
-
-Cold-open Editor → PIE. Verify MainBase has stable normal health; deploy Hub (500/500, +5 cap) and
-Turret (400/400, combat/cooldown/range); damage both and verify health bar/death; verify no placement
-or footprint regression. `GP UnitCombatAttributesInitialized` log lines expose initialized GAS values.
-
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.**

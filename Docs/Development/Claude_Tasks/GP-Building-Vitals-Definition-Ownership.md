@@ -1,6 +1,6 @@
 # GP — Building Vitals Definition Ownership
 
-Status: **BUILDING_VITALS_DEFINITION_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**
+Status: **BUILDING_VITALS_DEFINITION_OWNERSHIP_FINALIZED_READY_FOR_MERGE**
 
 Branch: `feature/gp-building-vitals-definition-ownership`  
 Base: `origin/main` @ `71a7c700a1f4b066d30c0490365099c82ce91a41`
@@ -106,7 +106,7 @@ changed. It stopped in the hauling child with 15 failures after a hostile author
 worker. Isolated hauling reproduced the same map contamination. This is not evidence of a vitals
 ownership regression; all directly affected and independently runnable shared-path contracts passed.
 
-Build: GPEditor Win64 Development + UHT **PASS**.
+Build: GPEditor Win64 Development + UHT **PASS**. GP Win64 Development **PASS**. GP Win64 Shipping **PASS**.
 
 ## Operator test
 
@@ -120,4 +120,4 @@ Build: GPEditor Win64 Development + UHT **PASS**.
 
 No asset edits are required.
 
-**NOT MERGED. NOT FINALIZED.**
+Operator PASS recorded. **NOT MERGED.**

@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — Building vitals definition ownership finalization
+
+Status: **BUILDING_VITALS_DEFINITION_OWNERSHIP_FINALIZED_READY_FOR_MERGE**
+
+- Same branch `feature/gp-building-vitals-definition-ownership` (base `origin/main` @ `71a7c700a1f4b066d30c0490365099c82ce91a41`)
+- Operator PASS: MainBase 1000/1000, Logistics Hub 500/500, Defensive Turret 400/400; placement remained functional; Hub/Turret behavior remained normal
+- Final contracts Failures=0: building vitals ownership, building-drop, MultiBuilding, Turret, UnitCap/Hub, UnitDefinition, health bar, auto-acquire, attack-move, unit-drop, economy/logistics
+- S28 suite still contaminated by authored hostile `BP_GP_SalvageWalkerLONGRAGE` on the locally modified prototype map; protected content not changed
+- GPEditor+UHT / GP Development / GP Shipping **PASS**
+- Protected authored config/content/map changes not staged. **NOT MERGED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
 ## 2026-08-20 — Building vitals definition ownership
 
 Status: **BUILDING_VITALS_DEFINITION_OWNERSHIP_READY_FOR_OPERATOR_VALIDATION**

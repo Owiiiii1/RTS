@@ -12,7 +12,8 @@
 - Exact base: `9d9caa5fc7665ad8dc62016aed7b77f5238761dc`
 - Validated implementation head before finalization docs:
   `30edb117bda035172646c83e6235e5c60817b748`
-- Final branch head: finalization documentation commit containing this report
+- Finalization documentation/report head: `c248f2c46a2f010e388dd5eb9a18c66c415fb702`
+- Final branch head: documentation-only head-record commit following the finalization report
 
 ## Operator validation — PASS
 

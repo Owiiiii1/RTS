@@ -20,8 +20,8 @@ struct FGP_FoWOverlayDrawBatch
 /**
  * Source-only, hit-test-invisible viewport overlay for the local player's world FoW.
  *
- * Rebuilds a viewport-local high-resolution presentation raster whenever the LocalFoW revision or
- * camera/view projection changes. Camera motion resamples; it does not freeze a prior contour cache.
+ * Rebuilds viewport-local per-cell feathered quads whenever the LocalFoW revision or camera/view
+ * projection changes. Visible cells are skipped. There is no sampled fullscreen mask.
  */
 UCLASS(NotBlueprintable)
 class GPUIRUNTIME_API UGP_FoWWorldOverlayWidget : public UUserWidget

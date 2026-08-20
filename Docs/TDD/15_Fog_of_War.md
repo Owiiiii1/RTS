@@ -30,10 +30,10 @@ Current-compatible deviations from the older pseudocode:
   confirmation remains authoritative;
 - single-client transitions, same-coordinate two-player team isolation, and restart/reinitialization
   passed operator validation;
-- source-only world/terrain presentation is a viewport-local **BlurredRasterOverlay**
-  (`UGP_FoWWorldPresentationSubsystem` + `UGP_FoWWorldOverlayWidget` + bilinear upsample + separable
-  box blur). The post-process texture/material experiment is abandoned. Canonical gameplay grid is
-  50 cm / 10 Hz / 4000×4000;
+- source-only world/terrain presentation is a viewport-local **PerCellBlurredQuadRenderer**
+  (`UGP_FoWWorldPresentationSubsystem` + `UGP_FoWWorldOverlayWidget` + one feathered quad tile per
+  non-Visible cell). Post-process and fullscreen/sampled mask approaches are abandoned. Canonical
+  gameplay grid is 50 cm / 10 Hz / 4000×4000;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
   relevance, minimap, and the full production HUD remain later FoW slices.
 
@@ -46,8 +46,8 @@ Current-compatible deviations from the older pseudocode:
    `bOnlyRelevantToOwner`; the trusted mirror does not itself hide replicated actors.
 4. **Bit-grid storage.** Authority and local mirror use `TBitArray` internally; raw arrays are never
    replicated. Current deterministic gameplay cell size is 50 cm (10 Hz, 4000×4000, same world origin).
-   Visual smoothness is a presentation-only viewport-local blurred raster overlay; the post-process
-   texture path is abandoned.
+   Visual smoothness is a presentation-only per-cell feathered quad overlay; post-process and
+   fullscreen mask paths are abandoned.
 5. **No client-side FoW gameplay.** Client can render fog mask, but server arbiters all visibility-gated logic.
 6. **No tick-poll у widgets.** FoW reads through `UGP_FoWViewModel` and reacts to coarse Revision
    FieldNotify (Common UI + MVVM per TDD/12).
@@ -155,23 +155,24 @@ Payload facts:
 
 `UGP_FoWWorldPresentationSubsystem` is one `ULocalPlayerSubsystem` per local player in `GPUIRuntime`.
 It binds only to that controller's `UGP_LocalFoWComponent` and drives a hit-test-invisible Slate
-overlay (`UGP_FoWWorldOverlayWidget`). Renderer name: **BlurredRasterOverlay**. `PostProcessActive=false`.
+overlay (`UGP_FoWWorldOverlayWidget`). Renderer name: **PerCellBlurredQuadRenderer**.
+`PostProcessActive=false`. `MaskProjectionActive=false`.
 
-Operator stopped the post-process texture experiment (terrain fog did not apply; stutter). SDF /
-contour / Chaikin / marching-squares reconstruction is also abandoned. Current temporary MVP stop:
+Operator rejected the sampled/projected mask overlay (left-side striping) and the earlier post-process
+experiment. SDF / contour / Chaikin / marching-squares remain abandoned. Current temporary MVP stop:
 
 - gameplay grid: CellSize=50 cm, Dims=4000×4000, Interval=0.10 s;
-- visual: square cells from LocalFoW, Unexplored black, Explored dim grey, Visible clear;
-- viewport-local bilinear upsample (target 4×) + separable box blur (12 samples) + coalesced Slate quads;
-- the look may remain cell-based; cells are much smaller and edges are strongly blurred;
-- no post-process material, no world-position reconstruction, no camera blendable binding.
+- visual: one world-space quad tile per Unexplored/Explored cell in the current view;
+- Visible cells are not drawn;
+- each tile has a neighbor-aware feathered edge so adjacent tiles blend;
+- the look remains cell-based; cells are 50 cm with soft edges;
+- no post-process material, no world-position reconstruction, no fullscreen mask, no coalesced strip surface.
 
 Bounds:
 
-- sampled gameplay cells capped at 65536;
-- presentation pixels capped at 262144;
-- overlay quads capped at 16384;
-- no full-world 4000×4000 raster;
+- sampled gameplay cells capped at 16384;
+- overlay quads capped at 98304;
+- no full-world 4000×4000 allocation;
 - no cell UObject/component allocation.
 
 Enemy world presentation remains a separate temporary local gate, not replication relevance:
@@ -372,8 +373,8 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
   is 16× denser than the former 200 cm grid; authority work stays circle-fill, not a full 16M scan.
 - Relevance check called by engine per actor per client. Cheap (per-cell bit query + team check).
 - Multicast and replication budget unchanged from existing.
-- World FoW presentation: viewport-local blurred raster overlay (max 65536 sampled cells, 262144
-  presentation pixels). Camera pan/zoom/rotate resamples the overlay; it does not rebuild authority FoW.
+- World FoW presentation: viewport-local per-cell feathered quads (max 16384 sampled cells, 98304
+  overlay quads). Camera pan/zoom/rotate rebuilds tiles; it does not rebuild authority FoW.
 
 ## Validation per Pillars
 

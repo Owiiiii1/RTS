@@ -481,7 +481,7 @@ int32 UGP_FogOfWarComponent::DebugGetExploredCellCountForTeam(int32 TeamId) cons
 void UGP_FogOfWarComponent::DebugDumpToLog() const
 {
 	UE_LOG(LogGPFogOfWar, Display,
-		TEXT("GP FoW Dump: Renderer=BlurredRasterOverlay PostProcessActive=false Sources=%d CellSize=%.1f Dims=%dx%d Interval=%.2f Origin=%s"),
+		TEXT("GP FoW Dump: Renderer=PerCellBlurredQuadRenderer PostProcessActive=false MaskProjectionActive=false Sources=%d CellSize=%.1f Dims=%dx%d Interval=%.2f Origin=%s"),
 		DebugGetRegisteredSightSourceCount(),
 		GetCellSizeCm(),
 		GetGridDimensions().X,

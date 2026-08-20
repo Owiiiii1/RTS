@@ -13,59 +13,44 @@
 
 ## Operator decision
 
-Operator stopped the post-process direction.
+The previous attempt was rejected because it restored mask/overlay behavior.
 
-The post-process terrain fog renderer is rejected: it did not visibly apply (map stayed fully lit)
-and stuttered. Enemy LocalFoW hiding still worked and is preserved.
+`BlurredRasterOverlay` sampled a presentation field and projected coalesced strips across the view.
+That reintroduced the old left-side striping. It is not the requested visual.
 
-This change reverts conceptually to the earlier simple square blurred renderer and adopts the
-previously deferred 4× denser gameplay grid.
+The operator wants FoW drawn as many small cells: each Unexplored/Explored cell is its own quad tile
+with feathered edges. Visible cells are not drawn. A still-cellular look is acceptable.
 
-SDF / contour / Chaikin / marching-squares reconstruction remains abandoned.
+## Final active renderer
 
-## Final canonical values
+**PerCellBlurredQuadRenderer**
+
+Exact path:
+
+1. `UGP_FoWWorldPresentationSubsystem` (local-player owner)
+2. `UGP_FoWWorldOverlayWidget` (hit-test-invisible viewport overlay)
+3. Per-cell world-space quads with neighbor-aware edge/corner feathers
+
+- **PostProcessActive=false**
+- **MaskProjectionActive=false**
+- No fullscreen mask
+- No sampled raster bands
+- No coalesced row-strip surface
+- No post-process material
+- No SDF / contour / marching squares
+
+Unexplored tiles are black with feathered edges. Explored tiles are dim grey with feathered edges.
+Same-state neighbors abut solidly so they merge; edges toward Visible (and Unexplored toward Explored)
+feather out.
+
+## Canonical values
 
 - CellSize = **50 cm**
 - Dims = **4000 × 4000**
 - Interval = **0.10 sec (10 Hz)**
 - World origin unchanged: `(-100000, -100000)`
 
-Applied to authority FoW, LocalFoW mirror, visibility queries, auto-acquire, building placement
-checks, debug dumps, and world visualization.
-
 BuildGrid remains 200 cm. That is a different grid.
-
-## Active renderer
-
-Exact path now active:
-
-1. `UGP_FoWWorldPresentationSubsystem` (local-player owner)
-2. `UGP_FoWWorldOverlayWidget` (hit-test-invisible viewport overlay)
-3. `GPFoWPresentationRaster` (`BilinearUpsampleSeparableBoxBlur`)
-
-- **Renderer=`BlurredRasterOverlay`**
-- **PostProcessActive=false**
-- Viewport-local sampling (max 65536 cells, 262144 presentation pixels, 16384 quads)
-- Target supersample 4, separable box blur radius 12
-- Unexplored = black, Explored = dim grey, Visible = clear
-- Camera pan/zoom/rotate resamples; no post-process injection; no world-position material
-
-This is deliberately a square-based but much finer and strongly blurred look. It is not a
-mathematically perfect round fog edge.
-
-## Post-process path
-
-Removed / disabled:
-
-- `GPFoWVisualMask` runtime texture path
-- `UGP_LocalFoWComponent::BuildPresentationMaskRGBA`
-- `M_GP_FoW_PostProcess` and `GPFoWPostProcessMaterialSeedCommandlet`
-- camera blendable binding, debug tint, SceneDepth world reconstruction
-- RHI/RenderCore FoW presentation dependencies
-
-No competing terrain FoW renderer remains active.
-
-Enemy visibility gating by LocalFoW is unchanged and still working.
 
 ## Tests / build
 
@@ -93,25 +78,17 @@ Not modified:
 - VFX / Tools
 - LongRange UnitDefinition sight radius 2000
 
-The branch-owned unused FoW post-process material was removed from this branch.
-
 ## Changed files (implementation)
 
-- `GP/Source/GPRuntime/Public/FogOfWar/GPFogOfWarComponent.h`
-- `GP/Source/GPRuntime/Private/FogOfWar/GPFogOfWarComponent.cpp`
-- `GP/Source/GPRuntime/Public/FogOfWar/GPLocalFoWComponent.h`
-- `GP/Source/GPRuntime/Private/FogOfWar/GPLocalFoWComponent.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPFoWRuntimeFoundationContractTest.cpp`
-- `GP/Source/GPUIRuntime/GPUIRuntime.Build.cs`
+- `GP/Source/GPUIRuntime/Public/Presentation/GPFoWPresentationRaster.h`
+- `GP/Source/GPUIRuntime/Private/Presentation/GPFoWPresentationRaster.cpp`
 - `GP/Source/GPUIRuntime/Public/Presentation/GPFoWWorldPresentationSubsystem.h`
 - `GP/Source/GPUIRuntime/Private/Presentation/GPFoWWorldPresentationSubsystem.cpp`
-- `GP/Source/GPUIRuntime/Public/Presentation/GPFoWPresentationRaster.h` (restored)
-- `GP/Source/GPUIRuntime/Private/Presentation/GPFoWPresentationRaster.cpp` (restored)
-- `GP/Source/GPUIRuntime/Public/Widgets/GPFoWWorldOverlayWidget.h` (restored)
-- `GP/Source/GPUIRuntime/Private/Widgets/GPFoWWorldOverlayWidget.cpp` (restored)
+- `GP/Source/GPUIRuntime/Public/Widgets/GPFoWWorldOverlayWidget.h`
+- `GP/Source/GPUIRuntime/Private/Widgets/GPFoWWorldOverlayWidget.cpp`
 - `GP/Source/GPUIRuntime/Private/Debug/GPFoWWorldVisualizationContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPFoWClientPresentationFoundationContractTest.cpp`
-- deleted `GPFoWVisualMask` + post-process seed commandlet + `M_GP_FoW_PostProcess.uasset`
+- `GP/Source/GPRuntime/Private/FogOfWar/GPFogOfWarComponent.cpp`
+- `GP/Source/GPRuntime/Private/FogOfWar/GPLocalFoWComponent.cpp`
 
 ## Changed files (docs)
 

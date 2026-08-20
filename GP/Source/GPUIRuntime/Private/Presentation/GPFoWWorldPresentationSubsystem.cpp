@@ -88,24 +88,9 @@ const TCHAR* UGP_FoWWorldPresentationSubsystem::GetBlurName()
 	return GPFoWPresentationRaster::GetBlurName();
 }
 
-int32 UGP_FoWWorldPresentationSubsystem::GetTargetSuperSample()
+float UGP_FoWWorldPresentationSubsystem::GetFeatherFraction()
 {
-	return GPFoWPresentationRaster::TargetSuperSample;
-}
-
-int32 UGP_FoWWorldPresentationSubsystem::GetMinimumSuperSample()
-{
-	return GPFoWPresentationRaster::MinimumSuperSample;
-}
-
-int32 UGP_FoWWorldPresentationSubsystem::GetBlurRadiusSamples()
-{
-	return GPFoWPresentationRaster::BlurRadiusSamples;
-}
-
-int32 UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels()
-{
-	return GPFoWPresentationRaster::MaximumPresentationPixels;
+	return GPFoWPresentationRaster::FeatherFraction;
 }
 
 int32 UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads()
@@ -257,9 +242,10 @@ void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 			: nullptr;
 
 	UE_LOG(LogGPFoWWorldPresentation, Display,
-		TEXT("GP FoW VisualDump: Renderer=%s PostProcessActive=%s World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d Algorithm=%s CellSize=%.1f Dims=%dx%d Interval=%.2f GameplayCellSize=%.1f PresentationSupersample=%d PresentationTexelWorldSize=%.1f SampledGameplayCells=%d RasterDims=%s RasterPixels=%d RasterBytes=%d BlurRadiusSamples=%d BlurRadiusCm=%.1f MaskRevision=%lld CameraResample=%s FallbackActive=%s RegisteredEnemyPresentation=%d LocalTeamId=%d RebuildMs=%.3f Interpolation=%s Blur=%s MaskModel=%s PadCells=%d OverlayQuads=%d OverlayVertices=%d MaxPixels=%d MaxQuads=%d RegionMin=%s RegionMax=%s Dirty=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
+		TEXT("GP FoW VisualDump: Renderer=%s PostProcessActive=%s MaskProjectionActive=%s World=%s Active=%s Enabled=%s Ready=%s LocalTeam=%d Algorithm=%s CellSize=%.1f Dims=%dx%d Interval=%.2f SampledGameplayCells=%d CellTiles=%d VisibleCellsSkipped=%d FeatherQuads=%d FeatherCm=%.1f FeatherFraction=%.2f OverlayQuads=%d OverlayVertices=%d MaxSampledCells=%d MaxQuads=%d MaskRevision=%lld CameraResample=%s FallbackActive=%s RegisteredEnemyPresentation=%d RebuildMs=%.3f Blur=%s PadCells=%d RegionMin=%s RegionMax=%s Dirty=%s LastUpdateRevision=%lld ConsumedSerial=%llu RenderSerial=%llu"),
 		GetRendererName(),
 		IsPostProcessActive() ? TEXT("true") : TEXT("false"),
+		IsMaskProjectionActive() ? TEXT("true") : TEXT("false"),
 		*GetNameSafe(GetWorld()),
 		IsRendererActive() ? TEXT("true") : TEXT("false"),
 		bVisualizationEnabled ? TEXT("true") : TEXT("false"),
@@ -270,29 +256,23 @@ void UGP_FoWWorldPresentationSubsystem::DebugDumpToLog() const
 		Dims.X,
 		Dims.Y,
 		Interval,
-		CellSize,
-		LastStats.SuperSample,
-		LastStats.PresentationTexelWorldSize,
 		LastStats.SampledGameplayCells,
-		*LastStats.RasterDims.ToString(),
-		LastStats.RasterPixels,
-		LastStats.RasterBytes,
-		LastStats.BlurRadiusSamples,
-		LastStats.BlurRadiusCm,
+		LastStats.CellTiles,
+		LastStats.VisibleCellsSkipped,
+		LastStats.FeatherQuads,
+		LastStats.FeatherCm,
+		GetFeatherFraction(),
+		LastStats.OverlayQuads,
+		LastStats.OverlayVertices,
+		GetMaximumSampledCells(),
+		GetMaximumOverlayQuads(),
 		LastStats.MaskRevision,
 		LastStats.bCameraResample ? TEXT("true") : TEXT("false"),
 		LastStats.bFallbackActive ? TEXT("true") : TEXT("false"),
 		UnitPresentation != nullptr ? UnitPresentation->GetRegisteredUnitCount() : 0,
-		Mirror != nullptr ? Mirror->GetLocalTeamId() : -1,
 		LastStats.RebuildMilliseconds,
-		GetInterpolationName(),
 		GetBlurName(),
-		GetMaskModelName(),
 		GetSamplePadCells(),
-		LastStats.OverlayQuads,
-		LastStats.OverlayVertices,
-		GetMaximumPresentationPixels(),
-		GetMaximumOverlayQuads(),
 		*LastStats.MinCell.ToString(),
 		*LastStats.MaxCell.ToString(),
 		IsVisualDataDirty() ? TEXT("true") : TEXT("false"),

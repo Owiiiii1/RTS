@@ -8,55 +8,51 @@
 
 Make the trusted one-team local FoW physically visible over the current MVP arena:
 
-- Unexplored: opaque black;
-- Explored: dim/grey terrain;
-- Visible: unchanged world.
+- Unexplored: opaque black tiles;
+- Explored: dim/grey tiles;
+- Visible: not drawn.
 
-This slice is presentation-only for the overlay, plus the adopted denser gameplay grid.
+## Operator decision
 
-## Operator decision (temporary MVP stop)
+The previous sampled/projected mask overlay is **wrong**. It restored a large mask/strip surface
+across the view and reintroduced left-side striping.
 
-The post-process texture renderer is **rejected and abandoned**.
+Correct target: **simple per-cell renderer**.
 
-We stop on the earlier simple working approach, plus the previously deferred denser grid:
+- FoW is drawn as many small cell tiles;
+- each non-Visible cell is its own quad with feathered edges;
+- neighboring tiles blend because of the feather;
+- the look may remain cell-based;
+- no fullscreen mask, post-process, SDF, contours, or coalesced strip projection.
 
-- square/cell-based FoW visualization;
-- strong blur / soft edges;
-- no post-process material;
-- no SDF / contour / marching-squares reconstruction;
-- no camera-bound post-process binding.
-
-Canonical gameplay grid:
+## Canonical gameplay grid
 
 - CellSize = **50 cm**
 - Dims = **4000 × 4000**
 - Interval = **0.10 sec (10 Hz)**
-- same world origin `(-100000, -100000)`
+- world origin unchanged `(-100000, -100000)`
 
 ## Active renderer
 
-Exactly one terrain FoW renderer is active:
+`UGP_FoWWorldPresentationSubsystem` + `UGP_FoWWorldOverlayWidget` + per-cell feathered quads
 
-`UGP_FoWWorldPresentationSubsystem` + `UGP_FoWWorldOverlayWidget` + `GPFoWPresentationRaster`
-
-- **Renderer=`BlurredRasterOverlay`**
+- **Renderer=`PerCellBlurredQuadRenderer`**
 - **PostProcessActive=false**
-- Algorithm=`BilinearUpsampleSeparableBoxBlur`
-- viewport-local sample cap 65536 cells / 262144 presentation pixels
-- target supersample 4 (≈12.5 cm texels) and separable box blur radius 12
-- coalesced Slate quads; camera pan/zoom/rotate resamples
+- **MaskProjectionActive=false**
+- Algorithm=`PerCellFeatheredQuads`
+- only Unexplored and Explored cells emit tiles
+- neighbor-aware edge/corner feathers
+- viewport-local sample cap 16384 cells / 98304 quads
 
-Enemy visibility gating by LocalFoW remains a separate local presentation gate.
+Enemy LocalFoW gating remains a separate presentation gate.
 
-## Removed / abandoned
+## Abandoned
 
-- post-process terrain fog renderer
-- runtime FoW texture / mask presentation path (`GPFoWVisualMask`, `BuildPresentationMaskRGBA`)
-- post-process camera binding and debug tint
-- world-position reconstruction material path
-- `M_GP_FoW_PostProcess` and its seed commandlet
-- SDF / contour / Chaikin / marching squares
-- hybrid post-process + overlay competition
+- post-process FoW
+- projected / sampled fullscreen mask
+- coalesced row-strip overlay
+- SDF / contour / marching squares
+- debug tint path
 
 ## Diagnostics
 
@@ -65,8 +61,9 @@ Enemy visibility gating by LocalFoW remains a separate local presentation gate.
 - CellSize=50
 - Dims=4000x4000
 - Interval=0.10
-- Renderer=BlurredRasterOverlay
+- Renderer=PerCellBlurredQuadRenderer
 - PostProcessActive=false
+- MaskProjectionActive=false
 
 ## Validation
 
@@ -79,7 +76,7 @@ Enemy visibility gating by LocalFoW remains a separate local presentation gate.
 - `gp.Building.RunBuildGridContractTest` — **PASS**, `Failures=0`
 - GPEditor Win64 Development + UHT — **PASS**
 
-No Config, maps, Blueprints, DataAssets, materials, VFX, or Tools were modified.
+No Config, maps, Blueprints, DataAssets, VFX, or Tools were modified.
 LongRange UnitDefinition sight=2000 was not touched.
 
 **NOT MERGED. NOT FINALIZED.**

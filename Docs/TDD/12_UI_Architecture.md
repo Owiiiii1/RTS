@@ -74,8 +74,8 @@ PublicDependencyModuleNames.AddRange(new string[]
 - Listen-host and remote-client team isolation plus restart/reinitialization passed operator validation.
 - `UGP_FoWWorldPresentationSubsystem` is the first specialized world-presentation consumer. It binds
   directly to the trusted one-team LocalFoW mirror, not gameplay authority, and paints a viewport-local
-  **BlurredRasterOverlay** (bilinear upsample + separable box blur + coalesced Slate quads). Gameplay
-  FoW is 50 cm / 10 Hz / 4000×4000. The post-process texture/material experiment is abandoned.
+  **PerCellBlurredQuadRenderer** (one feathered world-space tile per non-Visible cell). Gameplay
+  FoW is 50 cm / 10 Hz / 4000×4000. Post-process and fullscreen/sampled mask approaches are abandoned.
 - This direct mirror binding is intentionally limited to the project-owned world renderer. Ordinary
   HUD/minimap widgets still consume ViewModels.
 - The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.
@@ -150,9 +150,9 @@ UI код live у `GPUIRuntime`. Per [`01_Module_Architecture`](01_Module_Archit
 7. **Common UI activation stack** для будь-якого modal (OrderMenu, EndOfMatch, Pause). Не raw `AddToViewport` для screens.
 
 Specialized exception: FoW world presentation is a native local-player adapter, not an interactive HUD
-screen. `UGP_FoWWorldPresentationSubsystem` may read the trusted local mirror to rebuild a viewport-local
-blurred raster overlay, but cannot read authority or mutate gameplay. Camera motion resamples that
-overlay. The paired `UGP_LocalFoWUnitPresentationSubsystem` is likewise a native world-presentation
+screen. `UGP_FoWWorldPresentationSubsystem` may read the trusted local mirror to rebuild viewport-local
+per-cell feathered quads, but cannot read authority or mutate gameplay. Camera motion rebuilds those
+tiles. The paired `UGP_LocalFoWUnitPresentationSubsystem` is likewise a native world-presentation
 adapter: UnitBase actors lifecycle-register, LocalFoW revisions push immediate reevaluation, and a
 bounded 10 Hz registered-list pass catches movement across a static visibility edge. It only composes
 local primitive/health/combat presentation and never changes actor replication or gameplay state.

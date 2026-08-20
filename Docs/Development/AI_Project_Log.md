@@ -1,5 +1,20 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-20 — FoW per-cell blurred quad renderer
+
+Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Operator rejected the restored sampled/projected mask overlay (left-side striping). The intended
+  visual is many small cell tiles with soft edges, not a fullscreen/strip mask.
+- Active renderer: `PerCellBlurredQuadRenderer`. Visible cells are skipped. Unexplored/Explored emit
+  world-space quads with neighbor-aware feathers. `PostProcessActive=false`, `MaskProjectionActive=false`.
+- Gameplay grid unchanged from the denser plan: CellSize=50, Dims=4000×4000, Interval=0.10.
+- Focused contracts Failures=0; GPEditor Win64 Development + UHT **PASS**. No Config/map/Blueprint/
+  DataAsset/VFX/Tools edit. **NOT MERGED. NOT FINALIZED.**
+- Task: `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+
 ## 2026-08-20 — FoW blurred raster overlay + 50 cm / 10 Hz grid
 
 Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**

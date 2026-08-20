@@ -246,7 +246,7 @@ void UGP_LocalFoWComponent::DebugDumpToLog() const
 	const float Interval =
 		AuthorityFoW != nullptr ? AuthorityFoW->GetUpdateIntervalSeconds() : 0.0f;
 	UE_LOG(LogGPLocalFogOfWar, Display,
-		TEXT("GP LocalFoW Dump: Renderer=BlurredRasterOverlay PostProcessActive=false World=%s NetMode=%s Owner=%s Ready=%s LocalTeam=%d Revision=%lld CellSize=%.1f Dims=%dx%d Interval=%.2f Origin=%s Explored=%d Visible=%d"),
+		TEXT("GP LocalFoW Dump: Renderer=PerCellBlurredQuadRenderer PostProcessActive=false MaskProjectionActive=false World=%s NetMode=%s Owner=%s Ready=%s LocalTeam=%d Revision=%lld CellSize=%.1f Dims=%dx%d Interval=%.2f Origin=%s Explored=%d Visible=%d"),
 		*GetNameSafe(World),
 		World != nullptr ? GPLocalFogOfWarPrivate::NetModeToString(World->GetNetMode()) : TEXT("None"),
 		*GetNameSafe(GetOwner()),

@@ -124,7 +124,7 @@ current execution order.
 | --- | --- | --- |
 | Per-team Unexplored/Explored/Visible runtime | **DONE — FOUNDATION** | `UGP_FogOfWarComponent` owns authority-only per-team bit grids, 10 Hz registered-source recompute, sticky exploration, and public server queries; contract and operator validation passed. Canonical grid: 50 cm / 4000×4000 / 0.10 s. Client rendering/relevance remain separate capability work. |
 | Trusted owning-client mirror + FoW MVVM | **DONE — FOUNDATION** | Owner-only initial/delta range sync, revision guards, one-team `UGP_LocalFoWComponent`, `UGP_FoWViewModel`, adapter, CommonUI base, and local placement preview passed contracts, final builds, and two-player operator isolation. |
-| Visual world/terrain FoW | **PARTIAL — OPERATOR VALIDATION PENDING** | Operator stopped the post-process direction. Current stop: viewport-local BlurredRasterOverlay (square cells, strong blur) plus 4× denser gameplay grid (50 cm / 10 Hz / 4000×4000). Post-process path removed. Contracts and Editor build pass; PIE terrain readability is the current gate. |
+| Visual world/terrain FoW | **PARTIAL — OPERATOR VALIDATION PENDING** | Operator rejected sampled/projected mask overlay (striping) and the post-process experiment. Current stop: PerCellBlurredQuadRenderer plus 50 cm / 10 Hz / 4000×4000 gameplay grid. Contracts and Editor build pass; PIE terrain readability is the current gate. |
 | FoW-gated selection/combat/drop placement | **PARTIAL** | Server auto-acquire and orbital building placement consume active visibility. Enemy local selection, explicit-Attack last-known behavior, unit-drop pod vision, and broad relevance filtering remain deferred FoW integration. |
 | Last-known state and minimap layers | **NOT STARTED** | Design only. |
 

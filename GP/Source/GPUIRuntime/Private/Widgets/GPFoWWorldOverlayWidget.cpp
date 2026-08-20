@@ -32,7 +32,7 @@ void UGP_FoWWorldOverlayWidget::NativeConstruct()
 	SetAlignmentInViewport(FVector2D::ZeroVector);
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 
-	// Paint every view frame so camera projection changes resample the viewport-local raster.
+	// Paint every view frame so camera projection changes rebuild per-cell tiles.
 	bIsVolatile = true;
 }
 
@@ -136,14 +136,10 @@ int32 UGP_FoWWorldOverlayWidget::NativePaint(
 	Stats.SampledGameplayCells = bHasValidCache
 		? (CachedMaxCell.X - CachedMinCell.X + 1) * (CachedMaxCell.Y - CachedMinCell.Y + 1)
 		: 0;
-	Stats.PaddedCells = Stats.SampledGameplayCells;
-	Stats.SuperSample = CachedGeometry.SuperSample;
-	Stats.RasterDims = CachedGeometry.RasterDims;
-	Stats.RasterPixels = CachedGeometry.RasterPixels;
-	Stats.RasterBytes = CachedGeometry.RasterBytes;
-	Stats.BlurRadiusSamples = CachedGeometry.BlurRadiusSamples;
-	Stats.BlurRadiusCm = CachedGeometry.BlurRadiusCm;
-	Stats.PresentationTexelWorldSize = CachedGeometry.PresentationTexelWorldSize;
+	Stats.CellTiles = CachedGeometry.CellTiles;
+	Stats.FeatherQuads = CachedGeometry.FeatherQuads;
+	Stats.VisibleCellsSkipped = CachedGeometry.VisibleCellsSkipped;
+	Stats.FeatherCm = CachedGeometry.FeatherCm;
 	Stats.OverlayVertices = 0;
 	for (const FGP_FoWOverlayDrawBatch& Batch : CachedBatches)
 	{
@@ -335,8 +331,8 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedOverlay(
 
 	int32 Width = MaxCell.X - MinCell.X + 1;
 	int32 Height = MaxCell.Y - MinCell.Y + 1;
-	while (GPFoWPresentationRaster::ChooseSuperSample(Width, Height)
-			< GPFoWPresentationRaster::MinimumSuperSample
+	while (static_cast<int64>(Width) * Height
+			> UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells()
 		&& Width > 4 && Height > 4)
 	{
 		++MinCell.X;
@@ -349,9 +345,7 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedOverlay(
 
 	const int64 SampledCellCount64 = static_cast<int64>(Width) * static_cast<int64>(Height);
 	if (SampledCellCount64 <= 0
-		|| SampledCellCount64 > UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells()
-		|| GPFoWPresentationRaster::ChooseSuperSample(Width, Height)
-			< GPFoWPresentationRaster::MinimumSuperSample)
+		|| SampledCellCount64 > UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells())
 	{
 		return false;
 	}
@@ -420,9 +414,10 @@ void UGP_FoWWorldOverlayWidget::AddProjectedQuad(
 	const FIntRect& ViewRect,
 	float ViewportScale) const
 {
-	const FLinearColor Color =
-		UGP_FoWWorldPresentationSubsystem::GetOverlayColorForObscuration(Quad.Obscuration);
-	if (Color.A <= 0.0f)
+	if (Quad.CornerColors[0].A <= 0.0f
+		&& Quad.CornerColors[1].A <= 0.0f
+		&& Quad.CornerColors[2].A <= 0.0f
+		&& Quad.CornerColors[3].A <= 0.0f)
 	{
 		return;
 	}
@@ -464,18 +459,17 @@ void UGP_FoWWorldOverlayWidget::AddProjectedQuad(
 
 	FGP_FoWOverlayDrawBatch& Batch = CachedBatches.Last();
 	const SlateIndex BaseIndex = static_cast<SlateIndex>(Batch.Vertices.Num());
-	const FColor VertexColor = Color.ToFColor(true);
 	const FSlateRenderTransform& SlateRenderTransform =
 		AllottedGeometry.GetAccumulatedRenderTransform();
 
 	Batch.Vertices.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(
-		SlateRenderTransform, LocalCorners[0], FVector2f(0.0f, 0.0f), VertexColor));
+		SlateRenderTransform, LocalCorners[0], FVector2f(0.0f, 0.0f), Quad.CornerColors[0].ToFColor(true)));
 	Batch.Vertices.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(
-		SlateRenderTransform, LocalCorners[1], FVector2f(1.0f, 0.0f), VertexColor));
+		SlateRenderTransform, LocalCorners[1], FVector2f(1.0f, 0.0f), Quad.CornerColors[1].ToFColor(true)));
 	Batch.Vertices.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(
-		SlateRenderTransform, LocalCorners[2], FVector2f(1.0f, 1.0f), VertexColor));
+		SlateRenderTransform, LocalCorners[2], FVector2f(1.0f, 1.0f), Quad.CornerColors[2].ToFColor(true)));
 	Batch.Vertices.Add(FSlateVertex::Make<ESlateVertexRounding::Disabled>(
-		SlateRenderTransform, LocalCorners[3], FVector2f(0.0f, 1.0f), VertexColor));
+		SlateRenderTransform, LocalCorners[3], FVector2f(0.0f, 1.0f), Quad.CornerColors[3].ToFColor(true)));
 	Batch.Indices.Add(BaseIndex + 0);
 	Batch.Indices.Add(BaseIndex + 1);
 	Batch.Indices.Add(BaseIndex + 2);

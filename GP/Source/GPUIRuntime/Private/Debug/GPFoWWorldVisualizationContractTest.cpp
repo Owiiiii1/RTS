@@ -256,36 +256,35 @@ namespace GPFoWWorldVisualizationContractPrivate
 			Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0));
 		Expect(FCString::Strcmp(
 				UGP_FoWWorldPresentationSubsystem::GetRendererName(),
-				TEXT("BlurredRasterOverlay")) == 0
+				TEXT("PerCellBlurredQuadRenderer")) == 0
 			&& !UGP_FoWWorldPresentationSubsystem::IsPostProcessActive()
-			&& UGP_FoWWorldPresentationSubsystem::GetTargetSuperSample() == 4
-			&& UGP_FoWWorldPresentationSubsystem::GetBlurRadiusSamples() == 12
+			&& !UGP_FoWWorldPresentationSubsystem::IsMaskProjectionActive()
 			&& FString(UGP_FoWWorldPresentationSubsystem::GetPresentationAlgorithmName())
-				.Contains(TEXT("Bilinear"))
+				.Contains(TEXT("PerCell"))
 			&& FString(UGP_FoWWorldPresentationSubsystem::GetMaskModelName())
-				.Contains(TEXT("KnownMask+VisibleMask")),
-			TEXT("H8_BlurredRasterOverlayIsTheActiveRenderer"));
+				.Equals(TEXT("None")),
+			TEXT("H8_PerCellBlurredQuadRendererIsTheActiveRenderer"));
 		{
 			FGP_FoWPresentationRaster TinyField;
 			GPFoWPresentationRaster::ConfigureField(
-				TinyField, 0, 0, 2, 1, 100.0f, FVector2D::ZeroVector);
+				TinyField, 0, 0, 2, 1, 50.0f, FVector2D::ZeroVector);
 			GPFoWPresentationRaster::SetCell(TinyField, 0, 0, EGP_FoWState::Visible);
 			GPFoWPresentationRaster::SetCell(TinyField, 1, 0, EGP_FoWState::Unexplored);
 			FGP_FoWPresentationGeometry TinyGeometry;
 			Expect(GPFoWPresentationRaster::RebuildPresentation(TinyField, TinyGeometry)
-				&& TinyField.SuperSample >= UGP_FoWWorldPresentationSubsystem::GetMinimumSuperSample()
-				&& TinyGeometry.RasterDims.X == TinyField.Width * TinyField.SuperSample
-				&& TinyGeometry.RasterDims.Y == TinyField.Height * TinyField.SuperSample,
-				TEXT("H8B_RasterDimsMatchSampledRegion"));
+				&& TinyGeometry.CellTiles == 1
+				&& TinyGeometry.VisibleCellsSkipped == 1
+				&& TinyGeometry.Quads.Num() > TinyGeometry.CellTiles,
+				TEXT("H8B_OnlyNonVisibleCellsEmitTiles"));
 			const float HiddenCenter = GPFoWPresentationRaster::SamplePresentationObscuration(
-				TinyField, FVector2D(150.0, 50.0));
+				TinyField, TinyGeometry, FVector2D(75.0, 25.0));
 			const float VisibleCenter = GPFoWPresentationRaster::SamplePresentationObscuration(
-				TinyField, FVector2D(50.0, 50.0));
+				TinyField, TinyGeometry, FVector2D(15.0, 25.0));
 			const float Boundary = GPFoWPresentationRaster::SamplePresentationObscuration(
-				TinyField, FVector2D(100.0, 50.0));
+				TinyField, TinyGeometry, FVector2D(40.0, 25.0));
 			Expect(HiddenCenter > VisibleCenter
 				&& Boundary > VisibleCenter && Boundary < HiddenCenter,
-				TEXT("H8C_InterpolationCreatesBoundarySamples"));
+				TEXT("H8C_FeatheredTileEdgesBlendTowardVisible"));
 		}
 		Expect(Team1Mirror->GetRevision() == SmoothingRevisionBefore
 			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0))
@@ -293,12 +292,13 @@ namespace GPFoWWorldVisualizationContractPrivate
 			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(2, 0))
 				== UnexploredBeforeSmoothing,
 			TEXT("H9_SmoothingDoesNotMutateOrPromoteLocalFoWState"));
-		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels() == 262144
-			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() == 16384
-			&& UGP_FoWWorldPresentationSubsystem::GetBlurRadiusSamples() >= 6
-			&& UGP_FoWWorldPresentationSubsystem::GetBlurRadiusSamples() <= 12
-			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 2,
-			TEXT("H10_PresentationRasterIsBounded"));
+		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() == 16384
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() == 98304
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumQuadsPerBatch() == 8000
+			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 1
+			&& UGP_FoWWorldPresentationSubsystem::GetFeatherFraction() > 0.25f
+			&& UGP_FoWWorldPresentationSubsystem::GetFeatherFraction() < 0.6f,
+			TEXT("H10_PerCellRendererIsBounded"));
 		const float RasterCellSize = 50.0f;
 		FGP_FoWPresentationRaster CircleField;
 		GPFoWPresentationRaster::ConfigureField(
@@ -312,17 +312,19 @@ namespace GPFoWWorldVisualizationContractPrivate
 		}
 		FGP_FoWPresentationGeometry CircleGeometry;
 		Expect(GPFoWPresentationRaster::RebuildPresentation(CircleField, CircleGeometry)
-			&& CircleField.SuperSample >= UGP_FoWWorldPresentationSubsystem::GetTargetSuperSample()
-			&& CircleGeometry.RasterPixels == CircleField.GetRasterCount()
-			&& CircleGeometry.RasterPixels <= UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels(),
-			TEXT("W1_SupersampleMeetsIntendedMinimum"));
+			&& CircleGeometry.VisibleCellsSkipped == 64
+			&& CircleGeometry.CellTiles == 16 * 16 - 64
+			&& CircleGeometry.Quads.Num() >= CircleGeometry.CellTiles
+			&& CircleGeometry.Quads.Num()
+				<= UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads(),
+			TEXT("W1_VisibleCellsAreNotDrawn"));
 
 		const FVector2D VisibleCenter(8.0 * RasterCellSize, 8.0 * RasterCellSize);
 		const FVector2D DeepUnexplored(1.0 * RasterCellSize, 1.0 * RasterCellSize);
 		const float Interior = GPFoWPresentationRaster::SamplePresentationObscuration(
-			CircleField, VisibleCenter);
+			CircleField, CircleGeometry, VisibleCenter);
 		const float DeepHidden = GPFoWPresentationRaster::SamplePresentationObscuration(
-			CircleField, DeepUnexplored);
+			CircleField, CircleGeometry, DeepUnexplored);
 		Expect(Interior <= 0.08f, TEXT("W2_InteriorVisibleRemainsClear"));
 		Expect(DeepHidden >= 0.90f, TEXT("W3_DeepUnexploredRemainsBlack"));
 
@@ -337,7 +339,7 @@ namespace GPFoWWorldVisualizationContractPrivate
 				FVector2D(1.0 * RasterCellSize, 8.0 * RasterCellSize),
 				T);
 			const float Sample = GPFoWPresentationRaster::SamplePresentationObscuration(
-				CircleField, Probe);
+				CircleField, CircleGeometry, Probe);
 			if (Sample > Previous + 0.02f)
 			{
 				++TransitionSamples;
@@ -348,8 +350,8 @@ namespace GPFoWWorldVisualizationContractPrivate
 			}
 			Previous = Sample;
 		}
-		Expect(bMonotone && TransitionSamples >= 6,
-			TEXT("W4_BlurProducesMultiSampleTransition"));
+		Expect(bMonotone && TransitionSamples >= 3,
+			TEXT("W4_FeatherProducesSoftCellEdge"));
 
 		FGP_FoWPresentationRaster ComposeField;
 		GPFoWPresentationRaster::ConfigureField(
@@ -368,14 +370,14 @@ namespace GPFoWWorldVisualizationContractPrivate
 		FGP_FoWPresentationGeometry ComposeGeometry;
 		GPFoWPresentationRaster::RebuildPresentation(ComposeField, ComposeGeometry);
 		const float VisibleSample = GPFoWPresentationRaster::SamplePresentationObscuration(
-			ComposeField, FVector2D(8.0 * RasterCellSize, 8.0 * RasterCellSize));
+			ComposeField, ComposeGeometry, FVector2D(8.0 * RasterCellSize, 8.0 * RasterCellSize));
 		const float ExploredSample = GPFoWPresentationRaster::SamplePresentationObscuration(
-			ComposeField, FVector2D(24.0 * RasterCellSize, 8.0 * RasterCellSize));
+			ComposeField, ComposeGeometry, FVector2D(24.0 * RasterCellSize, 8.0 * RasterCellSize));
 		const float UnexploredSample = GPFoWPresentationRaster::SamplePresentationObscuration(
-			ComposeField, FVector2D(1.0 * RasterCellSize, 14.0 * RasterCellSize));
+			ComposeField, ComposeGeometry, FVector2D(1.0 * RasterCellSize, 14.0 * RasterCellSize));
 		Expect(VisibleSample < ExploredSample && ExploredSample < UnexploredSample
 			&& ExploredSample > 0.35f && ExploredSample < 0.85f,
-			TEXT("W5_KnownVisibleMasksComposeCorrectly"));
+			TEXT("W5_UnexploredAndExploredAreSeparateTileStates"));
 
 		FGP_FoWPresentationRaster ShiftField;
 		GPFoWPresentationRaster::ConfigureField(
@@ -383,19 +385,19 @@ namespace GPFoWWorldVisualizationContractPrivate
 		GPFoWPresentationRaster::SetCell(ShiftField, 2, 2, EGP_FoWState::Visible);
 		FGP_FoWPresentationGeometry ShiftGeometry;
 		Expect(GPFoWPresentationRaster::RebuildPresentation(ShiftField, ShiftGeometry)
-			&& ShiftGeometry.RasterPixels > 0
-			&& GPFoWPresentationRaster::ChooseSuperSample(8, 8) == 4,
-			TEXT("W6_OutsidePriorSampleRebuildsSuccessfully"));
+			&& ShiftGeometry.CellTiles == 63
+			&& ShiftGeometry.VisibleCellsSkipped == 1
+			&& ShiftGeometry.Quads.Num() >= ShiftGeometry.CellTiles,
+			TEXT("W6_OutsidePriorSampleRebuildsPerCellTiles"));
 
-		Expect(GPFoWPresentationRaster::ChooseSuperSample(4000, 4000) == 0
-			&& UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels() < 4000 * 4000
-			&& UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() < 4000 * 4000,
-			TEXT("W7_NoFullWorldHighResolutionAllocation"));
-		Expect(CircleGeometry.RasterPixels
-				<= UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels()
-			&& CircleGeometry.Quads.Num()
-				<= UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads(),
-			TEXT("W8_HardPixelCapIsEnforced"));
+		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() < 4000 * 4000
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() < 4000 * 4000,
+			TEXT("W7_NoFullWorldMaskOrTileAllocation"));
+		Expect(CircleGeometry.Quads.Num()
+				<= UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads()
+			&& CircleGeometry.CellTiles
+				<= UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells(),
+			TEXT("W8_HardTileCapIsEnforced"));
 		Expect(!UGP_FoWWorldOverlayWidget::StaticClass()->IsChildOf(UActorComponent::StaticClass()),
 			TEXT("W9_NoPerPresentationTexelComponent"));
 		Expect(Team1Mirror->GetRevision() == SmoothingRevisionBefore
@@ -447,12 +449,11 @@ namespace GPFoWWorldVisualizationContractPrivate
 			&& UGP_FoWWorldOverlayWidget::StaticClass()->IsChildOf(
 				UUserWidget::StaticClass()),
 			TEXT("O_NoPerCellComponentOrUObjectModel"));
-		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() == 65536
+		Expect(UGP_FoWWorldPresentationSubsystem::GetMaximumSampledCells() == 16384
 			&& UGP_FoWWorldPresentationSubsystem::GetMaximumQuadsPerBatch() == 8000
-			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() == 16384
-			&& UGP_FoWWorldPresentationSubsystem::GetMaximumPresentationPixels() == 262144
-			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 2
-			&& UGP_FoWWorldPresentationSubsystem::GetTargetSuperSample() == 4,
+			&& UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads() == 98304
+			&& UGP_FoWWorldPresentationSubsystem::GetSamplePadCells() == 1
+			&& !UGP_FoWWorldPresentationSubsystem::IsMaskProjectionActive(),
 			TEXT("P_ViewportWorkAndBatchingAreBounded"));
 
 		UGP_LocalFoWComponent* MillionCellMirror =
@@ -487,11 +488,9 @@ namespace GPFoWWorldVisualizationContractPrivate
 		{
 			FGP_FoWWorldOverlayStats CameraResampleStats;
 			CameraResampleStats.SampledGameplayCells = 64;
-			CameraResampleStats.PaddedCells = 81;
-			CameraResampleStats.SuperSample = 4;
-			CameraResampleStats.RasterDims = FIntPoint(80, 80);
-			CameraResampleStats.RasterPixels = 6400;
-			CameraResampleStats.OverlayQuads = 12;
+			CameraResampleStats.CellTiles = 50;
+			CameraResampleStats.FeatherQuads = 20;
+			CameraResampleStats.OverlayQuads = 70;
 			CameraResampleStats.DrawBatches = 1;
 			CameraResampleStats.MinCell = FIntPoint(1, 1);
 			CameraResampleStats.MaxCell = FIntPoint(8, 8);

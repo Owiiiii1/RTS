@@ -8,7 +8,7 @@
 
 - Branch: `docs/gp-production-hud-layout-spec`
 - Base: `origin/main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`
-- Head: `docs/gp-production-hud-layout-spec` documentation-only tip (this slice)
+- Head: `6998b00d305b2769d705f66ddb535ccc2b8be6de`
 - **NOT MERGED**
 
 ## Scope confirmation

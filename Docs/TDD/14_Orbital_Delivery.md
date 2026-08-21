@@ -28,7 +28,7 @@ Engineering implementation of orbital drop pods (per [`../GDD/10_Orbital_Deliver
 ```
 UNIT FLOW
 ─────────
-TEMP/Order UI (manifest)
+TEMP/HUD UI (manifest)
   → Server_RequestUnitDrop(Manifest)
   → Validate: Orbital, slots, MaxUnits, UnitDropZone
   → GE_SpendOrbital(TotalCost) once
@@ -38,6 +38,8 @@ TEMP/Order UI (manifest)
 BUILDING FLOW
 ─────────────
 Order UI Purchase(DropDef)   // UGP_OrbitalDropDefinition / FPrimaryAssetId
+  // Production HUD: MainBase PURCHASE → BUILDINGS|DEFENSE → LAUNCH (design)
+  // TEMP HUD purchase buttons remain scaffolding
   → Validate catalog + associated BuildingDefinition
   → GE_SpendOrbital(DropDef.Cost) once
   → READY[DropDefId]++
@@ -53,6 +55,7 @@ Deploy mode (ghost)
 WALL PACKAGE FLOW
 ─────────────────
 Order UI BuyWallPackage(PackageDef)   // UGP_WallPackageDefinition
+  // Production HUD: MainBase PURCHASE → DEFENSE → Wall Package → LAUNCH (design)
   → Validate stock<5, not in-flight, catalog, Orbital >= full Cost
   → GE_SpendOrbital(PackageDef.Cost) once (never prorated)
   → Mark delivery pending; spawn AGP_DropPod → Landing = owning MainBase UnitDropZone
@@ -175,11 +178,21 @@ Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / 
 
 ## Order UI (target / TEMP)
 
-- **Unit panel:** manifest builder — slots used/cap, counts, per-unit costs, total Orbital, Confirm.
-- **Building panel:** Purchase buttons; READY list; click READY → ghost deploy mode.
-- **Wall:** Buy Wall Package when stock is 0..4 and not in-flight (full package price); plan Build Wall when stock>0. Package never enters READY/ghost. Lands at UnitDropZone. Segments become operational after Worker labor (**no Foundation**). Consume/reserve moment TBD.
-- **Foundation (future):** Buy Foundation Slab package (cost/quantity TBD); plan install job; Workers progressively install onto leveled cells. Not READY. Not a building spawn. Consume/reserve moment TBD.
-- TEMP HUD buttons acceptable for first unit slice; production Order Menu later.
+Production HUD (design / **not implemented**): Select MainBase → PURCHASE in the bottom-right
+Context Action Grid → UNITS / BUILDINGS / DEFENSE. Not a permanent global Order Menu.
+Keyboard `O` is not the canonical production HUD entry. Message Strip is panel-local feedback.
+
+- **UNITS:** manifest builder — LMB add / RMB remove, quantity on icon, shuttle
+  `PodTransportSlotCapacity` (not unit cap), Confirm = existing `Server_RequestUnitDrop`.
+- **BUILDINGS:** list (no Wall Package, no MainBase). Select → selected-item launch state
+  (BACK / LAUNCH). LAUNCH = existing `Server_RequestBuildingPurchase` then immediately enter
+  current deploy ghost using that READY item. BACK = no spend. RMB/Esc on ghost keeps READY.
+- **DEFENSE:** Defensive Turret uses the BUILDINGS launch pattern. Wall Package LAUNCH =
+  existing `Server_RequestWallPackagePurchase` (no READY, no placement mode).
+- **Foundation (future):** Buy Foundation Slab package (cost/quantity TBD). HUD category **TBD**;
+  do not force into Units / Buildings / Defense in this pass. Plan install job; Workers
+  progressively install onto leveled cells. Not READY. Not a building spawn.
+- TEMP HUD buttons remain acceptable scaffolding. Do not claim the MainBase PURCHASE UI exists yet.
 
 ## RPCs (illustrative)
 
@@ -229,7 +242,7 @@ Shared rocket: vertical descent, exhaust while moving, impact smoke, clear, payl
 
 ## Out of this TDD’s first impl slice
 
-Full FoW, production Order Menu polish — later. Wall Package + inventory = **GP-S42A**; drag placement = **GP-S42C**. GP-S36G added BuildGrid occupancy + snap. GP-S37T added deployable `AGP_DefensiveTurret` (yaw-0 rectangular reservation, native 2×2).
+Full FoW later. Production HUD MainBase PURCHASE panel is design / not implemented (TEMP HUD scaffolding remains). Wall Package + inventory = **GP-S42A**; drag placement = **GP-S42C**. GP-S36G added BuildGrid occupancy + snap. GP-S37T added deployable `AGP_DefensiveTurret` (yaw-0 rectangular reservation, native 2×2).
 
 ## References
 

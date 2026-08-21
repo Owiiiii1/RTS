@@ -1,13 +1,14 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW`
+**Status:** `PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW`
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
 **Baseline:** `origin/main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`
 **Audit date:** 2026-08-21
 **Scope:** current factual roadmap and capability status.
 **Current execution checkpoint:** Production HUD Resource/Match data foundation is on `main`.
-Approved two-bar HUD IA is documented. No authored visual HUD, minimap function, or Order Menu
-is included.
+Approved two-bar HUD IA plus MainBase PURCHASE in the bottom-right panel is documented.
+No authored visual HUD, minimap function, or MainBase PURCHASE UI is implemented. TEMP HUD
+procurement remains scaffolding.
 
 ## 1. Why reconciliation is required
 
@@ -110,8 +111,8 @@ current execution order.
 | --- | --- | --- |
 | TEMP gameplay HUD | **DONE (temporary)** | `UGP_TEMP_S28P_PlanetaryFerroniteHUD` exposes resources, launch, catalogs/READY, cap, timer, result, and Wall Package state. |
 | CommonUI/MVVM prerequisites | **DONE — FOUNDATION** | Plugins/dependencies plus project-owned activatable and non-activatable widget bases, HUD root base, FoW/Resource/Match VMs, and push adapters exist in `GPUIRuntime`. |
-| Production HUD | **PARTIAL — DATA FOUNDATION + APPROVED LAYOUT SPEC** | Data foundation on `main`. Approved IA: two bars × three blocks ([`GP-Production-HUD-Layout-Spec`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md)). Not implemented: authored `WBP_GP_HUD`, visible HUD, SelectionVM, Context Action Grid, minimap function, Patrol, Order Menu, notifications, production end-of-match. TEMP HUD remains active. Old resource/score top-right / selection bottom-left / command bar bottom-center / minimap top-or-bottom-right layout is **SUPERSEDED**. |
-| Production Order Menu | **NOT STARTED** | Purchases are usable through TEMP HUD only. |
+| Production HUD | **PARTIAL — DATA FOUNDATION + APPROVED LAYOUT SPEC** | Data foundation on `main`. Approved IA: two bars × three blocks; MainBase PURCHASE lives in the bottom-right panel ([`GP-Production-HUD-Layout-Spec`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md)). Not implemented: authored `WBP_GP_HUD`, visible HUD, SelectionVM, Context Action Grid, MainBase PURCHASE UI, minimap function, Patrol, notifications, production end-of-match. TEMP HUD remains active. Global Order Menu is **SUPERSEDED** as the production HUD path. |
+| Production Order Menu | **SUPERSEDED AS HUD PATH — UI NOT STARTED** | Canonical production entry is MainBase PURCHASE inside the Context Action Grid. Purchases remain usable through TEMP HUD only. Backend unit/building/Wall Package flows exist. |
 | Minimap | **NOT STARTED** | No minimap subsystem/VM/widget production code. |
 | Notifications | **NOT STARTED** | No notification VM/stack or authority-to-client notification pipeline. |
 | Feedback/VFX foundation | **PARTIAL** | Combat presentation multicast, team colors, health bars, primitive visuals, and placement feedback exist; planned bundle/pool/damage-flash pass is incomplete. |
@@ -353,7 +354,7 @@ After SWARM implementation:
 | S46A | Sell/Demolish **REMAINING**. |
 | S47 | CommonUI/MVVM prerequisites and first project activatable/ViewModel base **DONE — FOUNDATION**; full production HUD remains. |
 | S48 | FoW authority, trusted client mirror/MVVM, and world overlay **DONE / MERGED**; relevance/last-known remain. Voxel-surface FoW adaptation is Terrain stage 3E. |
-| S49-S53 | Resource/Match VMs, adapters, local-player ownership, widget/HUD-root bases **DONE — FOUNDATION**; authored HUD/minimap/Order Menu and remaining panel VMs **REMAINING**. Approved two-bar layout spec is documented; visual HUD is not implemented. TEMP HUD remains active. |
+| S49-S53 | Resource/Match VMs, adapters, local-player ownership, widget/HUD-root bases **DONE — FOUNDATION**; authored HUD/minimap/MainBase PURCHASE panel and remaining panel VMs **REMAINING**. Global Order Menu is superseded as the production HUD path. TEMP HUD remains active. |
 | S54-S56 | RTS AI Opponent **REMAINING** and distinct from SWARM. |
 | S57-S60 | Feedback pass **PARTIAL**; implement only MVP-readable gaps. |
 | S61-S64 | Steam sessions/lobby/travel/menu **REMAINING**. |
@@ -364,11 +365,13 @@ After SWARM implementation:
 
 ## 11. Immediate NEXT recommendation
 
-**Production HUD layout documentation is ready for review.** Canonical IA is two bars × three
-blocks. Visual HUD is still not implemented. Next implementation slice must follow
+**Production HUD layout + MainBase procurement documentation is ready for review.** Canonical IA is
+two bars × three blocks. Canonical visible procurement: select MainBase → PURCHASE →
+UNITS / BUILDINGS / DEFENSE. Visual HUD and MainBase PURCHASE UI are still not implemented.
+Next implementation slice must follow
 [`GP-Production-HUD-Layout-Spec`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
 
-Status: `PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW`. **NOT MERGED.**
+Status: `PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW`. **NOT MERGED.**
 
 Execution order remains: implement remaining production UI/HUD visuals using the approved layout →
 minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps →
@@ -377,4 +380,4 @@ stabilization.
 
 **Wall Foundation Rule — RESOLVED:** Walls do not require Foundation. Do not list it as an open design gate.
 
-Do not start minimap function, Order Menu, or Terrain runtime work in this documentation slice.
+Do not start minimap function or Terrain runtime work in this documentation slice.

@@ -1,5 +1,19 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-21 — Production HUD MainBase procurement documentation
+
+Status: **PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW**
+
+- Same branch `docs/gp-production-hud-layout-spec`. Owner refinement: orbital procurement is not a
+  global Order Menu. Canonical visible entry: select MainBase → PURCHASE → UNITS / BUILDINGS / DEFENSE.
+- Message Strip above the right-side panel. Bottom-center stays on MainBase info.
+- Units: LMB add / RMB remove, shuttle-slot messaging, existing manifest Confirm.
+- Buildings/Turret LAUNCH preserves Purchase → READY → immediate deploy ghost. Wall Package LAUNCH
+  remains buy-to-MainBase-stock. Foundation HUD category TBD.
+- Documentation only. MainBase PURCHASE UI is not implemented. **NOT MERGED.**
+
+
+
 ## 2026-08-21 — Production HUD layout documentation
 
 Status: **PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW**

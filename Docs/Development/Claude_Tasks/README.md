@@ -8,8 +8,8 @@
 
 > Стан станом на 2026-08-21. Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), and the current [`MVP roadmap reconciliation`](../MVP_Roadmap_Reconciliation_Post_Building_Vitals.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
-**Поточна фаза:** Production HUD layout documentation.
-**Current: PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW**.
+**Поточна фаза:** Production HUD layout + MainBase procurement documentation.
+**Current: PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW**.
 
 **Status snapshot:**
 
@@ -29,10 +29,11 @@
 | **FoW client presentation foundation** | **FINALIZED READY FOR MERGE** — [`GP-FoW-Client-Presentation-Foundation.md`](GP-FoW-Client-Presentation-Foundation.md) — **NOT MERGED** |
 | **FoW world visualization** | **DONE / MERGED / OPERATOR ACCEPTED** — [`GP-FoW-World-Visualization.md`](GP-FoW-World-Visualization.md) |
 | **Production HUD data foundation** | **DONE / on `main`** — [`GP-Production-HUD-Foundation.md`](GP-Production-HUD-Foundation.md) @ `317ce3f0367111081e3a8987c8ac8beebfbd6310` |
-| **Production HUD layout spec** | **READY FOR REVIEW** — [`GP-Production-HUD-Layout-Spec.md`](GP-Production-HUD-Layout-Spec.md) — **NOT MERGED** |
+| **Production HUD layout spec** | **READY FOR REVIEW** — [`GP-Production-HUD-Layout-Spec.md`](GP-Production-HUD-Layout-Spec.md) — MainBase PURCHASE documented — **NOT MERGED** |
 
-**Exactly one current gate:** review of the Production HUD layout documentation.
-Visual HUD, minimap function, SelectionVM, Context Action Grid, Patrol, and Order Menu are later slices.
+**Exactly one current gate:** review of the Production HUD layout + MainBase procurement documentation.
+Visual HUD, minimap function, SelectionVM, Context Action Grid, MainBase PURCHASE UI, Patrol, and
+a fullscreen Order Menu are later slices / superseded as the production path.
 TEMP HUD remains active. Documentation only — do not change runtime/content.
 
 Do **not** start footprint/geometry cleanup; it is deferred pending building construction redesign.

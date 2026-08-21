@@ -17,11 +17,13 @@ Worker **does** later perform local engineering: level terrain, install/repair f
 
 Цей doc описує **гравецьке відчуття і правила**. Engineering — [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md).
 
-> **Owner refinement (2026-08-08):** Unit delivery and building procurement are **two flows** sharing one DropPod/rocket presentation. Units land at the MainBase **Unit Drop Zone** (no free world placement). Buildings are **purchased into orbital inventory (READY)** then **deployed later** via ghost placement — spend happens at purchase, not at placement confirm.
+> **Owner refinement (2026-08-08):** Unit delivery and building procurement are **two flows** sharing one DropPod/rocket presentation. Units land at the MainBase **Unit Drop Zone** (no free world placement). Buildings are **purchased into orbital inventory (READY)** then **deployed** via ghost placement — spend happens at purchase, not at placement confirm.
 >
 > **Owner refinement (2026-08-18, GP-0305R):** Wall is a **third flow**. Buy a **Wall Package of 5** → one rocket to MainBase → MainBase Wall inventory (max 5). **Build Wall** places from that inventory. Not READY. Not per-segment pods. See [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).
 >
 > **Owner refinement (2026-08-21, ADR-0010):** Foundation Slab material is a **fourth orbital flow** with Wall Package philosophy (spend once → one delivery to MainBase inventory). Installation is a **planned Worker job** (progressive cells; consume/reserve moment **DESIGN REQUIRED**; no second spend). Quantity/cost/footprint are **TBD** and must **not** copy Wall Package `5`. Normal READY building deploy additionally requires leveled terrain + intact per-cell foundation. **Wall Foundation Rule — RESOLVED:** Walls do not require Foundation; Workers construct them on terrain.
+>
+> **Owner refinement (2026-08-21, production HUD):** Canonical **visible** procurement entry is Select MainBase → **PURCHASE** in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE. Not a permanent global Order Menu. Keyboard `O` may later convenience-open the same panel; it is not the canonical HUD path. TEMP HUD debug buttons may remain as scaffolding. **Backend RPCs and spend semantics do not change.** Production HUD building **LAUNCH** is a UX shortcut: Purchase → READY → immediately enter current deploy ghost. READY inventory still exists if placement is canceled. Foundation Slab HUD category remains **TBD**. See [`../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
 
 ## Two-State Resource (Recap)
 
@@ -100,9 +102,9 @@ Future-proof schema (do not implement now): larger pods, doctrines/upgrades modi
 ### Unit procurement flow (player view)
 
 1. Player has Orbital Ferronite.
-2. Opens Unit Order / Orbital Procurement UI.
-3. Builds a **pod manifest** up to transport-slot limit.
-4. UI shows: slots used/capacity, unit counts, per-unit Orbital cost, per-unit slot cost, **total Orbital cost**.
+2. Production HUD (design): select MainBase → PURCHASE → UNITS. TEMP HUD unit-order controls remain scaffolding. A global Order Menu is not the production HUD path.
+3. Builds a **pod manifest** up to transport-slot limit (LMB add / RMB remove; quantity on icon).
+4. UI shows: slots used/capacity, unit counts, per-unit Orbital cost, per-unit slot cost, **total Orbital cost**. Message Strip reports shuttle slots / funds / cap.
 5. Confirm Order.
 6. Server validates: funds, transport slots, unit-cap, MainBase / Unit Drop Zone validity.
 7. Orbital Ferronite spends **exactly once** (GAS Instant spend GE).
@@ -126,7 +128,27 @@ Do not spawn multiple units at the identical transform. Server uses deterministi
 
 ## B — Building Procurement + Deployment
 
-Buying and deploying are **two actions**.
+Buying and deploying are **two backend actions**. Production HUD **LAUNCH** does not collapse them.
+
+### Production HUD entry (design / not implemented)
+
+Select MainBase → PURCHASE → BUILDINGS (or DEFENSE for Defensive Turret) → select icon →
+selected-item launch state → **LAUNCH** or **BACK**.
+
+**LAUNCH** uses existing contracts in one UX step:
+
+Purchase → spend Orbital Ferronite exactly once → READY++ → immediately enter current building
+deployment ghost using that READY item.
+
+**BACK:** return to the list. No spend. No READY consume.
+
+If ghost placement is canceled with RMB / Esc: no second spend; READY remains owned and can be
+deployed later via existing READY inventory. Do not invent a new building-spawn RPC.
+
+Primary production HUD flow is optimized as select building → LAUNCH → immediate placement mode.
+READY inventory still exists.
+
+TEMP HUD purchase/READY/deploy controls remain temporary scaffolding.
 
 ### Purchase → Orbital Building Inventory
 
@@ -158,6 +180,8 @@ Building pods use player-confirmed placement. Same DropPod/rocket actor/visual a
 ## C — Wall Package
 
 1. **Buy Wall Package** when MainBase Wall stock is **0..4** and no package is in flight.
+   Production HUD entry (design): MainBase → PURCHASE → DEFENSE → Wall Package → LAUNCH.
+   TEMP HUD Buy Wall Package remains scaffolding.
 2. Spend full `UGP_WallPackageDefinition.Cost` once. Do **not** enter placement. Price does not prorate.
 3. One rocket delivers the package to MainBase **UnitDropZone**. Payload is inventory, not an `AGP_Wall` actor.
 4. On arrival: `Accepted = min(5, Capacity - current stock)`. Excess wasted. No refund.
@@ -177,7 +201,8 @@ Same procurement philosophy as Wall Package. **Do not copy quantity 5.**
 4. Installed state is tracked **per BuildGrid cell**. One physical slab/panel may cover multiple cells (exact footprint **TBD**; ~8 cells is an owner **example** only).
 5. Placement validation cares about per-cell intact coverage, not which original package supplied the cell.
 
-Exact command/UI names are **future / DESIGN**. See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
+Exact command/UI names are **future / DESIGN**. Production HUD category for Foundation is **TBD**;
+do not force it into Units / Buildings / Defense in this pass. See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
 
 ---
 

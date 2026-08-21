@@ -2,9 +2,11 @@
 
 > **Orbital procurement (2026-08-08):** No local Build menu. Unit Order = manifest → Unit Drop Zone. Building Order = Purchase→READY→Deploy ghost. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md). The Context Action Grid is not a Build Menu.
 >
-> **GP-0305R (2026-08-18):** Wall is not READY. Order Menu **Buy Wall Package** (stock 0, not in-flight). After delivery, **Build Wall** is a separate action (not an orbital purchase). State contract only — no final layout. See GDD/10 flow C.
+> **GP-0305R (2026-08-18):** Wall is not READY. **Buy Wall Package** (stock 0, not in-flight). After delivery, **Build Wall** is a separate action (not an orbital purchase). State contract only. See GDD/10 flow C.
 >
 > **Production HUD layout (2026-08-21):** The coarse HUD (resource/score top-right, selection bottom-left, command bar bottom-center, minimap top/bottom-right) is **SUPERSEDED**. Canonical IA: two horizontal bars × three blocks. See [`Claude_Tasks/GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
+>
+> **Production HUD procurement (2026-08-21):** Orbital procurement is **not** a permanent global HUD panel. Canonical visible entry: select MainBase → **PURCHASE** in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE. A global `O` Order Menu is **SUPERSEDED** as the production HUD path. TEMP HUD debug procurement may remain as temporary scaffolding. Backend authority unchanged.
 
 ## MVP UI Surface
 
@@ -72,13 +74,19 @@ Do not invent a second currency.
   health bar beneath it. Overflow beyond 30 is TBD / UX DESIGN REQUIRED. Do not cap gameplay
   selection to 30.
 
-**Bottom right — Context Action Grid**
+**Bottom right — Context Action Grid + Message Strip**
 
-- Not a permanent Build Menu. Mode follows selection.
+- Not a permanent Build Menu or global Order Menu. Mode follows selection.
+- A small **Message Strip** sits directly above this block for short contextual
+  procurement/action feedback (may be empty). Not a global toast system.
 - **Unit Action Mode:** Move, Stop, Attack-Move ("идти с атакой"), Patrol (planned / not implemented).
   Direct RMB target Attack remains a separate contextual behavior and is not Attack-Move.
-- **Building Action Mode:** same panel, building actions. Current MVP may have no functional
-  actions. Not local production. Orbital READY procurement stays on the Order Menu.
+- **Building Action Mode:** building-specific actions. Only **MainBase** owns **PURCHASE**.
+- **MainBase PURCHASE** (design / not implemented): replaces the grid with UNITS / BUILDINGS /
+  DEFENSE inside the same panel. Bottom-center stays on MainBase info.
+- BUILDINGS / Defensive Turret LAUNCH = existing Purchase → READY → immediately enter deploy ghost.
+  Wall Package LAUNCH = existing Buy Wall Package (no READY, no placement mode).
+- TEMP HUD procurement controls remain temporary scaffolding.
 
 **Visual prototype:** medium/dark grey major blocks, lighter grey inner cells, thin borders,
 modest rounding, stronger contrast for selected/hover. No final art, textures, or icons required.
@@ -91,8 +99,8 @@ Future authored names; none of these visual widgets are implemented yet.
 - `WBP_GP_Lobby`
 - `WBP_GP_HUD` (root; native base `UGP_HUDRootWidget`)
 - Top-bar blocks: Threat+Score, Match Timer, Planet/Orbit/Cap
-- Bottom-bar blocks: Minimap placeholder, Selection/Info, Context Action Grid
-- `WBP_GP_HUD_OrderMenu` (modal overlay — separate from the Context Action Grid)
+- Bottom-bar blocks: Minimap placeholder, Selection/Info, Context Action Grid + Message Strip
+  (MainBase PURCHASE lives in this panel; not a fullscreen Order Menu)
 - `WBP_GP_EndOfMatch`
 
 ## UX Principles
@@ -177,7 +185,8 @@ Smart context, що читає target і issues найбільш intuitive comma
 - `A` → Attack-move mode (next click — attack-move command).
 - `M` → Move mode (next click — explicit move, no auto-target).
 - `S` → Stop selected units.
-- `O` → Orbital Order / procurement UI (units + buildings panels).
+- `O` → optional later convenience to open MainBase procurement. **Not** the canonical production HUD entry.
+  Canonical path: select MainBase → PURCHASE. Global Order Menu is superseded for production HUD.
 - ~~`B` → Build menu~~ — removed (orbital model; no Worker Build).
 - `P` → Patrol mode (**PLANNED / DESIGN TARGET**; Patrol is not runtime-complete).
 - `Esc` → Cancel current mode (incl. building deploy ghost).
@@ -210,6 +219,8 @@ UI — read-only consumer gameplay state:
 - Planet Ferronite (exact stored amount) → MainBase `UGP_StorageComponent` (same underlying quantity that currently drives threat).
 - SWARM / Ferronite Threat (pressure presentation) → `AGP_GameState.FerroniteThreatValue` / MatchVM.
 - Context Action Grid commands → local selection + `AllowedCommands` (not a Build Menu).
+- MainBase PURCHASE / Message Strip → existing `UGP_OrbitalDeliverySubsystem` catalogs, manifests,
+  READY inventory, Wall Package stock, and `PodTransportSlotCapacity` (server-authoritative).
 
 Widgets reading state — через AbilitySystemComponent attribute change delegates або prop binding (не tick polling).
 

@@ -1,129 +1,149 @@
-# Cursor Work Report — Production HUD Layout Spec
+# Cursor Work Report — Production HUD Layout + MainBase Procurement
 
 ## Status
 
-**PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW**
+**PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW**
 
 ## Branch / base / head
 
 - Branch: `docs/gp-production-hud-layout-spec`
 - Base: `origin/main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`
-- Head: `6998b00d305b2769d705f66ddb535ccc2b8be6de`
+- Previous layout commit on this branch: `6998b00d305b2769d705f66ddb535ccc2b8be6de`
+- Head: this documentation amendment (recorded after commit)
 - **NOT MERGED**
 
-## Scope confirmation
+## Previous HUD layout status
 
-Documentation only. No runtime code. No `GP/Content`, Config, maps, Blueprints, DataAssets, or Tools.
-No Unreal tests or builds.
+The approved two-bar × three-block HUD IA remains canonical (Threat+Score / Match Timer /
+Planet-Orbit-Cap; square minimap placeholder / Selection-Info / Context Action Grid).
+The coarse pre-2026-08-21 placement remains **SUPERSEDED**.
 
-## Superseded old HUD layout
+This amendment adds owner-approved MainBase procurement into the bottom-right panel.
+A global `O` / standalone Order Menu is **SUPERSEDED** as the production HUD path.
+TEMP HUD debug procurement remains temporary scaffolding. Backend ownership is unchanged.
 
-The previous canonical in-match HUD is **SUPERSEDED** and must not remain as a second source of truth:
+## MainBase PURCHASE entry
 
-- resource/score stack at top-right
-- selection panel bottom-left
-- command bar bottom-center
-- minimap top-right or bottom-right
+Orbital procurement is not a permanent global HUD panel.
 
-## Exact new top-bar structure
+When MainBase is the current single selected building, the bottom-right Building Action Grid
+shows **PURCHASE**. Clicking PURCHASE replaces that panel with three large category buttons:
+UNITS, BUILDINGS, DEFENSE. Navigation stays inside the same bottom-right panel.
+Only MainBase owns PURCHASE. Other buildings are not procurement sources.
 
-Two horizontal bars, three major blocks each. Central battlefield stays unobstructed.
+Keyboard shortcut may later convenience-open the same panel; select MainBase + PURCHASE is the
+canonical visible entry.
 
-- **Top left — Threat + Score:** Ferronite Threat (pressure) + player Ferronite Score
-- **Top center — Match Timer:** strongest isolated central readout
-- **Top right — Economy + Unit Cap:** Planet Ferronite, Orbital Ferronite, `CurrentUnits / MaxUnits`
+## Message Strip
 
-## Exact new bottom-bar structure
+Small horizontal strip directly **above** the bottom-right Context Action / Procurement block.
+Short contextual procurement/action feedback. Not a global toast system. Default may be empty.
 
-- **Bottom left — Minimap block:** square placeholder; function not implemented in the next visual slice
-- **Bottom center — Selection / Current Info:** widest lower block
-- **Bottom right — Context Action Grid:** table/grid; not a permanent Build Menu
+Examples: shuttle capacity, not enough Orbital Ferronite, shuttle capacity reached, unit cap
+reached, building/placement unavailable, wall stock full, delivery already pending.
 
-## Single-selection mode
+## Units category behavior
 
-Exactly one unit or one building: entity icon, display name, current health, relevant stats only
-(Health/Max, Damage, Armor, Move Speed, later cargo/work where applicable). Stats come from actual
-entity type/data. Do not force irrelevant stats.
+Uses the current factual orbital unit catalog and existing backend:
 
-## Group-selection 10×3 mode
+manifest → validate Orbital Ferronite → validate transport slots → validate player unit cap
+→ Confirm → one DropPod to MainBase Unit Drop Zone
 
-Multiple units: 10 icons per row, 3 rows, 30 visible slots. Each icon has a small current-health bar
-beneath it. Overflow/paging/aggregation beyond 30 is **TBD / UX DESIGN REQUIRED**. Do not silently
-cap gameplay selection to 30.
+No free world placement for normal unit orders.
 
-## Unit Action Grid
+## LMB add / RMB remove quantity behavior
 
-When one unit or a unit group is selected:
+- LMB on a unit icon: add one of that type to the pending shuttle manifest; show quantity on
+  the icon; repeated LMB increments while valid.
+- RMB: remove one; decrement quantity; hide the marker at zero.
+- UI must not create invalid authoritative state. Local prevent of obvious invalid adds is
+  allowed; final validation remains server-authoritative.
 
-1. Move
-2. Stop
-3. Attack-Move ("идти с атакой") — not a rename of direct RMB target Attack
-4. Patrol — **PLANNED / DESIGN TARGET**, not runtime-complete
+## Shuttle slot messaging
 
-Future unit abilities may occupy extra cells. Ability slots are not fully designed.
+Before the first unit is added, Message Strip should show shuttle capacity
+(`PodTransportSlotCapacity`), e.g. `Shuttle. Capacity — X slots`.
+Do not confuse shuttle slots with `CurrentUnits / MaxUnits`.
+As the manifest changes: `Shuttle: 3 / 4 slots`, capacity reached, not enough Orbital Ferronite,
+unit cap reached. Per-unit transport-slot cost remains canonical.
 
-## Building Action Grid
+LAUNCH SHUTTLE (name may be finalized in WBP authoring) uses existing unit-manifest Confirm.
 
-Same right-side panel, building selected. Current MVP may have no functional actions.
-Future upgrades/ops must not be invented now. Not local building production.
-READY orbital procurement remains the separate Order Menu / TEMP HUD flow.
+## Buildings category and Launch/Back flow
 
-## Patrol
+BUILDINGS lists orbital buildings. No Wall Package. No MainBase.
 
-Marked **PLANNED / DESIGN TARGET**. Not implemented. Do not claim Patrol complete.
+LMB on an icon → selected-item launch state: mostly empty panel, selected identity/icon may
+remain, centered **LAUNCH**, corner **BACK**.
 
-## Planet Ferronite vs Threat current-source clarification
+BACK: return to list. No spend. No READY consume.
 
-Current factual threat source: `AGP_GameState` / `UGP_MatchViewModel.FerroniteThreatValue`.
+## Exact preservation of Purchase → READY → Deploy backend
 
-Raw Ferronite stored at planet/MainBase is the **same underlying gameplay quantity** that currently
-drives that threat value. The HUD may present it twice:
+LAUNCH is a UX shortcut, not a collapsed authority model:
 
-- Threat block = danger/pressure
-- Planet Ferronite block = exact numeric amount
+Purchase → spend Orbital Ferronite exactly once → READY → immediately enter current building
+deployment ghost using that READY item
 
-Do not invent a second gameplay currency. If Threat later becomes derived/non-linear, architecture
-may separate them. ResourceVM does not yet expose Planet Ferronite (later adapter from MainBase
-storage). Opponent score is not part of this approved two-bar prototype (placement TBD).
+No second spend on placement. RMB / Esc cancel: READY remains owned and can be deployed later
+via existing READY inventory. No new building-spawn RPC.
 
-## Visual prototype contract
+## Defense category
 
-Not final art. Medium/dark grey major blocks, lighter grey inner cells, thin borders, modest
-rounding, stronger contrast for selected/hover, clear spacing. No decorative sci-fi art, textures,
-or final icons required. Placeholder icon fields are acceptable.
+DEFENSE shows Defensive Turret and Wall Package. Wall-mounted Turret may appear when its
+placement/support workflow is production-ready. Do not invent other defenses.
+Foundation Slab package HUD category remains **TBD** (orbital flow still documented).
 
-## Runtime boundary (do not claim complete)
+## Defensive Turret behavior
 
-Already on `main`: `UGP_UserWidgetBase`, `UGP_HUDRootWidget`, `UGP_ResourceViewModel`,
-`UGP_MatchViewModel`, `UGP_HUDViewModelSubsystem`, push adapters.
+Same selected-item launch pattern as BUILDINGS. LAUNCH preserves Purchase → READY →
+immediately enter current building placement ghost. Placement remains server-authoritative.
+Future foundation requirements still apply when Terrain/Foundation implements them.
 
-Not implemented:
+## Exact Wall Package behavior
 
-- `WBP_GP_HUD`
-- SelectionVM
-- minimap function
-- Context Action Grid
-- Patrol
+Same selected-item launch presentation, different LAUNCH:
+
+Buy Wall Package → spend full package cost once → one DropPod to owning MainBase Unit Drop Zone
+→ add wall segment stock to MainBase → NO placement mode → NO READY inventory → NO wall actor
+from the pod
+
+Canonical rules: package = 5; MainBase stock cap = 5; buy at 0..4 only when none in flight;
+full price never prorated; arrival `min(5, free capacity)`; excess wasted; no refund;
+stock 5 rejects; pending package rejects another purchase.
+
+## Foundation category remains TBD
+
+Do not force Foundation Slab package into Units / Buildings / Defense in this pass.
+Do not omit it from orbital architecture docs. Do not claim it is implemented.
+
+## Right-panel state machine
+
+NO/GENERIC SELECTION → unit/building commands
+MAINBASE SELECTED → Building Actions → PURCHASE
+PURCHASE → UNITS | BUILDINGS | DEFENSE
+UNITS → manifest LMB/RMB/quantity → launch current manifest
+BUILDINGS → list → selected-item launch → BACK or Purchase+READY+ghost
+DEFENSE → turret (READY+ghost) or wall (Buy Wall Package → MainBase stock)
+
+Message Strip stays attached above this block. Bottom-center stays on MainBase info.
 
 ## Exact changed files
 
-- `Docs/Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md` (new)
+- `Docs/Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md`
 - `Docs/GDD/09_UI_UX.md`
-- `Docs/GDD/README.md`
-- `Docs/GDD/02_Core_Gameplay_Loop.md`
+- `Docs/GDD/10_Orbital_Delivery.md`
 - `Docs/GDD/05_Buildings.md`
+- `Docs/GDD/README.md`
 - `Docs/TDD/12_UI_Architecture.md`
-- `Docs/TDD/README.md`
-- `Docs/TDD/04_RTS_Selection_And_Commands.md`
-- `Docs/TDD/05_Unit_Architecture.md`
+- `Docs/TDD/14_Orbital_Delivery.md`
 - `Docs/TDD/06_Building_Architecture.md`
-- `Docs/TDD/07_Resource_Architecture.md`
-- `Docs/TDD/13_Architecture_Proposal.md`
+- `Docs/TDD/04_RTS_Selection_And_Commands.md`
+- `Docs/TDD/README.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/DOCUMENTATION_INDEX.md`
 - `Docs/Development/Claude_Tasks/README.md`
-- `Docs/Development/Naming_Conventions.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
 ## Documentation-only confirmation

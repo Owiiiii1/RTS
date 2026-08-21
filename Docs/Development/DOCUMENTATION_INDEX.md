@@ -39,7 +39,7 @@
 | Last closed / merged stage | **FoW world visualization** operator-accepted / **MERGED** on `main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`docs/gp-production-hud-layout-spec`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md) — **PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW** |
+| Current stage | [`docs/gp-production-hud-layout-spec`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md) — **PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW** |
 
 ---
 
@@ -57,11 +57,11 @@
 
 **Closed:** Production HUD data foundation — on `main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`.
 
-**Exactly one current gate:** review of the Production HUD layout documentation on
+**Exactly one current gate:** review of the Production HUD layout + MainBase procurement documentation on
 `docs/gp-production-hud-layout-spec`. Status:
-**PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW**. **NOT MERGED.**
-Documentation only. The next visual HUD slice must use the approved two-bar IA.
-Do not claim `WBP_GP_HUD`, SelectionVM, minimap, action grid, or Patrol complete.
+**PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW**. **NOT MERGED.**
+Documentation only. Canonical visible procurement: select MainBase → PURCHASE → UNITS / BUILDINGS / DEFENSE.
+Do not claim `WBP_GP_HUD`, SelectionVM, minimap, action grid, MainBase PURCHASE UI, or Patrol complete.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 
@@ -117,7 +117,7 @@ Do not claim `WBP_GP_HUD`, SelectionVM, minimap, action grid, or Patrol complete
 | [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) | Current factual MVP capability matrix, remaining stages, historical mapping, and NEXT authority |
 | [`Claude_Tasks/GP-FoW-Runtime-Foundation.md`](Claude_Tasks/GP-FoW-Runtime-Foundation.md) | FoW authority + trusted client mirror foundations — **DONE / MERGED** |
 | [`Claude_Tasks/GP-Production-HUD-Foundation.md`](Claude_Tasks/GP-Production-HUD-Foundation.md) | Production HUD Resource/Match data foundation — **on `main`** @ `317ce3f0…` |
-| [`Claude_Tasks/GP-Production-HUD-Layout-Spec.md`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md) | Approved two-bar HUD IA — **PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW** |
+| [`Claude_Tasks/GP-Production-HUD-Layout-Spec.md`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md) | Approved two-bar HUD IA + MainBase PURCHASE — **PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW** |
 | [`GDD/13_Terrain_Engineering_And_Foundations.md`](../GDD/13_Terrain_Engineering_And_Foundations.md) | Canonical WHAT for voxel terrain, Worker leveling, per-cell foundations |
 | [`TDD/16_Voxel_Terrain_And_Foundations.md`](../TDD/16_Voxel_Terrain_And_Foundations.md) | Technical direction; Voxel Plugin spike still required |
 | [`ADR_0010_Voxel_Terrain_And_Foundation_System.md`](../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md) | Accepted documentation decision |

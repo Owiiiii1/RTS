@@ -91,7 +91,7 @@ public:
 
 **GP-S35B did not implement** `EffectsOnPlacement`. Logistics Hub `+5 MaxUnits` remains native on `AGP_LogisticsHub` (apply when live/operational; remove on destroy). Do not migrate that into a generic DA effect list until a dedicated slice.
 
-There is no `BuildTime`, no `AllowedProductions` — buildings do not build other things; new units and READY buildings come from the global Order Menu (orbital). Wall **material** is ordered as a Wall Package (orbital); `AGP_Wall` segments are placed from MainBase inventory. Remaining grid fields (`ClearanceCells`, `bMountsOnWall`, `bCanHostWallMount`) and economy fields (`bSellable`, `SellRefundRate`) stay documented in §Build Grid System and §Sell + Demolish System. **GP-S36G implements BuildGrid occupancy + snap.** `ClearanceCells`, orbital rotation UI, Walls, and FoW placement remain deferred.
+There is no `BuildTime`, no `AllowedProductions` — buildings do not build other things; new units and READY buildings come from orbital procurement (production HUD: MainBase **PURCHASE**; TEMP HUD scaffolding). Wall **material** is ordered as a Wall Package (orbital); `AGP_Wall` segments are placed from MainBase inventory. Remaining grid fields (`ClearanceCells`, `bMountsOnWall`, `bCanHostWallMount`) and economy fields (`bSellable`, `SellRefundRate`) stay documented in §Build Grid System and §Sell + Demolish System. **GP-S36G implements BuildGrid occupancy + snap.** `ClearanceCells`, orbital rotation UI, Walls, and FoW placement remain deferred.
 
 ## Building Lifecycle — Orbital Procurement
 
@@ -178,7 +178,7 @@ Stage — design only (per [`Claude_Tasks/GP-0301_Main_Base`](../Development/Cla
 | `Icon` | `TSoftObjectPtr<UTexture2D>` | per asset pass |
 | `Materials` | `TArray<TSoftObjectPtr<UMaterialInterface>>` | per asset pass |
 
-> No `BuildTime`, `AllowedProductions`, `MaxProductionQueue`, `bSupportsRallyPoint`, `DefaultRallyOffset`, `bCanProduce`. MainBase does **not** produce units — Workers and all buildings/units come from the orbital Order Menu.
+> No `BuildTime`, `AllowedProductions`, `MaxProductionQueue`, `bSupportsRallyPoint`, `DefaultRallyOffset`, `bCanProduce`. MainBase does **not** produce units — Workers and all buildings/units come from orbital procurement (production HUD: MainBase PURCHASE; TEMP HUD scaffolding).
 
 ### Container Storage
 
@@ -267,7 +267,11 @@ Health, MaxHealth, Armor — через `UGP_UnitAttributeSet` (per TDD/02 / TDD
   - HP bar, name, faction tint.
   - Container status: filled / total containers, "Launch" button per full container (sends to orbit).
   - Drop-off zone indicator (decal, fade при deselect).
-- Ordering Workers / buildings is done from the **global Order Menu** (orbital), not from MainBase selection.
+- Ordering Workers / buildings is done from orbital procurement, **not** local production.
+  Production HUD (design / not implemented): MainBase selected → bottom-right **PURCHASE** →
+  UNITS / BUILDINGS / DEFENSE. Bottom-center stays on MainBase info. Only MainBase owns PURCHASE.
+  TEMP HUD order buttons remain temporary scaffolding. Backend: existing unit manifest, building
+  Purchase/READY/Deploy, Wall Package RPCs.
 
 ### Validation Checklist (Stop Condition)
 
@@ -364,7 +368,7 @@ Decision: existing units **survive** when MaxUnits clamps below CurrentUnits; ne
 1. Logistics Hub destroyed (combat or sell) → `RemoveActiveGameplayEffectBySourceEffect(GE_GP_UnitCap_Plus5, source=this)`.
 2. `MaxUnits -= UnitCapContribution`. `EffectiveMaxContainerCount -= ContainerCapContribution` on MainBase.
 3. `CurrentUnits` unchanged → may temporarily exceed `MaxUnits` (coherent, no auto-kill).
-4. Order Menu validation rejects new Unit drops while `CurrentUnits + 1 > MaxUnits` (`EReason::UnitCapReached`).
+4. Unit-drop validation rejects new Unit drops while `CurrentUnits + 1 > MaxUnits` (`EReason::UnitCapReached`).
 5. Cap unblocks on natural death (CurrentUnits decrement) OR a new Logistics Hub drop.
 
 HUD displays "Cap: X/Y (over)" з червоним tint доки `CurrentUnits > MaxUnits`.

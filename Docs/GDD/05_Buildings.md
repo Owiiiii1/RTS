@@ -21,6 +21,8 @@
 
 **Owner refinement (2026-08-21, ADR-0010):** Normal player-deployed buildings require **leveled terrain + intact per-cell foundation** before DropPod deploy. Foundation stock uses Wall Package philosophy (orbit → MainBase inventory → Worker install job; quantity/cost/footprint **TBD**, not automatically 5). Foundation does not appear instantly on click. Initial MainBase is the authored starter-site exception. **Wall Foundation Rule — RESOLVED:** Wall segments do **not** require Foundation. They are locally constructed by Workers on terrain. Terrain suitability remains TBD.
 
+**Owner refinement (2026-08-21, production HUD):** Canonical visible orbital purchase entry is select MainBase → **PURCHASE** → UNITS / BUILDINGS / DEFENSE. Not a global Order Menu. Building/Turret **LAUNCH** still uses Purchase → READY → deploy ghost. Wall Package stays in DEFENSE and does not enter READY. Foundation HUD category **TBD**. See [`09_UI_UX`](09_UI_UX.md) and [`../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
+
 Per Pillar 2 (Engineer, Not Soldier) і Pillar 7 (Simple Machines, Strong Readability) з [`01_Game_Pillars`](01_Game_Pillars.md). Усі buildings — industrial / engineering visual identity. Жодних military bunkers, fortress towers, або command centers з військовою aesthetic.
 
 ## Build Grid System
@@ -118,7 +120,7 @@ Grid overlay прихований за default — з'являється тіл�
 
 - Гравець з'являється на map з 1 Main Base + N стартових Workers (per `DA_GP_Faction_Default.StartingUnits`).
 - Initial MainBase begins on an authored / prepared starting site / starter foundation. Player is **not** required to level terrain first. Exact starter-foundation implementation is **deferred** ([`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md)).
-- **Не виробляє Workers.** Workers arrive via orbital drop (per [`10_Orbital_Delivery`](10_Orbital_Delivery.md)).
+- **Не виробляє Workers.** Workers arrive via orbital drop (per [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Production HUD (design): selecting MainBase exposes **PURCHASE** in the bottom-right Action Grid (UNITS / BUILDINGS / DEFENSE). MainBase is the only building that owns orbital PURCHASE. Bottom-center keeps MainBase info. TEMP HUD order buttons remain scaffolding.
 - Приймає Ferronite drop-off від Workers (див. [`06_Resources`](06_Resources.md) §Container System). Raw drop-off піднімає `AGP_GameState.FerroniteThreatValue` (stored-at-base stock). Container fills → launch до орбіти → `GE_GP_AddOrbital` (+`OrbitalFerronite`) + `GE_GP_AddScore` (+`FerroniteScore`); launch знижує `FerroniteThreatValue`.
 - Якщо Main Base знищено → **immediate annihilation loss** (за `bAnnihilationCountsAsWin`, default true). Без MainBase containers ship не може, нова Orbital Ferronite не надходить → no path до victory. Opponent wins. Деталі — [`08_Win_Lose_Conditions`](08_Win_Lose_Conditions.md).
 
@@ -211,7 +213,7 @@ Total ~16 distinct visual states. Implementation: material parameter або mesh
 
 #### Acquisition (Wall Package)
 
-1. Order Menu **Buy Wall Package** (available when MainBase Wall stock is **0..4** and no package is in flight).
+1. MainBase **PURCHASE → DEFENSE → Wall Package → LAUNCH** (production HUD, design / not implemented). Available when MainBase Wall stock is **0..4** and no package is in flight. TEMP HUD Buy Wall Package remains scaffolding. Not a global Order Menu.
 2. Spend full package `Cost` once. One rocket delivers the package to MainBase **UnitDropZone**. No placement mode.
 3. Arrival: stock becomes `min(5, current + 5)`. Excess segments are wasted. Depot shows remaining blocks. Cannot buy at stock 5.
 4. **Build Wall** becomes available while stock > 0.
@@ -419,7 +421,7 @@ MVP — **orbital procurement** (no local building construction):
 
 ### Units (separate flow)
 
-Unit Order manifest → MainBase **Unit Drop Zone**. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md) / [`04_Units`](04_Units.md).
+Unit manifest (MainBase PURCHASE → UNITS, design) → MainBase **Unit Drop Zone**. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md) / [`04_Units`](04_Units.md).
 
 ### Site preparation (Worker local engineering; not constructing the READY building)
 

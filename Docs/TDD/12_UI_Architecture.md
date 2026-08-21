@@ -115,11 +115,12 @@ PublicDependencyModuleNames.AddRange(new string[]
   OrbitalFerronite=100, FerroniteScore=100, FerroniteThreatValue=250. The live push path is accepted.
 - The TEMP HUD is preserved and remains functional. Production HUD remains **PARTIAL**. Still not
   implemented: authored `WBP_GP_HUD`, visible resource/timer HUD, Selection UI, Context Action Grid,
-  Order Menu, minimap function, notifications, and production end-of-match screen.
-- **Approved visual IA (2026-08-21):** two bars × three blocks. See
+  MainBase PURCHASE panel, minimap function, notifications, and production end-of-match screen.
+- **Approved visual IA (2026-08-21):** two bars × three blocks, plus MainBase PURCHASE inside the
+  bottom-right panel. See
   [`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
-  The old resource/score top-right, selection bottom-left, command-bar bottom-center, minimap
-  top/bottom-right layout is **SUPERSEDED**.
+  Global `O` Order Menu is **SUPERSEDED** as the production HUD path. TEMP HUD procurement remains
+  scaffolding. Backend orbital flows are unchanged.
 
 ### MVVM Data Flow
 
@@ -129,7 +130,7 @@ Server-authoritative state                 Replication                ViewModel 
 UGP_PlayerAttributeSet.OrbitalFerronite ─► GAS attribute repl   ─►   UGP_ResourceViewModel ◄─  future resource widget
 UGP_SelectionComponent (local)       ─►    OnSelectionChanged    ─►   UGP_SelectionVM      ◄─►  future Selection/Info + Action Grid
 AGP_GameState.MatchTimeRemaining     ─►    RepNotify/delegate    ─►   UGP_MatchViewModel    ◄─  future match widget
-UGP_OrbitalDeliverySubsystem.Catalog ─►    OnRep / delegate      ─►   UGP_OrderMenuVM      ◄─►  WBP_GP_HUD_OrderMenu
+UGP_OrbitalDeliverySubsystem.Catalog ─►    OnRep / delegate      ─►   future procurement VM  ◄─►  MainBase PURCHASE panel (bottom-right)
 ```
 
 > Post-pivot (ADR-0009 + 2026-08-08 refinement): **no Build / Production queue UI**. Ordering surfaces:
@@ -158,7 +159,7 @@ Rules:
 | `UGP_ResourceViewModel` | `UGP_PlayerAttributeSet.{OrbitalFerronite, FerroniteScore, MaxUnits, CurrentUnits}` (own + opponent score) | `UGP_ResourceViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-right Orbit/Cap + top-left Score |
 | `UGP_MatchViewModel` | `AGP_GameState.{MatchStateTag, MatchTimeRemaining, TeamFerroniteThreatValues, WinnerTeamId, WinReasonTag, MatchResult.MatchDuration}` | `UGP_MatchViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-center timer + top-left Threat |
 | `UGP_SelectionVM` | `UGP_SelectionComponent.{SelectedUnits, InspectedTarget}` (local PC) — **not implemented** | Future adapter | Future bottom-center Selection/Info + bottom-right Context Action Grid |
-| `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits` | Future adapter | Future modal Order Menu (not the Context Action Grid) |
+| `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits`, shuttle slots, READY, Wall stock — **not implemented** | Future adapter | Future MainBase PURCHASE panel (bottom-right). Not a fullscreen Order Menu. |
 | `UGP_CargoVM` | `UGP_CargoComponent.CurrentCargo` of single-selected worker — **not implemented** | Future adapter | Future single-entity Selection/Info |
 | `UGP_NotificationVM` | Local notification queue (PC pushes) — **not implemented** | PC native | Future notification stack |
 | `UGP_MinimapVM` | `UGP_MinimapSubsystem` snapshot — **not implemented** | Subsystem self | Future bottom-left minimap (layout currently reserves a square placeholder only) |
@@ -170,7 +171,9 @@ Future widgets receive them from that subsystem; no gameplay module type owns a 
 
 - Project Settings → CommonUI Input Routing enabled.
 - `AGP_PlayerController` extends project `APlayerController` (not Lyra `CommonPlayerController`) and integrates Common UI action routing (`UCommonUIActionRouterBase` / LocalPlayer Common UI services) without `CommonGame`.
-- Action sets: `CommonUI.Default`, `CommonUI.OrderMenu`, `CommonUI.EndOfMatch` — switch on activatable widget activation.
+- Action sets: `CommonUI.Default`, `CommonUI.EndOfMatch` — switch on activatable widget activation.
+  Production MainBase procurement is an **in-panel HUD state**, not a fullscreen activatable Order Menu.
+  Historical `CommonUI.OrderMenu` naming is superseded for the production HUD path.
 - Gameplay IMC (`IMC_GP_Camera`, `IMC_GP_Selection`, `IMC_GP_Commands`) via Enhanced Input — gated by `IsMatchInput` predicate; suspended коли activatable modal у focus.
 
 ## Module Ownership
@@ -191,7 +194,8 @@ UI код live у `GPUIRuntime`. Per [`01_Module_Architecture`](01_Module_Archit
 4. **Selection — local-only.** Adapter читає `UGP_SelectionComponent` напряму (local PC owns), оновлює `UGP_SelectionVM`.
 5. **Cosmetic feedback ≠ gameplay truth.** UI може предіктивно показати pulse decal / sound, але authority — server.
 6. **Widget never queries ASC / Actor state.** Direct reads of attributes, components, transforms — banned. Все через VM.
-7. **Common UI activation stack** для будь-якого modal (OrderMenu, EndOfMatch, Pause). Не raw `AddToViewport` для screens.
+7. **Common UI activation stack** для modal screens (EndOfMatch, Pause). Не raw `AddToViewport` для screens.
+   Production MainBase PURCHASE is in-panel HUD, not a modal Order Menu.
 
 Specialized exception: FoW world presentation is a native local-player adapter, not an interactive HUD
 screen. `UGP_FoWWorldPresentationSubsystem` may read the trusted local mirror to rebuild viewport-local
@@ -252,14 +256,15 @@ WBP_GP_HUD (future authored child of UGP_HUDRootWidget)
 ├── BottomBar
 │   ├── BottomLeft  Minimap square placeholder (function later)
 │   ├── BottomCenter Selection / Current Info (widest; single-entity or 10×3 group)
-│   └── BottomRight Context Action Grid (Unit Action Mode or Building Action Mode)
-├── OrderMenu (modal overlay — orbital procurement; not the Action Grid)
+│   └── BottomRight Context Action Grid + Message Strip
+│       (Unit / Building / MainBase PURCHASE → UNITS|BUILDINGS|DEFENSE)
 ├── DropReticle / building ghost (visual layer)
-├── NotificationStack (not implemented)
+├── NotificationStack (not implemented; Message Strip is panel-local)
 └── EndOfMatch (hidden until match end)
 ```
 
-Native production HUD root class is `UGP_HUDRootWidget : UGP_UserWidgetBase`. A later authored
+A fullscreen / modal Order Menu is **not** part of the production HUD. TEMP HUD procurement
+controls remain scaffolding. Native production HUD root class is `UGP_HUDRootWidget : UGP_UserWidgetBase`. A later authored
 `WBP_GP_HUD` child will own this layout. Creation/viewport wiring is not implemented yet.
 
 Visual prototype contract: medium/dark grey major blocks, lighter grey inner cells, thin borders,
@@ -280,8 +285,9 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 | Future top-left Score + top-right Orbit/Cap | `UGP_ResourceViewModel.{OrbitalFerronite, FerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates |
 | Future top-right Planet Ferronite | MainBase stored amount (not yet a ResourceVM field) | Storage change delegate via future adapter |
 | Future bottom-center Selection/Info | Future `UGP_SelectionVM` single-entity vs 10×3 group | `UGP_SelectionComponent.OnSelectionChanged` (local) |
-| Future bottom-right Context Action Grid | Future selection/command presentation | Same selection delegate; Unit vs Building mode |
-| Future `WBP_GP_HUD_OrderMenu` | `UGP_OrderMenuVM.{AvailableDrops[], CanAffordPerEntry[]}` | Adapter listens to `OrbitalFerronite` + orbital catalog |
+| Future bottom-right Context Action Grid | Future selection/command + MainBase procurement presentation | Same selection delegate; Unit vs Building vs PURCHASE states |
+| Future right-side Message Strip | Contextual procurement/action status (shuttle slots, funds, cap, wall stock) | Existing orbital reject/status; not a global toast stack |
+| Future MainBase PURCHASE panel | Future procurement VM (catalog, manifest, READY, Wall stock) | `UGP_OrbitalDeliverySubsystem` + existing Purchase/Confirm/Deploy RPCs |
 | Future bottom-left Minimap | Future `UGP_MinimapVM` — layout placeholder only in the next visual slice | Later minimap subsystem |
 | Future `WBP_GP_HUD_NotificationStack` | `UGP_NotificationVM.{ActiveToasts[]}` | PC `OnHUDNotification` multicast |
 | Future `WBP_GP_EndOfMatch` (Activatable) | `UGP_MatchViewModel.{MatchStateTag, WinnerTeamId, WinReasonTag, MatchDuration, bMatchFinished}` | `AGP_GameState` match-state/result delegates |
@@ -345,7 +351,14 @@ Additional granted commands (Mine, Repair, future unit abilities) may occupy ext
 selection actually grants them. Do not fully design ability slots yet.
 
 **Building Action Mode** (one building selected): same panel switches to building actions.
-Current MVP may show no functional actions. Do not invent upgrades. Do not treat as local production.
+Only **MainBase** owns orbital **PURCHASE**. Other buildings: contextual actions only; MVP may
+still have no functional actions. Do not invent upgrades. Do not treat as local production.
+
+**MainBase PURCHASE** (design / not implemented): replace grid with UNITS / BUILDINGS / DEFENSE
+inside this panel. Message Strip sits above it. Bottom-center stays on MainBase info.
+LAUNCH uses existing unit Confirm / building Purchase→READY→ghost / Wall Package buy.
+A global Order Menu is superseded for production HUD. See
+[`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
 
 Multi-select group: intersection of AllowedCommands across selected units.
 

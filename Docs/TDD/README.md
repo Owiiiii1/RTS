@@ -20,7 +20,7 @@ Engineering-canonical документація GrimProtocol. Описує **як
 - [13_Architecture_Proposal](13_Architecture_Proposal.md) — Consolidated C++ class list, module ownership, DataAssets, Tags, Attributes, RPCs, risks, 12-slice implementation order. Stop point before C++ code.
 - [14_Orbital_Delivery](14_Orbital_Delivery.md) — Drop pod mechanic, order menu, drop validation, `UGP_OrbitalDeliverySubsystem`, replaces local production/construction.
 - [15_Fog_of_War](15_Fog_of_War.md) — 3-level FoW (Unexplored/Explored/Visible), sight scan, replication relevance, selection/combat/drop interactions.
-- [16_Voxel_Terrain_And_Foundations](16_Voxel_Terrain_And_Foundations.md) — Voxel Plugin terrain backend direction, generic deformation contract, BuildGrid vs voxels, per-cell foundation, leveling/placement queries, nav and FoW surface integration requirements.
+- [16_Voxel_Terrain_And_Foundations](16_Voxel_Terrain_And_Foundations.md) — Voxel Plugin terrain backend direction, generic deformation contract, local engineering jobs, BuildGrid vs voxels, per-cell foundation, Wall-without-foundation, nav and FoW surface integration requirements.
 
 ## Cross-Reference з ADR
 

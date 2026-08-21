@@ -136,7 +136,10 @@ current execution order.
 | Per-cell foundation coverage | **NOT STARTED** | Canonical model: track intact foundation per BuildGrid cell. Physical slab may cover multiple cells. |
 | Building deploy requires foundation | **NOT STARTED** | Additional placement prerequisite for normal orbital buildings. Initial MainBase excepted. |
 | Per-cell foundation destruction | **NOT STARTED** | Canonical; not all-or-nothing per original slab. Surviving-building-after-support-loss **DESIGN REQUIRED**. |
-| Wall requires foundation? | **DESIGN REQUIRED** | Building System design gate. Do not assume. |
+| Wall requires foundation? | **RESOLVED — NO** | Wall segments do not require Foundation Slabs. Terrain suitability TBD. Wall-mounted Turret follows Wall. |
+| Generic local engineering job | **NOT STARTED** | Plan first, Worker assignment, physical work, completion. Exact job representation TBD. |
+| Foundation Repair | **NOT STARTED** | Future Worker engineering job. Tunables TBD. |
+| Earthquakes | **POST-MVP / NOT STARTED** | Reuse generic deformation/foundation-damage contract. Parameters TBD. |
 | Dynamic nav after deformation | **DESIGN / TECH-SPIKE REQUIRED** | Do not assume full NavMesh rebuild per explosion. |
 | World FoW follows voxel surface | **NOT STARTED** | Required integration in Terrain stage. Do not reopen FoW now. |
 
@@ -218,7 +221,7 @@ These are factual product gaps, not an implied strict order:
 3. Terrain / Voxel / Foundation system (3A–3E below).
 4. Primitive RTS AI Opponent (`Explore / Mine / Ship / Order / Defend`).
 5. Remaining bounded core-loop gameplay: player-facing Stop, Worker Repair, Logistics Hub storage-cap bonus, necessary feedback.
-6. Building-system design gate (Wall/foundation rule, wall surface, connection, Wall Turret, Sell/Demolish).
+6. Building-system design gate (Wall terrain suitability, drag/path, Worker construction details, auto-connect, Wall Turret, Sell/Demolish).
 7. Steam 2-player session/lobby/host/find/join/travel/disconnect flow.
 8. Match completion product flow.
 9. SWARM design/reconciliation gate.
@@ -235,7 +238,7 @@ infrastructure. A standalone ownership cleanup is not immediate MVP work.
 
 ### Building placement/construction redesign — **DESIGN REQUIRED / DEFERRED**
 
-Wall surface construction and any broader redesign of building placement must establish Wall/foundation interaction before footprint ownership is reconsidered. This does not invalidate the existing orbital building deployment capability, which is **DONE** as a delivery path; Terrain stage later adds leveled + intact foundation as an additional prerequisite for normal buildings. Wall drag preview is a separate missing wall capability.
+Wall surface construction and any broader redesign of building placement no longer wait on a Wall/foundation yes/no decision (**RESOLVED: Walls do not require Foundation**). Remaining Wall questions are terrain suitability, drag/path, Worker construction flow, auto-connect, Wall Turret, and Sell/Demolish. This does not invalidate the existing orbital building deployment capability, which is **DONE** as a delivery path; Terrain stage later adds leveled + intact foundation as an additional prerequisite for **normal orbital buildings**.
 
 Neither item is an immediate optimization/refactor package. Revisit only when the concrete surface
 construction redesign requires it.
@@ -246,16 +249,16 @@ This order replaces mechanical continuation of the historical Slice 8 -> 13 sequ
 
 1. **Production UI foundation / HUD**
 2. **Minimap + FoW minimap presentation**
-3. **Terrain / Voxel / Foundation system** — must exist before AI and final building/wall design because both depend on construction-site rules and navigation.
+3. **Terrain / Voxel / Foundation system** — must exist before AI and final building/wall design because both depend on construction-site rules and navigation. This stage must also establish the **generic local engineering job contract**, **Worker assignment/contribution model**, and **reusable work-presentation hooks** before final Wall implementation.
    - **3A.** Voxel Plugin technical spike + authoritative terrain deformation foundation
    - **3B.** Worker terrain leveling / site-preparation loop
-   - **3C.** Orbital Foundation Slab procurement + MainBase inventory + installation
+   - **3C.** Orbital Foundation Slab procurement + MainBase inventory + Worker installation
    - **3D.** Building placement migration to leveled + intact foundation requirement
    - **3E.** navigation + current world-FoW terrain-surface integration
 4. **RTS AI Opponent** — Explore/Mine/Ship/Order/Defend using completed authority APIs, FoW, and construction-site rules
 5. **Remaining bounded core-loop gameplay** — player-facing Stop, Worker Repair, Logistics Hub storage-cap bonus, and necessary feedback
 6. **Building-system design gate**, then only approved remaining surface-building capabilities
-   (Wall/foundation rule, Wall surface placement, wall connection, Wall Turret, Sell/Demolish). Do not pre-emptively clean geometry.
+   (**Wall Foundation Rule — RESOLVED: Wall does not require Foundation.** Remaining: terrain suitability/slope, drag/path placement, local Worker construction flow details, auto-connect, Wall Turret, Sell/Demolish). Do not pre-emptively clean geometry.
 7. **Steam multiplayer product flow** — sessions, lobby, host/find/join, travel, disconnect, and menus.
 8. **Match completion product flow** — production end screen, OpponentDisconnect result, cleanup/
    return, and singleplayer/multiplayer completion checks.
@@ -339,7 +342,7 @@ After SWARM implementation:
 | S40 | Logistics Hub **PARTIAL**: +5 cap done; storage-cap bonus missing. |
 | S41 | Defensive Turret **DONE** through GP-S37T. |
 | S42A | Wall Package purchase/delivery/inventory **DONE**. |
-| S42B-S42C | Wall actor/connection/Build Wall drag **REMAINING, DESIGN REQUIRED** after construction redesign gate. |
+| S42B-S42C | Wall actor/connection/Build Wall drag **REMAINING**. Foundation-under-wall is **RESOLVED NO**. Remaining: terrain suitability, Worker construction job, auto-connect, Wall Turret. |
 | S43 | Wall-mounted Turret **REMAINING**, dependent on wall system. |
 | S44 | Building reticle/ghost capability **DONE — SUPERSEDED IMPLEMENTATION SHAPE** via `AGP_BuildingPlacementGhost`; wall ghost remains part of S42C concern. |
 | S45 | Old per-segment pod cascade **SUPERSEDED — DO NOT IMPLEMENT**. |
@@ -368,8 +371,9 @@ Reason:
 - FoW world visualization is **MERGED / operator accepted** (planar / fixed ground projection);
 - Terrain / foundation must exist before RTS AI Opponent and the Building-system / Wall design gate
   because both depend on construction-site rules and navigation;
-- Voxel Plugin version/API, replication, nav strategy, slab balance, wall/foundation rule, and
+- Voxel Plugin version/API, replication, nav strategy, slab balance, Wall slope, stock consume moment, and
   surviving-building-after-foundation-loss remain **TBD / DESIGN REQUIRED**;
+- Wall/Foundation is **RESOLVED** (Walls do not require Foundation);
 - this slice is documentation only.
 
 Do not implement Voxel Plugin, Worker leveling, or foundation inventory in this review gate.

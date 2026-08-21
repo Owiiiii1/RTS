@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-21 — Voxel terrain / foundation documentation refinement
+
+Status: **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW**
+
+- Continued on `docs/gp-voxel-terrain-foundations`. **NOT MERGED.**
+- **Wall Foundation Rule — RESOLVED:** Walls do not require Foundation; Workers construct them on terrain. Terrain suitability TBD.
+- Canonical split: orbital completed assets vs local engineering (plan job → assign Workers → physical work → completion; multi-Worker acceleration formula TBD).
+- Foundation install is progressive Worker labor (stock consume moment DESIGN REQUIRED). Foundation Repair and Earthquakes documented as future (same generic damage contract).
+- Generic work-presentation start/end hooks (Blueprint Niagara; mining as reference pattern).
+- Documentation-only. No Source/Content/Config/Tools.
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+
 ## 2026-08-21 — Voxel terrain / foundation documentation
 
 Status: **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW**

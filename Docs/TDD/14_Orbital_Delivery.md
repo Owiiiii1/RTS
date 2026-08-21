@@ -2,17 +2,17 @@
 
 ## Scope
 
-Engineering implementation of orbital drop pods (per [`../GDD/10_Orbital_Delivery`](../GDD/10_Orbital_Delivery.md)). Defines orbital procurement flows (units, READY buildings, Wall Package, future Foundation Slab package), shared DropPod actor, validation, replication, presentation hooks, subsystem ownership. Replaces pre-pivot Production/Construction/GhostBuilding. `AGP_Wall` surface placement is **not** an orbital pod path (GP-S42C). Foundation install is inventory consume onto BuildGrid cells (TDD/16), not a READY building spawn.
+Engineering implementation of orbital drop pods (per [`../GDD/10_Orbital_Delivery`](../GDD/10_Orbital_Delivery.md)). Defines orbital procurement flows (units, READY buildings, Wall Package, future Foundation Slab package), shared DropPod actor, validation, replication, presentation hooks, subsystem ownership. Replaces pre-pivot Production/Construction/GhostBuilding as a **READY-building factory**. `AGP_Wall` surface work is **not** an orbital pod path. Foundation install is a planned Worker job onto BuildGrid cells (TDD/16), not a READY building spawn.
 
 > **Owner refinement (2026-08-08):** See GDD/10. Units → MainBase Unit Drop Zone + transport-slot manifests. Buildings → Purchase/READY inventory then Deploy (no second spend). Shared rocket visual family; authored BP for mesh/Niagara.
 >
 > **GP-0305R (2026-08-18):** Wall Package is a **third flow**: spend → one rocket to MainBase → Wall inventory 0..5. Not READY. Not per-segment pods. [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).
 >
-> **ADR-0010 (2026-08-21):** Foundation Slab package is a **fourth** Wall-Package-style flow (cost/quantity/footprint **TBD**). Building deploy will require per-cell foundation. Exact inventory/API names are **future**.
+> **ADR-0010 (2026-08-21):** Foundation Slab package is a **fourth** Wall-Package-style flow (cost/quantity/footprint **TBD**). Installation is a planned Worker job (progressive; consume/reserve moment **DESIGN REQUIRED**). Building deploy will require per-cell foundation. **Walls do not require Foundation.** Exact inventory/API names are **future**.
 
 ## Hard Rules
 
-1. **Non-initial material originates from orbit.** No local production / Worker-constructed buildings. Units and READY buildings arrive via DropPod. Wall **Package** and Foundation Slab **package** arrive via DropPod to MainBase. **`AGP_Wall` segments are not DropPod payloads** — they are placed from MainBase inventory. Foundation **cells** are installed from inventory, not as READY buildings.
+1. **Non-initial material originates from orbit.** No Barracks / local production of READY buildings. Units and READY buildings arrive via DropPod. Wall **Package** and Foundation Slab **package** arrive via DropPod to MainBase. **`AGP_Wall` segments are not DropPod payloads** — they are locally constructed from MainBase inventory by Workers (planned job). Foundation **cells** are installed from inventory by Workers, not as READY buildings.
 2. **Server-authoritative.** Client intent only. `UGP_OrbitalDeliverySubsystem` validates and schedules pods for units / READY buildings / Wall Package / (future) Foundation Slab package. Surface wall placement is GP-S42C / BuildGrid, not this subsystem.
 3. **Four orbital material flows, one delivery actor family (target).** Unit manifests, building deploys, Wall Package, and Foundation Slab package share `AGP_DropPod` + presentation BP; differ in targeting + payload data. Per-segment wall pods are **forbidden**. Foundation package quantity is **TBD** (do not copy Wall Package 5).
 4. **Units do not free-place.** Landing = server-resolved MainBase **Unit Drop Zone** (authored anchor — not hardcoded `BaseLocation + offset`).
@@ -21,7 +21,7 @@ Engineering implementation of orbital drop pods (per [`../GDD/10_Orbital_Deliver
 7. **No client prediction** of spend / inventory / payload.
 8. **DataAsset-driven** per-purchase costs, slot costs, and delivery timing on drop definitions. Global pod capacity / altitude / spacing / cleanup / placement stay on `UGP_OrbitalDeliverySettings`.
 9. **GAS spend only** via Instant spend GE (no direct attribute mutate). Spend exactly once on accepted unit Confirm / building Purchase / Wall Package purchase / (future) Foundation Slab package purchase.
-10. **FoW + grid + (future) foundation** remain canonical for **building** placement. Unit Drop Zone path does not require FoW click targeting. Wall/foundation rule is **DESIGN REQUIRED**.
+10. **FoW + grid + (future) foundation** remain canonical for **READY building** placement. Unit Drop Zone path does not require FoW click targeting. **Wall Foundation Rule — RESOLVED:** Walls do not require Foundation. Wall terrain suitability is **TBD**.
 
 ## Architecture (refined)
 
@@ -177,8 +177,8 @@ Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / 
 
 - **Unit panel:** manifest builder — slots used/cap, counts, per-unit costs, total Orbital, Confirm.
 - **Building panel:** Purchase buttons; READY list; click READY → ghost deploy mode.
-- **Wall:** Buy Wall Package when stock is 0..4 and not in-flight (full package price); Build Wall when stock>0. Package never enters READY/ghost. Lands at UnitDropZone.
-- **Foundation (future):** Buy Foundation Slab package (cost/quantity TBD); Worker install from inventory onto leveled cells. Not READY. Not a building spawn.
+- **Wall:** Buy Wall Package when stock is 0..4 and not in-flight (full package price); plan Build Wall when stock>0. Package never enters READY/ghost. Lands at UnitDropZone. Segments become operational after Worker labor (**no Foundation**). Consume/reserve moment TBD.
+- **Foundation (future):** Buy Foundation Slab package (cost/quantity TBD); plan install job; Workers progressively install onto leveled cells. Not READY. Not a building spawn. Consume/reserve moment TBD.
 - TEMP HUD buttons acceptable for first unit slice; production Order Menu later.
 
 ## RPCs (illustrative)

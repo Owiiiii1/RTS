@@ -13,13 +13,13 @@
 
 Шість building entity-типів у MVP (4 player-orderable + 1 wall-mounted variant + 1 environment). Без research, без supply, без upgrade tiers, без faction-unique buildings.
 
-**Pivot note (2026-05-16):** усе крім Main Base і Ferronite Deposit **originates from orbit** (per ADR-0009 і [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Worker не **конструює** будівлю локально. Worker **does** later level terrain and install delivered foundation material ([`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md)). "Assembly Yard" → "Logistics Hub". Wall **Package** uses DropPod; `AGP_Wall` segments are placed from MainBase inventory (GP-0305R).
+**Pivot note (2026-05-16):** усе крім Main Base і Ferronite Deposit **originates from orbit as material or completed assets** (per ADR-0009 і [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Worker не **конструює** READY будівлю локально. Worker **does** later perform local engineering: level terrain, install/repair foundation, construct Walls ([`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md)). "Assembly Yard" → "Logistics Hub". Wall **Package** uses DropPod; `AGP_Wall` segments are field-constructed from MainBase inventory by Workers (GP-0305R + ADR-0010).
 
 **Owner refinement (2026-08-08):** Most buildings are **Purchased** into **orbital READY inventory** (Orbital spend at purchase), then **Deployed** later via ghost placement (DropPod to confirmed location; **no second spend**). Buildings do **not** land in the MainBase Unit Drop Zone (that pad is for **units** only). Shared DropPod/rocket visual with unit deliveries.
 
 **Owner refinement (2026-08-18, GP-0305R):** Wall is **not** a READY building. Player buys a **Wall Package of 5** (one rocket to MainBase). **Build Wall** then places already-delivered segments from MainBase inventory (max 5, no stacking). No per-segment rocket. No second Orbital spend. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md) and [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).
 
-**Owner refinement (2026-08-21, ADR-0010):** Normal player-deployed buildings require **leveled terrain + intact per-cell foundation** before DropPod deploy. Foundation stock uses Wall Package philosophy (orbit → MainBase inventory → consume on install; quantity/cost/footprint **TBD**, not automatically 5). Initial MainBase is the authored starter-site exception. **Wall/Foundation interaction = DESIGN REQUIRED** at the Building System design gate.
+**Owner refinement (2026-08-21, ADR-0010):** Normal player-deployed buildings require **leveled terrain + intact per-cell foundation** before DropPod deploy. Foundation stock uses Wall Package philosophy (orbit → MainBase inventory → Worker install job; quantity/cost/footprint **TBD**, not automatically 5). Foundation does not appear instantly on click. Initial MainBase is the authored starter-site exception. **Wall Foundation Rule — RESOLVED:** Wall segments do **not** require Foundation. They are locally constructed by Workers on terrain. Terrain suitability remains TBD.
 
 Per Pillar 2 (Engineer, Not Soldier) і Pillar 7 (Simple Machines, Strong Readability) з [`01_Game_Pillars`](01_Game_Pillars.md). Усі buildings — industrial / engineering visual identity. Жодних military bunkers, fortress towers, або command centers з військовою aesthetic.
 
@@ -64,7 +64,7 @@ Footprint у DA: `UGP_BuildingDefinition.FootprintCells : FIntPoint`.
 
 Initial MainBase is **not** gated on player-leveled foundation (authored starter site; implementation deferred).
 
-**Wall/Foundation interaction = DESIGN REQUIRED** at the Building System design gate. Do not assume Wall segments use this foundation rule.
+**Wall Foundation Rule — RESOLVED:** Wall segments do **not** use this foundation rule. Wall-mounted Turret follows Wall and does not independently require ground Foundation. Wall still needs terrain-suitability validation (slope / visual adapt / auto-level vs manual / voxel base interaction = **TBD**).
 
 Cells, що знаходяться під будівлями — **blocked для unit pathing** (NavMesh modifier).
 
@@ -177,7 +177,7 @@ Modular industrial logistics node: heavy crane gantry, exposed conveyor system, 
 
 Wall — це **захисна периметральна структура**. Замикає choke points, формує defensive corridor, hosts wall-mounted turrets для economy fortification. Без walls — open-field SWARM rush легко добирається до Workers. Wall — це **інженерне рішення** проти organic threat: ти не оборонюєшся армією, ти будуєш периметр.
 
-**`Wall/Foundation interaction = DESIGN REQUIRED at Building System design gate.`** The generic “buildings require foundation” rule applies to normal orbital buildings, not silently to Wall. Wall-mounted Turret depends on that gate.
+**`Wall Foundation Rule — RESOLVED:`** Wall segments do **not** require Foundation Slabs. They are locally assembled from delivered Wall Package stock by Workers and may be constructed directly on terrain. Wall-mounted Turret follows the Wall system. Terrain suitability (max slope, visual adapt, auto-level vs player-level, voxel base interaction) is **TBD / DESIGN REQUIRED**.
 
 ### Definition
 
@@ -216,24 +216,27 @@ Total ~16 distinct visual states. Implementation: material parameter або mesh
 3. Arrival: stock becomes `min(5, current + 5)`. Excess segments are wasted. Depot shows remaining blocks. Cannot buy at stock 5.
 4. **Build Wall** becomes available while stock > 0.
 
-#### Drag-Build (from inventory)
+#### Drag-Build (from inventory) — planned local engineering
 
 Player presses **Build Wall** (not an orbital purchase):
 
-1. LMB-press на start cell A (валідний grid cell з clearance OK).
+1. LMB-press на start cell A (валідний grid cell з clearance OK; terrain suitability rules **TBD**).
 2. Hold + drag — preview path:
    - A* on BuildGrid (server-side).
    - Free cells with clearance OK only.
    - Path length **cannot exceed** current Wall inventory.
-3. LMB-release — confirm:
-   - Server validates inventory ≥ N, cells, clearance, existing wall rules.
-   - Consume **N** inventory once. Spawn **N** `AGP_Wall` immediately (operational). Auto-connect.
-   - Depot updates to remaining stock.
-4. RMB / Esc — cancel; **consume nothing**.
+3. LMB-release — confirm the **plan**:
+   - Server validates cells, clearance, existing wall rules, terrain suitability (when specified).
+   - A planned construction site / job exists. Construction does **not** progress automatically.
+   - Exact Wall inventory consume / reserve moment is **DESIGN REQUIRED**.
+4. Player assigns one or more Workers. Workers travel to valid work positions.
+5. Work begins only when at least one assigned Worker is in a valid work position. Multiple Workers accelerate (formula TBD).
+6. On completion, the final Wall segment(s) become operational. Auto-connect when implemented.
+7. RMB / Esc on an unstarted plan — cancel; do not invent refund/reservation until consume moment is designed.
 
-No per-segment DropPod. No `PathLength × WallSegmentCost`. No Building READY decrement.
+No per-segment DropPod. No `PathLength × WallSegmentCost`. No Building READY decrement. **No Foundation required.**
 
-Single-click place of one segment from inventory is allowed if stock ≥ 1 (same consume-1 rule).
+Single-click plan of one segment from inventory is allowed if stock ≥ 1 (same planned-job rule, not instant operational spawn).
 
 #### Clearance Rule — "2 Cells Away"
 
@@ -418,12 +421,12 @@ MVP — **orbital procurement** (no local building construction):
 
 Unit Order manifest → MainBase **Unit Drop Zone**. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md) / [`04_Units`](04_Units.md).
 
-### Site preparation (Worker; not constructing the building)
+### Site preparation (Worker local engineering; not constructing the READY building)
 
 See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md):
 
-1. Level Terrain on a BuildGrid-aligned zone (grey / yellow per cell).
-2. Install delivered Foundation Slab stock **per cell**.
+1. Plan Level Terrain on a BuildGrid-aligned zone (grey / yellow per cell); assign Workers.
+2. Plan Foundation installation; delivered stock available; Workers progressively install cells (consume/reserve moment **DESIGN REQUIRED**).
 3. Only then deploy a normal READY building.
 
 ### Buildings
@@ -436,11 +439,12 @@ See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Founda
 
 Server: no double-consume READY; no duplicate spawn; **no Orbital charge on deploy**.
 
-Foundation destruction is **per cell**. Do not destroy an entire original slab because one cell was hit. Surviving-building-after-partial-foundation-loss is **DESIGN REQUIRED**.
+Foundation destruction is **per cell**. Do not destroy an entire original slab because one cell was hit. Surviving-building-after-partial-foundation-loss is **DESIGN REQUIRED**. Foundation Repair is a future Worker engineering job (tunables TBD).
 
 Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md), [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md), [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
 
-**Eliminated** (pre-pivot): Worker channel-build, ConstructionComponent, construction sites.  
+**Eliminated** (pre-pivot): Worker channel-build of READY buildings, ConstructionComponent as a Barracks queue, construction sites that spawn Logistics Hub / Turret.  
+**Not eliminated:** planned local-engineering jobs for leveling, foundation install/repair, and Wall construction (ADR-0010). These are not a factory.  
 **Superseded (2026-08-08):** immediate spend-on-placement for buildings. Canonical = Purchase→READY→Deploy.  
 **Ghost** returns for **building deploy only**; unit orders do not free-place.
 

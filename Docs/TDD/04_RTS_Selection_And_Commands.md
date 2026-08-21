@@ -38,7 +38,7 @@ UGP_CommandComponent::ExecuteServerCommand (server-side)
    v
 AGP_UnitBase::ReceiveCommand (server-side)
    - Routes to appropriate component (Movement / Combat / Mining / etc.)
-   - May activate GAS ability (Repair, etc.). Do **not** route a `Build` ability that constructs the READY building (ADR-0009). Future Level Terrain / foundation-install commands are separate engineering jobs (ADR-0010; names TBD).
+   - May activate GAS ability (Repair, etc.). Do **not** route a `Build` ability that constructs the READY building (ADR-0009). Future Level Terrain / foundation-install / Wall-construction assignment commands are local engineering jobs (ADR-0010; names TBD).
    |
    v
 Behavior tick on server, replicated to clients via attributes + transform
@@ -227,13 +227,17 @@ void AGP_UnitBase::ReceiveCommand(const FGP_CommandRequest& Request)
 
 Це не gameplay prediction — це UI feedback. Real authority — server.
 
-## Future: Terrain Leveling And Foundation Install (ADR-0010)
+## Future: Local Engineering Jobs (ADR-0010)
 
-Gameplay command **concepts** only. Exact tags, input actions, and classes **do not exist yet** and must not be treated as current API.
+Gameplay command **concepts** only. Exact tags, input actions, and classes **do not exist yet**.
 
-- **Level Terrain / site preparation:** Worker-selected mode using the existing BuildGrid overlay. Per-cell GREY (already level) / YELLOW (needs work). Rectangular BuildGrid-aligned zone. Zone sizing UX is **DESIGN REQUIRED**. After confirm, Worker covers the zone with waypoints; terrain converges **progressively** (no instant flatten).
-- **Install foundation:** consumes already-delivered MainBase foundation stock onto leveled cells. Per-cell state, not one all-or-nothing slab actor. No second Orbital spend.
-- These commands are **not** `GP.Command.Build` and do not spawn Logistics Hub / Turret.
+Orbital READY buildings are **not** this pipeline. Local engineering uses **plan first, work second**: player may define the job before Workers are present; progress starts only when an assigned Worker reaches a valid work position; 0 Workers = 0 progress; multiple Workers accelerate (formula TBD).
+
+- **Level Terrain / site preparation:** planned BuildGrid-aligned zone (the zone is the job). Per-cell GREY / YELLOW. Zone sizing UX is **DESIGN REQUIRED**. Terrain converges **progressively** while Workers work.
+- **Install foundation:** planned job on leveled cells; delivered MainBase stock; progressive per-cell labor. Consume/reserve moment **DESIGN REQUIRED**. No second Orbital spend.
+- **Foundation Repair:** future planned job on damaged/destroyed cells. Tunables TBD.
+- **Wall Construction:** planned path from Wall inventory; Workers assemble on terrain; **no Foundation required**. Terrain suitability TBD. Consume/reserve moment **DESIGN REQUIRED**. Segments operational on completion — not instant spawn on click.
+- **Work presentation:** gameplay emits work-pulse start/end (~1 s presentation target). Blueprint owns Niagara. No hardcoded project Niagara in native Worker gameplay. Mining presentation is the reference pattern.
 
 See [`../GDD/13_Terrain_Engineering_And_Foundations.md`](../GDD/13_Terrain_Engineering_And_Foundations.md) and [`16_Voxel_Terrain_And_Foundations.md`](16_Voxel_Terrain_And_Foundations.md).
 

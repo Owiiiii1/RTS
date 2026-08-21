@@ -1,6 +1,6 @@
 # Building Architecture
 
-> **Architecture model:** Orbital Delivery (post-pivot, canon per ADR-0009 + ADR-0010). All non-initial **READY buildings** arrive from orbit via drop pods and land already-operational — there is **no local building-construction phase and no per-building production queue**. Worker may later **level terrain** and **install delivered foundation stock**; that is site preparation, not constructing the building. The pre-pivot local-production/local-construction architecture (Barracks, Assembly Yard, `UGP_ProductionComponent`, `UGP_ConstructionComponent`, construction sites, rally points) has been **archived** to [`../Archive/PrePivot_Building_Architecture.md`](../Archive/PrePivot_Building_Architecture.md). Do not implement anything from that archive.
+> **Architecture model:** Orbital Delivery (post-pivot, canon per ADR-0009 + ADR-0010). All non-initial **READY buildings** arrive from orbit via drop pods and land already-operational — there is **no local construction phase of that building and no per-building production queue**. Worker may later perform **local engineering** (level terrain, install/repair foundation, construct Walls from delivered stock). That is field labor on planned jobs, not a Barracks. The pre-pivot local-production architecture (Barracks, Assembly Yard, `UGP_ProductionComponent`, `UGP_ConstructionComponent` as READY-building production, rally points) has been **archived** to [`../Archive/PrePivot_Building_Architecture.md`](../Archive/PrePivot_Building_Architecture.md). Do not implement anything from that archive as a factory.
 
 ## Class Hierarchy
 
@@ -95,7 +95,7 @@ There is no `BuildTime`, no `AllowedProductions` — buildings do not build othe
 
 ## Building Lifecycle — Orbital Procurement
 
-**Units and READY buildings** besides initial MainBase arrive via DropPod. Player does not Worker-construct the building. Worker later prepares the site (level + install delivered foundation). Wall **Package** arrives from orbit to MainBase; **`AGP_Wall` segments are not DropPod payloads** — Build Wall instantiates them from inventory (GP-S42C / BuildGrid). **Wall/foundation interaction is DESIGN REQUIRED.**
+**Units and READY buildings** besides initial MainBase arrive via DropPod. Player does not Worker-construct the READY building. Worker later prepares the site (level + install delivered foundation as planned jobs) and constructs **Walls** from inventory. Wall **Package** arrives from orbit to MainBase; **`AGP_Wall` segments are not DropPod payloads** — they become operational after Worker labor on a planned job (not instant click-spawn). **Wall Foundation Rule — RESOLVED:** Walls do not require Foundation. Terrain suitability TBD.
 
 ```
 READY buildings:
@@ -502,7 +502,7 @@ Deprecated (pre-pivot, do not use): `GP.Building.Type.Barracks`, `GP.Building.Ty
 - **NavMesh MVP:** project footprint center with extent `(CellSize/2, CellSize/2, 300)`. Success → navigable. Fail + WorldStatic ground hit → `NotNavigable`. Fail + empty void → allow (isolated contract locations). Validation runs before the new building's NavigationObstacle exists.
 - **World collision:** raised footprint box vs WorldStatic/WorldDynamic, ignoring buildings/pods/pawns. Not structure-vs-structure SoT.
 - **FoW placement validation deferred to FoW integration slice.**
-- **Foundation / leveled-terrain placement (ADR-0010):** **NOT IMPLEMENTED.** Future deploy validation for normal orbital buildings must require every footprint cell to be sufficiently leveled and to have intact installed foundation (GDD/13, TDD/16). Foundation state is per BuildGrid cell. Initial MainBase uses an authored starter site (implementation deferred). **Wall/Foundation interaction = DESIGN REQUIRED.**
+- **Foundation / leveled-terrain placement (ADR-0010):** **NOT IMPLEMENTED.** Future deploy validation for normal orbital buildings must require every footprint cell to be sufficiently leveled and to have intact installed foundation (GDD/13, TDD/16). Foundation state is per BuildGrid cell. Initial MainBase uses an authored starter site (implementation deferred). **Wall Foundation Rule — RESOLVED:** Walls do not require foundation cells. Wall terrain suitability (slope / visual adapt / auto-level / voxel base) is **TBD**.
 - **Walls deferred:** no `AGP_Wall`, drag, A*, mounting, wall-specific clearance.
 
 ### UGP_BuildGridSubsystem (UWorldSubsystem)
@@ -626,7 +626,9 @@ Reticle on client similarly grid-snaps + queries `BuildGrid` для valid/invali
 
 ## Wall System (GP-0305 / **GP-0305R**)
 
-> **GP-0305R (2026-08-18):** Acquisition is a **Wall Package of 5** delivered to MainBase. Placement consumes MainBase Wall inventory. Per-segment Orbital cost and pod-per-segment cascade are **removed**. See [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).
+> **GP-0305R (2026-08-18):** Acquisition is a **Wall Package of 5** delivered to MainBase. Field construction consumes MainBase Wall inventory. Per-segment Orbital cost and pod-per-segment cascade are **removed**. See [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).
+>
+> **ADR-0010 (2026-08-21):** **Wall Foundation Rule — RESOLVED:** Walls do not require Foundation. Segments are local Worker construction on a planned job (not instant operational spawn on LMB-release). Terrain suitability TBD. Inventory consume/reserve moment **DESIGN REQUIRED**. Exact job class names TBD.
 
 `AGP_Wall : AGP_BuildingBase`. Custom logic on top of base + `UGP_WallConnectionComponent`.
 
@@ -681,22 +683,30 @@ Presentation: `WallInventoryChanged(NewCount)` — BP depot meshes only; not gam
 
 ### Wall Drag-Build Flow
 
+Historical GP-S42C sketch below assumed instant spawn. **Canonical now (GDD/13):** plan first, assign Workers, physical work, operational on completion. RPC names below are **not** current API.
+
 ```
 Player presses Build Wall (requires inventory > 0). Not an orbital purchase.
   Client:
     - Snap cursor to grid.
     - LMB-press: DragStart, preview.
-    - Drag: Server_PreviewWallPath (rate-limited 4 Hz).
+    - Drag: preview path (rate-limited). Terrain suitability TBD.
        - A* on free cells with clearance OK.
        - Path length clamped to current Wall inventory.
-    - Ghosts: local-only AGP_GhostWallSegment.
+    - Ghosts: local-only preview (class TBD).
   LMB-release:
-    - Server_BuildWallPath(Start, End).
-    - Re-validate path + inventory >= N + clearance/occupancy.
-    - Consume N exactly once. Spawn N AGP_Wall immediately (operational).
-    - RegisterFootprint + OnNeighborChanged. No DropPod. No Orbital spend. No READY.
+    - Confirm planned job / blueprint (exact representation TBD).
+    - Re-validate path + clearance/occupancy + terrain suitability (when specified).
+    - Construction does NOT progress automatically.
+    - Inventory consume/reserve moment DESIGN REQUIRED (not invented as instant consume+spawn).
+    - No DropPod. No Orbital spend. No READY. No Foundation.
+  Player assigns one or more Workers:
+    - Workers travel to reserved work positions (distinct points).
+    - Work starts when ≥1 assigned Worker is in a valid work position.
+    - Multiple Workers accelerate (formula TBD). Work-presentation pulses (TDD/16).
+    - On completion: spawn/mark operational AGP_Wall segment(s); auto-connect when implemented.
   RMB / Esc:
-    - Cancel. Consume nothing.
+    - Cancel unstarted plan. Do not invent refund until consume moment is designed.
 ```
 
 ### Server_PreviewWallPath / Server_BuildWallPath
@@ -829,10 +839,10 @@ Wall drag-build must feel **responsive і satisfying** per 5-component rubric:
 - "No path" case (blocked all routes): full red strikethrough across drag line + "blocked" SFX. Player знає причину.
 
 **Commit (Satisfaction):**
-- LMB release on valid path: N segments spawn immediately from inventory (no per-segment rocket).
-- Optional later cosmetic place animation; MVP is instant operational.
-- Auto-connect bitfield updates as each segment registers → visible reshape.
-- Soft completion cue when the path is committed.
+- LMB release on valid path: planned job confirmed (not instant operational walls).
+- Assigned Workers visibly work (pulses + reposition). Segments become operational on completion.
+- Auto-connect bitfield updates as each completed segment registers → visible reshape.
+- Soft completion cue when the job completes.
 
 **Auto-connect visual feedback (Clarity + Fit):**
 - New wall placed adjacent to existing → connection point flashes briefly (welding-spark VFX 200 ms).

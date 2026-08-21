@@ -1,13 +1,15 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `HUD_VIEWMODEL_BRIDGE_READY_FOR_OPERATOR_VALIDATION`
+**Status:** `HUD_VIEWMODEL_BRIDGE_AND_BOOTSTRAP_READY_FOR_OPERATOR_VALIDATION`
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
 **Baseline:** `origin/main` @ `61cedc682a391225ac0a02a716f3d36a4c176d7e`
 **Audit date:** 2026-08-21
 **Scope:** current factual roadmap and capability status.
 **Current execution checkpoint:** Production HUD Resource/Match data foundation is on `main`.
 `UGP_HUDRootWidget` now injects those subsystem-owned ViewModels into authored Manual MVVM slots.
-Visible HUD is still not complete. TEMP HUD remains active. **NOT FINALIZED.**
+GPUIRuntime/LocalPlayer now bootstraps at most one production HUD root from a soft-configured
+`UGP_UIPresentationSettings::ProductionHUDWidgetClass`. Visible HUD is still not complete.
+TEMP HUD remains active. **NOT FINALIZED.**
 
 ## 1. Why reconciliation is required
 
@@ -110,7 +112,7 @@ current execution order.
 | --- | --- | --- |
 | TEMP gameplay HUD | **DONE (temporary)** | `UGP_TEMP_S28P_PlanetaryFerroniteHUD` exposes resources, launch, catalogs/READY, cap, timer, result, and Wall Package state. |
 | CommonUI/MVVM prerequisites | **DONE — FOUNDATION** | Plugins/dependencies plus project-owned activatable and non-activatable widget bases, HUD root base, FoW/Resource/Match VMs, and push adapters exist in `GPUIRuntime`. |
-| Production HUD | **PARTIAL — DATA FOUNDATION + VIEWMODEL BRIDGE** | Data foundation on `main`. `UGP_HUDRootWidget` injects subsystem-owned Resource/Match VMs into authored Manual MVVM slots. Visible HUD, SelectionVM, Context Action Grid, MainBase PURCHASE UI, minimap, Patrol, notifications, and production end-of-match remain unimplemented. TEMP HUD remains active. Operator is authoring `WBP_GP_HUD` locally (not in this slice). |
+| Production HUD | **PARTIAL — DATA FOUNDATION + VIEWMODEL BRIDGE + RUNTIME BOOTSTRAP** | Data foundation on `main`. `UGP_HUDViewModelSubsystem` creates at most one local production HUD from configured `ProductionHUDWidgetClass`. HUD root injects subsystem-owned Resource/Match VMs into authored Manual MVVM slots. Visible HUD, SelectionVM, Context Action Grid, MainBase PURCHASE UI, minimap, Patrol, notifications, and production end-of-match remain unimplemented. TEMP HUD remains active. Operator assigns authored `WBP_GP_HUD` locally (not in this slice). |
 | Production Order Menu | **SUPERSEDED AS HUD PATH — UI NOT STARTED** | Canonical production entry is MainBase PURCHASE inside the Context Action Grid. Purchases remain usable through TEMP HUD only. Backend unit/building/Wall Package flows exist. |
 | Minimap | **NOT STARTED** | No minimap subsystem/VM/widget production code. |
 | Notifications | **NOT STARTED** | No notification VM/stack or authority-to-client notification pipeline. |
@@ -364,12 +366,13 @@ After SWARM implementation:
 
 ## 11. Immediate NEXT recommendation
 
-**HUD ViewModel bridge is ready for operator validation.** Authored `WBP_GP_HUD` (local, not in this
-slice) uses Manual MVVM entries `GP_ResourceViewModel` / `GP_MatchViewModel`.
-`UGP_HUDRootWidget::NativeConstruct` assigns the LocalPlayer subsystem's existing instances.
+**HUD ViewModel bridge + production HUD bootstrap are ready for operator validation.** Assign
+authored `WBP_GP_HUD` to Project Settings → Game → GP UI Presentation → `ProductionHUDWidgetClass`.
+`UGP_HUDViewModelSubsystem` creates that widget for each local player; `NativeConstruct` then
+assigns the LocalPlayer subsystem's existing Resource/Match instances. TEMP HUD remains.
 Visible HUD is not claimed complete.
 
-Status: `HUD_VIEWMODEL_BRIDGE_READY_FOR_OPERATOR_VALIDATION`. **NOT MERGED. NOT FINALIZED.**
+Status: `HUD_VIEWMODEL_BRIDGE_AND_BOOTSTRAP_READY_FOR_OPERATOR_VALIDATION`. **NOT MERGED. NOT FINALIZED.**
 
 Execution order remains: implement remaining production UI/HUD visuals using the approved layout →
 minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps →

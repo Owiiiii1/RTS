@@ -12,14 +12,16 @@ class APlayerState;
 class AGP_GameState;
 class AGP_PlayerController;
 class AGP_PlayerState;
+class UGP_HUDRootWidget;
 class UGP_MatchViewModel;
 class UGP_MatchViewModelAdapter;
 class UGP_ResourceViewModel;
 class UGP_ResourceViewModelAdapter;
 
 /**
- * GPUIRuntime-owned local-player lifetime for production HUD ViewModels and push adapters.
- * It never ticks and never performs a world actor scan.
+ * GPUIRuntime-owned local-player lifetime for production HUD ViewModels, push adapters,
+ * and the production HUD root widget bootstrap. It never ticks and never performs a
+ * world actor scan.
  */
 UCLASS()
 class GPUIRUNTIME_API UGP_HUDViewModelSubsystem : public ULocalPlayerSubsystem
@@ -43,11 +45,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|MVVM")
 	int32 GetLocalTeamId() const { return LocalTeamId; }
 
+	UFUNCTION(BlueprintPure, Category = "GP|HUD")
+	UGP_HUDRootWidget* GetProductionHUDWidget() const { return ProductionHUDWidget; }
+
 	int32 GetResourceDelegateCount() const;
 	int32 GetMatchDelegateCount() const;
 
+	void EnsureProductionHUD();
+	void TeardownProductionHUD();
+
 #if !UE_BUILD_SHIPPING
+	void EnsureProductionHUDWithClassForContract(TSubclassOf<UGP_HUDRootWidget> WidgetClass);
 	void DebugDumpToLog() const;
+	void DebugDumpHUDStatusToLog() const;
 #endif
 
 private:
@@ -67,6 +77,13 @@ private:
 	void HandlePlayerStatePresentationReady(APlayerState* PlayerState);
 	void HandlePlayerStateRosterChanged(APlayerState* PlayerState, bool bAdded);
 	void HandleAnyPlayerTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
+	TSubclassOf<UGP_HUDRootWidget> ResolveConfiguredProductionHUDClass() const;
+	void EnsureProductionHUDInternal(
+		TSubclassOf<UGP_HUDRootWidget> WidgetClass,
+		bool bWarnIfUnconfigured);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGP_HUDRootWidget> ProductionHUDWidget;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UGP_ResourceViewModel> ResourceViewModel;
@@ -88,4 +105,5 @@ private:
 	TMap<TWeakObjectPtr<AGP_PlayerState>, FDelegateHandle> PlayerStateTeamHandles;
 	int32 LocalTeamId = -1;
 	bool bReady = false;
+	bool bLoggedUnconfiguredHUDClass = false;
 };

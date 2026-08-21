@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-21 — Production HUD runtime bootstrap
+
+Status: **HUD_VIEWMODEL_BRIDGE_AND_BOOTSTRAP_READY_FOR_OPERATOR_VALIDATION**
+
+- Continued `feature/gp-production-hud-viewmodel-bridge`. Production HUD creation is
+  GPUIRuntime/LocalPlayer owned (`UGP_HUDViewModelSubsystem`). No GPRuntime → GPUIRuntime
+  dependency. TEMP HUD remains.
+- Soft class: `UGP_UIPresentationSettings::ProductionHUDWidgetClass`. Unconfigured = safe no-op.
+  Operator assigns `WBP_GP_HUD` in the editor after this lands. Content/Config untouched.
+- `gp.UI.HUDStatus` plus `gp.UI.RunHUDBootstrapContractTest`. Existing foundation/bridge/FoW
+  contracts re-run. GPEditor Win64 Development + UHT **PASS**.
+- **NOT MERGED. NOT FINALIZED.**
+
 ## 2026-08-21 — Production HUD ViewModel bridge
 
 Status: **HUD_VIEWMODEL_BRIDGE_READY_FOR_OPERATOR_VALIDATION**

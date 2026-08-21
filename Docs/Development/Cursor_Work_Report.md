@@ -1,98 +1,116 @@
-# Cursor Work Report — Production HUD ViewModel Bridge
+# Cursor Work Report — Production HUD ViewModel Bridge and Bootstrap
 
 ## Status
 
-**HUD_VIEWMODEL_BRIDGE_READY_FOR_OPERATOR_VALIDATION**
+**HUD_VIEWMODEL_BRIDGE_AND_BOOTSTRAP_READY_FOR_OPERATOR_VALIDATION**
 
 ## Branch / base / head
 
 - Branch: `feature/gp-production-hud-viewmodel-bridge`
 - Base: `origin/main` @ `61cedc682a391225ac0a02a716f3d36a4c176d7e`
-- Head: `e76a9bb89e38f0d08c1c950e7217bc53a92e8fc9`
+- Head: recorded after commit on this branch
 - **NOT MERGED**
 - **NOT FINALIZED**
 
-## Factual UE 5.8 MVVM API used
+## Bootstrap owner
 
-Inspected installed UE 5.8.1 `ModelViewViewModel` headers:
+`UGP_HUDViewModelSubsystem` (`ULocalPlayerSubsystem` in GPUIRuntime).
 
-- `UMVVMSubsystem::GetViewFromUserWidget(const UUserWidget*)` returns the widget's `UMVVMView` extension (`UserWidget->GetExtension<UMVVMView>()`).
-- `UMVVMView::SetViewModel(FName ViewModelName, TScriptInterface<INotifyFieldValueChanged> ViewModel)` assigns a Manual/settable source by authored slot name and re-executes bindings if the view is already initialized.
+No second LocalPlayer UI owner. `AGP_PlayerController` is unchanged and does not reference GPUIRuntime types. `GPRuntime` does not depend on `GPUIRuntime`. TEMP HUD remains created by GPRuntime PlayerController.
 
-No duplicate ViewModel objects are created by this path.
+## Settings class / property
 
-## Widget lifecycle hook and why
+- Class: `UGP_UIPresentationSettings` (`UDeveloperSettings`, Config=Game, DefaultConfig)
+- Property: `ProductionHUDWidgetClass` (`TSoftClassPtr<UGP_HUDRootWidget>`)
+- Editor path: Project Settings → Game → GP UI Presentation
+- This slice does **not** write `GP/Config`
+- No hardcoded `/Game/.../WBP_GP_HUD` path
+- Unconfigured class: safe no-op + non-shipping warning; TEMP HUD remains available
 
-`UGP_HUDRootWidget::NativeConstruct` **after** `Super::NativeConstruct()`.
+Operator assigns authored `WBP_GP_HUD` to this setting locally after the code lands.
 
-Why:
+## Lifecycle
 
-- `UUserWidget::NativeOnInitialized` runs `UMVVMViewClass::Initialize`, which **adds** `UMVVMView` (`ConstructView`).
-- `UUserWidget::NativeConstruct` then constructs class extensions and calls `UMVVMView::Construct()`, which `InitializeSources` / `InitializeBindings` for Manual entries (no instance until set).
-- Assigning immediately after Super uses the constructed view so `SetViewModel` can attach the subsystem instances and re-run bindings.
-- No Tick. No timer retry. No world scan.
+Create only for a valid LocalPlayer with a local PlayerController.
 
-## ViewModel slot identifiers
+Hooks:
 
-Stable `FName` constants on `FGP_HUDViewModelBridge`:
+- `Initialize` → `EnsureProductionHUD`
+- `PlayerControllerChanged` → ensure if local controller, otherwise teardown
+- `Deinitialize` → teardown first
 
-- `GP_ResourceViewModel`
-- `GP_MatchViewModel`
+No Tick. No timer retry. No world actor scan.
 
-These match the authored WBP Manual MVVM entry display names. Existing ViewModel classes were not renamed.
+## Duplicate prevention
 
-## Ownership confirmation
+If the existing production HUD instance is valid, matches the resolved class, and is owned by the current local controller: re-add to viewport only if missing. Otherwise teardown then create once.
 
-`UGP_HUDViewModelSubsystem` remains the Outer/lifetime owner of ResourceVM, MatchVM, and adapters.
-`UGP_HUDRootWidget` only assigns those pointers into the MVVM View.
+## Teardown
 
-## No duplicate VM creation
+`RemoveFromParent()` on the production HUD, then clear `ProductionHUDWidget`.
 
-The bridge never `NewObject`s ResourceVM/MatchVM. Null subsystem VMs abort without replacements.
+## Input
 
-## Failure behavior
+Root is `HitTestInvisible` and not focusable. No controller input-mode change. RTS world clicks are not blocked. Readout/layout only.
 
-Safe no-crash returns with non-shipping warnings:
+## Debug command
 
-- no LocalPlayer
-- no HUDViewModelSubsystem
-- no `UMVVMView`
-- `SetViewModel` false (missing/unconstructed slot)
+`gp.UI.HUDStatus`
 
-## Tests / results
+Prints:
 
-Headless full WBP Manual-slot success is not claimed (operator-authored `WBP_GP_HUD` is local and unstaged).
-The contract proves fail-safe helper behavior, slot names, and subsystem ownership of existing instances.
+- LocalPlayer present
+- configured production HUD class
+- production HUD instance present
+- widget class/name
+- ViewModel subsystem Ready state
+
+Does not bypass widget bootstrap.
+
+## Bridge API
+
+Unchanged from the prior slice:
+
+- `FGP_HUDViewModelBridge::AssignOwnedViewModels`
+- `FGP_HUDViewModelBridge::AssignOwnedViewModelsToView`
+- Slots: `GP_ResourceViewModel`, `GP_MatchViewModel`
+- `UGP_HUDRootWidget::NativeConstruct` assigns subsystem-owned VMs after Super
+
+## Tests
 
 | Command | Result |
 | --- | --- |
 | `gp.UI.RunProductionHUDFoundationContractTest` | **PASS**, Failures=0 |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | **PASS**, Failures=0 |
 | `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS**, Failures=0 |
+| `gp.UI.RunHUDBootstrapContractTest` | **PASS**, Failures=0 |
+
+Bootstrap contract proves: unconfigured/null class no-op, at most one HUD per local player, repeated ensure does not duplicate, teardown clears/removes, TEMP HUD path remains, no GPRuntime→GPUIRuntime type ownership.
 
 ## GPEditor / UHT
 
 `Build.bat GPEditor Win64 Development` — **PASS** (UHT processed GPEditor; compile/link succeeded).
 
-GP Win64 Development / Shipping **not run** (post-operator finalization).
+GP Win64 Development / Shipping **not run**.
 
 ## Exact changed files
 
-- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
-- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
-- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDViewModelBridge.h` (new)
-- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDViewModelBridge.cpp` (new)
-- `GP/Source/GPUIRuntime/Private/Debug/GPHUDViewModelBridgeContractTest.cpp` (new)
+- `GP/Source/GPUIRuntime/GPUIRuntime.Build.cs`
+- `GP/Source/GPUIRuntime/Public/Settings/GPUIPresentationSettings.h`
+- `GP/Source/GPUIRuntime/Private/Settings/GPUIPresentationSettings.cpp`
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPHUDViewModelSubsystem.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPHUDViewModelSubsystem.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPHUDRootWidgetContractStub.h`
+- `GP/Source/GPUIRuntime/Private/Debug/GPHUDBootstrapContractTest.cpp`
 - `Docs/TDD/12_UI_Architecture.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Protected Content confirmation
+## Content / TEMP HUD / merge
 
-No `GP/Content/**`, Config, maps, Blueprints, DataAssets, or Tools files were modified or staged.
-Operator-authored `WBP_GP_HUD` was not touched.
-
-## NOT MERGED
-
-## NOT FINALIZED
+- **Content untouched** (`WBP_GP_HUD` and all `GP/Content` unstaged)
+- `GP/Config` untouched in this slice
+- **TEMP HUD preserved** (`UGP_TEMP_S28P_PlanetaryFerroniteHUD` still created by `AGP_PlayerController`)
+- **NOT MERGED**
+- **NOT FINALIZED**

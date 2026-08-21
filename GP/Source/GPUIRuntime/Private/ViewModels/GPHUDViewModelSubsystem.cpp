@@ -2,6 +2,8 @@
 
 #include "ViewModels/GPHUDViewModelSubsystem.h"
 
+#include "Blueprint/UserWidget.h"
+#include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "Game/GPGameState.h"
@@ -9,10 +11,12 @@
 #include "HAL/IConsoleManager.h"
 #include "Player/GPPlayerController.h"
 #include "Player/GPPlayerState.h"
+#include "Settings/GPUIPresentationSettings.h"
 #include "ViewModels/GPMatchViewModel.h"
 #include "ViewModels/GPMatchViewModelAdapter.h"
 #include "ViewModels/GPResourceViewModel.h"
 #include "ViewModels/GPResourceViewModelAdapter.h"
+#include "Widgets/GPHUDRootWidget.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPHUDViewModels, Log, All);
 
@@ -31,10 +35,12 @@ void UGP_HUDViewModelSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			this, &ThisClass::HandleGameStateSet);
 	}
 	Rebind();
+	EnsureProductionHUD();
 }
 
 void UGP_HUDViewModelSubsystem::Deinitialize()
 {
+	TeardownProductionHUD();
 	if (UWorld* World = GetWorld())
 	{
 		World->GameStateSetEvent.Remove(GameStateSetHandle);
@@ -57,8 +63,15 @@ void UGP_HUDViewModelSubsystem::Deinitialize()
 
 void UGP_HUDViewModelSubsystem::PlayerControllerChanged(APlayerController* NewPlayerController)
 {
+	Super::PlayerControllerChanged(NewPlayerController);
 	BindPlayerController(Cast<AGP_PlayerController>(NewPlayerController));
 	Rebind();
+	if (NewPlayerController == nullptr || !NewPlayerController->IsLocalController())
+	{
+		TeardownProductionHUD();
+		return;
+	}
+	EnsureProductionHUD();
 }
 
 void UGP_HUDViewModelSubsystem::Rebind()
@@ -282,6 +295,127 @@ void UGP_HUDViewModelSubsystem::HandleAnyPlayerTeamIdChanged(
 	Rebind();
 }
 
+namespace GPHUDBootstrapPrivate
+{
+	static constexpr int32 ProductionHUDZOrder = 100;
+}
+
+TSubclassOf<UGP_HUDRootWidget> UGP_HUDViewModelSubsystem::ResolveConfiguredProductionHUDClass() const
+{
+	const UGP_UIPresentationSettings* Settings = UGP_UIPresentationSettings::Get();
+	if (Settings == nullptr || Settings->ProductionHUDWidgetClass.IsNull())
+	{
+		return nullptr;
+	}
+
+	UClass* LoadedClass = Settings->ProductionHUDWidgetClass.LoadSynchronous();
+	if (LoadedClass == nullptr)
+	{
+#if !UE_BUILD_SHIPPING
+		UE_LOG(LogGPHUDViewModels, Warning,
+			TEXT("UGP_HUDViewModelSubsystem: ProductionHUDWidgetClass failed to load (%s)"),
+			*Settings->ProductionHUDWidgetClass.ToString());
+#endif
+		return nullptr;
+	}
+
+	if (!LoadedClass->IsChildOf(UGP_HUDRootWidget::StaticClass())
+		|| LoadedClass->HasAnyClassFlags(CLASS_Abstract))
+	{
+#if !UE_BUILD_SHIPPING
+		UE_LOG(LogGPHUDViewModels, Warning,
+			TEXT("UGP_HUDViewModelSubsystem: ProductionHUDWidgetClass is not a concrete UGP_HUDRootWidget subclass (%s)"),
+			*LoadedClass->GetName());
+#endif
+		return nullptr;
+	}
+
+	return LoadedClass;
+}
+
+void UGP_HUDViewModelSubsystem::EnsureProductionHUD()
+{
+	EnsureProductionHUDInternal(ResolveConfiguredProductionHUDClass(), true);
+}
+
+void UGP_HUDViewModelSubsystem::TeardownProductionHUD()
+{
+	if (UGP_HUDRootWidget* HUD = ProductionHUDWidget.Get())
+	{
+		HUD->RemoveFromParent();
+	}
+	ProductionHUDWidget = nullptr;
+}
+
+void UGP_HUDViewModelSubsystem::EnsureProductionHUDInternal(
+	TSubclassOf<UGP_HUDRootWidget> WidgetClass,
+	bool bWarnIfUnconfigured)
+{
+	ULocalPlayer* LocalPlayer = GetLocalPlayer();
+	UWorld* World = GetWorld();
+	APlayerController* PlayerController =
+		LocalPlayer != nullptr && World != nullptr
+			? LocalPlayer->GetPlayerController(World)
+			: nullptr;
+	if (LocalPlayer == nullptr || PlayerController == nullptr || !PlayerController->IsLocalController())
+	{
+		return;
+	}
+
+	if (WidgetClass == nullptr)
+	{
+		if (bWarnIfUnconfigured && !bLoggedUnconfiguredHUDClass)
+		{
+			bLoggedUnconfiguredHUDClass = true;
+#if !UE_BUILD_SHIPPING
+			UE_LOG(LogGPHUDViewModels, Warning,
+				TEXT("UGP_HUDViewModelSubsystem: ProductionHUDWidgetClass is not configured; production HUD bootstrap skipped. TEMP HUD remains available."));
+#endif
+		}
+		return;
+	}
+
+	if (IsValid(ProductionHUDWidget)
+		&& ProductionHUDWidget->GetClass() == WidgetClass.Get()
+		&& ProductionHUDWidget->GetOwningPlayer() == PlayerController)
+	{
+		if (!ProductionHUDWidget->IsInViewport())
+		{
+			ProductionHUDWidget->SetIsFocusable(false);
+			ProductionHUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+			ProductionHUDWidget->AddToViewport(GPHUDBootstrapPrivate::ProductionHUDZOrder);
+			ProductionHUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		return;
+	}
+
+	TeardownProductionHUD();
+
+	ProductionHUDWidget = CreateWidget<UGP_HUDRootWidget>(PlayerController, WidgetClass);
+	if (ProductionHUDWidget == nullptr)
+	{
+#if !UE_BUILD_SHIPPING
+		UE_LOG(LogGPHUDViewModels, Warning,
+			TEXT("UGP_HUDViewModelSubsystem: CreateWidget failed for %s"),
+			*GetNameSafe(WidgetClass.Get()));
+#endif
+		return;
+	}
+
+	ProductionHUDWidget->SetIsFocusable(false);
+	ProductionHUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	ProductionHUDWidget->AddToViewport(GPHUDBootstrapPrivate::ProductionHUDZOrder);
+	ProductionHUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+}
+
+#if !UE_BUILD_SHIPPING
+void UGP_HUDViewModelSubsystem::EnsureProductionHUDWithClassForContract(
+	TSubclassOf<UGP_HUDRootWidget> WidgetClass)
+{
+	EnsureProductionHUDInternal(WidgetClass, false);
+}
+#endif
+
 int32 UGP_HUDViewModelSubsystem::GetResourceDelegateCount() const
 {
 	return ResourceAdapter != nullptr ? ResourceAdapter->GetBoundDelegateCount() : 0;
@@ -317,23 +451,53 @@ void UGP_HUDViewModelSubsystem::DebugDumpToLog() const
 		Match != nullptr ? Match->MatchDuration : 0.0f);
 }
 
+void UGP_HUDViewModelSubsystem::DebugDumpHUDStatusToLog() const
+{
+	const ULocalPlayer* LocalPlayer = GetLocalPlayer();
+	const UGP_UIPresentationSettings* Settings = UGP_UIPresentationSettings::Get();
+	const FString ConfiguredClass =
+		Settings != nullptr && !Settings->ProductionHUDWidgetClass.IsNull()
+			? Settings->ProductionHUDWidgetClass.ToString()
+			: FString(TEXT("<unconfigured>"));
+	const UGP_HUDRootWidget* HUD = ProductionHUDWidget.Get();
+	const FString InstanceClass =
+		HUD != nullptr ? HUD->GetClass()->GetName() : FString(TEXT("<none>"));
+	const FString InstanceName =
+		HUD != nullptr ? HUD->GetName() : FString(TEXT("<none>"));
+
+	UE_LOG(LogGPHUDViewModels, Display,
+		TEXT("gp.UI.HUDStatus LocalPlayer=%s ConfiguredClass=%s InstancePresent=%s ")
+		TEXT("WidgetClass=%s WidgetName=%s Ready=%s"),
+		LocalPlayer != nullptr ? *LocalPlayer->GetName() : TEXT("<none>"),
+		*ConfiguredClass,
+		HUD != nullptr ? TEXT("true") : TEXT("false"),
+		*InstanceClass,
+		*InstanceName,
+		bReady ? TEXT("Ready") : TEXT("NotReady"));
+}
+
 namespace GPHUDDumpPrivate
 {
+	static UGP_HUDViewModelSubsystem* FindLocalHUDSubsystem(UWorld* World)
+	{
+		if (World == nullptr)
+		{
+			return nullptr;
+		}
+		if (APlayerController* PlayerController = World->GetFirstPlayerController())
+		{
+			if (ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer())
+			{
+				return LocalPlayer->GetSubsystem<UGP_HUDViewModelSubsystem>();
+			}
+		}
+		return nullptr;
+	}
+
 	static void HUDDump(const TArray<FString>& Args, UWorld* World)
 	{
 		(void)Args;
-		UGP_HUDViewModelSubsystem* Subsystem = nullptr;
-		if (World != nullptr)
-		{
-			if (APlayerController* PlayerController = World->GetFirstPlayerController())
-			{
-				if (ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer())
-				{
-					Subsystem = LocalPlayer->GetSubsystem<UGP_HUDViewModelSubsystem>();
-				}
-			}
-		}
-		if (Subsystem != nullptr)
+		if (UGP_HUDViewModelSubsystem* Subsystem = FindLocalHUDSubsystem(World))
 		{
 			Subsystem->DebugDumpToLog();
 		}
@@ -344,9 +508,42 @@ namespace GPHUDDumpPrivate
 		}
 	}
 
+	static void HUDStatus(const TArray<FString>& Args, UWorld* World)
+	{
+		(void)Args;
+		if (World == nullptr || GEngine == nullptr)
+		{
+			UE_LOG(LogGPHUDViewModels, Warning,
+				TEXT("gp.UI.HUDStatus LocalPlayer=<none> Reason=NoWorld"));
+			return;
+		}
+
+		int32 Dumped = 0;
+		for (FLocalPlayerIterator It(GEngine, World); It; ++It)
+		{
+			if (UGP_HUDViewModelSubsystem* Subsystem =
+				(*It) != nullptr ? (*It)->GetSubsystem<UGP_HUDViewModelSubsystem>() : nullptr)
+			{
+				Subsystem->DebugDumpHUDStatusToLog();
+				++Dumped;
+			}
+		}
+		if (Dumped == 0)
+		{
+			UE_LOG(LogGPHUDViewModels, Warning,
+				TEXT("gp.UI.HUDStatus LocalPlayer=<none> ConfiguredClass=<unknown> ")
+				TEXT("InstancePresent=false WidgetClass=<none> WidgetName=<none> Ready=NotReady"));
+		}
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs GHUDDumpCommand(
 		TEXT("gp.UI.HUDDump"),
 		TEXT("Dump local production HUD ViewModel state."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&HUDDump));
+
+	static FAutoConsoleCommandWithWorldAndArgs GHUDStatusCommand(
+		TEXT("gp.UI.HUDStatus"),
+		TEXT("Dump local production HUD bootstrap status."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&HUDStatus));
 }
 #endif

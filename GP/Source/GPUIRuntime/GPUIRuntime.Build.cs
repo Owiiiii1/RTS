@@ -13,6 +13,7 @@ public class GPUIRuntime : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"DeveloperSettings",
 			"UMG",
 			"Slate",
 			"SlateCore",

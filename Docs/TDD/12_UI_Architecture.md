@@ -117,11 +117,27 @@ PublicDependencyModuleNames.AddRange(new string[]
   `UWorld::GameStateSetEvent`, GameState roster changes, and PlayerState team changes. There is no
   UI Tick or timer polling. Rebind removes old handles before adding new ones.
 - `gp.UI.HUDDump` reads only subsystem/ViewModel state for operator diagnostics.
+- Production HUD runtime creation is owned by the same `UGP_HUDViewModelSubsystem`
+  (GPUIRuntime `ULocalPlayerSubsystem`). There is no second LocalPlayer UI owner and
+  `AGP_PlayerController` does not reference GPUIRuntime types. `GPRuntime` still does not
+  depend on `GPUIRuntime`.
+- Authored class is soft-configured via `UGP_UIPresentationSettings::ProductionHUDWidgetClass`
+  (`TSoftClassPtr<UGP_HUDRootWidget>`). Project Settings → Game → GP UI Presentation.
+  This slice does not write `GP/Config` and does not hardcode `/Game/.../WBP_GP_HUD`.
+  Unconfigured class → safe no-op + non-shipping warning; TEMP HUD remains available.
+- For each valid local player/controller the subsystem creates at most one production HUD
+  root, adds it to that player's viewport (`HitTestInvisible`, no gameplay mouse consume,
+  no input-mode change), then `UGP_HUDRootWidget::NativeConstruct` injects subsystem-owned
+  VMs through the existing bridge. Repeated ensure does not duplicate. Teardown removes
+  the widget and clears the reference (Initialize / PlayerControllerChanged / Deinitialize).
+- `gp.UI.HUDStatus` prints LocalPlayer, configured class, instance, widget class/name, and
+  ViewModel Ready for operator validation. It does not bypass bootstrap.
 - Operator PIE validation passed: initial dump Ready/TeamId=1/zero resources; after live play,
   OrbitalFerronite=100, FerroniteScore=100, FerroniteThreatValue=250. The live push path is accepted.
 - The TEMP HUD is preserved and remains functional. Production HUD remains **PARTIAL**. Still not
-  implemented: authored `WBP_GP_HUD`, visible resource/timer HUD, Selection UI, Context Action Grid,
+  implemented: visible resource/timer HUD completeness, Selection UI, Context Action Grid,
   MainBase PURCHASE panel, minimap function, notifications, and production end-of-match screen.
+  Operator assigns authored `WBP_GP_HUD` to `ProductionHUDWidgetClass` locally after this code lands.
 - **Approved visual IA (2026-08-21):** two bars × three blocks, plus MainBase PURCHASE inside the
   bottom-right panel. See
   [`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).

@@ -10,8 +10,8 @@
 
 - [Development/DOCUMENTATION_INDEX.md](Development/DOCUMENTATION_INDEX.md) — **единый индекс**: sources of truth, deprecated docs, conflicts, current NEXT task.
 - [Game_Pitch.md](Game_Pitch.md) — **non-technical onboarding** (Ukrainian, no tech-speak). What the game is, why it's interesting, how a match plays.
-- [GDD/](GDD/README.md) — Game Design Document. Gameplay-canonical: pillars, gameplay loop, factions, units, buildings, resources, match flow, win/lose conditions, UI/UX, orbital delivery, fog of war.
-- [TDD/](TDD/README.md) — Technical Design Document. Engineering-canonical: module architecture, GAS, multiplayer, RTS pipeline, unit/building/resource architecture, Steam matchmaking, camera, UI/MVVM, orbital delivery system, fog of war, consolidated architecture proposal.
+- [GDD/](GDD/README.md) — Game Design Document. Gameplay-canonical: pillars, gameplay loop, factions, units, buildings, resources, match flow, win/lose conditions, UI/UX, orbital delivery, fog of war, terrain engineering / foundations.
+- [TDD/](TDD/README.md) — Technical Design Document. Engineering-canonical: module architecture, GAS, multiplayer, RTS pipeline, unit/building/resource architecture, Steam matchmaking, camera, UI/MVVM, orbital delivery system, fog of war, voxel terrain / foundations, consolidated architecture proposal.
 - [Architecture_Decisions/](Architecture_Decisions/README.md) — ADRs. Прийняті архітектурні рішення з context, decision, consequences.
 - [Development/](Development/README.md) — operational rules. Coding rules, naming, git workflow, slice template, per-task specs.
 - [Archive/](Archive/README.md) — legacy документи попереднього проєкту, reference-only.

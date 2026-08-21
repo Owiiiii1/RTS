@@ -1,14 +1,11 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE`
+**Status:** `VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW`
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
-**Baseline:** `origin/main` @ `b7e391a636749173c445f7994a41daf3c18ba902`
-**Audit date:** 2026-08-20
+**Baseline:** `origin/main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f`
+**Audit date:** 2026-08-21
 **Scope:** documentation/roadmap reconciliation only. No runtime, Config, Content, Blueprint, DataAsset, map, or placement implementation changes.
-**Current execution checkpoint:** authoritative FoW plus the trusted client/MVVM foundations are
-finalized. Source-only visual world/terrain FoW is implemented on
-`feature/gp-fow-world-visualization` and awaits operator visual validation. Minimap and the full
-production HUD are not implemented.
+**Current execution checkpoint:** FoW world visualization is **MERGED / operator accepted**. Next product stages are production UI foundation / HUD, then minimap + FoW minimap presentation, then the **new Terrain / Voxel / Foundation system** before RTS AI Opponent.
 
 ## 1. Why reconciliation is required
 
@@ -124,9 +121,24 @@ current execution order.
 | --- | --- | --- |
 | Per-team Unexplored/Explored/Visible runtime | **DONE — FOUNDATION** | `UGP_FogOfWarComponent` owns authority-only per-team bit grids, 10 Hz registered-source recompute, sticky exploration, and public server queries; contract and operator validation passed. Canonical grid: 100 cm / 2000×2000 / 0.10 s. Client rendering/relevance remain separate capability work. |
 | Trusted owning-client mirror + FoW MVVM | **DONE — FOUNDATION** | Owner-only initial/delta range sync, revision guards, one-team `UGP_LocalFoWComponent`, `UGP_FoWViewModel`, adapter, CommonUI base, and local placement preview passed contracts, final builds, and two-player operator isolation. |
-| Visual world/terrain FoW | **PARTIAL — OPERATOR VALIDATION PENDING** | Operator rejected sampled/projected mask overlay (striping) and the post-process experiment. Current stop: PerCellBlurredQuadRenderer plus 100 cm / 10 Hz / 2000×2000 gameplay grid (4× original 200 cm / 1000×1000). Viewport FoW region is never cropped; over-cap frames are full black. Contracts and Editor build pass; PIE terrain readability is the current gate. |
+| Visual world/terrain FoW | **DONE — MERGED / OPERATOR ACCEPTED** | PerCellBlurredQuadRenderer plus 100 cm / 10 Hz / 2000×2000 gameplay grid. Planar / fixed ground-projection assumption. Voxel terrain-surface adaptation is a later Terrain-stage integration task (do not reopen FoW now). |
 | FoW-gated selection/combat/drop placement | **PARTIAL** | Server auto-acquire and orbital building placement consume active visibility. Enemy local selection, explicit-Attack last-known behavior, unit-drop pod vision, and broad relevance filtering remain deferred FoW integration. |
 | Last-known state and minimap layers | **NOT STARTED** | Design only. |
+
+### Terrain, leveling, and foundations
+
+| Capability | Status | Factual evidence / boundary |
+| --- | --- | --- |
+| Voxel Plugin terrain backend | **NOT STARTED** | Intended backend per ADR-0010. Exact version/edition/API is **TECH-SPIKE REQUIRED**. |
+| Authoritative terrain deformation | **NOT STARTED** | Generic deformation-event contract documented; no production service. Clients must not author destruction. |
+| Worker terrain leveling / site prep | **NOT STARTED** | Command concept only (names TBD). Grey/yellow BuildGrid overlay. Zone sizing UX **DESIGN REQUIRED**. |
+| Foundation Slab orbital procurement | **NOT STARTED** | Wall Package philosophy; cost/quantity/footprint **TBD** (do not copy 5). |
+| Per-cell foundation coverage | **NOT STARTED** | Canonical model: track intact foundation per BuildGrid cell. Physical slab may cover multiple cells. |
+| Building deploy requires foundation | **NOT STARTED** | Additional placement prerequisite for normal orbital buildings. Initial MainBase excepted. |
+| Per-cell foundation destruction | **NOT STARTED** | Canonical; not all-or-nothing per original slab. Surviving-building-after-support-loss **DESIGN REQUIRED**. |
+| Wall requires foundation? | **DESIGN REQUIRED** | Building System design gate. Do not assume. |
+| Dynamic nav after deformation | **DESIGN / TECH-SPIKE REQUIRED** | Do not assume full NavMesh rebuild per explosion. |
+| World FoW follows voxel surface | **NOT STARTED** | Required integration in Terrain stage. Do not reopen FoW now. |
 
 ### RTS AI Opponent
 
@@ -192,6 +204,8 @@ must remain separate from the RTS AI Opponent.
   auto-acquire visibility gating, and authority building-placement visibility gating.
 - Trusted one-team client FoW mirror, server-originated snapshot/delta sync, stale revision protection,
   team isolation, FoW ViewModel/CommonUI foundation, and local FoW-aware placement preview.
+- World FoW presentation (PerCellBlurredQuadRenderer, planar / fixed ground projection) — **MERGED /
+  operator accepted**. Voxel-surface adaptation is Terrain stage 3E.
 
 Do not schedule another implementation slice merely to recreate an obsolete historical class name.
 
@@ -199,20 +213,17 @@ Do not schedule another implementation slice merely to recreate an obsolete hist
 
 These are factual product gaps, not an implied strict order:
 
-1. Validate/finalize visual terrain FoW, then implement remaining visibility consumers, replication
-   relevance policy, and last-known rules on the finalized trusted mirror foundation.
-2. Complete the production CommonUI/MVVM HUD, Order Menu, minimap, notifications, and end-of-match flow.
-3. Primitive RTS AI Opponent (`Explore / Mine / Ship / Order / Defend`).
-4. Player-facing Stop command input/dispatch completion.
-5. Steam 2-player session/lobby/host/find/join/travel/disconnect flow.
-6. Worker Repair.
-7. Logistics Hub storage-cap bonus.
-8. Wall surface system: wall actor/connection, Build Wall inventory consumption/drag placement, and
-   wall-mounted Turret. This is redesign-dependent; see §6.
-9. Sell and Demolish lifecycle operations.
-10. OpponentDisconnect result and complete match return/session cleanup.
-11. Remaining feedback/presentation necessary for readable MVP play.
-12. SWARM — only after every preceding gameplay system is complete enough for an end-to-end match.
+1. Complete the production CommonUI/MVVM HUD / UI foundation.
+2. Minimap + FoW minimap presentation.
+3. Terrain / Voxel / Foundation system (3A–3E below).
+4. Primitive RTS AI Opponent (`Explore / Mine / Ship / Order / Defend`).
+5. Remaining bounded core-loop gameplay: player-facing Stop, Worker Repair, Logistics Hub storage-cap bonus, necessary feedback.
+6. Building-system design gate (Wall/foundation rule, wall surface, connection, Wall Turret, Sell/Demolish).
+7. Steam 2-player session/lobby/host/find/join/travel/disconnect flow.
+8. Match completion product flow.
+9. SWARM design/reconciliation gate.
+10. SWARM implementation.
+11. Full MVP validation/stabilization.
 
 ## 6. Deferred and redesign-dependent work
 
@@ -224,9 +235,7 @@ infrastructure. A standalone ownership cleanup is not immediate MVP work.
 
 ### Building placement/construction redesign — **DESIGN REQUIRED / DEFERRED**
 
-Wall surface construction and any broader redesign of building placement must establish its interaction
-model before footprint ownership is reconsidered. This does not invalidate the existing orbital building
-deployment capability, which is **DONE**. Wall drag preview is a separate missing wall capability.
+Wall surface construction and any broader redesign of building placement must establish Wall/foundation interaction before footprint ownership is reconsidered. This does not invalidate the existing orbital building deployment capability, which is **DONE** as a delivery path; Terrain stage later adds leveled + intact foundation as an additional prerequisite for normal buildings. Wall drag preview is a separate missing wall capability.
 
 Neither item is an immediate optimization/refactor package. Revisit only when the concrete surface
 construction redesign requires it.
@@ -235,20 +244,24 @@ construction redesign requires it.
 
 This order replaces mechanical continuation of the historical Slice 8 -> 13 sequence:
 
-1. **Visual FoW and production UI consumers** — operator-validate/finalize the current world overlay,
-   then implement remaining trusted presentation consumers, HUD readouts, Order Menu, notifications,
-   and minimap FoW.
-2. **RTS AI Opponent** — Explore/Mine/Ship/Order/Defend using completed authority APIs and FoW.
-3. **Remaining bounded core-loop gameplay** — player-facing Stop completion, Worker Repair, Logistics
-   Hub storage-cap bonus, and necessary feedback.
-4. **Building-system design gate**, then only approved remaining surface-building capabilities
-   (Wall/connection/Build Wall/Wall Turret and lifecycle operations). Do not pre-emptively clean geometry.
-5. **Steam multiplayer product flow** — sessions, lobby, host/find/join, travel, disconnect, and menus.
-6. **Match completion product flow** — production end screen, OpponentDisconnect result, cleanup/
+1. **Production UI foundation / HUD**
+2. **Minimap + FoW minimap presentation**
+3. **Terrain / Voxel / Foundation system** — must exist before AI and final building/wall design because both depend on construction-site rules and navigation.
+   - **3A.** Voxel Plugin technical spike + authoritative terrain deformation foundation
+   - **3B.** Worker terrain leveling / site-preparation loop
+   - **3C.** Orbital Foundation Slab procurement + MainBase inventory + installation
+   - **3D.** Building placement migration to leveled + intact foundation requirement
+   - **3E.** navigation + current world-FoW terrain-surface integration
+4. **RTS AI Opponent** — Explore/Mine/Ship/Order/Defend using completed authority APIs, FoW, and construction-site rules
+5. **Remaining bounded core-loop gameplay** — player-facing Stop, Worker Repair, Logistics Hub storage-cap bonus, and necessary feedback
+6. **Building-system design gate**, then only approved remaining surface-building capabilities
+   (Wall/foundation rule, Wall surface placement, wall connection, Wall Turret, Sell/Demolish). Do not pre-emptively clean geometry.
+7. **Steam multiplayer product flow** — sessions, lobby, host/find/join, travel, disconnect, and menus.
+8. **Match completion product flow** — production end screen, OpponentDisconnect result, cleanup/
    return, and singleplayer/multiplayer completion checks.
-7. **SWARM design/reconciliation gate.**
-8. **SWARM implementation — last gameplay implementation stage of MVP.**
-9. **Full MVP end-to-end validation and stabilization.**
+9. **SWARM design/reconciliation gate.**
+10. **SWARM implementation — last gameplay implementation stage of MVP.**
+11. **Full MVP end-to-end validation and stabilization.**
 
 Small slices may subdivide a stage, but dependency order and capability status take precedence over old
 S-number titles.
@@ -333,7 +346,7 @@ After SWARM implementation:
 | S46 | Worker Repair **REMAINING**. |
 | S46A | Sell/Demolish **REMAINING**. |
 | S47 | CommonUI/MVVM prerequisites and first project activatable/ViewModel base **DONE — FOUNDATION**; full production HUD remains. |
-| S48 | FoW authority and trusted client mirror/MVVM foundations **DONE**; visual world overlay **PARTIAL — OPERATOR VALIDATION PENDING**; relevance/last-known remain. |
+| S48 | FoW authority, trusted client mirror/MVVM, and world overlay **DONE / MERGED**; relevance/last-known remain. Voxel-surface FoW adaptation is Terrain stage 3E. |
 | S49-S53 | Production VMs/adapters/HUD/minimap/Order Menu **REMAINING**; TEMP HUD does not close them. |
 | S54-S56 | RTS AI Opponent **REMAINING** and distinct from SWARM. |
 | S57-S60 | Feedback pass **PARTIAL**; implement only MVP-readable gaps. |
@@ -345,22 +358,18 @@ After SWARM implementation:
 
 ## 11. Immediate NEXT recommendation
 
-**Exactly one current gate: operator visual validation and finalization of the source-only world Fog of
-War presentation.**
+**Exactly one current gate: review of voxel-terrain / foundation documentation on
+`docs/gp-voxel-terrain-foundations`.**
+
+Status: `VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW`. **NOT MERGED.**
 
 Reason:
 
-- authoritative and trusted-client FoW foundations passed contracts, builds, single-client transition
-  checks, same-coordinate two-player isolation, and restart/reinitialization;
-- source-only black/grey/normal projected presentation now consumes that trusted state and passes its
-  deterministic contract, bounded render smoke, and Editor build;
-- normal PIE readability/alignment across pan/zoom/rotation and two-player visual isolation require
-  operator confirmation before finalization;
-- minimap, full HUD, last-known state, selection/inspect integration, and relevance remain separate
-  bounded work;
-- it is a dependency for readable player feedback and the RTS AI Opponent's Explore/visibility behavior;
-- it is independent of the deferred building-construction/footprint redesign;
-- it is a concrete gameplay capability, not another cleanup package.
+- FoW world visualization is **MERGED / operator accepted** (planar / fixed ground projection);
+- Terrain / foundation must exist before RTS AI Opponent and the Building-system / Wall design gate
+  because both depend on construction-site rules and navigation;
+- Voxel Plugin version/API, replication, nav strategy, slab balance, wall/foundation rule, and
+  surviving-building-after-foundation-loss remain **TBD / DESIGN REQUIRED**;
+- this slice is documentation only.
 
-Do not expand this operator gate into minimap, full HUD, last-known state, selection policy, or
-replication relevance.
+Do not implement Voxel Plugin, Worker leveling, or foundation inventory in this review gate.

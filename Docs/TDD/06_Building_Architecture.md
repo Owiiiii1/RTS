@@ -1,6 +1,6 @@
 # Building Architecture
 
-> **Architecture model:** Orbital Delivery (post-pivot, canon per ADR-0009). All non-initial buildings arrive from orbit via drop pods and land already-operational — there is **no local construction phase and no per-building production queue**. The pre-pivot local-production/local-construction architecture (Barracks, Assembly Yard, `UGP_ProductionComponent`, `UGP_ConstructionComponent`, construction sites, rally points) has been **archived** to [`../Archive/PrePivot_Building_Architecture.md`](../Archive/PrePivot_Building_Architecture.md). Do not implement anything from that archive.
+> **Architecture model:** Orbital Delivery (post-pivot, canon per ADR-0009 + ADR-0010). All non-initial **READY buildings** arrive from orbit via drop pods and land already-operational — there is **no local building-construction phase and no per-building production queue**. Worker may later **level terrain** and **install delivered foundation stock**; that is site preparation, not constructing the building. The pre-pivot local-production/local-construction architecture (Barracks, Assembly Yard, `UGP_ProductionComponent`, `UGP_ConstructionComponent`, construction sites, rally points) has been **archived** to [`../Archive/PrePivot_Building_Architecture.md`](../Archive/PrePivot_Building_Architecture.md). Do not implement anything from that archive.
 
 ## Class Hierarchy
 
@@ -95,7 +95,7 @@ There is no `BuildTime`, no `AllowedProductions` — buildings do not build othe
 
 ## Building Lifecycle — Orbital Procurement
 
-**Units and READY buildings** besides initial MainBase arrive via DropPod. Player does not Worker-construct. Wall **Package** arrives from orbit to MainBase; **`AGP_Wall` segments are not DropPod payloads** — Build Wall instantiates them from inventory (GP-S42C / BuildGrid).
+**Units and READY buildings** besides initial MainBase arrive via DropPod. Player does not Worker-construct the building. Worker later prepares the site (level + install delivered foundation). Wall **Package** arrives from orbit to MainBase; **`AGP_Wall` segments are not DropPod payloads** — Build Wall instantiates them from inventory (GP-S42C / BuildGrid). **Wall/foundation interaction is DESIGN REQUIRED.**
 
 ```
 READY buildings:
@@ -110,7 +110,7 @@ Build Wall → consume N inventory → spawn N AGP_Wall on the surface (no DropP
 
 Units use a **separate** Unit Delivery path to MainBase Unit Drop Zone (manifest + transport slots) — see TDD/14 / GDD/10. Buildings do **not** land on the Unit Drop Zone. Wall Package lands at MainBase; wall segments do not ride pods.
 
-Building deploy still uses grid/FoW validation when those systems exist (TDD/06 grid + TDD/15). EffectsOnPlacement apply on landing.
+Building deploy still uses grid/FoW validation when those systems exist (TDD/06 grid + TDD/15). After the Terrain stage, deploy also requires **leveled terrain + intact per-cell foundation** for normal orbital buildings (TDD/16). EffectsOnPlacement apply on landing.
 
 MVP buildings list:
 
@@ -502,6 +502,7 @@ Deprecated (pre-pivot, do not use): `GP.Building.Type.Barracks`, `GP.Building.Ty
 - **NavMesh MVP:** project footprint center with extent `(CellSize/2, CellSize/2, 300)`. Success → navigable. Fail + WorldStatic ground hit → `NotNavigable`. Fail + empty void → allow (isolated contract locations). Validation runs before the new building's NavigationObstacle exists.
 - **World collision:** raised footprint box vs WorldStatic/WorldDynamic, ignoring buildings/pods/pawns. Not structure-vs-structure SoT.
 - **FoW placement validation deferred to FoW integration slice.**
+- **Foundation / leveled-terrain placement (ADR-0010):** **NOT IMPLEMENTED.** Future deploy validation for normal orbital buildings must require every footprint cell to be sufficiently leveled and to have intact installed foundation (GDD/13, TDD/16). Foundation state is per BuildGrid cell. Initial MainBase uses an authored starter site (implementation deferred). **Wall/Foundation interaction = DESIGN REQUIRED.**
 - **Walls deferred:** no `AGP_Wall`, drag, A*, mounting, wall-specific clearance.
 
 ### UGP_BuildGridSubsystem (UWorldSubsystem)

@@ -36,6 +36,11 @@ Current-compatible deviations from the older pseudocode:
   gameplay grid is 100 cm / 10 Hz / 2000×2000;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
   relevance, minimap, and the full production HUD remain later FoW slices.
+- **Voxel terrain integration is NOT reopened here.** World FoW presentation was finalized against
+  effectively planar terrain and a fixed ground-projection assumption. After Voxel Plugin deformation
+  ships, world FoW presentation must follow the actual terrain surface. That work belongs to the
+  Terrain / Voxel stage (TDD/16). FoW gameplay visibility grid stays independent of terrain rendering
+  unless a later design adds terrain occlusion.
 
 ## Hard Rules
 
@@ -416,6 +421,7 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
 - Vision-cone direction (omni 360° у MVP).
 - Height / elevation vision effects.
 - High-ground vision bonus.
+- Reopening the current planar world-FoW overlay in this FoW stage (terrain-surface adaptation is a Terrain/Voxel integration task, TDD/16).
 
 ## References
 
@@ -423,6 +429,7 @@ Per [`ADR-0002`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md) — al
 - Selection rules (FoW interactions) — [`04_RTS_Selection_And_Commands`](04_RTS_Selection_And_Commands.md).
 - Combat (LOS + FoW filter) — [`04_RTS_Selection_And_Commands`](04_RTS_Selection_And_Commands.md) §Detailed Attack Command Rules.
 - Orbital Delivery (drop zone gating) — [`14_Orbital_Delivery`](14_Orbital_Delivery.md).
+- Voxel terrain / FoW surface integration (later) — [`16_Voxel_Terrain_And_Foundations`](16_Voxel_Terrain_And_Foundations.md).
 - UI / MVVM (minimap, FoW VM) — [`12_UI_Architecture`](12_UI_Architecture.md).
 - Multiplayer relevance — [`03_Multiplayer_Architecture`](03_Multiplayer_Architecture.md).
 - Data assets — [`10_Data_Assets`](10_Data_Assets.md), [`../Architecture_Decisions/ADR_0002_Data_Driven_First`](../Architecture_Decisions/ADR_0002_Data_Driven_First.md).

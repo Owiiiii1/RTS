@@ -17,6 +17,7 @@ Gameplay-canonical документація GrimProtocol. Без implementation 
 - [10_Orbital_Delivery](10_Orbital_Delivery.md) — orbital drop pod mechanic, two-state resource, order flow, drop zone rules.
 - [11_Fog_of_War](11_Fog_of_War.md) — 3-level FoW (Unexplored / Explored / Visible), sight sources, selection / combat / drop interactions.
 - [12_Session_Tuning_And_Calibration](12_Session_Tuning_And_Calibration.md) — **production operational doc.** Session params, debug cheats, balance calibration workflow, canonical post-pivot core loop, reward loop, player flow states, parameters table, playtest metrics, hot/warm/cold change rules, ownership matrix.
+- [13_Terrain_Engineering_And_Foundations](13_Terrain_Engineering_And_Foundations.md) — destructible voxel terrain, Worker leveling / site prep, per-cell foundation slabs, building placement dependency.
 - [Lore_Setting](Lore_Setting.md) — EREBUS-9, Ferronite, SWARM ecology, visual style, hard lore bans.
 - [First_Playable_Match](First_Playable_Match.md) — end-to-end player story, singleplayer + PvP, без gaps.
 - [Backlog](Backlog.md) — validated ideas після MVP.
@@ -43,4 +44,7 @@ Gameplay-canonical документація GrimProtocol. Без implementation 
 | `06_Resources` | `07_Resource_Architecture` |
 | `07_Match_Flow` | `03_Multiplayer_Architecture` |
 | `09_UI_UX` | (UI TDD — TBD) |
+| `10_Orbital_Delivery` | `14_Orbital_Delivery` |
+| `11_Fog_of_War` | `15_Fog_of_War` |
+| `13_Terrain_Engineering_And_Foundations` | `16_Voxel_Terrain_And_Foundations` |
 | `Lore_Setting` | (no direct TDD; informs visual / asset pipeline) |

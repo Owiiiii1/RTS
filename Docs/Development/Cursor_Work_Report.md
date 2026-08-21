@@ -1,106 +1,104 @@
-# Cursor Work Report — Fog of War World Visualization
+# Cursor Work Report — Voxel Terrain / Foundation Documentation
 
 ## Status
 
-**FOW_WORLD_VISUALIZATION_FINALIZED_READY_FOR_MERGE**
+**VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW**
 
 **NOT MERGED.**
 
-## Branch / base
+## Branch / base / head
 
-- Branch: `feature/gp-fow-world-visualization`
-- Exact base: `origin/main` @ `7847c3ce27a571d92f7629369cc8d361bd981387`
+- Branch: `docs/gp-voxel-terrain-foundations`
+- Base: `origin/main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` (`Finalize FoW world visualization after operator acceptance.`)
+- Head: branch tip of `docs/gp-voxel-terrain-foundations` (`Document destructible voxel terrain, Worker leveling, and per-cell foundations.`)
 
-## Operator acceptance
+## New canonical design decisions
 
-The operator accepted the current FoW implementation. This slice is finalized with **no further visual or architecture changes**.
+- Terrain is no longer conceptually immutable. Gameplay may deform it via a **generic** location + data-driven radius/depth/strength/shape contract. Not tied to one weapon class.
+- Intended backend: **Voxel Plugin**. Exact version/edition/API is **not** decided; later technical spike.
+- Deformation is **server-authoritative**; clients reconstruct; clients do not author gameplay destruction. Replication mechanism is **spike-required**.
+- Worker gains **terrain leveling / site preparation** in addition to mine/transport/repair. Worker does **not** construct the READY building.
+- Canonical sequence for normal buildings: raw terrain → level → install foundation coverage → deploy orbital READY building (still DropPod, still immediately operational).
+- Foundation material uses **Wall Package procurement philosophy** (Orbital spend once → MainBase inventory → consume on install). Quantity/cost/footprint are **TBD** (do **not** copy 5).
+- Foundation state is **per BuildGrid cell**. A physical slab may cover multiple cells. Partial destruction is canonical.
+- Initial MainBase remains the authored starter-site exception.
+- BuildGrid stays the discrete planning/occupancy/foundation grid. Voxel terrain stays continuous geometry. Do not merge them.
+- Current world FoW stays as merged planar/fixed-projection presentation. Terrain-surface FoW adaptation is a **required Terrain-stage integration task**, not a FoW reopen.
 
-## Final active renderer and canonical values
+## Roadmap insertion
 
-- Renderer = **PerCellBlurredQuadRenderer**
-- Algorithm = `PerCellFeatheredQuads`
-- CellSize = **100 cm**
-- Dims = **2000 × 2000**
-- Interval = **0.10 sec (10 Hz)**
-- PostProcessActive = **false**
-- MaskProjectionActive = **false**
-- Mask model = **None**
-- Unexplored = black tiles; Explored = dark grey tiles; Visible = no tile
-- neighbor-aware side feather + rounded exposed outer corners
-- presentation-only temporal fade (reveal 0.18 s / hide 0.24 s)
-- enemy hiding and health-bar leak prevention remain LocalFoW-based
+FoW world visualization is **MERGED / operator accepted**, not pending.
 
-## Exact tests / results
+Reconciled execution order:
 
-| Command | Result |
-| --- | --- |
-| `gp.FoW.RunWorldVisualizationContractTest` | **PASS** `Complete Failures=0 Cancelled=false` |
-| `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS** `Complete Failures=0 Cancelled=false` |
-| `gp.FoW.RunRuntimeFoundationContractTest` | **PASS** `Complete Failures=0 Cancelled=false` |
-| `gp.Combat.RunHealthBarContractTest` | **PASS** `Complete Failures=0 Cancelled=false` |
-| `gp.Combat.RunTeamColorContractTest` | **PASS** `Complete Failures=0 Cancelled=false` |
+1. Production UI foundation / HUD
+2. Minimap + FoW minimap presentation
+3. **NEW — Terrain / Voxel / Foundation system**
+   - 3A. Voxel Plugin technical spike + authoritative terrain deformation foundation
+   - 3B. Worker terrain leveling / site-preparation loop
+   - 3C. Orbital Foundation Slab procurement + MainBase inventory + installation
+   - 3D. Building placement migration to leveled + intact foundation requirement
+   - 3E. navigation + current world-FoW terrain-surface integration
+4. RTS AI Opponent
+5. Remaining bounded core-loop gaps (Stop, Worker Repair, Logistics Hub storage-cap bonus, necessary feedback)
+6. Building-system design gate (Wall/foundation rule, Wall surface, connection, Wall Turret, Sell/Demolish)
+7. Steam multiplayer product flow
+8. Match completion product flow
+9. SWARM design/reconciliation gate
+10. SWARM implementation
+11. Full MVP validation/stabilization
 
-Full project suite **not run** (not requested unless a focused contract failed).
+Reason: terrain/foundation must exist before AI and final building/wall design because both depend on construction-site rules and navigation.
 
-## Exact build results
+## Documents created
 
-| Target | Result |
-| --- | --- |
-| GPEditor Win64 Development + UHT | **Succeeded** |
-| GP Win64 Development | **Succeeded** (`GP.exe`) |
-| GP Win64 Shipping | **Succeeded** (`GP-Win64-Shipping.exe`) |
+- `Docs/GDD/13_Terrain_Engineering_And_Foundations.md`
+- `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
+- `Docs/Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md`
 
-## Final audit
+## Documents updated
 
-- LocalFoW (`UGP_LocalFoWComponent`) remains the only trusted client FoW source; it is filled only by owning-client RPC `Client_ReceiveFoWPresentationUpdate`.
-- Gameplay authority is unchanged (`UGP_FogOfWarComponent` on GameState; 100 cm / 2000×2000 / 0.10 s).
-- Enemy presentation hiding remains LocalFoW-based (`UGP_LocalFoWUnitPresentationSubsystem::ShouldPresentUnitForLocalPlayer`).
-- Health bars cannot leak through hidden FoW (`SetFoWPresentationAllowed` / `IsComposedHealthBarVisible`).
-- No post-process FoW path is active (`IsPostProcessActive() == false`).
-- No fullscreen mask renderer is active (`IsMaskProjectionActive() == false`, mask model `None`).
-
-## Exact changed files
-
-Relative to `origin/main` @ `7847c3ce27a571d92f7629369cc8d361bd981387`:
-
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Claude_Tasks/GP-FoW-World-Visualization.md`
-- `Docs/Development/Claude_Tasks/README.md`
-- `Docs/Development/Cursor_Work_Report.md`
-- `Docs/Development/DOCUMENTATION_INDEX.md`
-- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
-- `Docs/TDD/12_UI_Architecture.md`
+- `Docs/GDD/02_Core_Gameplay_Loop.md`
+- `Docs/GDD/04_Units.md`
+- `Docs/GDD/05_Buildings.md`
+- `Docs/GDD/10_Orbital_Delivery.md`
+- `Docs/GDD/README.md`
+- `Docs/TDD/04_RTS_Selection_And_Commands.md`
+- `Docs/TDD/06_Building_Architecture.md`
+- `Docs/TDD/14_Orbital_Delivery.md`
 - `Docs/TDD/15_Fog_of_War.md`
-- `GP/Source/GPEditor/GPEditor.Build.cs`
-- `GP/Source/GPRuntime/Private/Combat/GPCombatPresentationComponent.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPFoWRuntimeFoundationContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPHealthBarContractTest.cpp`
-- `GP/Source/GPRuntime/Private/FogOfWar/GPFogOfWarComponent.cpp`
-- `GP/Source/GPRuntime/Private/FogOfWar/GPLocalFoWComponent.cpp`
-- `GP/Source/GPRuntime/Private/Presentation/GPHealthBarComponent.cpp`
-- `GP/Source/GPRuntime/Private/Presentation/GPLocalFoWUnitPresentationSubsystem.cpp`
-- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
-- `GP/Source/GPRuntime/Public/Combat/GPCombatPresentationComponent.h`
-- `GP/Source/GPRuntime/Public/FogOfWar/GPFogOfWarComponent.h`
-- `GP/Source/GPRuntime/Public/Presentation/GPHealthBarComponent.h`
-- `GP/Source/GPRuntime/Public/Presentation/GPLocalFoWUnitPresentationSubsystem.h`
-- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
-- `GP/Source/GPUIRuntime/Private/Debug/GPFoWClientPresentationFoundationContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPFoWWorldVisualizationContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Presentation/GPFoWPresentationRaster.cpp`
-- `GP/Source/GPUIRuntime/Private/Presentation/GPFoWWorldPresentationSubsystem.cpp`
-- `GP/Source/GPUIRuntime/Private/Widgets/GPFoWWorldOverlayWidget.cpp`
-- `GP/Source/GPUIRuntime/Public/Presentation/GPFoWPresentationRaster.h`
-- `GP/Source/GPUIRuntime/Public/Presentation/GPFoWWorldPresentationSubsystem.h`
-- `GP/Source/GPUIRuntime/Public/Widgets/GPFoWWorldOverlayWidget.h`
+- `Docs/TDD/README.md`
+- `Docs/Architecture_Decisions/README.md`
+- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/README.md`
 
-## Protected content confirmation
+## Unresolved design questions preserved as TBD
 
-Not modified on this branch:
+- Leveling zone sizing UX (fixed footprint vs drag rectangle)
+- Target leveling elevation algorithm
+- Flatness / slope tolerance
+- Leveling duration / speed
+- Worker movement pattern and interrupt/resume
+- Foundation package quantity
+- Foundation package cost
+- Exact slab footprint
+- Exact blast crater radius / depth / terrain damage formula
+- Voxel Plugin version / API
+- Multiplayer voxel replication mechanism
+- Dynamic navigation strategy
+- Surviving-building behavior after foundation loss
+- Whether Walls require foundation
+- Exact starter-foundation implementation for initial MainBase
 
-- `GP/Config/*`
-- maps / Blueprints / DataAssets
-- VFX / Tools
-- operator-local LongRange UnitDefinition sight radius 2000
+## Documentation-only confirmation
+
+- Documentation-only slice.
+- No runtime (`GP/Source`) changes.
+- No `GP/Content`, `GP/Config`, `Tools`, maps, Blueprints, DataAssets, or authored-content changes.
+- No tests. No Unreal builds.
+
+## Merge
 
 **NOT MERGED.**

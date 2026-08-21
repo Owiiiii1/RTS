@@ -11,13 +11,17 @@ Planetary Ferronite → containers → launch → Orbital Ferronite
 → orbital procurement → orbital delivery → deployed asset
 ```
 
-**NO:** barracks/factory production, Worker Build ability, local construction queue, local unit production.
+**NO:** barracks/factory production, Worker constructing the READY building, local construction queue, local unit production.
+
+Worker **does** later level terrain and install already-delivered Foundation Slab material. That is site preparation, not building construction. See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
 
 Цей doc описує **гравецьке відчуття і правила**. Engineering — [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md).
 
 > **Owner refinement (2026-08-08):** Unit delivery and building procurement are **two flows** sharing one DropPod/rocket presentation. Units land at the MainBase **Unit Drop Zone** (no free world placement). Buildings are **purchased into orbital inventory (READY)** then **deployed later** via ghost placement — spend happens at purchase, not at placement confirm.
 >
 > **Owner refinement (2026-08-18, GP-0305R):** Wall is a **third flow**. Buy a **Wall Package of 5** → one rocket to MainBase → MainBase Wall inventory (max 5). **Build Wall** places from that inventory. Not READY. Not per-segment pods. See [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).
+>
+> **Owner refinement (2026-08-21, ADR-0010):** Foundation Slab material is a **fourth orbital flow** with Wall Package philosophy (spend once → one delivery to MainBase inventory → install from stock, no second spend). Quantity/cost/footprint are **TBD** and must **not** copy Wall Package `5`. Normal READY building deploy additionally requires leveled terrain + intact per-cell foundation.
 
 ## Two-State Resource (Recap)
 
@@ -32,10 +36,10 @@ Per [`06_Resources`](06_Resources.md):
 
 | Rule | Meaning |
 | --- | --- |
-| No local production | Nothing is trained or Worker-constructed on the planet. Wall segments are placed from already-delivered package stock (not a new local production path). |
-| Initial exception only | MainBase + **2 Workers** pre-deployed. |
-| All else from orbit | Additional Workers, Salvage Walkers, Logistics Hub, Turrets, Wall Packages, Wall-mounted Turrets — orbital only. Wall **material** arrives as a package; segments are not individual pods. |
-| Shared delivery actor | Units, READY buildings, and Wall **Package** use the **same** MVP DropPod/rocket visual family. `AGP_Wall` segments do **not**. |
+| No local production | Nothing is trained or Worker-constructed as the building itself on the planet. Wall segments and foundation slabs are placed/installed from already-delivered package stock (not a new Barracks path). |
+| Initial exception only | MainBase + **2 Workers** pre-deployed. MainBase uses an authored starter site / starter foundation (implementation deferred). |
+| All else from orbit | Additional Workers, Salvage Walkers, Logistics Hub, Turrets, Wall Packages, Foundation Slab packages, Wall-mounted Turrets — orbital only. Wall **material** and Foundation **material** arrive as packages; segments/cells are not individual pods. |
+| Shared delivery actor | Units, READY buildings, Wall **Package**, and Foundation Slab **package** use the **same** MVP DropPod/rocket visual family. `AGP_Wall` segments and installed foundation cells do **not**. |
 
 ## Procurement Flows
 
@@ -44,8 +48,9 @@ Per [`06_Resources`](06_Resources.md):
 | **A. Unit Delivery** | On Confirm Order (manifest) | Fixed: MainBase **Unit Drop Zone** | 1..N units packed by **Transport Slots** |
 | **B. Building Procurement + Deployment** | On **Purchase** → READY inventory | Later: ghost placement → DropPod to chosen cell | Exactly **one** READY building item |
 | **C. Wall Package** | On **Buy Wall Package** | None at purchase. Later **Build Wall** from MainBase inventory | One rocket: **5** segments into MainBase Wall stock (max 5) |
+| **D. Foundation Slab package** | On **Buy Foundation Slab package** (future) | None at purchase. Later Worker **install** from MainBase inventory | One delivery: **quantity TBD** foundation stock (do **not** copy 5) |
 
-Buildings (Hub / Turret / WallTurret) do **not** land in the Unit Drop Zone. Units do **not** use free world placement for normal orders. Wall Package lands at **MainBase** (not a grid ghost, not READY).
+Buildings (Hub / Turret / WallTurret) do **not** land in the Unit Drop Zone. Units do **not** use free world placement for normal orders. Wall Package and Foundation Slab package land at **MainBase** (not a grid ghost, not READY). Normal building deploy requires intact per-cell foundation when the Terrain stage exists. **Wall/foundation rule = DESIGN REQUIRED.**
 
 ---
 
@@ -138,7 +143,7 @@ Authoritative MVP representation (conceptual): `(BuildingType / DropDefinition, 
 
 1. Player clicks a READY item → **building deployment mode**.
 2. Semi-transparent building ghost follows cursor; footprint shown; valid/invalid visuals.
-3. Final FoW/grid rules layer in when those systems exist.
+3. Final FoW/grid/foundation rules: **every** footprint cell must be sufficiently leveled and have intact installed foundation (plus occupancy / existing checks). Initial MainBase excepted.
 4. **LMB** on valid location: consume **one** READY item → schedule DropPod to that location. **No second Orbital charge.**
 5. **RMB / Esc:** cancel placement; item stays READY; no refund (purchase already completed).
 
@@ -159,6 +164,20 @@ Building pods use player-confirmed placement. Same DropPod/rocket actor/visual a
 5. **Build Wall** (separate action) drags a path limited by stock; confirm consumes N and places N `AGP_Wall` immediately. No second Orbital spend. No READY. No extra rocket.
 
 Cannot repurchase at stock 5 or while a package is in flight. MainBase destroyed → remaining stock is lost.
+
+---
+
+## D — Foundation Slab Package
+
+Same procurement philosophy as Wall Package. **Do not copy quantity 5.**
+
+1. Player spends Orbital Ferronite once to order a Foundation Slab package (**cost TBD**, data-driven).
+2. One orbital delivery brings foundation stock to MainBase inventory (**quantity TBD**).
+3. Worker installs already-delivered stock onto **leveled** BuildGrid cells. Installation does **not** spend Orbital again.
+4. Installed state is tracked **per BuildGrid cell**. One physical slab/panel may cover multiple cells (exact footprint **TBD**; ~8 cells is an owner **example** only).
+5. Placement validation cares about per-cell intact coverage, not which original package supplied the cell.
+
+Exact command/UI names are **future / DESIGN**. See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
 
 ---
 
@@ -196,7 +215,8 @@ Authority spawn occurs **once** at deterministic landing-complete. Impact FX can
 | **Logistics Hub** | Purchase → READY → deploy ghost | Cap / logistics expansion |
 | **Defensive Turret** | Purchase → READY → deploy ghost | Static defense |
 | **Wall Package** | Purchase → one rocket to MainBase → stock 5 | Then **Build Wall** from inventory |
-| **Wall-mounted Turret** | Purchase → READY → deploy on wall | Mounted defense |
+| **Foundation Slab package** | Purchase → one delivery to MainBase → stock **TBD** | Then Worker **install** from inventory |
+| **Wall-mounted Turret** | Purchase → READY → deploy on wall | Mounted defense; depends on Wall/foundation gate |
 | **MainBase** | Initial only | Not purchased |
 | **Ferronite Deposit** | Environment | Not purchased |
 
@@ -224,7 +244,7 @@ No free-world FoW click for normal unit drops.
 | Constraint | Validation |
 | --- | --- |
 | READY inventory | Exactly one READY item of requested type available |
-| Placement | Grid / footprint / blockers (FoW when available) |
+| Placement | Grid / footprint / blockers / FoW; **leveled terrain + intact per-cell foundation** for normal buildings |
 | Spend | **None at deploy** — already paid at purchase |
 
 Invalid → notify + no inventory consume / no second spend.
@@ -252,9 +272,10 @@ Drop pod **telegraphs** (visible descent, audio, minimap, 2–3 s). Window of vu
 2. Workers mine → containers → Threat ↑.
 3. Launch → OrbitalFerronite + FerroniteScore ↑; Threat ↓.
 4. **Units:** fill manifest → Confirm → spend → pod → Unit Drop Zone → control units.
-5. **Buildings:** Purchase → READY → later ghost deploy → pod → building operational.
+5. **Buildings:** Purchase → READY → later ghost deploy onto prepared foundation → pod → building operational.
 6. **Walls:** Buy Wall Package → one rocket to MainBase → Build Wall from inventory (no READY, no per-segment rocket).
-7. Defend / expand / score race.
+7. **Foundation:** Buy Foundation Slab package → delivery to MainBase → Worker install from inventory.
+8. Defend / expand / score race.
 
 See [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md).
 
@@ -272,6 +293,8 @@ See [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md).
 3. Exact Unit Drop Zone component vs scene socket naming.
 4. ~~Wall drag-build vs single READY segment UX~~ — **resolved GP-0305R:** package of 5 + inventory Build Wall.
 5. Whether unit-cap check also reserves slots during in-flight pods (recommend count at confirm).
+6. Foundation package cost, quantity, slab footprint, and install UX (**TBD**; ADR-0010).
+7. Whether Walls require foundation (**DESIGN REQUIRED** at Building System design gate).
 
 ## Out of MVP
 
@@ -285,6 +308,7 @@ See [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md).
 - Core Loop — [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md)
 - Units — [`04_Units`](04_Units.md)
 - Buildings — [`05_Buildings`](05_Buildings.md)
+- Terrain / foundations — [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md)
 - Resources — [`06_Resources`](06_Resources.md)
 - FoW (building deploy / future validation) — [`11_Fog_of_War`](11_Fog_of_War.md)
 - Engineering — [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md)

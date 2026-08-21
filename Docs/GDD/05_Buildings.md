@@ -13,11 +13,13 @@
 
 Шість building entity-типів у MVP (4 player-orderable + 1 wall-mounted variant + 1 environment). Без research, без supply, без upgrade tiers, без faction-unique buildings.
 
-**Pivot note (2026-05-16):** усе крім Main Base і Ferronite Deposit **originates from orbit** (per ADR-0009 і [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Worker не будує локально. "Assembly Yard" → "Logistics Hub". Wall **Package** uses DropPod; `AGP_Wall` segments are placed from MainBase inventory (GP-0305R).
+**Pivot note (2026-05-16):** усе крім Main Base і Ferronite Deposit **originates from orbit** (per ADR-0009 і [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Worker не **конструює** будівлю локально. Worker **does** later level terrain and install delivered foundation material ([`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md)). "Assembly Yard" → "Logistics Hub". Wall **Package** uses DropPod; `AGP_Wall` segments are placed from MainBase inventory (GP-0305R).
 
 **Owner refinement (2026-08-08):** Most buildings are **Purchased** into **orbital READY inventory** (Orbital spend at purchase), then **Deployed** later via ghost placement (DropPod to confirmed location; **no second spend**). Buildings do **not** land in the MainBase Unit Drop Zone (that pad is for **units** only). Shared DropPod/rocket visual with unit deliveries.
 
 **Owner refinement (2026-08-18, GP-0305R):** Wall is **not** a READY building. Player buys a **Wall Package of 5** (one rocket to MainBase). **Build Wall** then places already-delivered segments from MainBase inventory (max 5, no stacking). No per-segment rocket. No second Orbital spend. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md) and [`../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md`](../Development/Claude_Tasks/GP-0305R_Wall_Package_Reconciliation.md).
+
+**Owner refinement (2026-08-21, ADR-0010):** Normal player-deployed buildings require **leveled terrain + intact per-cell foundation** before DropPod deploy. Foundation stock uses Wall Package philosophy (orbit → MainBase inventory → consume on install; quantity/cost/footprint **TBD**, not automatically 5). Initial MainBase is the authored starter-site exception. **Wall/Foundation interaction = DESIGN REQUIRED** at the Building System design gate.
 
 Per Pillar 2 (Engineer, Not Soldier) і Pillar 7 (Simple Machines, Strong Readability) з [`01_Game_Pillars`](01_Game_Pillars.md). Усі buildings — industrial / engineering visual identity. Жодних military bunkers, fortress towers, або command centers з військовою aesthetic.
 
@@ -50,13 +52,19 @@ Footprint у DA: `UGP_BuildingDefinition.FootprintCells : FIntPoint`.
 
 ### Placement Validation
 
-Кожна спроба drop-нути будівлю проходить cell-by-cell validation на сервері:
+Кожна спроба drop-нути **нормальну** orbital будівлю проходить cell-by-cell validation на сервері:
 
 1. **Cell occupancy:** усі N × M cells вільні (не зайняті іншою будівлею).
 2. **Clearance:** для structures з `ClearanceCells > 0` — навколо footprint у `ClearanceCells` радіусі (Chebyshev distance) має бути free space.
-3. **NavMesh navigable:** під footprint є walkable surface.
+3. **NavMesh navigable:** під footprint є walkable surface (dynamic terrain nav strategy is later TECH-SPIKE).
 4. **FoW visible:** drop target у Actively Visible зоні (per [`11_Fog_of_War`](11_Fog_of_War.md)).
-5. **Resources OK:** player має `OrbitalFerronite >= Cost`.
+5. **Leveled terrain:** кожна footprint cell sufficiently level (tolerance **TBD**; grey/yellow site-prep language in [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md)).
+6. **Intact foundation:** кожна footprint cell has installed, undestroyed foundation coverage. Foundation is **per BuildGrid cell**, not one all-or-nothing slab actor.
+7. **Resources OK:** player має READY inventory (Orbital already spent at Purchase).
+
+Initial MainBase is **not** gated on player-leveled foundation (authored starter site; implementation deferred).
+
+**Wall/Foundation interaction = DESIGN REQUIRED** at the Building System design gate. Do not assume Wall segments use this foundation rule.
 
 Cells, що знаходяться під будівлями — **blocked для unit pathing** (NavMesh modifier).
 
@@ -67,7 +75,7 @@ Cells, що знаходяться під будівлями — **blocked дл�
 - Footprint reticle (зелений valid / червоний invalid) over the cells, які будуть зайняті.
 - Clearance zone — outline тонкою лінією навколо footprint (для wall — 2 cells exclusion).
 
-Grid overlay прихований за default — з'являється тільки при drop-targeting.
+Grid overlay прихований за default — з'являється тільки при drop-targeting **and** (later) Level Terrain site-prep mode. Leveling overlay uses **GREY** (already level) / **YELLOW** (needs leveling) per cell. Zone sizing UX is **DESIGN REQUIRED**.
 
 ## Architectural Note: Building-as-Pawn
 
@@ -109,6 +117,7 @@ Grid overlay прихований за default — з'являється тіл�
 ### Behavior
 
 - Гравець з'являється на map з 1 Main Base + N стартових Workers (per `DA_GP_Faction_Default.StartingUnits`).
+- Initial MainBase begins on an authored / prepared starting site / starter foundation. Player is **not** required to level terrain first. Exact starter-foundation implementation is **deferred** ([`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md)).
 - **Не виробляє Workers.** Workers arrive via orbital drop (per [`10_Orbital_Delivery`](10_Orbital_Delivery.md)).
 - Приймає Ferronite drop-off від Workers (див. [`06_Resources`](06_Resources.md) §Container System). Raw drop-off піднімає `AGP_GameState.FerroniteThreatValue` (stored-at-base stock). Container fills → launch до орбіти → `GE_GP_AddOrbital` (+`OrbitalFerronite`) + `GE_GP_AddScore` (+`FerroniteScore`); launch знижує `FerroniteThreatValue`.
 - Якщо Main Base знищено → **immediate annihilation loss** (за `bAnnihilationCountsAsWin`, default true). Без MainBase containers ship не може, нова Orbital Ferronite не надходить → no path до victory. Opponent wins. Деталі — [`08_Win_Lose_Conditions`](08_Win_Lose_Conditions.md).
@@ -140,7 +149,7 @@ Landing capsule / mobile command rig. Жовто-чорні danger striping, п�
 ### Behavior
 
 - Player **Purchases** Logistics Hub (Orbital spend → READY inventory).
-- Later **Deploys** READY via ghost → DropPod (2–3 s; **no second spend**).
+- Later **Deploys** READY via ghost onto **leveled + intact foundation cells** (when the Terrain stage exists) → DropPod (2–3 s; **no second spend**).
 - Building operational on landing; unit-cap / container bonuses apply.
 - +5 MaxUnits available instantly.
 - +N MaxContainerCount applied to owning MainBase's StorageComponent.
@@ -167,6 +176,8 @@ Modular industrial logistics node: heavy crane gantry, exposed conveyor system, 
 ### Design Intent
 
 Wall — це **захисна периметральна структура**. Замикає choke points, формує defensive corridor, hosts wall-mounted turrets для economy fortification. Без walls — open-field SWARM rush легко добирається до Workers. Wall — це **інженерне рішення** проти organic threat: ти не оборонюєшся армією, ти будуєш периметр.
+
+**`Wall/Foundation interaction = DESIGN REQUIRED at Building System design gate.`** The generic “buildings require foundation” rule applies to normal orbital buildings, not silently to Wall. Wall-mounted Turret depends on that gate.
 
 ### Definition
 
@@ -304,7 +315,7 @@ Defensive Turret — primary oborona проти SWARM waves і opponent harass. 
 ### Behavior
 
 - Player **Purchases** Defensive Turret (Orbital spend → READY).
-- Later **Deploys** via ghost (typically choke / deposit / contested) → DropPod; **no second Orbital charge**.
+- Later **Deploys** via ghost (typically choke / deposit / contested) onto prepared foundation (when the Terrain stage exists) → DropPod; **no second Orbital charge**.
 - FoW/grid validation applies at **deploy** when those systems exist.
 - Drop pod descent telegraph.
 - Static — після приземлення не рухається.
@@ -401,23 +412,33 @@ Engineering implementation, RPC contracts, refund formula, replication rules —
 
 ## Deployment Model
 
-MVP — **orbital procurement** (no local construction):
+MVP — **orbital procurement** (no local building construction):
 
 ### Units (separate flow)
 
 Unit Order manifest → MainBase **Unit Drop Zone**. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md) / [`04_Units`](04_Units.md).
 
+### Site preparation (Worker; not constructing the building)
+
+See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md):
+
+1. Level Terrain on a BuildGrid-aligned zone (grey / yellow per cell).
+2. Install delivered Foundation Slab stock **per cell**.
+3. Only then deploy a normal READY building.
+
 ### Buildings
 
 1. Open Building Order UI.
-2. **Purchase** Logistics Hub / Defensive Turret / Wall Turret → `GE_GP_SpendOrbital` → READY inventory++. **Not Wall** — Wall uses Wall Package (flow C).
+2. **Purchase** Logistics Hub / Defensive Turret / Wall Turret → `GE_GP_SpendOrbital` → READY inventory++. **Not Wall** — Wall uses Wall Package (flow C). **Not foundation** — Foundation Slab package is a separate inventory flow.
 3. Click READY → **deployment mode** (semi-transparent ghost + footprint; valid/invalid tint).
-4. **LMB** valid: consume one READY → DropPod → building operational.
+4. **LMB** valid (occupancy + existing checks + leveled + intact foundation for normal buildings): consume one READY → DropPod → building operational.
 5. **RMB / Esc:** cancel; READY unchanged; no refund.
 
 Server: no double-consume READY; no duplicate spawn; **no Orbital charge on deploy**.
 
-Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md), [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md).
+Foundation destruction is **per cell**. Do not destroy an entire original slab because one cell was hit. Surviving-building-after-partial-foundation-loss is **DESIGN REQUIRED**.
+
+Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md), [`../TDD/14_Orbital_Delivery`](../TDD/14_Orbital_Delivery.md), [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
 
 **Eliminated** (pre-pivot): Worker channel-build, ConstructionComponent, construction sites.  
 **Superseded (2026-08-08):** immediate spend-on-placement for buildings. Canonical = Purchase→READY→Deploy.  
@@ -443,6 +464,7 @@ Server: no double-consume READY; no duplicate spawn; **no Orbital charge on depl
 - Building architecture (engineering) — [`../TDD/06_Building_Architecture`](../TDD/06_Building_Architecture.md).
 - Resource flow + Container System — [`06_Resources`](06_Resources.md).
 - Orbital Delivery System (drop mechanics) — [`10_Orbital_Delivery`](10_Orbital_Delivery.md).
+- Terrain / foundations — [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
 - Fog of War (sight source contribution, drop zone gating) — [`11_Fog_of_War`](11_Fog_of_War.md).
 - SWARM waves як defense trigger — [`03_Factions`](03_Factions.md), [`07_Match_Flow`](07_Match_Flow.md).
 - Pillars — [`01_Game_Pillars`](01_Game_Pillars.md).

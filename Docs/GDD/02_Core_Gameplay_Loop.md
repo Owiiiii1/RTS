@@ -1,12 +1,14 @@
 # Core Gameplay Loop
 
-> **Canonical model:** узгоджений з [ADR-0009](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md) (+ 2026-08-08 procurement refinement + 2026-08-18 GP-0305R). Non-initial units / READY buildings / Wall **material** originate **from orbit** (no local production / Worker construction). Units land at MainBase **Unit Drop Zone** (manifest + transport slots). Buildings: **Purchase → READY inventory → Deploy** (ghost). Walls: **Buy Wall Package (5) → one rocket to MainBase → Build Wall from inventory**. `AGP_Wall` segments are **not** DropPod payloads. Shared DropPod/rocket for units, READY buildings, and Wall Package. Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md); Ferronite — [`06_Resources`](06_Resources.md); будівлі — [`05_Buildings`](05_Buildings.md).
+> **Canonical model:** узгоджений з [ADR-0009](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md) (+ 2026-08-08 procurement refinement + 2026-08-18 GP-0305R + 2026-08-21 ADR-0010). Non-initial units / READY buildings / Wall **material** / **Foundation Slab material** originate **from orbit** (no local production / Worker-constructed buildings). Units land at MainBase **Unit Drop Zone** (manifest + transport slots). Buildings: **Purchase → READY inventory → Deploy** onto **leveled terrain + intact per-cell foundation**. Walls: **Buy Wall Package (5) → one rocket to MainBase → Build Wall from inventory**. `AGP_Wall` segments are **not** DropPod payloads. Shared DropPod/rocket for units, READY buildings, Wall Package, and Foundation Slab packages. Worker may **level terrain** and **install delivered foundation stock**; Worker does **not** manufacture the building. Деталі — [`10_Orbital_Delivery`](10_Orbital_Delivery.md), [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md); Ferronite — [`06_Resources`](06_Resources.md); будівлі — [`05_Buildings`](05_Buildings.md).
 
 ```
 Mine → Containers → Launch → OrbitalFerronite (+ Score)
   → Unit Order (manifest / slots) → DropPod → Unit Drop Zone → control units
-  → Building Purchase → READY → Deploy ghost → DropPod → building
+  → Level terrain (Worker) → install delivered foundation (per BuildGrid cell)
+  → Building Purchase → READY → Deploy ghost onto intact foundation → DropPod → building
   → Buy Wall Package → one rocket to MainBase → Build Wall from inventory
+  → Buy Foundation Slab package → one delivery to MainBase → install from inventory
 ```
 
 Старт: MainBase + 2 Workers pre-deployed; `OrbitalFerronite = 0`.
@@ -17,8 +19,10 @@ Mine → Containers → Launch → OrbitalFerronite (+ Score)
 Land  ->  Scout  ->  Mine  ->  Carry to MainBase containers (raw Planetary Ferronite, +FerroniteThreatValue)
       ->  Container fills  ->  Launch to orbit (-FerroniteThreatValue, +OrbitalFerronite +FerroniteScore)
       ->  Units: manifest order (transport slots) -> DropPod -> MainBase Unit Drop Zone
-      ->  Buildings: Purchase -> READY inventory -> Deploy ghost -> DropPod -> placed building
+      ->  Site prep: Worker levels a BuildGrid zone, then installs delivered foundation cells
+      ->  Buildings: Purchase -> READY inventory -> Deploy ghost onto intact foundation -> DropPod -> placed building
       ->  Walls: Buy Wall Package (5) -> rocket to MainBase -> Build Wall from inventory
+      ->  Foundation: Buy Foundation Slab package -> delivery to MainBase -> install from inventory
       ->  Expand / Defend (SWARM scales with FerroniteThreatValue)
       ->  Win by Delivery Quota OR highest FerroniteScore at timer.
 ```
@@ -28,7 +32,7 @@ Land  ->  Scout  ->  Mine  ->  Carry to MainBase containers (raw Planetary Ferro
 ### Second-to-Second
 
 - Select units (LMB / marquee).
-- Issue command (move / attack / mine / repair / stop).
+- Issue command (move / attack / mine / repair / stop; later: Level Terrain / install foundation — exact tags TBD).
 - Read feedback (selection ring, command marker, damage numbers, score increment flash on container launch).
 - Adjust camera (pan, zoom, rotate).
 - Glance at HUD readouts: Match Timer, own FerroniteScore, opponent FerroniteScore, OrbitalFerronite, FerroniteThreatValue (swarm pressure).
@@ -42,7 +46,8 @@ Land  ->  Scout  ->  Mine  ->  Carry to MainBase containers (raw Planetary Ferro
   - **Units:** build transport-slot manifest → Confirm → DropPod to MainBase Unit Drop Zone.
   - **Buildings:** Purchase → READY inventory → later Deploy (ghost) → DropPod to chosen location (no second spend).
   - **Walls:** Buy Wall Package → one rocket to MainBase (stock 5, max 5) → later **Build Wall** from inventory (no READY, no second spend, no per-segment rocket).
-- Increase unit cap via Logistics Hub (purchase/deploy). Per Pillar 4 — capacity expansion є свідомий strategic spend.
+- Prepare construction sites: Worker **Level Terrain** on a BuildGrid-aligned zone (grey = already level, yellow = needs work), then install already-delivered **Foundation Slab** stock per cell. Worker still does **not** construct the building. See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
+- Increase unit cap via Logistics Hub (purchase/deploy onto prepared foundation). Per Pillar 4 — capacity expansion є свідомий strategic spend.
 - React to SWARM waves: position Salvage Walker, drop Defensive Turret / Walls біля threatened deposits / buildings; Worker repairs damaged assets (`GP.Command.Repair`).
 - Scout opponent (minimap awareness, mid-match push для denied expansion).
 - Balance **greed vs safety**: тримати raw Ferronite у containers = вищий `FerroniteThreatValue` = більше swarm pressure; швидко shipping = безпечніше + швидше score.
@@ -64,8 +69,10 @@ Land  ->  Scout  ->  Mine  ->  Carry to MainBase containers (raw Planetary Ferro
 | Order Drop | `GP.Command.OrderDrop` | `UGP_CommandComponent` → Order Menu | Yes |
 | Sell | `GP.Command.Sell` | `UGP_CommandComponent` | Yes |
 | Demolish | `GP.Command.Demolish` | `UGP_CommandComponent` | Yes |
+| Level Terrain / site prep | **Future** — exact tag/class TBD | Worker engineering command concept | Yes (when implemented) |
+| Install foundation | **Future** — exact tag/class TBD | Consume MainBase foundation stock onto leveled cells | Yes (when implemented) |
 
-Немає `GP.Command.Build` / `Produce` — local construction / production усунено (orbital delivery canon).
+Немає `GP.Command.Build` / `Produce` як local building construction / production (orbital delivery canon, ADR-0009). Worker **does** later level terrain and install delivered foundation material (ADR-0010). That is **not** constructing the READY building.
 
 ## Flow Diagram
 
@@ -117,15 +124,16 @@ AGP_PlayerController (local)
    - `FerroniteThreatValue -= launched` — shipping relieves SWARM pressure.
 8. Player витрачає `OrbitalFerronite` через `GE_GP_SpendOrbital`:
    - Unit Confirm (manifest total), or
-   - Building Purchase (READY inventory), or
-   - Wall Package purchase (one rocket to MainBase; stock 5).
-   Deploy of READY buildings and **Build Wall** from inventory do **not** spend again.
+  - Building Purchase (READY inventory), or
+  - Wall Package purchase (one rocket to MainBase; stock 5), or
+  - Foundation Slab package purchase (one delivery to MainBase; **quantity/cost TBD**, not automatically 5).
+   Deploy of READY buildings, **Build Wall**, and foundation **installation** from inventory do **not** spend Orbital again.
 
 Деталі — [`06_Resources`](06_Resources.md), [`10_Orbital_Delivery`](10_Orbital_Delivery.md).
 
 ## Acquisition Loop (Orbital Procurement — MVP)
 
-Заміняє pre-pivot production + construction. Local production / construction усунено. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md).
+Заміняє pre-pivot production + construction. Local **building production / Worker-constructed buildings** усунено. Worker site preparation (level + install delivered foundation) is **in** MVP design (ADR-0010) and is not a Barracks queue. See [`10_Orbital_Delivery`](10_Orbital_Delivery.md), [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
 
 ### Units
 
@@ -136,8 +144,14 @@ AGP_PlayerController (local)
 ### Buildings
 
 1. Purchase → `GE_GP_SpendOrbital` once → READY inventory++.
-2. Deploy mode: ghost; Esc/RMB cancels (READY stays).
-3. LMB valid → consume one READY → DropPod → building (**no second spend**).
+2. Prepare site (when the Terrain stage exists): level yellow BuildGrid cells; install intact foundation coverage on every footprint cell.
+3. Deploy mode: ghost; Esc/RMB cancels (READY stays).
+4. LMB valid (including leveled + intact foundation for normal buildings) → consume one READY → DropPod → building (**no second spend**).
+
+### Foundation Slab packages (not READY buildings)
+
+1. **Buy Foundation Slab package** (Wall Package philosophy: spend once, one delivery to MainBase inventory). Cost / quantity / slab footprint = **TBD**.
+2. Worker **installs** already-delivered stock onto leveled cells. No second Orbital spend. Per-cell coverage, not one all-or-nothing slab actor.
 
 ### Walls (not READY)
 
@@ -224,9 +238,11 @@ Spend moments:
 | Building Deploy (READY) | **No** — consume READY only |
 | Wall Package purchase | Yes — package Cost once → rocket to MainBase |
 | Build Wall (from inventory) | **No** — consume Wall stock only |
+| Foundation Slab package purchase | Yes — package Cost once → delivery to MainBase (**quantity TBD**) |
+| Install foundation (from inventory) | **No** — consume foundation stock only |
 | Cancel ghost placement / wall preview | **No** |
 
-Unit Confirm also validates transport slots + MaxUnits (reject whole manifest if over) + Unit Drop Zone. Building Deploy validates READY + placement.
+Unit Confirm also validates transport slots + MaxUnits (reject whole manifest if over) + Unit Drop Zone. Building Deploy validates READY + placement, including **leveled terrain + intact per-cell foundation** for normal orbital buildings (initial MainBase excepted). Wall/foundation rule is **DESIGN REQUIRED**.
 
 При insufficient Orbital — order fails; UI "Insufficient Orbital Ferronite" (per [`09_UI_UX`](09_UI_UX.md)).
 
@@ -348,7 +364,7 @@ Widget bindings — через ViewModel change delegates, **не tick polling**
 - Player control over SWARM.
 - Surrender / forfeit UI.
 - Pings / map markers.
-- Local production / construction (усунено per ADR_0009).
+- Local production / Worker-constructed buildings (усунено per ADR_0009). Worker leveling + foundation install is **not** this exclusion.
 
 Per Pillars 1–9 і `gp-mechanics-validator` anti-patterns — будь-яке порушення цих exclusions review-blocking без pillar amendment.
 
@@ -366,4 +382,5 @@ Per Pillars 1–9 і `gp-mechanics-validator` anti-patterns — будь-яке 
 - GAS attributes — [`../TDD/02_GAS_Architecture`](../TDD/02_GAS_Architecture.md).
 - Gameplay Tags taxonomy — [`../TDD/09_Gameplay_Tags`](../TDD/09_Gameplay_Tags.md).
 - Pillars — [`01_Game_Pillars`](01_Game_Pillars.md).
+- Terrain / foundations — [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md), [`../TDD/16_Voxel_Terrain_And_Foundations`](../TDD/16_Voxel_Terrain_And_Foundations.md), [`../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System`](../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md).
 - Orbital Delivery ADR — [`../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar`](../Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md).

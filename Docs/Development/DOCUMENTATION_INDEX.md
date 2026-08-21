@@ -11,7 +11,7 @@
 | Domain | Canonical path | Notes |
 | --- | --- | --- |
 | **Architecture** | `Docs/Architecture_Decisions/` (ADR wins) + `Docs/TDD/13_Architecture_Proposal.md` | ADR-0009 overrides pre-pivot examples; current implementation order/status is reconciled by [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md). |
-| **Gameplay** | `Docs/GDD/` + `Docs/Game_Pitch.md` | Prefer `02`, `06`, `08`, `10`, `11`, `12` over stale fragments in `00` / `09` / `Out_Of_Scope`. |
+| **Gameplay** | `Docs/GDD/` + `Docs/Game_Pitch.md` | Prefer `02`, `06`, `08`, `10`, `11`, `12`, `13` over stale fragments in `00` / `09` / `Out_Of_Scope`. |
 | **Workflow / process** | `GRIM_PROTOCOL_START_RULES.md` (root + `Docs/Development/`) + [`Risk_Based_Development_Workflow.md`](Risk_Based_Development_Workflow.md) + `/CONTRIBUTING.md` + `/STYLE.md` + `Docs/Development/Git_Workflow.md` + `Coding_Rules.md` | One stage at a time; operator validates in UE Editor. Test/build selection is risk-based. |
 | **Current status / NEXT** | `Docs/Development/AI_Project_Log.md` + **this file** + `Docs/Development/Claude_Tasks/README.md` (cursor) | Cursor must match disk/`AI_Project_Log`. |
 | **Engineering rules** | `/CONTRIBUTING.md`, `/STYLE.md`, `Docs/Development/Coding_Rules.md` | Review-blocking rules. |
@@ -34,16 +34,18 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | Current `origin/main` baseline: `9d9caa5fc7665ad8dc62016aed7b77f5238761dc` |
+| Code baseline | Current `origin/main` baseline: `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **Building Vitals / Definition Ownership** on `main` @ `b7e391a636749173c445f7994a41daf3c18ba902` |
+| Last closed / merged stage | **FoW world visualization** operator-accepted / **MERGED** on `main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`Claude_Tasks/GP-FoW-World-Visualization.md`](Claude_Tasks/GP-FoW-World-Visualization.md) — **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION** |
+| Current stage | [`docs/gp-voxel-terrain-foundations`](../GDD/13_Terrain_Engineering_And_Foundations.md) — **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW** |
 
 ---
 
 ## Current NEXT Task
+
+**Closed:** FoW world visualization — **MERGED / operator accepted** on `main` @ `26e0dfa2…`.
 
 **Closed:** GP-S39E Economy / Logistics Data Ownership — **MERGED / VERIFIED / CLOSED** on `main` @ `75a0e5bd1ce9ca473f216ced36bd8b8970a3005d`.
 
@@ -51,10 +53,9 @@
 
 **Closed on `main`:** Delivery timing ownership cleanup @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`; Unit payload compatibility cleanup @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`; Unit numeric compatibility cleanup @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`; Dead overlap setting removal @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`; Settings Visibility Truth @ `f38e803771261c60d865949c693a52a73fbcedb2`; Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — **MVP_ROADMAP_RECONCILIATION_POST_VITALS_FINALIZED_READY_FOR_MERGE**. Historical S-number order is no longer the execution cursor.
+**Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — Terrain / Voxel / Foundation inserted after production UI + minimap and **before** RTS AI Opponent. FoW world visualization is **MERGED**, not pending.
 
-**Exactly one current gate:** normal and two-player PIE validation of black Unexplored, dim Explored,
-Visible restoration, camera alignment, and per-team visual isolation.
+**Exactly one current gate:** review of voxel-terrain / foundation documentation on `docs/gp-voxel-terrain-foundations`. **NOT MERGED.** No runtime work in this slice.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 
@@ -95,9 +96,9 @@ Visible restoration, camera alignment, and per-team visual isolation.
 
 | Area | Status |
 | --- | --- |
-| `Docs/GDD/` (post-pivot core: 02, 04–08, 10–12, Lore, First_Playable, Backlog) | Active |
-| `Docs/TDD/` (esp. 03, 05–07 CANONICAL parts, 09–15, 13) | Active |
-| `Docs/Architecture_Decisions/ADR_0001`…`0006`, `0008`, `0009` | Active (Accepted) |
+| `Docs/GDD/` (post-pivot core: 02, 04–08, 10–13, Lore, First_Playable, Backlog) | Active |
+| `Docs/TDD/` (esp. 03, 05–07 CANONICAL parts, 09–16, 13) | Active |
+| `Docs/Architecture_Decisions/ADR_0001`…`0006`, `0008`, `0009`, `0010` | Active (Accepted) |
 | `ADR_0007` Building-As-Pawn | Active but **Draft** — pattern stands; examples superseded by ADR-0009 |
 | Root `README.md`, `CONTRIBUTING.md`, `STYLE.md` | Active |
 | `GRIM_PROTOCOL_START_RULES.md` | Active process SoT (roles / one-stage / factual review) |
@@ -108,7 +109,11 @@ Visible restoration, camera alignment, and per-team visual isolation.
 | `UGP_GameplayPresentationSettings` + `DefaultGame.ini` (`[/Script/GPRuntime.GP_GameplayPresentationSettings]`) | Active — Project Settings → Game → GP Gameplay Presentation (S29R team colors + health bar tunables) |
 | [`Configuration_Data_Ownership_Audit.md`](Configuration_Data_Ownership_Audit.md) | Current factual ownership/precedence audit; recommendations are not implemented architecture |
 | [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) | Current factual MVP capability matrix, remaining stages, historical mapping, and NEXT authority |
-| [`Claude_Tasks/GP-FoW-Runtime-Foundation.md`](Claude_Tasks/GP-FoW-Runtime-Foundation.md) | Current implementation candidate and operator validation contract |
+| [`Claude_Tasks/GP-FoW-Runtime-Foundation.md`](Claude_Tasks/GP-FoW-Runtime-Foundation.md) | FoW authority + trusted client mirror foundations — **DONE / MERGED** |
+| [`Claude_Tasks/GP-FoW-World-Visualization.md`](Claude_Tasks/GP-FoW-World-Visualization.md) | World FoW presentation — **MERGED / operator accepted** on `main`. Do not reopen FoW implementation in the terrain-docs slice. |
+| [`GDD/13_Terrain_Engineering_And_Foundations.md`](../GDD/13_Terrain_Engineering_And_Foundations.md) | Canonical WHAT for voxel terrain, Worker leveling, per-cell foundations |
+| [`TDD/16_Voxel_Terrain_And_Foundations.md`](../TDD/16_Voxel_Terrain_And_Foundations.md) | Technical direction; Voxel Plugin spike still required |
+| [`ADR_0010_Voxel_Terrain_And_Foundation_System.md`](../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md) | Accepted documentation decision |
 
 ### Stale / needs cleanup (still in active tree)
 
@@ -171,7 +176,7 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-Current baseline: `origin/main` @ `7847c3ce27a571d92f7629369cc8d361bd981387`. Current stage:
-**FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION** on
-`feature/gp-fow-world-visualization`.
-**NOT MERGED. NOT FINALIZED.** NEXT: operator visual PIE validation.
+Current baseline: `origin/main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f`. Current stage:
+**VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW** on
+`docs/gp-voxel-terrain-foundations`.
+**NOT MERGED.** Documentation-only. No runtime / Content / Config / Tools changes.

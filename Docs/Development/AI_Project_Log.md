@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-21 — Voxel terrain / foundation documentation
+
+Status: **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW**
+
+- Branch `docs/gp-voxel-terrain-foundations` from current `origin/main` @ `26e0dfa` (FoW world visualization **MERGED / operator accepted**).
+- New canonical MVP system: destructible Voxel Plugin terrain + Worker leveling + per-cell foundation slabs. Buildings remain orbital; Worker does not construct them.
+- Created GDD/13, TDD/16, ADR-0010. Updated loop/units/buildings/orbital/commands/building/FoW docs and roadmap (Terrain stage inserted before AI).
+- TBD preserved: zone UX, elevation/tolerance/speed, slab cost/qty/footprint, crater formula, plugin API, replication, nav, surviving-building-after-foundation-loss, Wall/foundation rule.
+- Documentation-only. No Source/Content/Config/Tools. **NOT MERGED.**
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+
 ## 2026-08-20 — FoW 100 cm / 2000×2000 + no viewport crop
 
 Status: **FOW_WORLD_VISUALIZATION_READY_FOR_OPERATOR_VALIDATION**

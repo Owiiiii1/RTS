@@ -38,7 +38,7 @@ UGP_CommandComponent::ExecuteServerCommand (server-side)
    v
 AGP_UnitBase::ReceiveCommand (server-side)
    - Routes to appropriate component (Movement / Combat / Mining / etc.)
-   - May activate GAS ability (Build, ProduceUnit, ...)
+   - May activate GAS ability (Repair, etc.). Do **not** route a `Build` ability that constructs the READY building (ADR-0009). Future Level Terrain / foundation-install commands are separate engineering jobs (ADR-0010; names TBD).
    |
    v
 Behavior tick on server, replicated to clients via attributes + transform
@@ -226,6 +226,16 @@ void AGP_UnitBase::ReceiveCommand(const FGP_CommandRequest& Request)
 - Selection ring update.
 
 Це не gameplay prediction — це UI feedback. Real authority — server.
+
+## Future: Terrain Leveling And Foundation Install (ADR-0010)
+
+Gameplay command **concepts** only. Exact tags, input actions, and classes **do not exist yet** and must not be treated as current API.
+
+- **Level Terrain / site preparation:** Worker-selected mode using the existing BuildGrid overlay. Per-cell GREY (already level) / YELLOW (needs work). Rectangular BuildGrid-aligned zone. Zone sizing UX is **DESIGN REQUIRED**. After confirm, Worker covers the zone with waypoints; terrain converges **progressively** (no instant flatten).
+- **Install foundation:** consumes already-delivered MainBase foundation stock onto leveled cells. Per-cell state, not one all-or-nothing slab actor. No second Orbital spend.
+- These commands are **not** `GP.Command.Build` and do not spawn Logistics Hub / Turret.
+
+See [`../GDD/13_Terrain_Engineering_And_Foundations.md`](../GDD/13_Terrain_Engineering_And_Foundations.md) and [`16_Voxel_Terrain_And_Foundations.md`](16_Voxel_Terrain_And_Foundations.md).
 
 ## Out of MVP
 

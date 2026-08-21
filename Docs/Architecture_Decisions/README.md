@@ -13,6 +13,7 @@
 - [ADR_0007_Building_As_Pawn](ADR_0007_Building_As_Pawn.md) — `Draft`. Будівлі і юніти наслідуються від спільного `AGP_UnitBase : APawn`.
 - [ADR_0008_AI_Opponent_AAIController](ADR_0008_AI_Opponent_AAIController.md) — AI opponent implemented as `AAIController` subclass, not `APlayerController`.
 - [ADR_0009_Orbital_Delivery_Pillar](ADR_0009_Orbital_Delivery_Pillar.md) — Units, READY buildings, and Wall Packages arrive via orbital drop pods. `AGP_Wall` segments are placed from MainBase inventory. No local production / construction.
+- [ADR_0010_Voxel_Terrain_And_Foundation_System](ADR_0010_Voxel_Terrain_And_Foundation_System.md) — Deformable Voxel Plugin terrain; server-authoritative deformation; Worker site prep; per-cell foundation required for normal orbital buildings. Plugin API / net / nav deferred to spike.
 
 ## Format
 

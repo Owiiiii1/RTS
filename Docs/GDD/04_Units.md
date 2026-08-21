@@ -4,7 +4,7 @@
 
 | Unit | Type Tag | Role | Data Asset |
 | --- | --- | --- | --- |
-| Worker | `GP.Unit.Type.Worker` | Ferronite mining + transport до MainBase containers + repair | `DA_GP_Unit_Worker` |
+| Worker | `GP.Unit.Type.Worker` | Ferronite mining + transport до MainBase containers + repair + **terrain leveling / foundation install** | `DA_GP_Unit_Worker` |
 | Salvage Walker | `GP.Unit.Type.SalvageWalker` | Industrial defender — protects workers, repels SWARM waves, engages opposing player units | `DA_GP_Unit_SalvageWalker` |
 
 Дві unit-категорії у MVP. Жодних support / siege / hero / specialist юнітів. SWARM units описані у [`03_Factions`](03_Factions.md) (не player-controllable).
@@ -38,8 +38,8 @@ Per Pillar 2 (Engineer, Not Soldier) і Pillar 7 (Simple Machines, Strong Readab
 - `CarryCapacity`: 50 Ferronite (визначає, скільки raw Ferronite worker несе за один trip у MainBase containers; TBD)
 - `MineRatePerSecond`: 10 (TBD; також live у `DA_GP_Resource_Ferronite.MineRatePerWorker` — final tuning у одній з пар, не дублювати).
 - `RepairCost`: TBD (per repair tick — застосовується через `GE_GP_Cost_RepairTick`)
-- `AllowedCommands`: `GP.Command.{Move, Stop, Mine, Repair}`
-- `GrantedAbilities`: Repair (NO Build)
+- `AllowedCommands`: `GP.Command.{Move, Stop, Mine, Repair}` today. **Future:** Level Terrain / install-foundation command concepts (exact tags TBD; see [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md)).
+- `GrantedAbilities`: Repair. **NO Build of the actual building.** Worker does not manufacture Logistics Hub / Turret / other READY buildings.
 - `UnitTags`: `GP.Unit.Type.Worker`, `GP.Faction.Corporate`
 
 ### Identity
@@ -50,12 +50,13 @@ Reads з top-down camera як excavator-class mining rig. Не tank, не infant
 
 ### Behavior
 
-Role — **mining + transport + repair**:
+Role — **mining + transport + repair + site engineering**:
 
 - Видобуває з `Ferronite Deposit` (`UGP_MiningComponent`). Деталі — [`06_Resources`](06_Resources.md).
 - Несе raw (Planetary) Ferronite до MainBase containers; drop-off наповнює container і піднімає `FerroniteThreatValue` (per [`06_Resources`](06_Resources.md) §Container System).
 - Ремонтує own-team damaged buildings / units (`GP.Command.Repair`, GAS-driven). Деталі — нижче §Repair.
-- **Не ініціює construction / production.** Усі buildings/units прибувають orbital drop. Worker не будує і не виробляє; немає `Build` ability.
+- **Does not construct/build the actual building.** READY buildings still arrive complete from orbit. There is no Barracks / factory / local building-production queue.
+- **Does** later: **level terrain** (site preparation on a BuildGrid-aligned zone) and **install already-delivered Foundation Slab material** (per-cell coverage). See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md), [ADR-0010](../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md).
 - **Не атакує** у MVP. Це навмисне обмеження — workers є м'якою ціллю для SWARM waves, що стимулює оборону.
 - Уразливий до SWARM атак — низький HP, без attack response.
 
@@ -65,7 +66,7 @@ Role — **mining + transport + repair**:
 - Server-validated: target own-team, target damaged, worker у repair range.
 - Worker рухається до target → repair tick застосовує heal + cost через `GE_GP_Cost_RepairTick` (repair cost — TBD у balance pass).
 - Завершується на full heal, target loss, або player cancel.
-- Repair НЕ є build / construction — це відновлення вже-deployed asset, що прибув orbital drop або був pre-placed.
+- Repair НЕ є build / construction будівлі — це відновлення вже-deployed asset, що прибув orbital drop або був pre-placed. Terrain leveling / foundation install are separate engineering jobs and also do **not** spawn the building.
 
 ### Visual / Animation Budget
 
@@ -222,6 +223,7 @@ Per Pillar 4 (Capacity Is Strategy) — unit capacity це **strategic resource*
 - GAS — [`../TDD/02_GAS_Architecture`](../TDD/02_GAS_Architecture.md).
 - Commands — [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md), [`../TDD/04_RTS_Selection_And_Commands`](../TDD/04_RTS_Selection_And_Commands.md).
 - Mining mechanic — [`06_Resources`](06_Resources.md).
+- Terrain leveling / foundations — [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
 - SWARM units (non-player) — [`03_Factions`](03_Factions.md).
 - Visual style — [`Lore_Setting`](Lore_Setting.md).
 - Pillars — [`01_Game_Pillars`](01_Game_Pillars.md).

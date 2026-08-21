@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-21 — Production HUD ViewModel bridge + bootstrap finalized
+
+Status: **HUD_VIEWMODEL_BRIDGE_AND_BOOTSTRAP_FINALIZED_READY_TO_MERGE**
+
+- Operator PIE validation **PASSED**: `WBP_GP_HUD` appeared automatically; `gp.UI.HUDStatus`
+  ConfiguredClass=`WBP_GP_HUD_C`, InstancePresent=true, Ready=Ready; `gp.UI.HUDDump`
+  OrbitalFerronite=100.00; Manual MVVM `GP_ResourceViewModel.OrbitalFerronite` → To Text (Float) →
+  `TXT_OrbitalFerroniteValue.Text` updated live.
+- GPUIRuntime/LocalPlayer owns bootstrap. ResourceVM/MatchVM remain subsystem-owned.
+  TEMP HUD remains. Authored WBP is operator-local, not committed. Visible HUD only partially wired.
+- Focused contracts Failures=0. GPEditor Development + UHT, GP Development, GP Shipping **PASS**.
+- **NOT MERGED.**
+
 ## 2026-08-21 — Production HUD runtime bootstrap
 
 Status: **HUD_VIEWMODEL_BRIDGE_AND_BOOTSTRAP_READY_FOR_OPERATOR_VALIDATION**

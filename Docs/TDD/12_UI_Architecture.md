@@ -57,7 +57,7 @@ PublicDependencyModuleNames.AddRange(new string[]
 
 | Role | Base class | Notes |
 | --- | --- | --- |
-| HUD root | `UGP_HUDRootWidget : UGP_UserWidgetBase` (BP child for layout) | Production lifetime root; authored child is future `WBP_GP_HUD`. |
+| HUD root | `UGP_HUDRootWidget : UGP_UserWidgetBase` (BP child for layout) | Production lifetime root. Authored child `WBP_GP_HUD` is operator-local (not committed). Runtime bootstrap is implemented. |
 | Activatable screen (OrderMenu, EndOfMatch, Pause, Lobby) | `UCommonActivatableWidget` | Pushed into `UCommonActivatableWidgetStack`. |
 | Inline panels (SelectionPanel, ResourceReadout, MatchTimer, etc.) | `UGP_UserWidgetBase : UCommonUserWidget` | Never raw `UUserWidget`. |
 | Buttons / list items | `UCommonButtonBase`, `UCommonListView` items | Reusable styles via `UCommonButtonStyle` DataAssets. |
@@ -84,7 +84,7 @@ PublicDependencyModuleNames.AddRange(new string[]
   HUD/minimap widgets still consume ViewModels.
 - The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.
 
-### Production HUD data foundation — operator-validated / finalized (2026-08-21)
+### Production HUD data foundation, ViewModel bridge, and bootstrap — operator-validated / finalized (2026-08-21)
 
 - `UGP_UserWidgetBase : UCommonUserWidget` is the project-owned base for non-activatable widgets.
   `UGP_ActivatableWidgetBase` remains the base for modal/activatable screens.
@@ -95,7 +95,10 @@ PublicDependencyModuleNames.AddRange(new string[]
   `UMVVMSubsystem::GetViewFromUserWidget` + `UMVVMView::SetViewModel(FName, TScriptInterface<INotifyFieldValueChanged>)`.
   The widget never creates ViewModels, never queries ASC/PlayerState/GameState, and does not Tick or
   poll. Missing LocalPlayer / subsystem / MVVM View / slot fails safely with a non-shipping warning.
-  Visible authored HUD remains operator-owned; this slice does not claim WBP complete.
+  Operator-validated: authored `WBP_GP_HUD` became visible at runtime and
+  `GP_ResourceViewModel.OrbitalFerronite` → To Text (Float) → `TXT_OrbitalFerroniteValue.Text`
+  updated live. Remaining HUD fields/actions are not claimed complete. `WBP_GP_HUD` remains
+  operator-local and is not committed.
 - `UGP_ResourceViewModel` exposes FieldNotify `OrbitalFerronite`, `FerroniteScore`, `CurrentUnits`,
   `MaxUnits`, and `OpponentFerroniteScore`. Numeric types remain `float`, matching current GAS
   attributes.
@@ -132,12 +135,18 @@ PublicDependencyModuleNames.AddRange(new string[]
   the widget and clears the reference (Initialize / PlayerControllerChanged / Deinitialize).
 - `gp.UI.HUDStatus` prints LocalPlayer, configured class, instance, widget class/name, and
   ViewModel Ready for operator validation. It does not bypass bootstrap.
-- Operator PIE validation passed: initial dump Ready/TeamId=1/zero resources; after live play,
-  OrbitalFerronite=100, FerroniteScore=100, FerroniteThreatValue=250. The live push path is accepted.
+- Operator PIE validation passed for the live push path: initial dump Ready/TeamId=1/zero resources;
+  after live play, OrbitalFerronite=100, FerroniteScore=100, FerroniteThreatValue=250.
+  Follow-up PIE validation of runtime bootstrap: authored `WBP_GP_HUD` appeared automatically;
+  `gp.UI.HUDStatus` ConfiguredClass=`WBP_GP_HUD_C`, InstancePresent=true, Ready=Ready;
+  `gp.UI.HUDDump` OrbitalFerronite=100.00; Manual MVVM
+  `GP_ResourceViewModel.OrbitalFerronite` → To Text (Float) → `TXT_OrbitalFerroniteValue.Text`
+  updated in the visible HUD.
 - The TEMP HUD is preserved and remains functional. Production HUD remains **PARTIAL**. Still not
   implemented: visible resource/timer HUD completeness, Selection UI, Context Action Grid,
   MainBase PURCHASE panel, minimap function, notifications, and production end-of-match screen.
-  Operator assigns authored `WBP_GP_HUD` to `ProductionHUDWidgetClass` locally after this code lands.
+  Operator-validated runtime visibility of authored `WBP_GP_HUD` (local, not committed).
+  Only the OrbitalFerronite text binding has been manually validated so far.
 - **Approved visual IA (2026-08-21):** two bars × three blocks, plus MainBase PURCHASE inside the
   bottom-right panel. See
   [`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
@@ -270,7 +279,7 @@ Canonical in-match HUD is two bars × three blocks. Old hierarchy (resource/scor
 selection bottom-left, command bar bottom-center, minimap top-right) is **SUPERSEDED**.
 
 ```
-WBP_GP_HUD (future authored child of UGP_HUDRootWidget)
+WBP_GP_HUD (authored child of UGP_HUDRootWidget; operator-local, not committed)
 ├── TopBar
 │   ├── TopLeft  Threat + Player Ferronite Score
 │   ├── TopCenter Match Timer
@@ -286,8 +295,11 @@ WBP_GP_HUD (future authored child of UGP_HUDRootWidget)
 ```
 
 A fullscreen / modal Order Menu is **not** part of the production HUD. TEMP HUD procurement
-controls remain scaffolding. Native production HUD root class is `UGP_HUDRootWidget : UGP_UserWidgetBase`. A later authored
-`WBP_GP_HUD` child will own this layout. Creation/viewport wiring is not implemented yet.
+controls remain scaffolding. Native production HUD root class is `UGP_HUDRootWidget : UGP_UserWidgetBase`.
+Authored `WBP_GP_HUD` is created at runtime by `UGP_HUDViewModelSubsystem` from
+`UGP_UIPresentationSettings::ProductionHUDWidgetClass` (operator-local asset, not committed).
+The widget is not fully wired; remaining top/bottom fields and actions still need authored
+bindings and layout work.
 
 Visual prototype contract: medium/dark grey major blocks, lighter grey inner cells, thin borders,
 modest rounding, stronger contrast for selected/hover. No final art/textures/icons required.

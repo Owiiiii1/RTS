@@ -56,12 +56,13 @@
 **Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — Terrain / Voxel / Foundation inserted after production UI + minimap and **before** RTS AI Opponent. FoW world visualization is **MERGED**, not pending.
 
 **Closed:** Production HUD data foundation — on `main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`.
+Production HUD layout + MainBase procurement documentation is on `main`.
 
-**Exactly one current gate:** review of the Production HUD layout + MainBase procurement documentation on
-`docs/gp-production-hud-layout-spec`. Status:
-**PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW**. **NOT MERGED.**
-Documentation only. Canonical visible procurement: select MainBase → PURCHASE → UNITS / BUILDINGS / DEFENSE.
-Do not claim `WBP_GP_HUD`, SelectionVM, minimap, action grid, MainBase PURCHASE UI, or Patrol complete.
+**Exactly one current gate:** merge of `feature/gp-production-hud-viewmodel-bridge`.
+Status: **HUD_VIEWMODEL_BRIDGE_AND_BOOTSTRAP_FINALIZED_READY_TO_MERGE**. **NOT MERGED.**
+Runtime HUD bootstrap and ViewModel bridge are implemented. Authored `WBP_GP_HUD` remains
+operator-local (not committed). Only OrbitalFerronite text binding has been manually validated.
+Do not claim remaining HUD fields, SelectionVM, minimap, action grid, MainBase PURCHASE UI, or Patrol complete.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 

@@ -1,5 +1,22 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-21 — Production HUD layout documentation
+
+Status: **PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW**
+
+- Branch `docs/gp-production-hud-layout-spec` from current `origin/main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`.
+- Replaced the superseded coarse HUD (resource/score top-right, selection bottom-left, command bar
+  bottom-center, minimap top/bottom-right) with the approved two-bar × three-block IA.
+- Top: Threat+Score / Match Timer / Planet Ferronite + Orbital Ferronite + Unit Cap.
+- Bottom: square minimap placeholder / Selection-Info (single-entity + 10×3 group) / Context Action Grid
+  (Unit: Move, Stop, Attack-Move; Patrol planned; Building: possibly empty).
+- Threat and Planet Ferronite currently present the same stored-Ferronite source (pressure vs exact
+  number). Visual prototype: grey blocks, not final art.
+- Documentation only. Visible HUD, SelectionVM, minimap, action grid, and Patrol remain unimplemented.
+- **NOT MERGED.** Report: `Docs/Development/Cursor_Work_Report.md`.
+
+
+
 ## 2026-08-21 — Production HUD data foundation finalized
 
 Status: **PRODUCTION_HUD_FOUNDATION_FINALIZED_READY_FOR_MERGE**

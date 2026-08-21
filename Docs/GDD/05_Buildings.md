@@ -369,7 +369,7 @@ Static defense node: tripod або quadruped mounting на industrial base plate
 
 ### Sell — для будівель
 
-- Кнопка **Sell** з'являється у `WBP_GP_HUD_SelectionPanel` building mode, коли вибрана sellable будівля.
+- Кнопка **Sell** may appear later in the Building Action Grid when a sellable building is selected. Not part of the current visual HUD slice; do not invent upgrades.
 - Hover показує preview refund (e.g., "Sell: +45 Orbital").
 - Click → server validates → building destroyed → partial Orbital Ferronite refund.
 - **Refund formula** (DA-driven, placeholders):
@@ -393,7 +393,7 @@ Static defense node: tripod або quadruped mounting на industrial base plate
 
 ### Demolish — для стін
 
-- Stikne кнопка **Demolish** у CommandBar коли wall selected, OR hotkey `Del` / `X`.
+- Future Building Action Grid **Demolish** cell when a wall is selected, OR hotkey `Del` / `X`. Not implemented in the current visual HUD slice.
 - Вхід у **demolish cursor mode** — cursor змінюється на demolition icon, HUD banner "DEMOLISH MODE — click walls to demolish, Esc to exit".
 - Click modes:
   - Single LMB на wall cell → demolish that wall.

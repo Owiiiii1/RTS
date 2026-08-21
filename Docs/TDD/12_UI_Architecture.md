@@ -2,9 +2,13 @@
 
 ## Scope
 
-Engineering-canonical UI architecture for GrimProtocol. Currently scoped до MVP HUD (per [`Claude_Tasks/GP-0401_MVP_HUD`](../Development/Claude_Tasks/GP-0401_MVP_HUD.md)). Broader UI architecture (theme system, localization, settings panel, accessibility, scaling) — pending GP-0701.
+Engineering-canonical UI architecture for GrimProtocol. Canonical in-match HUD IA:
+[`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md) +
+[`../GDD/09_UI_UX`](../GDD/09_UI_UX.md). Broader UI architecture (theme system, localization,
+settings panel, accessibility, scaling) — pending GP-0701.
 
-Декорація / стиль / лор — у [`../GDD/09_UI_UX`](../GDD/09_UI_UX.md). Цей TDD описує **state ownership, data binding, replication contracts і module separation**, не visual design.
+This TDD describes **state ownership, data binding, replication contracts, module separation, and
+the approved two-bar layout**. The coarse pre-2026-08-21 HUD placement is **SUPERSEDED**.
 
 ## Framework — Common UI + MVVM
 
@@ -110,8 +114,12 @@ PublicDependencyModuleNames.AddRange(new string[]
 - Operator PIE validation passed: initial dump Ready/TeamId=1/zero resources; after live play,
   OrbitalFerronite=100, FerroniteScore=100, FerroniteThreatValue=250. The live push path is accepted.
 - The TEMP HUD is preserved and remains functional. Production HUD remains **PARTIAL**. Still not
-  implemented: authored `WBP_GP_HUD`, visible resource/timer HUD, Selection UI, Command Bar, Order
-  Menu, minimap, notifications, and production end-of-match screen.
+  implemented: authored `WBP_GP_HUD`, visible resource/timer HUD, Selection UI, Context Action Grid,
+  Order Menu, minimap function, notifications, and production end-of-match screen.
+- **Approved visual IA (2026-08-21):** two bars × three blocks. See
+  [`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
+  The old resource/score top-right, selection bottom-left, command-bar bottom-center, minimap
+  top/bottom-right layout is **SUPERSEDED**.
 
 ### MVVM Data Flow
 
@@ -119,7 +127,7 @@ PublicDependencyModuleNames.AddRange(new string[]
 Server-authoritative state                 Replication                ViewModel             Widget (View)
 ────────────────────────────               ──────────────             ─────────             ─────────────
 UGP_PlayerAttributeSet.OrbitalFerronite ─► GAS attribute repl   ─►   UGP_ResourceViewModel ◄─  future resource widget
-UGP_SelectionComponent (local)       ─►    OnSelectionChanged    ─►   UGP_SelectionVM      ◄─►  WBP_GP_HUD_SelectionPanel
+UGP_SelectionComponent (local)       ─►    OnSelectionChanged    ─►   UGP_SelectionVM      ◄─►  future Selection/Info + Action Grid
 AGP_GameState.MatchTimeRemaining     ─►    RepNotify/delegate    ─►   UGP_MatchViewModel    ◄─  future match widget
 UGP_OrbitalDeliverySubsystem.Catalog ─►    OnRep / delegate      ─►   UGP_OrderMenuVM      ◄─►  WBP_GP_HUD_OrderMenu
 ```
@@ -147,13 +155,13 @@ Rules:
 
 | ViewModel | Source state | Owner adapter | Widget consumer |
 | --- | --- | --- | --- |
-| `UGP_ResourceViewModel` | `UGP_PlayerAttributeSet.{OrbitalFerronite, FerroniteScore, MaxUnits, CurrentUnits}` (own + opponent score) | `UGP_ResourceViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future `WBP_GP_HUD_ResourceReadout` |
-| `UGP_MatchViewModel` | `AGP_GameState.{MatchStateTag, MatchTimeRemaining, TeamFerroniteThreatValues, WinnerTeamId, WinReasonTag, MatchResult.MatchDuration}` | `UGP_MatchViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future match timer/threat/result widgets |
-| `UGP_SelectionVM` | `UGP_SelectionComponent.{SelectedUnits, InspectedTarget}` (local PC) | `UGP_SelectionVMAdapter` | `WBP_GP_HUD_SelectionPanel`, `WBP_GP_HUD_InspectPanel`, `WBP_GP_HUD_CommandBar` |
-| `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits` | `UGP_OrderMenuVMAdapter` (PC subsystem) | `WBP_GP_HUD_OrderMenu` |
-| `UGP_CargoVM` | `UGP_CargoComponent.CurrentCargo` of single-selected worker | `UGP_CargoVMAdapter` | `WBP_GP_HUD_SelectionPanel` unit mode |
-| `UGP_NotificationVM` | Local notification queue (PC pushes) | PC native | `WBP_GP_HUD_NotificationStack` |
-| `UGP_MinimapVM` | `UGP_MinimapSubsystem` snapshot 5 Hz | Subsystem self | `WBP_GP_HUD_Minimap` |
+| `UGP_ResourceViewModel` | `UGP_PlayerAttributeSet.{OrbitalFerronite, FerroniteScore, MaxUnits, CurrentUnits}` (own + opponent score) | `UGP_ResourceViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-right Orbit/Cap + top-left Score |
+| `UGP_MatchViewModel` | `AGP_GameState.{MatchStateTag, MatchTimeRemaining, TeamFerroniteThreatValues, WinnerTeamId, WinReasonTag, MatchResult.MatchDuration}` | `UGP_MatchViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-center timer + top-left Threat |
+| `UGP_SelectionVM` | `UGP_SelectionComponent.{SelectedUnits, InspectedTarget}` (local PC) — **not implemented** | Future adapter | Future bottom-center Selection/Info + bottom-right Context Action Grid |
+| `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits` | Future adapter | Future modal Order Menu (not the Context Action Grid) |
+| `UGP_CargoVM` | `UGP_CargoComponent.CurrentCargo` of single-selected worker — **not implemented** | Future adapter | Future single-entity Selection/Info |
+| `UGP_NotificationVM` | Local notification queue (PC pushes) — **not implemented** | PC native | Future notification stack |
+| `UGP_MinimapVM` | `UGP_MinimapSubsystem` snapshot — **not implemented** | Subsystem self | Future bottom-left minimap (layout currently reserves a square placeholder only) |
 
 Production Resource/Match VMs are created once by `UGP_HUDViewModelSubsystem` per `ULocalPlayer`.
 Future widgets receive them from that subsystem; no gameplay module type owns a `GPUIRuntime` object.
@@ -208,7 +216,8 @@ Stage — design only. Поверх existing widget naming у [`GDD/09_UI_UX`](.
 | Opponent score | `UGP_PlayerAttributeSet.FerroniteScore` (remote PlayerState.ASC lookup) | `OnAttributeChanged` on remote ASC | All clients |
 | Current unit count | `UGP_PlayerAttributeSet.CurrentUnits` (own ASC) | `OnAttributeChanged` | `COND_OwnerOnly` |
 | Max unit cap | `UGP_PlayerAttributeSet.MaxUnits` (own ASC) | `OnAttributeChanged` | `COND_OwnerOnly` |
-| SWARM threat (pressure) | `AGP_GameState.FerroniteThreatValue` | `OnRep_FerroniteThreatValue` | All clients |
+| Planet Ferronite (exact stored amount) | MainBase `UGP_StorageComponent` total stored | Storage change delegate | Owner / FoW-gated detail |
+| SWARM / Ferronite Threat (pressure) | `AGP_GameState` per-team `FerroniteThreatValue` | `OnTeamFerroniteThreatValueChanged` | All clients |
 | Selected entities | `UGP_SelectionComponent.SelectedUnits` (local PC) | `OnSelectionChanged` delegate | **Local only — no replication** |
 | Inspected target | `UGP_SelectionComponent.InspectedTarget` (local PC) | Same delegate | Local only |
 | Inspected target HP | `UGP_UnitAttributeSet.Health` on target ASC | Standard GAS replication | Per ASC settings (Mixed) |
@@ -231,25 +240,34 @@ Stage — design only. Поверх existing widget naming у [`GDD/09_UI_UX`](.
 
 ### Widget Hierarchy
 
+Canonical in-match HUD is two bars × three blocks. Old hierarchy (resource/score top-right,
+selection bottom-left, command bar bottom-center, minimap top-right) is **SUPERSEDED**.
+
 ```
-WBP_GP_HUD_Match (root, attached to PlayerController via ClientHUDClass)
-├── WBP_GP_HUD_TopBar
-│   ├── WBP_GP_HUD_MatchTimer
-│   ├── WBP_GP_HUD_ResourceReadout         (Ferronite + Score + OpponentScore + Cap)
-│   └── WBP_GP_HUD_SwarmAggression
-├── WBP_GP_HUD_Minimap (top-right corner, mandatory MVP)
-├── WBP_GP_HUD_SelectionPanel               (bottom-left; multi-mode: unit/group/building/site)
-├── WBP_GP_HUD_InspectPanel                 (separate slot from SelectionPanel; never overlaps)
-├── WBP_GP_HUD_CommandBar                   (bottom-center; gated by selection content)
-├── WBP_GP_HUD_OrderMenu                    (modal overlay — orbital Order Menu, opened at Logistics Hub / hotkey; closed by Esc/RMB)
-├── WBP_GP_HUD_DropReticle                  (visual layer for orbital drop-target reticle)
-├── WBP_GP_HUD_NotificationStack            (transient toasts: "Cap reached", "Idle worker", "Insufficient Ferronite")
-└── WBP_GP_HUD_EndOfMatch                   (hidden until match end)
+WBP_GP_HUD (future authored child of UGP_HUDRootWidget)
+├── TopBar
+│   ├── TopLeft  Threat + Player Ferronite Score
+│   ├── TopCenter Match Timer
+│   └── TopRight Planet Ferronite / Orbital Ferronite / CurrentUnits/MaxUnits
+├── BottomBar
+│   ├── BottomLeft  Minimap square placeholder (function later)
+│   ├── BottomCenter Selection / Current Info (widest; single-entity or 10×3 group)
+│   └── BottomRight Context Action Grid (Unit Action Mode or Building Action Mode)
+├── OrderMenu (modal overlay — orbital procurement; not the Action Grid)
+├── DropReticle / building ghost (visual layer)
+├── NotificationStack (not implemented)
+└── EndOfMatch (hidden until match end)
 ```
 
 Native production HUD root class is `UGP_HUDRootWidget : UGP_UserWidgetBase`. A later authored
-`WBP_GP_HUD` child will own layout/visual composition; creation/viewport wiring is not implemented in
-this data-foundation slice.
+`WBP_GP_HUD` child will own this layout. Creation/viewport wiring is not implemented yet.
+
+Visual prototype contract: medium/dark grey major blocks, lighter grey inner cells, thin borders,
+modest rounding, stronger contrast for selected/hover. No final art/textures/icons required.
+
+Planet Ferronite and Threat currently present the **same underlying stored-Ferronite source**
+(pressure vs exact number). Do not invent a second currency. ResourceVM does not yet expose
+Planet Ferronite; that mapping is a later adapter task from MainBase storage.
 
 ### MVVM Binding Contract
 
@@ -257,15 +275,15 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 
 | Widget | ViewModel (FieldNotify props) | Adapter subscribes to |
 | --- | --- | --- |
-| Future `WBP_GP_HUD_MatchTimer` | `UGP_MatchViewModel.MatchTimeRemaining` | `AGP_GameState.OnMatchTimeRemainingChanged` (per-second push) |
-| Future `WBP_GP_HUD_ResourceReadout` | `UGP_ResourceViewModel.{OrbitalFerronite, FerroniteScore, OpponentFerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates; opposing PlayerState ASC for public score |
-| Future threat widget | `UGP_MatchViewModel.FerroniteThreatValue` | `AGP_GameState.OnTeamFerroniteThreatValueChanged` for local TeamId |
-| `WBP_GP_HUD_SelectionPanel` | `UGP_SelectionVM.{Mode, SelectedUnitVMs[], SingleUnitVM, BuildingVM}` | `UGP_SelectionComponent.OnSelectionChanged` (local) |
-| `WBP_GP_HUD_InspectPanel` | `UGP_SelectionVM.{InspectedVM}` | Same delegate (InspectedTarget field) |
-| `WBP_GP_HUD_CommandBar` | `UGP_SelectionVM.{AvailableCommandTags, DisabledCommandTags}` | Same delegate + cooldown attribute changes на selection |
-| `WBP_GP_HUD_OrderMenu` | `UGP_OrderMenuVM.{AvailableDrops[], CanAffordPerEntry[]}` | Adapter listens to `OrbitalFerronite` changes + `UGP_OrbitalDeliverySubsystem` catalog |
-| `WBP_GP_HUD_Minimap` | `UGP_MinimapVM.{ActorBlips[], LocalViewportRect}` | `UGP_MinimapSubsystem` snapshot tick |
-| `WBP_GP_HUD_NotificationStack` | `UGP_NotificationVM.{ActiveToasts[]}` | PC `OnHUDNotification` multicast |
+| Future top-center Match Timer | `UGP_MatchViewModel.MatchTimeRemaining` | `AGP_GameState.OnMatchTimeRemainingChanged` |
+| Future top-left Threat | `UGP_MatchViewModel.FerroniteThreatValue` | `AGP_GameState.OnTeamFerroniteThreatValueChanged` for local TeamId |
+| Future top-left Score + top-right Orbit/Cap | `UGP_ResourceViewModel.{OrbitalFerronite, FerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates |
+| Future top-right Planet Ferronite | MainBase stored amount (not yet a ResourceVM field) | Storage change delegate via future adapter |
+| Future bottom-center Selection/Info | Future `UGP_SelectionVM` single-entity vs 10×3 group | `UGP_SelectionComponent.OnSelectionChanged` (local) |
+| Future bottom-right Context Action Grid | Future selection/command presentation | Same selection delegate; Unit vs Building mode |
+| Future `WBP_GP_HUD_OrderMenu` | `UGP_OrderMenuVM.{AvailableDrops[], CanAffordPerEntry[]}` | Adapter listens to `OrbitalFerronite` + orbital catalog |
+| Future bottom-left Minimap | Future `UGP_MinimapVM` — layout placeholder only in the next visual slice | Later minimap subsystem |
+| Future `WBP_GP_HUD_NotificationStack` | `UGP_NotificationVM.{ActiveToasts[]}` | PC `OnHUDNotification` multicast |
 | Future `WBP_GP_EndOfMatch` (Activatable) | `UGP_MatchViewModel.{MatchStateTag, WinnerTeamId, WinReasonTag, MatchDuration, bMatchFinished}` | `AGP_GameState` match-state/result delegates |
 
 **Historical abbreviated FieldNotify example (implemented production names are listed above):**
@@ -296,33 +314,40 @@ public:
 - Direct widget→server RPC calls — banned. Use PC handler injected via Common UI delegate.
 - `AddToViewport` для modal screens — banned. Use `UCommonActivatableWidgetStack::AddWidget`.
 
-### Selection Routing Rules
+### Selection / Information Routing Rules
 
-`SelectionPanel` mode determination, in order:
+Bottom-center Selection / Current Info:
 
-1. `SelectedUnits.IsEmpty() && !InspectedTarget.IsValid()` → hide panel + disable CommandBar.
-2. `SelectedUnits.IsEmpty() && InspectedTarget.IsValid()` → InspectPanel shown, CommandBar disabled.
-3. `SelectedUnits.Num() == 1`:
-   - Tag `Selection.Type.Unit` → SelectionPanel "unit detail" mode.
-   - Tag `Selection.Type.Building` → SelectionPanel "building detail" mode. (Post-pivot: no production-queue / construction-site sub-modes — assets arrive operational via orbital drop; ordering happens in the Order Menu, not the selection panel.)
-4. `SelectedUnits.Num() > 1`:
-   - All have `Selection.Type.Unit` → SelectionPanel "group" mode (portraits grouped by UnitDefinition).
-   - Mixed types — forbidden per GP-0202 (replaced on click).
+1. Empty selection → hide info content; Action Grid idle / no unit commands.
+2. Exactly one unit **or** one building → **single-entity mode** (icon, name, health, relevant stats).
+   Inspect of a single target uses this same block; a separate overlapping InspectPanel is not canonical.
+3. Multiple units → **group mode**: 10 icons per row, 3 rows, 30 visible slots. Each icon has a small
+   health bar below it. Overflow/paging/aggregation beyond 30 is **TBD / UX DESIGN REQUIRED**.
+   Do not silently cap gameplay selection to 30.
+4. Mixed unit+building selection remains forbidden per GP-0202.
 
-### CommandBar Population
+### Context Action Grid Population
 
-Per `SelectedUnits[0].UnitDefinition.AllowedCommands`:
+Bottom-right panel. Not a Build Menu. Not orbital production.
 
-| Command tag present | Button shown |
-| --- | --- |
-| `GP.Command.Move` | "Move" |
-| `GP.Command.Stop` | "Stop" |
-| `GP.Command.Attack` | "Attack" |
-| `GP.Command.AttackMove` | "A-Move" |
-| `GP.Command.Mine` | "Mine" |
-| `GP.Command.Repair` | "Repair" (Worker repair stays in MVP) |
+**Unit Action Mode** (one unit or a unit group):
 
-Multi-select group: intersection of AllowedCommands across all selected units.
+| Cell | Command | Status |
+| --- | --- | --- |
+| 1 | Move — choose destination | Existing command |
+| 2 | Stop — halt current command | Existing command |
+| 3 | Attack-Move — move toward point while engaging ("идти с атакой") | Existing `GP.Command.AttackMove` |
+| 4 | Patrol — current/assigned point to target and back | **PLANNED / DESIGN TARGET**, not implemented |
+
+Direct RMB target Attack remains a separate contextual gameplay behavior. Do not rename it Attack-Move.
+
+Additional granted commands (Mine, Repair, future unit abilities) may occupy extra cells when the
+selection actually grants them. Do not fully design ability slots yet.
+
+**Building Action Mode** (one building selected): same panel switches to building actions.
+Current MVP may show no functional actions. Do not invent upgrades. Do not treat as local production.
+
+Multi-select group: intersection of AllowedCommands across selected units.
 
 ### Match-State HUD Gating
 
@@ -371,12 +396,11 @@ UI legitimately owns:
 | `FerroniteThreatValue` | All clients | Shared world state (swarm pressure). |
 | `MatchTimeRemaining`, `MatchState` | All clients | Universal. |
 
-### Minimap (MVP — No FoW)
+### Minimap (layout reserved; function later)
 
-- All units / buildings visible to all players (no fog of war in MVP).
-- Subsystem `UGP_MinimapSubsystem` snapshot 5 Hz: actor → 2D position + team color + type icon.
-- Camera viewport rectangle drawn from local camera transform.
-- Click-to-pan: minimap LMB → `AGP_CameraPawn::FocusOnLocation(world_pos)`.
+- Bottom-left **square placeholder** is part of the approved HUD IA.
+- Minimap function, FoW minimap layers, and click-to-pan are **not** part of the next visual HUD slice.
+- Later: subsystem snapshot, camera viewport rectangle, LMB focus via `AGP_CameraPawn::FocusOnLocation`.
 
 ### Validation Checklist (Stop Condition)
 
@@ -399,12 +423,12 @@ UI legitimately owns:
 
 | # | Scenario | Pass Criteria |
 | --- | --- | --- |
-| 1 | Empty selection | Click ground → SelectionPanel hidden, CommandBar disabled. |
-| 2 | Single worker selected | Panel shows worker detail, cargo bar live, command bar enabled. |
-| 3 | 24 workers | Group mode, portraits grouped, count displayed, single command bar. |
-| 4 | Building selected | Building panel з production queue widget. |
-| 5 | Inspect enemy | InspectPanel shows HP, SelectionPanel unchanged. |
-| 6 | Esc clear | Both panels hidden, command bar disabled. |
+| 1 | Empty selection | Bottom-center info empty; Action Grid idle. |
+| 2 | Single worker selected | Single-entity mode; Action Grid in Unit Action Mode. |
+| 3 | 24 workers | Group 10×3 grid with per-icon health bars; 24 of 30 slots filled. |
+| 4 | Building selected | Single-entity building stats; Action Grid in Building Action Mode (may be empty). |
+| 5 | Inspect enemy | Bottom-center shows that entity; no separate overlapping inspect slot. |
+| 6 | Esc clear | Info and Action Grid return to empty/idle. |
 | 7 | Resource readout flash | Drop-off → score `+50` flash animation, pool unchanged. |
 | 8 | Opponent score | Opponent drop-off → opponent score updates within ≤ 1 s. |
 | 9 | Cap reached | Production at max → toast "Unit cap reached". |
@@ -456,7 +480,8 @@ void UGP_SelectionVMAdapter::HandleSelectionChanged()
 }
 ```
 
-Widget-side (BP or C++) binds через `MVVM View Binding`: `WBP_GP_HUD_SelectionPanel` listens to `SelectionVM.Mode` → conditional visibility of detail / group / building / construction sub-panels.
+Widget-side (BP or C++) binds через `MVVM View Binding`: future Selection/Info listens to
+`SelectionVM` mode → single-entity vs 10×3 group; Context Action Grid listens to unit vs building mode.
 
 Abbreviated adapter pattern (the implementation is `UGP_ResourceViewModelAdapter`):
 
@@ -512,8 +537,8 @@ Stage — design only (per [`Claude_Tasks/GP-0402_Feedback_Pass`](../Development
 
 | Action / Event | V-Decal | V-VFX | V-Mat | V-Mesh | V-UI | A-3D | A-2D | HUD-Toast | HUD-Flash | HUD-Indicator | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Selection** (add unit) | — | — | EmissiveBoost on unit | — | SelectionPanel rebuild | — | Click | — | — | — | Local only; per GP-0202. |
-| **Inspect enemy** | — | — | InspectBoost on target | — | InspectPanel show | — | Soft click | — | — | — | Local only. |
+| **Selection** (add unit) | — | — | EmissiveBoost on unit | — | Selection/Info rebuild | — | Click | — | — | — | Local only; per GP-0202. |
+| **Inspect enemy** | — | — | InspectBoost on target | — | Selection/Info shows that entity | — | Soft click | — | — | — | Local only. |
 | **Marquee** | LMB drag rectangle | — | — | — | — | — | — | — | — | — | Local only. |
 | **Move command issued** | Green pulse at click | — | SelectionRing flash 200 ms | — | — | — | CommandIssued SFX | — | — | — | Predictive cosmetic. Per GP-0203. |
 | **Move command rejected** | Red pulse at click | — | — | — | — | — | CommandDenied SFX | Optional toast | — | — | `Client_NotifyCommandRejected` triggers. |
@@ -521,7 +546,7 @@ Stage — design only (per [`Claude_Tasks/GP-0402_Feedback_Pass`](../Development
 | **Attack — fire** | — | MuzzleFlash + impact at target | — | — | — | WeaponFire 3D | — | — | — | — | Multicast unreliable; per GP-0204. |
 | **Attack — hit damage** | — | HitImpact (sparks) at target | DamageFlash 100 ms on target | — | — | HitImpact 3D | — | — | — | — | Multicast on `OnHealthChanged` delta < 0. |
 | **Attack — target killed** | — | DeathExplosion | — | RubbleMesh (delayed 0.5 s) | — | DeathSFX 3D | — | — | — | — | Standard `OnUnitDied`. |
-| **Cooldown blocking attack** | — | — | — | — | — | — | — | — | — | Cooldown overlay on CommandBar Attack button | VM read from `AttackCooldown` tag. |
+| **Cooldown blocking attack** | — | — | — | — | — | — | — | — | — | Cooldown overlay on Attack-Move / attack-related Action Grid cell | VM read from `AttackCooldown` tag. |
 | **Mining tick** | — | DrillSparks at deposit | — | — | — | DrillLoop 3D (looping) | — | — | — | — | Multicast unreliable, 1 Hz event. |
 | **Deposit depleted** | — | DepletionPuff | — | Destroy actor (per GP-0303) | — | DepletionFizzle 3D | — | — | — | — | Server triggers destroy + multicast cosmetic. |
 | **Cargo full** | — | — | CargoGlowOn worker | — | CargoBar VM `IsFull=true` | — | — | — | — | — | Visual gate. |

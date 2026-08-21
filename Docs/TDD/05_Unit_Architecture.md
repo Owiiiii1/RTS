@@ -336,7 +336,7 @@ public:
 ```
 
 - Replication: `CurrentCargo` + `CargoType` — `Skip Owner` not needed, full replicate (small).
-- Client UI: `WBP_GP_HUD_SelectionPanel` reads через PlayerController->LocalSelection->FirstSelected->Cargo when single Worker selected. Render bar fill = `CurrentCargo / MaxCargo`.
+- Client UI: future bottom-center single-entity Selection/Info may show Worker cargo when a Worker is selected (`CurrentCargo / MaxCargo`). Direct widget→component reads remain banned; bind through a future cargo VM/adapter.
 
 ### Mining Loop (server-side)
 

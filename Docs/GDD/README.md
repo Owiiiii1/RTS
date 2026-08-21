@@ -13,7 +13,7 @@ Gameplay-canonical документація GrimProtocol. Без implementation 
 - [06_Resources](06_Resources.md) — Ferronite economy, mining, drop-off.
 - [07_Match_Flow](07_Match_Flow.md) — phases матчу, timing, SWARM escalation.
 - [08_Win_Lose_Conditions](08_Win_Lose_Conditions.md) — score-based primary, time-out resolve.
-- [09_UI_UX](09_UI_UX.md) — high-level UI flow, screens, HUD elements.
+- [09_UI_UX](09_UI_UX.md) — screens and **canonical two-bar production HUD IA** (Threat+Score / Timer / Planet-Orbit-Cap; Minimap placeholder / Selection-Info / Context Action Grid).
 - [10_Orbital_Delivery](10_Orbital_Delivery.md) — orbital drop pod mechanic, two-state resource, order flow, drop zone rules.
 - [11_Fog_of_War](11_Fog_of_War.md) — 3-level FoW (Unexplored / Explored / Visible), sight sources, selection / combat / drop interactions.
 - [12_Session_Tuning_And_Calibration](12_Session_Tuning_And_Calibration.md) — **production operational doc.** Session params, debug cheats, balance calibration workflow, canonical post-pivot core loop, reward loop, player flow states, parameters table, playtest metrics, hot/warm/cold change rules, ownership matrix.

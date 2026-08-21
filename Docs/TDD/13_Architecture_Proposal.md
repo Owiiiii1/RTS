@@ -133,7 +133,7 @@ Buildings are pawns (static units). No building owns a Production or Constructio
 | Class | Base | Purpose |
 | --- | --- | --- |
 | `UGP_UserWidgetBase` | `UCommonUserWidget` | Project-wide widget base. |
-| `UGP_HUDWidget` | `UGP_UserWidgetBase` | HUD root (BP child `WBP_GP_HUD_Match`). |
+| `UGP_HUDRootWidget` | `UGP_UserWidgetBase` | Production HUD root. Future authored child `WBP_GP_HUD`. Historical name `UGP_HUDWidget` / `WBP_GP_HUD_Match` is superseded. |
 | `UGP_ActivatableScreenBase` | `UCommonActivatableWidget` | Base для modal screens (Order Menu, EndOfMatch, Pause, Lobby). |
 | `UGP_ResourceVM` | `UMVVMViewModelBase` | OrbitalFerronite / FerroniteScore / Cap mirror. |
 | `UGP_MatchVM` | `UMVVMViewModelBase` | MatchState / Timer / FerroniteThreatValue / Winner / WinReason. |

@@ -38,7 +38,7 @@
 | Element | Prefix | Example |
 | --- | --- | --- |
 | Blueprint actor / pawn / component | `BP_GP_*` | `BP_GP_Worker`, `BP_GP_MainBase` |
-| Widget Blueprint | `WBP_GP_*` | `WBP_GP_HUD_Match` |
+| Widget Blueprint | `WBP_GP_*` | `WBP_GP_HUD` |
 | Animation Blueprint | `ABP_GP_*` | `ABP_GP_Worker` |
 | Blueprint interface | `BPI_GP_*` | `BPI_GP_DamagedEvent` |
 | Blueprint enumeration | `BPE_GP_*` | `BPE_GP_PlayerColor` (preferred: declare у C++) |

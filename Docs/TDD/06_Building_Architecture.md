@@ -263,7 +263,7 @@ Health, MaxHealth, Armor — через `UGP_UnitAttributeSet` (per TDD/02 / TDD
 
 ### UI Surface (cross-ref до GP-0401)
 
-- Selection → WBP_GP_HUD_SelectionPanel building mode:
+- Selection → bottom-center Selection/Info building mode (future visual HUD):
   - HP bar, name, faction tint.
   - Container status: filled / total containers, "Launch" button per full container (sends to orbit).
   - Drop-off zone indicator (decal, fade при deselect).
@@ -875,8 +875,8 @@ Per [`../GDD/05_Buildings`](../GDD/05_Buildings.md) §Sell + Demolish і memory 
 
 | Op | Applies to | Refund | UX entry |
 | --- | --- | --- | --- |
-| **Sell** | Buildings with `bSellable=true` (Logistics Hub, Defensive Turret, Wall-mounted Turret) | `Cost × SellRefundRate × HealthFraction` (DA-driven) | `WBP_GP_HUD_SelectionPanel` Sell button |
-| **Demolish** | Walls only (`AGP_Wall`) | **0** (permanent) | CommandBar Demolish button + cursor mode |
+| **Sell** | Buildings with `bSellable=true` (Logistics Hub, Defensive Turret, Wall-mounted Turret) | `Cost × SellRefundRate × HealthFraction` (DA-driven) | Future Building Action Grid cell (not implemented; do not invent now) |
+| **Demolish** | Walls only (`AGP_Wall`) | **0** (permanent) | Future Building Action Grid cell + cursor mode (not implemented) |
 
 ### UGP_BuildingDefinition Update
 
@@ -958,7 +958,7 @@ UI mode у HUD — activatable per Common UI per [`12_UI_Architecture`](12_UI_Ar
 
 ```
 Entry:
-  - CommandBar Demolish button (when wall selected) OR `Del` / `X` hotkey OR command-bar global "Demolish Mode".
+  - Future Building Action Grid Demolish cell (when wall selected; not implemented) OR `Del` / `X` hotkey.
   - HUD overlay: persistent banner "DEMOLISH MODE — click walls to demolish, Esc to exit".
   - Cursor texture override (red demolition icon).
   - `IMC_GP_Commands` partially suspended; new `IMC_GP_Demolish` activated.
@@ -997,9 +997,9 @@ float SellPreviewAmount;          // computed client-side from cached Definition
 
 Adapter recomputes on selection / health change. Widget shows preview on Sell button hover.
 
-`WBP_GP_HUD_SelectionPanel` building mode adds Sell button row. Disabled if `bSellable == false` with tooltip explaining ("MainBase cannot be sold", "Walls must be demolished", etc.).
+Future Building Action Grid (building selected) may add a Sell cell. Disabled if `bSellable == false` with tooltip explaining ("MainBase cannot be sold", "Walls must be demolished", etc.). Not implemented; do not invent upgrades or treat this as local production.
 
-`WBP_GP_HUD_CommandBar` adds Demolish button when wall selected.
+Future Building Action Grid may add Demolish when a wall is selected. Not implemented.
 
 ### Tag Surface
 

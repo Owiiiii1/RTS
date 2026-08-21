@@ -576,7 +576,7 @@ Additions to previous abuse table:
 Container System має **central risk-vs-greed loop**. Per 5-component rubric, кожен step циклу — visible і feel-able:
 
 **Container fill (Clarity + Motivation):**
-- HUD bottom-left під SelectionPanel: row of N container icons (per `MaxContainerCount`).
+- Future MainBase single-entity Selection/Info (bottom-center): row of N container icons (per `MaxContainerCount`). Not a separate global HUD strip.
 - Each container icon: vertical fill bar 0-100% із tint (warm-up effect at 50%+, glow at 90%+).
 - Approach-full state (>= 80%): icon pulses softly. Player knows ship-time approaching.
 

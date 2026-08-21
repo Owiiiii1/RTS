@@ -16,7 +16,7 @@ Engineering-canonical документація GrimProtocol. Описує **як
 - [09_Gameplay_Tags](09_Gameplay_Tags.md) — tag taxonomy, ownership, native vs config tags.
 - [10_Data_Assets](10_Data_Assets.md) — Data Asset ownership, tuning surfaces, runtime usage.
 - [11_RTS_Camera](11_RTS_Camera.md) — RTS camera pawn, DataAsset-driven tuning, Enhanced Input set, edge cases.
-- [12_UI_Architecture](12_UI_Architecture.md) — Common UI + MVVM framework, HUD info architecture, ViewModel inventory, state ownership.
+- [12_UI_Architecture](12_UI_Architecture.md) — Common UI + MVVM, approved two-bar HUD IA, ViewModel inventory, state ownership.
 - [13_Architecture_Proposal](13_Architecture_Proposal.md) — Consolidated C++ class list, module ownership, DataAssets, Tags, Attributes, RPCs, risks, 12-slice implementation order. Stop point before C++ code.
 - [14_Orbital_Delivery](14_Orbital_Delivery.md) — Drop pod mechanic, order menu, drop validation, `UGP_OrbitalDeliverySubsystem`, replaces local production/construction.
 - [15_Fog_of_War](15_Fog_of_War.md) — 3-level FoW (Unexplored/Explored/Visible), sight scan, replication relevance, selection/combat/drop interactions.

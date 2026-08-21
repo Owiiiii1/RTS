@@ -346,7 +346,7 @@ HUD bindings per [`09_UI_UX`](09_UI_UX.md) (CommonUI + MVVM — server updates V
 - Opponent Score ← opponent's `UGP_PlayerAttributeSet.FerroniteScore`.
 - Unit Cap ← `UGP_PlayerAttributeSet.CurrentUnits / MaxUnits`.
 - SWARM Pressure ← `AGP_GameState.FerroniteThreatValue`.
-- Selection Panel ← `UGP_SelectionComponent.SelectedUnits` (local).
+- Selection / Current Info ← `UGP_SelectionComponent.SelectedUnits` (local).
 - Minimap ← world state (own / opponent units, buildings, deposits, SWARM spawn pulses).
 - End-of-Match screen ← `AGP_GameState.MatchResult` via RepNotify.
 

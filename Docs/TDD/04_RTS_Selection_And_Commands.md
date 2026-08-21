@@ -387,13 +387,19 @@ Trade-offs vs decal: менше draw calls, не потребує land-projectio
 
 ### UI Surface
 
-| State | Widget | Notes |
+Canonical HUD IA: [`12_UI_Architecture`](12_UI_Architecture.md) and
+[`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
+The previous SelectionPanel bottom-left / CommandBar bottom-center / InspectPanel split is **SUPERSEDED**.
+
+| State | Widget slot | Notes |
 | --- | --- | --- |
-| `SelectedUnits` single unit | `WBP_GP_HUD_SelectionPanel` detail mode | HP bar, abilities, current command. |
-| `SelectedUnits` multi (units only) | `WBP_GP_HUD_SelectionPanel` group mode | Portraits grouped by `UnitDefinition`, count per group. |
-| `SelectedUnits` single building | `WBP_GP_HUD_SelectionPanel` building mode | Production queue, abilities. |
-| `InspectedTarget` (any) | `WBP_GP_HUD_InspectPanel` | HP, name, team color. Separate widget slot, не overlap selection panel. |
-| Empty selection | Both widgets hidden, command bar disabled. |
+| `SelectedUnits` single unit | Bottom-center Selection/Info, single-entity mode | Icon, name, health, relevant stats. Future widget; not implemented. |
+| `SelectedUnits` multi (units only) | Bottom-center Selection/Info, group mode | 10×3 visible icon grid with per-icon health bars. Overflow >30 TBD. Do not cap gameplay selection to 30. |
+| `SelectedUnits` single building | Bottom-center Selection/Info, single-entity mode | Building stats. Production queue is not a HUD mode (orbital Order Menu). |
+| `InspectedTarget` (any) | Same bottom-center block | No separate overlapping InspectPanel slot. |
+| Empty selection | Info empty; Context Action Grid idle | |
+| Unit/group selected | Bottom-right Context Action Grid, Unit Action Mode | Move, Stop, Attack-Move; Patrol planned/not implemented. Direct RMB Attack stays separate. |
+| Building selected | Bottom-right Context Action Grid, Building Action Mode | MVP may have no functional actions. Not a Build Menu. |
 
 ### Edge Cases
 

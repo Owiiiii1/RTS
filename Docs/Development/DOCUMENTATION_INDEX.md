@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | Current slice base: `origin/main` @ `ad2e5eb94afbef6922c332c0d35ff0f9337423c2` |
+| Code baseline | Current slice base: `origin/main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
 | Last closed / merged stage | **FoW world visualization** operator-accepted / **MERGED** on `main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`feature/gp-production-hud-foundation`](Claude_Tasks/GP-Production-HUD-Foundation.md) — **PRODUCTION_HUD_FOUNDATION_FINALIZED_READY_FOR_MERGE** |
+| Current stage | [`docs/gp-production-hud-layout-spec`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md) — **PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW** |
 
 ---
 
@@ -55,11 +55,13 @@
 
 **Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — Terrain / Voxel / Foundation inserted after production UI + minimap and **before** RTS AI Opponent. FoW world visualization is **MERGED**, not pending.
 
-**Exactly one current gate:** merge of the Production HUD data foundation on
-`feature/gp-production-hud-foundation`. Status:
-**PRODUCTION_HUD_FOUNDATION_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
-Operator-validated live push path. The authored production HUD, minimap, Order Menu, selection panel,
-and notifications remain later work; TEMP HUD remains active.
+**Closed:** Production HUD data foundation — on `main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`.
+
+**Exactly one current gate:** review of the Production HUD layout documentation on
+`docs/gp-production-hud-layout-spec`. Status:
+**PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW**. **NOT MERGED.**
+Documentation only. The next visual HUD slice must use the approved two-bar IA.
+Do not claim `WBP_GP_HUD`, SelectionVM, minimap, action grid, or Patrol complete.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 
@@ -114,7 +116,8 @@ and notifications remain later work; TEMP HUD remains active.
 | [`Configuration_Data_Ownership_Audit.md`](Configuration_Data_Ownership_Audit.md) | Current factual ownership/precedence audit; recommendations are not implemented architecture |
 | [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) | Current factual MVP capability matrix, remaining stages, historical mapping, and NEXT authority |
 | [`Claude_Tasks/GP-FoW-Runtime-Foundation.md`](Claude_Tasks/GP-FoW-Runtime-Foundation.md) | FoW authority + trusted client mirror foundations — **DONE / MERGED** |
-| [`Claude_Tasks/GP-FoW-World-Visualization.md`](Claude_Tasks/GP-FoW-World-Visualization.md) | World FoW presentation — **MERGED / operator accepted** on `main`. Do not reopen FoW implementation in the terrain-docs slice. |
+| [`Claude_Tasks/GP-Production-HUD-Foundation.md`](Claude_Tasks/GP-Production-HUD-Foundation.md) | Production HUD Resource/Match data foundation — **on `main`** @ `317ce3f0…` |
+| [`Claude_Tasks/GP-Production-HUD-Layout-Spec.md`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md) | Approved two-bar HUD IA — **PRODUCTION_HUD_LAYOUT_DOCUMENTATION_READY_FOR_REVIEW** |
 | [`GDD/13_Terrain_Engineering_And_Foundations.md`](../GDD/13_Terrain_Engineering_And_Foundations.md) | Canonical WHAT for voxel terrain, Worker leveling, per-cell foundations |
 | [`TDD/16_Voxel_Terrain_And_Foundations.md`](../TDD/16_Voxel_Terrain_And_Foundations.md) | Technical direction; Voxel Plugin spike still required |
 | [`ADR_0010_Voxel_Terrain_And_Foundation_System.md`](../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md) | Accepted documentation decision |

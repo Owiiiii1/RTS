@@ -9,7 +9,7 @@
 > Стан станом на 2026-08-21. Перед кожним новим slice агент **зобов'язаний** перевірити cursor: [`../DOCUMENTATION_INDEX.md`](../DOCUMENTATION_INDEX.md), [`../AI_Project_Log.md`](../AI_Project_Log.md), and the current [`MVP roadmap reconciliation`](../MVP_Roadmap_Reconciliation_Post_Building_Vitals.md). Validation selection: [`../Risk_Based_Development_Workflow.md`](../Risk_Based_Development_Workflow.md).
 
 **Поточна фаза:** Production UI / HUD foundation.
-**Current: PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**.
+**Current: PRODUCTION_HUD_FOUNDATION_FINALIZED_READY_FOR_MERGE**.
 
 **Status snapshot:**
 
@@ -28,10 +28,10 @@
 | **FoW runtime foundation** | **FINALIZED READY FOR MERGE** — [`GP-FoW-Runtime-Foundation.md`](GP-FoW-Runtime-Foundation.md) — **NOT MERGED** |
 | **FoW client presentation foundation** | **FINALIZED READY FOR MERGE** — [`GP-FoW-Client-Presentation-Foundation.md`](GP-FoW-Client-Presentation-Foundation.md) — **NOT MERGED** |
 | **FoW world visualization** | **DONE / MERGED / OPERATOR ACCEPTED** — [`GP-FoW-World-Visualization.md`](GP-FoW-World-Visualization.md) |
-| **Production HUD data foundation** | **READY FOR OPERATOR VALIDATION** — [`GP-Production-HUD-Foundation.md`](GP-Production-HUD-Foundation.md) — **NOT MERGED / NOT FINALIZED** |
+| **Production HUD data foundation** | **FINALIZED READY FOR MERGE** — [`GP-Production-HUD-Foundation.md`](GP-Production-HUD-Foundation.md) — **NOT MERGED** |
 
-**Exactly one current gate:** operator verification of local-player Resource/Match ViewModel state
-through `gp.UI.HUDDump` on listen server and remote client. Visual HUD layout is not part of this slice.
+**Exactly one current gate:** merge of the Production HUD data foundation. Visual HUD layout,
+minimap, and Order Menu are later slices. TEMP HUD remains active.
 
 Do **not** start footprint/geometry cleanup; it is deferred pending building construction redesign.
 Do **not** implement SWARM now. SWARM is separate from the RTS AI Opponent and is

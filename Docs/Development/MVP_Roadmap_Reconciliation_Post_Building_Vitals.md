@@ -1,12 +1,12 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION`
+**Status:** `PRODUCTION_HUD_FOUNDATION_FINALIZED_READY_FOR_MERGE`
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
 **Baseline:** `origin/main` @ `ad2e5eb94afbef6922c332c0d35ff0f9337423c2`
 **Audit date:** 2026-08-21
 **Scope:** current factual roadmap and capability status.
-**Current execution checkpoint:** Production HUD Resource/Match data foundation is **PARTIAL / ready for
-operator validation**. No authored HUD, minimap, or Order Menu is included.
+**Current execution checkpoint:** Production HUD Resource/Match data foundation is **PARTIAL /
+operator-validated / finalized**. No authored HUD, minimap, or Order Menu is included.
 
 ## 1. Why reconciliation is required
 
@@ -109,7 +109,7 @@ current execution order.
 | --- | --- | --- |
 | TEMP gameplay HUD | **DONE (temporary)** | `UGP_TEMP_S28P_PlanetaryFerroniteHUD` exposes resources, launch, catalogs/READY, cap, timer, result, and Wall Package state. |
 | CommonUI/MVVM prerequisites | **DONE — FOUNDATION** | Plugins/dependencies plus project-owned activatable and non-activatable widget bases, HUD root base, FoW/Resource/Match VMs, and push adapters exist in `GPUIRuntime`. |
-| Production HUD | **PARTIAL — DATA FOUNDATION** | `UGP_HUDViewModelSubsystem` owns per-local-player Resource/Match VMs and event-driven adapters; `gp.UI.HUDDump` and the focused contract exist. No authored `WBP_GP_HUD`, visual panels, Order Menu, minimap, selection panel, or notifications yet. TEMP HUD remains active. |
+| Production HUD | **PARTIAL — DATA FOUNDATION** | Operator-validated live push path. Delivered: widget/HUD-root bases, Resource/Match VMs, local-player ownership, push adapters, `gp.UI.HUDDump`. Not implemented: authored `WBP_GP_HUD`, visible resource/timer HUD, Selection UI, Command Bar, Order Menu, minimap, notifications, production end-of-match screen. TEMP HUD remains active. |
 | Production Order Menu | **NOT STARTED** | Purchases are usable through TEMP HUD only. |
 | Minimap | **NOT STARTED** | No minimap subsystem/VM/widget production code. |
 | Notifications | **NOT STARTED** | No notification VM/stack or authority-to-client notification pipeline. |
@@ -363,13 +363,13 @@ After SWARM implementation:
 
 ## 11. Immediate NEXT recommendation
 
-**Production HUD data foundation is implemented and awaiting operator validation.** It delivers
+**Production HUD data foundation is operator-validated and finalized.** It delivers
 project widget/root bases, Resource/Match ViewModels, local-player subsystem ownership, push adapters,
 focused contract coverage, and `gp.UI.HUDDump`. It does not deliver the authored visual HUD.
 
-Status: `PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION`. **NOT MERGED. NOT FINALIZED.**
+Status: `PRODUCTION_HUD_FOUNDATION_FINALIZED_READY_FOR_MERGE`. **NOT MERGED.**
 
-Execution order remains: complete production UI/HUD → minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps → Building-system / Walls gate → Steam → match completion → SWARM gate → SWARM → full MVP stabilization.
+Execution order remains: complete remaining production UI/HUD visuals → minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps → Building-system / Walls gate → Steam → match completion → SWARM gate → SWARM → full MVP stabilization.
 
 **Wall Foundation Rule — RESOLVED:** Walls do not require Foundation. Do not list it as an open design gate.
 

@@ -39,7 +39,7 @@
 | Last closed / merged stage | **FoW world visualization** operator-accepted / **MERGED** on `main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`feature/gp-production-hud-foundation`](Claude_Tasks/GP-Production-HUD-Foundation.md) — **PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION** |
+| Current stage | [`feature/gp-production-hud-foundation`](Claude_Tasks/GP-Production-HUD-Foundation.md) — **PRODUCTION_HUD_FOUNDATION_FINALIZED_READY_FOR_MERGE** |
 
 ---
 
@@ -55,11 +55,11 @@
 
 **Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — Terrain / Voxel / Foundation inserted after production UI + minimap and **before** RTS AI Opponent. FoW world visualization is **MERGED**, not pending.
 
-**Exactly one current gate:** operator validation of the Production HUD data foundation on
+**Exactly one current gate:** merge of the Production HUD data foundation on
 `feature/gp-production-hud-foundation`. Status:
-**PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**. **NOT MERGED. NOT FINALIZED.**
-The authored production HUD, minimap, Order Menu, selection panel, and notifications are not part of
-this slice; TEMP HUD remains active.
+**PRODUCTION_HUD_FOUNDATION_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.**
+Operator-validated live push path. The authored production HUD, minimap, Order Menu, selection panel,
+and notifications remain later work; TEMP HUD remains active.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 

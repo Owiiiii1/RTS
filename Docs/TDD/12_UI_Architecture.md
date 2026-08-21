@@ -80,7 +80,7 @@ PublicDependencyModuleNames.AddRange(new string[]
   HUD/minimap widgets still consume ViewModels.
 - The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.
 
-### Production HUD data foundation — implemented (2026-08-21)
+### Production HUD data foundation — operator-validated / finalized (2026-08-21)
 
 - `UGP_UserWidgetBase : UCommonUserWidget` is the project-owned base for non-activatable widgets.
   `UGP_ActivatableWidgetBase` remains the base for modal/activatable screens.
@@ -107,8 +107,11 @@ PublicDependencyModuleNames.AddRange(new string[]
   `UWorld::GameStateSetEvent`, GameState roster changes, and PlayerState team changes. There is no
   UI Tick or timer polling. Rebind removes old handles before adding new ones.
 - `gp.UI.HUDDump` reads only subsystem/ViewModel state for operator diagnostics.
-- The TEMP HUD is preserved and remains functional. Production visual HUD, Order Menu, selection
-  panel, minimap, notifications, and authored content remain outside this slice.
+- Operator PIE validation passed: initial dump Ready/TeamId=1/zero resources; after live play,
+  OrbitalFerronite=100, FerroniteScore=100, FerroniteThreatValue=250. The live push path is accepted.
+- The TEMP HUD is preserved and remains functional. Production HUD remains **PARTIAL**. Still not
+  implemented: authored `WBP_GP_HUD`, visible resource/timer HUD, Selection UI, Command Bar, Order
+  Menu, minimap, notifications, and production end-of-match screen.
 
 ### MVVM Data Flow
 

@@ -1,134 +1,99 @@
-# Cursor Work Report — Production HUD Foundation
+# Cursor Work Report — Production HUD Foundation Finalization
 
 ## Status
 
-**PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**
+**PRODUCTION_HUD_FOUNDATION_FINALIZED_READY_FOR_MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.**
 
 ## Branch / base / head
 
 - Branch: `feature/gp-production-hud-foundation`
 - Exact base: `origin/main` @ `ad2e5eb94afbef6922c332c0d35ff0f9337423c2`
-- Head: this implementation/report commit on `feature/gp-production-hud-foundation`
+- Implementation head: `dc644b9a3d08b7380463b586b50bae03a649be7c`
+- Finalization head: this commit on `feature/gp-production-hud-foundation`
 
-## Factual classes added
+## Operator validation evidence
 
-- `UGP_UserWidgetBase : UCommonUserWidget` — project-owned non-activatable CommonUI base.
-- `UGP_HUDRootWidget : UGP_UserWidgetBase` — native lifetime/root base for future `WBP_GP_HUD`.
-- `UGP_ResourceViewModel : UMVVMViewModelBase`
-- `UGP_MatchViewModel : UMVVMViewModelBase`
-- `UGP_ResourceViewModelAdapter`
-- `UGP_MatchViewModelAdapter`
-- `UGP_HUDViewModelSubsystem : ULocalPlayerSubsystem`
+PIE `gp.UI.HUDDump` observed:
 
-No authored Widget Blueprint or native visual HUD panel hierarchy was created.
+- Initial: Ready=Ready, LocalTeamId=1, OrbitalFerronite=0, FerroniteScore=0, FerroniteThreatValue=0
+- After live gameplay: OrbitalFerronite=100, FerroniteScore=100, FerroniteThreatValue=250
 
-## Local-player ownership / access architecture
+The production HUD foundation live push path is operator-validated.
 
-`UGP_HUDViewModelSubsystem` is owned once per `ULocalPlayer`. It owns one ResourceVM, one MatchVM, and
-their adapters. Future widgets obtain read-only VM references through
-`GetResourceViewModel()` / `GetMatchViewModel()` and do not resolve gameplay actors, ASC, or components.
+## Final architecture summary
 
-Initialization/rebind is push/event-driven through:
+- `UGP_HUDViewModelSubsystem` remains a `ULocalPlayerSubsystem`. One ResourceVM, one MatchVM, and their
+  adapters are owned per local player.
+- No Tick polling. No timer polling/retry loop. Lifecycle is event-driven:
+  `PlayerControllerChanged`, `UWorld::GameStateSetEvent`,
+  `AGP_PlayerController::OnPlayerStatePresentationReady`,
+  `AGP_GameState::OnPlayerStateRosterChanged`, and `AGP_PlayerState::OnTeamIdChanged`.
+- ResourceVM updates from GAS attribute-change delegates on the local PlayerState ASC.
+- MatchVM updates from current GameState match-time/state/per-team-threat/result delegates.
+- Opponent score is isolated by replicated `PlayerArray` + TeamId resolution, then the opposing
+  PlayerState's public `FerroniteScore` delegate.
+- Rebind calls adapter `Shutdown()` before re-initialize, removing previous handles first.
+- Teardown is idempotent (`Shutdown` + handle reset; `BeginDestroy` also shuts down).
+- GPRuntime does not depend on GPUIRuntime or CommonUI. Pre-existing UMG remains only for the TEMP HUD
+  and was not expanded by this slice.
+- Widget bases (`UGP_UserWidgetBase`, `UGP_HUDRootWidget`) expose no gameplay query API.
+- TEMP HUD (`UGP_TEMP_S28P_PlanetaryFerroniteHUD`) is still present and unchanged in functional role.
+- Production HUD remains **PARTIAL**. No visual production HUD is claimed complete.
 
-- `ULocalPlayerSubsystem::PlayerControllerChanged`
-- `UWorld::GameStateSetEvent`
-- `AGP_PlayerController::OnPlayerStatePresentationReady`
-- `AGP_GameState::OnPlayerStateRosterChanged`
-- `AGP_PlayerState::OnTeamIdChanged`
-- GAS attribute-change delegates
-- existing `AGP_GameState` match delegates
+Delivered:
 
-There is no subsystem/widget Tick, timer retry, or world actor scan. Rebind removes existing handles
-before adding new ones; teardown is idempotent.
+- project widget bases
+- HUD root base
+- ResourceVM
+- MatchVM
+- local-player ViewModel ownership
+- push adapters
+- debug dump
 
-## Gameplay delegate added
+Still not implemented:
 
-- `AGP_PlayerController::OnPlayerStatePresentationReady(APlayerState*)` broadcasts from the existing
-  `OnPlayerStateReady` lifecycle after the owning replicated link becomes available.
-- `AGP_GameState::OnPlayerStateRosterChanged(APlayerState*, bool bAdded)` broadcasts after
-  `AddPlayerState` / `RemovePlayerState`.
+- authored `WBP_GP_HUD`
+- visible production resource/timer HUD
+- Selection UI
+- Command Bar
+- Order Menu
+- Minimap
+- Notifications
+- End-of-match production screen
 
-Both are read-only presentation lifecycle information. No GPRuntime dependency on GPUIRuntime, UMG,
-or CommonUI was added; authority and replication semantics are unchanged.
-
-## ViewModel fields and factual sources
-
-### ResourceVM — current `UGP_PlayerAttributeSet` GAS attributes
-
-- `OrbitalFerronite` — own ASC, OwnerOnly replicated attribute
-- `FerroniteScore` — own ASC, public replicated score
-- `CurrentUnits` — own ASC, OwnerOnly replicated attribute
-- `MaxUnits` — own ASC, OwnerOnly replicated attribute
-- `OpponentFerroniteScore` — opposing PlayerState ASC public score
-
-All fields use `float`, matching current gameplay attributes. Opponent resolution uses replicated
-`AGP_GameState::PlayerArray` plus TeamId, not a world scan.
-
-### MatchVM — current `AGP_GameState`
-
-- `MatchTimeRemaining`
-- `MatchStateTag`
-- owning-team `FerroniteThreatValue` from `TeamFerroniteThreatValues`
-- `WinnerTeamId`
-- `WinReasonTag`
-- `MatchDuration` from current `FGP_MatchResult`
-- `bMatchFinished`
-
-Existing match timer/state/per-team-threat/result delegates drive updates; no new polling or gameplay
-replication was introduced.
-
-## TEMP HUD preservation
-
-`UGP_TEMP_S28P_PlanetaryFerroniteHUD` remains present and functional. Its buttons, gameplay contract,
-creation, and binding path were not migrated or removed.
-
-## Debug / operator visibility
-
-`gp.UI.HUDDump` reads only the local subsystem and its ViewModels. It prints Ready/NotReady, local
-TeamId, own resources/score/cap, opponent score, timer, own-team Ferronite threat, and factual
-match/result summary.
-
-## Validation results
+## Tests / results
 
 - `gp.UI.RunProductionHUDFoundationContractTest` — **PASS**, Failures=0
 - `gp.FoW.RunClientPresentationFoundationContractTest` — **PASS**, Failures=0
-- GPEditor Win64 Development + UHT — **PASS**
-- Full project suite — not run
-- GP Development / Shipping — not run (reserved for post-operator finalization)
+- Full project suite — **not run** (no escalation)
 
-## Exact changed files
+## Final build results
 
-- `GP/Source/GPRuntime/Public/Game/GPGameState.h`
-- `GP/Source/GPRuntime/Private/Game/GPGameState.cpp`
-- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-- `GP/Source/GPUIRuntime/Public/Widgets/GPUserWidgetBase.h`
-- `GP/Source/GPUIRuntime/Private/Widgets/GPUserWidgetBase.cpp`
-- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
-- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPResourceViewModel.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPResourceViewModel.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPMatchViewModel.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPMatchViewModel.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPResourceViewModelAdapter.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPResourceViewModelAdapter.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPMatchViewModelAdapter.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPMatchViewModelAdapter.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPHUDViewModelSubsystem.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPHUDViewModelSubsystem.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPProductionHUDFoundationContractTest.cpp`
+1. GPEditor Win64 Development + UHT — **PASS**
+2. GP Win64 Development — **PASS**
+3. GP Win64 Shipping — **PASS**
+
+## TEMP HUD preserved
+
+`UGP_TEMP_S28P_PlanetaryFerroniteHUD` remains the active operator gameplay HUD. It was not deleted,
+migrated, or replaced.
+
+## Exact changed files (this finalization commit)
+
 - `Docs/TDD/12_UI_Architecture.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
-- `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/DOCUMENTATION_INDEX.md`
 - `Docs/Development/Claude_Tasks/README.md`
 - `Docs/Development/Claude_Tasks/GP-Production-HUD-Foundation.md`
+- `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
+
+No runtime C++ changes in this finalization commit.
 
 ## Protected content confirmation
 
 No `GP/Content`, maps, Blueprints, DataAssets, local LongRange UnitDefinition, local authored
-terrain/material/VFX assets, `GP/Config`, or `Tools` files were changed by this slice. The pre-existing
-local protected modifications remain unstaged and untouched.
+terrain/material/VFX assets, `GP/Config`, or `Tools` files were changed by this finalization.
+Pre-existing local protected modifications remain unstaged and untouched.

@@ -9,7 +9,7 @@
 - Branch: `docs/gp-production-hud-layout-spec`
 - Base: `origin/main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`
 - Previous layout commit on this branch: `6998b00d305b2769d705f66ddb535ccc2b8be6de`
-- Head: this documentation amendment (recorded after commit)
+- Head: `2af66aac2ff0e54642fc8c288cfe71ae17540575`
 - **NOT MERGED**
 
 ## Previous HUD layout status

@@ -5,9 +5,15 @@
 #include "Widgets/GPUserWidgetBase.h"
 #include "GPHUDRootWidget.generated.h"
 
-/** Native lifetime root for the future authored WBP_GP_HUD production HUD. */
+/** Native lifetime root for the authored WBP_GP_HUD production HUD. */
 UCLASS(Abstract, Blueprintable)
 class GPUIRUNTIME_API UGP_HUDRootWidget : public UGP_UserWidgetBase
 {
 	GENERATED_BODY()
+
+protected:
+	virtual void NativeConstruct() override;
+
+private:
+	void TryAssignOwnedViewModels();
 };

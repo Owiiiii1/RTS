@@ -1,14 +1,13 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW`
+**Status:** `HUD_VIEWMODEL_BRIDGE_READY_FOR_OPERATOR_VALIDATION`
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
-**Baseline:** `origin/main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`
+**Baseline:** `origin/main` @ `61cedc682a391225ac0a02a716f3d36a4c176d7e`
 **Audit date:** 2026-08-21
 **Scope:** current factual roadmap and capability status.
 **Current execution checkpoint:** Production HUD Resource/Match data foundation is on `main`.
-Approved two-bar HUD IA plus MainBase PURCHASE in the bottom-right panel is documented.
-No authored visual HUD, minimap function, or MainBase PURCHASE UI is implemented. TEMP HUD
-procurement remains scaffolding.
+`UGP_HUDRootWidget` now injects those subsystem-owned ViewModels into authored Manual MVVM slots.
+Visible HUD is still not complete. TEMP HUD remains active. **NOT FINALIZED.**
 
 ## 1. Why reconciliation is required
 
@@ -111,7 +110,7 @@ current execution order.
 | --- | --- | --- |
 | TEMP gameplay HUD | **DONE (temporary)** | `UGP_TEMP_S28P_PlanetaryFerroniteHUD` exposes resources, launch, catalogs/READY, cap, timer, result, and Wall Package state. |
 | CommonUI/MVVM prerequisites | **DONE — FOUNDATION** | Plugins/dependencies plus project-owned activatable and non-activatable widget bases, HUD root base, FoW/Resource/Match VMs, and push adapters exist in `GPUIRuntime`. |
-| Production HUD | **PARTIAL — DATA FOUNDATION + APPROVED LAYOUT SPEC** | Data foundation on `main`. Approved IA: two bars × three blocks; MainBase PURCHASE lives in the bottom-right panel ([`GP-Production-HUD-Layout-Spec`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md)). Not implemented: authored `WBP_GP_HUD`, visible HUD, SelectionVM, Context Action Grid, MainBase PURCHASE UI, minimap function, Patrol, notifications, production end-of-match. TEMP HUD remains active. Global Order Menu is **SUPERSEDED** as the production HUD path. |
+| Production HUD | **PARTIAL — DATA FOUNDATION + VIEWMODEL BRIDGE** | Data foundation on `main`. `UGP_HUDRootWidget` injects subsystem-owned Resource/Match VMs into authored Manual MVVM slots. Visible HUD, SelectionVM, Context Action Grid, MainBase PURCHASE UI, minimap, Patrol, notifications, and production end-of-match remain unimplemented. TEMP HUD remains active. Operator is authoring `WBP_GP_HUD` locally (not in this slice). |
 | Production Order Menu | **SUPERSEDED AS HUD PATH — UI NOT STARTED** | Canonical production entry is MainBase PURCHASE inside the Context Action Grid. Purchases remain usable through TEMP HUD only. Backend unit/building/Wall Package flows exist. |
 | Minimap | **NOT STARTED** | No minimap subsystem/VM/widget production code. |
 | Notifications | **NOT STARTED** | No notification VM/stack or authority-to-client notification pipeline. |
@@ -365,13 +364,12 @@ After SWARM implementation:
 
 ## 11. Immediate NEXT recommendation
 
-**Production HUD layout + MainBase procurement documentation is ready for review.** Canonical IA is
-two bars × three blocks. Canonical visible procurement: select MainBase → PURCHASE →
-UNITS / BUILDINGS / DEFENSE. Visual HUD and MainBase PURCHASE UI are still not implemented.
-Next implementation slice must follow
-[`GP-Production-HUD-Layout-Spec`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
+**HUD ViewModel bridge is ready for operator validation.** Authored `WBP_GP_HUD` (local, not in this
+slice) uses Manual MVVM entries `GP_ResourceViewModel` / `GP_MatchViewModel`.
+`UGP_HUDRootWidget::NativeConstruct` assigns the LocalPlayer subsystem's existing instances.
+Visible HUD is not claimed complete.
 
-Status: `PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW`. **NOT MERGED.**
+Status: `HUD_VIEWMODEL_BRIDGE_READY_FOR_OPERATOR_VALIDATION`. **NOT MERGED. NOT FINALIZED.**
 
 Execution order remains: implement remaining production UI/HUD visuals using the approved layout →
 minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps →

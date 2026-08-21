@@ -88,8 +88,14 @@ PublicDependencyModuleNames.AddRange(new string[]
 
 - `UGP_UserWidgetBase : UCommonUserWidget` is the project-owned base for non-activatable widgets.
   `UGP_ActivatableWidgetBase` remains the base for modal/activatable screens.
-- `UGP_HUDRootWidget : UGP_UserWidgetBase` establishes the future `WBP_GP_HUD` native root/lifetime
-  contract. This slice creates no authored Widget Blueprint and no native visual panel hierarchy.
+- `UGP_HUDRootWidget : UGP_UserWidgetBase` is the native root for authored `WBP_GP_HUD`.
+  `NativeConstruct` (after Super) resolves the owning `ULocalPlayer`, reads
+  `UGP_HUDViewModelSubsystem`, and assigns the **already owned** Resource/Match ViewModels into
+  authored Manual MVVM slots `GP_ResourceViewModel` / `GP_MatchViewModel` via UE 5.8
+  `UMVVMSubsystem::GetViewFromUserWidget` + `UMVVMView::SetViewModel(FName, TScriptInterface<INotifyFieldValueChanged>)`.
+  The widget never creates ViewModels, never queries ASC/PlayerState/GameState, and does not Tick or
+  poll. Missing LocalPlayer / subsystem / MVVM View / slot fails safely with a non-shipping warning.
+  Visible authored HUD remains operator-owned; this slice does not claim WBP complete.
 - `UGP_ResourceViewModel` exposes FieldNotify `OrbitalFerronite`, `FerroniteScore`, `CurrentUnits`,
   `MaxUnits`, and `OpponentFerroniteScore`. Numeric types remain `float`, matching current GAS
   attributes.
@@ -97,8 +103,8 @@ PublicDependencyModuleNames.AddRange(new string[]
   `MatchTimeRemaining`, `MatchStateTag`, owning-team `FerroniteThreatValue`, `WinnerTeamId`,
   `WinReasonTag`, `MatchDuration`, and `bMatchFinished`.
 - `UGP_HUDViewModelSubsystem : ULocalPlayerSubsystem` owns exactly one ResourceVM, MatchVM, and their
-  push adapters per local player. Future widgets obtain read-only VM references through
-  `GetResourceViewModel()` / `GetMatchViewModel()`; they never resolve PlayerState, ASC, or GameState.
+  push adapters per local player. Authored `WBP_GP_HUD` Manual MVVM entries receive those same
+  instances from `UGP_HUDRootWidget` (no duplicate ViewModels). Widgets remain read-only consumers.
 - Resource binding uses current GAS attribute-change delegates on the local PlayerState ASC and the
   opposing PlayerState's public `FerroniteScore`. Opponent resolution is through the replicated
   `AGP_GameState::PlayerArray`, never a world actor scan.

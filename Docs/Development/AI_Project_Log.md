@@ -1,5 +1,19 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-21 — Production HUD ViewModel bridge
+
+Status: **HUD_VIEWMODEL_BRIDGE_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch `feature/gp-production-hud-viewmodel-bridge` from current `origin/main`.
+- `UGP_HUDRootWidget` assigns subsystem-owned Resource/Match VMs into authored Manual MVVM slots
+  `GP_ResourceViewModel` / `GP_MatchViewModel` via UE 5.8 `UMVVMView::SetViewModel`.
+- No duplicate VM instances. Widgets do not query gameplay. Visible HUD not claimed complete.
+- `gp.UI.RunProductionHUDFoundationContractTest` / `gp.UI.RunHUDViewModelBridgeContractTest` /
+  `gp.FoW.RunClientPresentationFoundationContractTest`: Failures=0. GPEditor Win64 Development + UHT **PASS**.
+- **NOT MERGED. NOT FINALIZED.**
+
+
+
 ## 2026-08-21 — Production HUD MainBase procurement documentation
 
 Status: **PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW**

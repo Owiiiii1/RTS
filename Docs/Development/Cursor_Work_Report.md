@@ -1,154 +1,98 @@
-# Cursor Work Report — Production HUD Layout + MainBase Procurement
+# Cursor Work Report — Production HUD ViewModel Bridge
 
 ## Status
 
-**PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW**
+**HUD_VIEWMODEL_BRIDGE_READY_FOR_OPERATOR_VALIDATION**
 
 ## Branch / base / head
 
-- Branch: `docs/gp-production-hud-layout-spec`
-- Base: `origin/main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`
-- Previous layout commit on this branch: `6998b00d305b2769d705f66ddb535ccc2b8be6de`
-- Head: `2af66aac2ff0e54642fc8c288cfe71ae17540575`
+- Branch: `feature/gp-production-hud-viewmodel-bridge`
+- Base: `origin/main` @ `61cedc682a391225ac0a02a716f3d36a4c176d7e`
+- Head: recorded after commit
 - **NOT MERGED**
+- **NOT FINALIZED**
 
-## Previous HUD layout status
+## Factual UE 5.8 MVVM API used
 
-The approved two-bar × three-block HUD IA remains canonical (Threat+Score / Match Timer /
-Planet-Orbit-Cap; square minimap placeholder / Selection-Info / Context Action Grid).
-The coarse pre-2026-08-21 placement remains **SUPERSEDED**.
+Inspected installed UE 5.8.1 `ModelViewViewModel` headers:
 
-This amendment adds owner-approved MainBase procurement into the bottom-right panel.
-A global `O` / standalone Order Menu is **SUPERSEDED** as the production HUD path.
-TEMP HUD debug procurement remains temporary scaffolding. Backend ownership is unchanged.
+- `UMVVMSubsystem::GetViewFromUserWidget(const UUserWidget*)` returns the widget's `UMVVMView` extension (`UserWidget->GetExtension<UMVVMView>()`).
+- `UMVVMView::SetViewModel(FName ViewModelName, TScriptInterface<INotifyFieldValueChanged> ViewModel)` assigns a Manual/settable source by authored slot name and re-executes bindings if the view is already initialized.
 
-## MainBase PURCHASE entry
+No duplicate ViewModel objects are created by this path.
 
-Orbital procurement is not a permanent global HUD panel.
+## Widget lifecycle hook and why
 
-When MainBase is the current single selected building, the bottom-right Building Action Grid
-shows **PURCHASE**. Clicking PURCHASE replaces that panel with three large category buttons:
-UNITS, BUILDINGS, DEFENSE. Navigation stays inside the same bottom-right panel.
-Only MainBase owns PURCHASE. Other buildings are not procurement sources.
+`UGP_HUDRootWidget::NativeConstruct` **after** `Super::NativeConstruct()`.
 
-Keyboard shortcut may later convenience-open the same panel; select MainBase + PURCHASE is the
-canonical visible entry.
+Why:
 
-## Message Strip
+- `UUserWidget::NativeOnInitialized` runs `UMVVMViewClass::Initialize`, which **adds** `UMVVMView` (`ConstructView`).
+- `UUserWidget::NativeConstruct` then constructs class extensions and calls `UMVVMView::Construct()`, which `InitializeSources` / `InitializeBindings` for Manual entries (no instance until set).
+- Assigning immediately after Super uses the constructed view so `SetViewModel` can attach the subsystem instances and re-run bindings.
+- No Tick. No timer retry. No world scan.
 
-Small horizontal strip directly **above** the bottom-right Context Action / Procurement block.
-Short contextual procurement/action feedback. Not a global toast system. Default may be empty.
+## ViewModel slot identifiers
 
-Examples: shuttle capacity, not enough Orbital Ferronite, shuttle capacity reached, unit cap
-reached, building/placement unavailable, wall stock full, delivery already pending.
+Stable `FName` constants on `FGP_HUDViewModelBridge`:
 
-## Units category behavior
+- `GP_ResourceViewModel`
+- `GP_MatchViewModel`
 
-Uses the current factual orbital unit catalog and existing backend:
+These match the authored WBP Manual MVVM entry display names. Existing ViewModel classes were not renamed.
 
-manifest → validate Orbital Ferronite → validate transport slots → validate player unit cap
-→ Confirm → one DropPod to MainBase Unit Drop Zone
+## Ownership confirmation
 
-No free world placement for normal unit orders.
+`UGP_HUDViewModelSubsystem` remains the Outer/lifetime owner of ResourceVM, MatchVM, and adapters.
+`UGP_HUDRootWidget` only assigns those pointers into the MVVM View.
 
-## LMB add / RMB remove quantity behavior
+## No duplicate VM creation
 
-- LMB on a unit icon: add one of that type to the pending shuttle manifest; show quantity on
-  the icon; repeated LMB increments while valid.
-- RMB: remove one; decrement quantity; hide the marker at zero.
-- UI must not create invalid authoritative state. Local prevent of obvious invalid adds is
-  allowed; final validation remains server-authoritative.
+The bridge never `NewObject`s ResourceVM/MatchVM. Null subsystem VMs abort without replacements.
 
-## Shuttle slot messaging
+## Failure behavior
 
-Before the first unit is added, Message Strip should show shuttle capacity
-(`PodTransportSlotCapacity`), e.g. `Shuttle. Capacity — X slots`.
-Do not confuse shuttle slots with `CurrentUnits / MaxUnits`.
-As the manifest changes: `Shuttle: 3 / 4 slots`, capacity reached, not enough Orbital Ferronite,
-unit cap reached. Per-unit transport-slot cost remains canonical.
+Safe no-crash returns with non-shipping warnings:
 
-LAUNCH SHUTTLE (name may be finalized in WBP authoring) uses existing unit-manifest Confirm.
+- no LocalPlayer
+- no HUDViewModelSubsystem
+- no `UMVVMView`
+- `SetViewModel` false (missing/unconstructed slot)
 
-## Buildings category and Launch/Back flow
+## Tests / results
 
-BUILDINGS lists orbital buildings. No Wall Package. No MainBase.
+Headless full WBP Manual-slot success is not claimed (operator-authored `WBP_GP_HUD` is local and unstaged).
+The contract proves fail-safe helper behavior, slot names, and subsystem ownership of existing instances.
 
-LMB on an icon → selected-item launch state: mostly empty panel, selected identity/icon may
-remain, centered **LAUNCH**, corner **BACK**.
+| Command | Result |
+| --- | --- |
+| `gp.UI.RunProductionHUDFoundationContractTest` | **PASS**, Failures=0 |
+| `gp.UI.RunHUDViewModelBridgeContractTest` | **PASS**, Failures=0 |
+| `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS**, Failures=0 |
 
-BACK: return to list. No spend. No READY consume.
+## GPEditor / UHT
 
-## Exact preservation of Purchase → READY → Deploy backend
+`Build.bat GPEditor Win64 Development` — **PASS** (UHT processed GPEditor; compile/link succeeded).
 
-LAUNCH is a UX shortcut, not a collapsed authority model:
-
-Purchase → spend Orbital Ferronite exactly once → READY → immediately enter current building
-deployment ghost using that READY item
-
-No second spend on placement. RMB / Esc cancel: READY remains owned and can be deployed later
-via existing READY inventory. No new building-spawn RPC.
-
-## Defense category
-
-DEFENSE shows Defensive Turret and Wall Package. Wall-mounted Turret may appear when its
-placement/support workflow is production-ready. Do not invent other defenses.
-Foundation Slab package HUD category remains **TBD** (orbital flow still documented).
-
-## Defensive Turret behavior
-
-Same selected-item launch pattern as BUILDINGS. LAUNCH preserves Purchase → READY →
-immediately enter current building placement ghost. Placement remains server-authoritative.
-Future foundation requirements still apply when Terrain/Foundation implements them.
-
-## Exact Wall Package behavior
-
-Same selected-item launch presentation, different LAUNCH:
-
-Buy Wall Package → spend full package cost once → one DropPod to owning MainBase Unit Drop Zone
-→ add wall segment stock to MainBase → NO placement mode → NO READY inventory → NO wall actor
-from the pod
-
-Canonical rules: package = 5; MainBase stock cap = 5; buy at 0..4 only when none in flight;
-full price never prorated; arrival `min(5, free capacity)`; excess wasted; no refund;
-stock 5 rejects; pending package rejects another purchase.
-
-## Foundation category remains TBD
-
-Do not force Foundation Slab package into Units / Buildings / Defense in this pass.
-Do not omit it from orbital architecture docs. Do not claim it is implemented.
-
-## Right-panel state machine
-
-NO/GENERIC SELECTION → unit/building commands
-MAINBASE SELECTED → Building Actions → PURCHASE
-PURCHASE → UNITS | BUILDINGS | DEFENSE
-UNITS → manifest LMB/RMB/quantity → launch current manifest
-BUILDINGS → list → selected-item launch → BACK or Purchase+READY+ghost
-DEFENSE → turret (READY+ghost) or wall (Buy Wall Package → MainBase stock)
-
-Message Strip stays attached above this block. Bottom-center stays on MainBase info.
+GP Win64 Development / Shipping **not run** (post-operator finalization).
 
 ## Exact changed files
 
-- `Docs/Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md`
-- `Docs/GDD/09_UI_UX.md`
-- `Docs/GDD/10_Orbital_Delivery.md`
-- `Docs/GDD/05_Buildings.md`
-- `Docs/GDD/README.md`
+- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
+- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
+- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDViewModelBridge.h` (new)
+- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDViewModelBridge.cpp` (new)
+- `GP/Source/GPUIRuntime/Private/Debug/GPHUDViewModelBridgeContractTest.cpp` (new)
 - `Docs/TDD/12_UI_Architecture.md`
-- `Docs/TDD/14_Orbital_Delivery.md`
-- `Docs/TDD/06_Building_Architecture.md`
-- `Docs/TDD/04_RTS_Selection_And_Commands.md`
-- `Docs/TDD/README.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/DOCUMENTATION_INDEX.md`
-- `Docs/Development/Claude_Tasks/README.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Documentation-only confirmation
+## Protected Content confirmation
 
-No runtime, Content, Config, maps, Blueprints, DataAssets, or Tools files are part of this slice.
-No Unreal tests or builds were run.
+No `GP/Content/**`, Config, maps, Blueprints, DataAssets, or Tools files were modified or staged.
+Operator-authored `WBP_GP_HUD` was not touched.
 
 ## NOT MERGED
+
+## NOT FINALIZED

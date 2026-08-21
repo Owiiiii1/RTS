@@ -11,7 +11,7 @@
 - Branch: `feature/gp-production-hud-viewmodel-bridge`
 - Base: `origin/main` @ `61cedc682a391225ac0a02a716f3d36a4c176d7e`
 - Implementation head: `1a13d0bf9cf2d2372d34ddb07fd8cba5e6ed6349`
-- Finalization head: this commit on `feature/gp-production-hud-viewmodel-bridge`
+- Finalization head: `ba5d127b2e6c835928681549bcdcbfec459a6b70`
 
 ## Operator validation PASS
 

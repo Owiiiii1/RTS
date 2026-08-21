@@ -1,5 +1,16 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-21 — Voxel terrain / foundation documentation finalized
+
+Status: **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE**
+
+- Final consistency audit on `docs/gp-voxel-terrain-foundations`. **NOT MERGED.**
+- Canonical rules locked: Voxel Plugin deformable terrain; READY buildings complete from orbit; Foundation per-cell Worker labor; local engineering planned-job model; Walls do not require Foundation; earthquakes post-MVP reuse the same damage contract.
+- Roadmap 3B/3C wording aligned (job/work hooks; Foundation procurement/install/repair support). Wall/Foundation is not an open gate.
+- Documentation-only. No Source/Content/Config/Tools. No tests/builds.
+- Report: `Docs/Development/Cursor_Work_Report.md`
+
+
 ## 2026-08-21 — Voxel terrain / foundation documentation refinement
 
 Status: **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW**

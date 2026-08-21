@@ -39,7 +39,7 @@
 | Last closed / merged stage | **FoW world visualization** operator-accepted / **MERGED** on `main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`docs/gp-voxel-terrain-foundations`](../GDD/13_Terrain_Engineering_And_Foundations.md) — **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW** |
+| Current stage | [`docs/gp-voxel-terrain-foundations`](../GDD/13_Terrain_Engineering_And_Foundations.md) — **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE** |
 
 ---
 
@@ -55,7 +55,7 @@
 
 **Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — Terrain / Voxel / Foundation inserted after production UI + minimap and **before** RTS AI Opponent. FoW world visualization is **MERGED**, not pending.
 
-**Exactly one current gate:** review of voxel-terrain / foundation documentation on `docs/gp-voxel-terrain-foundations`. **NOT MERGED.** No runtime work in this slice.
+**Exactly one current gate:** merge of voxel-terrain / foundation documentation on `docs/gp-voxel-terrain-foundations`. Status: **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.** Documentation-only. No runtime work in this slice.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 
@@ -177,6 +177,6 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 ## Stop
 
 Current baseline: `origin/main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f`. Current stage:
-**VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW** on
+**VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE** on
 `docs/gp-voxel-terrain-foundations`.
 **NOT MERGED.** Documentation-only. No runtime / Content / Config / Tools changes.

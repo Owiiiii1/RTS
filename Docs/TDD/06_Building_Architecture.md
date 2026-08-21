@@ -478,7 +478,7 @@ int32 EffectiveMaxContainerCount = 5;        // Base + sum of all alive Logistic
 | `GP.Capability.GrantsVision` | FoW sight source marker |
 | `GP.Effect.Source.UnitCapBuilding` | Marks `GE_GP_UnitCap_Plus5` source family (for query) |
 
-Deprecated (pre-pivot, do not use): `GP.Building.Type.Barracks`, `GP.Building.Type.AssemblyYard`, `GP.Command.QueueProduction`, `GP.Command.CancelProduction`, `GP.Command.SetRallyPoint`, `GP.Command.Build`.
+Deprecated (pre-pivot, do not use): `GP.Building.Type.Barracks`, `GP.Building.Type.AssemblyYard`, `GP.Command.QueueProduction`, `GP.Command.CancelProduction`, `GP.Command.SetRallyPoint`, `GP.Command.Build` (factory / READY-building construction). Future local-engineering job commands are a different concept (GDD/13, TDD/16).
 
 ## Build Grid System (2026-05-16 — adds Walls + grid mechanic)
 

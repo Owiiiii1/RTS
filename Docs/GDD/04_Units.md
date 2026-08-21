@@ -39,7 +39,7 @@ Per Pillar 2 (Engineer, Not Soldier) і Pillar 7 (Simple Machines, Strong Readab
 - `MineRatePerSecond`: 10 (TBD; також live у `DA_GP_Resource_Ferronite.MineRatePerWorker` — final tuning у одній з пар, не дублювати).
 - `RepairCost`: TBD (per repair tick — застосовується через `GE_GP_Cost_RepairTick`)
 - `AllowedCommands`: `GP.Command.{Move, Stop, Mine, Repair}` today. **Future:** Level Terrain / foundation install / foundation repair / Wall construction assignment (exact tags TBD; see [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md)).
-- `GrantedAbilities`: Repair. **NO Build of the READY building.** Worker does not manufacture Logistics Hub / Turret / other READY buildings. Worker **does** construct Walls and install foundation as local engineering.
+- `GrantedAbilities`: Repair. Worker does **not** build READY orbital buildings. Worker **does** perform field engineering / local Wall construction (level terrain, install/repair foundation, construct Walls). Exact future command tags TBD.
 - `UnitTags`: `GP.Unit.Type.Worker`, `GP.Faction.Corporate`
 
 ### Identity

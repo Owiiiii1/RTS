@@ -1,108 +1,113 @@
-# Cursor Work Report — Voxel Terrain / Foundation Documentation (refinement)
+# Cursor Work Report — Voxel Terrain / Foundation Documentation
 
 ## Status
 
-**VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW**
+**VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE**
 
 **NOT MERGED.**
 
-## Branch
+## Branch / base / head
 
 - Branch: `docs/gp-voxel-terrain-foundations`
-- Base: `origin/main` @ `26e0dfa` (FoW world visualization MERGED / operator accepted)
-- Head: this refinement commit on the same branch
+- Base: `origin/main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` (`Finalize FoW world visualization after operator acceptance.`)
+- Head: this finalization commit on `docs/gp-voxel-terrain-foundations`
 
-## Wall/Foundation decision resolved
+## Documentation-only confirmation
 
-**Wall segments do not require Foundation Slabs.**
+This slice is documentation only.
 
-Reason: Wall material arrives as Wall Package stock; segments are not completed orbital building drops; Workers assemble them in the field; they may be constructed directly on terrain.
+- No Unreal builds.
+- No gameplay tests.
+- No `GP/Source`, `GP/Content`, `GP/Config`, Tools, maps, Blueprints, or DataAssets changes in this commit.
 
-Wall placement still must validate terrain suitability. Exact slope, visual adapt, auto-level vs manual, and voxel base interaction remain **TBD**.
+## Canonical terrain / foundation rules
 
-Wall-mounted Turret follows Wall and does not independently require ground Foundation.
+- Intended backend = **Voxel Plugin**. Exact version/API remains spike-required.
+- Terrain is destructible/deformable via a **generic server-authoritative** deformation request.
+- Projectiles, explosions, and future earthquakes reuse the same terrain/foundation-damage architecture.
+- Normal orbital buildings arrive **COMPLETE** from orbit. Worker does **not** construct the READY building.
+- Deploy requires sufficiently leveled terrain + intact Foundation coverage for **every** required BuildGrid cell (initial MainBase excepted).
+- Foundation material comes from orbit to MainBase inventory. Player **plans** installation. Foundation does **not** appear instantly. Physical Workers must reach the job and install through labor. State and partial destruction are **per BuildGrid cell**. Foundation Repair is a Worker engineering job. Stock consume/reserve timing remains **DESIGN REQUIRED**.
 
-## Local engineering job principle
+## Local engineering / Worker job rules
 
-Any field engineering / local construction that is not delivery of an already-completed orbital asset requires physical Worker participation.
+- Plan/job may exist before Workers arrive.
+- 0 active Workers = 0 progress; 1 = baseline; multiple accelerate.
+- Exact scaling / max / reservation remain TBD.
+- Worker approaches valid work positions and alternates work pulse / reposition.
+- Authoritative progress is independent from presentation.
+- Gameplay exposes conceptual work start/end pulse hooks. Blueprint owns Niagara/sound/animation. No hardcoded project Niagara asset. Mining is the reference presentation pattern. Exact event names remain implementation detail.
+- Worker does **not** build READY orbital buildings. Worker **does** perform field engineering and local Wall construction.
 
-Does **not** apply to READY orbital buildings (Hub, Turret, future READY buildings): they land complete.
+## Wall / Foundation resolved decision
 
-## Planned job → Worker assignment → physical work → completion
+**Wall segments do NOT require Foundation.**
 
-Player may define the work before Workers are present. Construction does not auto-progress. Work starts when at least one assigned Worker reaches a valid work position. Exact job/site/blueprint class names are **not** invented.
+Wall material comes from Wall Package stock. Walls are locally constructed by Workers, may be planned before Workers arrive, and make no progress with 0 Workers. Multiple Workers may accelerate. Terrain suitability/slope/visual adaptation remains TBD. Wall-mounted Turret follows the Wall support rule.
 
-Terrain Leveling: the selected zone is the planned job. Foundation install uses the same conceptual pattern.
+## Earthquake future-extension status
 
-## Multi-Worker acceleration
+Earthquakes are **future / post-MVP only**. They reuse the generic terrain/foundation damage system. Live earthquake gameplay and tuning remain TBD.
 
-- 0 active Workers = 0 progress
-- 1 = baseline
-- multiple = faster
+## Final roadmap position
 
-Max Workers, scaling formula, contribution rate, assignment/cancel, work-position reservation remain **data-driven / DESIGN REQUIRED**. Workers should not occupy the same point.
+1. Production UI foundation / HUD
+2. Minimap + FoW minimap presentation
+3. Terrain / Voxel / Foundation system
+   - 3A. technical spike + deformation foundation
+   - 3B. Worker leveling + generic local engineering job/work hooks
+   - 3C. Foundation procurement/install/repair foundation support
+   - 3D. building placement migration
+   - 3E. navigation + terrain-surface FoW integration
+4. RTS AI Opponent
+5. bounded core-loop gaps
+6. Building-system design gate / Walls (**Wall/Foundation is RESOLVED**, not an open question)
+7. Steam multiplayer
+8. Match completion
+9. SWARM design gate
+10. SWARM
+11. full MVP stabilization
 
-## Generic Worker work-presentation start/end hooks
+## Remaining TBD / DESIGN REQUIRED items
 
-Gameplay emits work-pulse start/end (~1 s presentation target). Blueprint owns authored Niagara/sound/animation. No hardcoded project Niagara in Worker native gameplay. Pulses do not own authoritative progress. Mining presentation is the reference pattern, not a class to copy verbatim.
+- Leveling zone UX, elevation algorithm, slope/flatness tolerance, leveling speed, interrupt/resume
+- Max Workers per job, speed scaling, contribution rate, assignment/cancel, work-position reservation
+- Foundation package cost, quantity, slab footprint
+- Foundation and Wall stock consume/reserve moment
+- Foundation Repair thresholds, cost, duration, replacement-stock vs repair, damaged-cell support validity
+- Blast/crater radius/depth/formula
+- Voxel Plugin version/edition/API and multiplayer replication mechanism
+- Dynamic navigation strategy
+- Surviving-building behavior after foundation loss
+- Wall slope, visual adapt, auto-level vs manual, voxel interaction at wall bases
+- Exact starter-foundation implementation for initial MainBase
+- Earthquake frequency/intensity/area/warning/damage/building interaction
 
-## Foundation installation requires Worker labor
+## Exact changed files (this branch vs `origin/main`)
 
-Sequence: raw terrain → Worker levels → player plans Foundation install → delivered stock available → Workers travel → progressive cell install → intact coverage → READY deploy.
-
-Foundation does not appear instantly because stock exists and the player clicks cells.
-
-Stock consume/reserve moment is **DESIGN REQUIRED**.
-
-## Foundation Repair
-
-Future/canonical Worker engineering job on damaged/destroyed cells. Same planned-job + multi-Worker + presentation hooks. Thresholds, cost, duration, replacement-stock vs repair, and damaged-but-intact support validity remain **TBD**.
-
-## Earthquake future hazard
-
-Post-MVP. Reuses the same generic terrain/foundation deformation/damage architecture as explosions. Do not build a separate earthquake terrain system. Frequency/intensity/area/warning/damage/building interaction remain future design questions.
-
-## Landing/support rationale
-
-Foundation is an engineered landing/support surface for heavy orbital structures, not an arbitrary green-cell gate. Links Terrain Engineering to the Orbital Delivery pillar.
-
-## Docs changed
-
-- `Docs/GDD/13_Terrain_Engineering_And_Foundations.md`
+- `Docs/Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md`
+- `Docs/Architecture_Decisions/README.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/Cursor_Work_Report.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/GDD/02_Core_Gameplay_Loop.md`
 - `Docs/GDD/04_Units.md`
 - `Docs/GDD/05_Buildings.md`
 - `Docs/GDD/10_Orbital_Delivery.md`
+- `Docs/GDD/13_Terrain_Engineering_And_Foundations.md`
+- `Docs/GDD/README.md`
+- `Docs/README.md`
 - `Docs/TDD/04_RTS_Selection_And_Commands.md`
 - `Docs/TDD/06_Building_Architecture.md`
 - `Docs/TDD/14_Orbital_Delivery.md`
+- `Docs/TDD/15_Fog_of_War.md`
 - `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
 - `Docs/TDD/README.md`
-- `Docs/Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md`
-- `Docs/Architecture_Decisions/README.md`
-- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
 
-## Remaining TBDs
+## Runtime / Content / Config / Tools
 
-- Leveling zone UX, elevation algorithm, slope tolerance, speed, interrupt/resume
-- Max Workers / scaling / contribution / assignment / work-position reservation
-- Foundation package cost/quantity/footprint
-- Foundation and Wall stock consume/reserve moment
-- Foundation Repair tunables
-- Blast/crater formula
-- Voxel Plugin version/API and replication
-- Dynamic navigation
-- Surviving-building after foundation loss
-- Wall slope / visual adapt / auto-level / voxel base interaction
-- Earthquake parameters
-- Starter-foundation implementation
-
-## Documentation-only confirmation
-
-- No `GP/Source`, `GP/Content`, `GP/Config`, Tools, maps, Blueprints, or DataAssets modified.
-- No tests. No Unreal builds.
+**No runtime, Content, Config, or Tools changes in this documentation slice.**
 
 ## Merge
 

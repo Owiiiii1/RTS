@@ -1,6 +1,6 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW`
+**Status:** `VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE`
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
 **Baseline:** `origin/main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f`
 **Audit date:** 2026-08-21
@@ -251,8 +251,8 @@ This order replaces mechanical continuation of the historical Slice 8 -> 13 sequ
 2. **Minimap + FoW minimap presentation**
 3. **Terrain / Voxel / Foundation system** — must exist before AI and final building/wall design because both depend on construction-site rules and navigation. This stage must also establish the **generic local engineering job contract**, **Worker assignment/contribution model**, and **reusable work-presentation hooks** before final Wall implementation.
    - **3A.** Voxel Plugin technical spike + authoritative terrain deformation foundation
-   - **3B.** Worker terrain leveling / site-preparation loop
-   - **3C.** Orbital Foundation Slab procurement + MainBase inventory + Worker installation
+   - **3B.** Worker leveling + generic local engineering job/work hooks
+   - **3C.** Foundation procurement / install / repair foundation support
    - **3D.** Building placement migration to leveled + intact foundation requirement
    - **3E.** navigation + current world-FoW terrain-surface integration
 4. **RTS AI Opponent** — Explore/Mine/Ship/Order/Defend using completed authority APIs, FoW, and construction-site rules
@@ -361,19 +361,12 @@ After SWARM implementation:
 
 ## 11. Immediate NEXT recommendation
 
-**Exactly one current gate: review of voxel-terrain / foundation documentation on
-`docs/gp-voxel-terrain-foundations`.**
+**This documentation slice is finalized and ready for merge.** Runtime Terrain / Voxel / Foundation implementation is **not** started.
 
-Status: `VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_READY_FOR_REVIEW`. **NOT MERGED.**
+Status: `VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE`. **NOT MERGED.**
 
-Reason:
+After this docs merge, execution order remains: production UI/HUD → minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps → Building-system / Walls gate → Steam → match completion → SWARM gate → SWARM → full MVP stabilization.
 
-- FoW world visualization is **MERGED / operator accepted** (planar / fixed ground projection);
-- Terrain / foundation must exist before RTS AI Opponent and the Building-system / Wall design gate
-  because both depend on construction-site rules and navigation;
-- Voxel Plugin version/API, replication, nav strategy, slab balance, Wall slope, stock consume moment, and
-  surviving-building-after-foundation-loss remain **TBD / DESIGN REQUIRED**;
-- Wall/Foundation is **RESOLVED** (Walls do not require Foundation);
-- this slice is documentation only.
+**Wall Foundation Rule — RESOLVED:** Walls do not require Foundation. Do not list it as an open design gate.
 
-Do not implement Voxel Plugin, Worker leveling, or foundation inventory in this review gate.
+Do not implement Voxel Plugin, Worker leveling, or foundation inventory in this documentation slice.

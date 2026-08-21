@@ -296,7 +296,7 @@ GP.Command.{OrderDrop, Repair, Move, Stop, Attack, Mine, Sell, Demolish}
 GP.Team.{Neutral, Player.One, Player.Two}
 ```
 
-Deprecated (do NOT use): `GP.Command.{Build, QueueProduction, CancelProduction, SetRallyPoint}`, `GP.Building.Type.{Barracks, AssemblyYard}`. Tag taxonomy фіксована. Розширення — через ADR або TDD update, не ad-hoc.
+Deprecated (do NOT use): `GP.Command.{Build, QueueProduction, CancelProduction, SetRallyPoint}`, `GP.Building.Type.{Barracks, AssemblyYard}`. `GP.Command.Build` remains banned as a Barracks / READY-building factory tag. Future local-engineering job commands (level / foundation / Wall) are a different concept and are **not** this deprecated tag. Tag taxonomy фіксована. Розширення — через ADR або TDD update, не ad-hoc.
 
 ## Attributes List (MVP Canonical)
 

@@ -10,6 +10,7 @@
 #include "Orbital/GPOrbitalBuildingType.h"
 #include "GPPlayerController.generated.h"
 
+class APlayerState;
 class UGP_AbilitySystemComponent;
 class AGP_BuildingPlacementGhost;
 class AGP_CameraPawn;
@@ -29,6 +30,10 @@ class UEnhancedInputComponent;
 struct FInputActionValue;
 enum class EGP_BuildingDropRejectReason : uint8;
 
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FOnGP_PlayerStatePresentationReady,
+	APlayerState* /*PlayerState*/);
+
 /**
  * Network-correct PlayerController.
  * Forwards Enhanced Input camera intents to possessed AGP_CameraPawn; queries ASC from PlayerState.
@@ -44,6 +49,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "GP|AbilitySystem")
 	UGP_AbilitySystemComponent* GetGPAbilitySystemComponent() const;
+
+	/** Read-only lifecycle notification for local presentation adapters. */
+	FOnGP_PlayerStatePresentationReady OnPlayerStatePresentationReady;
 
 	UGP_SelectionComponent* GetSelectionComponent() const;
 	UGP_CommandComponent* GetCommandComponent() const;

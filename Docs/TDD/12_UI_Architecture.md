@@ -53,9 +53,9 @@ PublicDependencyModuleNames.AddRange(new string[]
 
 | Role | Base class | Notes |
 | --- | --- | --- |
-| HUD root | `UCommonUserWidget` (BP child for layout) | Added to viewport by PC. |
+| HUD root | `UGP_HUDRootWidget : UGP_UserWidgetBase` (BP child for layout) | Production lifetime root; authored child is future `WBP_GP_HUD`. |
 | Activatable screen (OrderMenu, EndOfMatch, Pause, Lobby) | `UCommonActivatableWidget` | Pushed into `UCommonActivatableWidgetStack`. |
-| Inline panels (SelectionPanel, ResourceReadout, MatchTimer, etc.) | `UCommonUserWidget` | Never raw `UUserWidget`. |
+| Inline panels (SelectionPanel, ResourceReadout, MatchTimer, etc.) | `UGP_UserWidgetBase : UCommonUserWidget` | Never raw `UUserWidget`. |
 | Buttons / list items | `UCommonButtonBase`, `UCommonListView` items | Reusable styles via `UCommonButtonStyle` DataAssets. |
 | ViewModels | `UMVVMViewModelBase` subclasses | Properties marked `UPROPERTY(FieldNotify)`. |
 
@@ -80,14 +80,44 @@ PublicDependencyModuleNames.AddRange(new string[]
   HUD/minimap widgets still consume ViewModels.
 - The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.
 
+### Production HUD data foundation — implemented (2026-08-21)
+
+- `UGP_UserWidgetBase : UCommonUserWidget` is the project-owned base for non-activatable widgets.
+  `UGP_ActivatableWidgetBase` remains the base for modal/activatable screens.
+- `UGP_HUDRootWidget : UGP_UserWidgetBase` establishes the future `WBP_GP_HUD` native root/lifetime
+  contract. This slice creates no authored Widget Blueprint and no native visual panel hierarchy.
+- `UGP_ResourceViewModel` exposes FieldNotify `OrbitalFerronite`, `FerroniteScore`, `CurrentUnits`,
+  `MaxUnits`, and `OpponentFerroniteScore`. Numeric types remain `float`, matching current GAS
+  attributes.
+- `UGP_MatchViewModel` exposes factual current `AGP_GameState` presentation fields:
+  `MatchTimeRemaining`, `MatchStateTag`, owning-team `FerroniteThreatValue`, `WinnerTeamId`,
+  `WinReasonTag`, `MatchDuration`, and `bMatchFinished`.
+- `UGP_HUDViewModelSubsystem : ULocalPlayerSubsystem` owns exactly one ResourceVM, MatchVM, and their
+  push adapters per local player. Future widgets obtain read-only VM references through
+  `GetResourceViewModel()` / `GetMatchViewModel()`; they never resolve PlayerState, ASC, or GameState.
+- Resource binding uses current GAS attribute-change delegates on the local PlayerState ASC and the
+  opposing PlayerState's public `FerroniteScore`. Opponent resolution is through the replicated
+  `AGP_GameState::PlayerArray`, never a world actor scan.
+- Match binding uses existing `AGP_GameState` timer/state/per-team-threat/result delegates. The only
+  gameplay-side additions are read-only lifecycle notifications:
+  `AGP_PlayerController::OnPlayerStatePresentationReady` for the owning link and
+  `AGP_GameState::OnPlayerStateRosterChanged` for player add/remove. They make late replication and
+  travel rebind explicit without introducing UI types into gameplay.
+- Lifecycle retry is event-driven: `ULocalPlayerSubsystem::PlayerControllerChanged`,
+  `UWorld::GameStateSetEvent`, GameState roster changes, and PlayerState team changes. There is no
+  UI Tick or timer polling. Rebind removes old handles before adding new ones.
+- `gp.UI.HUDDump` reads only subsystem/ViewModel state for operator diagnostics.
+- The TEMP HUD is preserved and remains functional. Production visual HUD, Order Menu, selection
+  panel, minimap, notifications, and authored content remain outside this slice.
+
 ### MVVM Data Flow
 
 ```
 Server-authoritative state                 Replication                ViewModel             Widget (View)
 ────────────────────────────               ──────────────             ─────────             ─────────────
-UGP_PlayerAttributeSet.OrbitalFerronite ─► GAS attribute repl   ─►   UGP_ResourceVM       ◄─►  WBP_GP_HUD_ResourceReadout
+UGP_PlayerAttributeSet.OrbitalFerronite ─► GAS attribute repl   ─►   UGP_ResourceViewModel ◄─  future resource widget
 UGP_SelectionComponent (local)       ─►    OnSelectionChanged    ─►   UGP_SelectionVM      ◄─►  WBP_GP_HUD_SelectionPanel
-AGP_GameState.MatchTimeRemaining     ─►    RepNotify             ─►   UGP_MatchVM          ◄─►  WBP_GP_HUD_MatchTimer
+AGP_GameState.MatchTimeRemaining     ─►    RepNotify/delegate    ─►   UGP_MatchViewModel    ◄─  future match widget
 UGP_OrbitalDeliverySubsystem.Catalog ─►    OnRep / delegate      ─►   UGP_OrderMenuVM      ◄─►  WBP_GP_HUD_OrderMenu
 ```
 
@@ -98,7 +128,9 @@ UGP_OrbitalDeliverySubsystem.Catalog ─►    OnRep / delegate      ─►   UG
 
 Rules:
 
-1. **VM populated by VM-owner adapter on local PC.** Each VM has a dedicated **adapter** (subobject on PC або dedicated subsystem) що:
+1. **VM populated by VM-owner adapter in local-player presentation lifetime.** Production Resource/Match
+   VMs and adapters are owned by `UGP_HUDViewModelSubsystem`; specialized FoW presentation retains its
+   existing ownership. Each adapter:
    - Subscribes до replicated state / attribute / delegate.
    - Translates state → VM `Set*` methods (broadcasts `OnPropertyChanged`).
    - Owns lifetime + unbind on EndPlay.
@@ -112,15 +144,16 @@ Rules:
 
 | ViewModel | Source state | Owner adapter | Widget consumer |
 | --- | --- | --- | --- |
-| `UGP_ResourceVM` | `UGP_PlayerAttributeSet.{OrbitalFerronite, FerroniteScore, MaxUnits, CurrentUnits}` (own + opponent score) | `UGP_ResourceVMAdapter` (PC subsystem) | `WBP_GP_HUD_ResourceReadout` |
-| `UGP_MatchVM` | `AGP_GameState.{MatchState, MatchTimeRemaining, FerroniteThreatValue, WinnerTeamId}` | `UGP_MatchVMAdapter` (PC subsystem) | `WBP_GP_HUD_MatchTimer`, `WBP_GP_HUD_SwarmThreat`, `WBP_GP_EndOfMatch` |
+| `UGP_ResourceViewModel` | `UGP_PlayerAttributeSet.{OrbitalFerronite, FerroniteScore, MaxUnits, CurrentUnits}` (own + opponent score) | `UGP_ResourceViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future `WBP_GP_HUD_ResourceReadout` |
+| `UGP_MatchViewModel` | `AGP_GameState.{MatchStateTag, MatchTimeRemaining, TeamFerroniteThreatValues, WinnerTeamId, WinReasonTag, MatchResult.MatchDuration}` | `UGP_MatchViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future match timer/threat/result widgets |
 | `UGP_SelectionVM` | `UGP_SelectionComponent.{SelectedUnits, InspectedTarget}` (local PC) | `UGP_SelectionVMAdapter` | `WBP_GP_HUD_SelectionPanel`, `WBP_GP_HUD_InspectPanel`, `WBP_GP_HUD_CommandBar` |
 | `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits` | `UGP_OrderMenuVMAdapter` (PC subsystem) | `WBP_GP_HUD_OrderMenu` |
 | `UGP_CargoVM` | `UGP_CargoComponent.CurrentCargo` of single-selected worker | `UGP_CargoVMAdapter` | `WBP_GP_HUD_SelectionPanel` unit mode |
 | `UGP_NotificationVM` | Local notification queue (PC pushes) | PC native | `WBP_GP_HUD_NotificationStack` |
 | `UGP_MinimapVM` | `UGP_MinimapSubsystem` snapshot 5 Hz | Subsystem self | `WBP_GP_HUD_Minimap` |
 
-VMs created у PC `BeginPlay` / `OnPossess`, registered у `UMVVMSubsystem` per local user.
+Production Resource/Match VMs are created once by `UGP_HUDViewModelSubsystem` per `ULocalPlayer`.
+Future widgets receive them from that subsystem; no gameplay module type owns a `GPUIRuntime` object.
 
 ### Input Routing — Common UI
 
@@ -211,7 +244,9 @@ WBP_GP_HUD_Match (root, attached to PlayerController via ClientHUDClass)
 └── WBP_GP_HUD_EndOfMatch                   (hidden until match end)
 ```
 
-Native HUD root class — `UGP_HUDWidget : UUserWidget`. BP child = `WBP_GP_HUD_Match`. PC у `BeginPlay` creates and adds to viewport (z=10).
+Native production HUD root class is `UGP_HUDRootWidget : UGP_UserWidgetBase`. A later authored
+`WBP_GP_HUD` child will own layout/visual composition; creation/viewport wiring is not implemented in
+this data-foundation slice.
 
 ### MVVM Binding Contract
 
@@ -219,18 +254,18 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 
 | Widget | ViewModel (FieldNotify props) | Adapter subscribes to |
 | --- | --- | --- |
-| `WBP_GP_HUD_MatchTimer` | `UGP_MatchVM.{MatchTimeRemaining, FormattedTime, TimerColorTag}` | `AGP_GameState.OnMatchTimeChanged` (per-second push) |
-| `WBP_GP_HUD_ResourceReadout` | `UGP_ResourceVM.{OrbitalFerronite, OwnScore, OpponentScore, CurrentUnits, MaxUnits, ScoreDelta}` | Own ASC attribute change delegates; remote PlayerState ASC for opponent score |
-| `WBP_GP_HUD_SwarmThreat` | `UGP_MatchVM.{FerroniteThreatValue, ThreatStateTag}` | `AGP_GameState.OnFerroniteThreatChanged` |
+| Future `WBP_GP_HUD_MatchTimer` | `UGP_MatchViewModel.MatchTimeRemaining` | `AGP_GameState.OnMatchTimeRemainingChanged` (per-second push) |
+| Future `WBP_GP_HUD_ResourceReadout` | `UGP_ResourceViewModel.{OrbitalFerronite, FerroniteScore, OpponentFerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates; opposing PlayerState ASC for public score |
+| Future threat widget | `UGP_MatchViewModel.FerroniteThreatValue` | `AGP_GameState.OnTeamFerroniteThreatValueChanged` for local TeamId |
 | `WBP_GP_HUD_SelectionPanel` | `UGP_SelectionVM.{Mode, SelectedUnitVMs[], SingleUnitVM, BuildingVM}` | `UGP_SelectionComponent.OnSelectionChanged` (local) |
 | `WBP_GP_HUD_InspectPanel` | `UGP_SelectionVM.{InspectedVM}` | Same delegate (InspectedTarget field) |
 | `WBP_GP_HUD_CommandBar` | `UGP_SelectionVM.{AvailableCommandTags, DisabledCommandTags}` | Same delegate + cooldown attribute changes на selection |
 | `WBP_GP_HUD_OrderMenu` | `UGP_OrderMenuVM.{AvailableDrops[], CanAffordPerEntry[]}` | Adapter listens to `OrbitalFerronite` changes + `UGP_OrbitalDeliverySubsystem` catalog |
 | `WBP_GP_HUD_Minimap` | `UGP_MinimapVM.{ActorBlips[], LocalViewportRect}` | `UGP_MinimapSubsystem` snapshot tick |
 | `WBP_GP_HUD_NotificationStack` | `UGP_NotificationVM.{ActiveToasts[]}` | PC `OnHUDNotification` multicast |
-| `WBP_GP_EndOfMatch` (Activatable) | `UGP_MatchVM.{MatchState, WinnerTeamId, OwnScore, OpponentScore, Duration}` | `AGP_GameState.OnMatchStateChanged` |
+| Future `WBP_GP_EndOfMatch` (Activatable) | `UGP_MatchViewModel.{MatchStateTag, WinnerTeamId, WinReasonTag, MatchDuration, bMatchFinished}` | `AGP_GameState` match-state/result delegates |
 
-**FieldNotify properties (приклад):**
+**Historical abbreviated FieldNotify example (implemented production names are listed above):**
 
 ```cpp
 UCLASS()
@@ -420,7 +455,7 @@ void UGP_SelectionVMAdapter::HandleSelectionChanged()
 
 Widget-side (BP or C++) binds через `MVVM View Binding`: `WBP_GP_HUD_SelectionPanel` listens to `SelectionVM.Mode` → conditional visibility of detail / group / building / construction sub-panels.
 
-ResourceVM adapter — Ferronite attribute mirror:
+Abbreviated adapter pattern (the implementation is `UGP_ResourceViewModelAdapter`):
 
 ```cpp
 void UGP_ResourceVMAdapter::BindAttribute(UAbilitySystemComponent* ASC, FGameplayAttribute Attr)

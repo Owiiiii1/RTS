@@ -5,6 +5,7 @@
 #include "Buildings/GPMainBase.h"
 #include "Engine/World.h"
 #include "FogOfWar/GPFogOfWarComponent.h"
+#include "GameFramework/PlayerState.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "Net/UnrealNetwork.h"
@@ -58,6 +59,26 @@ void AGP_GameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(AGP_GameState, MatchSeed);
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, MatchResult, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(AGP_GameState, ReplicatedMainBases, COND_None, REPNOTIFY_Always);
+}
+
+void AGP_GameState::AddPlayerState(APlayerState* PlayerState)
+{
+	const bool bAlreadyPresent = PlayerArray.Contains(PlayerState);
+	Super::AddPlayerState(PlayerState);
+	if (!bAlreadyPresent && PlayerArray.Contains(PlayerState))
+	{
+		OnPlayerStateRosterChanged.Broadcast(PlayerState, true);
+	}
+}
+
+void AGP_GameState::RemovePlayerState(APlayerState* PlayerState)
+{
+	const bool bWasPresent = PlayerArray.Contains(PlayerState);
+	Super::RemovePlayerState(PlayerState);
+	if (bWasPresent)
+	{
+		OnPlayerStateRosterChanged.Broadcast(PlayerState, false);
+	}
 }
 
 bool AGP_GameState::IsMatchStateBranchTag(const FGameplayTag& Tag)

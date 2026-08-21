@@ -11,6 +11,7 @@
 
 class AGP_MainBase;
 class AGP_ResourceNode;
+class APlayerState;
 class UGP_FogOfWarComponent;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGP_MatchStateTagChanged, FGameplayTag /*OldTag*/, FGameplayTag /*NewTag*/);
@@ -27,6 +28,10 @@ DECLARE_MULTICAST_DELEGATE_FourParams(
 	int32 /*NewWinnerTeamId*/,
 	FGameplayTag /*OldWinReasonTag*/,
 	FGameplayTag /*NewWinReasonTag*/);
+DECLARE_MULTICAST_DELEGATE_TwoParams(
+	FOnGP_PlayerStateRosterChanged,
+	APlayerState* /*PlayerState*/,
+	bool /*bAdded*/);
 
 /** Authority-only ResourceNode registry lifecycle (GP-S28P2). Not replicated. */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnGP_ResourceNodeRegistered, AGP_ResourceNode* /*Node*/);
@@ -85,6 +90,8 @@ public:
 	AGP_GameState();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void AddPlayerState(APlayerState* PlayerState) override;
+	virtual void RemovePlayerState(APlayerState* PlayerState) override;
 
 	// --- Getters ---
 
@@ -257,6 +264,9 @@ public:
 	 * pair uses the current getter values (field-level refresh). UI should read both getters.
 	 */
 	FOnGP_MatchResultChanged OnMatchResultChanged;
+
+	/** Client/server presentation notification for late PlayerState add/remove and travel rebinds. */
+	FOnGP_PlayerStateRosterChanged OnPlayerStateRosterChanged;
 
 protected:
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_MatchStateTag, Category = "GP|Match")

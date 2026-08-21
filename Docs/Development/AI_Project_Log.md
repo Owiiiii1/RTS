@@ -1,5 +1,22 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-21 — Production HUD data foundation
+
+Status: **PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch `feature/gp-production-hud-foundation` from exact `origin/main` @ `ad2e5eb94afbef6922c332c0d35ff0f9337423c2`.
+- Added project non-activatable CommonUI/HUD-root bases, FieldNotify Resource/Match VMs, push GAS/GameState
+  adapters, and `UGP_HUDViewModelSubsystem` per-local-player ownership/access.
+- Added read-only GPRuntime owning-PlayerState-ready and roster delegates for late
+  PlayerState/opponent/travel rebind. No authority or replication changes; no Tick/world scan/widget
+  gameplay query.
+- TEMP HUD preserved. No authored HUD, Order Menu, minimap, selection panel, notifications, Content,
+  Config, maps, Blueprints, DataAssets, or Tools changes.
+- Production HUD and FoW focused contracts: **PASS**, Failures=0. GPEditor Win64 Development + UHT:
+  **PASS**.
+- **NOT MERGED. NOT FINALIZED.** Report: `Docs/Development/Cursor_Work_Report.md`.
+
+
 ## 2026-08-21 — Voxel terrain / foundation documentation finalized
 
 Status: **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE**

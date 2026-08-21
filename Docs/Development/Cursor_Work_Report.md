@@ -1,114 +1,134 @@
-# Cursor Work Report — Voxel Terrain / Foundation Documentation
+# Cursor Work Report — Production HUD Foundation
 
 ## Status
 
-**VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE**
+**PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**
 
-**NOT MERGED.**
+**NOT MERGED. NOT FINALIZED.**
 
 ## Branch / base / head
 
-- Branch: `docs/gp-voxel-terrain-foundations`
-- Base: `origin/main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` (`Finalize FoW world visualization after operator acceptance.`)
-- Head: this finalization commit on `docs/gp-voxel-terrain-foundations`
+- Branch: `feature/gp-production-hud-foundation`
+- Exact base: `origin/main` @ `ad2e5eb94afbef6922c332c0d35ff0f9337423c2`
+- Head: this implementation/report commit on `feature/gp-production-hud-foundation`
 
-## Documentation-only confirmation
+## Factual classes added
 
-This slice is documentation only.
+- `UGP_UserWidgetBase : UCommonUserWidget` — project-owned non-activatable CommonUI base.
+- `UGP_HUDRootWidget : UGP_UserWidgetBase` — native lifetime/root base for future `WBP_GP_HUD`.
+- `UGP_ResourceViewModel : UMVVMViewModelBase`
+- `UGP_MatchViewModel : UMVVMViewModelBase`
+- `UGP_ResourceViewModelAdapter`
+- `UGP_MatchViewModelAdapter`
+- `UGP_HUDViewModelSubsystem : ULocalPlayerSubsystem`
 
-- No Unreal builds.
-- No gameplay tests.
-- No `GP/Source`, `GP/Content`, `GP/Config`, Tools, maps, Blueprints, or DataAssets changes in this commit.
+No authored Widget Blueprint or native visual HUD panel hierarchy was created.
 
-## Canonical terrain / foundation rules
+## Local-player ownership / access architecture
 
-- Intended backend = **Voxel Plugin**. Exact version/API remains spike-required.
-- Terrain is destructible/deformable via a **generic server-authoritative** deformation request.
-- Projectiles, explosions, and future earthquakes reuse the same terrain/foundation-damage architecture.
-- Normal orbital buildings arrive **COMPLETE** from orbit. Worker does **not** construct the READY building.
-- Deploy requires sufficiently leveled terrain + intact Foundation coverage for **every** required BuildGrid cell (initial MainBase excepted).
-- Foundation material comes from orbit to MainBase inventory. Player **plans** installation. Foundation does **not** appear instantly. Physical Workers must reach the job and install through labor. State and partial destruction are **per BuildGrid cell**. Foundation Repair is a Worker engineering job. Stock consume/reserve timing remains **DESIGN REQUIRED**.
+`UGP_HUDViewModelSubsystem` is owned once per `ULocalPlayer`. It owns one ResourceVM, one MatchVM, and
+their adapters. Future widgets obtain read-only VM references through
+`GetResourceViewModel()` / `GetMatchViewModel()` and do not resolve gameplay actors, ASC, or components.
 
-## Local engineering / Worker job rules
+Initialization/rebind is push/event-driven through:
 
-- Plan/job may exist before Workers arrive.
-- 0 active Workers = 0 progress; 1 = baseline; multiple accelerate.
-- Exact scaling / max / reservation remain TBD.
-- Worker approaches valid work positions and alternates work pulse / reposition.
-- Authoritative progress is independent from presentation.
-- Gameplay exposes conceptual work start/end pulse hooks. Blueprint owns Niagara/sound/animation. No hardcoded project Niagara asset. Mining is the reference presentation pattern. Exact event names remain implementation detail.
-- Worker does **not** build READY orbital buildings. Worker **does** perform field engineering and local Wall construction.
+- `ULocalPlayerSubsystem::PlayerControllerChanged`
+- `UWorld::GameStateSetEvent`
+- `AGP_PlayerController::OnPlayerStatePresentationReady`
+- `AGP_GameState::OnPlayerStateRosterChanged`
+- `AGP_PlayerState::OnTeamIdChanged`
+- GAS attribute-change delegates
+- existing `AGP_GameState` match delegates
 
-## Wall / Foundation resolved decision
+There is no subsystem/widget Tick, timer retry, or world actor scan. Rebind removes existing handles
+before adding new ones; teardown is idempotent.
 
-**Wall segments do NOT require Foundation.**
+## Gameplay delegate added
 
-Wall material comes from Wall Package stock. Walls are locally constructed by Workers, may be planned before Workers arrive, and make no progress with 0 Workers. Multiple Workers may accelerate. Terrain suitability/slope/visual adaptation remains TBD. Wall-mounted Turret follows the Wall support rule.
+- `AGP_PlayerController::OnPlayerStatePresentationReady(APlayerState*)` broadcasts from the existing
+  `OnPlayerStateReady` lifecycle after the owning replicated link becomes available.
+- `AGP_GameState::OnPlayerStateRosterChanged(APlayerState*, bool bAdded)` broadcasts after
+  `AddPlayerState` / `RemovePlayerState`.
 
-## Earthquake future-extension status
+Both are read-only presentation lifecycle information. No GPRuntime dependency on GPUIRuntime, UMG,
+or CommonUI was added; authority and replication semantics are unchanged.
 
-Earthquakes are **future / post-MVP only**. They reuse the generic terrain/foundation damage system. Live earthquake gameplay and tuning remain TBD.
+## ViewModel fields and factual sources
 
-## Final roadmap position
+### ResourceVM — current `UGP_PlayerAttributeSet` GAS attributes
 
-1. Production UI foundation / HUD
-2. Minimap + FoW minimap presentation
-3. Terrain / Voxel / Foundation system
-   - 3A. technical spike + deformation foundation
-   - 3B. Worker leveling + generic local engineering job/work hooks
-   - 3C. Foundation procurement/install/repair foundation support
-   - 3D. building placement migration
-   - 3E. navigation + terrain-surface FoW integration
-4. RTS AI Opponent
-5. bounded core-loop gaps
-6. Building-system design gate / Walls (**Wall/Foundation is RESOLVED**, not an open question)
-7. Steam multiplayer
-8. Match completion
-9. SWARM design gate
-10. SWARM
-11. full MVP stabilization
+- `OrbitalFerronite` — own ASC, OwnerOnly replicated attribute
+- `FerroniteScore` — own ASC, public replicated score
+- `CurrentUnits` — own ASC, OwnerOnly replicated attribute
+- `MaxUnits` — own ASC, OwnerOnly replicated attribute
+- `OpponentFerroniteScore` — opposing PlayerState ASC public score
 
-## Remaining TBD / DESIGN REQUIRED items
+All fields use `float`, matching current gameplay attributes. Opponent resolution uses replicated
+`AGP_GameState::PlayerArray` plus TeamId, not a world scan.
 
-- Leveling zone UX, elevation algorithm, slope/flatness tolerance, leveling speed, interrupt/resume
-- Max Workers per job, speed scaling, contribution rate, assignment/cancel, work-position reservation
-- Foundation package cost, quantity, slab footprint
-- Foundation and Wall stock consume/reserve moment
-- Foundation Repair thresholds, cost, duration, replacement-stock vs repair, damaged-cell support validity
-- Blast/crater radius/depth/formula
-- Voxel Plugin version/edition/API and multiplayer replication mechanism
-- Dynamic navigation strategy
-- Surviving-building behavior after foundation loss
-- Wall slope, visual adapt, auto-level vs manual, voxel interaction at wall bases
-- Exact starter-foundation implementation for initial MainBase
-- Earthquake frequency/intensity/area/warning/damage/building interaction
+### MatchVM — current `AGP_GameState`
 
-## Exact changed files (this branch vs `origin/main`)
+- `MatchTimeRemaining`
+- `MatchStateTag`
+- owning-team `FerroniteThreatValue` from `TeamFerroniteThreatValues`
+- `WinnerTeamId`
+- `WinReasonTag`
+- `MatchDuration` from current `FGP_MatchResult`
+- `bMatchFinished`
 
-- `Docs/Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md`
-- `Docs/Architecture_Decisions/README.md`
-- `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
-- `Docs/Development/DOCUMENTATION_INDEX.md`
+Existing match timer/state/per-team-threat/result delegates drive updates; no new polling or gameplay
+replication was introduced.
+
+## TEMP HUD preservation
+
+`UGP_TEMP_S28P_PlanetaryFerroniteHUD` remains present and functional. Its buttons, gameplay contract,
+creation, and binding path were not migrated or removed.
+
+## Debug / operator visibility
+
+`gp.UI.HUDDump` reads only the local subsystem and its ViewModels. It prints Ready/NotReady, local
+TeamId, own resources/score/cap, opponent score, timer, own-team Ferronite threat, and factual
+match/result summary.
+
+## Validation results
+
+- `gp.UI.RunProductionHUDFoundationContractTest` — **PASS**, Failures=0
+- `gp.FoW.RunClientPresentationFoundationContractTest` — **PASS**, Failures=0
+- GPEditor Win64 Development + UHT — **PASS**
+- Full project suite — not run
+- GP Development / Shipping — not run (reserved for post-operator finalization)
+
+## Exact changed files
+
+- `GP/Source/GPRuntime/Public/Game/GPGameState.h`
+- `GP/Source/GPRuntime/Private/Game/GPGameState.cpp`
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Source/GPUIRuntime/Public/Widgets/GPUserWidgetBase.h`
+- `GP/Source/GPUIRuntime/Private/Widgets/GPUserWidgetBase.cpp`
+- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
+- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPResourceViewModel.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPResourceViewModel.cpp`
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPMatchViewModel.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPMatchViewModel.cpp`
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPResourceViewModelAdapter.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPResourceViewModelAdapter.cpp`
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPMatchViewModelAdapter.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPMatchViewModelAdapter.cpp`
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPHUDViewModelSubsystem.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPHUDViewModelSubsystem.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPProductionHUDFoundationContractTest.cpp`
+- `Docs/TDD/12_UI_Architecture.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
-- `Docs/GDD/02_Core_Gameplay_Loop.md`
-- `Docs/GDD/04_Units.md`
-- `Docs/GDD/05_Buildings.md`
-- `Docs/GDD/10_Orbital_Delivery.md`
-- `Docs/GDD/13_Terrain_Engineering_And_Foundations.md`
-- `Docs/GDD/README.md`
-- `Docs/README.md`
-- `Docs/TDD/04_RTS_Selection_And_Commands.md`
-- `Docs/TDD/06_Building_Architecture.md`
-- `Docs/TDD/14_Orbital_Delivery.md`
-- `Docs/TDD/15_Fog_of_War.md`
-- `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
-- `Docs/TDD/README.md`
+- `Docs/Development/AI_Project_Log.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/Development/Claude_Tasks/README.md`
+- `Docs/Development/Claude_Tasks/GP-Production-HUD-Foundation.md`
+- `Docs/Development/Cursor_Work_Report.md`
 
-## Runtime / Content / Config / Tools
+## Protected content confirmation
 
-**No runtime, Content, Config, or Tools changes in this documentation slice.**
-
-## Merge
-
-**NOT MERGED.**
+No `GP/Content`, maps, Blueprints, DataAssets, local LongRange UnitDefinition, local authored
+terrain/material/VFX assets, `GP/Config`, or `Tools` files were changed by this slice. The pre-existing
+local protected modifications remain unstaged and untouched.

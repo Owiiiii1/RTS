@@ -643,6 +643,7 @@ void AGP_PlayerController::OnPlayerStateReady(APlayerState* InPlayerState)
 		TEXT("AGP_PlayerController::OnPlayerStateReady: PlayerState ready (%s)."),
 		*GetNameSafe(InPlayerState));
 
+	OnPlayerStatePresentationReady.Broadcast(InPlayerState);
 	BindFoWPlayerState(Cast<AGP_PlayerState>(InPlayerState));
 	BindAuthoritativeFoWUpdates();
 	TrySendInitialFoWSnapshot();

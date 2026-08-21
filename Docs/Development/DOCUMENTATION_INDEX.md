@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | Current `origin/main` baseline: `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` |
+| Code baseline | Current slice base: `origin/main` @ `ad2e5eb94afbef6922c332c0d35ff0f9337423c2` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
 | Last closed / merged stage | **FoW world visualization** operator-accepted / **MERGED** on `main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`docs/gp-voxel-terrain-foundations`](../GDD/13_Terrain_Engineering_And_Foundations.md) — **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE** |
+| Current stage | [`feature/gp-production-hud-foundation`](Claude_Tasks/GP-Production-HUD-Foundation.md) — **PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION** |
 
 ---
 
@@ -55,7 +55,11 @@
 
 **Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — Terrain / Voxel / Foundation inserted after production UI + minimap and **before** RTS AI Opponent. FoW world visualization is **MERGED**, not pending.
 
-**Exactly one current gate:** merge of voxel-terrain / foundation documentation on `docs/gp-voxel-terrain-foundations`. Status: **VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE**. **NOT MERGED.** Documentation-only. No runtime work in this slice.
+**Exactly one current gate:** operator validation of the Production HUD data foundation on
+`feature/gp-production-hud-foundation`. Status:
+**PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**. **NOT MERGED. NOT FINALIZED.**
+The authored production HUD, minimap, Order Menu, selection panel, and notifications are not part of
+this slice; TEMP HUD remains active.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 

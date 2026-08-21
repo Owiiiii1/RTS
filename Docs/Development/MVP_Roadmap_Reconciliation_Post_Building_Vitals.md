@@ -1,11 +1,12 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE`
+**Status:** `PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION`
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
-**Baseline:** `origin/main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f`
+**Baseline:** `origin/main` @ `ad2e5eb94afbef6922c332c0d35ff0f9337423c2`
 **Audit date:** 2026-08-21
-**Scope:** documentation/roadmap reconciliation only. No runtime, Config, Content, Blueprint, DataAsset, map, or placement implementation changes.
-**Current execution checkpoint:** FoW world visualization is **MERGED / operator accepted**. Next product stages are production UI foundation / HUD, then minimap + FoW minimap presentation, then the **new Terrain / Voxel / Foundation system** before RTS AI Opponent.
+**Scope:** current factual roadmap and capability status.
+**Current execution checkpoint:** Production HUD Resource/Match data foundation is **PARTIAL / ready for
+operator validation**. No authored HUD, minimap, or Order Menu is included.
 
 ## 1. Why reconciliation is required
 
@@ -107,8 +108,8 @@ current execution order.
 | Capability | Status | Factual evidence / boundary |
 | --- | --- | --- |
 | TEMP gameplay HUD | **DONE (temporary)** | `UGP_TEMP_S28P_PlanetaryFerroniteHUD` exposes resources, launch, catalogs/READY, cap, timer, result, and Wall Package state. |
-| CommonUI/MVVM prerequisites | **PARTIAL** | Plugins and `GPUIRuntime` dependencies are enabled; the UI module contains no widget bases, VMs, or adapters. |
-| Production HUD | **NOT STARTED** | No production CommonUI/MVVM HUD hierarchy. |
+| CommonUI/MVVM prerequisites | **DONE — FOUNDATION** | Plugins/dependencies plus project-owned activatable and non-activatable widget bases, HUD root base, FoW/Resource/Match VMs, and push adapters exist in `GPUIRuntime`. |
+| Production HUD | **PARTIAL — DATA FOUNDATION** | `UGP_HUDViewModelSubsystem` owns per-local-player Resource/Match VMs and event-driven adapters; `gp.UI.HUDDump` and the focused contract exist. No authored `WBP_GP_HUD`, visual panels, Order Menu, minimap, selection panel, or notifications yet. TEMP HUD remains active. |
 | Production Order Menu | **NOT STARTED** | Purchases are usable through TEMP HUD only. |
 | Minimap | **NOT STARTED** | No minimap subsystem/VM/widget production code. |
 | Notifications | **NOT STARTED** | No notification VM/stack or authority-to-client notification pipeline. |
@@ -216,7 +217,8 @@ Do not schedule another implementation slice merely to recreate an obsolete hist
 
 These are factual product gaps, not an implied strict order:
 
-1. Complete the production CommonUI/MVVM HUD / UI foundation.
+1. Continue the production CommonUI/MVVM HUD after the delivered Resource/Match data foundation
+   (authored root and bounded visual panels remain).
 2. Minimap + FoW minimap presentation.
 3. Terrain / Voxel / Foundation system (3A–3E below).
 4. Primitive RTS AI Opponent (`Explore / Mine / Ship / Order / Defend`).
@@ -350,7 +352,7 @@ After SWARM implementation:
 | S46A | Sell/Demolish **REMAINING**. |
 | S47 | CommonUI/MVVM prerequisites and first project activatable/ViewModel base **DONE — FOUNDATION**; full production HUD remains. |
 | S48 | FoW authority, trusted client mirror/MVVM, and world overlay **DONE / MERGED**; relevance/last-known remain. Voxel-surface FoW adaptation is Terrain stage 3E. |
-| S49-S53 | Production VMs/adapters/HUD/minimap/Order Menu **REMAINING**; TEMP HUD does not close them. |
+| S49-S53 | Resource/Match VMs, adapters, local-player ownership, widget/HUD-root bases **DONE — FOUNDATION**; authored HUD/minimap/Order Menu and remaining panel VMs **REMAINING**. TEMP HUD remains active. |
 | S54-S56 | RTS AI Opponent **REMAINING** and distinct from SWARM. |
 | S57-S60 | Feedback pass **PARTIAL**; implement only MVP-readable gaps. |
 | S61-S64 | Steam sessions/lobby/travel/menu **REMAINING**. |
@@ -361,12 +363,14 @@ After SWARM implementation:
 
 ## 11. Immediate NEXT recommendation
 
-**This documentation slice is finalized and ready for merge.** Runtime Terrain / Voxel / Foundation implementation is **not** started.
+**Production HUD data foundation is implemented and awaiting operator validation.** It delivers
+project widget/root bases, Resource/Match ViewModels, local-player subsystem ownership, push adapters,
+focused contract coverage, and `gp.UI.HUDDump`. It does not deliver the authored visual HUD.
 
-Status: `VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE`. **NOT MERGED.**
+Status: `PRODUCTION_HUD_FOUNDATION_READY_FOR_OPERATOR_VALIDATION`. **NOT MERGED. NOT FINALIZED.**
 
-After this docs merge, execution order remains: production UI/HUD → minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps → Building-system / Walls gate → Steam → match completion → SWARM gate → SWARM → full MVP stabilization.
+Execution order remains: complete production UI/HUD → minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps → Building-system / Walls gate → Steam → match completion → SWARM gate → SWARM → full MVP stabilization.
 
 **Wall Foundation Rule — RESOLVED:** Walls do not require Foundation. Do not list it as an open design gate.
 
-Do not implement Voxel Plugin, Worker leveling, or foundation inventory in this documentation slice.
+Do not start minimap, Order Menu, visual panel expansion, or Terrain runtime work in this slice.

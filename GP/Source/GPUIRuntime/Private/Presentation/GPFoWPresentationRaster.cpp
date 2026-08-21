@@ -52,6 +52,7 @@ namespace GPFoWPresentationRaster
 	void ResetField(FGP_FoWPresentationRaster& Field)
 	{
 		Field.Cells.Reset();
+		Field.Obscurations.Reset();
 		Field.CellMinX = 0;
 		Field.CellMinY = 0;
 		Field.Width = 0;
@@ -77,6 +78,7 @@ namespace GPFoWPresentationRaster
 		Field.CellSizeCm = CellSizeCm;
 		Field.GridOriginWorldXY = GridOriginWorldXY;
 		Field.Cells.Init(EGP_FoWState::Unexplored, Field.GetCellCount());
+		Field.Obscurations.Init(UnexploredObscuration, Field.GetCellCount());
 	}
 
 	void SetCell(FGP_FoWPresentationRaster& Field, int32 LocalX, int32 LocalY, EGP_FoWState State)
@@ -86,6 +88,18 @@ namespace GPFoWPresentationRaster
 			return;
 		}
 		Field.Cells[Field.CellIndex(LocalX, LocalY)] = State;
+		Field.Obscurations[Field.CellIndex(LocalX, LocalY)] = ObscurationForState(State);
+	}
+
+	void SetObscuration(FGP_FoWPresentationRaster& Field, int32 LocalX, int32 LocalY, float Obscuration)
+	{
+		if (LocalX < 0 || LocalY < 0 || LocalX >= Field.Width || LocalY >= Field.Height
+			|| Field.Obscurations.Num() != Field.GetCellCount())
+		{
+			return;
+		}
+		Field.Obscurations[Field.CellIndex(LocalX, LocalY)] =
+			FMath::Clamp(Obscuration, 0.0f, UnexploredObscuration);
 	}
 
 	EGP_FoWState GetCell(const FGP_FoWPresentationRaster& Field, int32 LocalX, int32 LocalY)
@@ -97,30 +111,41 @@ namespace GPFoWPresentationRaster
 		return Field.Cells[Field.CellIndex(LocalX, LocalY)];
 	}
 
-	static bool ShouldFeatherToward(EGP_FoWState Self, EGP_FoWState Neighbor)
+	float GetObscuration(const FGP_FoWPresentationRaster& Field, int32 LocalX, int32 LocalY)
 	{
-		if (Self == EGP_FoWState::Visible || Self == Neighbor)
+		if (LocalX < 0 || LocalY < 0 || LocalX >= Field.Width || LocalY >= Field.Height)
 		{
-			return false;
+			return UnexploredObscuration;
 		}
-		if (Neighbor == EGP_FoWState::Visible)
+		if (Field.Obscurations.Num() != Field.GetCellCount())
 		{
-			return true;
+			return ObscurationForState(GetCell(Field, LocalX, LocalY));
 		}
-		return Self == EGP_FoWState::Unexplored && Neighbor == EGP_FoWState::Explored;
+		return Field.Obscurations[Field.CellIndex(LocalX, LocalY)];
 	}
 
-	static EGP_FoWState NeighborState(
+	static bool ShouldFeatherToward(float SelfObscuration, float NeighborObscuration)
+	{
+		return SelfObscuration > NeighborObscuration + FeatherObscurationGap;
+	}
+
+	static float NeighborObscuration(
 		const FGP_FoWPresentationRaster& Field,
 		int32 LocalX,
 		int32 LocalY)
 	{
+		if (Field.Width <= 0 || Field.Height <= 0)
+		{
+			return UnexploredObscuration;
+		}
 		if (LocalX < 0 || LocalY < 0 || LocalX >= Field.Width || LocalY >= Field.Height)
 		{
-			return GetCell(Field, FMath::Clamp(LocalX, 0, Field.Width - 1),
+			return GetObscuration(
+				Field,
+				FMath::Clamp(LocalX, 0, Field.Width - 1),
 				FMath::Clamp(LocalY, 0, Field.Height - 1));
 		}
-		return GetCell(Field, LocalX, LocalY);
+		return GetObscuration(Field, LocalX, LocalY);
 	}
 
 	static bool TryAddQuad(
@@ -173,12 +198,24 @@ namespace GPFoWPresentationRaster
 			C01);
 	}
 
+	static FVector2D CornerArcPoint(
+		const FVector2D& Center,
+		const FVector2D& Axis0,
+		const FVector2D& Axis1,
+		float Radius,
+		float T)
+	{
+		const float Angle = T * UE_PI * 0.5f;
+		const FVector2D Dir = Axis0 * FMath::Cos(Angle) + Axis1 * FMath::Sin(Angle);
+		return Center + Dir * Radius;
+	}
+
 	static bool TryAddCornerFan(
 		FGP_FoWPresentationGeometry& OutGeometry,
 		const FVector2D& Center,
+		const FVector2D& Axis0,
+		const FVector2D& Axis1,
 		float Radius,
-		float AngleStart,
-		float AngleEnd,
 		const FLinearColor& Solid,
 		const FLinearColor& Transparent)
 	{
@@ -187,32 +224,42 @@ namespace GPFoWPresentationRaster
 			return true;
 		}
 
-		for (int32 Segment = 0; Segment < CornerSegments; ++Segment)
+		for (int32 Ring = 0; Ring < CornerRings; ++Ring)
 		{
-			const float T0 = static_cast<float>(Segment) / static_cast<float>(CornerSegments);
-			const float T1 = static_cast<float>(Segment + 1) / static_cast<float>(CornerSegments);
-			const float A0 = FMath::Lerp(AngleStart, AngleEnd, T0);
-			const float A1 = FMath::Lerp(AngleStart, AngleEnd, T1);
-			const FVector2D P0(
-				Center.X + static_cast<double>(FMath::Cos(A0)) * Radius,
-				Center.Y + static_cast<double>(FMath::Sin(A0)) * Radius);
-			const FVector2D P1(
-				Center.X + static_cast<double>(FMath::Cos(A1)) * Radius,
-				Center.Y + static_cast<double>(FMath::Sin(A1)) * Radius);
-			if (!TryAddQuad(
-					OutGeometry,
-					Center,
-					P0,
-					P1,
-					P1,
-					Solid,
-					Transparent,
-					Transparent,
-					Transparent))
+			const float InnerT = static_cast<float>(Ring) / static_cast<float>(CornerRings);
+			const float OuterT = static_cast<float>(Ring + 1) / static_cast<float>(CornerRings);
+			const float InnerR = Radius * InnerT;
+			const float OuterR = Radius * OuterT;
+			const FLinearColor InnerColor = FMath::Lerp(Solid, Transparent, InnerT);
+			const FLinearColor OuterColor = FMath::Lerp(Solid, Transparent, OuterT);
+
+			for (int32 Segment = 0; Segment < CornerSegments; ++Segment)
 			{
-				return false;
+				const float T0 = static_cast<float>(Segment) / static_cast<float>(CornerSegments);
+				const float T1 = static_cast<float>(Segment + 1) / static_cast<float>(CornerSegments);
+				const FVector2D Inner0 = InnerR <= KINDA_SMALL_NUMBER
+					? Center
+					: CornerArcPoint(Center, Axis0, Axis1, InnerR, T0);
+				const FVector2D Inner1 = InnerR <= KINDA_SMALL_NUMBER
+					? Center
+					: CornerArcPoint(Center, Axis0, Axis1, InnerR, T1);
+				const FVector2D Outer0 = CornerArcPoint(Center, Axis0, Axis1, OuterR, T0);
+				const FVector2D Outer1 = CornerArcPoint(Center, Axis0, Axis1, OuterR, T1);
+				if (!TryAddQuad(
+						OutGeometry,
+						Inner0,
+						Outer0,
+						Outer1,
+						Inner1,
+						InnerColor,
+						OuterColor,
+						OuterColor,
+						InnerColor))
+				{
+					return false;
+				}
+				++OutGeometry.FeatherQuads;
 			}
-			++OutGeometry.FeatherQuads;
 		}
 		return true;
 	}
@@ -226,7 +273,8 @@ namespace GPFoWPresentationRaster
 
 		if (Field.Width <= 0 || Field.Height <= 0 || Field.CellSizeCm <= KINDA_SMALL_NUMBER
 			|| Field.GetCellCount() > MaximumSampledCells
-			|| Field.Cells.Num() != Field.GetCellCount())
+			|| Field.Cells.Num() != Field.GetCellCount()
+			|| Field.Obscurations.Num() != Field.GetCellCount())
 		{
 			return false;
 		}
@@ -235,20 +283,23 @@ namespace GPFoWPresentationRaster
 		const float Inner = Field.CellSizeCm * InnerFeatherFraction;
 		OutGeometry.FeatherCm = Outer + Inner;
 		const FLinearColor Transparent(0.0f, 0.0f, 0.0f, 0.0f);
-		const float HalfPi = UE_PI * 0.5f;
+		const FVector2D AxisWest(-1.0f, 0.0f);
+		const FVector2D AxisEast(1.0f, 0.0f);
+		const FVector2D AxisSouth(0.0f, -1.0f);
+		const FVector2D AxisNorth(0.0f, 1.0f);
 
 		for (int32 LocalY = 0; LocalY < Field.Height; ++LocalY)
 		{
 			for (int32 LocalX = 0; LocalX < Field.Width; ++LocalX)
 			{
-				const EGP_FoWState State = GetCell(Field, LocalX, LocalY);
-				if (State == EGP_FoWState::Visible)
+				const float Obscuration = GetObscuration(Field, LocalX, LocalY);
+				if (Obscuration <= KINDA_SMALL_NUMBER)
 				{
 					++OutGeometry.VisibleCellsSkipped;
 					continue;
 				}
 
-				const FLinearColor Solid = OverlayColorForState(State);
+				const FLinearColor Solid = OverlayColorForObscuration(Obscuration);
 				const double MinX =
 					Field.GridOriginWorldXY.X
 					+ static_cast<double>(Field.CellMinX + LocalX) * Field.CellSizeCm;
@@ -259,13 +310,13 @@ namespace GPFoWPresentationRaster
 				const double MaxY = MinY + Field.CellSizeCm;
 
 				const bool bFeatherWest = ShouldFeatherToward(
-					State, NeighborState(Field, LocalX - 1, LocalY));
+					Obscuration, NeighborObscuration(Field, LocalX - 1, LocalY));
 				const bool bFeatherEast = ShouldFeatherToward(
-					State, NeighborState(Field, LocalX + 1, LocalY));
+					Obscuration, NeighborObscuration(Field, LocalX + 1, LocalY));
 				const bool bFeatherSouth = ShouldFeatherToward(
-					State, NeighborState(Field, LocalX, LocalY - 1));
+					Obscuration, NeighborObscuration(Field, LocalX, LocalY - 1));
 				const bool bFeatherNorth = ShouldFeatherToward(
-					State, NeighborState(Field, LocalX, LocalY + 1));
+					Obscuration, NeighborObscuration(Field, LocalX, LocalY + 1));
 
 				const double CoreMinX = MinX + (bFeatherWest ? Inner : 0.0);
 				const double CoreMaxX = MaxX - (bFeatherEast ? Inner : 0.0);
@@ -362,9 +413,9 @@ namespace GPFoWPresentationRaster
 					if (!TryAddCornerFan(
 							OutGeometry,
 							FVector2D(CoreMinX, CoreMinY),
+							AxisWest,
+							AxisSouth,
 							CornerRadius,
-							UE_PI,
-							UE_PI + HalfPi,
 							Solid,
 							Transparent))
 					{
@@ -377,9 +428,9 @@ namespace GPFoWPresentationRaster
 					if (!TryAddCornerFan(
 							OutGeometry,
 							FVector2D(CoreMaxX, CoreMinY),
+							AxisSouth,
+							AxisEast,
 							CornerRadius,
-							UE_PI + HalfPi,
-							UE_PI * 2.0f,
 							Solid,
 							Transparent))
 					{
@@ -392,9 +443,9 @@ namespace GPFoWPresentationRaster
 					if (!TryAddCornerFan(
 							OutGeometry,
 							FVector2D(CoreMaxX, CoreMaxY),
+							AxisEast,
+							AxisNorth,
 							CornerRadius,
-							0.0f,
-							HalfPi,
 							Solid,
 							Transparent))
 					{
@@ -407,9 +458,9 @@ namespace GPFoWPresentationRaster
 					if (!TryAddCornerFan(
 							OutGeometry,
 							FVector2D(CoreMinX, CoreMaxY),
+							AxisNorth,
+							AxisWest,
 							CornerRadius,
-							HalfPi,
-							UE_PI,
 							Solid,
 							Transparent))
 					{

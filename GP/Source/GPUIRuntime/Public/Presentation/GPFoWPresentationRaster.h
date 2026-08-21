@@ -14,6 +14,7 @@ struct FGP_FoWPresentationQuad
 struct FGP_FoWPresentationRaster
 {
 	TArray<EGP_FoWState> Cells;
+	TArray<float> Obscurations;
 	int32 CellMinX = 0;
 	int32 CellMinY = 0;
 	int32 Width = 0;
@@ -51,7 +52,11 @@ namespace GPFoWPresentationRaster
 	constexpr float UnexploredObscuration = 1.0f;
 	constexpr float FeatherFraction = 0.55f;
 	constexpr float InnerFeatherFraction = 0.22f;
-	constexpr int32 CornerSegments = 4;
+	constexpr int32 CornerSegments = 10;
+	constexpr int32 CornerRings = 2;
+	constexpr float FeatherObscurationGap = 0.05f;
+	constexpr float RevealFadeSeconds = 0.18f;
+	constexpr float HideFadeSeconds = 0.24f;
 	constexpr int32 SamplePadCells = 1;
 	constexpr int32 MaximumSampledCells = 65536;
 	constexpr int32 MaximumOverlayQuads = 262144;
@@ -101,8 +106,31 @@ namespace GPFoWPresentationRaster
 		float CellSizeCm,
 		const FVector2D& GridOriginWorldXY);
 	void SetCell(FGP_FoWPresentationRaster& Field, int32 LocalX, int32 LocalY, EGP_FoWState State);
+	void SetObscuration(FGP_FoWPresentationRaster& Field, int32 LocalX, int32 LocalY, float Obscuration);
 
 	EGP_FoWState GetCell(const FGP_FoWPresentationRaster& Field, int32 LocalX, int32 LocalY);
+	float GetObscuration(const FGP_FoWPresentationRaster& Field, int32 LocalX, int32 LocalY);
+
+	inline float DurationForObscurationChange(float FromObscuration, float ToObscuration)
+	{
+		return ToObscuration < FromObscuration - KINDA_SMALL_NUMBER
+			? RevealFadeSeconds
+			: HideFadeSeconds;
+	}
+
+	inline float EvaluateFade(
+		float StartObscuration,
+		float TargetObscuration,
+		float ElapsedSeconds,
+		float DurationSeconds)
+	{
+		if (DurationSeconds <= KINDA_SMALL_NUMBER)
+		{
+			return TargetObscuration;
+		}
+		const float T = FMath::Clamp(ElapsedSeconds / DurationSeconds, 0.0f, 1.0f);
+		return FMath::Lerp(StartObscuration, TargetObscuration, T);
+	}
 
 	bool RebuildPresentation(
 		FGP_FoWPresentationRaster& Field,

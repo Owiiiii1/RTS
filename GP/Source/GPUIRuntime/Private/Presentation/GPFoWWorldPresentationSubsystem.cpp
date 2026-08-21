@@ -98,6 +98,16 @@ float UGP_FoWWorldPresentationSubsystem::GetInnerFeatherFraction()
 	return GPFoWPresentationRaster::InnerFeatherFraction;
 }
 
+float UGP_FoWWorldPresentationSubsystem::GetRevealFadeSeconds()
+{
+	return GPFoWPresentationRaster::RevealFadeSeconds;
+}
+
+float UGP_FoWWorldPresentationSubsystem::GetHideFadeSeconds()
+{
+	return GPFoWPresentationRaster::HideFadeSeconds;
+}
+
 int32 UGP_FoWWorldPresentationSubsystem::GetMaximumOverlayQuads()
 {
 	return GPFoWPresentationRaster::MaximumOverlayQuads;

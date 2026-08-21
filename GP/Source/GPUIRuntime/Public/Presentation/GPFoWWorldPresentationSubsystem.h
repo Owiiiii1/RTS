@@ -83,6 +83,8 @@ public:
 	static const TCHAR* GetBlurName();
 	static float GetFeatherFraction();
 	static float GetInnerFeatherFraction();
+	static float GetRevealFadeSeconds();
+	static float GetHideFadeSeconds();
 	static int32 GetMaximumOverlayQuads();
 
 	void RecordOverlayStats(const FGP_FoWWorldOverlayStats& Stats);

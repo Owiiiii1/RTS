@@ -300,6 +300,25 @@ namespace GPFoWWorldVisualizationContractPrivate
 				&& CornerGeometry.FeatherQuads >= 6,
 				TEXT("H8D_ExposedOuterCornersUseRoundedFeather"));
 		}
+		Expect(FMath::IsNearlyEqual(GPFoWPresentationRaster::RevealFadeSeconds, 0.18f)
+			&& FMath::IsNearlyEqual(GPFoWPresentationRaster::HideFadeSeconds, 0.24f)
+			&& FMath::IsNearlyEqual(
+				GPFoWPresentationRaster::EvaluateFade(1.0f, 0.0f, 0.09f, 0.18f),
+				0.5f,
+				0.01f)
+			&& FMath::IsNearlyEqual(
+				GPFoWPresentationRaster::DurationForObscurationChange(1.0f, 0.0f),
+				0.18f)
+			&& FMath::IsNearlyEqual(
+				GPFoWPresentationRaster::DurationForObscurationChange(0.0f, 0.68f),
+				0.24f)
+			&& FMath::IsNearlyEqual(
+				UGP_FoWWorldPresentationSubsystem::GetRevealFadeSeconds(),
+				0.18f)
+			&& FMath::IsNearlyEqual(
+				UGP_FoWWorldPresentationSubsystem::GetHideFadeSeconds(),
+				0.24f),
+			TEXT("H8E_PresentationOnlyTemporalFade"));
 		Expect(Team1Mirror->GetRevision() == SmoothingRevisionBefore
 			&& Team1Mirror->GetStateAtWorldLocation(CellLocation(0, 0))
 				== ExploredBeforeSmoothing

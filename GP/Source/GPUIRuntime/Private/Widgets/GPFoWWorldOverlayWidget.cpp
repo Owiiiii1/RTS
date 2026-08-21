@@ -5,7 +5,9 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
 #include "FogOfWar/GPLocalFoWComponent.h"
+#include "HAL/PlatformTime.h"
 #include "Presentation/GPFoWWorldPresentationSubsystem.h"
 #include "Rendering/DrawElements.h"
 #include "SceneView.h"
@@ -73,6 +75,8 @@ int32 UGP_FoWWorldOverlayWidget::NativePaint(
 		NotReadyStats.bFallbackActive = true;
 		Owner->RecordOverlayStats(NotReadyStats);
 		CachedRenderSerial = Owner->GetRenderSerial();
+		ActiveFades.Reset();
+		CachedVisualObscuration.Reset();
 		return MaxLayer + 1;
 	}
 
@@ -105,9 +109,10 @@ int32 UGP_FoWWorldOverlayWidget::NativePaint(
 		|| !CachedViewProjection.Equals(ViewProjectionMatrix, 1.e-4)
 		|| !CachedLocalSize.Equals(LocalSize, 0.5f);
 	const bool bDataChanged = CachedRenderSerial != Owner->GetRenderSerial();
+	const bool bFadeTick = ActiveFades.Num() > 0;
 
 	bLastCameraResample = false;
-	if (bViewChanged || bDataChanged)
+	if (bViewChanged || bDataChanged || bFadeTick)
 	{
 		const bool bRebuilt = RebuildProjectedOverlay(
 			AllottedGeometry,
@@ -342,6 +347,8 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedOverlay(
 		bHasValidCache = false;
 		bConservativeFallback = true;
 		CachedMaskRevision = Mirror->GetRevision();
+		ActiveFades.Reset();
+		CachedVisualObscuration.Reset();
 		return false;
 	}
 
@@ -357,19 +364,61 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedOverlay(
 
 	const FVector2D GridOrigin = Mirror->GetGridOriginWorldXY();
 	const float CellSize = Mirror->GetCellSizeCm();
+	const FIntPoint GridDimensions = Mirror->GetGridDimensions();
+	const UWorld* World = GetWorld();
+	const double NowSeconds =
+		World != nullptr ? World->GetTimeSeconds() : FPlatformTime::Seconds();
+	const int32 PreviousWidth = CachedMaxCell.X - CachedMinCell.X + 1;
+	const int32 PreviousHeight = CachedMaxCell.Y - CachedMinCell.Y + 1;
+	const bool bPreviousValid =
+		CachedVisualObscuration.Num() == PreviousWidth * PreviousHeight
+		&& PreviousWidth > 0
+		&& PreviousHeight > 0;
+	TArray<float> NewVisualObscuration;
+	NewVisualObscuration.SetNumUninitialized(Width * Height);
+
 	for (int32 LocalY = 0; LocalY < Height; ++LocalY)
 	{
 		for (int32 LocalX = 0; LocalX < Width; ++LocalX)
 		{
+			const int32 CellX = MinCell.X + LocalX;
+			const int32 CellY = MinCell.Y + LocalY;
 			const FVector CellCenter(
-				GridOrigin.X + (static_cast<double>(MinCell.X + LocalX) + 0.5) * CellSize,
-				GridOrigin.Y + (static_cast<double>(MinCell.Y + LocalY) + 0.5) * CellSize,
+				GridOrigin.X + (static_cast<double>(CellX) + 0.5) * CellSize,
+				GridOrigin.Y + (static_cast<double>(CellY) + 0.5) * CellSize,
 				UGP_FoWWorldPresentationSubsystem::GetProjectionGroundZ());
-			GPFoWPresentationRaster::SetCell(
-				Field,
-				LocalX,
-				LocalY,
-				Mirror->GetStateAtWorldLocation(CellCenter));
+			const EGP_FoWState GameplayState = Mirror->GetStateAtWorldLocation(CellCenter);
+			GPFoWPresentationRaster::SetCell(Field, LocalX, LocalY, GameplayState);
+
+			const float TargetObscuration =
+				GPFoWPresentationRaster::ObscurationForState(GameplayState);
+			if (GridDimensions.X <= 0)
+			{
+				NewVisualObscuration[LocalY * Width + LocalX] = TargetObscuration;
+				GPFoWPresentationRaster::SetObscuration(Field, LocalX, LocalY, TargetObscuration);
+				continue;
+			}
+
+			bool bHasPrevious = false;
+			float PreviousObscuration = TargetObscuration;
+			if (bPreviousValid
+				&& CellX >= CachedMinCell.X && CellX <= CachedMaxCell.X
+				&& CellY >= CachedMinCell.Y && CellY <= CachedMaxCell.Y)
+			{
+				PreviousObscuration = CachedVisualObscuration[
+					(CellY - CachedMinCell.Y) * PreviousWidth + (CellX - CachedMinCell.X)];
+				bHasPrevious = true;
+			}
+
+			const int32 GlobalIndex = CellY * GridDimensions.X + CellX;
+			const float VisualObscuration = ResolveVisualObscuration(
+				GlobalIndex,
+				TargetObscuration,
+				bHasPrevious,
+				PreviousObscuration,
+				NowSeconds);
+			NewVisualObscuration[LocalY * Width + LocalX] = VisualObscuration;
+			GPFoWPresentationRaster::SetObscuration(Field, LocalX, LocalY, VisualObscuration);
 		}
 	}
 
@@ -399,6 +448,8 @@ bool UGP_FoWWorldOverlayWidget::RebuildProjectedOverlay(
 	CachedMinCell = MinCell;
 	CachedMaxCell = MaxCell;
 	CachedMaskRevision = Mirror->GetRevision();
+	CachedVisualObscuration = MoveTemp(NewVisualObscuration);
+	PruneFadesOutsideRegion(MinCell, MaxCell, GridDimensions.X);
 	return true;
 }
 
@@ -498,4 +549,78 @@ void UGP_FoWWorldOverlayWidget::DrawConservativeFullObscuration(
 		bParentEnabled ? ESlateDrawEffect::None : ESlateDrawEffect::DisabledEffect,
 		UGP_FoWWorldPresentationSubsystem::GetOverlayColorForState(
 			EGP_FoWState::Unexplored));
+}
+
+float UGP_FoWWorldOverlayWidget::ResolveVisualObscuration(
+	int32 GlobalCellIndex,
+	float TargetObscuration,
+	bool bHasPrevious,
+	float PreviousObscuration,
+	double NowSeconds) const
+{
+	constexpr float EqualTolerance = 0.01f;
+	if (FGP_FoWCellFade* Fade = ActiveFades.Find(GlobalCellIndex))
+	{
+		const float Elapsed = static_cast<float>(NowSeconds - Fade->StartSeconds);
+		Fade->CurrentObscuration = GPFoWPresentationRaster::EvaluateFade(
+			Fade->StartObscuration,
+			Fade->TargetObscuration,
+			Elapsed,
+			Fade->DurationSeconds);
+		if (!FMath::IsNearlyEqual(Fade->TargetObscuration, TargetObscuration, EqualTolerance))
+		{
+			Fade->StartObscuration = Fade->CurrentObscuration;
+			Fade->TargetObscuration = TargetObscuration;
+			Fade->StartSeconds = NowSeconds;
+			Fade->DurationSeconds = GPFoWPresentationRaster::DurationForObscurationChange(
+				Fade->StartObscuration,
+				TargetObscuration);
+			Fade->CurrentObscuration = Fade->StartObscuration;
+		}
+		else if (Elapsed >= Fade->DurationSeconds)
+		{
+			ActiveFades.Remove(GlobalCellIndex);
+			return TargetObscuration;
+		}
+		return Fade->CurrentObscuration;
+	}
+
+	const float FromObscuration = bHasPrevious ? PreviousObscuration : TargetObscuration;
+	if (!bHasPrevious || FMath::IsNearlyEqual(FromObscuration, TargetObscuration, EqualTolerance))
+	{
+		return TargetObscuration;
+	}
+
+	FGP_FoWCellFade Fade;
+	Fade.StartObscuration = FromObscuration;
+	Fade.TargetObscuration = TargetObscuration;
+	Fade.CurrentObscuration = FromObscuration;
+	Fade.StartSeconds = NowSeconds;
+	Fade.DurationSeconds = GPFoWPresentationRaster::DurationForObscurationChange(
+		FromObscuration,
+		TargetObscuration);
+	ActiveFades.Add(GlobalCellIndex, Fade);
+	return FromObscuration;
+}
+
+void UGP_FoWWorldOverlayWidget::PruneFadesOutsideRegion(
+	const FIntPoint& MinCell,
+	const FIntPoint& MaxCell,
+	int32 GridWidth) const
+{
+	if (GridWidth <= 0)
+	{
+		ActiveFades.Reset();
+		return;
+	}
+
+	for (auto It = ActiveFades.CreateIterator(); It; ++It)
+	{
+		const int32 CellX = It.Key() % GridWidth;
+		const int32 CellY = It.Key() / GridWidth;
+		if (CellX < MinCell.X || CellX > MaxCell.X || CellY < MinCell.Y || CellY > MaxCell.Y)
+		{
+			It.RemoveCurrent();
+		}
+	}
 }

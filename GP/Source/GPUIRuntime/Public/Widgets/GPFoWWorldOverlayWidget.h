@@ -17,6 +17,15 @@ struct FGP_FoWOverlayDrawBatch
 	TArray<SlateIndex> Indices;
 };
 
+struct FGP_FoWCellFade
+{
+	float StartObscuration = 1.0f;
+	float TargetObscuration = 1.0f;
+	float CurrentObscuration = 1.0f;
+	double StartSeconds = 0.0;
+	float DurationSeconds = 0.18f;
+};
+
 /**
  * Source-only, hit-test-invisible viewport overlay for the local player's world FoW.
  *
@@ -69,6 +78,13 @@ private:
 		FSlateWindowElementList& OutDrawElements,
 		int32 LayerId,
 		bool bParentEnabled) const;
+	float ResolveVisualObscuration(
+		int32 GlobalCellIndex,
+		float TargetObscuration,
+		bool bHasPrevious,
+		float PreviousObscuration,
+		double NowSeconds) const;
+	void PruneFadesOutsideRegion(const FIntPoint& MinCell, const FIntPoint& MaxCell, int32 GridWidth) const;
 
 	TWeakObjectPtr<UGP_FoWWorldPresentationSubsystem> PresentationOwner;
 
@@ -84,4 +100,6 @@ private:
 	mutable bool bHasValidCache = false;
 	mutable bool bConservativeFallback = true;
 	mutable bool bLastCameraResample = false;
+	mutable TMap<int32, FGP_FoWCellFade> ActiveFades;
+	mutable TArray<float> CachedVisualObscuration;
 };

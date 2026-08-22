@@ -1,16 +1,28 @@
-# Cursor Work Report — Production HUD Planet Ferronite
+# Cursor Work Report — Production HUD Planet Ferronite Finalization
 
 ## Status
 
-**HUD_PLANET_FERRONITE_READY_FOR_OPERATOR_VALIDATION**
+**HUD_PLANET_FERRONITE_FINALIZED_READY_TO_MERGE**
 
-**NOT MERGED. NOT FINALIZED.**
+**NOT MERGED.**
 
 ## Branch / base / head
 
 - Branch: `feature/gp-hud-planet-ferronite`
 - Base: `origin/main` @ `04e4b7e6050ebe3bfb42dcd5f1af4ca45c8df893`
 - Implementation head: `63504d667cb9c40ab24b823ae7e0c33b288b5447`
+- Finalization head: this finalization/report commit on `feature/gp-hud-planet-ferronite`
+
+## Operator validation PASS
+
+Observed in authored local `WBP_GP_HUD`:
+
+- `TXT_PlanetFerroniteValue` bound to `GP_ResourceViewModel.PlanetFerronite` through To Text (Float)
+- Planet Ferronite is visible in PIE
+- the value updates correctly when Workers deposit Ferronite into MainBase
+- presentation matches the intended exact MainBase stored Ferronite value
+
+`WBP_GP_HUD` remains operator-local and is **not committed**.
 
 ## Exact source-of-truth path
 
@@ -22,36 +34,22 @@ local team's MainBase
 → UGP_ResourceViewModel::PlanetFerronite
 ```
 
-This is the exact raw stored Ferronite amount. It is not a second currency. It is not reconstructed from `FerroniteThreatValue` / threat.
+Presentation-only FieldNotify. Exact raw stored Ferronite. Not a second currency. Not reconstructed from `FerroniteThreatValue`.
 
-## Adapter signature / lifecycle
+## Adapter lifecycle / delegates
 
-`UGP_ResourceViewModelAdapter::Initialize` is now:
+`UGP_ResourceViewModelAdapter::Initialize(ResourceVM, LocalPlayerState, OpponentPlayerState, GameState, LocalTeamId)`
 
-```
-Initialize(ResourceVM, LocalPlayerState, OpponentPlayerState, GameState, LocalTeamId)
-```
+`UGP_HUDViewModelSubsystem::Rebind` passes current GameState and LocalTeamId. ResourceVM and MatchVM remain owned by the LocalPlayer subsystem.
 
-`UGP_HUDViewModelSubsystem::Rebind` passes the current `AGP_GameState` and `LocalTeamId`. ResourceVM and MatchVM remain owned by the LocalPlayer subsystem. No second owner.
+Binds only the local team:
 
-`Initialize` calls `Shutdown` first. `Shutdown` / `BeginDestroy` unbind GameState and storage, then set `PlanetFerronite = 0`. `ResetViewModels` also zeros `PlanetFerronite`. Missing MainBase/storage does not fail Ready; it presents `0`.
-
-## GameState / MainBase / storage delegates
-
-`UGP_ResourceViewModelAdapter` binds only the local team:
-
-- `AGP_GameState::OnResolvedMainBaseChanged` — other teams are ignored
+- `AGP_GameState::OnResolvedMainBaseChanged` — other teams ignored
 - local MainBase `UGP_StorageComponent::OnStorageChanged`
 
-Local MainBase change: unbind old storage, bind new storage, refresh immediately. No Tick, timers, polling, or world scans.
+`Initialize` calls `Shutdown` first. Local MainBase change unbinds old storage, binds new storage, refreshes immediately. `Shutdown` / `BeginDestroy` remove GameState and storage delegates and set `PlanetFerronite = 0`. Missing MainBase/storage presents `0`. Rebind does not duplicate delegates.
 
-## HUDDump output / example
-
-`gp.UI.HUDDump` now includes `PlanetFerronite` next to `OrbitalFerronite`:
-
-```
-gp.UI.HUDDump Ready=Ready LocalTeamId=1 PlanetFerronite=250.00 OrbitalFerronite=100.00 FerroniteScore=100.00 ...
-```
+No Tick, timers, polling, or world scans.
 
 ## Focused contract results
 
@@ -64,13 +62,40 @@ gp.UI.HUDDump Ready=Ready LocalTeamId=1 PlanetFerronite=250.00 OrbitalFerronite=
 | `gp.UI.RunThreatPresentationContractTest` | **PASS**, Failures=0 |
 | `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS**, Failures=0 |
 
-Full suite **not run** (no focused failure; no unexpected shared-system expansion).
+Full suite **not run** (no focused failure; no unexpected shared-system impact).
 
 ## GPEditor / UHT
 
-`Build.bat GPEditor Win64 Development` — **PASS** (UHT included)
+`Build.bat GPEditor Win64 Development` — **PASS**
 
-GP Development / Shipping **not run** (post-operator finalization).
+## GP Development
+
+`Build.bat GP Win64 Development` — **PASS**
+
+## GP Shipping
+
+`Build.bat GP Win64 Shipping` — **PASS**
+
+## Factual final diff review vs `origin/main`
+
+Reviewed `origin/main...HEAD`. No defects found. Confirmed:
+
+- `PlanetFerronite` is presentation-only FieldNotify; widgets remain read-only
+- exact source is local MainBase `FindMainBaseForTeamClientSafe` → `GetStorageComponent()` → `GetTotalStored()`
+- not reconstructed from `FerroniteThreatValue`
+- not a second currency
+- no gameplay/economy/storage semantic changes
+- missing MainBase/storage presents `0`
+- `OnResolvedMainBaseChanged` filtered to `LocalTeamId`
+- old storage is unbound on MainBase replacement
+- `OnStorageChanged` rereads `GetTotalStored()`
+- repeated Initialize/Rebind does not duplicate delegates
+- Shutdown/BeginDestroy remove GameState/storage bindings
+- no Tick / timers / polling
+- no `GetActorOfClass` / `GetAllActorsOfClass` / `TObjectIterator` / world scan
+- ResourceVM/MatchVM ownership remains LocalPlayer subsystem
+- TEMP HUD (`UGP_TEMP_S28P_PlanetaryFerroniteHUD`) remains created by `AGP_PlayerController`
+- committed diff contains **no** `GP/Content/**`, Config, maps, DataAssets, or Tools
 
 ## Exact changed files vs `origin/main`
 
@@ -92,7 +117,6 @@ GP Development / Shipping **not run** (post-operator finalization).
 - **Content untouched** (`WBP_GP_HUD`, `TXT_PlanetFerroniteValue`, all `GP/Content` unstaged)
 - Protected Config/maps/DataAssets/Tools **untouched / unstaged**
 - **No gameplay/economy semantic changes**
-- TEMP HUD (`UGP_TEMP_S28P_PlanetaryFerroniteHUD`) remains created by `AGP_PlayerController`
-- Authored `TXT_PlanetFerroniteValue` binding remains operator-local WBP work
+- Authored WBP binding is operator-local and not committed
+- TEMP HUD preserved
 - **NOT MERGED**
-- **NOT FINALIZED**

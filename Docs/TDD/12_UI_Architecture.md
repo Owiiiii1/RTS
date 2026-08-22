@@ -103,7 +103,9 @@ PublicDependencyModuleNames.AddRange(new string[]
   `MaxUnits`, `OpponentFerroniteScore`, and `PlanetFerronite`. Numeric types remain `float`, matching
   current GAS attributes. `PlanetFerronite` is the exact raw stored Ferronite from the local team's
   MainBase `UGP_StorageComponent::GetTotalStored()`. It is not a second currency and is not
-  reconstructed from `FerroniteThreatValue`.
+  reconstructed from `FerroniteThreatValue`. Operator-validated: authored
+  `TXT_PlanetFerroniteValue` is bound to `GP_ResourceViewModel.PlanetFerronite` through
+  To Text (Float) and updates in PIE. `WBP_GP_HUD` remains operator-local and uncommitted.
 - `UGP_MatchViewModel` exposes factual current `AGP_GameState` presentation fields:
   `MatchTimeRemaining`, `MatchStateTag`, owning-team `FerroniteThreatValue`,
   `FerroniteThreatNormalized`, `WinnerTeamId`,
@@ -161,8 +163,9 @@ PublicDependencyModuleNames.AddRange(new string[]
   implemented: visible resource/timer HUD completeness, Selection UI, Context Action Grid,
   MainBase PURCHASE panel, minimap function, notifications, and production end-of-match screen.
   Operator-validated runtime visibility of authored `WBP_GP_HUD` (local, not committed).
-  Only the OrbitalFerronite text binding has been manually validated so far.
-  Authored `TXT_PlanetFerroniteValue` binding remains operator-local WBP work.
+  Operator-validated: `GP_ResourceViewModel.PlanetFerronite` → To Text (Float) →
+  `TXT_PlanetFerroniteValue.Text` updates live when Workers deposit Ferronite.
+  `WBP_GP_HUD` remains operator-local and is not committed.
 - **Approved visual IA (2026-08-21):** two bars × three blocks, plus MainBase PURCHASE inside the
   bottom-right panel. See
   [`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
@@ -325,8 +328,10 @@ Planet Ferronite and Threat currently present the **same underlying stored-Ferro
 `FerroniteThreatNormalized` derived from actual MainBase storage capacity × ThreatPerStoredUnit;
 this is presentation normalization, not a gameplay threshold. ResourceVM exposes exact
 `PlanetFerronite` from local MainBase `UGP_StorageComponent::GetTotalStored()` (event-driven via
-MainBase resolve + storage change). It is not reconstructed from Threat. Authored
-`TXT_PlanetFerroniteValue` binding remains operator-local WBP work.
+MainBase resolve + storage change). It is not reconstructed from Threat. Operator-validated:
+authored `TXT_PlanetFerroniteValue` is bound to `GP_ResourceViewModel.PlanetFerronite` through
+To Text (Float) and updates when Workers deposit Ferronite. `WBP_GP_HUD` remains operator-local
+and uncommitted.
 
 ### MVVM Binding Contract
 

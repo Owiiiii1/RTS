@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-22 — Production HUD Planet Ferronite finalized
+
+Status: **HUD_PLANET_FERRONITE_FINALIZED_READY_TO_MERGE**
+
+- Operator PIE validation **PASSED**: authored `TXT_PlanetFerroniteValue` bound to
+  `GP_ResourceViewModel.PlanetFerronite` through To Text (Float); value is visible in PIE and
+  updates when Workers deposit Ferronite into MainBase. Exact stored amount.
+- Presentation-only FieldNotify. Source is local MainBase `GetTotalStored()`. Not a second
+  currency. Not reconstructed from Threat. `WBP_GP_HUD` uncommitted. TEMP HUD remains.
+- Focused contracts Failures=0. GPEditor Development + UHT, GP Development, GP Shipping **PASS**.
+- **NOT MERGED.**
+
 ## 2026-08-22 — Production HUD Planet Ferronite presentation
 
 Status: **HUD_PLANET_FERRONITE_READY_FOR_OPERATOR_VALIDATION**

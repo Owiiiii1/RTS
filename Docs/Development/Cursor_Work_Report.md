@@ -8,7 +8,7 @@
 
 - Branch: `feature/gp-hud-threat-normalized`
 - Base: `origin/main` @ `ec1eb9981fd3dd798d913cb04d43973494fd44de`
-- Head: recorded after commit on this branch
+- Head: `626c0ad4f9f84f356eaf58d76902cea68d6db224`
 - **NOT MERGED**
 - **NOT FINALIZED**
 

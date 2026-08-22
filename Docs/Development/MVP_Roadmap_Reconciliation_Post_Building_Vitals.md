@@ -1,6 +1,6 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `HUD_THREAT_NORMALIZED_READY_FOR_OPERATOR_VALIDATION`
+**Status:** `HUD_THREAT_NORMALIZED_FINALIZED_READY_TO_MERGE`
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
 **Baseline:** `origin/main` @ `61cedc682a391225ac0a02a716f3d36a4c176d7e`
 **Audit date:** 2026-08-21
@@ -8,9 +8,10 @@
 **Current execution checkpoint:** Production HUD Resource/Match data foundation is on `main`.
 `UGP_HUDRootWidget` injects those subsystem-owned ViewModels into authored Manual MVVM slots.
 GPUIRuntime/LocalPlayer bootstraps at most one production HUD root from a soft-configured
-`UGP_UIPresentationSettings::ProductionHUDWidgetClass`. MatchVM now exposes presentation-only
+`UGP_UIPresentationSettings::ProductionHUDWidgetClass`. MatchVM exposes presentation-only
 `FerroniteThreatNormalized` from MainBase storage capacity × ThreatPerStoredUnit.
-Visible HUD is still only partially wired. TEMP HUD remains active. **NOT FINALIZED.**
+Operator-validated: `PB_Threat` binds that field; green → yellow → red color interpolation
+works in PIE. Visible HUD is still only partially wired. TEMP HUD remains active. **NOT MERGED.**
 
 ## 1. Why reconciliation is required
 
@@ -113,7 +114,7 @@ current execution order.
 | --- | --- | --- |
 | TEMP gameplay HUD | **DONE (temporary)** | `UGP_TEMP_S28P_PlanetaryFerroniteHUD` exposes resources, launch, catalogs/READY, cap, timer, result, and Wall Package state. |
 | CommonUI/MVVM prerequisites | **DONE — FOUNDATION** | Plugins/dependencies plus project-owned activatable and non-activatable widget bases, HUD root base, FoW/Resource/Match VMs, and push adapters exist in `GPUIRuntime`. |
-| Production HUD | **PARTIAL — DATA FOUNDATION + VIEWMODEL BRIDGE + RUNTIME BOOTSTRAP + THREAT NORMALIZED** | Data foundation and HUD bootstrap on `main`. MatchVM exposes presentation-only `FerroniteThreatNormalized` = Clamp(threat / (MainBase `GetTotalCapacity()` × `GetThreatPerStoredUnit()`), 0, 1). Not a gameplay threshold; no hardcoded ThreatMax. Raw `FerroniteThreatValue` remains. Authored ProgressBar is operator-local WBP work. Remaining HUD fields/actions, SelectionVM, Context Action Grid, MainBase PURCHASE UI, minimap, Patrol, notifications, and production end-of-match remain unimplemented. TEMP HUD remains active. |
+| Production HUD | **PARTIAL — DATA FOUNDATION + VIEWMODEL BRIDGE + RUNTIME BOOTSTRAP + THREAT NORMALIZED** | Data foundation and HUD bootstrap on `main`. MatchVM exposes presentation-only `FerroniteThreatNormalized` = Clamp(threat / (MainBase `GetTotalCapacity()` × `GetThreatPerStoredUnit()`), 0, 1). Not a gameplay threshold; no hardcoded ThreatMax. Raw `FerroniteThreatValue` remains. Operator-validated: `PB_Threat.Percent` bound to `FerroniteThreatNormalized`; operator-local `ThreatToColor` green → yellow → red. `WBP_GP_HUD` / `ThreatToColor` uncommitted. Current gameplay tuning can fill the bar quickly; later UX/balance tuning may revisit presentation scale. Remaining HUD fields/actions, SelectionVM, Context Action Grid, MainBase PURCHASE UI, minimap, Patrol, notifications, and production end-of-match remain unimplemented. TEMP HUD remains active. |
 | Production Order Menu | **SUPERSEDED AS HUD PATH — UI NOT STARTED** | Canonical production entry is MainBase PURCHASE inside the Context Action Grid. Purchases remain usable through TEMP HUD only. Backend unit/building/Wall Package flows exist. |
 | Minimap | **NOT STARTED** | No minimap subsystem/VM/widget production code. |
 | Notifications | **NOT STARTED** | No notification VM/stack or authority-to-client notification pipeline. |
@@ -367,12 +368,14 @@ After SWARM implementation:
 
 ## 11. Immediate NEXT recommendation
 
-**Threat bar presentation is ready for operator validation.** Bind authored ProgressBar to
-`UGP_MatchViewModel.FerroniteThreatNormalized`. Formula uses actual MainBase storage
-capacity × ThreatPerStoredUnit. Not a gameplay threshold. Raw `FerroniteThreatValue` remains.
-Authored WBP remains operator-local. TEMP HUD remains.
+**Threat bar presentation is operator-validated and ready to merge.** `PB_Threat` binds
+`FerroniteThreatNormalized`. Formula uses actual MainBase storage capacity × ThreatPerStoredUnit.
+Not a gameplay threshold. Raw `FerroniteThreatValue` remains. Authored `WBP_GP_HUD` / `ThreatToColor`
+remain operator-local. Green → yellow → red interpolation was operator-validated. Current gameplay
+values can fill the bar quickly; later UX/balance tuning may revisit the presentation scale.
+TEMP HUD remains.
 
-Status: `HUD_THREAT_NORMALIZED_READY_FOR_OPERATOR_VALIDATION`. **NOT MERGED. NOT FINALIZED.**
+Status: `HUD_THREAT_NORMALIZED_FINALIZED_READY_TO_MERGE`. **NOT MERGED.**
 
 Execution order remains: implement remaining production UI/HUD visuals using the approved layout →
 minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps →

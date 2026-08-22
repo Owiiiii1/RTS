@@ -57,12 +57,14 @@
 
 **Closed:** Production HUD data foundation — on `main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`.
 Production HUD layout + MainBase procurement documentation is on `main`.
+Production HUD ViewModel bridge + runtime bootstrap is on `main`.
 
-**Exactly one current gate:** merge of `feature/gp-production-hud-viewmodel-bridge`.
-Status: **HUD_VIEWMODEL_BRIDGE_AND_BOOTSTRAP_FINALIZED_READY_TO_MERGE**. **NOT MERGED.**
-Runtime HUD bootstrap and ViewModel bridge are implemented. Authored `WBP_GP_HUD` remains
-operator-local (not committed). Only OrbitalFerronite text binding has been manually validated.
-Do not claim remaining HUD fields, SelectionVM, minimap, action grid, MainBase PURCHASE UI, or Patrol complete.
+**Exactly one current gate:** merge of `feature/gp-hud-threat-normalized`.
+Status: **HUD_THREAT_NORMALIZED_FINALIZED_READY_TO_MERGE**. **NOT MERGED.**
+Threat bar uses presentation-only `FerroniteThreatNormalized` from MainBase storage capacity ×
+ThreatPerStoredUnit. Authored `WBP_GP_HUD` / `ThreatToColor` remain operator-local.
+Do not claim remaining HUD fields, SelectionVM, minimap, action grid, MainBase PURCHASE UI, Patrol,
+or final Threat tuning/art complete.
 
 **Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
 

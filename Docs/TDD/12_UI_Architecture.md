@@ -109,8 +109,11 @@ PublicDependencyModuleNames.AddRange(new string[]
   `FerroniteThreatNormalized` is presentation-only: Clamp(FerroniteThreatValue /
   (MainBase `GetTotalCapacity()` × `GetThreatPerStoredUnit()`), 0, 1). Invalid/zero
   denominator → 0. There is no gameplay ThreatMax and no hardcoded 1000. Raw
-  `FerroniteThreatValue` remains. The authored ProgressBar is operator-local WBP work;
-  final art/color states are not claimed complete.
+  `FerroniteThreatValue` remains. Operator-validated: authored `PB_Threat.Percent` is bound to
+  `GP_MatchViewModel.FerroniteThreatNormalized` and updates in PIE; operator-local `ThreatToColor`
+  drives Fill Color and Opacity with green → yellow → red. `WBP_GP_HUD` and `ThreatToColor`
+  remain uncommitted. Final art is not claimed complete. Current gameplay/storage tuning can
+  drive the bar to high/full quickly; later UX/balance tuning may revisit the presentation scale.
 - `UGP_HUDViewModelSubsystem : ULocalPlayerSubsystem` owns exactly one ResourceVM, MatchVM, and their
   push adapters per local player. Authored `WBP_GP_HUD` Manual MVVM entries receive those same
   instances from `UGP_HUDRootWidget` (no duplicate ViewModels). Widgets remain read-only consumers.

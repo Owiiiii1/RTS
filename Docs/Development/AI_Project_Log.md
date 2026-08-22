@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-22 — Production HUD Threat normalized finalized
+
+Status: **HUD_THREAT_NORMALIZED_FINALIZED_READY_TO_MERGE**
+
+- Operator PIE validation **PASSED**: `PB_Threat.Percent` bound to
+  `GP_MatchViewModel.FerroniteThreatNormalized`; bar updates live; operator-local `ThreatToColor`
+  drives Fill Color and Opacity green → yellow → red.
+- Presentation-only formula unchanged: Clamp(threat / (capacity × ThreatPerStoredUnit), 0, 1).
+  No gameplay ThreatMax. `WBP_GP_HUD` / `ThreatToColor` uncommitted. Current gameplay tuning can
+  fill the bar quickly; later UX/balance tuning may revisit scale.
+- Focused contracts Failures=0. GPEditor Development + UHT, GP Development, GP Shipping **PASS**.
+- **NOT MERGED.**
+
 ## 2026-08-22 — Production HUD Threat normalized presentation
 
 Status: **HUD_THREAT_NORMALIZED_READY_FOR_OPERATOR_VALIDATION**

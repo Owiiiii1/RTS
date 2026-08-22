@@ -53,8 +53,11 @@ bottom-center, minimap top-right or bottom-right) is **SUPERSEDED**.
 
 Raw Ferronite stored at MainBase is the same underlying quantity that currently drives threat.
 The HUD may show it twice: Threat as pressure, Planet Ferronite as the exact number.
-Do not invent a second currency. The authored ProgressBar remains operator-local WBP work.
-Do not claim final art/color states complete.
+Do not invent a second currency. Operator-validated: authored `PB_Threat` binds
+`FerroniteThreatNormalized` and `ThreatToColor` interpolates green → yellow → red.
+`WBP_GP_HUD` and `ThreatToColor` remain operator-local / uncommitted. Do not claim final art
+or final Threat tuning complete. Current gameplay values can fill the bar quickly; later
+UX/balance tuning may revisit the presentation scale.
 
 **Top center — Match Timer**
 
@@ -155,8 +158,11 @@ SWARM / Ferronite Threat lives in the **top-left Threat + Score** block. Form:
 - Pressure bar bound to `FerroniteThreatNormalized` (derived from actual MainBase storage
   capacity × ThreatPerStoredUnit). Not a gameplay threshold. No hardcoded ThreatMax.
 - Raw `FerroniteThreatValue` remains available for numeric readout if authored.
-- Color shift (green → yellow → orange → red) is acceptable prototype contrast; not claimed complete.
-- Authored ProgressBar itself is operator-local `WBP_GP_HUD` work.
+- Operator-validated: `PB_Threat.Percent` updates in PIE; operator-local `ThreatToColor`
+  interpolates green → yellow → red on Fill Color and Opacity.
+- `WBP_GP_HUD` and `ThreatToColor` remain uncommitted. Final art is not claimed complete.
+- Current gameplay/storage tuning can reach high/full threat quickly; later UX/balance
+  tuning may revisit the presentation scale. This is not a defect in the normalization slice.
 - Optional later minimap wave marker is minimap-slice work, not this layout.
 
 Гравець має знати рівень threat за ≤ 1 second.

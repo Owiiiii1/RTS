@@ -189,9 +189,15 @@ Enemy world presentation remains a separate temporary local gate, not replicatio
 - LocalFoW revisions trigger immediate registered-list evaluation;
 - a 10 Hz bounded registered-list pass catches replicated actor movement across unchanged FoW;
 - own-team actors remain presented; cross-team actors are locally presented only while their current
-  location is `Visible`;
-- actor hidden-in-game state covers authored/generated primitives and team tint, while health and
-  combat presentation have explicit local gates;
+  location is `Visible` on **that local client's** `UGP_LocalFoWComponent`;
+- local unit FoW presentation must never use Actor-level replicated/shared hidden state
+  (`SetActorHiddenInGame` / `AActor::bHidden`). Each client gates owned visual
+  `UPrimitiveComponent`s (including Blueprint-added meshes) with local `SetHiddenInGame`,
+  restoring the component's original hidden flag when shown;
+- health and combat presentation keep explicit local gates; team tint is refreshed on become-visible;
+- actor replication/relevancy is unchanged. This is listen-server/multiplayer presentation
+  correctness, not FoW network secrecy or relevancy culling. FoW world visualization is a
+  separate overlay path and was not this coupling bug;
 - `UGP_HealthBarComponent` composes `owner/death && LocalFoW && damaged-health`: full health (within
   `max(KINDA_SMALL_NUMBER, abs(MaxHealth) * 1e-4)`), zero, and dead are hidden; only damaged living
   actors may show a bar.

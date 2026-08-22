@@ -5,6 +5,8 @@
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPUnitAttributeSet.h"
 #include "Combat/GPCombatPresentationComponent.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/WidgetComponent.h"
 #include "Presentation/GPHealthBarComponent.h"
 #include "Presentation/GPLocalFoWUnitPresentationSubsystem.h"
 #include "Presentation/GPTeamPresentationComponent.h"
@@ -188,7 +190,7 @@ void AGP_UnitBase::SetLocalFoWPresentationVisible(bool bVisible)
 	}
 
 	bLocalFoWPresentationVisible = bVisible;
-	SetActorHiddenInGame(!bVisible);
+	ApplyLocalFoWVisualPresentation(bVisible);
 
 	if (HealthBarComponent != nullptr)
 	{
@@ -202,6 +204,78 @@ void AGP_UnitBase::SetLocalFoWPresentationVisible(bool bVisible)
 	{
 		TeamPresentationComponent->RefreshTeamPresentation();
 	}
+}
+
+int32 AGP_UnitBase::GetLocalFoWGatedPrimitiveCount() const
+{
+	int32 Count = 0;
+	for (const FGP_LocalFoWVisualPrimitiveCache& Entry : LocalFoWVisualPrimitives)
+	{
+		if (Entry.Primitive.IsValid())
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+void AGP_UnitBase::ApplyLocalFoWVisualPresentation(bool bVisible)
+{
+	if (bVisible)
+	{
+		RestoreLocalFoWVisualComponents();
+	}
+	else
+	{
+		CaptureAndHideLocalFoWVisualComponents();
+	}
+}
+
+void AGP_UnitBase::CaptureAndHideLocalFoWVisualComponents()
+{
+	if (LocalFoWVisualPrimitives.Num() == 0)
+	{
+		TArray<UPrimitiveComponent*> Primitives;
+		GetComponents<UPrimitiveComponent>(Primitives);
+		LocalFoWVisualPrimitives.Reserve(Primitives.Num());
+		for (UPrimitiveComponent* Primitive : Primitives)
+		{
+			if (!ShouldGatePrimitiveForLocalFoW(Primitive))
+			{
+				continue;
+			}
+
+			FGP_LocalFoWVisualPrimitiveCache Entry;
+			Entry.Primitive = Primitive;
+			Entry.bOriginalHiddenInGame = Primitive->bHiddenInGame;
+			LocalFoWVisualPrimitives.Add(Entry);
+		}
+	}
+
+	for (const FGP_LocalFoWVisualPrimitiveCache& Entry : LocalFoWVisualPrimitives)
+	{
+		if (UPrimitiveComponent* Primitive = Entry.Primitive.Get())
+		{
+			Primitive->SetHiddenInGame(true, false);
+		}
+	}
+}
+
+void AGP_UnitBase::RestoreLocalFoWVisualComponents()
+{
+	for (const FGP_LocalFoWVisualPrimitiveCache& Entry : LocalFoWVisualPrimitives)
+	{
+		if (UPrimitiveComponent* Primitive = Entry.Primitive.Get())
+		{
+			Primitive->SetHiddenInGame(Entry.bOriginalHiddenInGame, false);
+		}
+	}
+	LocalFoWVisualPrimitives.Reset();
+}
+
+bool AGP_UnitBase::ShouldGatePrimitiveForLocalFoW(const UPrimitiveComponent* Primitive) const
+{
+	return IsValid(Primitive) && Cast<UWidgetComponent>(Primitive) == nullptr;
 }
 
 UAbilitySystemComponent* AGP_UnitBase::GetAbilitySystemComponent() const
@@ -295,6 +369,7 @@ void AGP_UnitBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	CancelPendingUnitDefinitionLoad();
 	UnregisterPlayerUnitCap();
+	RestoreLocalFoWVisualComponents();
 	Super::EndPlay(EndPlayReason);
 }
 

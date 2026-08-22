@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-22 — FoW multiplayer local unit visibility fix
+
+Status: **FOW_MULTIPLAYER_UNIT_PRESENTATION_FIX_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch `fix/gp-fow-multiplayer-local-unit-visibility` from current `origin/main`.
+- Root cause: listen-server `SetActorHiddenInGame` mutated replicated `AActor::bHidden`, so
+  Player 1 FoW leaked onto Player 2 unit presentation. World visualization mirrors were already
+  correct.
+- Fix: local `UPrimitiveComponent::SetHiddenInGame` (including Blueprint-added meshes), restore
+  original flags on show. HealthBar/Combat local gates preserved. No actor relevancy/collision
+  changes.
+- **NOT MERGED. NOT FINALIZED.**
+
 ## 2026-08-22 — Production HUD Planet Ferronite finalized
 
 Status: **HUD_PLANET_FERRONITE_FINALIZED_READY_TO_MERGE**

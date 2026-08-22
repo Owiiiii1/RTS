@@ -13,6 +13,7 @@ class UGP_AbilitySystemComponent;
 class UGP_CombatPresentationComponent;
 class UGP_HealthBarComponent;
 class UGP_TeamPresentationComponent;
+class UPrimitiveComponent;
 class UGP_UnitAttributeSet;
 class UGP_UnitCommandComponent;
 class UGP_UnitDefinition;
@@ -79,6 +80,7 @@ public:
 	/** Local presentation-only FoW gate. Does not change replication, collision, or gameplay state. */
 	void SetLocalFoWPresentationVisible(bool bVisible);
 	bool IsLocalFoWPresentationVisible() const { return bLocalFoWPresentationVisible; }
+	int32 GetLocalFoWGatedPrimitiveCount() const;
 
 	UFUNCTION(BlueprintPure, Category = "GP|Team")
 	int32 GetTeamId() const;
@@ -206,6 +208,10 @@ protected:
 	virtual void NotifyAuthorityDeath();
 	void ApplyClientDeadPresentation();
 	void AttachHealthBarToOwnerRoot();
+	void ApplyLocalFoWVisualPresentation(bool bVisible);
+	void CaptureAndHideLocalFoWVisualComponents();
+	void RestoreLocalFoWVisualComponents();
+	bool ShouldGatePrimitiveForLocalFoW(const UPrimitiveComponent* Primitive) const;
 	class AGP_PlayerState* ResolveOwningPlayerStateForUnitCap() const;
 
 	/** -1 unassigned, 0 neutral, 1+ playable teams. */
@@ -294,6 +300,12 @@ private:
 	bool bDeathHandled = false;
 	bool bCountedTowardPlayerUnitCap = false;
 	bool bLocalFoWPresentationVisible = true;
+	struct FGP_LocalFoWVisualPrimitiveCache
+	{
+		TWeakObjectPtr<UPrimitiveComponent> Primitive;
+		bool bOriginalHiddenInGame = false;
+	};
+	TArray<FGP_LocalFoWVisualPrimitiveCache> LocalFoWVisualPrimitives;
 	TWeakObjectPtr<class AGP_PlayerState> UnitCapOwnerWeak;
 
 	UPROPERTY(Transient)

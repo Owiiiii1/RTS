@@ -1,122 +1,91 @@
-# Cursor Work Report — Production HUD Planet Ferronite Finalization
+# Cursor Work Report — FoW Multiplayer Local Unit Visibility Fix
 
 ## Status
 
-**HUD_PLANET_FERRONITE_FINALIZED_READY_TO_MERGE**
+**FOW_MULTIPLAYER_UNIT_PRESENTATION_FIX_READY_FOR_OPERATOR_VALIDATION**
 
-**NOT MERGED.**
+**NOT MERGED. NOT FINALIZED.**
 
 ## Branch / base / head
 
-- Branch: `feature/gp-hud-planet-ferronite`
-- Base: `origin/main` @ `04e4b7e6050ebe3bfb42dcd5f1af4ca45c8df893`
-- Implementation head: `63504d667cb9c40ab24b823ae7e0c33b288b5447`
-- Finalization head: `cbf3abd5ca130db1d7478907f313d485fa5c2fc8`
+- Branch: `fix/gp-fow-multiplayer-local-unit-visibility`
+- Base: `origin/main` @ `f20439388a3e3bf0f3389a10193634749995c21d`
+- Implementation head: this implementation/report commit on `fix/gp-fow-multiplayer-local-unit-visibility`
 
-## Operator validation PASS
+## Confirmed root cause
 
-Observed in authored local `WBP_GP_HUD`:
+`UGP_LocalFoWUnitPresentationSubsystem` already decided visibility from the local player's `UGP_LocalFoWComponent`. The leak was the apply path:
 
-- `TXT_PlanetFerroniteValue` bound to `GP_ResourceViewModel.PlanetFerronite` through To Text (Float)
-- Planet Ferronite is visible in PIE
-- the value updates correctly when Workers deposit Ferronite into MainBase
-- presentation matches the intended exact MainBase stored Ferronite value
+`AGP_UnitBase::SetLocalFoWPresentationVisible` called `SetActorHiddenInGame`.
 
-`WBP_GP_HUD` remains operator-local and is **not committed**.
+`AActor::bHidden` is a replicated Actor property. On a listen-server host that mutates shared actor hidden state, so Player 1's FoW presentation replicated onto Player 2's unit visuals. FoW world overlay mirrors were already per-local-player and were not this bug.
 
-## Exact source-of-truth path
+## Exact old behavior
 
-```
-local team's MainBase
-→ AGP_GameState::FindMainBaseForTeamClientSafe(LocalTeamId)
-→ AGP_MainBase::GetStorageComponent()
-→ UGP_StorageComponent::GetTotalStored()
-→ UGP_ResourceViewModel::PlanetFerronite
-```
+Hide/show used Actor-level `SetActorHiddenInGame(!bVisible)`. HealthBar and Combat already had local gates, but the mesh/actor hide leaked across clients.
 
-Presentation-only FieldNotify. Exact raw stored Ferronite. Not a second currency. Not reconstructed from `FerroniteThreatValue`.
+## Exact new presentation mechanism
 
-## Adapter lifecycle / delegates
+Keep the actor logically present. On local FoW hide:
 
-`UGP_ResourceViewModelAdapter::Initialize(ResourceVM, LocalPlayerState, OpponentPlayerState, GameState, LocalTeamId)`
+- enumerate owned visual `UPrimitiveComponent`s (including Blueprint/SCS/runtime-added meshes)
+- skip `UWidgetComponent` (HealthBar owns its composed visibility)
+- cache each component's original `bHiddenInGame`
+- call local `UPrimitiveComponent::SetHiddenInGame(true)` (component `bHiddenInGame` is not replicated)
 
-`UGP_HUDViewModelSubsystem::Rebind` passes current GameState and LocalTeamId. ResourceVM and MatchVM remain owned by the LocalPlayer subsystem.
+On show: restore original `bHiddenInGame` and refresh team presentation. Enumeration runs on visibility transitions only (the 10 Hz eval still early-outs when the local bool is unchanged).
 
-Binds only the local team:
+## Why it is local-only
 
-- `AGP_GameState::OnResolvedMainBaseChanged` — other teams ignored
-- local MainBase `UGP_StorageComponent::OnStorageChanged`
+Component `SetHiddenInGame` does not replicate. Actor `bHidden` is never written by this path. Collision, movement, ASC, commands, and actor relevancy are untouched.
 
-`Initialize` calls `Shutdown` first. Local MainBase change unbinds old storage, binds new storage, refreshes immediately. `Shutdown` / `BeginDestroy` remove GameState and storage delegates and set `PlanetFerronite = 0`. Missing MainBase/storage presents `0`. Rebind does not duplicate delegates.
+## Component / Blueprint child handling
 
-No Tick, timers, polling, or world scans.
+`GetComponents<UPrimitiveComponent>` includes native capsule/generated visual parts and Blueprint-added meshes. A contract-spawned child `UStaticMeshComponent` is gated and restored. Widget health bars are excluded from that list.
+
+## Healthbar / combat leak handling
+
+Preserved:
+
+- `HealthBarComponent->SetFoWPresentationAllowed(bVisible)`
+- `CombatPresentationComponent->SetLocalPresentationAllowed(bVisible)`
+- `TeamPresentationComponent->RefreshTeamPresentation()` on become-visible
+
+Damaged enemy bars cannot show while local FoW disallows presentation. Combat multicast still no-ops when local presentation is disallowed.
 
 ## Focused contract results
 
 | Command | Result |
 | --- | --- |
-| `gp.UI.RunPlanetFerronitePresentationContractTest` | **PASS**, Failures=0 |
+| `gp.FoW.RunMultiplayerUnitPresentationContractTest` | **PASS**, Failures=0 |
+| `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS**, Failures=0 |
+| `gp.FoW.RunWorldVisualizationContractTest` | **PASS**, Failures=0 |
 | `gp.UI.RunProductionHUDFoundationContractTest` | **PASS**, Failures=0 |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | **PASS**, Failures=0 |
-| `gp.UI.RunHUDBootstrapContractTest` | **PASS**, Failures=0 |
-| `gp.UI.RunThreatPresentationContractTest` | **PASS**, Failures=0 |
-| `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS**, Failures=0 |
 
-Full suite **not run** (no focused failure; no unexpected shared-system impact).
+Full suite **not run** (no focused failure; no unexpected architecture expansion).
 
 ## GPEditor / UHT
 
 `Build.bat GPEditor Win64 Development` — **PASS**
 
-## GP Development
-
-`Build.bat GP Win64 Development` — **PASS**
-
-## GP Shipping
-
-`Build.bat GP Win64 Shipping` — **PASS**
-
-## Factual final diff review vs `origin/main`
-
-Reviewed `origin/main...HEAD`. No defects found. Confirmed:
-
-- `PlanetFerronite` is presentation-only FieldNotify; widgets remain read-only
-- exact source is local MainBase `FindMainBaseForTeamClientSafe` → `GetStorageComponent()` → `GetTotalStored()`
-- not reconstructed from `FerroniteThreatValue`
-- not a second currency
-- no gameplay/economy/storage semantic changes
-- missing MainBase/storage presents `0`
-- `OnResolvedMainBaseChanged` filtered to `LocalTeamId`
-- old storage is unbound on MainBase replacement
-- `OnStorageChanged` rereads `GetTotalStored()`
-- repeated Initialize/Rebind does not duplicate delegates
-- Shutdown/BeginDestroy remove GameState/storage bindings
-- no Tick / timers / polling
-- no `GetActorOfClass` / `GetAllActorsOfClass` / `TObjectIterator` / world scan
-- ResourceVM/MatchVM ownership remains LocalPlayer subsystem
-- TEMP HUD (`UGP_TEMP_S28P_PlanetaryFerroniteHUD`) remains created by `AGP_PlayerController`
-- committed diff contains **no** `GP/Content/**`, Config, maps, DataAssets, or Tools
+GP Development / Shipping **not run** (post-operator finalization).
 
 ## Exact changed files vs `origin/main`
 
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPResourceViewModel.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPResourceViewModel.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPResourceViewModelAdapter.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPResourceViewModelAdapter.cpp`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPHUDViewModelSubsystem.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPProductionHUDFoundationContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPPlanetFerronitePresentationContractTest.cpp`
-- `Docs/TDD/12_UI_Architecture.md`
-- `Docs/GDD/09_UI_UX.md`
-- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
+- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPFoWMultiplayerUnitPresentationContractTest.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPFoWWorldVisualizationContractTest.cpp`
+- `Docs/TDD/15_Fog_of_War.md`
 - `Docs/Development/AI_Project_Log.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Content / protected files / limitations
+## Protected files / limitations
 
-- **Content untouched** (`WBP_GP_HUD`, `TXT_PlanetFerroniteValue`, all `GP/Content` unstaged)
+- **Content untouched** (no `GP/Content/**`, unit Blueprints, or `WBP_GP_HUD`)
 - Protected Config/maps/DataAssets/Tools **untouched / unstaged**
-- **No gameplay/economy semantic changes**
-- Authored WBP binding is operator-local and not committed
-- TEMP HUD preserved
+- Gameplay replication/relevancy unchanged
+- This is client presentation correctness, not FoW network secrecy
 - **NOT MERGED**
+- **NOT FINALIZED**

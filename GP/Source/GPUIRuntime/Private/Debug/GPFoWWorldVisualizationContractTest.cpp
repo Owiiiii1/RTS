@@ -152,7 +152,8 @@ namespace GPFoWWorldVisualizationContractPrivate
 			Team1Mirror);
 		Expect(OwnUnit != nullptr
 			&& OwnUnit->IsLocalFoWPresentationVisible()
-			&& !OwnUnit->IsHidden(),
+			&& !OwnUnit->IsHidden()
+			&& OwnUnit->GetLocalFoWGatedPrimitiveCount() == 0,
 			TEXT("H1_OwnUnitNeverHiddenByLocalFoW"));
 
 		UGP_LocalFoWUnitPresentationSubsystem::ApplyUnitPresentationForLocalPlayer(
@@ -161,7 +162,8 @@ namespace GPFoWWorldVisualizationContractPrivate
 			Team1Mirror);
 		Expect(EnemyUnit != nullptr
 			&& EnemyUnit->IsLocalFoWPresentationVisible()
-			&& !EnemyUnit->IsHidden(),
+			&& !EnemyUnit->IsHidden()
+			&& EnemyUnit->GetLocalFoWGatedPrimitiveCount() == 0,
 			TEXT("H2_EnemyVisiblePresentationVisible"));
 
 		if (EnemyUnit != nullptr)
@@ -174,7 +176,8 @@ namespace GPFoWWorldVisualizationContractPrivate
 			Team1Mirror);
 		Expect(EnemyUnit != nullptr
 			&& !EnemyUnit->IsLocalFoWPresentationVisible()
-			&& EnemyUnit->IsHidden(),
+			&& !EnemyUnit->IsHidden()
+			&& EnemyUnit->GetLocalFoWGatedPrimitiveCount() > 0,
 			TEXT("H3_EnemyExploredPresentationHidden"));
 
 		if (EnemyUnit != nullptr)
@@ -187,7 +190,8 @@ namespace GPFoWWorldVisualizationContractPrivate
 			Team1Mirror);
 		Expect(EnemyUnit != nullptr
 			&& !EnemyUnit->IsLocalFoWPresentationVisible()
-			&& EnemyUnit->IsHidden(),
+			&& !EnemyUnit->IsHidden()
+			&& EnemyUnit->GetLocalFoWGatedPrimitiveCount() > 0,
 			TEXT("H4_EnemyUnexploredPresentationHidden"));
 
 		if (EnemyUnit != nullptr)
@@ -200,7 +204,8 @@ namespace GPFoWWorldVisualizationContractPrivate
 			Team1Mirror);
 		Expect(EnemyUnit != nullptr
 			&& EnemyUnit->IsLocalFoWPresentationVisible()
-			&& !EnemyUnit->IsHidden(),
+			&& !EnemyUnit->IsHidden()
+			&& EnemyUnit->GetLocalFoWGatedPrimitiveCount() == 0,
 			TEXT("H5_EnemyReentersVisiblePresentationRestored"));
 
 		UGP_HealthBarComponent* EnemyHealthBar =
@@ -239,6 +244,7 @@ namespace GPFoWWorldVisualizationContractPrivate
 			&& !EnemyHealthBar->IsComposedHealthBarVisible()
 			&& !EnemyHealthBar->IsVisible()
 			&& EnemyUnit != nullptr
+			&& !EnemyUnit->IsHidden()
 			&& EnemyUnit->GetCombatPresentationComponent() != nullptr
 			&& !EnemyUnit->GetCombatPresentationComponent()->IsLocalPresentationAllowed(),
 			TEXT("H6_DamagedEnemyHealthBarCannotLeakWhileHidden"));
@@ -246,7 +252,8 @@ namespace GPFoWWorldVisualizationContractPrivate
 			&& EnemyUnit->GetTeamId() == EnemyTeamBeforePresentation
 			&& EnemyUnit->GetIsReplicated() == bEnemyReplicatesBeforePresentation
 			&& EnemyUnit->IsReplicatingMovement() == bEnemyReplicateMovementBeforePresentation
-			&& EnemyUnit->GetActorLocation().Equals(EnemyLocationBeforePresentation),
+			&& EnemyUnit->GetActorLocation().Equals(EnemyLocationBeforePresentation)
+			&& !EnemyUnit->IsHidden(),
 			TEXT("H7_PresentationGateDoesNotMutateGameplayOrReplication"));
 
 		const int64 SmoothingRevisionBefore = Team1Mirror->GetRevision();

@@ -167,6 +167,7 @@ void UGP_HUDViewModelSubsystem::ResetViewModels()
 		MatchViewModel->SetMatchTimeRemaining(0.0f);
 		MatchViewModel->SetMatchStateTag(FGameplayTag());
 		MatchViewModel->SetFerroniteThreatValue(0.0f);
+		MatchViewModel->SetFerroniteThreatNormalized(0.0f);
 		MatchViewModel->SetWinnerTeamId(-1);
 		MatchViewModel->SetWinReasonTag(FGameplayTag());
 		MatchViewModel->SetMatchDuration(0.0f);
@@ -434,7 +435,8 @@ void UGP_HUDViewModelSubsystem::DebugDumpToLog() const
 	UE_LOG(LogGPHUDViewModels, Display,
 		TEXT("gp.UI.HUDDump Ready=%s LocalTeamId=%d OrbitalFerronite=%.2f FerroniteScore=%.2f ")
 		TEXT("OpponentFerroniteScore=%.2f CurrentUnits=%.0f MaxUnits=%.0f MatchTimeRemaining=%.2f ")
-		TEXT("FerroniteThreatValue=%.2f MatchState=%s Finished=%s WinnerTeamId=%d WinReason=%s MatchDuration=%.2f"),
+		TEXT("FerroniteThreatValue=%.2f ThreatNormalized=%.2f ThreatPresentationMax=%.2f ")
+		TEXT("MatchState=%s Finished=%s WinnerTeamId=%d WinReason=%s MatchDuration=%.2f"),
 		bReady ? TEXT("Ready") : TEXT("NotReady"),
 		LocalTeamId,
 		Resources != nullptr ? Resources->OrbitalFerronite : 0.0f,
@@ -444,6 +446,8 @@ void UGP_HUDViewModelSubsystem::DebugDumpToLog() const
 		Resources != nullptr ? Resources->MaxUnits : 0.0f,
 		Match != nullptr ? Match->MatchTimeRemaining : 0.0f,
 		Match != nullptr ? Match->FerroniteThreatValue : 0.0f,
+		Match != nullptr ? Match->FerroniteThreatNormalized : 0.0f,
+		MatchAdapter != nullptr ? MatchAdapter->GetThreatPresentationMax() : 0.0f,
 		Match != nullptr ? *Match->MatchStateTag.ToString() : TEXT("None"),
 		Match != nullptr && Match->bMatchFinished ? TEXT("true") : TEXT("false"),
 		Match != nullptr ? Match->WinnerTeamId : -1,

@@ -44,12 +44,17 @@ bottom-center, minimap top-right or bottom-right) is **SUPERSEDED**.
 
 **Top left — Threat + Score**
 
-- Ferronite Threat = danger/pressure presentation (`FerroniteThreatValue`).
+- Ferronite Threat = danger/pressure presentation. Bind the bar to
+  `UGP_MatchViewModel.FerroniteThreatNormalized` (`[0,1]`).
+- Normalization: `Clamp(FerroniteThreatValue / (MainBase storage GetTotalCapacity() × GetThreatPerStoredUnit()), 0, 1)`.
+  Invalid/zero denominator → 0. This is presentation only — not a gameplay ThreatMax.
+  Raw `FerroniteThreatValue` remains available. No hardcoded 1000.
 - Player Ferronite Score.
 
 Raw Ferronite stored at MainBase is the same underlying quantity that currently drives threat.
 The HUD may show it twice: Threat as pressure, Planet Ferronite as the exact number.
-Do not invent a second currency.
+Do not invent a second currency. The authored ProgressBar remains operator-local WBP work.
+Do not claim final art/color states complete.
 
 **Top center — Match Timer**
 
@@ -145,10 +150,13 @@ Bottom-center Selection / Current Info:
 
 ### SWARM Aggression Indicator
 
-SWARM / Ferronite Threat lives in the **top-left Threat + Score** block. Form (prototype TBD):
+SWARM / Ferronite Threat lives in the **top-left Threat + Score** block. Form:
 
-- Pressure presentation of the current `FerroniteThreatValue` source.
-- Color shift (green → yellow → orange → red) is acceptable prototype contrast.
+- Pressure bar bound to `FerroniteThreatNormalized` (derived from actual MainBase storage
+  capacity × ThreatPerStoredUnit). Not a gameplay threshold. No hardcoded ThreatMax.
+- Raw `FerroniteThreatValue` remains available for numeric readout if authored.
+- Color shift (green → yellow → orange → red) is acceptable prototype contrast; not claimed complete.
+- Authored ProgressBar itself is operator-local `WBP_GP_HUD` work.
 - Optional later minimap wave marker is minimap-slice work, not this layout.
 
 Гравець має знати рівень threat за ≤ 1 second.
@@ -217,7 +225,9 @@ UI — read-only consumer gameplay state:
 - Match state → `AGP_GameState.MatchState`.
 - Match timer → `AGP_GameState.MatchTimeRemaining`.
 - Planet Ferronite (exact stored amount) → MainBase `UGP_StorageComponent` (same underlying quantity that currently drives threat).
-- SWARM / Ferronite Threat (pressure presentation) → `AGP_GameState.FerroniteThreatValue` / MatchVM.
+- SWARM / Ferronite Threat (pressure presentation) → `UGP_MatchViewModel.FerroniteThreatNormalized`
+  (bar) derived from `AGP_GameState` per-team threat and local MainBase storage capacity ×
+  ThreatPerStoredUnit. Raw `FerroniteThreatValue` remains. Not a gameplay threshold.
 - Context Action Grid commands → local selection + `AllowedCommands` (not a Build Menu).
 - MainBase PURCHASE / Message Strip → existing `UGP_OrbitalDeliverySubsystem` catalogs, manifests,
   READY inventory, Wall Package stock, and `PodTransportSlotCapacity` (server-authoritative).

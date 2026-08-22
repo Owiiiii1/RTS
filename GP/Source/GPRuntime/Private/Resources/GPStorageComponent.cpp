@@ -619,6 +619,7 @@ bool UGP_StorageComponent::IsStorageFull() const
 
 void UGP_StorageComponent::ConfigureFromDefinition(float InContainerCapacity, int32 InContainerCount)
 {
+	const float PreviousTotal = GetTotalStored();
 	const float NewCapacity = FMath::Max(0.0f, InContainerCapacity);
 	const int32 NewCount = FMath::Max(0, InContainerCount);
 
@@ -638,6 +639,7 @@ void UGP_StorageComponent::ConfigureFromDefinition(float InContainerCapacity, in
 			}
 			RefreshContainerState(Container);
 		}
+		BroadcastStorageChanged(PreviousTotal);
 		return;
 	}
 
@@ -645,6 +647,7 @@ void UGP_StorageComponent::ConfigureFromDefinition(float InContainerCapacity, in
 	ContainerCount = NewCount;
 	EnsureContainerArray();
 	bStorageConfigured = true;
+	BroadcastStorageChanged(PreviousTotal);
 }
 
 void UGP_StorageComponent::EnsureContainerArray()
@@ -842,6 +845,12 @@ void UGP_StorageComponent::BroadcastStorageChanged(float PreviousTotal)
 }
 
 void UGP_StorageComponent::OnRep_Containers()
+{
+	const float Total = GetTotalStored();
+	OnStorageChanged.Broadcast(Total, Total, GetTotalCapacity());
+}
+
+void UGP_StorageComponent::OnRep_StorageLayout()
 {
 	const float Total = GetTotalStored();
 	OnStorageChanged.Broadcast(Total, Total, GetTotalCapacity());

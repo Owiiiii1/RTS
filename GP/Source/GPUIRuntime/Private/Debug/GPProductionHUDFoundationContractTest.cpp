@@ -83,6 +83,7 @@ namespace GPProductionHUDFoundationContractPrivate
 			Expect(Descriptor.GetField(MatchVM->GetClass(), TEXT("MatchTimeRemaining")).IsValid()
 				&& Descriptor.GetField(MatchVM->GetClass(), TEXT("MatchStateTag")).IsValid()
 				&& Descriptor.GetField(MatchVM->GetClass(), TEXT("FerroniteThreatValue")).IsValid()
+				&& Descriptor.GetField(MatchVM->GetClass(), TEXT("FerroniteThreatNormalized")).IsValid()
 				&& Descriptor.GetField(MatchVM->GetClass(), TEXT("WinnerTeamId")).IsValid()
 				&& Descriptor.GetField(MatchVM->GetClass(), TEXT("WinReasonTag")).IsValid()
 				&& Descriptor.GetField(MatchVM->GetClass(), TEXT("MatchDuration")).IsValid()
@@ -90,15 +91,20 @@ namespace GPProductionHUDFoundationContractPrivate
 				TEXT("D_MatchFieldsAreFieldNotify"));
 			MatchVM->SetMatchTimeRemaining(99.0f);
 			MatchVM->SetFerroniteThreatValue(42.0f);
+			MatchVM->SetFerroniteThreatNormalized(1.5f);
 			MatchVM->SetWinnerTeamId(2);
 			MatchVM->SetMatchDuration(301.0f);
 			MatchVM->SetMatchFinished(true);
 			Expect(FMath::IsNearlyEqual(MatchVM->MatchTimeRemaining, 99.0f)
 				&& FMath::IsNearlyEqual(MatchVM->FerroniteThreatValue, 42.0f)
+				&& FMath::IsNearlyEqual(MatchVM->FerroniteThreatNormalized, 1.0f)
 				&& MatchVM->WinnerTeamId == 2
 				&& FMath::IsNearlyEqual(MatchVM->MatchDuration, 301.0f)
 				&& MatchVM->bMatchFinished,
 				TEXT("E_MatchSettersMapValues"));
+			MatchVM->SetFerroniteThreatNormalized(-0.25f);
+			Expect(FMath::IsNearlyEqual(MatchVM->FerroniteThreatNormalized, 0.0f),
+				TEXT("E2_ThreatNormalizedSetterClampsToUnitInterval"));
 		}
 
 		UGP_ResourceViewModelAdapter* Adapter =

@@ -24,6 +24,14 @@ public:
 	UPROPERTY(BlueprintReadOnly, FieldNotify, Category = "GP|HUD|Match")
 	float FerroniteThreatValue = 0.0f;
 
+	/**
+	 * Presentation-only Threat bar fill in [0,1].
+	 * Derived from FerroniteThreatValue / (MainBase storage capacity × ThreatPerStoredUnit).
+	 * Not a gameplay threshold.
+	 */
+	UPROPERTY(BlueprintReadOnly, FieldNotify, Category = "GP|HUD|Match")
+	float FerroniteThreatNormalized = 0.0f;
+
 	UPROPERTY(BlueprintReadOnly, FieldNotify, Category = "GP|HUD|Match")
 	int32 WinnerTeamId = -1;
 
@@ -40,6 +48,7 @@ public:
 	void SetMatchTimeRemaining(float Value);
 	void SetMatchStateTag(FGameplayTag Value);
 	void SetFerroniteThreatValue(float Value);
+	void SetFerroniteThreatNormalized(float Value);
 	void SetWinnerTeamId(int32 Value);
 	void SetWinReasonTag(FGameplayTag Value);
 	void SetMatchDuration(float Value);

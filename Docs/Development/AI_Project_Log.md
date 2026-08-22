@@ -1,5 +1,19 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-22 — Production HUD Threat normalized presentation
+
+Status: **HUD_THREAT_NORMALIZED_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch `feature/gp-hud-threat-normalized` from current `origin/main`.
+- `UGP_MatchViewModel.FerroniteThreatNormalized` is presentation-only:
+  Clamp(FerroniteThreatValue / (MainBase GetTotalCapacity() × GetThreatPerStoredUnit()), 0, 1).
+  No gameplay ThreatMax. No hardcoded 1000. Raw FerroniteThreatValue remains.
+- Adapter binds local-team `OnTeamFerroniteThreatValueChanged`, `OnResolvedMainBaseChanged`,
+  and MainBase `OnStorageChanged`. Storage layout OnRep / ConfigureFromDefinition now broadcast
+  the existing `OnStorageChanged` (no new gameplay delegate type).
+- Authored ProgressBar remains operator-local WBP work. TEMP HUD remains.
+- **NOT MERGED. NOT FINALIZED.**
+
 ## 2026-08-21 — Production HUD ViewModel bridge + bootstrap finalized
 
 Status: **HUD_VIEWMODEL_BRIDGE_AND_BOOTSTRAP_FINALIZED_READY_TO_MERGE**

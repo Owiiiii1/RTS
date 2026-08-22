@@ -103,8 +103,14 @@ PublicDependencyModuleNames.AddRange(new string[]
   `MaxUnits`, and `OpponentFerroniteScore`. Numeric types remain `float`, matching current GAS
   attributes.
 - `UGP_MatchViewModel` exposes factual current `AGP_GameState` presentation fields:
-  `MatchTimeRemaining`, `MatchStateTag`, owning-team `FerroniteThreatValue`, `WinnerTeamId`,
+  `MatchTimeRemaining`, `MatchStateTag`, owning-team `FerroniteThreatValue`,
+  `FerroniteThreatNormalized`, `WinnerTeamId`,
   `WinReasonTag`, `MatchDuration`, and `bMatchFinished`.
+  `FerroniteThreatNormalized` is presentation-only: Clamp(FerroniteThreatValue /
+  (MainBase `GetTotalCapacity()` × `GetThreatPerStoredUnit()`), 0, 1). Invalid/zero
+  denominator → 0. There is no gameplay ThreatMax and no hardcoded 1000. Raw
+  `FerroniteThreatValue` remains. The authored ProgressBar is operator-local WBP work;
+  final art/color states are not claimed complete.
 - `UGP_HUDViewModelSubsystem : ULocalPlayerSubsystem` owns exactly one ResourceVM, MatchVM, and their
   push adapters per local player. Authored `WBP_GP_HUD` Manual MVVM entries receive those same
   instances from `UGP_HUDRootWidget` (no duplicate ViewModels). Widgets remain read-only consumers.
@@ -188,7 +194,7 @@ Rules:
 | ViewModel | Source state | Owner adapter | Widget consumer |
 | --- | --- | --- | --- |
 | `UGP_ResourceViewModel` | `UGP_PlayerAttributeSet.{OrbitalFerronite, FerroniteScore, MaxUnits, CurrentUnits}` (own + opponent score) | `UGP_ResourceViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-right Orbit/Cap + top-left Score |
-| `UGP_MatchViewModel` | `AGP_GameState.{MatchStateTag, MatchTimeRemaining, TeamFerroniteThreatValues, WinnerTeamId, WinReasonTag, MatchResult.MatchDuration}` | `UGP_MatchViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-center timer + top-left Threat |
+| `UGP_MatchViewModel` | `AGP_GameState.{MatchStateTag, MatchTimeRemaining, TeamFerroniteThreatValues, WinnerTeamId, WinReasonTag, MatchResult.MatchDuration}` plus presentation `FerroniteThreatNormalized` from local MainBase storage | `UGP_MatchViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-center timer + top-left Threat bar |
 | `UGP_SelectionVM` | `UGP_SelectionComponent.{SelectedUnits, InspectedTarget}` (local PC) — **not implemented** | Future adapter | Future bottom-center Selection/Info + bottom-right Context Action Grid |
 | `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits`, shuttle slots, READY, Wall stock — **not implemented** | Future adapter | Future MainBase PURCHASE panel (bottom-right). Not a fullscreen Order Menu. |
 | `UGP_CargoVM` | `UGP_CargoComponent.CurrentCargo` of single-selected worker — **not implemented** | Future adapter | Future single-entity Selection/Info |
@@ -305,7 +311,9 @@ Visual prototype contract: medium/dark grey major blocks, lighter grey inner cel
 modest rounding, stronger contrast for selected/hover. No final art/textures/icons required.
 
 Planet Ferronite and Threat currently present the **same underlying stored-Ferronite source**
-(pressure vs exact number). Do not invent a second currency. ResourceVM does not yet expose
+(pressure vs exact number). Do not invent a second currency. Threat bar fill uses
+`FerroniteThreatNormalized` derived from actual MainBase storage capacity × ThreatPerStoredUnit;
+this is presentation normalization, not a gameplay threshold. ResourceVM does not yet expose
 Planet Ferronite; that mapping is a later adapter task from MainBase storage.
 
 ### MVVM Binding Contract
@@ -315,7 +323,7 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 | Widget | ViewModel (FieldNotify props) | Adapter subscribes to |
 | --- | --- | --- |
 | Future top-center Match Timer | `UGP_MatchViewModel.MatchTimeRemaining` | `AGP_GameState.OnMatchTimeRemainingChanged` |
-| Future top-left Threat | `UGP_MatchViewModel.FerroniteThreatValue` | `AGP_GameState.OnTeamFerroniteThreatValueChanged` for local TeamId |
+| Future top-left Threat | `UGP_MatchViewModel.FerroniteThreatNormalized` (bar); raw `FerroniteThreatValue` remains available | Local-team `OnTeamFerroniteThreatValueChanged`, `OnResolvedMainBaseChanged`, MainBase `OnStorageChanged` |
 | Future top-left Score + top-right Orbit/Cap | `UGP_ResourceViewModel.{OrbitalFerronite, FerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates |
 | Future top-right Planet Ferronite | MainBase stored amount (not yet a ResourceVM field) | Storage change delegate via future adapter |
 | Future bottom-center Selection/Info | Future `UGP_SelectionVM` single-entity vs 10×3 group | `UGP_SelectionComponent.OnSelectionChanged` (local) |

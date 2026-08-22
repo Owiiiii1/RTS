@@ -1,6 +1,6 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `HUD_VIEWMODEL_BRIDGE_AND_BOOTSTRAP_FINALIZED_READY_TO_MERGE`
+**Status:** `HUD_THREAT_NORMALIZED_READY_FOR_OPERATOR_VALIDATION`
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
 **Baseline:** `origin/main` @ `61cedc682a391225ac0a02a716f3d36a4c176d7e`
 **Audit date:** 2026-08-21
@@ -8,9 +8,9 @@
 **Current execution checkpoint:** Production HUD Resource/Match data foundation is on `main`.
 `UGP_HUDRootWidget` injects those subsystem-owned ViewModels into authored Manual MVVM slots.
 GPUIRuntime/LocalPlayer bootstraps at most one production HUD root from a soft-configured
-`UGP_UIPresentationSettings::ProductionHUDWidgetClass`. Operator-validated: `WBP_GP_HUD`
-appeared in PIE and OrbitalFerronite text bound live. Visible HUD is still only partially wired.
-TEMP HUD remains active. **NOT MERGED.**
+`UGP_UIPresentationSettings::ProductionHUDWidgetClass`. MatchVM now exposes presentation-only
+`FerroniteThreatNormalized` from MainBase storage capacity × ThreatPerStoredUnit.
+Visible HUD is still only partially wired. TEMP HUD remains active. **NOT FINALIZED.**
 
 ## 1. Why reconciliation is required
 
@@ -113,7 +113,7 @@ current execution order.
 | --- | --- | --- |
 | TEMP gameplay HUD | **DONE (temporary)** | `UGP_TEMP_S28P_PlanetaryFerroniteHUD` exposes resources, launch, catalogs/READY, cap, timer, result, and Wall Package state. |
 | CommonUI/MVVM prerequisites | **DONE — FOUNDATION** | Plugins/dependencies plus project-owned activatable and non-activatable widget bases, HUD root base, FoW/Resource/Match VMs, and push adapters exist in `GPUIRuntime`. |
-| Production HUD | **PARTIAL — DATA FOUNDATION + VIEWMODEL BRIDGE + RUNTIME BOOTSTRAP** | Data foundation on `main`. `UGP_HUDViewModelSubsystem` creates at most one local production HUD from configured `ProductionHUDWidgetClass`. HUD root injects subsystem-owned Resource/Match VMs into authored Manual MVVM slots. Operator-validated: `WBP_GP_HUD` appeared in PIE; `GP_ResourceViewModel.OrbitalFerronite` bound to `TXT_OrbitalFerroniteValue`. Remaining HUD fields/actions, SelectionVM, Context Action Grid, MainBase PURCHASE UI, minimap, Patrol, notifications, and production end-of-match remain unimplemented. TEMP HUD remains active. Authored `WBP_GP_HUD` is operator-local (not committed). |
+| Production HUD | **PARTIAL — DATA FOUNDATION + VIEWMODEL BRIDGE + RUNTIME BOOTSTRAP + THREAT NORMALIZED** | Data foundation and HUD bootstrap on `main`. MatchVM exposes presentation-only `FerroniteThreatNormalized` = Clamp(threat / (MainBase `GetTotalCapacity()` × `GetThreatPerStoredUnit()`), 0, 1). Not a gameplay threshold; no hardcoded ThreatMax. Raw `FerroniteThreatValue` remains. Authored ProgressBar is operator-local WBP work. Remaining HUD fields/actions, SelectionVM, Context Action Grid, MainBase PURCHASE UI, minimap, Patrol, notifications, and production end-of-match remain unimplemented. TEMP HUD remains active. |
 | Production Order Menu | **SUPERSEDED AS HUD PATH — UI NOT STARTED** | Canonical production entry is MainBase PURCHASE inside the Context Action Grid. Purchases remain usable through TEMP HUD only. Backend unit/building/Wall Package flows exist. |
 | Minimap | **NOT STARTED** | No minimap subsystem/VM/widget production code. |
 | Notifications | **NOT STARTED** | No notification VM/stack or authority-to-client notification pipeline. |
@@ -367,13 +367,12 @@ After SWARM implementation:
 
 ## 11. Immediate NEXT recommendation
 
-**HUD ViewModel bridge + production HUD bootstrap are operator-validated and ready to merge.**
-Runtime creation is GPUIRuntime/LocalPlayer owned. Authored `WBP_GP_HUD` (operator-local, not
-committed) appeared in PIE; Manual MVVM `OrbitalFerronite` text updated live. Remaining HUD
-fields/actions still need authored bindings/layout. TEMP HUD remains. ResourceVM/MatchVM remain
-subsystem-owned.
+**Threat bar presentation is ready for operator validation.** Bind authored ProgressBar to
+`UGP_MatchViewModel.FerroniteThreatNormalized`. Formula uses actual MainBase storage
+capacity × ThreatPerStoredUnit. Not a gameplay threshold. Raw `FerroniteThreatValue` remains.
+Authored WBP remains operator-local. TEMP HUD remains.
 
-Status: `HUD_VIEWMODEL_BRIDGE_AND_BOOTSTRAP_FINALIZED_READY_TO_MERGE`. **NOT MERGED.**
+Status: `HUD_THREAT_NORMALIZED_READY_FOR_OPERATOR_VALIDATION`. **NOT MERGED. NOT FINALIZED.**
 
 Execution order remains: implement remaining production UI/HUD visuals using the approved layout →
 minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps →

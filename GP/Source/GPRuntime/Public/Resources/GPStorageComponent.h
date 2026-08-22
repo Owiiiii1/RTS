@@ -222,6 +222,9 @@ protected:
 	UFUNCTION()
 	void OnRep_Containers();
 
+	UFUNCTION()
+	void OnRep_StorageLayout();
+
 	void EnsureContainerArray();
 	void RefreshContainerState(FGP_StorageContainer& Container) const;
 	bool IsFinitePositive(float Value) const;
@@ -256,13 +259,13 @@ protected:
 	 * Compatibility fallback when BuildingDefinition is empty. Canonical: UGP_BuildingDefinition.
 	 * MVP ReadyThreshold == ContainerCapacity (no partial launch).
 	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Replicated, Category = "GP|Storage", meta = (ClampMin = "0.0"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, ReplicatedUsing = OnRep_StorageLayout, Category = "GP|Storage", meta = (ClampMin = "0.0"))
 	float ContainerCapacity = 100.0f;
 
 	/**
 	 * Compatibility fallback when BuildingDefinition is empty. Canonical: UGP_BuildingDefinition.
 	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Replicated, Category = "GP|Storage", meta = (ClampMin = "0"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, ReplicatedUsing = OnRep_StorageLayout, Category = "GP|Storage", meta = (ClampMin = "0"))
 	int32 ContainerCount = 5;
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, ReplicatedUsing = OnRep_Containers, Category = "GP|Storage")

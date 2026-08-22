@@ -17,6 +17,12 @@ void UGP_MatchViewModel::SetFerroniteThreatValue(float Value)
 	UE_MVVM_SET_PROPERTY_VALUE(FerroniteThreatValue, Value);
 }
 
+void UGP_MatchViewModel::SetFerroniteThreatNormalized(float Value)
+{
+	const float Clamped = FMath::IsFinite(Value) ? FMath::Clamp(Value, 0.0f, 1.0f) : 0.0f;
+	UE_MVVM_SET_PROPERTY_VALUE(FerroniteThreatNormalized, Clamped);
+}
+
 void UGP_MatchViewModel::SetWinnerTeamId(int32 Value)
 {
 	UE_MVVM_SET_PROPERTY_VALUE(WinnerTeamId, Value);

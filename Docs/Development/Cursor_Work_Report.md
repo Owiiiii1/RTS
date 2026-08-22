@@ -11,7 +11,7 @@
 - Branch: `feature/gp-hud-planet-ferronite`
 - Base: `origin/main` @ `04e4b7e6050ebe3bfb42dcd5f1af4ca45c8df893`
 - Implementation head: `63504d667cb9c40ab24b823ae7e0c33b288b5447`
-- Finalization head: this finalization/report commit on `feature/gp-hud-planet-ferronite`
+- Finalization head: `cbf3abd5ca130db1d7478907f313d485fa5c2fc8`
 
 ## Operator validation PASS
 

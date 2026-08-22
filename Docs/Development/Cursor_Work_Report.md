@@ -11,7 +11,7 @@
 - Branch: `feature/gp-hud-threat-normalized`
 - Base: `origin/main` @ `ec1eb9981fd3dd798d913cb04d43973494fd44de`
 - Implementation head: `626c0ad4f9f84f356eaf58d76902cea68d6db224`
-- Finalization head: this commit on `feature/gp-hud-threat-normalized`
+- Finalization head: `e2fee5c59ea5ecff62206e0644b73f359c8e9288`
 
 ## Operator validation PASS
 

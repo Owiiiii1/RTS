@@ -10,7 +10,7 @@
 
 - Branch: `fix/gp-fow-multiplayer-local-unit-visibility`
 - Base: `origin/main` @ `f20439388a3e3bf0f3389a10193634749995c21d`
-- Implementation head: this implementation/report commit on `fix/gp-fow-multiplayer-local-unit-visibility`
+- Implementation head: `a42865f860d3870bb88c25bf10471b0cfe8daf84`
 
 ## Confirmed root cause
 

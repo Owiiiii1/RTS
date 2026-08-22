@@ -15,6 +15,8 @@
 #include "Widgets/GPHUDRootWidget.h"
 #include "Widgets/GPUserWidgetBase.h"
 
+#include <limits>
+
 DEFINE_LOG_CATEGORY_STATIC(LogGPProductionHUDFoundationContract, Log, All);
 
 #if !UE_BUILD_SHIPPING
@@ -62,19 +64,25 @@ namespace GPProductionHUDFoundationContractPrivate
 				&& Descriptor.GetField(ResourceVM->GetClass(), TEXT("FerroniteScore")).IsValid()
 				&& Descriptor.GetField(ResourceVM->GetClass(), TEXT("CurrentUnits")).IsValid()
 				&& Descriptor.GetField(ResourceVM->GetClass(), TEXT("MaxUnits")).IsValid()
-				&& Descriptor.GetField(ResourceVM->GetClass(), TEXT("OpponentFerroniteScore")).IsValid(),
+				&& Descriptor.GetField(ResourceVM->GetClass(), TEXT("OpponentFerroniteScore")).IsValid()
+				&& Descriptor.GetField(ResourceVM->GetClass(), TEXT("PlanetFerronite")).IsValid(),
 				TEXT("B_ResourceFieldsAreFieldNotify"));
 			ResourceVM->SetOrbitalFerronite(125.0f);
 			ResourceVM->SetFerroniteScore(450.0f);
 			ResourceVM->SetCurrentUnits(7.0f);
 			ResourceVM->SetMaxUnits(12.0f);
 			ResourceVM->SetOpponentFerroniteScore(300.0f);
+			ResourceVM->SetPlanetFerronite(250.0f);
 			Expect(FMath::IsNearlyEqual(ResourceVM->OrbitalFerronite, 125.0f)
 				&& FMath::IsNearlyEqual(ResourceVM->FerroniteScore, 450.0f)
 				&& FMath::IsNearlyEqual(ResourceVM->CurrentUnits, 7.0f)
 				&& FMath::IsNearlyEqual(ResourceVM->MaxUnits, 12.0f)
-				&& FMath::IsNearlyEqual(ResourceVM->OpponentFerroniteScore, 300.0f),
+				&& FMath::IsNearlyEqual(ResourceVM->OpponentFerroniteScore, 300.0f)
+				&& FMath::IsNearlyEqual(ResourceVM->PlanetFerronite, 250.0f),
 				TEXT("C_ResourceSettersMapValues"));
+			ResourceVM->SetPlanetFerronite(std::numeric_limits<float>::quiet_NaN());
+			Expect(FMath::IsNearlyEqual(ResourceVM->PlanetFerronite, 0.0f),
+				TEXT("C2_PlanetFerroniteNonFiniteClampsToZero"));
 		}
 
 		if (MatchVM != nullptr)
@@ -118,7 +126,8 @@ namespace GPProductionHUDFoundationContractPrivate
 				UGP_PlayerAttributeSet::GetFerroniteScoreAttribute(), 777.0f);
 			Adapter->ApplyOpponentScoreForContract(333.0f);
 			Expect(FMath::IsNearlyEqual(ResourceVM->FerroniteScore, 777.0f)
-				&& FMath::IsNearlyEqual(ResourceVM->OpponentFerroniteScore, 333.0f),
+				&& FMath::IsNearlyEqual(ResourceVM->OpponentFerroniteScore, 333.0f)
+				&& FMath::IsNearlyEqual(ResourceVM->PlanetFerronite, 0.0f),
 				TEXT("F_AdapterSeparatesOwnAndOpponentScore"));
 			Adapter->Shutdown();
 			Adapter->Shutdown();

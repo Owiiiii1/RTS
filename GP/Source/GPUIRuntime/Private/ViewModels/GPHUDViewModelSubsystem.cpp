@@ -118,7 +118,7 @@ void UGP_HUDViewModelSubsystem::Rebind()
 	AGP_PlayerState* OpponentPlayerState =
 		ResolveOpponentPlayerState(GameState, LocalPlayerState, LocalTeamId);
 	const bool bResourcesBound = ResourceAdapter->Initialize(
-		ResourceViewModel, LocalPlayerState, OpponentPlayerState);
+		ResourceViewModel, LocalPlayerState, OpponentPlayerState, GameState, LocalTeamId);
 	const bool bMatchBound = MatchAdapter->Initialize(
 		MatchViewModel, GameState, LocalTeamId);
 	bReady = bResourcesBound && bMatchBound;
@@ -161,6 +161,7 @@ void UGP_HUDViewModelSubsystem::ResetViewModels()
 		ResourceViewModel->SetCurrentUnits(0.0f);
 		ResourceViewModel->SetMaxUnits(0.0f);
 		ResourceViewModel->SetOpponentFerroniteScore(0.0f);
+		ResourceViewModel->SetPlanetFerronite(0.0f);
 	}
 	if (MatchViewModel != nullptr)
 	{
@@ -433,12 +434,13 @@ void UGP_HUDViewModelSubsystem::DebugDumpToLog() const
 	const UGP_ResourceViewModel* Resources = ResourceViewModel;
 	const UGP_MatchViewModel* Match = MatchViewModel;
 	UE_LOG(LogGPHUDViewModels, Display,
-		TEXT("gp.UI.HUDDump Ready=%s LocalTeamId=%d OrbitalFerronite=%.2f FerroniteScore=%.2f ")
+		TEXT("gp.UI.HUDDump Ready=%s LocalTeamId=%d PlanetFerronite=%.2f OrbitalFerronite=%.2f FerroniteScore=%.2f ")
 		TEXT("OpponentFerroniteScore=%.2f CurrentUnits=%.0f MaxUnits=%.0f MatchTimeRemaining=%.2f ")
 		TEXT("FerroniteThreatValue=%.2f ThreatNormalized=%.2f ThreatPresentationMax=%.2f ")
 		TEXT("MatchState=%s Finished=%s WinnerTeamId=%d WinReason=%s MatchDuration=%.2f"),
 		bReady ? TEXT("Ready") : TEXT("NotReady"),
 		LocalTeamId,
+		Resources != nullptr ? Resources->PlanetFerronite : 0.0f,
 		Resources != nullptr ? Resources->OrbitalFerronite : 0.0f,
 		Resources != nullptr ? Resources->FerroniteScore : 0.0f,
 		Resources != nullptr ? Resources->OpponentFerroniteScore : 0.0f,

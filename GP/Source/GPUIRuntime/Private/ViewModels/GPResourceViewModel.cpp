@@ -26,3 +26,9 @@ void UGP_ResourceViewModel::SetOpponentFerroniteScore(float Value)
 {
 	UE_MVVM_SET_PROPERTY_VALUE(OpponentFerroniteScore, Value);
 }
+
+void UGP_ResourceViewModel::SetPlanetFerronite(float Value)
+{
+	const float SafeValue = FMath::IsFinite(Value) ? Value : 0.0f;
+	UE_MVVM_SET_PROPERTY_VALUE(PlanetFerronite, SafeValue);
+}

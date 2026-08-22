@@ -65,7 +65,9 @@ UX/balance tuning may revisit the presentation scale.
 
 **Top right — Economy + Unit Cap**
 
-- Planet Ferronite (exact stored amount)
+- Planet Ferronite (exact stored amount). Bind to `UGP_ResourceViewModel.PlanetFerronite`
+  from local MainBase `UGP_StorageComponent::GetTotalStored()`. Not a second currency; not
+  reconstructed from Threat. Authored `TXT_PlanetFerroniteValue` binding remains operator-local.
 - Orbital Ferronite (spendable)
 - Unit Capacity (`CurrentUnits / MaxUnits`)
 
@@ -230,7 +232,11 @@ UI — read-only consumer gameplay state:
 - Selected units → `UGP_SelectionComponent.SelectedUnits` (local).
 - Match state → `AGP_GameState.MatchState`.
 - Match timer → `AGP_GameState.MatchTimeRemaining`.
-- Planet Ferronite (exact stored amount) → MainBase `UGP_StorageComponent` (same underlying quantity that currently drives threat).
+- Planet Ferronite (exact stored amount) → `UGP_ResourceViewModel.PlanetFerronite` from local
+  MainBase `UGP_StorageComponent::GetTotalStored()`. Same underlying raw stored Ferronite that
+  currently drives threat. Not a second currency. Not reconstructed from `FerroniteThreatValue`.
+  Event-driven via MainBase resolve + storage change. Authored `TXT_PlanetFerroniteValue`
+  binding remains operator-local WBP work.
 - SWARM / Ferronite Threat (pressure presentation) → `UGP_MatchViewModel.FerroniteThreatNormalized`
   (bar) derived from `AGP_GameState` per-team threat and local MainBase storage capacity ×
   ThreatPerStoredUnit. Raw `FerroniteThreatValue` remains. Not a gameplay threshold.

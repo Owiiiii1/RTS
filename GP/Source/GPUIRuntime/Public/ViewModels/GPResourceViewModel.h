@@ -28,10 +28,19 @@ public:
 	UPROPERTY(BlueprintReadOnly, FieldNotify, Category = "GP|HUD|Resources")
 	float OpponentFerroniteScore = 0.0f;
 
+	/**
+	 * Exact raw Ferronite currently stored in the local team's MainBase.
+	 * Same underlying stored amount that drives threat; not a second currency.
+	 * Not reconstructed from FerroniteThreatValue.
+	 */
+	UPROPERTY(BlueprintReadOnly, FieldNotify, Category = "GP|HUD|Resources")
+	float PlanetFerronite = 0.0f;
+
 	/** Adapter-facing presentation setters. Widgets must not call these as gameplay mutations. */
 	void SetOrbitalFerronite(float Value);
 	void SetFerroniteScore(float Value);
 	void SetCurrentUnits(float Value);
 	void SetMaxUnits(float Value);
 	void SetOpponentFerroniteScore(float Value);
+	void SetPlanetFerronite(float Value);
 };

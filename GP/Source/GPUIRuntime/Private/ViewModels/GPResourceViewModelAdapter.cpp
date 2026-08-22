@@ -4,13 +4,18 @@
 
 #include "AbilitySystemComponent.h"
 #include "AttributeSets/GPPlayerAttributeSet.h"
+#include "Buildings/GPMainBase.h"
+#include "Game/GPGameState.h"
 #include "Player/GPPlayerState.h"
+#include "Resources/GPStorageComponent.h"
 #include "ViewModels/GPResourceViewModel.h"
 
 bool UGP_ResourceViewModelAdapter::Initialize(
 	UGP_ResourceViewModel* InViewModel,
 	AGP_PlayerState* InLocalPlayerState,
-	AGP_PlayerState* InOpponentPlayerState)
+	AGP_PlayerState* InOpponentPlayerState,
+	AGP_GameState* InGameState,
+	int32 InLocalTeamId)
 {
 	Shutdown();
 	ViewModel = InViewModel;
@@ -26,6 +31,8 @@ bool UGP_ResourceViewModelAdapter::Initialize(
 	}
 
 	BoundLocalASC = LocalASC;
+	BoundGameState = InGameState;
+	LocalTeamId = InLocalTeamId;
 	OrbitalFerroniteHandle = LocalASC->GetGameplayAttributeValueChangeDelegate(
 		UGP_PlayerAttributeSet::GetOrbitalFerroniteAttribute()).AddUObject(
 			this, &ThisClass::HandleOrbitalFerroniteChanged);
@@ -50,6 +57,13 @@ bool UGP_ResourceViewModelAdapter::Initialize(
 		}
 	}
 
+	if (IsValid(InGameState))
+	{
+		ResolvedMainBaseHandle = InGameState->OnResolvedMainBaseChanged.AddUObject(
+			this, &ThisClass::HandleResolvedMainBaseChanged);
+		BindLocalMainBaseStorage();
+	}
+
 	RefreshSnapshot();
 	return true;
 }
@@ -72,14 +86,26 @@ void UGP_ResourceViewModelAdapter::Shutdown()
 		OpponentASC->GetGameplayAttributeValueChangeDelegate(
 			UGP_PlayerAttributeSet::GetFerroniteScoreAttribute()).Remove(OpponentFerroniteScoreHandle);
 	}
+	if (AGP_GameState* GameState = BoundGameState.Get())
+	{
+		GameState->OnResolvedMainBaseChanged.Remove(ResolvedMainBaseHandle);
+	}
+	UnbindLocalMainBaseStorage();
+	if (ViewModel != nullptr)
+	{
+		ViewModel->SetPlanetFerronite(0.0f);
+	}
 
 	BoundLocalASC.Reset();
 	BoundOpponentASC.Reset();
+	BoundGameState.Reset();
+	LocalTeamId = -1;
 	OrbitalFerroniteHandle.Reset();
 	FerroniteScoreHandle.Reset();
 	CurrentUnitsHandle.Reset();
 	MaxUnitsHandle.Reset();
 	OpponentFerroniteScoreHandle.Reset();
+	ResolvedMainBaseHandle.Reset();
 }
 
 void UGP_ResourceViewModelAdapter::BeginDestroy()
@@ -112,6 +138,7 @@ void UGP_ResourceViewModelAdapter::RefreshSnapshot()
 		OpponentASC != nullptr
 			? OpponentASC->GetNumericAttribute(UGP_PlayerAttributeSet::GetFerroniteScoreAttribute())
 			: 0.0f);
+	RefreshPlanetFerronite();
 }
 
 void UGP_ResourceViewModelAdapter::ApplyOwnAttribute(
@@ -176,7 +203,77 @@ int32 UGP_ResourceViewModelAdapter::GetBoundDelegateCount() const
 		+ (FerroniteScoreHandle.IsValid() ? 1 : 0)
 		+ (CurrentUnitsHandle.IsValid() ? 1 : 0)
 		+ (MaxUnitsHandle.IsValid() ? 1 : 0)
-		+ (OpponentFerroniteScoreHandle.IsValid() ? 1 : 0);
+		+ (OpponentFerroniteScoreHandle.IsValid() ? 1 : 0)
+		+ (ResolvedMainBaseHandle.IsValid() ? 1 : 0)
+		+ (BoundStorage.IsValid() ? 1 : 0);
+}
+
+void UGP_ResourceViewModelAdapter::BindLocalMainBaseStorage()
+{
+	UnbindLocalMainBaseStorage();
+	AGP_GameState* GameState = BoundGameState.Get();
+	if (GameState == nullptr || LocalTeamId < 1)
+	{
+		return;
+	}
+
+	AGP_MainBase* MainBase = GameState->FindMainBaseForTeamClientSafe(LocalTeamId);
+	UGP_StorageComponent* Storage =
+		IsValid(MainBase) ? MainBase->GetStorageComponent() : nullptr;
+	if (!IsValid(Storage))
+	{
+		return;
+	}
+
+	Storage->OnStorageChanged.AddDynamic(this, &ThisClass::HandleStorageChanged);
+	BoundStorage = Storage;
+}
+
+void UGP_ResourceViewModelAdapter::UnbindLocalMainBaseStorage()
+{
+	if (UGP_StorageComponent* Storage = BoundStorage.Get())
+	{
+		Storage->OnStorageChanged.RemoveDynamic(this, &ThisClass::HandleStorageChanged);
+	}
+	BoundStorage.Reset();
+}
+
+void UGP_ResourceViewModelAdapter::RefreshPlanetFerronite()
+{
+	if (ViewModel == nullptr)
+	{
+		return;
+	}
+
+	UGP_StorageComponent* Storage = BoundStorage.Get();
+	const float Stored = IsValid(Storage) ? Storage->GetTotalStored() : 0.0f;
+	ViewModel->SetPlanetFerronite(Stored);
+}
+
+void UGP_ResourceViewModelAdapter::HandleResolvedMainBaseChanged(
+	int32 TeamId,
+	AGP_MainBase* Previous,
+	AGP_MainBase* NewBase)
+{
+	(void)Previous;
+	(void)NewBase;
+	if (TeamId != LocalTeamId)
+	{
+		return;
+	}
+	BindLocalMainBaseStorage();
+	RefreshPlanetFerronite();
+}
+
+void UGP_ResourceViewModelAdapter::HandleStorageChanged(
+	float PreviousTotalStored,
+	float NewTotalStored,
+	float TotalCapacity)
+{
+	(void)PreviousTotalStored;
+	(void)NewTotalStored;
+	(void)TotalCapacity;
+	RefreshPlanetFerronite();
 }
 
 #if !UE_BUILD_SHIPPING

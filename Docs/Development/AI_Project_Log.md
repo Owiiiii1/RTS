@@ -1,5 +1,18 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-22 — Production HUD Planet Ferronite presentation
+
+Status: **HUD_PLANET_FERRONITE_READY_FOR_OPERATOR_VALIDATION**
+
+- Branch `feature/gp-hud-planet-ferronite` from current `origin/main`.
+- `UGP_ResourceViewModel.PlanetFerronite` is the exact raw Ferronite stored in the local team's
+  MainBase (`UGP_StorageComponent::GetTotalStored()`). Not a second currency. Not reconstructed
+  from Threat.
+- Adapter binds local-team `OnResolvedMainBaseChanged` and MainBase `OnStorageChanged`.
+  Resolve uses `FindMainBaseForTeamClientSafe`. Initialize calls Shutdown first.
+- Authored `TXT_PlanetFerroniteValue` binding remains operator-local WBP work. TEMP HUD remains.
+- **NOT MERGED. NOT FINALIZED.**
+
 ## 2026-08-22 — Production HUD Threat normalized finalized
 
 Status: **HUD_THREAT_NORMALIZED_FINALIZED_READY_TO_MERGE**

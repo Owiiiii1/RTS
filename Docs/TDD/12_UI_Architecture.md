@@ -100,8 +100,10 @@ PublicDependencyModuleNames.AddRange(new string[]
   updated live. Remaining HUD fields/actions are not claimed complete. `WBP_GP_HUD` remains
   operator-local and is not committed.
 - `UGP_ResourceViewModel` exposes FieldNotify `OrbitalFerronite`, `FerroniteScore`, `CurrentUnits`,
-  `MaxUnits`, and `OpponentFerroniteScore`. Numeric types remain `float`, matching current GAS
-  attributes.
+  `MaxUnits`, `OpponentFerroniteScore`, and `PlanetFerronite`. Numeric types remain `float`, matching
+  current GAS attributes. `PlanetFerronite` is the exact raw stored Ferronite from the local team's
+  MainBase `UGP_StorageComponent::GetTotalStored()`. It is not a second currency and is not
+  reconstructed from `FerroniteThreatValue`.
 - `UGP_MatchViewModel` exposes factual current `AGP_GameState` presentation fields:
   `MatchTimeRemaining`, `MatchStateTag`, owning-team `FerroniteThreatValue`,
   `FerroniteThreatNormalized`, `WinnerTeamId`,
@@ -119,7 +121,10 @@ PublicDependencyModuleNames.AddRange(new string[]
   instances from `UGP_HUDRootWidget` (no duplicate ViewModels). Widgets remain read-only consumers.
 - Resource binding uses current GAS attribute-change delegates on the local PlayerState ASC and the
   opposing PlayerState's public `FerroniteScore`. Opponent resolution is through the replicated
-  `AGP_GameState::PlayerArray`, never a world actor scan.
+  `AGP_GameState::PlayerArray`, never a world actor scan. `PlanetFerronite` is bound from the local
+  team's MainBase via `AGP_GameState::FindMainBaseForTeamClientSafe` plus
+  `UGP_StorageComponent::OnStorageChanged` / `AGP_GameState::OnResolvedMainBaseChanged`.
+  No Tick, timer, polling, or world scan.
 - Match binding uses existing `AGP_GameState` timer/state/per-team-threat/result delegates. The only
   gameplay-side additions are read-only lifecycle notifications:
   `AGP_PlayerController::OnPlayerStatePresentationReady` for the owning link and
@@ -128,7 +133,8 @@ PublicDependencyModuleNames.AddRange(new string[]
 - Lifecycle retry is event-driven: `ULocalPlayerSubsystem::PlayerControllerChanged`,
   `UWorld::GameStateSetEvent`, GameState roster changes, and PlayerState team changes. There is no
   UI Tick or timer polling. Rebind removes old handles before adding new ones.
-- `gp.UI.HUDDump` reads only subsystem/ViewModel state for operator diagnostics.
+- `gp.UI.HUDDump` reads only subsystem/ViewModel state for operator diagnostics, including
+  `PlanetFerronite` next to `OrbitalFerronite`.
 - Production HUD runtime creation is owned by the same `UGP_HUDViewModelSubsystem`
   (GPUIRuntime `ULocalPlayerSubsystem`). There is no second LocalPlayer UI owner and
   `AGP_PlayerController` does not reference GPUIRuntime types. `GPRuntime` still does not
@@ -148,7 +154,7 @@ PublicDependencyModuleNames.AddRange(new string[]
   after live play, OrbitalFerronite=100, FerroniteScore=100, FerroniteThreatValue=250.
   Follow-up PIE validation of runtime bootstrap: authored `WBP_GP_HUD` appeared automatically;
   `gp.UI.HUDStatus` ConfiguredClass=`WBP_GP_HUD_C`, InstancePresent=true, Ready=Ready;
-  `gp.UI.HUDDump` OrbitalFerronite=100.00; Manual MVVM
+  `gp.UI.HUDDump` PlanetFerronite / OrbitalFerronite=100.00; Manual MVVM
   `GP_ResourceViewModel.OrbitalFerronite` → To Text (Float) → `TXT_OrbitalFerroniteValue.Text`
   updated in the visible HUD.
 - The TEMP HUD is preserved and remains functional. Production HUD remains **PARTIAL**. Still not
@@ -156,6 +162,7 @@ PublicDependencyModuleNames.AddRange(new string[]
   MainBase PURCHASE panel, minimap function, notifications, and production end-of-match screen.
   Operator-validated runtime visibility of authored `WBP_GP_HUD` (local, not committed).
   Only the OrbitalFerronite text binding has been manually validated so far.
+  Authored `TXT_PlanetFerroniteValue` binding remains operator-local WBP work.
 - **Approved visual IA (2026-08-21):** two bars × three blocks, plus MainBase PURCHASE inside the
   bottom-right panel. See
   [`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
@@ -196,7 +203,7 @@ Rules:
 
 | ViewModel | Source state | Owner adapter | Widget consumer |
 | --- | --- | --- | --- |
-| `UGP_ResourceViewModel` | `UGP_PlayerAttributeSet.{OrbitalFerronite, FerroniteScore, MaxUnits, CurrentUnits}` (own + opponent score) | `UGP_ResourceViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-right Orbit/Cap + top-left Score |
+| `UGP_ResourceViewModel` | `UGP_PlayerAttributeSet.{OrbitalFerronite, FerroniteScore, MaxUnits, CurrentUnits}` (own + opponent score) plus exact local MainBase `UGP_StorageComponent::GetTotalStored()` as `PlanetFerronite` | `UGP_ResourceViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-right Planet/Orbit/Cap + top-left Score |
 | `UGP_MatchViewModel` | `AGP_GameState.{MatchStateTag, MatchTimeRemaining, TeamFerroniteThreatValues, WinnerTeamId, WinReasonTag, MatchResult.MatchDuration}` plus presentation `FerroniteThreatNormalized` from local MainBase storage | `UGP_MatchViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-center timer + top-left Threat bar |
 | `UGP_SelectionVM` | `UGP_SelectionComponent.{SelectedUnits, InspectedTarget}` (local PC) — **not implemented** | Future adapter | Future bottom-center Selection/Info + bottom-right Context Action Grid |
 | `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits`, shuttle slots, READY, Wall stock — **not implemented** | Future adapter | Future MainBase PURCHASE panel (bottom-right). Not a fullscreen Order Menu. |
@@ -260,7 +267,7 @@ Stage — design only. Поверх existing widget naming у [`GDD/09_UI_UX`](.
 | Opponent score | `UGP_PlayerAttributeSet.FerroniteScore` (remote PlayerState.ASC lookup) | `OnAttributeChanged` on remote ASC | All clients |
 | Current unit count | `UGP_PlayerAttributeSet.CurrentUnits` (own ASC) | `OnAttributeChanged` | `COND_OwnerOnly` |
 | Max unit cap | `UGP_PlayerAttributeSet.MaxUnits` (own ASC) | `OnAttributeChanged` | `COND_OwnerOnly` |
-| Planet Ferronite (exact stored amount) | MainBase `UGP_StorageComponent` total stored | Storage change delegate | Owner / FoW-gated detail |
+| Planet Ferronite (exact stored amount) | `UGP_ResourceViewModel.PlanetFerronite` = local MainBase `UGP_StorageComponent::GetTotalStored()` | `OnResolvedMainBaseChanged` + `OnStorageChanged` | Owner / FoW-gated detail |
 | SWARM / Ferronite Threat (pressure) | `AGP_GameState` per-team `FerroniteThreatValue` | `OnTeamFerroniteThreatValueChanged` | All clients |
 | Selected entities | `UGP_SelectionComponent.SelectedUnits` (local PC) | `OnSelectionChanged` delegate | **Local only — no replication** |
 | Inspected target | `UGP_SelectionComponent.InspectedTarget` (local PC) | Same delegate | Local only |
@@ -316,8 +323,10 @@ modest rounding, stronger contrast for selected/hover. No final art/textures/ico
 Planet Ferronite and Threat currently present the **same underlying stored-Ferronite source**
 (pressure vs exact number). Do not invent a second currency. Threat bar fill uses
 `FerroniteThreatNormalized` derived from actual MainBase storage capacity × ThreatPerStoredUnit;
-this is presentation normalization, not a gameplay threshold. ResourceVM does not yet expose
-Planet Ferronite; that mapping is a later adapter task from MainBase storage.
+this is presentation normalization, not a gameplay threshold. ResourceVM exposes exact
+`PlanetFerronite` from local MainBase `UGP_StorageComponent::GetTotalStored()` (event-driven via
+MainBase resolve + storage change). It is not reconstructed from Threat. Authored
+`TXT_PlanetFerroniteValue` binding remains operator-local WBP work.
 
 ### MVVM Binding Contract
 
@@ -327,8 +336,8 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 | --- | --- | --- |
 | Future top-center Match Timer | `UGP_MatchViewModel.MatchTimeRemaining` | `AGP_GameState.OnMatchTimeRemainingChanged` |
 | Future top-left Threat | `UGP_MatchViewModel.FerroniteThreatNormalized` (bar); raw `FerroniteThreatValue` remains available | Local-team `OnTeamFerroniteThreatValueChanged`, `OnResolvedMainBaseChanged`, MainBase `OnStorageChanged` |
-| Future top-left Score + top-right Orbit/Cap | `UGP_ResourceViewModel.{OrbitalFerronite, FerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates |
-| Future top-right Planet Ferronite | MainBase stored amount (not yet a ResourceVM field) | Storage change delegate via future adapter |
+| Future top-left Score + top-right Orbit/Cap | `UGP_ResourceViewModel.{PlanetFerronite, OrbitalFerronite, FerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates; local MainBase `OnResolvedMainBaseChanged` + `OnStorageChanged` for `PlanetFerronite` |
+| Future top-right Planet Ferronite | `UGP_ResourceViewModel.PlanetFerronite` = local MainBase `GetTotalStored()` | `FindMainBaseForTeamClientSafe` + `OnResolvedMainBaseChanged` + `OnStorageChanged` |
 | Future bottom-center Selection/Info | Future `UGP_SelectionVM` single-entity vs 10×3 group | `UGP_SelectionComponent.OnSelectionChanged` (local) |
 | Future bottom-right Context Action Grid | Future selection/command + MainBase procurement presentation | Same selection delegate; Unit vs Building vs PURCHASE states |
 | Future right-side Message Strip | Contextual procurement/action status (shuttle slots, funds, cap, wall stock) | Existing orbital reject/status; not a global toast stack |

@@ -395,9 +395,9 @@ void UGP_HUDViewModelSubsystem::EnsureProductionHUDInternal(
 		if (!ProductionHUDWidget->IsInViewport())
 		{
 			ProductionHUDWidget->SetIsFocusable(false);
-			ProductionHUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+			ProductionHUDWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 			ProductionHUDWidget->AddToViewport(GPHUDBootstrapPrivate::ProductionHUDZOrder);
-			ProductionHUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+			ProductionHUDWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		}
 		return;
 	}
@@ -416,9 +416,10 @@ void UGP_HUDViewModelSubsystem::EnsureProductionHUDInternal(
 	}
 
 	ProductionHUDWidget->SetIsFocusable(false);
-	ProductionHUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	// SelfHitTestInvisible: root/background does not consume hits; children such as BTN_Launch stay clickable.
+	ProductionHUDWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	ProductionHUDWidget->AddToViewport(GPHUDBootstrapPrivate::ProductionHUDZOrder);
-	ProductionHUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	ProductionHUDWidget->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 }
 
 #if !UE_BUILD_SHIPPING

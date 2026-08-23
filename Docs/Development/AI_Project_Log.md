@@ -1,5 +1,15 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-23 — Production HUD Launch click: SelfHitTestInvisible
+
+Status: **PRODUCTION_LAUNCH_MENU_READY_FOR_OPERATOR_VALIDATION**
+
+- Operator found Launch rows/enablement working, but Launch OnClicked did nothing.
+- Root cause: `UGP_HUDViewModelSubsystem::EnsureProductionHUDInternal` set production HUD root to `HitTestInvisible`, which blocks hit-testing for the widget and its children (`BTN_Launch`).
+- Fixed to `SelfHitTestInvisible` on every bootstrap/re-add path: root/background does not consume clicks; interactive descendants remain clickable.
+- Gameplay launch path unchanged. No input-mode change. TEMP HUD remains retired.
+- **NOT MERGED. NOT FINALIZED.**
+
 ## 2026-08-23 — Production HUD right-side Launch Menu presentation
 
 Status: **PRODUCTION_LAUNCH_MENU_READY_FOR_OPERATOR_VALIDATION**

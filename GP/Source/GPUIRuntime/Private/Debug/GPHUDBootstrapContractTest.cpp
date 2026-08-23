@@ -143,8 +143,12 @@ namespace GPHUDBootstrapContractPrivate
 			&& FirstHUD->IsA(UGP_HUDRootWidgetContractStub::StaticClass())
 			&& FirstHUD->IsInViewport()
 			&& FirstHUD->GetOwningLocalPlayer() == LocalPlayer
-			&& FirstHUD->GetVisibility() == ESlateVisibility::HitTestInvisible,
+			&& FirstHUD->GetVisibility() == ESlateVisibility::SelfHitTestInvisible,
 			TEXT("H_OneLocalPlayerCreatesOneHUDInstance"));
+		Expect(FirstHUD != nullptr
+			&& FirstHUD->GetVisibility() == ESlateVisibility::SelfHitTestInvisible
+			&& FirstHUD->GetVisibility() != ESlateVisibility::HitTestInvisible,
+			TEXT("H2_RootSelfHitTestInvisibleAllowsInteractiveDescendants"));
 
 		Subsystem->EnsureProductionHUDWithClassForContract(
 			UGP_HUDRootWidgetContractStub::StaticClass());

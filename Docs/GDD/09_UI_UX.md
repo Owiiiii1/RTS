@@ -102,7 +102,9 @@ UX/balance tuning may revisit the presentation scale.
   Container fill bars sit below it, one per local MainBase container. Yellow = filling.
   Green = full/ready. The Launch button calls the existing PlayerController launch request.
   Native presentation is event-driven from local MainBase storage. Authored WBP layout is
-  operator-local and is not committed in this slice.
+  operator-local and is not committed in this slice. Production HUD root is
+  `SelfHitTestInvisible`: the root/background does not consume clicks, so Launch and other
+  child buttons remain clickable. No global input-mode change.
 
 **Visual prototype:** medium/dark grey major blocks, lighter grey inner cells, thin borders,
 modest rounding, stronger contrast for selected/hover. No final art, textures, or icons required.

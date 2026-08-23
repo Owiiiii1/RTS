@@ -1,4 +1,4 @@
-# Cursor Work Report — Production HUD Right-Side Launch Menu
+# Cursor Work Report — Production HUD Launch Hit-Test Fix
 
 ## Status
 
@@ -12,101 +12,51 @@
 
 - Branch: `cleanup/gp-remove-temp-hud`
 - Base: `origin/main` @ `7fc2ab9ee880e73e1c7610570cc9a723b9376905`
-- Parent: `28ca7ef16ab1312e39f2320b78b78fe9e0e3f4ec` (TEMP HUD retirement)
+- Parent: `587d8ccd99ec89ae9ac7800e0f7df17ecf480b99` (launch menu presentation)
 - Head: this implementation commit on `cleanup/gp-remove-temp-hud` (pushed with this report)
 
-Continued from the TEMP HUD retirement commit on this branch. Did not reset to stale `main`.
+## Operator finding
 
-## Exact presenter / ownership shape
+Launch container rows worked and Launch became enabled when a container was Ready, but clicking Launch did nothing. Blueprint OnClicked was already wired to `UGP_HUDRootWidget::RequestLaunchReadyContainer()`.
 
-Gameplay source of truth is unchanged: local team → resolved `AGP_MainBase` → `UGP_StorageComponent`.
+## Confirmed root cause
 
-Presentation is LocalPlayer-owned, not PlayerController-owned:
+`UGP_HUDViewModelSubsystem::EnsureProductionHUDInternal` set production HUD root visibility to `ESlateVisibility::HitTestInvisible` both when restoring an existing HUD to the viewport and after `CreateWidget` / `AddToViewport`.
 
-- `UGP_HUDViewModelSubsystem` (LocalPlayer subsystem) creates and owns `UGP_LaunchMenuPresenter`
-- Presenter is created in subsystem `Initialize`, `Shutdown` on `Rebind` / `Deinitialize`, `Initialize(GameState, LocalTeamId)` after local team is valid
-- `UGP_HUDRootWidget` binds the presenter on `NativeConstruct` and unbinds on `NativeDestruct`
-- Authored `WBP_GP_HUD` layout remains operator-local and uncommitted
+In UMG, `HitTestInvisible` disables hit-testing for the widget **and its children**, so `BTN_Launch` never received pointer clicks.
 
-`FGP_LaunchContainerRow` (Blueprint-read-only):
+The owning PlayerController was already passed to `CreateWidget`. The gameplay forward path was already correct.
 
-- `Index`
-- `StoredAmount` (`FGP_StorageContainer.CurrentAmount`)
-- `Capacity` (`UGP_StorageComponent::GetContainerCapacity()`)
-- `FillNormalized` = clamp(`StoredAmount` / `Capacity`, 0..1)
-- `bIsReadyForLaunch` = (`State == EGP_StorageContainerState::Ready`)
+## Fix
 
-`CanLaunchReadyContainer` = `GetReadyCount() > 0 && !IsLaunchInFlight()`.
+Changed every Production HUD bootstrap/re-add visibility assignment to:
 
-No Tick, no timers, no polling, no world scan.
+`ESlateVisibility::SelfHitTestInvisible`
 
-## Exact Blueprint-facing HUDRoot API
+Semantics:
 
-On `UGP_HUDRootWidget`:
+- HUD root/background itself does not consume pointer hits
+- interactive child widgets remain hit-testable
+- `BTN_Launch` OnClicked can run
+- future production action/procurement buttons can also work
+- no input-mode change
+- no mouse-capture redesign
+- no PlayerController gameplay changes
 
-- `GetLaunchContainerRows()` → `TArray<FGP_LaunchContainerRow>`
-- `GetLaunchContainerPresentations()` → same array (alias for WBP authoring)
-- `CanLaunchReadyContainer()` → `bool`
-- `GetReadyLaunchContainerCount()` → `int32`
-- `RequestLaunchReadyContainer()` → `void`
-- `BP_OnLaunchMenuChanged()` → `BlueprintImplementableEvent`
+Did not set the whole HUD to `Visible`.
 
-WBP color choice: yellow while `!bIsReadyForLaunch`, green when `bIsReadyForLaunch`.
-
-## Exact event / delegate sources
-
-Local team only; other teams are ignored.
-
-- `AGP_GameState::OnResolvedMainBaseChanged` → rebind local storage when `TeamId == LocalTeamId`
-- Local `UGP_StorageComponent::OnStorageChanged` → rebuild rows
-- Presenter `OnLaunchMenuPresentationChanged` → `UGP_HUDRootWidget::BP_OnLaunchMenuChanged`
-- Also fires on presenter initialize / shutdown / reset and once when the HUD root binds
-
-Local MainBase lookup uses `FindMainBaseForTeamClientSafe`. Shutdown/rebind unbinds first; repeated `Initialize` does not duplicate delegates.
-
-## Exact launch request forwarding path
+## Gameplay launch path unchanged
 
 `UGP_HUDRootWidget::RequestLaunchReadyContainer()`
 → `AGP_PlayerController::RequestLaunchReadyContainer()`
 → `Server_RequestLaunchReadyContainer`
 → `AuthorityTryLaunchReadyContainerForOwningTeam`
 
-No gameplay launch logic was duplicated or changed.
-
 ## Focused contract results
 
-`gp.UI.RunLaunchMenuPresentationContractTest` — **Complete Failures=0 Cancelled=false**
-
-PASS:
-
-- no Tick on presenter/subsystem
-- TEMP HUD remains retired
-- HUD root launch-menu API present
-- `Server_RequestLaunchReadyContainer` remains
-- no local MainBase/storage → empty list, ready count 0, can launch false
-- local storage with 5 containers → 5 rows
-- `FillNormalized` correct and clamped
-- `bIsReadyForLaunch` matches full/ready state
-- `ReadyContainerCount` correct
-- other team storage does not affect local launch menu
-- local MainBase replacement rebinds cleanly
-- old storage no longer updates presentation after rebind
-- repeated Initialize does not duplicate delegates
-- HUD `RequestLaunchReadyContainer` forwards without crash
-- Shutdown clears presentation
-
-## Regressions
-
-All **Complete Failures=0 Cancelled=false**:
-
-- `gp.UI.RunProductionHUDFoundationContractTest`
-- `gp.UI.RunHUDViewModelBridgeContractTest`
-- `gp.UI.RunHUDBootstrapContractTest`
-- `gp.UI.RunPlanetFerronitePresentationContractTest`
-- `gp.UI.RunThreatPresentationContractTest`
-
-Launch / orbital gameplay contracts actually executed (not teardown stubs):
-
+- `gp.UI.RunHUDBootstrapContractTest` — **Complete Failures=0 Cancelled=false** (canonical visibility is `SelfHitTestInvisible`; `H2_RootSelfHitTestInvisibleAllowsInteractiveDescendants` PASS)
+- `gp.UI.RunProductionHUDFoundationContractTest` — **Complete Failures=0 Cancelled=false**
+- `gp.UI.RunLaunchMenuPresentationContractTest` — **Complete Failures=0 Cancelled=false**
 - `gp.Resource.RunContainerLaunchContractTest` — **Complete Failures=0 Cancelled=false**, `SuiteComplete`
 - `gp.Resource.RunContainerLaunchHUDContractTest` — **Complete Failures=0 Cancelled=None** (`None` = not cancelled), `SuiteComplete`
 
@@ -114,17 +64,12 @@ GP Development / Shipping not run.
 
 ## GPEditor / UHT result
 
-`GPEditor Win64 Development` **Result: Succeeded** (UHT compiled-in). Focused rebuild compiled presenter, HUD root, subsystem, and launch-menu contract.
+`GPEditor Win64 Development` **Result: Succeeded** (UHT compiled-in). Adaptive rebuild compiled `GPHUDViewModelSubsystem.cpp` and `GPHUDBootstrapContractTest.cpp`.
 
 ## Exact changed files
 
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPLaunchMenuPresenter.h` (new)
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPLaunchMenuPresenter.cpp` (new)
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPHUDViewModelSubsystem.h`
 - `GP/Source/GPUIRuntime/Private/ViewModels/GPHUDViewModelSubsystem.cpp`
-- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
-- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPLaunchMenuPresentationContractTest.cpp` (new)
+- `GP/Source/GPUIRuntime/Private/Debug/GPHUDBootstrapContractTest.cpp`
 - `Docs/TDD/12_UI_Architecture.md`
 - `Docs/GDD/09_UI_UX.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
@@ -140,18 +85,15 @@ Not modified or staged by this slice:
 - maps
 - DataAssets
 - Tools
-- `WBP_GP_HUD` and other Blueprint/widget assets
+- `WBP_GP_HUD`
+- `WBP_GP_LaunchContainerRow`
 
-Local dirty authored Content/Config/`GP.uproject`/`Tools` remain unstaged operator work.
+Operator-authored Blueprint work remains local.
 
 ## TEMP HUD remains retired
 
-No restore of `UGP_TEMP_S28P_PlanetaryFerroniteHUD` or PlayerController TEMP presentation bars. Production HUD remains the active match HUD.
+No restore of TEMP HUD. Production HUD remains the active match HUD.
 
 ## No gameplay / economy semantic changes
 
-Storage rules, orbital transfer, economy values, and container launch gameplay are unchanged. This slice is read-only presentation plus forwarding to the existing launch request API.
-
-## Operator next step
-
-Author the right-side vertical menu on `WBP_GP_HUD`: Launch button on top, container fill-bar list below, yellow while filling, green when ready. Bind to the HUD-root API above. Do not resurrect TEMP HUD.
+Storage, orbital transfer, economy values, and container launch gameplay are unchanged.

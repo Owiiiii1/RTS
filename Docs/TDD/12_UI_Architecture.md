@@ -146,7 +146,8 @@ PublicDependencyModuleNames.AddRange(new string[]
   This slice does not write `GP/Config` and does not hardcode `/Game/.../WBP_GP_HUD`.
   Unconfigured class → safe no-op + non-shipping warning. TEMP HUD is retired and is not a fallback.
 - For each valid local player/controller the subsystem creates at most one production HUD
-  root, adds it to that player's viewport (`HitTestInvisible`, no gameplay mouse consume,
+  root, adds it to that player's viewport (`SelfHitTestInvisible`: root/background does not
+  consume clicks, interactive children remain clickable; no gameplay mouse consume,
   no input-mode change), then `UGP_HUDRootWidget::NativeConstruct` injects subsystem-owned
   VMs through the existing bridge. Repeated ensure does not duplicate. Teardown removes
   the widget and clears the reference (Initialize / PlayerControllerChanged / Deinitialize).
@@ -349,6 +350,10 @@ and notifies authored WBP via `BP_OnLaunchMenuChanged`. Source of truth remains
 `UGP_StorageComponent` on the resolved local MainBase. Event-driven via
 `OnResolvedMainBaseChanged` + `OnStorageChanged`. No Tick, no world scan, no TEMP HUD.
 Authored right-side layout stays operator-local; this slice does not modify `GP/Content`.
+Production HUD root visibility is `SelfHitTestInvisible` so empty HUD chrome does not eat
+pointer hits while `BTN_Launch` and future procurement controls remain clickable. Operator
+found Launch OnClicked dead under `HitTestInvisible`; that was a root hit-test bug, not a
+gameplay launch-path bug. No global input-mode change.
 
 ### MVVM Binding Contract
 

@@ -12,7 +12,9 @@ GPUIRuntime/LocalPlayer bootstraps at most one production HUD root from a soft-c
 `FerroniteThreatNormalized` from MainBase storage capacity × ThreatPerStoredUnit.
 ResourceVM exposes exact `PlanetFerronite` from local MainBase `UGP_StorageComponent::GetTotalStored()`.
 Native right-side Launch Menu presentation is on `cleanup/gp-remove-temp-hud`:
-`UGP_LaunchMenuPresenter` + HUD-root accessors. Authored WBP layout remains operator-local.
+`UGP_LaunchMenuPresenter` + HUD-root accessors. Production HUD root is
+`SelfHitTestInvisible` so Launch and other child buttons remain clickable.
+Authored WBP layout remains operator-local.
 It is not a second currency and is not reconstructed from Threat. Operator-validated:
 `PB_Threat` binds normalized threat; `TXT_PlanetFerroniteValue` binds `PlanetFerronite` through
 To Text (Float) and updates when Workers deposit Ferronite. `WBP_GP_HUD` remains operator-local

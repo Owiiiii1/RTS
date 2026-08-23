@@ -8,7 +8,6 @@
 #include "HAL/IConsoleManager.h"
 #include "Player/GPPlayerController.h"
 #include "Settings/GPUIPresentationSettings.h"
-#include "UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h"
 #include "UObject/UObjectIterator.h"
 #include "ViewModels/GPHUDViewModelSubsystem.h"
 #include "Widgets/GPHUDRootWidget.h"
@@ -93,13 +92,13 @@ namespace GPHUDBootstrapContractPrivate
 				TEXT("GPUIRuntime")),
 			TEXT("C_NoGPRuntimeToGPUIRuntimeTypeOwnership"));
 
-		const FObjectProperty* TempHUDProperty = FindFProperty<FObjectProperty>(
-			AGP_PlayerController::StaticClass(), TEXT("PlanetaryFerroniteHUD"));
-		Expect(TempHUDProperty != nullptr
-			&& TempHUDProperty->PropertyClass == UGP_TEMP_S28P_PlanetaryFerroniteHUD::StaticClass()
+		const UClass* RetiredTempHUDClass = FindObject<UClass>(
+			nullptr, TEXT("/Script/GPRuntime.GP_TEMP_S28P_PlanetaryFerroniteHUD"));
+		Expect(RetiredTempHUDClass == nullptr
+			&& AGP_PlayerController::StaticClass()->FindPropertyByName(TEXT("PlanetaryFerroniteHUD")) == nullptr
 			&& AGP_PlayerController::StaticClass()->FindPropertyByName(
 				TEXT("ProductionHUDWidget")) == nullptr,
-			TEXT("D_TEMPHUDPathRemainsOnPlayerController"));
+			TEXT("D_TEMPHUDPathRemovedFromPlayerController"));
 
 		UGameInstance* GameInstance = World->GetGameInstance();
 		ULocalPlayer* LocalPlayer =
@@ -179,19 +178,15 @@ namespace GPHUDBootstrapContractPrivate
 				TEXT("L_RestoredConfiguredProductionHUD"));
 		}
 
-		APlayerController* PlayerController = LocalPlayer->GetPlayerController(World);
-		AGP_PlayerController* GPPlayerController = Cast<AGP_PlayerController>(PlayerController);
-		if (GPPlayerController != nullptr && TempHUDProperty != nullptr)
-		{
-			const UObject* TempHUD =
-				TempHUDProperty->GetObjectPropertyValue_InContainer(GPPlayerController);
-			Expect(TempHUD != nullptr,
-				TEXT("M_TEMPHUDInstanceStillPresent"));
-		}
-		else
-		{
-			Expect(false, TEXT("M_TEMPHUDInstanceStillPresent"));
-		}
+		Expect(AGP_PlayerController::StaticClass()->FindFunctionByName(
+				TEXT("Server_RequestLaunchReadyContainer")) != nullptr
+			&& AGP_PlayerController::StaticClass()->FindFunctionByName(
+				TEXT("Server_RequestUnitDrop")) != nullptr
+			&& AGP_PlayerController::StaticClass()->FindFunctionByName(
+				TEXT("Server_RequestBuildingPurchase")) != nullptr
+			&& AGP_PlayerController::StaticClass()->FindFunctionByName(
+				TEXT("Server_RequestWallPackagePurchase")) != nullptr,
+			TEXT("M_GameplayRequestRPCsRemain"));
 
 		UE_LOG(LogGPHUDBootstrapContract, Log,
 			TEXT("gp.UI.RunHUDBootstrapContractTest: Complete Failures=%d Cancelled=false"),

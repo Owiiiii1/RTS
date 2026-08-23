@@ -1,156 +1,194 @@
-# Cursor Work Report — FoW Multiplayer Local Unit Visibility Fix
+# Cursor Work Report — TEMP_S28P HUD Removal
 
 ## Status
 
-**FOW_MULTIPLAYER_UNIT_PRESENTATION_FIX_FINALIZED_READY_TO_MERGE**
+**TEMP_HUD_REMOVAL_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**
+
+**NOT FINALIZED.**
 
 ## Branch / base / head
 
-- Branch: `fix/gp-fow-multiplayer-local-unit-visibility`
-- Tracks: `origin/fix/gp-fow-multiplayer-local-unit-visibility`
-- Base: `origin/main` @ `f20439388a3e3bf0f3389a10193634749995c21d`
-- Implementation: `a42865f860d3870bb88c25bf10471b0cfe8daf84`
-- Pre-finalization SHA-record: `b1ebefca5c25ca899d9224058c60be14f9fdd0fd`
-- Finalization: `dc0ef104d37ec5ad7ca5bb8c8e41c5d1ff390277`
+- Branch: `cleanup/gp-remove-temp-hud`
+- Base: `origin/main` @ `7fc2ab9ee880e73e1c7610570cc9a723b9376905`
+- Head: this implementation commit on `cleanup/gp-remove-temp-hud` (pushed with this report)
 
-## Operator PASS details
+## Exact deleted files
 
-Operator validation **PASSED** in a 2-player PIE/network session:
+- `GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h`
+- `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
 
-- each player's FoW world visualization is correct
-- Player 2 now sees enemy units according to Player 2's own FoW
-- Player 1 visibility no longer reveals/hides units for Player 2
-- reciprocal local visibility behavior is correct
-- own-team units remain visible
-- enemy units disappear/reappear according to the observing client's own FoW
+There is no remaining runtime creation of `UGP_TEMP_S28P_PlanetaryFerroniteHUD`.
 
-This confirms the multiplayer presentation coupling bug is fixed.
+## PlayerController TEMP presentation code removed
 
-## Confirmed root cause
+Class A only (TEMP presentation scaffolding). Removed from `AGP_PlayerController`:
 
-`UGP_LocalFoWUnitPresentationSubsystem` already resolved visibility from **that client's** `UGP_LocalFoWComponent` via `ShouldPresentUnitForLocalPlayer`:
+Lifecycle / bind / sync:
 
-- invalid unit → false
-- team ≤ 0 (neutral) → true
-- own team (`UnitTeamId == LocalTeamId`) → true
-- enemy → LocalFoW ready + matching LocalTeamId + `IsVisible(unit location)`
+- `EnsurePlanetaryFerroniteHUD`
+- `DestroyPlanetaryFerroniteHUD`
+- `RefreshPlanetaryFerroniteHUDBinding`
+- `ClearPlanetaryFerroniteHUDBindings`
+- `BindPlanetaryFerroniteStorage`
+- `UnbindPlanetaryFerroniteStorage`
+- `SyncPlanetaryFerroniteHUDFromStorage`
+- `SyncLaunchButtonFromStorage`
+- `BindOrbitalFerroniteAttribute`
+- `UnbindOrbitalFerroniteAttribute`
+- `SyncOrbitalFerroniteHUDFromAttributes`
+- `SyncBuildingReadyHUDFromInventory`
+- `BindWallInventoryEvents`
+- `UnbindWallInventoryEvents`
+- `SyncWallPackageHUDFromInventory`
+- `BindBuildingInventoryEvents`
+- `UnbindBuildingInventoryEvents`
 
-The leak was the apply path: `AGP_UnitBase::SetLocalFoWPresentationVisible` called `SetActorHiddenInGame`. `AActor::bHidden` is replicated. On a listen-server host, Player 1's FoW hide/show mutated shared actor hidden state and leaked onto Player 2.
+TEMP-HUD-specific handlers:
 
-FoW world overlay mirrors were already per-local-player and were **not** this bug.
+- `HandleWallInventoryChangedForHUD`
+- `HandleWallPackagePendingChangedForHUD`
+- `HandleOrbitalFerroniteAttributeChanged`
+- `HandleMaxUnitsAttributeChanged`
+- `HandleCurrentUnitsAttributeChanged`
+- `HandleFerroniteScoreAttributeChanged`
+- `SyncUnitCapHUDFromAttributes`
+- `SyncMatchHUDFromAuthority`
+- `HandleMatchTimeRemainingChanged`
+- `HandleMatchStateTagChanged`
+- `HandleMatchResultChangedForHUD`
+- `HandleBuildingReadyChanged`
+- `HandleResolvedMainBaseChanged`
+- `HandlePlayerTeamIdChanged`
+- `HandleStorageChangedForHUD`
 
-## Exact old mechanism
+TEMP presentation members:
 
-Hide/show used Actor-level `SetActorHiddenInGame(!bVisible)`. HealthBar and Combat already had local gates, but the mesh/actor hide wrote replicated `bHidden` and coupled clients.
+- `PlanetaryFerroniteHUD`
+- `BoundPlanetaryGameState`
+- `BoundPlanetaryPlayerState`
+- `BoundPlanetaryStorage`
+- `BoundWallInventory`
+- `BoundOrbitalASC`
+- `ResolvedMainBaseChangedHandle`
+- `PlayerTeamIdChangedHandle`
+- `OrbitalFerroniteChangedHandle`
+- `MaxUnitsChangedHandle`
+- `CurrentUnitsChangedHandle`
+- `FerroniteScoreChangedHandle`
+- `BuildingReadyChangedHandle`
+- `MatchTimeRemainingChangedHandle`
+- `MatchStateTagChangedHandle`
+- `MatchResultChangedHandle`
+- `BoundPlanetaryTeamId`
+- `PlanetaryFerroniteHUDZOrder`
 
-## Exact new mechanism
+TEMP HUD create/destroy calls removed from PlayerController lifecycle (`BeginPlayingState` / PlayerState ready / ASC link / `EndPlay`). `Client_NotifyUnitDropRejected` remains; it no longer talks to TEMP HUD.
 
-Keep the actor logically present. **Never** write Actor `bHidden` / `SetActorHiddenInGame`.
+`AGP_PlayerController` no longer owns TEMP HUD presentation state.
 
-On local FoW hide:
+## Gameplay / RPC APIs explicitly preserved
 
-- `GetComponents<UPrimitiveComponent>` (native capsule/generated parts and Blueprint/SCS/runtime-added meshes)
-- skip `UWidgetComponent` (HealthBar owns composed visibility)
-- cache each component's original `bHiddenInGame` in `TWeakObjectPtr` entries
-- call local `UPrimitiveComponent::SetHiddenInGame(true, false)` (component `bHiddenInGame` is not replicated)
+Class B — still on `AGP_PlayerController`:
 
-On show: restore original `bHiddenInGame`, `LocalFoWVisualPrimitives.Reset()`, refresh team presentation. Enumeration runs on visibility transitions only (the 10 Hz eval still early-outs when the local bool is unchanged). `EndPlay` restores.
+- `RequestLaunchReadyContainer` / `Server_RequestLaunchReadyContainer` / `AuthorityTryLaunchReadyContainerForOwningTeam`
+- `RequestUnitDrop` / `Server_RequestUnitDrop` / `AuthorityTryRequestUnitDrop`
+- `RequestBuildingPurchase` / `Server_RequestBuildingPurchase` / `AuthorityTryPurchaseBuilding`
+- `RequestWallPackagePurchase` / `Server_RequestWallPackagePurchase` / `AuthorityTryPurchaseWallPackage`
+- Building deploy / placement: `RequestBuildingDeploy` / `Server_RequestBuildingDeploy` / `AuthorityTryDeployBuilding` / `CancelBuildingPlacement` / `ConfirmBuildingPlacement`
 
-## Why it is local-only
+Storage, orbital inventory, GAS attributes, GameState match delegates, and building/wall procurement rules were not changed.
 
-Engine fact: `USceneComponent::bHiddenInGame` / `SetHiddenInGame` on primitives is **not** replicated. Actor `bHidden` is never written by this path. Decision still uses only the observing client's `UGP_LocalFoWComponent`. Collision, movement, ASC, command components, and actor relevancy are untouched.
+## Production HUD ownership / bootstrap unchanged
 
-## Blueprint child component handling
+Not touched:
 
-`GetComponents<UPrimitiveComponent>` includes Blueprint-added visual primitives. The multiplayer contract attaches a child `UStaticMeshComponent` and proves it is gated and restored. `UWidgetComponent` is excluded from generic primitive gating.
+- `GP/Content/**` (including operator-local `/Game/GrimProtocol/Blueprint/Widgets/WBP_GP_HUD`)
+- Production HUD bindings / authored layout
 
-## Healthbar / combat / team presentation
+Canonical bootstrap remains:
 
-Preserved:
+`UGP_HUDViewModelSubsystem` → configured `ProductionHUDWidgetClass` → `WBP_GP_HUD`
 
-- `HealthBarComponent->SetFoWPresentationAllowed(bVisible)`
-- `CombatPresentationComponent->SetLocalPresentationAllowed(bVisible)`
-- `TeamPresentationComponent->RefreshTeamPresentation()` when becoming visible
+No replacement C++ widget. Production HUD ownership was not moved into PlayerController.
 
-Damaged enemy bars cannot show while local FoW disallows presentation. Combat multicast still no-ops when local presentation is disallowed. HealthBar FoW gating remains intact; CombatPresentation local gating remains intact.
+## Contracts / regressions run
 
-hidden → visible → hidden restores original component hidden state (cache original flag, restore on show, reset cache, recapture on next hide). Weak ptrs skip destroyed components; cache lives only while hidden.
+Anti-reintroduction checks:
 
-## Focused contract results
+- `K_TEMPHUDRetiredNotOwnedByPlayerController` (`FindObject` `/Script/GPRuntime.GP_TEMP_S28P_PlanetaryFerroniteHUD` == null; no `PlanetaryFerroniteHUD` property on PC)
+- `D_TEMPHUDPathRemovedFromPlayerController`
+- `M_GameplayRequestRPCsRemain` (`Server_RequestLaunchReadyContainer`, `Server_RequestUnitDrop`, `Server_RequestBuildingPurchase`, `Server_RequestWallPackagePurchase`)
 
-Re-run after operator PASS (`UnrealEditor-Cmd.exe`, `/Game/GrimProtocol/Maps/L_PrototypeArena`, `-game -nullrhi`):
+UI (all `Complete Failures=0`):
 
-| Command | Result |
-| --- | --- |
-| `gp.FoW.RunMultiplayerUnitPresentationContractTest` | **PASS**, Failures=0 |
-| `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS**, Failures=0 |
-| `gp.FoW.RunWorldVisualizationContractTest` | **PASS**, Failures=0 |
-| `gp.UI.RunProductionHUDFoundationContractTest` | **PASS**, Failures=0 |
-| `gp.UI.RunHUDViewModelBridgeContractTest` | **PASS**, Failures=0 |
+- `gp.UI.RunProductionHUDFoundationContractTest`
+- `gp.UI.RunHUDViewModelBridgeContractTest`
+- `gp.UI.RunHUDBootstrapContractTest`
+- `gp.UI.RunPlanetFerronitePresentationContractTest`
+- `gp.UI.RunThreatPresentationContractTest`
 
-Full suite **not run** (no focused failure; no unexpected shared-system expansion).
+Gameplay (all `Complete Failures=0`; rewritten launch HUD contract is gameplay-only, no TEMP widget):
 
-## GPEditor / UHT
+- `gp.Resource.RunContainerLaunchContractTest`
+- `gp.Resource.RunContainerLaunchHUDContractTest` (`PASS: SuiteComplete`, including `A_LaunchRPCRemains`)
+- `gp.Resource.RunOrbitalUnitDropContractTest`
+- `gp.Building.RunOrbitalBuildingDropContractTest`
+- `gp.Orbital.RunWallPackageInventoryContractTest`
 
-`Build.bat GPEditor Win64 Development` — **PASS** (UHT processed; 0 generated files written)
+Full suite not run. GP Development / Shipping not run.
 
-## GP Development
+## GPEditor / UHT result
 
-`Build.bat GP Win64 Development` — **PASS** (`GP.exe`)
+`GPEditor Win64 Development` + UHT: **PASS** (`Result: Succeeded`).
 
-## GP Shipping
+GP Development / Shipping: **not run** (post-operator finalization only).
 
-`Build.bat GP Win64 Shipping` — **PASS** (`GP-Win64-Shipping.exe`)
+## Exact changed files
 
-## Factual final diff review vs `origin/main`
+Deleted:
 
-Reviewed `origin/main...HEAD` plus uncommitted docs. **No defects found. No code fix required.**
+- `GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h`
+- `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
 
-| Check | Result |
-| --- | --- |
-| local FoW presentation no longer calls `SetActorHiddenInGame` | **confirmed** (none remain under `GP/Source`) |
-| Actor `bHidden` is not used for local FoW gating | **confirmed** |
-| actor replication/relevancy semantics unchanged | **confirmed** (`GetLifetimeReplicatedProps` still only `TeamId` / `bIsDead`; no `IsNetRelevantFor` change) |
-| each client resolves visibility from its own `UGP_LocalFoWComponent` | **confirmed** (`ShouldPresentUnitForLocalPlayer`) |
-| own-team units remain always presented | **confirmed** |
-| enemy visibility = LocalFoW ready + matching LocalTeamId + `IsVisible(location)` | **confirmed** |
-| local hide/show only affects presentation components | **confirmed** |
-| collision unchanged | **confirmed** |
-| movement unchanged | **confirmed** |
-| ASC unchanged | **confirmed** |
-| command components unchanged | **confirmed** |
-| Blueprint-added visual primitive components covered | **confirmed** |
-| `UWidgetComponent` not incorrectly hidden by generic primitive gating | **confirmed** |
-| HealthBar FoW gating intact | **confirmed** |
-| CombatPresentation local gating intact | **confirmed** |
-| TeamPresentation refresh on becoming visible | **confirmed** |
-| hidden → visible → hidden restores original component hidden state | **confirmed** |
-| no stale component cache safety issue | **confirmed** (weak ptrs; cache reset on show; EndPlay restore) |
-| no gameplay/network authority state mutation introduced | **confirmed** |
-| no Content/protected files committed | **confirmed** |
+Source:
 
-## Exact changed files vs `origin/main`
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
+- `GP/Source/GPRuntime/Public/Resources/GPStorageComponent.h` (comment only: TEMP HUD retired)
+- `GP/Source/GPRuntime/Private/Debug/GPContainerLaunchHUDContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPMatchWinLoseContractTest.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPHUDBootstrapContractTest.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPProductionHUDFoundationContractTest.cpp`
 
-- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPFoWMultiplayerUnitPresentationContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPFoWWorldVisualizationContractTest.cpp`
-- `Docs/TDD/15_Fog_of_War.md`
+Docs (current-state only; historical task docs not rewritten):
+
+- `Docs/TDD/12_UI_Architecture.md`
+- `Docs/GDD/09_UI_UX.md`
+- `Docs/GDD/10_Orbital_Delivery.md`
+- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md`
+- `Docs/Development/Cursor_Work_Report.md` (this report)
 
-## Protected / content files untouched
+## Content / protected files untouched
 
-- **Content untouched** (no committed `GP/Content/**`, unit Blueprints, maps, DataAssets, or `WBP_GP_HUD`)
-- Protected Config/maps/DataAssets/Tools **untouched / unstaged**
-- Local dirty Content/Config remain unstaged and are **not** part of this branch
+Not touched and not staged:
 
-## Gameplay replication / relevancy
+- `GP/Content/**`
+- `GP/Config/**`
+- maps
+- DataAssets
+- Tools
 
-Unchanged. This is **presentation correctness**, not network secrecy / replication culling.
+Local dirty authored work left unstaged.
 
-## Merge
+## No gameplay / economy semantic changes
+
+Procurement/request APIs remain available for future production context-action UI. HUD ViewModels / adapters continue functioning. No duplicate top HUD from TEMP widget instantiation.
+
+## Merge / finalization
 
 **NOT MERGED.**
+
+**NOT FINALIZED.**

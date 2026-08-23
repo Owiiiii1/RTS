@@ -360,7 +360,7 @@ private:
 	FName CancelReason;
 };
 
-/** GP-S30 TEMP HUD Orbital display + Launch button / PC request contract. */
+/** GP-S30 container launch gameplay request contract (TEMP HUD retired). */
 UCLASS()
 class GPRUNTIME_API UGP_ContainerLaunchHUDContractTestRunner : public UObject
 {
@@ -395,7 +395,6 @@ private:
 	TWeakObjectPtr<class AGP_PlayerState> OtherPSWeak;
 	TWeakObjectPtr<class AGP_PlayerController> OwnPCWeak;
 	TWeakObjectPtr<class AGP_PlayerController> OtherPCWeak;
-	TWeakObjectPtr<class UGP_TEMP_S28P_PlanetaryFerroniteHUD> HUDWeak;
 	TWeakObjectPtr<class UGP_AbilitySystemComponent> BoundASCWeak;
 	float LastOrbitalAttrValue = -1.0f;
 	int32 OrbitalAttrEventCount = 0;

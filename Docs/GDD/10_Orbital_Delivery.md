@@ -23,7 +23,7 @@ Worker **does** later perform local engineering: level terrain, install/repair f
 >
 > **Owner refinement (2026-08-21, ADR-0010):** Foundation Slab material is a **fourth orbital flow** with Wall Package philosophy (spend once → one delivery to MainBase inventory). Installation is a **planned Worker job** (progressive cells; consume/reserve moment **DESIGN REQUIRED**; no second spend). Quantity/cost/footprint are **TBD** and must **not** copy Wall Package `5`. Normal READY building deploy additionally requires leveled terrain + intact per-cell foundation. **Wall Foundation Rule — RESOLVED:** Walls do not require Foundation; Workers construct them on terrain.
 >
-> **Owner refinement (2026-08-21, production HUD):** Canonical **visible** procurement entry is Select MainBase → **PURCHASE** in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE. Not a permanent global Order Menu. Keyboard `O` may later convenience-open the same panel; it is not the canonical HUD path. TEMP HUD debug buttons may remain as scaffolding. **Backend RPCs and spend semantics do not change.** Production HUD building **LAUNCH** is a UX shortcut: Purchase → READY → immediately enter current deploy ghost. READY inventory still exists if placement is canceled. Foundation Slab HUD category remains **TBD**. See [`../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
+> **Owner refinement (2026-08-21, production HUD):** Canonical **visible** procurement entry is Select MainBase → **PURCHASE** in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE. Not a permanent global Order Menu. Keyboard `O` may later convenience-open the same panel; it is not the canonical HUD path. TEMP HUD is retired. Future production context-action UI will call existing PlayerController gameplay request APIs. **Backend RPCs and spend semantics do not change.** Production HUD building **LAUNCH** is a UX shortcut: Purchase → READY → immediately enter current deploy ghost. READY inventory still exists if placement is canceled. Foundation Slab HUD category remains **TBD**. See [`../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
 
 ## Two-State Resource (Recap)
 
@@ -102,7 +102,7 @@ Future-proof schema (do not implement now): larger pods, doctrines/upgrades modi
 ### Unit procurement flow (player view)
 
 1. Player has Orbital Ferronite.
-2. Production HUD (design): select MainBase → PURCHASE → UNITS. TEMP HUD unit-order controls remain scaffolding. A global Order Menu is not the production HUD path.
+2. Production HUD (design): select MainBase → PURCHASE → UNITS. Future production PURCHASE UI will call existing PlayerController unit-drop request APIs. TEMP HUD is retired. A global Order Menu is not the production HUD path.
 3. Builds a **pod manifest** up to transport-slot limit (LMB add / RMB remove; quantity on icon).
 4. UI shows: slots used/capacity, unit counts, per-unit Orbital cost, per-unit slot cost, **total Orbital cost**. Message Strip reports shuttle slots / funds / cap.
 5. Confirm Order.
@@ -148,7 +148,7 @@ deployed later via existing READY inventory. Do not invent a new building-spawn 
 Primary production HUD flow is optimized as select building → LAUNCH → immediate placement mode.
 READY inventory still exists.
 
-TEMP HUD purchase/READY/deploy controls remain temporary scaffolding.
+Future production PURCHASE/deploy UI will call existing PlayerController building request APIs. TEMP HUD is retired.
 
 ### Purchase → Orbital Building Inventory
 
@@ -181,7 +181,7 @@ Building pods use player-confirmed placement. Same DropPod/rocket actor/visual a
 
 1. **Buy Wall Package** when MainBase Wall stock is **0..4** and no package is in flight.
    Production HUD entry (design): MainBase → PURCHASE → DEFENSE → Wall Package → LAUNCH.
-   TEMP HUD Buy Wall Package remains scaffolding.
+   Future production PURCHASE UI will call existing PlayerController wall-package request APIs. TEMP HUD is retired.
 2. Spend full `UGP_WallPackageDefinition.Cost` once. Do **not** enter placement. Price does not prorate.
 3. One rocket delivers the package to MainBase **UnitDropZone**. Payload is inventory, not an `AGP_Wall` actor.
 4. On arrival: `Accepted = min(5, Capacity - current stock)`. Excess wasted. No refund.

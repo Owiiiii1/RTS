@@ -19,9 +19,7 @@
 #include "Player/GPPlayerState.h"
 #include "Settings/GPResourceGameplaySettings.h"
 #include "TimerManager.h"
-#include "UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h"
 #include "UObject/Package.h"
-#include "Widgets/SNullWidget.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPContainerLaunchHUD, Log, All);
 
@@ -98,7 +96,7 @@ namespace GPContainerLaunchHUDDebug
 
 	static FAutoConsoleCommandWithWorldAndArgs GContainerLaunchHUDContract(
 		TEXT("gp.Resource.RunContainerLaunchHUDContractTest"),
-		TEXT("Authority: GP-S30 TEMP HUD Orbital + Launch button / PC server launch request contract."),
+		TEXT("Authority: GP-S30 container launch gameplay request contract (TEMP HUD retired)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunContainerLaunchHUDContractTest));
 }
 
@@ -106,10 +104,6 @@ void UGP_ContainerLaunchHUDContractTestRunner::HandleOrbitalAttrChanged(const FO
 {
 	++OrbitalAttrEventCount;
 	LastOrbitalAttrValue = Data.NewValue;
-	if (UGP_TEMP_S28P_PlanetaryFerroniteHUD* HUD = HUDWeak.Get())
-	{
-		HUD->SetOrbitalFerroniteDisplay(Data.NewValue);
-	}
 }
 
 void UGP_ContainerLaunchHUDContractTestRunner::BeginDestroy()
@@ -151,12 +145,6 @@ void UGP_ContainerLaunchHUDContractTestRunner::CleanupActors()
 	}
 	OrbitalAttrHandle.Reset();
 	BoundASCWeak.Reset();
-
-	if (UGP_TEMP_S28P_PlanetaryFerroniteHUD* HUD = HUDWeak.Get())
-	{
-		HUD->RemoveFromParent();
-		HUDWeak.Reset();
-	}
 
 	auto DestroyWeak = [](auto& Weak)
 	{
@@ -300,43 +288,7 @@ void UGP_ContainerLaunchHUDContractTestRunner::AdvanceStage()
 			return;
 		}
 
-		UGP_TEMP_S28P_PlanetaryFerroniteHUD* HUD =
-			CreateWidget<UGP_TEMP_S28P_PlanetaryFerroniteHUD>(World, UGP_TEMP_S28P_PlanetaryFerroniteHUD::StaticClass());
-		HUDWeak = HUD;
-		if (!Expect(IsValid(HUD), TEXT("A_CreateHUD")))
-		{
-			Finish();
-			return;
-		}
-		HUD->SetOwningPlayer(OwnPC);
-
-		// Force real Slate construction via public UUserWidget API (RebuildWidget path).
-		// Must run BEFORE display Set* so a NativeConstruct-only tree build cannot false-pass.
-		const TSharedRef<SWidget> SlateWidget = HUD->TakeWidget();
-		Expect(SlateWidget != SNullWidget::NullWidget, TEXT("A_SlateNotNullWidget"));
-		Expect(HUD->HasWidgetTreeRootForContract(), TEXT("A_RootWidgetAfterTakeWidget"));
-		Expect(HUD->HasStatusPanelForContract(), TEXT("A_StatusPanelAfterTakeWidget"));
-		Expect(HUD->HasResourceBarForContract(), TEXT("A_ResourceBarAfterTakeWidget"));
-		Expect(HUD->IsResourceBarTopRightAnchoredForContract(), TEXT("A_ResourceBarTopRight"));
-		Expect(HUD->AreOrbitalAndUnitsOnResourceBarForContract(), TEXT("A_OrbitalUnitsOnResourceBar"));
-		Expect(HUD->IsStatusPanelBottomLeftAnchoredForContract(), TEXT("A_StatusPanelBottomLeft"));
-		Expect(HUD->IsProcurementGroupBottomRightAnchoredForContract(), TEXT("A_ProcurementBottomRight"));
-		Expect(HUD->HasLaunchButtonWidgetForContract(), TEXT("A_LaunchButtonInTreeAfterTakeWidget"));
-		Expect(HUD->IsLaunchButtonBottomCenterAnchoredForContract(), TEXT("A_LaunchButtonBottomCenter"));
-		Expect(HUD->HasNoDuplicateOrbitalOrUnitsWidgetsForContract(), TEXT("A_NoDuplicateOrbitalUnits"));
-		Expect(HUD->HasInteractiveLaunchButtonForContract(), TEXT("A_LaunchButtonVisible"));
-
-		HUD->AddToViewport(1);
-		HUD->SetStorageDisplay(false, 0.0f, 0.0f, TArray<float>());
-		HUD->SetOrbitalFerroniteDisplay(0.0f);
-		HUD->SetLaunchButtonEnabled(false);
-
-		Expect(HUD->GetVisibility() == ESlateVisibility::SelfHitTestInvisible, TEXT("A_RootSelfHitTestInvisible"));
-		Expect(HUD->GetBaseLineTextForContract().Contains(TEXT("База:")), TEXT("A_BaseLabel"));
-		Expect(HUD->GetOrbitalLineTextForContract().Contains(TEXT("Orbital:")), TEXT("A_OrbitalLabel"));
-		Expect(HUD->GetOrbitalLineTextForContract().Contains(TEXT("Orbital: 0")), TEXT("B_OrbitalInitialZero"));
-		Expect(HUD->GetContainerLineCountForContract() == 0, TEXT("A_NoContainerLinesWhenUnbound"));
-		Expect(!HUD->IsLaunchButtonEnabledForContract(), TEXT("E_DisabledNoReady"));
+		Expect(AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("Server_RequestLaunchReadyContainer")) != nullptr, TEXT("A_LaunchRPCRemains"));
 
 		UGP_AbilitySystemComponent* ASC = OwnPS->GetGPAbilitySystemComponent();
 		BoundASCWeak = ASC;
@@ -365,8 +317,6 @@ void UGP_ContainerLaunchHUDContractTestRunner::AdvanceStage()
 
 		Expect(OrbitalAttrEventCount >= 1, TEXT("C_OrbitalDelegateFired"));
 		Expect(FMath::IsNearlyEqual(LastOrbitalAttrValue, 25.0f, 0.05f), TEXT("C_OrbitalDelegateValue"));
-		Expect(FMath::IsNearlyEqual(HUD->GetDisplayedOrbitalForContract(), 25.0f, 0.05f), TEXT("C_HUDOrbitalUpdated"));
-		Expect(HUD->GetOrbitalLineTextForContract().Contains(TEXT("Orbital: 25")), TEXT("C_HUDOrbitalText"));
 
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -388,34 +338,15 @@ void UGP_ContainerLaunchHUDContractTestRunner::AdvanceStage()
 		UGP_StorageComponent* OwnStorage = OwnBase->GetStorageComponent();
 		Expect(IsValid(OwnStorage), TEXT("OwnStoragePresent"));
 
-		auto PushStorageToHUD = [HUD](UGP_StorageComponent* Storage)
-		{
-			TArray<float> Amounts;
-			const TArray<FGP_StorageContainer>& Containers = Storage->GetContainers();
-			Amounts.Reserve(Containers.Num());
-			for (const FGP_StorageContainer& Container : Containers)
-			{
-				Amounts.Add(Container.CurrentAmount);
-			}
-			HUD->SetStorageDisplay(true, Storage->GetTotalStored(), Storage->GetTotalCapacity(), Amounts);
-			HUD->SetLaunchButtonEnabled(Storage->GetReadyCount() > 0 && !Storage->IsLaunchInFlight());
-		};
-
-		PushStorageToHUD(OwnStorage);
-		Expect(HUD->GetContainerLineCountForContract() == OwnStorage->GetContainers().Num(), TEXT("A_ContainerLineCountMatches"));
-		Expect(HUD->GetBaseLineTextForContract().Contains(TEXT("База: 0 /")), TEXT("A_BaseZeroTotal"));
-		Expect(HUD->GetBaseLineTextForContract().Contains(
-			FString::Printf(TEXT("/ %d"), FMath::RoundToInt(OwnStorage->GetTotalCapacity()))), TEXT("A_BaseUsesStorageCapacity"));
-		Expect(!HUD->IsLaunchButtonEnabledForContract(), TEXT("E_StillDisabledEmpty"));
+		Expect(OwnStorage->GetReadyCount() == 0, TEXT("E_StillDisabledEmpty"));
 
 		OwnStorage->AddPlanetaryFerronite(130.0f);
-		PushStorageToHUD(OwnStorage);
 		Expect(OwnStorage->GetReadyCount() >= 1, TEXT("D_ReadyPresent"));
-		Expect(HUD->IsLaunchButtonEnabledForContract(), TEXT("D_EnabledWhenReady"));
-		Expect(HUD->GetBaseLineTextForContract().Contains(TEXT("База: 130 /")), TEXT("A_BaseTotal130"));
-		Expect(HUD->GetContainerLineTextForContract(0).Contains(TEXT("Контейнер 1 — 100")), TEXT("A_Container1_100"));
-		Expect(HUD->GetContainerLineTextForContract(1).Contains(TEXT("Контейнер 2 — 30")), TEXT("A_Container2_30"));
-		Expect(HUD->GetContainerLineTextForContract(2).Contains(TEXT("Контейнер 3 — 0")), TEXT("A_Container3_0"));
+		Expect(FMath::IsNearlyEqual(OwnStorage->GetTotalStored(), 130.0f, 0.05f), TEXT("A_BaseTotal130"));
+		Expect(OwnStorage->GetContainers().Num() >= 3, TEXT("A_ContainerCountStable"));
+		Expect(FMath::IsNearlyEqual(OwnStorage->GetContainers()[0].CurrentAmount, 100.0f, 0.05f), TEXT("A_Container1_100"));
+		Expect(FMath::IsNearlyEqual(OwnStorage->GetContainers()[1].CurrentAmount, 30.0f, 0.05f), TEXT("A_Container2_30"));
+		Expect(FMath::IsNearlyEqual(OwnStorage->GetContainers()[2].CurrentAmount, 0.0f, 0.05f), TEXT("A_Container3_0"));
 
 		OtherBase->GetStorageComponent()->AddPlanetaryFerronite(100.0f);
 		Expect(OtherBase->GetStorageComponent()->GetReadyCount() >= 1, TEXT("OtherReadyPresent"));
@@ -431,11 +362,8 @@ void UGP_ContainerLaunchHUDContractTestRunner::AdvanceStage()
 		Expect(bOwnLaunch, TEXT("G_OwnPCLaunchAccepted"));
 		Expect(OwnStorage->IsLaunchInFlight(), TEXT("G_OwnLaunchInFlight"));
 		Expect(OwnStorage->GetContainers()[0].State == EGP_StorageContainerState::Launching, TEXT("G_LaunchingState"));
-		PushStorageToHUD(OwnStorage);
-		Expect(!HUD->IsLaunchButtonEnabledForContract(), TEXT("F_DisabledDuringLaunching"));
-		Expect(HUD->GetContainerLineTextForContract(0).Contains(TEXT("Контейнер 1 — 100")), TEXT("G_Index0StableDuringLaunch"));
-		Expect(HUD->GetContainerLineTextForContract(1).Contains(TEXT("Контейнер 2 — 30")), TEXT("G_Index1StableDuringLaunch"));
-
+		Expect(FMath::IsNearlyEqual(OwnStorage->GetContainers()[0].CurrentAmount, 100.0f, 0.05f), TEXT("G_Index0StableDuringLaunch"));
+		Expect(FMath::IsNearlyEqual(OwnStorage->GetContainers()[1].CurrentAmount, 30.0f, 0.05f), TEXT("G_Index1StableDuringLaunch"));
 		const bool bSecond = OwnPC->AuthorityTryLaunchReadyContainerForOwningTeam();
 		Expect(!bSecond, TEXT("G_SecondLaunchRejected"));
 
@@ -451,9 +379,8 @@ void UGP_ContainerLaunchHUDContractTestRunner::AdvanceStage()
 	case 1:
 	{
 		UGP_StorageComponent* OwnStorage = OwnBaseWeak.IsValid() ? OwnBaseWeak->GetStorageComponent() : nullptr;
-		UGP_TEMP_S28P_PlanetaryFerroniteHUD* HUD = HUDWeak.Get();
 		AGP_PlayerState* OwnPS = OwnPSWeak.Get();
-		if (!Expect(IsValid(OwnStorage) && IsValid(HUD) && IsValid(OwnPS), TEXT("CompletionActorsAlive")))
+		if (!Expect(IsValid(OwnStorage) && IsValid(OwnPS), TEXT("CompletionActorsAlive")))
 		{
 			Finish();
 			return;
@@ -463,26 +390,11 @@ void UGP_ContainerLaunchHUDContractTestRunner::AdvanceStage()
 		Expect(OwnStorage->GetContainers()[0].State == EGP_StorageContainerState::Empty, TEXT("Completion_Empty"));
 		Expect(FMath::IsNearlyEqual(OwnPS->GetPlayerAttributeSet()->GetOrbitalFerronite(), 125.0f, 0.05f),
 			TEXT("Completion_OrbitalGranted"));
-
-		{
-			TArray<float> Amounts;
-			const TArray<FGP_StorageContainer>& Containers = OwnStorage->GetContainers();
-			Amounts.Reserve(Containers.Num());
-			for (const FGP_StorageContainer& Container : Containers)
-			{
-				Amounts.Add(Container.CurrentAmount);
-			}
-			HUD->SetStorageDisplay(true, OwnStorage->GetTotalStored(), OwnStorage->GetTotalCapacity(), Amounts);
-		}
-		HUD->SetOrbitalFerroniteDisplay(OwnPS->GetPlayerAttributeSet()->GetOrbitalFerronite());
-		HUD->SetLaunchButtonEnabled(OwnStorage->GetReadyCount() > 0 && !OwnStorage->IsLaunchInFlight());
-
-		Expect(!HUD->IsLaunchButtonEnabledForContract(), TEXT("Completion_DisabledNoReady"));
-		Expect(HUD->GetOrbitalLineTextForContract().Contains(TEXT("Orbital: 125")), TEXT("Completion_OrbitalHUD"));
-		Expect(HUD->GetBaseLineTextForContract().Contains(TEXT("База: 30 /")), TEXT("Completion_BaseTotal30"));
-		Expect(HUD->GetContainerLineTextForContract(0).Contains(TEXT("Контейнер 1 — 0")), TEXT("Completion_Index0Zeroed"));
-		Expect(HUD->GetContainerLineTextForContract(1).Contains(TEXT("Контейнер 2 — 30")), TEXT("Completion_Index1Unshifted"));
-		Expect(HUD->GetContainerLineCountForContract() == OwnStorage->GetContainers().Num(), TEXT("Completion_LineCountStable"));
+		Expect(OwnStorage->GetReadyCount() == 0, TEXT("Completion_DisabledNoReady"));
+		Expect(FMath::IsNearlyEqual(OwnStorage->GetTotalStored(), 30.0f, 0.05f), TEXT("Completion_BaseTotal30"));
+		Expect(FMath::IsNearlyEqual(OwnStorage->GetContainers()[0].CurrentAmount, 0.0f, 0.05f), TEXT("Completion_Index0Zeroed"));
+		Expect(FMath::IsNearlyEqual(OwnStorage->GetContainers()[1].CurrentAmount, 30.0f, 0.05f), TEXT("Completion_Index1Unshifted"));
+		Expect(OwnStorage->GetContainers().Num() >= 3, TEXT("Completion_LineCountStable"));
 
 		Expect(true, TEXT("SuiteComplete"));
 		Finish();

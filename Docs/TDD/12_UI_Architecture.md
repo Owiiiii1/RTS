@@ -82,7 +82,7 @@ PublicDependencyModuleNames.AddRange(new string[]
   FoW is 100 cm / 10 Hz / 2000×2000. Post-process and fullscreen/sampled mask approaches are abandoned.
 - This direct mirror binding is intentionally limited to the project-owned world renderer. Ordinary
   HUD/minimap widgets still consume ViewModels.
-- The TEMP HUD remains unchanged until a production HUD is implemented and separately validated.
+- The TEMP HUD has been retired. Production HUD is the active match HUD (`UGP_HUDViewModelSubsystem` → configured `ProductionHUDWidgetClass` → `WBP_GP_HUD`).
 
 ### Production HUD data foundation, ViewModel bridge, and bootstrap — operator-validated / finalized (2026-08-21)
 
@@ -144,7 +144,7 @@ PublicDependencyModuleNames.AddRange(new string[]
 - Authored class is soft-configured via `UGP_UIPresentationSettings::ProductionHUDWidgetClass`
   (`TSoftClassPtr<UGP_HUDRootWidget>`). Project Settings → Game → GP UI Presentation.
   This slice does not write `GP/Config` and does not hardcode `/Game/.../WBP_GP_HUD`.
-  Unconfigured class → safe no-op + non-shipping warning; TEMP HUD remains available.
+  Unconfigured class → safe no-op + non-shipping warning. TEMP HUD is retired and is not a fallback.
 - For each valid local player/controller the subsystem creates at most one production HUD
   root, adds it to that player's viewport (`HitTestInvisible`, no gameplay mouse consume,
   no input-mode change), then `UGP_HUDRootWidget::NativeConstruct` injects subsystem-owned
@@ -159,7 +159,7 @@ PublicDependencyModuleNames.AddRange(new string[]
   `gp.UI.HUDDump` PlanetFerronite / OrbitalFerronite=100.00; Manual MVVM
   `GP_ResourceViewModel.OrbitalFerronite` → To Text (Float) → `TXT_OrbitalFerroniteValue.Text`
   updated in the visible HUD.
-- The TEMP HUD is preserved and remains functional. Production HUD remains **PARTIAL**. Still not
+- The TEMP HUD is retired. Production HUD is the active match HUD and remains **PARTIAL**. Still not
   implemented: visible resource/timer HUD completeness, Selection UI, Context Action Grid,
   MainBase PURCHASE panel, minimap function, notifications, and production end-of-match screen.
   Operator-validated runtime visibility of authored `WBP_GP_HUD` (local, not committed).
@@ -169,8 +169,8 @@ PublicDependencyModuleNames.AddRange(new string[]
 - **Approved visual IA (2026-08-21):** two bars × three blocks, plus MainBase PURCHASE inside the
   bottom-right panel. See
   [`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
-  Global `O` Order Menu is **SUPERSEDED** as the production HUD path. TEMP HUD procurement remains
-  scaffolding. Backend orbital flows are unchanged.
+  Global `O` Order Menu is **SUPERSEDED** as the production HUD path. TEMP HUD procurement is
+  retired. Future production context-action UI will call existing PlayerController gameplay request APIs. Backend orbital flows are unchanged.
 
 ### MVVM Data Flow
 
@@ -186,7 +186,7 @@ UGP_OrbitalDeliverySubsystem.Catalog ─►    OnRep / delegate      ─►   fu
 > Post-pivot (ADR-0009 + 2026-08-08 refinement): **no Build / Production queue UI**. Ordering surfaces:
 > - **Unit Order** — manifest builder (slots / costs) → DropPod → MainBase Unit Drop Zone (no world reticle for normal units).
 > - **Building Order** — Purchase → READY list → Deploy ghost (placement) → DropPod (no second spend).
-> Shared DropPod presentation. `UGP_OrderMenuVM` / TEMP HUD may host both panels. Pre-pivot Production/Construction/BuildMenu VMs superseded.
+> Shared DropPod presentation. Future production context-action UI may host both panels. TEMP HUD is retired. Pre-pivot Production/Construction/BuildMenu VMs superseded.
 
 Rules:
 
@@ -314,7 +314,7 @@ WBP_GP_HUD (authored child of UGP_HUDRootWidget; operator-local, not committed)
 ```
 
 A fullscreen / modal Order Menu is **not** part of the production HUD. TEMP HUD procurement
-controls remain scaffolding. Native production HUD root class is `UGP_HUDRootWidget : UGP_UserWidgetBase`.
+is retired; future production context-action UI will call existing PlayerController gameplay request APIs. Native production HUD root class is `UGP_HUDRootWidget : UGP_UserWidgetBase`.
 Authored `WBP_GP_HUD` is created at runtime by `UGP_HUDViewModelSubsystem` from
 `UGP_UIPresentationSettings::ProductionHUDWidgetClass` (operator-local asset, not committed).
 The widget is not fully wired; remaining top/bottom fields and actions still need authored

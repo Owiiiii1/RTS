@@ -31,8 +31,6 @@
 #include "Tags/GPGameplayTags.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
-#include "UObject/UObjectIterator.h"
-#include "UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h"
 #include "Units/GPWorker.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPMatchWinLose, Log, All);
@@ -965,43 +963,15 @@ void UGP_MatchWinLoseContractTestRunner::AdvanceStage()
 		ScheduleNext(0.05f);
 		break;
 	}
-	case 13: // O HUD seams readable from replicated facts
+	case 13: // O match result readable from replicated GameState facts
 	{
-		UGP_TEMP_S28P_PlanetaryFerroniteHUD* HUD = nullptr;
-		for (TObjectIterator<UGP_TEMP_S28P_PlanetaryFerroniteHUD> It; It; ++It)
-		{
-			if (It->GetWorld() == World)
-			{
-				HUD = *It;
-				break;
-			}
-		}
-		if (HUD == nullptr)
-		{
-			HUD = CreateWidget<UGP_TEMP_S28P_PlanetaryFerroniteHUD>(World, UGP_TEMP_S28P_PlanetaryFerroniteHUD::StaticClass());
-			if (HUD != nullptr)
-			{
-				HUD->AddToViewport(0);
-			}
-		}
-		if (!Expect(HUD != nullptr, TEXT("O_HUDPresent")))
-		{
-			Finish();
-			return;
-		}
-
-		const float LocalScore = TeamBStateWeak.IsValid() && TeamBStateWeak->GetPlayerAttributeSet()
+		const float LocalScore = TeamBStateWeak.IsValid() && TeamBStateWeak->GetPlayerAttributeSet() != nullptr
 			? TeamBStateWeak->GetPlayerAttributeSet()->GetFerroniteScore()
 			: 0.0f;
-		HUD->SetMatchPlayingDisplay(GS->GetMatchTimeRemaining(), LocalScore, GS->GetDeliveryQuotaFerroniteScore());
-		HUD->SetMatchFinishedDisplay(true, GS->GetWinReasonTag(), GS->GetWinnerTeamId());
-		const FString Status = HUD->GetMatchStatusTextForContract();
-		Expect(Status.Contains(TEXT("SCORE")), TEXT("O_StatusHasScore"));
-		Expect(Status.Contains(TEXT("5000")), TEXT("O_StatusHasQuota"));
-		Expect(HUD->GetMatchResultTitleForContract() == TEXT("VICTORY"), TEXT("O_VictoryTitle"));
-		Expect(HUD->GetMatchResultReasonForContract() == TEXT("Annihilation"), TEXT("O_ReasonLabel"));
-		Expect(HUD->GetDisplayedWinnerTeamIdForContract() == GPMatchWinLoseDebug::TeamB, TEXT("O_WinnerTeamFromGS"));
-		Expect(HUD->IsMatchResultVisibleForContract(), TEXT("O_ResultVisible"));
+		Expect(GS->GetDeliveryQuotaFerroniteScore() >= 5000.0f - KINDA_SMALL_NUMBER, TEXT("O_QuotaFromGS"));
+		Expect(GS->GetWinnerTeamId() == GPMatchWinLoseDebug::TeamB, TEXT("O_WinnerTeamFromGS"));
+		Expect(GS->GetWinReasonTag() == Tags.Match_WinReason_Annihilation, TEXT("O_ReasonFromGS"));
+		Expect(LocalScore >= 0.0f, TEXT("O_LocalScoreReadable"));
 		Expect(GS->GetWinnerTeamId() == GPMatchWinLoseDebug::TeamB, TEXT("O_NoClientWinCalc"));
 		Finish();
 		break;

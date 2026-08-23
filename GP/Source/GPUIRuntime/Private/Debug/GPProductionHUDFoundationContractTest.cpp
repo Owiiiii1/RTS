@@ -7,7 +7,6 @@
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "Player/GPPlayerController.h"
-#include "UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h"
 #include "ViewModels/GPHUDViewModelSubsystem.h"
 #include "ViewModels/GPMatchViewModel.h"
 #include "ViewModels/GPResourceViewModel.h"
@@ -164,10 +163,11 @@ namespace GPProductionHUDFoundationContractPrivate
 		Expect(UGP_UserWidgetBase::StaticClass()->IsChildOf(UCommonUserWidget::StaticClass())
 			&& UGP_HUDRootWidget::StaticClass()->IsChildOf(UGP_UserWidgetBase::StaticClass()),
 			TEXT("J_ProjectCommonUIWidgetBases"));
-		Expect(UGP_TEMP_S28P_PlanetaryFerroniteHUD::StaticClass() != nullptr
-			&& !UGP_HUDRootWidget::StaticClass()->IsChildOf(
-				UGP_TEMP_S28P_PlanetaryFerroniteHUD::StaticClass()),
-			TEXT("K_TEMP_HUDPreservedAndNotReplaced"));
+		const UClass* RetiredTempHUDClass = FindObject<UClass>(
+			nullptr, TEXT("/Script/GPRuntime.GP_TEMP_S28P_PlanetaryFerroniteHUD"));
+		Expect(RetiredTempHUDClass == nullptr
+			&& AGP_PlayerController::StaticClass()->FindPropertyByName(TEXT("PlanetaryFerroniteHUD")) == nullptr,
+			TEXT("K_TEMPHUDRetiredNotOwnedByPlayerController"));
 		Expect(UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetAbilitySystemComponent")) == nullptr
 			&& UGP_UserWidgetBase::StaticClass()->FindFunctionByName(TEXT("GetPlayerState")) == nullptr,
 			TEXT("L_WidgetBasesExposeNoGameplayQueryContract"));

@@ -18,12 +18,10 @@ class UGP_CommandComponent;
 class UGP_FogOfWarComponent;
 class UGP_LocalFoWComponent;
 class UGP_MarqueeSelectionWidget;
-class UGP_TEMP_S28P_PlanetaryFerroniteHUD;
 class UGP_SelectionComponent;
 class AGP_MainBase;
 class AGP_GameState;
 class AGP_PlayerState;
-class UGP_StorageComponent;
 class UInputAction;
 class UInputMappingContext;
 class UEnhancedInputComponent;
@@ -68,13 +66,13 @@ public:
 	void Server_RequestCommand(const FGP_CommandRequest& Request);
 
 	/**
-	 * Local TEMP HUD Launch Container intent (GP-S30).
+	 * Local launch-container gameplay intent (GP-S30).
 	 * Client calls Server_RequestLaunchReadyContainer — does not mutate Storage locally.
 	 */
 	void RequestLaunchReadyContainer();
 
 	/**
-	 * Local TEMP HUD Unit Drop intent (GP-S31R).
+	 * Local unit-drop gameplay intent (GP-S31R).
 	 * Client submits counts only — server resolves classes/costs/slots.
 	 */
 	void RequestUnitDrop(const FGP_UnitDropManifest& Manifest);
@@ -88,7 +86,7 @@ public:
 	/** Authority helper used by Server RPC and non-shipping contracts. */
 	bool AuthorityTryRequestUnitDrop(const FGP_UnitDropManifest& Manifest);
 
-	/** Local TEMP HUD Building Purchase intent (GP-S35B). Enum overload is compatibility glue. */
+	/** Local building-purchase gameplay intent (GP-S35B). Enum overload is compatibility glue. */
 	void RequestBuildingPurchase(FPrimaryAssetId DropDefinitionId);
 	void RequestBuildingPurchase(EGP_OrbitalBuildingType BuildingType);
 
@@ -238,45 +236,6 @@ private:
 	void HideMarqueeWidget();
 	void DestroyMarqueeWidget();
 
-	/** TEMP_S28P_HUD — Planetary + Orbital Ferronite + Launch (GP-S28P4 / GP-S30). Local-only, event-driven. */
-	void EnsurePlanetaryFerroniteHUD();
-	void DestroyPlanetaryFerroniteHUD();
-	void RefreshPlanetaryFerroniteHUDBinding();
-	void ClearPlanetaryFerroniteHUDBindings();
-	void BindPlanetaryFerroniteStorage(AGP_MainBase* MainBase);
-	void UnbindPlanetaryFerroniteStorage();
-	void SyncPlanetaryFerroniteHUDFromStorage();
-	void SyncLaunchButtonFromStorage();
-	void BindOrbitalFerroniteAttribute();
-	void UnbindOrbitalFerroniteAttribute();
-	void SyncOrbitalFerroniteHUDFromAttributes();
-	void SyncBuildingReadyHUDFromInventory();
-	void BindWallInventoryEvents(AGP_MainBase* MainBase);
-	void UnbindWallInventoryEvents();
-	void SyncWallPackageHUDFromInventory();
-	UFUNCTION()
-	void HandleWallInventoryChangedForHUD(int32 NewCount);
-	UFUNCTION()
-	void HandleWallPackagePendingChangedForHUD(bool bPending);
-	void HandleOrbitalFerroniteAttributeChanged(const struct FOnAttributeChangeData& Data);
-	void HandleMaxUnitsAttributeChanged(const struct FOnAttributeChangeData& Data);
-	void HandleCurrentUnitsAttributeChanged(const struct FOnAttributeChangeData& Data);
-	void HandleFerroniteScoreAttributeChanged(const struct FOnAttributeChangeData& Data);
-	void SyncUnitCapHUDFromAttributes();
-	void SyncMatchHUDFromAuthority();
-	void HandleMatchTimeRemainingChanged(float OldTime, float NewTime);
-	void HandleMatchStateTagChanged(FGameplayTag OldTag, FGameplayTag NewTag);
-	void HandleMatchResultChangedForHUD(
-		int32 OldWinnerTeamId,
-		int32 NewWinnerTeamId,
-		FGameplayTag OldWinReasonTag,
-		FGameplayTag NewWinReasonTag);
-	void HandleBuildingReadyChanged(FPrimaryAssetId DropDefinitionId, int32 NewReadyCount);
-	void HandleResolvedMainBaseChanged(int32 TeamId, AGP_MainBase* PreviousMainBase, AGP_MainBase* NewMainBase);
-	void HandlePlayerTeamIdChanged(int32 OldTeamId, int32 NewTeamId);
-	UFUNCTION()
-	void HandleStorageChangedForHUD(float PreviousTotalStored, float NewTotalStored, float TotalCapacity);
-
 	void UpdatePendingSelectionDrag();
 	void BeginActiveMarquee(const FVector2D& CurrentScreenPosition);
 	void UpdateActiveMarquee(const FVector2D& CurrentScreenPosition);
@@ -300,8 +259,6 @@ private:
 	void CancelBuildingPlacementFromRMB();
 	void UpdateBuildingPlacementInputOwnership();
 	void ClearSelectionForBuildingPlacementEnter();
-	void BindBuildingInventoryEvents();
-	void UnbindBuildingInventoryEvents();
 
 	void BindAuthoritativeFoWUpdates();
 	void UnbindAuthoritativeFoWUpdates();
@@ -401,26 +358,6 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UGP_MarqueeSelectionWidget> MarqueeWidget;
 
-	UPROPERTY(Transient)
-	TObjectPtr<UGP_TEMP_S28P_PlanetaryFerroniteHUD> PlanetaryFerroniteHUD;
-
-	TWeakObjectPtr<AGP_GameState> BoundPlanetaryGameState;
-	TWeakObjectPtr<AGP_PlayerState> BoundPlanetaryPlayerState;
-	TWeakObjectPtr<UGP_StorageComponent> BoundPlanetaryStorage;
-	TWeakObjectPtr<class UGP_WallSegmentInventoryComponent> BoundWallInventory;
-	TWeakObjectPtr<UGP_AbilitySystemComponent> BoundOrbitalASC;
-	FDelegateHandle ResolvedMainBaseChangedHandle;
-	FDelegateHandle PlayerTeamIdChangedHandle;
-	FDelegateHandle OrbitalFerroniteChangedHandle;
-	FDelegateHandle MaxUnitsChangedHandle;
-	FDelegateHandle CurrentUnitsChangedHandle;
-	FDelegateHandle FerroniteScoreChangedHandle;
-	FDelegateHandle BuildingReadyChangedHandle;
-	FDelegateHandle MatchTimeRemainingChangedHandle;
-	FDelegateHandle MatchStateTagChangedHandle;
-	FDelegateHandle MatchResultChangedHandle;
-	int32 BoundPlanetaryTeamId = -1;
-
 	TWeakObjectPtr<UGP_FogOfWarComponent> BoundAuthoritativeFoW;
 	TWeakObjectPtr<AGP_PlayerState> BoundFoWPlayerState;
 	FDelegateHandle AuthoritativeFoWChangedHandle;
@@ -461,7 +398,6 @@ private:
 	static constexpr float SelectionDragThresholdPixels = 8.0f;
 	static constexpr float SelectionTraceDistance = 1000000.0f;
 	static constexpr int32 MarqueeWidgetZOrder = 1000;
-	static constexpr int32 PlanetaryFerroniteHUDZOrder = 900;
 
 	bool bCameraMappingContextAdded = false;
 	bool bCameraInputBindingsInstalled = false;

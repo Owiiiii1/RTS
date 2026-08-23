@@ -1,5 +1,15 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-23 — TEMP HUD retired; production HUD is the active match HUD
+
+Status: **TEMP_HUD_REMOVAL_READY_FOR_OPERATOR_VALIDATION**
+
+- Retired `UGP_TEMP_S28P_PlanetaryFerroniteHUD` and PlayerController TEMP presentation ownership.
+- Production HUD bootstrap unchanged: `UGP_HUDViewModelSubsystem` → configured `ProductionHUDWidgetClass` → `WBP_GP_HUD`.
+- Gameplay request/RPC surfaces remain on `AGP_PlayerController` (launch, unit drop, building purchase/deploy, wall package).
+- No gameplay/economy semantic change. No Content/Config/maps/DataAssets/Tools touched.
+- **NOT MERGED. NOT FINALIZED.**
+
 ## 2026-08-23 — FoW multiplayer local unit visibility finalized
 
 Status: **FOW_MULTIPLAYER_UNIT_PRESENTATION_FIX_FINALIZED_READY_TO_MERGE**

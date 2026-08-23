@@ -6,7 +6,7 @@
 >
 > **Production HUD layout (2026-08-21):** The coarse HUD (resource/score top-right, selection bottom-left, command bar bottom-center, minimap top/bottom-right) is **SUPERSEDED**. Canonical IA: two horizontal bars × three blocks. See [`Claude_Tasks/GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
 >
-> **Production HUD procurement (2026-08-21):** Orbital procurement is **not** a permanent global HUD panel. Canonical visible entry: select MainBase → **PURCHASE** in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE. A global `O` Order Menu is **SUPERSEDED** as the production HUD path. TEMP HUD debug procurement may remain as temporary scaffolding. Backend authority unchanged.
+> **Production HUD procurement (2026-08-21):** Orbital procurement is **not** a permanent global HUD panel. Canonical visible entry: select MainBase → **PURCHASE** in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE. A global `O` Order Menu is **SUPERSEDED** as the production HUD path. TEMP HUD is retired. Future production context-action UI will call existing PlayerController gameplay request APIs. Backend authority unchanged.
 
 ## MVP UI Surface
 
@@ -97,7 +97,7 @@ UX/balance tuning may revisit the presentation scale.
   DEFENSE inside the same panel. Bottom-center stays on MainBase info.
 - BUILDINGS / Defensive Turret LAUNCH = existing Purchase → READY → immediately enter deploy ghost.
   Wall Package LAUNCH = existing Buy Wall Package (no READY, no placement mode).
-- TEMP HUD procurement controls remain temporary scaffolding.
+- TEMP HUD is retired. Future production context-action UI will call existing PlayerController gameplay request APIs.
 
 **Visual prototype:** medium/dark grey major blocks, lighter grey inner cells, thin borders,
 modest rounding, stronger contrast for selected/hover. No final art, textures, or icons required.

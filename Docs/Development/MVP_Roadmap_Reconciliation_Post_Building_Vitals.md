@@ -14,7 +14,7 @@ ResourceVM exposes exact `PlanetFerronite` from local MainBase `UGP_StorageCompo
 It is not a second currency and is not reconstructed from Threat. Operator-validated:
 `PB_Threat` binds normalized threat; `TXT_PlanetFerroniteValue` binds `PlanetFerronite` through
 To Text (Float) and updates when Workers deposit Ferronite. `WBP_GP_HUD` remains operator-local
-and uncommitted. Visible HUD is still only partially wired. TEMP HUD remains active. **NOT MERGED.**
+and uncommitted. Visible HUD is still only partially wired. TEMP HUD is retired. Production HUD is the active match HUD. **NOT MERGED.**
 
 ## 1. Why reconciliation is required
 
@@ -115,10 +115,10 @@ current execution order.
 
 | Capability | Status | Factual evidence / boundary |
 | --- | --- | --- |
-| TEMP gameplay HUD | **DONE (temporary)** | `UGP_TEMP_S28P_PlanetaryFerroniteHUD` exposes resources, launch, catalogs/READY, cap, timer, result, and Wall Package state. |
+| TEMP gameplay HUD | **RETIRED** | `UGP_TEMP_S28P_PlanetaryFerroniteHUD` deleted. Production HUD is the active match HUD. PlayerController gameplay request APIs remain. |
 | CommonUI/MVVM prerequisites | **DONE — FOUNDATION** | Plugins/dependencies plus project-owned activatable and non-activatable widget bases, HUD root base, FoW/Resource/Match VMs, and push adapters exist in `GPUIRuntime`. |
-| Production HUD | **PARTIAL — DATA FOUNDATION + VIEWMODEL BRIDGE + RUNTIME BOOTSTRAP + THREAT NORMALIZED + PLANET FERRONITE** | Data foundation and HUD bootstrap on `main`. MatchVM exposes presentation-only `FerroniteThreatNormalized` = Clamp(threat / (MainBase `GetTotalCapacity()` × `GetThreatPerStoredUnit()`), 0, 1). ResourceVM exposes exact `PlanetFerronite` = local MainBase `UGP_StorageComponent::GetTotalStored()`. Not a second currency; not reconstructed from Threat. Event-driven via `OnResolvedMainBaseChanged` + `OnStorageChanged`. Operator-validated: `PB_Threat.Percent` bound to `FerroniteThreatNormalized`; `TXT_PlanetFerroniteValue` bound to `PlanetFerronite` through To Text (Float) and updates on Worker deposit. `WBP_GP_HUD` / `ThreatToColor` uncommitted. Remaining HUD fields/actions, SelectionVM, Context Action Grid, MainBase PURCHASE UI, minimap, Patrol, notifications, and production end-of-match remain unimplemented. TEMP HUD remains active. |
-| Production Order Menu | **SUPERSEDED AS HUD PATH — UI NOT STARTED** | Canonical production entry is MainBase PURCHASE inside the Context Action Grid. Purchases remain usable through TEMP HUD only. Backend unit/building/Wall Package flows exist. |
+| Production HUD | **PARTIAL — DATA FOUNDATION + VIEWMODEL BRIDGE + RUNTIME BOOTSTRAP + THREAT NORMALIZED + PLANET FERRONITE** | Data foundation and HUD bootstrap on `main`. MatchVM exposes presentation-only `FerroniteThreatNormalized` = Clamp(threat / (MainBase `GetTotalCapacity()` × `GetThreatPerStoredUnit()`), 0, 1). ResourceVM exposes exact `PlanetFerronite` = local MainBase `UGP_StorageComponent::GetTotalStored()`. Not a second currency; not reconstructed from Threat. Event-driven via `OnResolvedMainBaseChanged` + `OnStorageChanged`. Operator-validated: `PB_Threat.Percent` bound to `FerroniteThreatNormalized`; `TXT_PlanetFerroniteValue` bound to `PlanetFerronite` through To Text (Float) and updates on Worker deposit. `WBP_GP_HUD` / `ThreatToColor` uncommitted. Remaining HUD fields/actions, SelectionVM, Context Action Grid, MainBase PURCHASE UI, minimap, Patrol, notifications, and production end-of-match remain unimplemented. TEMP HUD is retired. Production HUD is the active match HUD. |
+| Production Order Menu | **SUPERSEDED AS HUD PATH — UI NOT STARTED** | Canonical production entry is MainBase PURCHASE inside the Context Action Grid. Future production PURCHASE UI will call existing PlayerController gameplay request APIs. TEMP HUD is retired. Backend unit/building/Wall Package flows exist. |
 | Minimap | **NOT STARTED** | No minimap subsystem/VM/widget production code. |
 | Notifications | **NOT STARTED** | No notification VM/stack or authority-to-client notification pipeline. |
 | Feedback/VFX foundation | **PARTIAL** | Combat presentation multicast, team colors, health bars, primitive visuals, and placement feedback exist; planned bundle/pool/damage-flash pass is incomplete. |
@@ -183,7 +183,7 @@ Defend using the same economy and authority rules as a player. It is not SWARM.
 | Timer winner/tie-break | **DONE** | FerroniteScore, OrbitalFerronite, CurrentUnits, deterministic seed ladder. |
 | MainBase annihilation | **DONE** | Authority MainBase death can finish match with Annihilation reason. |
 | `FinishMatch` / `FGP_MatchResult` | **DONE** | Authority result creation and replicated result state. |
-| Temporary result presentation | **DONE (temporary)** | TEMP HUD shows winner/reason. |
+| Temporary result presentation | **RETIRED (TEMP HUD)** | TEMP HUD retired. Match result state remains on GameState. Production end screen still remaining. |
 | Production end screen / return flow | **NOT STARTED** | No CommonUI EndOfMatch screen or return-to-menu/session cleanup. |
 | Opponent disconnect result | **NOT STARTED** | Tag exists; GameMode explicitly logs it as deferred. |
 | Full match start-to-return completion | **PARTIAL** | Core timer/result mechanics work, but menus, sessions, AI, SWARM, FoW, production UI, and return flow prevent the canonical end-to-end story. |
@@ -360,7 +360,7 @@ After SWARM implementation:
 | S46A | Sell/Demolish **REMAINING**. |
 | S47 | CommonUI/MVVM prerequisites and first project activatable/ViewModel base **DONE — FOUNDATION**; full production HUD remains. |
 | S48 | FoW authority, trusted client mirror/MVVM, and world overlay **DONE / MERGED**; relevance/last-known remain. Voxel-surface FoW adaptation is Terrain stage 3E. |
-| S49-S53 | Resource/Match VMs, adapters, local-player ownership, widget/HUD-root bases **DONE — FOUNDATION**; authored HUD/minimap/MainBase PURCHASE panel and remaining panel VMs **REMAINING**. Global Order Menu is superseded as the production HUD path. TEMP HUD remains active. |
+| S49-S53 | Resource/Match VMs, adapters, local-player ownership, widget/HUD-root bases **DONE — FOUNDATION**; authored HUD/minimap/MainBase PURCHASE panel and remaining panel VMs **REMAINING**. Global Order Menu is superseded as the production HUD path. TEMP HUD is retired. Production HUD is the active match HUD. |
 | S54-S56 | RTS AI Opponent **REMAINING** and distinct from SWARM. |
 | S57-S60 | Feedback pass **PARTIAL**; implement only MVP-readable gaps. |
 | S61-S64 | Steam sessions/lobby/travel/menu **REMAINING**. |
@@ -377,7 +377,7 @@ underlying raw stored Ferronite that drives threat; not a second currency; not r
 from Threat. Event-driven via MainBase resolve + storage change. Operator-validated:
 `TXT_PlanetFerroniteValue` binds `GP_ResourceViewModel.PlanetFerronite` through To Text (Float)
 and updates when Workers deposit Ferronite. Authored `WBP_GP_HUD` remains operator-local.
-TEMP HUD remains.
+TEMP HUD is retired. Production HUD is the active match HUD.
 
 Status: `HUD_PLANET_FERRONITE_FINALIZED_READY_TO_MERGE`. **NOT MERGED.**
 

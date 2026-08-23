@@ -2,108 +2,130 @@
 
 ## Status
 
-**WORKER_COMMAND_INTENT_READY_FOR_OPERATOR_VALIDATION**
+**WORKER_COMMAND_INTENT_FINALIZED_READY_TO_MERGE**
 
-**NOT MERGED.**
+Operator PASS received. Tech-lead pre-finalization SHAs verified. Gameplay semantics were not changed during finalization.
+
+## Operator PASS
+
+Operator confirmed in PIE that the new Worker mining/haul command-intent semantics work correctly:
+
+- explicit Mine on a ResourceNode is a mining cycle (including cargo-already-full)
+- explicit friendly MainBase is a one-shot deposit and does not restore the old Mine
+- explicit Move / Stop / Mine replace WaitingForDropOff without stale haul resurrection
 
 ## Branch / base / head
 
 - Branch: `fix/gp-worker-command-intent`
 - Base: `origin/main` @ `aa84960c57bb4ee4180de80e44a49caece413549`
-- Head: `bd2f0af1b6db4bcaf7c781bcb22bb3858c1ff611` (implementation; report-only follow-up may sit on top)
+- Implementation commit: `bd2f0af1b6db4bcaf7c781bcb22bb3858c1ff611`
+- Pre-finalization head (tech-lead check): `91616b8318217ab01b7e52706a66eb0a57b0085d`
+- Finalization head: recorded in the commit that lands this report
+- Ahead of `origin/main`: implementation + report + test-harness isolation
+- Behind `origin/main`: **0**
 
-## Established factual root cause
+## Factual root cause
 
-Worker command intent was not a single ownership SoT. Mining-cycle assignment, automatic haul, and player Move/Base/Stop were mixed across:
+Worker command intent was split across multiple SoTs instead of one unambiguous assignment:
 
 1. Held command (`Command_Mine` + `TargetActor` = ResourceNode, or `Command_Move` with `TargetActor` forced null)
 2. Executor `MineTarget` / `LastMineDepositForHaul`
 3. Haul `LastHaulDeposit` + `bShouldReturnToDepositAfterHaul` + haul serial
 4. MiningComponent current node (occupancy/execution only)
 
-Two concrete bugs followed from that split:
+Two concrete gameplay defects followed:
 
-1. **Explicit `Mine(ResourceNode)` while cargo was already full was rejected** (`MineRejected Reason=CargoFull`) unless a haul chain for that deposit was already active. Valid explicit Mine therefore could not assign the node and enter the haul/deposit phase.
-2. **Explicit click on friendly MainBase was not a deposit command.** Smart-command + Move validation stripped `TargetActor` to null, so the Worker received a ground Move. Cargo was never deposited, and any previous Mine held/return-to-deposit state could survive incorrectly depending on replacement cleanup.
+1. **Explicit `Mine(ResourceNode)` while cargo was already full was rejected** (`MineRejected Reason=CargoFull`) unless a haul chain for that deposit was already active. A valid explicit Mine could not assign the node and enter haul/deposit.
+2. **Explicit click on friendly MainBase was not a deposit command.** Smart-command + Move validation stripped `TargetActor` to null, so the Worker received a ground Move. Cargo was never deposited; previous Mine/return-to-deposit state could survive incorrectly.
 
-`WaitingForDropOff` replacement (Move/Stop/Mine) already reset haul/wait via `ResetMineExecutorForReplacement` → `ResetHaulExecutor` (storage/register/retry unbind + serial zero). The remaining hole was Mine-full-cargo reject and Base-as-Move, not a missing unbind in Stop/Move.
+`WaitingForDropOff` replacement already reset haul/wait via `ResetMineExecutorForReplacement` → `ResetHaulExecutor`. The remaining hole was Mine-full-cargo reject and Base-as-Move.
 
-## Previous state ownership
+## Final Worker semantics
 
-| Concern | Previous SoT |
-| --- | --- |
-| Player Mine assignment | Held `Command_Mine` + `TargetActor` |
-| Cycle return-to-node | `bShouldReturnToDepositAfterHaul` + `LastHaulDeposit` + held Mine serial match |
-| Auto-reassign after haul | Held Mine serial match even without return flag |
-| Explicit Base | Not represented; friendly MainBase → Move with null target |
-| Full-cargo explicit Mine | Rejected before accept |
-| Drop-off wait | `HaulState == WaitingForDropOff` + `ActiveHaulSerial`; wake/retry required that pair |
+No new gameplay tag. Two intents are distinguished by held command.
 
-## New intent / ownership semantics
+### Mining cycle — explicit `Mine(ResourceNode)`
 
-No new gameplay tag. Two intents are distinguished by held command:
+- Always accepted for a valid node. CargoFull is **not** a reject.
+- Held Mine + `MineTarget` / `LastMineDepositForHaul` / search anchor own the assignment.
+- If cargo has space: approach and mine until full.
+- If cargo is already full: accept, keep/set assignment, start automatic haul with return-to-deposit armed.
+- After successful unload: return to the assigned node and continue mining.
 
-1. **Mining cycle** — explicit `Mine(ResourceNode)`
-   - Always accepted for a valid node (CargoFull is not a reject).
-   - Held Mine + `MineTarget` / `LastMineDepositForHaul` / search anchor own the assignment.
-   - If cargo has space: approach and mine until full.
-   - If cargo is already full: accept, keep/set assignment, `StartHaulReturnToBase(..., bReturnToDeposit=true)` immediately.
-   - After successful unload: return to the assigned node and continue mining.
+### One-shot deposit — explicit `Move` whose `TargetActor` is a friendly `AGP_MainBase`
 
-2. **One-shot deposit** — explicit `Move` whose `TargetActor` is a friendly `AGP_MainBase`
-   - Smart-command and server validate keep that `TargetActor`.
-   - `ResetMineExecutorForReplacement` cancels prior mine/haul/wait.
-   - `TryStartOneShotMainBaseDeposit` starts haul with `bReturnToDeposit=false` and the clicked MainBase (no generic `RequestMove`).
-   - After unload (or empty-cargo arrival): held Move matching haul serial is cleared; Worker idles at base. Old Mine is not restored.
+- Smart-command and server validate keep that `TargetActor`.
+- Replacement cancels prior mine/haul/wait.
+- Haul starts with return-to-deposit **false** and the clicked MainBase.
+- After unload (or empty-cargo arrival): matching held Move is cleared; Worker idles at base. Old Mine is not restored.
 
-Generic Move (null target) and Stop still fully replace orchestration. Stale wait/haul callbacks cannot resume because serial/state are zeroed and wake handlers require `WaitingForDropOff && ActiveHaulSerial != 0`.
+Generic Move (null target) and Stop still fully replace orchestration. Stale wait/haul callbacks cannot resume: serial/state are zeroed and wake handlers require `WaitingForDropOff && ActiveHaulSerial != 0`.
 
-## Exact changed files
+## Exact changed files (branch vs `origin/main`)
+
+Gameplay / dispatch:
 
 - `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
 - `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
 - `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
+
+Contracts:
+
 - `GP/Source/GPRuntime/Public/Units/GPWorker.h` (contract runner UCLASS only)
 - `GP/Source/GPRuntime/Private/Debug/GPWorkerCommandIntentContractTest.cpp` (new)
-- `GP/Source/GPRuntime/Private/Debug/GPMineReassignmentHaulContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPMineReassignmentHaulContractTest.cpp` (full-cargo explicit Mine now expects accept)
+- `GP/Source/GPRuntime/Private/Debug/GPContractTestCoordinator.cpp` (finalization: neutralize authored combat `AGP_Unit` the same way arena turrets already were)
+
+Docs:
+
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Cleanup timers / delegates / callbacks
-
-Replacement (Stop / Move / Mine / one-shot Base) still goes through `ResetMineExecutorForReplacement` → `ResetHaulExecutor` / `ClearDropOffSubscriptionsAndTimer`:
-
-- MainBase register/unregister drop-off wakes
-- storage-changed drop-off wake
-- drop-off safety retry timer
-- pending next-tick haul resume serial/deposit/return flag
-- mining-state delegate unbind + StopMining
-- resource-registry wait-for-resource unbind
-- pending movement ownership (replaced by new serial or StopMove)
-- `ActiveMineSerial` / `ActiveHaulSerial` / `MineTarget` / `LastHaulDeposit` / `HaulMainBase` / `bShouldReturnToDepositAfterHaul`
-
-`FinishHaulChain` now also clears a matching held **Move** (one-shot deposit) so leftover Move cannot resurrect work. Matching held Mine is still cleared only when the haul chain is allowed to clear held.
-
-Wake/retry paths still no-op unless `HaulState == WaitingForDropOff` and `ActiveHaulSerial != 0`.
-
-## Contracts and results
+## Focused contract results (post-finalization, `L_PrototypeArena` `-game -unattended`)
 
 | Command | Result |
 | --- | --- |
-| `gp.Worker.RunCommandIntentContractTest` | **Complete Failures=0 Cancelled=None** (A–E: full-cargo Mine accept+return A; explicit Base breaks cycle; wait+Move no resurrect; wait+Mine B returns to B; Stop clears latent) |
-| `gp.Resource.RunMineReassignmentHaulContractTest` | **Complete Failures=0 Cancelled=None** (stage 8 updated: full-cargo explicit Mine is accepted and starts cycle haul) |
+| `gp.Worker.RunCommandIntentContractTest` | **Complete Failures=0 Cancelled=None** |
+| `gp.Resource.RunMineReassignmentHaulContractTest` | **Complete Failures=0 Cancelled=None** |
 | `gp.Resource.RunDepletionReassignmentContractTest` | **Complete Failures=0 Cancelled=None** |
 | `gp.Resource.RunDropOffResilienceContractTest` | **Complete Failures=0 Cancelled=None** |
 | `gp.Worker.RunContractTest` | **Complete Failures=0** |
-| `gp.Worker.RunHaulingContractTest` | Complete Failures=15 — **not a command-intent regression**. Log shows map `BP_GP_SalvageWalkerLONGRAGE` killed `GP_DiagWorker` mid-haul (`OwnerDied`). First cargo-full haul/drop-off/return case had already **PASS**. Re-run in isolation reproduced walker kill. |
+| `gp.Worker.RunHaulingContractTest` | **Complete Failures=0** after test-harness isolation (see below) |
 
-## GPEditor / UHT
+## `gp.Worker.RunHaulingContractTest`
 
-- `GPEditor Win64 Development` **Succeeded** (UHT processed, GPRuntime linked)
-- `GP Win64 Development` / `GP Win64 Shipping` **not run** (not required before operator PASS)
+Previous operator-gate run failed with Failures=15 because map-authored `BP_GP_SalvageWalkerLONGRAGE` auto-acquired and killed `GP_DiagWorker` mid-haul (`OwnerDied`). First cargo-full haul/drop-off/return assertions had already PASS. This was **not** a command-intent gameplay regression.
 
-## Protected-file check
+Finalization isolation (test harness only, no Content/map, no production combat change):
 
-Diff vs `origin/main` for this slice does **not** include:
+- Existing contract coordinator already set authored **turrets** to `TeamId=-1` and refreshed auto-acquire at `TryAcquire`.
+- The same neutralize path now also covers authored combat `AGP_Unit` (Salvage Walker) already in the world when a contract acquires the token.
+- Contract-spawned combat actors are created **after** `TryAcquire` and are unaffected.
+- `#if !UE_BUILD_SHIPPING` only.
+
+After that harness change, `gp.Worker.RunHaulingContractTest` completed **Failures=0**. Production Threat / auto-acquire semantics were not altered.
+
+## Builds
+
+| Target | Result |
+| --- | --- |
+| `GPEditor Win64 Development` + UHT | **Succeeded** |
+| `GP Win64 Development` | **Succeeded** (`GP.exe`) |
+| `GP Win64 Shipping` | **Succeeded** (`GP-Win64-Shipping.exe`) |
+
+## Final diff audit vs `origin/main`
+
+- Branch is **not behind** `origin/main` (behind by 0).
+- Committed path set is only C++ / contract / docs listed above.
+- **No** Blueprint/UI authored assets.
+- **No** Content.
+- **No** Config.
+- **No** maps / DataAssets.
+- **No** Tools.
+- **No** generated/binary files in the branch diff.
+
+## Protected-file audit
+
+Local dirty/untracked operator work remains unstaged and was not restored/cleaned/stashed:
 
 - `GP/Config/DefaultEngine.ini`
 - `GP/Config/DefaultGame.ini`
@@ -117,21 +139,10 @@ Diff vs `origin/main` for this slice does **not** include:
 - `Tools/`
 - WBP_GP_HUD / WBP_GP_LaunchContainerRow
 - operator-authored unit/building Blueprints/DataAssets
+- `GP/GP.uproject` (local dirty; not committed)
 
-Those remain local dirty/untracked and were not staged.
-
-## Operator test now required
-
-PIE on `L_PrototypeArena` (or equivalent navigable map), authority Worker:
-
-1. **Full cargo + explicit Mine on node A** — command accepted (no CargoFull reject); Worker hauls; after unload returns to A and continues mining.
-2. **Mine A / auto-haul then explicit click on friendly MainBase** — deposits; stays at Base; does **not** return to A; idle until next player command. Empty cargo Base click also ends at Base without restoring Mine.
-3. **Storage full wait + Move X** — waiting cancelled; Move executes; later storage space does **not** resume old haul.
-4. **Storage full wait + Mine B** — accepted despite full cargo; B is the cycle assignment; after unload returns to B not A.
-5. **Wait/haul/mine + Stop** — latent orchestration cleared; no timer/delegate resumes old cycle.
-
-Also confirm mixed selection: combat units clicking MainBase still Move; only Workers one-shot deposit.
+Authored Blueprint / map / material / config work was **not** touched by this slice.
 
 ## Status
 
-**WORKER_COMMAND_INTENT_READY_FOR_OPERATOR_VALIDATION**
+**WORKER_COMMAND_INTENT_FINALIZED_READY_TO_MERGE**

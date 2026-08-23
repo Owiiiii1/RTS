@@ -9,6 +9,8 @@
 #include "EngineUtils.h"
 #include "Orbital/GPBuildingDropCatalog.h"
 #include "Orbital/GPOrbitalUnitDropCatalog.h"
+#include "Units/GPUnit.h"
+#include "Units/GPUnitBase.h"
 #include "Units/GPUnitCommandComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPContractTest, Log, All);
@@ -80,19 +82,27 @@ namespace GPContractTestCoordinator
 		UGP_OrbitalUnitDropCatalog::Get().DebugBeginContractIsolation();
 		UGP_BuildingDropCatalog::Get().DebugBeginContractIsolation();
 
-		// Operator-placed arena turrets must not fire during contracts (headless isolation).
-		for (TActorIterator<AGP_DefensiveTurret> It(World); It; ++It)
+		// Operator-placed arena combat actors must not auto-acquire diagnostic workers.
+		// Production gameplay is unchanged; this is contract-session isolation only.
+		auto NeutralizeAuthoredCombatActor = [](AGP_UnitBase* Actor)
 		{
-			AGP_DefensiveTurret* Turret = *It;
-			if (!IsValid(Turret) || Turret->IsDead())
+			if (!IsValid(Actor) || Actor->IsDead())
 			{
-				continue;
+				return;
 			}
-			Turret->SetTeamId(-1);
-			if (UGP_UnitCommandComponent* Cmd = Turret->GetUnitCommandComponent())
+			Actor->SetTeamId(-1);
+			if (UGP_UnitCommandComponent* Cmd = Actor->GetUnitCommandComponent())
 			{
 				Cmd->RefreshCombatAutoAcquireTimer();
 			}
+		};
+		for (TActorIterator<AGP_DefensiveTurret> It(World); It; ++It)
+		{
+			NeutralizeAuthoredCombatActor(*It);
+		}
+		for (TActorIterator<AGP_Unit> It(World); It; ++It)
+		{
+			NeutralizeAuthoredCombatActor(*It);
 		}
 
 		UE_LOG(LogGPContractTest, Log,

@@ -10,7 +10,7 @@
 
 - Branch: `fix/gp-worker-command-intent`
 - Base: `origin/main` @ `aa84960c57bb4ee4180de80e44a49caece413549`
-- Head: commit SHA recorded after push on this branch
+- Head: `bd2f0af1b6db4bcaf7c781bcb22bb3858c1ff611` (implementation; report-only follow-up may sit on top)
 
 ## Established factual root cause
 

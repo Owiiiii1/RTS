@@ -6,6 +6,7 @@
 #include "Player/GPPlayerController.h"
 #include "ViewModels/GPHUDViewModelSubsystem.h"
 #include "ViewModels/GPLaunchMenuPresenter.h"
+#include "ViewModels/GPSelectionViewModel.h"
 #include "Widgets/GPHUDViewModelBridge.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPHUDRootWidget, Log, All);
@@ -15,10 +16,12 @@ void UGP_HUDRootWidget::NativeConstruct()
 	Super::NativeConstruct();
 	TryAssignOwnedViewModels();
 	BindLaunchMenuPresenter();
+	BindSelectionViewModel();
 }
 
 void UGP_HUDRootWidget::NativeDestruct()
 {
+	UnbindSelectionViewModel();
 	UnbindLaunchMenuPresenter();
 	Super::NativeDestruct();
 }
@@ -116,4 +119,55 @@ void UGP_HUDRootWidget::RequestLaunchReadyContainer()
 	{
 		PlayerController->RequestLaunchReadyContainer();
 	}
+}
+
+void UGP_HUDRootWidget::BindSelectionViewModel()
+{
+	UnbindSelectionViewModel();
+	const UGP_SelectionViewModel* SelectionVM = ResolveSelectionViewModel();
+	UGP_SelectionViewModel* MutableSelectionVM = const_cast<UGP_SelectionViewModel*>(SelectionVM);
+	if (MutableSelectionVM == nullptr)
+	{
+		return;
+	}
+
+	BoundSelectionViewModel = MutableSelectionVM;
+	MutableSelectionVM->OnSelectionPresentationChanged.AddUObject(
+		this, &ThisClass::HandleSelectionPresentationChanged);
+	HandleSelectionPresentationChanged();
+}
+
+void UGP_HUDRootWidget::UnbindSelectionViewModel()
+{
+	if (UGP_SelectionViewModel* SelectionVM = BoundSelectionViewModel.Get())
+	{
+		SelectionVM->OnSelectionPresentationChanged.RemoveAll(this);
+	}
+	BoundSelectionViewModel.Reset();
+}
+
+void UGP_HUDRootWidget::HandleSelectionPresentationChanged()
+{
+	BP_OnSelectionPresentationChanged();
+}
+
+const UGP_SelectionViewModel* UGP_HUDRootWidget::ResolveSelectionViewModel() const
+{
+	if (const UGP_SelectionViewModel* Bound = BoundSelectionViewModel.Get())
+	{
+		return Bound;
+	}
+	const ULocalPlayer* LocalPlayer = GetOwningLocalPlayer();
+	const UGP_HUDViewModelSubsystem* Subsystem =
+		LocalPlayer != nullptr ? LocalPlayer->GetSubsystem<UGP_HUDViewModelSubsystem>() : nullptr;
+	return Subsystem != nullptr ? Subsystem->GetSelectionViewModel() : nullptr;
+}
+
+TArray<FGP_SelectionGroupRow> UGP_HUDRootWidget::GetSelectionGroupRows() const
+{
+	if (const UGP_SelectionViewModel* SelectionVM = ResolveSelectionViewModel())
+	{
+		return SelectionVM->GetGroupRows();
+	}
+	return TArray<FGP_SelectionGroupRow>();
 }

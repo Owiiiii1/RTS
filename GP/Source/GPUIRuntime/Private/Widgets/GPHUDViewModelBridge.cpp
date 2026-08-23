@@ -7,11 +7,13 @@
 #include "ViewModels/GPHUDViewModelSubsystem.h"
 #include "ViewModels/GPMatchViewModel.h"
 #include "ViewModels/GPResourceViewModel.h"
+#include "ViewModels/GPSelectionViewModel.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPHUDViewModelBridge, Log, All);
 
 const FName FGP_HUDViewModelBridge::ResourceViewModelSlotName(TEXT("GP_ResourceViewModel"));
 const FName FGP_HUDViewModelBridge::MatchViewModelSlotName(TEXT("GP_MatchViewModel"));
+const FName FGP_HUDViewModelBridge::SelectionViewModelSlotName(TEXT("GP_SelectionViewModel"));
 
 FGP_HUDViewModelBridgeResult FGP_HUDViewModelBridge::AssignOwnedViewModels(
 	UUserWidget* Widget,
@@ -69,7 +71,8 @@ FGP_HUDViewModelBridgeResult FGP_HUDViewModelBridge::AssignOwnedViewModelsToView
 
 	UGP_ResourceViewModel* ResourceViewModel = Subsystem->GetResourceViewModel();
 	UGP_MatchViewModel* MatchViewModel = Subsystem->GetMatchViewModel();
-	if (ResourceViewModel == nullptr || MatchViewModel == nullptr)
+	UGP_SelectionViewModel* SelectionViewModel = Subsystem->GetSelectionViewModel();
+	if (ResourceViewModel == nullptr && MatchViewModel == nullptr && SelectionViewModel == nullptr)
 	{
 #if !UE_BUILD_SHIPPING
 		UE_LOG(LogGPHUDViewModelBridge, Warning,
@@ -78,21 +81,37 @@ FGP_HUDViewModelBridgeResult FGP_HUDViewModelBridge::AssignOwnedViewModelsToView
 		return Result;
 	}
 
-	Result.bResourceAssigned = View->SetViewModel(ResourceViewModelSlotName, ResourceViewModel);
-	Result.bMatchAssigned = View->SetViewModel(MatchViewModelSlotName, MatchViewModel);
+	if (ResourceViewModel != nullptr)
+	{
+		Result.bResourceAssigned = View->SetViewModel(ResourceViewModelSlotName, ResourceViewModel);
+	}
+	if (MatchViewModel != nullptr)
+	{
+		Result.bMatchAssigned = View->SetViewModel(MatchViewModelSlotName, MatchViewModel);
+	}
+	if (SelectionViewModel != nullptr)
+	{
+		Result.bSelectionAssigned = View->SetViewModel(SelectionViewModelSlotName, SelectionViewModel);
+	}
 
 #if !UE_BUILD_SHIPPING
-	if (!Result.bResourceAssigned)
+	if (ResourceViewModel != nullptr && !Result.bResourceAssigned)
 	{
 		UE_LOG(LogGPHUDViewModelBridge, Warning,
 			TEXT("HUD ViewModel bridge: failed to assign slot '%s'"),
 			*ResourceViewModelSlotName.ToString());
 	}
-	if (!Result.bMatchAssigned)
+	if (MatchViewModel != nullptr && !Result.bMatchAssigned)
 	{
 		UE_LOG(LogGPHUDViewModelBridge, Warning,
 			TEXT("HUD ViewModel bridge: failed to assign slot '%s'"),
 			*MatchViewModelSlotName.ToString());
+	}
+	if (SelectionViewModel != nullptr && !Result.bSelectionAssigned)
+	{
+		UE_LOG(LogGPHUDViewModelBridge, Warning,
+			TEXT("HUD ViewModel bridge: failed to assign slot '%s'"),
+			*SelectionViewModelSlotName.ToString());
 	}
 #endif
 

@@ -3,10 +3,12 @@
 #pragma once
 
 #include "ViewModels/GPLaunchMenuPresenter.h"
+#include "ViewModels/GPSelectionViewModel.h"
 #include "Widgets/GPUserWidgetBase.h"
 #include "GPHUDRootWidget.generated.h"
 
 class UGP_LaunchMenuPresenter;
+class UGP_SelectionViewModel;
 
 /** Native lifetime root for the authored WBP_GP_HUD production HUD. */
 UCLASS(Abstract, Blueprintable)
@@ -30,6 +32,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GP|HUD|LaunchMenu")
 	void RequestLaunchReadyContainer();
 
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|Selection")
+	TArray<FGP_SelectionGroupRow> GetSelectionGroupRows() const;
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
@@ -37,12 +42,20 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "GP|HUD|LaunchMenu")
 	void BP_OnLaunchMenuChanged();
 
+	UFUNCTION(BlueprintImplementableEvent, Category = "GP|HUD|Selection")
+	void BP_OnSelectionPresentationChanged();
+
 private:
 	void TryAssignOwnedViewModels();
 	void BindLaunchMenuPresenter();
 	void UnbindLaunchMenuPresenter();
 	void HandleLaunchMenuPresentationChanged();
 	const UGP_LaunchMenuPresenter* ResolveLaunchMenuPresenter() const;
+	void BindSelectionViewModel();
+	void UnbindSelectionViewModel();
+	void HandleSelectionPresentationChanged();
+	const UGP_SelectionViewModel* ResolveSelectionViewModel() const;
 
 	TWeakObjectPtr<UGP_LaunchMenuPresenter> BoundLaunchMenuPresenter;
+	TWeakObjectPtr<UGP_SelectionViewModel> BoundSelectionViewModel;
 };

@@ -8,6 +8,7 @@
 #include "ViewModels/GPHUDViewModelSubsystem.h"
 #include "ViewModels/GPMatchViewModel.h"
 #include "ViewModels/GPResourceViewModel.h"
+#include "ViewModels/GPSelectionViewModel.h"
 #include "Widgets/GPFoWWorldOverlayWidget.h"
 #include "Widgets/GPHUDRootWidget.h"
 #include "Widgets/GPHUDViewModelBridge.h"
@@ -47,11 +48,13 @@ namespace GPHUDViewModelBridgeContractPrivate
 		};
 
 		Expect(FGP_HUDViewModelBridge::ResourceViewModelSlotName == FName(TEXT("GP_ResourceViewModel"))
-			&& FGP_HUDViewModelBridge::MatchViewModelSlotName == FName(TEXT("GP_MatchViewModel")),
+			&& FGP_HUDViewModelBridge::MatchViewModelSlotName == FName(TEXT("GP_MatchViewModel"))
+			&& FGP_HUDViewModelBridge::SelectionViewModelSlotName == FName(TEXT("GP_SelectionViewModel")),
 			TEXT("A_SlotNamesMatchAuthoredManualEntries"));
 
 		Expect(UGP_HUDRootWidget::StaticClass()->FindPropertyByName(TEXT("ResourceViewModel")) == nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindPropertyByName(TEXT("MatchViewModel")) == nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindPropertyByName(TEXT("SelectionViewModel")) == nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetAbilitySystemComponent")) == nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetPlayerState")) == nullptr,
 			TEXT("B_HUDRootDoesNotOwnOrQueryGameplayVMs"));
@@ -64,14 +67,18 @@ namespace GPHUDViewModelBridgeContractPrivate
 		Expect(Subsystem != nullptr
 			&& Subsystem->GetResourceViewModel() != nullptr
 			&& Subsystem->GetMatchViewModel() != nullptr
+			&& Subsystem->GetSelectionViewModel() != nullptr
 			&& Subsystem->GetResourceViewModel()->GetOuter() == Subsystem
-			&& Subsystem->GetMatchViewModel()->GetOuter() == Subsystem,
-			TEXT("C_SubsystemOwnsResourceAndMatchVMs"));
+			&& Subsystem->GetMatchViewModel()->GetOuter() == Subsystem
+			&& Subsystem->GetSelectionViewModel()->GetOuter() == Subsystem,
+			TEXT("C_SubsystemOwnsResourceMatchAndSelectionVMs"));
 
 		UGP_ResourceViewModel* OwnedResource =
 			Subsystem != nullptr ? Subsystem->GetResourceViewModel() : nullptr;
 		UGP_MatchViewModel* OwnedMatch =
 			Subsystem != nullptr ? Subsystem->GetMatchViewModel() : nullptr;
+		UGP_SelectionViewModel* OwnedSelection =
+			Subsystem != nullptr ? Subsystem->GetSelectionViewModel() : nullptr;
 
 		const FGP_HUDViewModelBridgeResult MissingWidget =
 			FGP_HUDViewModelBridge::AssignOwnedViewModels(nullptr, Subsystem);
@@ -79,9 +86,11 @@ namespace GPHUDViewModelBridgeContractPrivate
 			&& MissingWidget.bHadSubsystem
 			&& !MissingWidget.bResourceAssigned
 			&& !MissingWidget.bMatchAssigned
+			&& !MissingWidget.bSelectionAssigned
 			&& Subsystem != nullptr
 			&& Subsystem->GetResourceViewModel() == OwnedResource
-			&& Subsystem->GetMatchViewModel() == OwnedMatch,
+			&& Subsystem->GetMatchViewModel() == OwnedMatch
+			&& Subsystem->GetSelectionViewModel() == OwnedSelection,
 			TEXT("D_MissingWidgetFailsSafelyWithoutCreatingVMs"));
 
 		const FGP_HUDViewModelBridgeResult MissingSubsystem =
@@ -89,7 +98,8 @@ namespace GPHUDViewModelBridgeContractPrivate
 		Expect(!MissingSubsystem.bHadView
 			&& !MissingSubsystem.bHadSubsystem
 			&& !MissingSubsystem.bResourceAssigned
-			&& !MissingSubsystem.bMatchAssigned,
+			&& !MissingSubsystem.bMatchAssigned
+			&& !MissingSubsystem.bSelectionAssigned,
 			TEXT("E_MissingSubsystemFailsSafely"));
 
 		UGP_FoWWorldOverlayWidget* BareWidget = NewObject<UGP_FoWWorldOverlayWidget>(GetTransientPackage());
@@ -99,9 +109,11 @@ namespace GPHUDViewModelBridgeContractPrivate
 			&& MissingView.bHadSubsystem
 			&& !MissingView.bResourceAssigned
 			&& !MissingView.bMatchAssigned
+			&& !MissingView.bSelectionAssigned
 			&& Subsystem != nullptr
 			&& Subsystem->GetResourceViewModel() == OwnedResource
 			&& Subsystem->GetMatchViewModel() == OwnedMatch
+			&& Subsystem->GetSelectionViewModel() == OwnedSelection
 			&& OwnedResource != nullptr
 			&& OwnedResource->GetOuter() == Subsystem,
 			TEXT("F_MissingMVVMViewFailsSafelyWithoutCreatingVMs"));
@@ -113,23 +125,29 @@ namespace GPHUDViewModelBridgeContractPrivate
 			&& MissingSlots.bHadSubsystem
 			&& !MissingSlots.bResourceAssigned
 			&& !MissingSlots.bMatchAssigned
+			&& !MissingSlots.bSelectionAssigned
 			&& Subsystem != nullptr
 			&& Subsystem->GetResourceViewModel() == OwnedResource
 			&& Subsystem->GetMatchViewModel() == OwnedMatch
+			&& Subsystem->GetSelectionViewModel() == OwnedSelection
 			&& OwnedMatch != nullptr
-			&& OwnedMatch->GetOuter() == Subsystem,
+			&& OwnedMatch->GetOuter() == Subsystem
+			&& OwnedSelection != nullptr
+			&& OwnedSelection->GetOuter() == Subsystem,
 			TEXT("G_UnconstructedViewSetViewModelFailsSafelyUsingExistingInstances"));
 
 		const FGP_HUDViewModelBridgeResult MissingViewPtr =
 			FGP_HUDViewModelBridge::AssignOwnedViewModelsToView(nullptr, Subsystem);
 		Expect(!MissingViewPtr.bHadView
 			&& !MissingViewPtr.bResourceAssigned
+			&& !MissingViewPtr.bSelectionAssigned
 			&& Subsystem != nullptr
 			&& Subsystem->GetResourceViewModel() == OwnedResource,
 			TEXT("H_NullViewHelperFailsSafely"));
 
 		Expect(UGP_HUDRootWidget::StaticClass()->FindPropertyByName(TEXT("BridgeRetryTimer")) == nullptr
-			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetAbilitySystemComponent")) == nullptr,
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetAbilitySystemComponent")) == nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetSelectionGroupRows")) != nullptr,
 			TEXT("I_NoRetryTimerAndNoGameplayQueryOnHUDRoot"));
 
 		UE_LOG(LogGPHUDViewModelBridgeContract, Log,

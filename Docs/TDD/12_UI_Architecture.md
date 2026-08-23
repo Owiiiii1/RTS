@@ -162,9 +162,11 @@ PublicDependencyModuleNames.AddRange(new string[]
   updated in the visible HUD.
 - The TEMP HUD is retired. Production HUD is the active match HUD and remains **PARTIAL**. Native
   right-side Launch Menu presentation exists (`UGP_LaunchMenuPresenter` + HUD-root accessors);
-  authored WBP layout is operator-local. Still not implemented: visible resource/timer HUD
-  completeness, Selection UI, Context Action Grid, MainBase PURCHASE panel, minimap function,
-  notifications, and production end-of-match screen.
+  native Selection presentation exists (`UGP_SelectionViewModel` + `UGP_SelectionViewModelAdapter`
+  owned by `UGP_HUDViewModelSubsystem`; HUD-root group accessor / `BP_OnSelectionPresentationChanged`).
+  Authored WBP layout is operator-local. Still not implemented: authored Selection/Info bindings in
+  `WBP_GP_HUD`, Context Action Grid, MainBase PURCHASE panel, minimap function, notifications, and
+  production end-of-match screen. Selection HUD visuals are not complete until operator MVVM wiring.
   Operator-validated runtime visibility of authored `WBP_GP_HUD` (local, not committed).
   Operator-validated: `GP_ResourceViewModel.PlanetFerronite` → To Text (Float) →
   `TXT_PlanetFerroniteValue.Text` updates live when Workers deposit Ferronite.
@@ -181,7 +183,7 @@ PublicDependencyModuleNames.AddRange(new string[]
 Server-authoritative state                 Replication                ViewModel             Widget (View)
 ────────────────────────────               ──────────────             ─────────             ─────────────
 UGP_PlayerAttributeSet.OrbitalFerronite ─► GAS attribute repl   ─►   UGP_ResourceViewModel ◄─  future resource widget
-UGP_SelectionComponent (local)       ─►    OnSelectionChanged    ─►   UGP_SelectionVM      ◄─►  future Selection/Info + Action Grid
+UGP_SelectionComponent (local)       ─►    OnSelectionChanged    ─►   UGP_SelectionViewModel ◄─►  authored Selection/Info (operator WBP)
 AGP_GameState.MatchTimeRemaining     ─►    RepNotify/delegate    ─►   UGP_MatchViewModel    ◄─  future match widget
 UGP_OrbitalDeliverySubsystem.Catalog ─►    OnRep / delegate      ─►   future procurement VM  ◄─►  MainBase PURCHASE panel (bottom-right)
 ```
@@ -193,8 +195,8 @@ UGP_OrbitalDeliverySubsystem.Catalog ─►    OnRep / delegate      ─►   fu
 
 Rules:
 
-1. **VM populated by VM-owner adapter in local-player presentation lifetime.** Production Resource/Match
-   VMs and adapters are owned by `UGP_HUDViewModelSubsystem`; specialized FoW presentation retains its
+1. **VM populated by VM-owner adapter in local-player presentation lifetime.** Production Resource/Match/
+   Selection VMs and adapters are owned by `UGP_HUDViewModelSubsystem`; specialized FoW presentation retains its
    existing ownership. Each adapter:
    - Subscribes до replicated state / attribute / delegate.
    - Translates state → VM `Set*` methods (broadcasts `OnPropertyChanged`).
@@ -211,13 +213,13 @@ Rules:
 | --- | --- | --- | --- |
 | `UGP_ResourceViewModel` | `UGP_PlayerAttributeSet.{OrbitalFerronite, FerroniteScore, MaxUnits, CurrentUnits}` (own + opponent score) plus exact local MainBase `UGP_StorageComponent::GetTotalStored()` as `PlanetFerronite` | `UGP_ResourceViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-right Planet/Orbit/Cap + top-left Score |
 | `UGP_MatchViewModel` | `AGP_GameState.{MatchStateTag, MatchTimeRemaining, TeamFerroniteThreatValues, WinnerTeamId, WinReasonTag, MatchResult.MatchDuration}` plus presentation `FerroniteThreatNormalized` from local MainBase storage | `UGP_MatchViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-center timer + top-left Threat bar |
-| `UGP_SelectionVM` | `UGP_SelectionComponent.{SelectedUnits, InspectedTarget}` (local PC) — **not implemented** | Future adapter | Future bottom-center Selection/Info + bottom-right Context Action Grid |
+| `UGP_SelectionViewModel` | `UGP_SelectionComponent.{SelectedUnits, InspectedTarget}` (local PC) plus GAS health/max-health delegates and Worker `UGP_CargoComponent.OnCargoAmountChanged` for single presentation. Native foundation implemented: None/Single/Group, inspect fallback, event-driven vitals/cargo. No icon field (none on `UGP_UnitDefinition`). Authored bottom-center WBP bindings are operator work. | `UGP_SelectionViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future authored bottom-center Selection/Info (`WBP_GP_HUD` Manual slot `GP_SelectionViewModel`). Context Action Grid is not this slice. |
 | `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits`, shuttle slots, READY, Wall stock — **not implemented** | Future adapter | Future MainBase PURCHASE panel (bottom-right). Not a fullscreen Order Menu. |
-| `UGP_CargoVM` | `UGP_CargoComponent.CurrentCargo` of single-selected worker — **not implemented** | Future adapter | Future single-entity Selection/Info |
+| `UGP_CargoVM` | Worker cargo for single presentation is carried on `UGP_SelectionViewModel` (`CargoAmount` / `CargoCapacity` / `CargoNormalized` / `bHasCargo`) via existing `OnCargoAmountChanged`. A separate cargo-only VM is **not implemented**. | Selection adapter (single Worker) | Future single-entity Selection/Info cargo meter |
 | `UGP_NotificationVM` | Local notification queue (PC pushes) — **not implemented** | PC native | Future notification stack |
 | `UGP_MinimapVM` | `UGP_MinimapSubsystem` snapshot — **not implemented** | Subsystem self | Future bottom-left minimap (layout currently reserves a square placeholder only) |
 
-Production Resource/Match VMs are created once by `UGP_HUDViewModelSubsystem` per `ULocalPlayer`.
+Production Resource/Match/Selection VMs are created once by `UGP_HUDViewModelSubsystem` per `ULocalPlayer`.
 Future widgets receive them from that subsystem; no gameplay module type owns a `GPUIRuntime` object.
 
 ### Input Routing — Common UI
@@ -244,7 +246,7 @@ UI код live у `GPUIRuntime`. Per [`01_Module_Architecture`](01_Module_Archit
 1. **UI не власник gameplay state.** Replicated attributes, gameplay tags, RPC results — лише через ViewModels.
 2. **Жодних tick-poll.** ViewModels оновлюються push-based (`OnAttributeChanged`, `RepNotify`, multicast delegates → adapter → VM `Set*`).
 3. **UI не виконує gameplay authority.** Click on button → широка через PC RPC. Widget сам не змінює state, не пише у VM, не виконує gameplay logic.
-4. **Selection — local-only.** Adapter читає `UGP_SelectionComponent` напряму (local PC owns), оновлює `UGP_SelectionVM`.
+4. **Selection — local-only.** `UGP_SelectionViewModelAdapter` читає `UGP_SelectionComponent` напряму (local PC owns), оновлює `UGP_SelectionViewModel`. No world scan, no Tick.
 5. **Cosmetic feedback ≠ gameplay truth.** UI може предіктивно показати pulse decal / sound, але authority — server.
 6. **Widget never queries ASC / Actor state.** Direct reads of attributes, components, transforms — banned. Все через VM.
 7. **Common UI activation stack** для modal screens (EndOfMatch, Pause). Не raw `AddToViewport` для screens.
@@ -369,7 +371,7 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 | Future top-left Threat | `UGP_MatchViewModel.FerroniteThreatNormalized` (bar); raw `FerroniteThreatValue` remains available | Local-team `OnTeamFerroniteThreatValueChanged`, `OnResolvedMainBaseChanged`, MainBase `OnStorageChanged` |
 | Future top-left Score + top-right Orbit/Cap | `UGP_ResourceViewModel.{PlanetFerronite, OrbitalFerronite, FerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates; local MainBase `OnResolvedMainBaseChanged` + `OnStorageChanged` for `PlanetFerronite` |
 | Future top-right Planet Ferronite | `UGP_ResourceViewModel.PlanetFerronite` = local MainBase `GetTotalStored()` | `FindMainBaseForTeamClientSafe` + `OnResolvedMainBaseChanged` + `OnStorageChanged` |
-| Future bottom-center Selection/Info | Future `UGP_SelectionVM` single-entity vs 10×3 group | `UGP_SelectionComponent.OnSelectionChanged` (local) |
+| Future bottom-center Selection/Info | Native `UGP_SelectionViewModel` None/Single/Group (gameplay cap 24). Group rows via `UGP_HUDRootWidget::GetSelectionGroupRows` + `BP_OnSelectionPresentationChanged`. Authored WBP bindings operator-local. | `UGP_SelectionComponent.OnSelectionChanged` (local) + GAS health delegates + Worker cargo delegate |
 | Future bottom-right Context Action Grid | Future selection/command + MainBase procurement presentation | Same selection delegate; Unit vs Building vs PURCHASE states |
 | Future right-side Message Strip | Contextual procurement/action status (shuttle slots, funds, cap, wall stock) | Existing orbital reject/status; not a global toast stack |
 | Future MainBase PURCHASE panel | Future procurement VM (catalog, manifest, READY, Wall stock) | `UGP_OrbitalDeliverySubsystem` + existing Purchase/Confirm/Deploy RPCs |

@@ -11,12 +11,15 @@
 #include "HAL/IConsoleManager.h"
 #include "Player/GPPlayerController.h"
 #include "Player/GPPlayerState.h"
+#include "Player/GPSelectionComponent.h"
 #include "Settings/GPUIPresentationSettings.h"
 #include "ViewModels/GPLaunchMenuPresenter.h"
 #include "ViewModels/GPMatchViewModel.h"
 #include "ViewModels/GPMatchViewModelAdapter.h"
 #include "ViewModels/GPResourceViewModel.h"
 #include "ViewModels/GPResourceViewModelAdapter.h"
+#include "ViewModels/GPSelectionViewModel.h"
+#include "ViewModels/GPSelectionViewModelAdapter.h"
 #include "Widgets/GPHUDRootWidget.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPHUDViewModels, Log, All);
@@ -27,8 +30,10 @@ void UGP_HUDViewModelSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	ResourceViewModel = NewObject<UGP_ResourceViewModel>(this);
 	MatchViewModel = NewObject<UGP_MatchViewModel>(this);
+	SelectionViewModel = NewObject<UGP_SelectionViewModel>(this);
 	ResourceAdapter = NewObject<UGP_ResourceViewModelAdapter>(this);
 	MatchAdapter = NewObject<UGP_MatchViewModelAdapter>(this);
+	SelectionAdapter = NewObject<UGP_SelectionViewModelAdapter>(this);
 	LaunchMenuPresenter = NewObject<UGP_LaunchMenuPresenter>(this);
 
 	if (UWorld* World = GetWorld())
@@ -57,6 +62,10 @@ void UGP_HUDViewModelSubsystem::Deinitialize()
 	if (MatchAdapter != nullptr)
 	{
 		MatchAdapter->Shutdown();
+	}
+	if (SelectionAdapter != nullptr)
+	{
+		SelectionAdapter->Shutdown();
 	}
 	if (LaunchMenuPresenter != nullptr)
 	{
@@ -139,6 +148,7 @@ void UGP_HUDViewModelSubsystem::BindPlayerController(AGP_PlayerController* Playe
 {
 	if (BoundPlayerController.Get() == PlayerController)
 	{
+		BindSelectionAdapter(PlayerController);
 		return;
 	}
 
@@ -150,10 +160,15 @@ void UGP_HUDViewModelSubsystem::BindPlayerController(AGP_PlayerController* Playe
 			PlayerController->OnPlayerStatePresentationReady.AddUObject(
 				this, &ThisClass::HandlePlayerStatePresentationReady);
 	}
+	BindSelectionAdapter(PlayerController);
 }
 
 void UGP_HUDViewModelSubsystem::UnbindPlayerController()
 {
+	if (SelectionAdapter != nullptr)
+	{
+		SelectionAdapter->Shutdown();
+	}
 	if (AGP_PlayerController* PlayerController = BoundPlayerController.Get())
 	{
 		PlayerController->OnPlayerStatePresentationReady.Remove(
@@ -161,6 +176,24 @@ void UGP_HUDViewModelSubsystem::UnbindPlayerController()
 	}
 	PlayerStatePresentationReadyHandle.Reset();
 	BoundPlayerController.Reset();
+}
+
+void UGP_HUDViewModelSubsystem::BindSelectionAdapter(AGP_PlayerController* PlayerController)
+{
+	if (SelectionAdapter == nullptr || SelectionViewModel == nullptr)
+	{
+		return;
+	}
+
+	UGP_SelectionComponent* SelectionComponent =
+		PlayerController != nullptr ? PlayerController->GetSelectionComponent() : nullptr;
+	if (!IsValid(SelectionComponent))
+	{
+		SelectionAdapter->Shutdown();
+		return;
+	}
+
+	SelectionAdapter->Initialize(SelectionViewModel, SelectionComponent);
 }
 
 void UGP_HUDViewModelSubsystem::ResetViewModels()
@@ -438,6 +471,11 @@ int32 UGP_HUDViewModelSubsystem::GetResourceDelegateCount() const
 int32 UGP_HUDViewModelSubsystem::GetMatchDelegateCount() const
 {
 	return MatchAdapter != nullptr ? MatchAdapter->GetBoundDelegateCount() : 0;
+}
+
+int32 UGP_HUDViewModelSubsystem::GetSelectionDelegateCount() const
+{
+	return SelectionAdapter != nullptr ? SelectionAdapter->GetBoundDelegateCount() : 0;
 }
 
 #if !UE_BUILD_SHIPPING

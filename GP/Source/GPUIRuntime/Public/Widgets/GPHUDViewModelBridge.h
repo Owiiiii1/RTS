@@ -15,6 +15,7 @@ struct FGP_HUDViewModelBridgeResult
 	bool bHadSubsystem = false;
 	bool bResourceAssigned = false;
 	bool bMatchAssigned = false;
+	bool bSelectionAssigned = false;
 };
 
 /**
@@ -26,6 +27,7 @@ struct GPUIRUNTIME_API FGP_HUDViewModelBridge
 	/** Authored WBP_GP_HUD Manual MVVM entry names. */
 	static const FName ResourceViewModelSlotName;
 	static const FName MatchViewModelSlotName;
+	static const FName SelectionViewModelSlotName;
 
 	static FGP_HUDViewModelBridgeResult AssignOwnedViewModels(
 		UUserWidget* Widget,

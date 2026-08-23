@@ -18,6 +18,8 @@ class UGP_MatchViewModel;
 class UGP_MatchViewModelAdapter;
 class UGP_ResourceViewModel;
 class UGP_ResourceViewModelAdapter;
+class UGP_SelectionViewModel;
+class UGP_SelectionViewModelAdapter;
 
 /**
  * GPUIRuntime-owned local-player lifetime for production HUD ViewModels, push adapters,
@@ -41,6 +43,9 @@ public:
 	UGP_MatchViewModel* GetMatchViewModel() const { return MatchViewModel; }
 
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|MVVM")
+	UGP_SelectionViewModel* GetSelectionViewModel() const { return SelectionViewModel; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|MVVM")
 	bool IsReady() const { return bReady; }
 
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|MVVM")
@@ -54,6 +59,7 @@ public:
 
 	int32 GetResourceDelegateCount() const;
 	int32 GetMatchDelegateCount() const;
+	int32 GetSelectionDelegateCount() const;
 
 	void EnsureProductionHUD();
 	void TeardownProductionHUD();
@@ -69,6 +75,7 @@ private:
 	void ResetViewModels();
 	void BindPlayerController(AGP_PlayerController* PlayerController);
 	void UnbindPlayerController();
+	void BindSelectionAdapter(AGP_PlayerController* PlayerController);
 	void BindGameState(AGP_GameState* GameState);
 	void UnbindGameState();
 	void RebuildPlayerStateTeamBindings(AGP_GameState* GameState);
@@ -100,6 +107,12 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UGP_MatchViewModelAdapter> MatchAdapter;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGP_SelectionViewModel> SelectionViewModel;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGP_SelectionViewModelAdapter> SelectionAdapter;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UGP_LaunchMenuPresenter> LaunchMenuPresenter;

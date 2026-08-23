@@ -105,6 +105,8 @@ UX/balance tuning may revisit the presentation scale.
   operator-local and is not committed in this slice. Production HUD root is
   `SelfHitTestInvisible`: the root/background does not consume clicks, so Launch and other
   child buttons remain clickable. No global input-mode change.
+  Operator PIE validation **PASSED**: rows, yellow/green fill, Launch enablement, click, and
+  existing launch gameplay all work. Authored WBP layout remains operator-local.
 
 **Visual prototype:** medium/dark grey major blocks, lighter grey inner cells, thin borders,
 modest rounding, stronger contrast for selected/hover. No final art, textures, or icons required.

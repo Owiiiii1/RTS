@@ -354,6 +354,9 @@ Production HUD root visibility is `SelfHitTestInvisible` so empty HUD chrome doe
 pointer hits while `BTN_Launch` and future procurement controls remain clickable. Operator
 found Launch OnClicked dead under `HitTestInvisible`; that was a root hit-test bug, not a
 gameplay launch-path bug. No global input-mode change.
+Operator PIE validation **PASSED** (2026-08-23): TEMP HUD retired; Production HUD active;
+right-side Launch menu rows/fill/colors/enablement/click/launch-gameplay all live-correct.
+Authored `WBP_GP_HUD` / `WBP_GP_LaunchContainerRow` remain operator-local and uncommitted.
 
 ### MVVM Binding Contract
 

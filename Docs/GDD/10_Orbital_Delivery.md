@@ -11,6 +11,11 @@ Planetary Ferronite → containers → launch → Orbital Ferronite
 → orbital procurement → orbital delivery → deployed asset
 ```
 
+Production HUD right-side Launch Menu (operator-validated): Launch button above local MainBase
+container fill bars (yellow while filling, green when Ready/full). Presentation is event-driven
+from local storage. Launch still uses the existing PlayerController request/RPC path. TEMP HUD
+is retired.
+
 **NO:** barracks/factory production, Worker constructing the READY building, local construction queue, local unit production.
 
 Worker **does** later perform local engineering: level terrain, install/repair foundation, construct Walls from delivered stock. That is site preparation / field assembly, not READY-building construction. See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).

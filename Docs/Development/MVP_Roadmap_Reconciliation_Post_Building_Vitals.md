@@ -15,6 +15,9 @@ Native right-side Launch Menu presentation is on `cleanup/gp-remove-temp-hud`:
 `UGP_LaunchMenuPresenter` + HUD-root accessors. Production HUD root is
 `SelfHitTestInvisible` so Launch and other child buttons remain clickable.
 Authored WBP layout remains operator-local.
+Operator PIE validation **PASSED** for TEMP HUD retirement, Production HUD activity, and
+the right-side Launch menu (rows, yellow/green fill, Launch enablement/click, existing
+gameplay launch path). **NOT MERGED.**
 It is not a second currency and is not reconstructed from Threat. Operator-validated:
 `PB_Threat` binds normalized threat; `TXT_PlanetFerroniteValue` binds `PlanetFerronite` through
 To Text (Float) and updates when Workers deposit Ferronite. `WBP_GP_HUD` remains operator-local

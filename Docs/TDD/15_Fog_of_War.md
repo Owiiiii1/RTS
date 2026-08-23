@@ -198,6 +198,9 @@ Enemy world presentation remains a separate temporary local gate, not replicatio
 - actor replication/relevancy is unchanged. This is listen-server/multiplayer presentation
   correctness, not FoW network secrecy or relevancy culling. FoW world visualization is a
   separate overlay path and was not this coupling bug;
+- operator-validated in a 2-player PIE/network session: each client's world overlay stayed
+  independent; Player 2 saw enemies from Player 2 FoW only; Player 1 visibility no longer
+  revealed/hid units for Player 2; own-team units stayed visible;
 - `UGP_HealthBarComponent` composes `owner/death && LocalFoW && damaged-health`: full health (within
   `max(KINDA_SMALL_NUMBER, abs(MaxHealth) * 1e-4)`), zero, and dead are hidden; only damaged living
   actors may show a bar.

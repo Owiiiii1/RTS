@@ -1,5 +1,19 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-23 — FoW multiplayer local unit visibility finalized
+
+Status: **FOW_MULTIPLAYER_UNIT_PRESENTATION_FIX_FINALIZED_READY_TO_MERGE**
+
+- Operator 2-player PIE/network validation **PASSED**: each client's FoW world overlay stayed
+  correct; Player 2 saw enemies from Player 2 FoW only; Player 1 visibility no longer
+  revealed/hid units for Player 2; own-team units stayed visible; enemies hide/show from the
+  observing client's local FoW.
+- Root cause was Actor-level `SetActorHiddenInGame` / replicated `bHidden`. Local FoW now gates
+  visual primitives with component `SetHiddenInGame`. World visualization was already correct.
+  Replication/relevancy unchanged. Presentation correctness, not network secrecy.
+- Focused contracts Failures=0. GPEditor Development + UHT, GP Development, GP Shipping **PASS**.
+- **NOT MERGED.**
+
 ## 2026-08-22 — FoW multiplayer local unit visibility fix
 
 Status: **FOW_MULTIPLAYER_UNIT_PRESENTATION_FIX_READY_FOR_OPERATOR_VALIDATION**

@@ -259,6 +259,53 @@ private:
 
 class AGP_MainBase;
 
+/** Focused Worker Mine-cycle vs one-shot MainBase deposit command-intent contract. */
+UCLASS()
+class GPRUNTIME_API UGP_WorkerCommandIntentContractTestRunner : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	virtual void BeginDestroy() override;
+	void SetExecutionToken(uint64 InExecutionId, FName InOwnerTag)
+	{
+		ExecutionId = InExecutionId;
+		OwnerTag = InOwnerTag;
+	}
+	void Start(UWorld* InWorld);
+
+private:
+	void ScheduleNext(float DelaySeconds = 0.05f);
+	void AdvanceStage();
+	bool Expect(bool bOk, const TCHAR* Label);
+	void Abort(const TCHAR* Reason);
+	void Finish();
+	void OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void UnbindWorldCleanup();
+	void CleanupActors();
+	bool WaitUntil(bool bDone, const TCHAR* TimeoutLabel, float TimeoutSeconds = 45.0f);
+
+	int32 StageIndex = 0;
+	int32 Failures = 0;
+	bool bFinished = false;
+	FDelegateHandle WorldCleanupHandle;
+	FTimerHandle StageTimerHandle;
+	TWeakObjectPtr<UWorld> WorldWeak;
+	TWeakObjectPtr<AGP_Worker> WorkerWeak;
+	TWeakObjectPtr<AGP_MainBase> MainBaseWeak;
+	TWeakObjectPtr<AGP_ResourceNode> NodeAWeak;
+	TWeakObjectPtr<AGP_ResourceNode> NodeBWeak;
+	FVector BaseDropOffLocation = FVector::ZeroVector;
+	FVector NodeALocation = FVector::ZeroVector;
+	int32 ContractTeamId = 1;
+	int32 WaitTicks = 0;
+	double WaitStartTime = -1.0;
+	uint64 ExecutionId = 0;
+	FName OwnerTag;
+	bool bCancelled = false;
+	FName CancelReason;
+};
+
 /** Staged Worker hauling contract test runner (GP-S28 debug console). */
 UCLASS()
 class GPRUNTIME_API UGP_WorkerHaulingContractTestRunner : public UObject

@@ -858,37 +858,39 @@ void UGP_MineReassignmentHaulContractTestRunner::AdvanceStage()
 	}
 	case 8:
 	{
-		// Manual Mine while already CargoFull must remain rejected and must not start haul.
+		// Explicit Mine while CargoFull is accepted and starts a mining-cycle haul back to NodeA.
 		AGP_Worker* Worker = WorkerWeak.Get();
 		AGP_ResourceNode* NodeA = NodeAWeak.Get();
 		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
 		UGP_CargoComponent* Cargo = IsValid(Worker) ? Worker->GetCargoComponent() : nullptr;
-		if (!Expect(IsValid(Worker) && IsValid(NodeA) && Cmd && Cargo, TEXT("RejectObjects")))
+		if (!Expect(IsValid(Worker) && IsValid(NodeA) && Cmd && Cargo, TEXT("FullCargoMineObjects")))
 		{
 			Finish();
 			return;
 		}
 
 		const bool bIdleEnough = !HaulActiveTowardBase(Cmd);
-		if (WaitCondition(bIdleEnough, TEXT("WaitHaulIdleBeforeRejectTest")))
+		if (WaitCondition(bIdleEnough, TEXT("WaitHaulIdleBeforeFullCargoMine")))
 		{
 			return;
 		}
 
 		Cargo->ClearCargo();
 		Cargo->AddCargo(Cargo->GetCargoCapacity());
-		Expect(Cargo->IsFull(), TEXT("CargoFilledManuallyForReject"));
+		Expect(Cargo->IsFull(), TEXT("CargoFilledManuallyForFullCargoMine"));
 
-		const bool bHaulBefore = HaulActiveTowardBase(Cmd);
 		IssueMine(Worker, NodeA);
 
-		Expect(Cargo->IsFull(), TEXT("CargoStillFullAfterRejectedMine"));
-		Expect(!HaulActiveTowardBase(Cmd) || bHaulBefore, TEXT("RejectDidNotStartHaulFromRejectedMine"));
-		Expect(!(Cmd->GetMineExecutionState() == EGP_MineExecutionState::Approaching
-					&& Cmd->GetMineTarget() == NodeA)
-				&& !(Cmd->GetMineExecutionState() == EGP_MineExecutionState::Active
-					&& Cmd->GetMineTarget() == NodeA),
-			TEXT("MineRejectedCargoFullPreserved"));
+		const FGP_StoredUnitCommand* Held = Cmd->GetHeldCommand();
+		Expect(Cmd->HasHeldCommand() && Held != nullptr
+				&& Held->CommandTag == FGPGameplayTags::Get().Command_Mine,
+			TEXT("FullCargoMineAcceptedHeld"));
+		Expect(Held != nullptr && Held->TargetActor.Get() == NodeA, TEXT("FullCargoMineAssignmentIsNodeA"));
+		Expect(Cmd->ShouldReturnToDepositAfterHaul(), TEXT("FullCargoMineReturnToDepositArmed"));
+		Expect(HaulActiveTowardBase(Cmd)
+				|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::WaitingForDropOff
+				|| Cmd->GetHaulExecutionState() == EGP_HaulExecutionState::DroppingOff,
+			TEXT("FullCargoMineStartsHaul"));
 
 		++StageIndex;
 		ScheduleNext(0.05f);

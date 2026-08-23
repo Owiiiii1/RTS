@@ -431,7 +431,13 @@ private:
 	bool IsActiveHaulChainForDeposit(const AGP_ResourceNode* Node) const;
 	void ResetHaulExecutor();
 	void ResetHaulExecutorForReplacement(const TOptional<FGP_StoredUnitCommand>& PreviousCommand);
-	void StartHaulReturnToBase(uint32 ChainSerial, AGP_ResourceNode* Deposit, bool bReturnToDeposit);
+	void StartHaulReturnToBase(
+		uint32 ChainSerial,
+		AGP_ResourceNode* Deposit,
+		bool bReturnToDeposit,
+		AGP_MainBase* PreferredMainBase = nullptr);
+	/** Explicit friendly MainBase Move: one-shot deposit, no mining-cycle resume. */
+	bool TryStartOneShotMainBaseDeposit();
 	bool RequestHaulApproachMove(
 		AActor* Owner,
 		AGP_MainBase* MainBase,

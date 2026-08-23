@@ -2172,16 +2172,6 @@ bool UGP_UnitCommandComponent::TryRejectMineCommandBeforeAccept(const FGP_UnitCo
 		return true;
 	}
 
-	if (Cargo->IsFull() && !IsActiveHaulChainForDeposit(Node))
-	{
-		UE_LOG(LogGPUnitCommandExecution, Warning,
-			TEXT("GP UnitCommandExecution MineRejected: Unit=%s Reason=CargoFull Role=%s NetMode=%s"),
-			*GetNameSafe(Owner),
-			GPUnitCommandStatePrivate::RoleToString(Role),
-			GPUnitCommandStatePrivate::NetModeToString(NetMode));
-		return true;
-	}
-
 	FString MineFail;
 	if (!Node->CanAcceptMineCommand(true, &MineFail))
 	{
@@ -2517,6 +2507,19 @@ bool UGP_UnitCommandComponent::StartMineExecutor()
 	// Persistent cluster SearchCenter for the whole Mine/haul/reassignment intent.
 	SetMineSearchAnchorFromNode(Node);
 
+	if (Cargo->IsFull())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP UnitCommandExecution MineAcceptedCargoFullHaul: Unit=%s MineSerial=%u Target=%s Role=%s NetMode=%s"),
+			*GetNameSafe(Owner),
+			MineSerial,
+			*GetNameSafe(Node),
+			GPUnitCommandStatePrivate::RoleToString(Role),
+			GPUnitCommandStatePrivate::NetModeToString(NetMode));
+		StartHaulReturnToBase(MineSerial, Node, true);
+		return HeldCommand.IsSet() && ActiveMineSerial == MineSerial;
+	}
+
 	const float InteractionRange = ResolveMineInteractionRangeCm(Mining, Node);
 	const float Distance = FVector::Dist(Owner->GetActorLocation(), Node->GetActorLocation());
 	UGP_MovementComponent* Movement = ResolveMovementComponent();
@@ -2646,10 +2649,49 @@ bool UGP_UnitCommandComponent::TryConsumeMineMovementResult(
 	return true;
 }
 
+bool UGP_UnitCommandComponent::TryStartOneShotMainBaseDeposit()
+{
+	if (!HeldCommand.IsSet())
+	{
+		return false;
+	}
+
+	const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
+	if (!(Held.CommandTag == FGPGameplayTags::Get().Command_Move))
+	{
+		return false;
+	}
+
+	AActor* Owner = GetOwner();
+	AGP_Worker* Worker = Cast<AGP_Worker>(Owner);
+	AGP_MainBase* MainBase = Cast<AGP_MainBase>(Held.TargetActor.Get());
+	if (Worker == nullptr
+		|| !IsValid(MainBase)
+		|| Worker->GetTeamId() < 1
+		|| MainBase->GetTeamId() != Worker->GetTeamId())
+	{
+		return false;
+	}
+
+	const float CargoAmount = Worker->GetCargoComponent() != nullptr
+		? Worker->GetCargoComponent()->GetCurrentCargoAmount()
+		: 0.0f;
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution OneShotMainBaseDeposit: Unit=%s Serial=%u MainBase=%s Cargo=%.1f"),
+		*GetNameSafe(Owner),
+		Held.CommandSerial,
+		*GetNameSafe(MainBase),
+		CargoAmount);
+
+	StartHaulReturnToBase(Held.CommandSerial, nullptr, false, MainBase);
+	return true;
+}
+
 void UGP_UnitCommandComponent::StartHaulReturnToBase(
 	uint32 ChainSerial,
 	AGP_ResourceNode* Deposit,
-	bool bReturnToDeposit)
+	bool bReturnToDeposit,
+	AGP_MainBase* PreferredMainBase)
 {
 	AActor* Owner = GetOwner();
 	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
@@ -2672,9 +2714,13 @@ void UGP_UnitCommandComponent::StartHaulReturnToBase(
 
 	UWorld* World = Owner->GetWorld();
 	AGP_GameState* GameState = World != nullptr ? World->GetGameState<AGP_GameState>() : nullptr;
-	AGP_MainBase* MainBase = GameState != nullptr
-		? GameState->FindMainBaseForTeam(Worker->GetTeamId())
-		: nullptr;
+	AGP_MainBase* MainBase = PreferredMainBase;
+	if (!IsValid(MainBase) || MainBase->GetTeamId() != Worker->GetTeamId())
+	{
+		MainBase = GameState != nullptr
+			? GameState->FindMainBaseForTeam(Worker->GetTeamId())
+			: nullptr;
+	}
 	UGP_StorageComponent* Storage = IsValid(MainBase) ? MainBase->GetStorageComponent() : nullptr;
 	if (!IsValid(MainBase) || !IsValid(Storage))
 	{
@@ -3157,10 +3203,14 @@ void UGP_UnitCommandComponent::FinishHaulChain(bool bClearHeld)
 	if (bClearHeld
 		&& Serial != 0
 		&& HeldCommand.IsSet()
-		&& HeldCommand.GetValue().CommandTag == FGPGameplayTags::Get().Command_Mine
 		&& HeldCommand.GetValue().CommandSerial == Serial)
 	{
-		ClearHeldCommand();
+		const FGameplayTag HeldTag = HeldCommand.GetValue().CommandTag;
+		const FGPGameplayTags& Tags = FGPGameplayTags::Get();
+		if (HeldTag == Tags.Command_Mine || HeldTag == Tags.Command_Move)
+		{
+			ClearHeldCommand();
+		}
 	}
 
 	// Clear mine chain identity without recursing into ResetHaulExecutor.
@@ -5583,26 +5633,35 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 	ResetAttackExecutorForReplacement(PreviousCommand);
 	ResetMineExecutorForReplacement(PreviousCommand);
 
-	const bool bHeldRemainsAfterSync = SynchronizeMovementWithHeldCommand(PreviousCommand);
-	if (!bHeldRemainsAfterSync || !HeldCommand.IsSet())
+	const bool bOneShotMainBaseDeposit = TryStartOneShotMainBaseDeposit();
+	if (!bOneShotMainBaseDeposit)
 	{
-		return;
+		const bool bHeldRemainsAfterSync = SynchronizeMovementWithHeldCommand(PreviousCommand);
+		if (!bHeldRemainsAfterSync || !HeldCommand.IsSet())
+		{
+			return;
+		}
+
+		const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+		if (HeldCommand.GetValue().CommandTag == GPTags.Command_Attack)
+		{
+			if (!StartAttackExecutor() || !HeldCommand.IsSet())
+			{
+				return;
+			}
+		}
+		else if (HeldCommand.GetValue().CommandTag == GPTags.Command_Mine)
+		{
+			if (!StartMineExecutor() || !HeldCommand.IsSet())
+			{
+				return;
+			}
+		}
 	}
 
-	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
-	if (HeldCommand.GetValue().CommandTag == GPTags.Command_Attack)
+	if (!HeldCommand.IsSet())
 	{
-		if (!StartAttackExecutor() || !HeldCommand.IsSet())
-		{
-			return;
-		}
-	}
-	else if (HeldCommand.GetValue().CommandTag == GPTags.Command_Mine)
-	{
-		if (!StartMineExecutor() || !HeldCommand.IsSet())
-		{
-			return;
-		}
+		return;
 	}
 
 	if (bHadHeldCommand)

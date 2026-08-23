@@ -8,6 +8,7 @@
 #include "Player/GPPlayerController.h"
 #include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
+#include "Buildings/GPMainBase.h"
 #include "Resources/GPResourceNode.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPUnitBase.h"
@@ -245,7 +246,7 @@ bool UGP_CommandComponent::BuildSmartCommand(
 		else if (TargetTeamId >= 1 && TargetTeamId == LocalTeamId)
 		{
 			CommandTag = GPTags.Command_Move;
-			RequestTargetActor = nullptr;
+			RequestTargetActor = Cast<AGP_MainBase>(TargetActor) != nullptr ? TargetActor : nullptr;
 		}
 		else
 		{
@@ -394,6 +395,17 @@ bool UGP_CommandComponent::ValidateAndNormalizeCommand(
 	{
 		NormalizedTargetActor = nullptr;
 		NormalizedLocation = ClientRequest.TargetLocation;
+		if (bIsMove)
+		{
+			if (AGP_MainBase* MainBase = Cast<AGP_MainBase>(ClientRequest.TargetActor.Get()))
+			{
+				if (IsValid(MainBase) && MainBase->GetTeamId() == RequestingTeamId)
+				{
+					NormalizedTargetActor = MainBase;
+					NormalizedLocation = MainBase->GetActorLocation();
+				}
+			}
+		}
 		if (!GPCommandPrivate::IsCommandLocationSane(NormalizedLocation))
 		{
 			return Fail(EGP_CommandRejectReason::InvalidTargetLocation);
@@ -552,9 +564,13 @@ int32 UGP_CommandComponent::DispatchValidatedCommand(const FGP_CommandRequest& V
 	UnitCommand.bQueue = ValidatedRequest.bQueue;
 
 	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
-	const bool bSpreadDestination =
+	const bool bFriendlyMainBaseMove =
 		ValidatedRequest.CommandTag == GPTags.Command_Move
-		|| ValidatedRequest.CommandTag == GPTags.Command_AttackMove;
+		&& Cast<AGP_MainBase>(ValidatedRequest.TargetActor.Get()) != nullptr;
+	const bool bSpreadDestination =
+		(ValidatedRequest.CommandTag == GPTags.Command_Move
+			|| ValidatedRequest.CommandTag == GPTags.Command_AttackMove)
+		&& !bFriendlyMainBaseMove;
 
 	TArray<FVector> SpreadSlots;
 	if (bSpreadDestination)

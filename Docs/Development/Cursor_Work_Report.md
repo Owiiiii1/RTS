@@ -1,193 +1,137 @@
-# Cursor Work Report — Production HUD Launch Menu Finalization
+# Cursor Work Report
 
 ## Status
 
-**PRODUCTION_LAUNCH_MENU_FINALIZED_READY_TO_MERGE**
+**WORKER_COMMAND_INTENT_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**
 
 ## Branch / base / head
 
-- Branch: `cleanup/gp-remove-temp-hud`
-- Base: `origin/main` @ `7fc2ab9ee880e73e1c7610570cc9a723b9376905`
-- Parent: `7ff4a1226abd8b42506f5db4c273f79f144ef63b` (`SelfHitTestInvisible` interaction fix)
-- Head: this finalization commit on `cleanup/gp-remove-temp-hud` (pushed with this report)
+- Branch: `fix/gp-worker-command-intent`
+- Base: `origin/main` @ `aa84960c57bb4ee4180de80e44a49caece413549`
+- Head: commit SHA recorded after push on this branch
 
-## Operator PASS details
+## Established factual root cause
 
-Operator PIE validation **PASSED**. Confirmed live:
+Worker command intent was not a single ownership SoT. Mining-cycle assignment, automatic haul, and player Move/Base/Stop were mixed across:
 
-- obsolete TEMP HUD is retired
-- Production HUD remains active and updates correctly
-- right-side Launch menu is authored in operator-local `WBP_GP_HUD`
-- all MainBase container rows appear
-- fill bars update with storage state
-- partial containers display yellow fill
-- Ready/full containers display green fill
-- Launch button is disabled when no launch is available
-- Launch button becomes enabled when a Ready container exists
-- Launch button is clickable after the root visibility fix
-- clicking Launch executes the existing container launch gameplay path
-- container/storage presentation updates correctly after launch
+1. Held command (`Command_Mine` + `TargetActor` = ResourceNode, or `Command_Move` with `TargetActor` forced null)
+2. Executor `MineTarget` / `LastMineDepositForHaul`
+3. Haul `LastHaulDeposit` + `bShouldReturnToDepositAfterHaul` + haul serial
+4. MiningComponent current node (occupancy/execution only)
 
-Operator-authored Blueprint assets remain local and were not touched or staged.
+Two concrete bugs followed from that split:
 
-## TEMP HUD retirement summary
+1. **Explicit `Mine(ResourceNode)` while cargo was already full was rejected** (`MineRejected Reason=CargoFull`) unless a haul chain for that deposit was already active. Valid explicit Mine therefore could not assign the node and enter the haul/deposit phase.
+2. **Explicit click on friendly MainBase was not a deposit command.** Smart-command + Move validation stripped `TargetActor` to null, so the Worker received a ground Move. Cargo was never deposited, and any previous Mine held/return-to-deposit state could survive incorrectly depending on replacement cleanup.
 
-Deleted:
+`WaitingForDropOff` replacement (Move/Stop/Mine) already reset haul/wait via `ResetMineExecutorForReplacement` → `ResetHaulExecutor` (storage/register/retry unbind + serial zero). The remaining hole was Mine-full-cargo reject and Base-as-Move, not a missing unbind in Stop/Move.
 
-- `GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h`
-- `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
+## Previous state ownership
 
-No runtime creation of `UGP_TEMP_S28P_PlanetaryFerroniteHUD` remains. PlayerController TEMP presentation ownership is gone. Production HUD is the active match HUD (`UGP_HUDViewModelSubsystem` → configured `ProductionHUDWidgetClass` → `WBP_GP_HUD`).
+| Concern | Previous SoT |
+| --- | --- |
+| Player Mine assignment | Held `Command_Mine` + `TargetActor` |
+| Cycle return-to-node | `bShouldReturnToDepositAfterHaul` + `LastHaulDeposit` + held Mine serial match |
+| Auto-reassign after haul | Held Mine serial match even without return flag |
+| Explicit Base | Not represented; friendly MainBase → Move with null target |
+| Full-cargo explicit Mine | Rejected before accept |
+| Drop-off wait | `HaulState == WaitingForDropOff` + `ActiveHaulSerial`; wake/retry required that pair |
 
-## LaunchMenuPresenter ownership / data flow
+## New intent / ownership semantics
 
-- Owned by `UGP_HUDViewModelSubsystem` (LocalPlayer). Not PlayerController presentation state.
-- Gameplay SoT: local team → resolved `AGP_MainBase` → `UGP_StorageComponent`
-- Event-driven: `OnResolvedMainBaseChanged` (local team only) + local `OnStorageChanged`
-- MainBase replacement unbinds old storage and binds the new component
-- Other-team storage is ignored
-- No Tick, no timer, no polling, no world scan
-- Row count follows factual storage container count
-- `FillNormalized` = clamp(StoredAmount / Capacity, 0..1)
-- `bIsReadyForLaunch` from `EGP_StorageContainerState::Ready`
-- `CanLaunchReadyContainer` = ready count > 0 and `!IsLaunchInFlight()`
+No new gameplay tag. Two intents are distinguished by held command:
 
-## HUDRoot Blueprint-facing API
+1. **Mining cycle** — explicit `Mine(ResourceNode)`
+   - Always accepted for a valid node (CargoFull is not a reject).
+   - Held Mine + `MineTarget` / `LastMineDepositForHaul` / search anchor own the assignment.
+   - If cargo has space: approach and mine until full.
+   - If cargo is already full: accept, keep/set assignment, `StartHaulReturnToBase(..., bReturnToDeposit=true)` immediately.
+   - After successful unload: return to the assigned node and continue mining.
 
-On `UGP_HUDRootWidget`:
+2. **One-shot deposit** — explicit `Move` whose `TargetActor` is a friendly `AGP_MainBase`
+   - Smart-command and server validate keep that `TargetActor`.
+   - `ResetMineExecutorForReplacement` cancels prior mine/haul/wait.
+   - `TryStartOneShotMainBaseDeposit` starts haul with `bReturnToDeposit=false` and the clicked MainBase (no generic `RequestMove`).
+   - After unload (or empty-cargo arrival): held Move matching haul serial is cleared; Worker idles at base. Old Mine is not restored.
 
-- `GetLaunchContainerRows()` / `GetLaunchContainerPresentations()`
-- `CanLaunchReadyContainer()`
-- `GetReadyLaunchContainerCount()`
-- `RequestLaunchReadyContainer()`
-- `BP_OnLaunchMenuChanged()` (`BlueprintImplementableEvent`)
+Generic Move (null target) and Stop still fully replace orchestration. Stale wait/haul callbacks cannot resume because serial/state are zeroed and wake handlers require `WaitingForDropOff && ActiveHaulSerial != 0`.
 
-WBP color contract: yellow while `!bIsReadyForLaunch`, green when Ready/full.
+## Exact changed files
 
-## SelfHitTestInvisible interaction fix
-
-Operator first found Launch OnClicked dead while enablement was correct. Root cause: production HUD root was `HitTestInvisible`, which blocks hit-testing for the widget and children.
-
-Fixed in every bootstrap/re-add path of `UGP_HUDViewModelSubsystem::EnsureProductionHUDInternal` to `SelfHitTestInvisible`:
-
-- root/background does not consume pointer hits
-- interactive descendants (`BTN_Launch`, future procurement buttons) remain clickable
-- no input-mode change
-- no mouse-capture redesign
-
-## Exact authoritative launch forwarding path
-
-`UGP_HUDRootWidget::RequestLaunchReadyContainer()`
-→ `AGP_PlayerController::RequestLaunchReadyContainer()`
-→ `Server_RequestLaunchReadyContainer`
-→ `AuthorityTryLaunchReadyContainerForOwningTeam`
-
-Gameplay/RPC APIs preserved. Storage, orbital transfer, and economy semantics unchanged.
-
-## Focused contract results
-
-All **Complete Failures=0**:
-
-- `gp.UI.RunLaunchMenuPresentationContractTest` — Cancelled=false
-- `gp.UI.RunProductionHUDFoundationContractTest` — Cancelled=false
-- `gp.UI.RunHUDViewModelBridgeContractTest` — Cancelled=false
-- `gp.UI.RunHUDBootstrapContractTest` — Cancelled=false
-- `gp.UI.RunPlanetFerronitePresentationContractTest` — Cancelled=false
-- `gp.UI.RunThreatPresentationContractTest` — Cancelled=false
-- `gp.Resource.RunContainerLaunchContractTest` — Cancelled=false, `SuiteComplete`
-- `gp.Resource.RunContainerLaunchHUDContractTest` — Cancelled=None (`None` = not cancelled), `SuiteComplete`
-
-Full suite not run.
-
-## GPEditor / UHT result
-
-`GPEditor Win64 Development` **Result: Succeeded** (UHT compiled-in).
-
-## GP Development result
-
-`GP Win64 Development` **Result: Succeeded**. Output: `GP/Binaries/Win64/GP.exe`.
-
-## GP Shipping result
-
-`GP Win64 Shipping` **Result: Succeeded**. Output: `GP/Binaries/Win64/GP-Win64-Shipping.exe`.
-
-## Factual final diff review vs `origin/main`
-
-Confirmed:
-
-- TEMP HUD class remains deleted
-- no TEMP HUD runtime creation remains
-- PlayerController gameplay/RPC APIs preserved (`RequestLaunchReadyContainer`, unit drop, building purchase, wall package)
-- Production HUD bootstrap remains LocalPlayer-owned
-- Production HUD root uses `SelfHitTestInvisible`
-- no input-mode changes
-- LaunchMenuPresenter is event-driven
-- no Tick / timer / polling / world scan in launch-menu presentation
-- presenter binds only local MainBase storage
-- MainBase replacement unbinds old storage and binds new storage
-- container row count follows factual storage container count
-- `FillNormalized` remains clamped 0..1
-- Ready state comes from actual storage container state
-- `CanLaunchReadyContainer` respects ready count and launch-in-flight
-- HUDRoot `RequestLaunchReadyContainer` forwards to existing PlayerController path
-- storage/orbital/economy gameplay semantics were not changed (`GPStorageComponent.h` only dropped TEMP HUD weak-ptr from a contract runner and updated a comment)
-- no protected Content/Config/map/DataAsset/Tools files are committed
-
-No defect found that required a code fix in this finalization pass.
-
-## Exact changed files (branch vs `origin/main`)
-
-Deleted:
-
-- `GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h`
-- `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
-
-Added:
-
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPLaunchMenuPresenter.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPLaunchMenuPresenter.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPLaunchMenuPresentationContractTest.cpp`
-
-Modified:
-
-- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-- `GP/Source/GPRuntime/Public/Resources/GPStorageComponent.h`
-- `GP/Source/GPRuntime/Private/Debug/GPContainerLaunchHUDContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPMatchWinLoseContractTest.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPHUDViewModelSubsystem.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPHUDViewModelSubsystem.cpp`
-- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
-- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPHUDBootstrapContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPProductionHUDFoundationContractTest.cpp`
-- `Docs/TDD/12_UI_Architecture.md`
-- `Docs/GDD/09_UI_UX.md`
-- `Docs/GDD/10_Orbital_Delivery.md`
-- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
-- `Docs/Development/AI_Project_Log.md`
+- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
+- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
+- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPWorker.h` (contract runner UCLASS only)
+- `GP/Source/GPRuntime/Private/Debug/GPWorkerCommandIntentContractTest.cpp` (new)
+- `GP/Source/GPRuntime/Private/Debug/GPMineReassignmentHaulContractTest.cpp`
 - `Docs/Development/Cursor_Work_Report.md`
 
-## Protected files untouched
+## Cleanup timers / delegates / callbacks
 
-Not modified or staged by this branch:
+Replacement (Stop / Move / Mine / one-shot Base) still goes through `ResetMineExecutorForReplacement` → `ResetHaulExecutor` / `ClearDropOffSubscriptionsAndTimer`:
 
-- `GP/Content/**`
-- `GP/Config/**`
-- maps
-- DataAssets
-- Tools
-- `WBP_GP_HUD`
-- `WBP_GP_LaunchContainerRow`
+- MainBase register/unregister drop-off wakes
+- storage-changed drop-off wake
+- drop-off safety retry timer
+- pending next-tick haul resume serial/deposit/return flag
+- mining-state delegate unbind + StopMining
+- resource-registry wait-for-resource unbind
+- pending movement ownership (replaced by new serial or StopMove)
+- `ActiveMineSerial` / `ActiveHaulSerial` / `MineTarget` / `LastHaulDeposit` / `HaulMainBase` / `bShouldReturnToDepositAfterHaul`
 
-Local dirty authored Content/Config/`GP.uproject`/`Tools` remain unstaged operator work.
+`FinishHaulChain` now also clears a matching held **Move** (one-shot deposit) so leftover Move cannot resurrect work. Matching held Mine is still cleared only when the haul chain is allowed to clear held.
 
-## No gameplay / economy semantic changes
+Wake/retry paths still no-op unless `HaulState == WaitingForDropOff` and `ActiveHaulSerial != 0`.
 
-Storage rules, orbital transfer, economy values, and container launch gameplay are unchanged. This branch retires TEMP HUD presentation, adds Production HUD launch-menu presentation, and fixes HUD-root hit-testing.
+## Contracts and results
 
-## Merge state
+| Command | Result |
+| --- | --- |
+| `gp.Worker.RunCommandIntentContractTest` | **Complete Failures=0 Cancelled=None** (A–E: full-cargo Mine accept+return A; explicit Base breaks cycle; wait+Move no resurrect; wait+Mine B returns to B; Stop clears latent) |
+| `gp.Resource.RunMineReassignmentHaulContractTest` | **Complete Failures=0 Cancelled=None** (stage 8 updated: full-cargo explicit Mine is accepted and starts cycle haul) |
+| `gp.Resource.RunDepletionReassignmentContractTest` | **Complete Failures=0 Cancelled=None** |
+| `gp.Resource.RunDropOffResilienceContractTest` | **Complete Failures=0 Cancelled=None** |
+| `gp.Worker.RunContractTest` | **Complete Failures=0** |
+| `gp.Worker.RunHaulingContractTest` | Complete Failures=15 — **not a command-intent regression**. Log shows map `BP_GP_SalvageWalkerLONGRAGE` killed `GP_DiagWorker` mid-haul (`OwnerDied`). First cargo-full haul/drop-off/return case had already **PASS**. Re-run in isolation reproduced walker kill. |
 
-**NOT MERGED.**
+## GPEditor / UHT
+
+- `GPEditor Win64 Development` **Succeeded** (UHT processed, GPRuntime linked)
+- `GP Win64 Development` / `GP Win64 Shipping` **not run** (not required before operator PASS)
+
+## Protected-file check
+
+Diff vs `origin/main` for this slice does **not** include:
+
+- `GP/Config/DefaultEngine.ini`
+- `GP/Config/DefaultGame.ini`
+- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
+- `GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`
+- `GP/Content/Basic_VFX/`
+- `GP/Content/GrimProtocol/Blueprint/`
+- `GP/Content/GrimProtocol/Materials/`
+- `GP/Content/Mixed_Magic_VFX_Pack/`
+- `GP/Content/RocketThrusterExhaustFX/`
+- `Tools/`
+- WBP_GP_HUD / WBP_GP_LaunchContainerRow
+- operator-authored unit/building Blueprints/DataAssets
+
+Those remain local dirty/untracked and were not staged.
+
+## Operator test now required
+
+PIE on `L_PrototypeArena` (or equivalent navigable map), authority Worker:
+
+1. **Full cargo + explicit Mine on node A** — command accepted (no CargoFull reject); Worker hauls; after unload returns to A and continues mining.
+2. **Mine A / auto-haul then explicit click on friendly MainBase** — deposits; stays at Base; does **not** return to A; idle until next player command. Empty cargo Base click also ends at Base without restoring Mine.
+3. **Storage full wait + Move X** — waiting cancelled; Move executes; later storage space does **not** resume old haul.
+4. **Storage full wait + Mine B** — accepted despite full cargo; B is the cycle assignment; after unload returns to B not A.
+5. **Wait/haul/mine + Stop** — latent orchestration cleared; no timer/delegate resumes old cycle.
+
+Also confirm mixed selection: combat units clicking MainBase still Move; only Workers one-shot deposit.
+
+## Status
+
+**WORKER_COMMAND_INTENT_READY_FOR_OPERATOR_VALIDATION**

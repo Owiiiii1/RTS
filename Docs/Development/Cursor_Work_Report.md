@@ -13,6 +13,7 @@
 - Base: `origin/main` @ `f20439388a3e3bf0f3389a10193634749995c21d`
 - Implementation: `a42865f860d3870bb88c25bf10471b0cfe8daf84`
 - Pre-finalization SHA-record: `b1ebefca5c25ca899d9224058c60be14f9fdd0fd`
+- Finalization: `dc0ef104d37ec5ad7ca5bb8c8e41c5d1ff390277`
 
 ## Operator PASS details
 

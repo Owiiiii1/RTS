@@ -12,6 +12,7 @@
 #include "Player/GPPlayerController.h"
 #include "Player/GPPlayerState.h"
 #include "Settings/GPUIPresentationSettings.h"
+#include "ViewModels/GPLaunchMenuPresenter.h"
 #include "ViewModels/GPMatchViewModel.h"
 #include "ViewModels/GPMatchViewModelAdapter.h"
 #include "ViewModels/GPResourceViewModel.h"
@@ -28,6 +29,7 @@ void UGP_HUDViewModelSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	MatchViewModel = NewObject<UGP_MatchViewModel>(this);
 	ResourceAdapter = NewObject<UGP_ResourceViewModelAdapter>(this);
 	MatchAdapter = NewObject<UGP_MatchViewModelAdapter>(this);
+	LaunchMenuPresenter = NewObject<UGP_LaunchMenuPresenter>(this);
 
 	if (UWorld* World = GetWorld())
 	{
@@ -55,6 +57,10 @@ void UGP_HUDViewModelSubsystem::Deinitialize()
 	if (MatchAdapter != nullptr)
 	{
 		MatchAdapter->Shutdown();
+	}
+	if (LaunchMenuPresenter != nullptr)
+	{
+		LaunchMenuPresenter->Shutdown();
 	}
 	bReady = false;
 	LocalTeamId = -1;
@@ -86,6 +92,10 @@ void UGP_HUDViewModelSubsystem::Rebind()
 	{
 		MatchAdapter->Shutdown();
 	}
+	if (LaunchMenuPresenter != nullptr)
+	{
+		LaunchMenuPresenter->Shutdown();
+	}
 
 	UWorld* World = GetWorld();
 	ULocalPlayer* LocalPlayer = GetLocalPlayer();
@@ -102,7 +112,7 @@ void UGP_HUDViewModelSubsystem::Rebind()
 		PlayerController != nullptr ? PlayerController->GetPlayerState<AGP_PlayerState>() : nullptr;
 	if (!IsValid(GameState) || !IsValid(LocalPlayerState)
 		|| ResourceViewModel == nullptr || MatchViewModel == nullptr
-		|| ResourceAdapter == nullptr || MatchAdapter == nullptr)
+		|| ResourceAdapter == nullptr || MatchAdapter == nullptr || LaunchMenuPresenter == nullptr)
 	{
 		ResetViewModels();
 		return;
@@ -121,6 +131,7 @@ void UGP_HUDViewModelSubsystem::Rebind()
 		ResourceViewModel, LocalPlayerState, OpponentPlayerState, GameState, LocalTeamId);
 	const bool bMatchBound = MatchAdapter->Initialize(
 		MatchViewModel, GameState, LocalTeamId);
+	LaunchMenuPresenter->Initialize(GameState, LocalTeamId);
 	bReady = bResourcesBound && bMatchBound;
 }
 
@@ -371,7 +382,7 @@ void UGP_HUDViewModelSubsystem::EnsureProductionHUDInternal(
 			bLoggedUnconfiguredHUDClass = true;
 #if !UE_BUILD_SHIPPING
 			UE_LOG(LogGPHUDViewModels, Warning,
-				TEXT("UGP_HUDViewModelSubsystem: ProductionHUDWidgetClass is not configured; production HUD bootstrap skipped. TEMP HUD remains available."));
+				TEXT("UGP_HUDViewModelSubsystem: ProductionHUDWidgetClass is not configured; production HUD bootstrap skipped. TEMP HUD remains retired."));
 #endif
 		}
 		return;

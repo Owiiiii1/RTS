@@ -1,8 +1,8 @@
-# Cursor Work Report — TEMP_S28P HUD Removal
+# Cursor Work Report — Production HUD Right-Side Launch Menu
 
 ## Status
 
-**TEMP_HUD_REMOVAL_READY_FOR_OPERATOR_VALIDATION**
+**PRODUCTION_LAUNCH_MENU_READY_FOR_OPERATOR_VALIDATION**
 
 **NOT MERGED.**
 
@@ -12,116 +12,92 @@
 
 - Branch: `cleanup/gp-remove-temp-hud`
 - Base: `origin/main` @ `7fc2ab9ee880e73e1c7610570cc9a723b9376905`
+- Parent: `28ca7ef16ab1312e39f2320b78b78fe9e0e3f4ec` (TEMP HUD retirement)
 - Head: this implementation commit on `cleanup/gp-remove-temp-hud` (pushed with this report)
 
-## Exact deleted files
+Continued from the TEMP HUD retirement commit on this branch. Did not reset to stale `main`.
 
-- `GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h`
-- `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
+## Exact presenter / ownership shape
 
-There is no remaining runtime creation of `UGP_TEMP_S28P_PlanetaryFerroniteHUD`.
+Gameplay source of truth is unchanged: local team → resolved `AGP_MainBase` → `UGP_StorageComponent`.
 
-## PlayerController TEMP presentation code removed
+Presentation is LocalPlayer-owned, not PlayerController-owned:
 
-Class A only (TEMP presentation scaffolding). Removed from `AGP_PlayerController`:
+- `UGP_HUDViewModelSubsystem` (LocalPlayer subsystem) creates and owns `UGP_LaunchMenuPresenter`
+- Presenter is created in subsystem `Initialize`, `Shutdown` on `Rebind` / `Deinitialize`, `Initialize(GameState, LocalTeamId)` after local team is valid
+- `UGP_HUDRootWidget` binds the presenter on `NativeConstruct` and unbinds on `NativeDestruct`
+- Authored `WBP_GP_HUD` layout remains operator-local and uncommitted
 
-Lifecycle / bind / sync:
+`FGP_LaunchContainerRow` (Blueprint-read-only):
 
-- `EnsurePlanetaryFerroniteHUD`
-- `DestroyPlanetaryFerroniteHUD`
-- `RefreshPlanetaryFerroniteHUDBinding`
-- `ClearPlanetaryFerroniteHUDBindings`
-- `BindPlanetaryFerroniteStorage`
-- `UnbindPlanetaryFerroniteStorage`
-- `SyncPlanetaryFerroniteHUDFromStorage`
-- `SyncLaunchButtonFromStorage`
-- `BindOrbitalFerroniteAttribute`
-- `UnbindOrbitalFerroniteAttribute`
-- `SyncOrbitalFerroniteHUDFromAttributes`
-- `SyncBuildingReadyHUDFromInventory`
-- `BindWallInventoryEvents`
-- `UnbindWallInventoryEvents`
-- `SyncWallPackageHUDFromInventory`
-- `BindBuildingInventoryEvents`
-- `UnbindBuildingInventoryEvents`
+- `Index`
+- `StoredAmount` (`FGP_StorageContainer.CurrentAmount`)
+- `Capacity` (`UGP_StorageComponent::GetContainerCapacity()`)
+- `FillNormalized` = clamp(`StoredAmount` / `Capacity`, 0..1)
+- `bIsReadyForLaunch` = (`State == EGP_StorageContainerState::Ready`)
 
-TEMP-HUD-specific handlers:
+`CanLaunchReadyContainer` = `GetReadyCount() > 0 && !IsLaunchInFlight()`.
 
-- `HandleWallInventoryChangedForHUD`
-- `HandleWallPackagePendingChangedForHUD`
-- `HandleOrbitalFerroniteAttributeChanged`
-- `HandleMaxUnitsAttributeChanged`
-- `HandleCurrentUnitsAttributeChanged`
-- `HandleFerroniteScoreAttributeChanged`
-- `SyncUnitCapHUDFromAttributes`
-- `SyncMatchHUDFromAuthority`
-- `HandleMatchTimeRemainingChanged`
-- `HandleMatchStateTagChanged`
-- `HandleMatchResultChangedForHUD`
-- `HandleBuildingReadyChanged`
-- `HandleResolvedMainBaseChanged`
-- `HandlePlayerTeamIdChanged`
-- `HandleStorageChangedForHUD`
+No Tick, no timers, no polling, no world scan.
 
-TEMP presentation members:
+## Exact Blueprint-facing HUDRoot API
 
-- `PlanetaryFerroniteHUD`
-- `BoundPlanetaryGameState`
-- `BoundPlanetaryPlayerState`
-- `BoundPlanetaryStorage`
-- `BoundWallInventory`
-- `BoundOrbitalASC`
-- `ResolvedMainBaseChangedHandle`
-- `PlayerTeamIdChangedHandle`
-- `OrbitalFerroniteChangedHandle`
-- `MaxUnitsChangedHandle`
-- `CurrentUnitsChangedHandle`
-- `FerroniteScoreChangedHandle`
-- `BuildingReadyChangedHandle`
-- `MatchTimeRemainingChangedHandle`
-- `MatchStateTagChangedHandle`
-- `MatchResultChangedHandle`
-- `BoundPlanetaryTeamId`
-- `PlanetaryFerroniteHUDZOrder`
+On `UGP_HUDRootWidget`:
 
-TEMP HUD create/destroy calls removed from PlayerController lifecycle (`BeginPlayingState` / PlayerState ready / ASC link / `EndPlay`). `Client_NotifyUnitDropRejected` remains; it no longer talks to TEMP HUD.
+- `GetLaunchContainerRows()` → `TArray<FGP_LaunchContainerRow>`
+- `GetLaunchContainerPresentations()` → same array (alias for WBP authoring)
+- `CanLaunchReadyContainer()` → `bool`
+- `GetReadyLaunchContainerCount()` → `int32`
+- `RequestLaunchReadyContainer()` → `void`
+- `BP_OnLaunchMenuChanged()` → `BlueprintImplementableEvent`
 
-`AGP_PlayerController` no longer owns TEMP HUD presentation state.
+WBP color choice: yellow while `!bIsReadyForLaunch`, green when `bIsReadyForLaunch`.
 
-## Gameplay / RPC APIs explicitly preserved
+## Exact event / delegate sources
 
-Class B — still on `AGP_PlayerController`:
+Local team only; other teams are ignored.
 
-- `RequestLaunchReadyContainer` / `Server_RequestLaunchReadyContainer` / `AuthorityTryLaunchReadyContainerForOwningTeam`
-- `RequestUnitDrop` / `Server_RequestUnitDrop` / `AuthorityTryRequestUnitDrop`
-- `RequestBuildingPurchase` / `Server_RequestBuildingPurchase` / `AuthorityTryPurchaseBuilding`
-- `RequestWallPackagePurchase` / `Server_RequestWallPackagePurchase` / `AuthorityTryPurchaseWallPackage`
-- Building deploy / placement: `RequestBuildingDeploy` / `Server_RequestBuildingDeploy` / `AuthorityTryDeployBuilding` / `CancelBuildingPlacement` / `ConfirmBuildingPlacement`
+- `AGP_GameState::OnResolvedMainBaseChanged` → rebind local storage when `TeamId == LocalTeamId`
+- Local `UGP_StorageComponent::OnStorageChanged` → rebuild rows
+- Presenter `OnLaunchMenuPresentationChanged` → `UGP_HUDRootWidget::BP_OnLaunchMenuChanged`
+- Also fires on presenter initialize / shutdown / reset and once when the HUD root binds
 
-Storage, orbital inventory, GAS attributes, GameState match delegates, and building/wall procurement rules were not changed.
+Local MainBase lookup uses `FindMainBaseForTeamClientSafe`. Shutdown/rebind unbinds first; repeated `Initialize` does not duplicate delegates.
 
-## Production HUD ownership / bootstrap unchanged
+## Exact launch request forwarding path
 
-Not touched:
+`UGP_HUDRootWidget::RequestLaunchReadyContainer()`
+→ `AGP_PlayerController::RequestLaunchReadyContainer()`
+→ `Server_RequestLaunchReadyContainer`
+→ `AuthorityTryLaunchReadyContainerForOwningTeam`
 
-- `GP/Content/**` (including operator-local `/Game/GrimProtocol/Blueprint/Widgets/WBP_GP_HUD`)
-- Production HUD bindings / authored layout
+No gameplay launch logic was duplicated or changed.
 
-Canonical bootstrap remains:
+## Focused contract results
 
-`UGP_HUDViewModelSubsystem` → configured `ProductionHUDWidgetClass` → `WBP_GP_HUD`
+`gp.UI.RunLaunchMenuPresentationContractTest` — **Complete Failures=0 Cancelled=false**
 
-No replacement C++ widget. Production HUD ownership was not moved into PlayerController.
+PASS:
 
-## Contracts / regressions run
+- no Tick on presenter/subsystem
+- TEMP HUD remains retired
+- HUD root launch-menu API present
+- `Server_RequestLaunchReadyContainer` remains
+- no local MainBase/storage → empty list, ready count 0, can launch false
+- local storage with 5 containers → 5 rows
+- `FillNormalized` correct and clamped
+- `bIsReadyForLaunch` matches full/ready state
+- `ReadyContainerCount` correct
+- other team storage does not affect local launch menu
+- local MainBase replacement rebinds cleanly
+- old storage no longer updates presentation after rebind
+- repeated Initialize does not duplicate delegates
+- HUD `RequestLaunchReadyContainer` forwards without crash
+- Shutdown clears presentation
 
-Anti-reintroduction checks:
+## Regressions
 
-- `K_TEMPHUDRetiredNotOwnedByPlayerController` (`FindObject` `/Script/GPRuntime.GP_TEMP_S28P_PlanetaryFerroniteHUD` == null; no `PlanetaryFerroniteHUD` property on PC)
-- `D_TEMPHUDPathRemovedFromPlayerController`
-- `M_GameplayRequestRPCsRemain` (`Server_RequestLaunchReadyContainer`, `Server_RequestUnitDrop`, `Server_RequestBuildingPurchase`, `Server_RequestWallPackagePurchase`)
-
-UI (all `Complete Failures=0`):
+All **Complete Failures=0 Cancelled=false**:
 
 - `gp.UI.RunProductionHUDFoundationContractTest`
 - `gp.UI.RunHUDViewModelBridgeContractTest`
@@ -129,66 +105,53 @@ UI (all `Complete Failures=0`):
 - `gp.UI.RunPlanetFerronitePresentationContractTest`
 - `gp.UI.RunThreatPresentationContractTest`
 
-Gameplay (all `Complete Failures=0`; rewritten launch HUD contract is gameplay-only, no TEMP widget):
+Launch / orbital gameplay contracts actually executed (not teardown stubs):
 
-- `gp.Resource.RunContainerLaunchContractTest`
-- `gp.Resource.RunContainerLaunchHUDContractTest` (`PASS: SuiteComplete`, including `A_LaunchRPCRemains`)
-- `gp.Resource.RunOrbitalUnitDropContractTest`
-- `gp.Building.RunOrbitalBuildingDropContractTest`
-- `gp.Orbital.RunWallPackageInventoryContractTest`
+- `gp.Resource.RunContainerLaunchContractTest` — **Complete Failures=0 Cancelled=false**, `SuiteComplete`
+- `gp.Resource.RunContainerLaunchHUDContractTest` — **Complete Failures=0 Cancelled=None** (`None` = not cancelled), `SuiteComplete`
 
-Full suite not run. GP Development / Shipping not run.
+GP Development / Shipping not run.
 
 ## GPEditor / UHT result
 
-`GPEditor Win64 Development` + UHT: **PASS** (`Result: Succeeded`).
-
-GP Development / Shipping: **not run** (post-operator finalization only).
+`GPEditor Win64 Development` **Result: Succeeded** (UHT compiled-in). Focused rebuild compiled presenter, HUD root, subsystem, and launch-menu contract.
 
 ## Exact changed files
 
-Deleted:
-
-- `GP/Source/GPRuntime/Public/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.h`
-- `GP/Source/GPRuntime/Private/UI/GPTEMP_S28P_PlanetaryFerroniteHUD.cpp`
-
-Source:
-
-- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-- `GP/Source/GPRuntime/Public/Resources/GPStorageComponent.h` (comment only: TEMP HUD retired)
-- `GP/Source/GPRuntime/Private/Debug/GPContainerLaunchHUDContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPMatchWinLoseContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPHUDBootstrapContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPProductionHUDFoundationContractTest.cpp`
-
-Docs (current-state only; historical task docs not rewritten):
-
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPLaunchMenuPresenter.h` (new)
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPLaunchMenuPresenter.cpp` (new)
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPHUDViewModelSubsystem.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPHUDViewModelSubsystem.cpp`
+- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
+- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPLaunchMenuPresentationContractTest.cpp` (new)
 - `Docs/TDD/12_UI_Architecture.md`
 - `Docs/GDD/09_UI_UX.md`
-- `Docs/GDD/10_Orbital_Delivery.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/Development/AI_Project_Log.md`
-- `Docs/Development/Cursor_Work_Report.md` (this report)
+- `Docs/Development/Cursor_Work_Report.md`
 
 ## Content / protected files untouched
 
-Not touched and not staged:
+Not modified or staged by this slice:
 
 - `GP/Content/**`
 - `GP/Config/**`
 - maps
 - DataAssets
 - Tools
+- `WBP_GP_HUD` and other Blueprint/widget assets
 
-Local dirty authored work left unstaged.
+Local dirty authored Content/Config/`GP.uproject`/`Tools` remain unstaged operator work.
+
+## TEMP HUD remains retired
+
+No restore of `UGP_TEMP_S28P_PlanetaryFerroniteHUD` or PlayerController TEMP presentation bars. Production HUD remains the active match HUD.
 
 ## No gameplay / economy semantic changes
 
-Procurement/request APIs remain available for future production context-action UI. HUD ViewModels / adapters continue functioning. No duplicate top HUD from TEMP widget instantiation.
+Storage rules, orbital transfer, economy values, and container launch gameplay are unchanged. This slice is read-only presentation plus forwarding to the existing launch request API.
 
-## Merge / finalization
+## Operator next step
 
-**NOT MERGED.**
-
-**NOT FINALIZED.**
+Author the right-side vertical menu on `WBP_GP_HUD`: Launch button on top, container fill-bar list below, yellow while filling, green when ready. Bind to the HUD-root API above. Do not resurrect TEMP HUD.

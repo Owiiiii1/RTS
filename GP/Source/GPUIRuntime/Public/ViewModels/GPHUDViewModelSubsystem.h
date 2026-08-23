@@ -13,6 +13,7 @@ class AGP_GameState;
 class AGP_PlayerController;
 class AGP_PlayerState;
 class UGP_HUDRootWidget;
+class UGP_LaunchMenuPresenter;
 class UGP_MatchViewModel;
 class UGP_MatchViewModelAdapter;
 class UGP_ResourceViewModel;
@@ -47,6 +48,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "GP|HUD")
 	UGP_HUDRootWidget* GetProductionHUDWidget() const { return ProductionHUDWidget; }
+
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|LaunchMenu")
+	UGP_LaunchMenuPresenter* GetLaunchMenuPresenter() const { return LaunchMenuPresenter; }
 
 	int32 GetResourceDelegateCount() const;
 	int32 GetMatchDelegateCount() const;
@@ -96,6 +100,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UGP_MatchViewModelAdapter> MatchAdapter;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGP_LaunchMenuPresenter> LaunchMenuPresenter;
 
 	TWeakObjectPtr<AGP_GameState> BoundGameState;
 	TWeakObjectPtr<AGP_PlayerController> BoundPlayerController;

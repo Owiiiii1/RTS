@@ -1,5 +1,17 @@
 # Grim Protocol — AI Project Log
 
+## 2026-08-23 — Production HUD right-side Launch Menu presentation
+
+Status: **PRODUCTION_LAUNCH_MENU_READY_FOR_OPERATOR_VALIDATION**
+
+- Added `UGP_LaunchMenuPresenter` owned by `UGP_HUDViewModelSubsystem` (LocalPlayer).
+- `UGP_HUDRootWidget` exposes container rows, ready count, Launch enablement, Launch request forwarding, and `BP_OnLaunchMenuChanged`.
+- Launch forwards to existing `AGP_PlayerController::RequestLaunchReadyContainer` / `Server_RequestLaunchReadyContainer`.
+- Event-driven from local MainBase `UGP_StorageComponent` via `OnResolvedMainBaseChanged` + `OnStorageChanged`. No Tick, no world scan.
+- TEMP HUD remains retired. No gameplay/economy semantic change. No Content/Config/maps/DataAssets/Tools touched.
+- Authored right-side WBP layout remains operator-local.
+- **NOT MERGED. NOT FINALIZED.**
+
 ## 2026-08-23 — TEMP HUD retired; production HUD is the active match HUD
 
 Status: **TEMP_HUD_REMOVAL_READY_FOR_OPERATOR_VALIDATION**

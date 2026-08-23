@@ -159,9 +159,11 @@ PublicDependencyModuleNames.AddRange(new string[]
   `gp.UI.HUDDump` PlanetFerronite / OrbitalFerronite=100.00; Manual MVVM
   `GP_ResourceViewModel.OrbitalFerronite` → To Text (Float) → `TXT_OrbitalFerroniteValue.Text`
   updated in the visible HUD.
-- The TEMP HUD is retired. Production HUD is the active match HUD and remains **PARTIAL**. Still not
-  implemented: visible resource/timer HUD completeness, Selection UI, Context Action Grid,
-  MainBase PURCHASE panel, minimap function, notifications, and production end-of-match screen.
+- The TEMP HUD is retired. Production HUD is the active match HUD and remains **PARTIAL**. Native
+  right-side Launch Menu presentation exists (`UGP_LaunchMenuPresenter` + HUD-root accessors);
+  authored WBP layout is operator-local. Still not implemented: visible resource/timer HUD
+  completeness, Selection UI, Context Action Grid, MainBase PURCHASE panel, minimap function,
+  notifications, and production end-of-match screen.
   Operator-validated runtime visibility of authored `WBP_GP_HUD` (local, not committed).
   Operator-validated: `GP_ResourceViewModel.PlanetFerronite` → To Text (Float) →
   `TXT_PlanetFerroniteValue.Text` updates live when Workers deposit Ferronite.
@@ -308,6 +310,9 @@ WBP_GP_HUD (authored child of UGP_HUDRootWidget; operator-local, not committed)
 │   ├── BottomCenter Selection / Current Info (widest; single-entity or 10×3 group)
 │   └── BottomRight Context Action Grid + Message Strip
 │       (Unit / Building / MainBase PURCHASE → UNITS|BUILDINGS|DEFENSE)
+├── RightLaunchMenu (authored on WBP_GP_HUD; operator-local, not committed)
+│   ├── Launch button (top)
+│   └── Vertical container list (one fill bar per local MainBase container)
 ├── DropReticle / building ghost (visual layer)
 ├── NotificationStack (not implemented; Message Strip is panel-local)
 └── EndOfMatch (hidden until match end)
@@ -333,6 +338,18 @@ authored `TXT_PlanetFerroniteValue` is bound to `GP_ResourceViewModel.PlanetFerr
 To Text (Float) and updates when Workers deposit Ferronite. `WBP_GP_HUD` remains operator-local
 and uncommitted.
 
+**Right-side Launch Menu (production HUD, 2026-08-23):** a vertical panel on the right of
+`WBP_GP_HUD`. Top control is Launch. Below it, one row per local MainBase storage container
+with a fill bar: yellow while filling, green when full/ready. Presentation is owned by
+`UGP_LaunchMenuPresenter` on `UGP_HUDViewModelSubsystem` (LocalPlayer). `UGP_HUDRootWidget`
+exposes read-only `GetLaunchContainerRows` / `GetLaunchContainerPresentations` /
+`CanLaunchReadyContainer` / `GetReadyLaunchContainerCount`, forwards Launch through
+`AGP_PlayerController::RequestLaunchReadyContainer` → `Server_RequestLaunchReadyContainer`,
+and notifies authored WBP via `BP_OnLaunchMenuChanged`. Source of truth remains
+`UGP_StorageComponent` on the resolved local MainBase. Event-driven via
+`OnResolvedMainBaseChanged` + `OnStorageChanged`. No Tick, no world scan, no TEMP HUD.
+Authored right-side layout stays operator-local; this slice does not modify `GP/Content`.
+
 ### MVVM Binding Contract
 
 Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
@@ -340,6 +357,7 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 | Widget | ViewModel (FieldNotify props) | Adapter subscribes to |
 | --- | --- | --- |
 | Future top-center Match Timer | `UGP_MatchViewModel.MatchTimeRemaining` | `AGP_GameState.OnMatchTimeRemainingChanged` |
+| Right-side Launch Menu | `UGP_HUDRootWidget` accessors over `UGP_LaunchMenuPresenter` rows (`FillNormalized`, `bIsReadyForLaunch`); Launch via `RequestLaunchReadyContainer` | Local MainBase `OnResolvedMainBaseChanged` + `UGP_StorageComponent::OnStorageChanged` |
 | Future top-left Threat | `UGP_MatchViewModel.FerroniteThreatNormalized` (bar); raw `FerroniteThreatValue` remains available | Local-team `OnTeamFerroniteThreatValueChanged`, `OnResolvedMainBaseChanged`, MainBase `OnStorageChanged` |
 | Future top-left Score + top-right Orbit/Cap | `UGP_ResourceViewModel.{PlanetFerronite, OrbitalFerronite, FerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates; local MainBase `OnResolvedMainBaseChanged` + `OnStorageChanged` for `PlanetFerronite` |
 | Future top-right Planet Ferronite | `UGP_ResourceViewModel.PlanetFerronite` = local MainBase `GetTotalStored()` | `FindMainBaseForTeamClientSafe` + `OnResolvedMainBaseChanged` + `OnStorageChanged` |

@@ -98,6 +98,11 @@ UX/balance tuning may revisit the presentation scale.
 - BUILDINGS / Defensive Turret LAUNCH = existing Purchase → READY → immediately enter deploy ghost.
   Wall Package LAUNCH = existing Buy Wall Package (no READY, no placement mode).
 - TEMP HUD is retired. Future production context-action UI will call existing PlayerController gameplay request APIs.
+- **Right-side Launch Menu (production HUD):** Launch at the top of a vertical right panel.
+  Container fill bars sit below it, one per local MainBase container. Yellow = filling.
+  Green = full/ready. The Launch button calls the existing PlayerController launch request.
+  Native presentation is event-driven from local MainBase storage. Authored WBP layout is
+  operator-local and is not committed in this slice.
 
 **Visual prototype:** medium/dark grey major blocks, lighter grey inner cells, thin borders,
 modest rounding, stronger contrast for selected/hover. No final art, textures, or icons required.
@@ -112,6 +117,9 @@ Future authored names; none of these visual widgets are implemented yet.
 - Top-bar blocks: Threat+Score, Match Timer, Planet/Orbit/Cap
 - Bottom-bar blocks: Minimap placeholder, Selection/Info, Context Action Grid + Message Strip
   (MainBase PURCHASE lives in this panel; not a fullscreen Order Menu)
+- Right-side Launch Menu: Launch button on top, vertical local-MainBase container fill bars below
+  (yellow while filling, green when full/ready). Event-driven from local storage. Authored in
+  `WBP_GP_HUD` by the operator; native data/API is on `UGP_HUDRootWidget`.
 - `WBP_GP_EndOfMatch`
 
 ## UX Principles

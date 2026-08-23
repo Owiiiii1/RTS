@@ -20,7 +20,7 @@ Operator confirmed in PIE that the new Worker mining/haul command-intent semanti
 - Base: `origin/main` @ `aa84960c57bb4ee4180de80e44a49caece413549`
 - Implementation commit: `bd2f0af1b6db4bcaf7c781bcb22bb3858c1ff611`
 - Pre-finalization head (tech-lead check): `91616b8318217ab01b7e52706a66eb0a57b0085d`
-- Finalization head: recorded in the commit that lands this report
+- Finalization head: `d38578b5618286c26fa14327201dd718bc3d5100`
 - Ahead of `origin/main`: implementation + report + test-harness isolation
 - Behind `origin/main`: **0**
 

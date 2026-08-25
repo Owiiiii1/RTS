@@ -24,8 +24,9 @@ Group visual (icon grid from `GetSelectionGroupRows` / `BP_OnSelectionPresentati
 - Base: `origin/main` @ `e1af0c6e5fcf39f70c58169f32c457aa2850da8d`
 - Implementation commit: `832b17ca8405f4b863e92076ef854df1c83ab63e`
 - Pre-finalization head (tech-lead check): `26b4da12856595b4702eca6cdb574808e138485f`
-- Finalization head: this finalization commit
-- Ahead of `origin/main`: implementation + report SHA record + this finalization
+- Finalization head: `92698f117e8f1b15dc07d0b5c35f60ac76ff0ccc`
+- Final head: `92698f117e8f1b15dc07d0b5c35f60ac76ff0ccc`
+- Ahead of `origin/main`: implementation + implementation-SHA record + this finalization + this SHA record
 - Behind `origin/main`: **0**
 
 ## Final SelectionVM data flow

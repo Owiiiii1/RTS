@@ -2,170 +2,138 @@
 
 ## Status
 
-**PRODUCTION_HUD_SELECTION_VM_FINALIZED_READY_TO_MERGE**
+**BOTTOM_HUD_GROUP_AND_CONTEXT_ACTIONS_READY_FOR_OPERATOR_VALIDATION**
 
-Operator PASS received. Tech-lead pre-finalization SHAs verified. Gameplay/UI semantics were not changed during finalization. Authored `WBP_GP_HUD` was not modified and is not in the commit.
-
-## Operator PASS
-
-Operator confirmed in PIE (2026-08-25):
-
-- `GP_SelectionViewModel` is successfully connected in authored `WBP_GP_HUD` via Manual MVVM slot `GP_SelectionViewModel`
-- selecting Worker / Salvage Walker / MainBase updates Selection data
-- CurrentHealth / Damage display
-- Worker CargoAmount updates live during mining
-- authored `WBP_GP_HUD` remains operator-local and is **not** committed
-
-Group visual (icon grid from `GetSelectionGroupRows` / `BP_OnSelectionPresentationChanged`) is **not** authored and is **not** operator-validated.
+This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge. Do not run production finalization. The branch continues with PURCHASE categories after operator PASS.
 
 ## Branch / base / head
 
-- Branch: `ui/gp-production-hud-selection-vm`
-- Base: `origin/main` @ `e1af0c6e5fcf39f70c58169f32c457aa2850da8d`
-- Implementation commit: `832b17ca8405f4b863e92076ef854df1c83ab63e`
-- Pre-finalization head (tech-lead check): `26b4da12856595b4702eca6cdb574808e138485f`
-- Finalization head: `92698f117e8f1b15dc07d0b5c35f60ac76ff0ccc`
-- Final head: `92698f117e8f1b15dc07d0b5c35f60ac76ff0ccc`
-- Ahead of `origin/main`: implementation + implementation-SHA record + this finalization + this SHA record
+- Branch: `ui/gp-bottom-hud`
+- Base: `origin/main` @ `0667b6f912fce288422848d5d2355bc4510b748c`
+- Head: this implementation commit on `ui/gp-bottom-hud`
 - Behind `origin/main`: **0**
+- `GP Win64 Development` / `GP Win64 Shipping` / full suite: **not run** (intermediate gate)
 
-## Final SelectionVM data flow
+## Group Selection event seam
 
-```
-UGP_SelectionComponent (local PC)
-  OnSelectionChanged()
-        │
-        ▼
-UGP_SelectionViewModelAdapter   (GPUIRuntime, owned by UGP_HUDViewModelSubsystem)
-  live selected = valid && !IsDead()
-  else inspect fallback = Cast<AGP_UnitBase>(GetInspectedTarget())
-                         && valid && !IsDead() && IsGameplayInspectable()
-  bind GAS Health/MaxHealth + OnUnitDied + OnDestroyed
-  bind Worker UGP_CargoComponent::OnCargoAmountChanged (single only)
-        │
-        ▼
-UGP_SelectionViewModel          (canonical presentation SoT)
-        │
-        ├─ Manual MVVM slot `GP_SelectionViewModel` (fail-safe if missing)
-        └─ HUD-root group seam: GetSelectionGroupRows()
-           + BP_OnSelectionPresentationChanged()
-        │
-        ▼
-authored WBP_GP_HUD             (operator-local; Single bindings PIE-validated; not committed)
-```
+Canonical SoT remains `UGP_SelectionViewModel::GroupRows` (factual selection order, cap **24** unchanged).
 
-Gameplay state stays in `GPRuntime`. Presentation lives in `GPUIRuntime`. `GPRuntime` has no `GPUIRuntime` dependency.
+HUD seam (already present; not rewritten):
 
-No Tick. No polling. No world scan on the presentation path. The contract test uses `TActorIterator` only to neutralize authored combat actors, matching other diagnostic contracts.
+- `UGP_HUDRootWidget::GetSelectionGroupRows()`
+- `BP_OnSelectionPresentationChanged()`
 
-`UGP_HUDViewModelSubsystem` (local-player subsystem) owns exactly one `UGP_SelectionViewModel` and exactly one `UGP_SelectionViewModelAdapter`. Widgets do not create VMs. `FGP_HUDViewModelBridge::AssignOwnedViewModels` injects the existing instance into Manual slot `GP_SelectionViewModel`. Missing slot / missing `UMVVMView` fails safe and does not spawn a replacement VM.
+Row fields already complete: `Index`, `DisplayName`, `CurrentHealth`, `MaxHealth`, `HealthNormalized`, `bIsUnit`, `bIsBuilding`.
 
-Bind path:
+`SetGroupRowVitals` already broadcasts `OnSelectionPresentationChanged`. HUD root already forwards that multicast to `BP_OnSelectionPresentationChanged`. Contracts confirmed the event fires on group-row health push (single → group, group health, clear). No Tick.
 
-- `PlayerControllerChanged` / `Rebind` → `BindPlayerController` → `BindSelectionAdapter`
-- Selection bind does **not** wait for GameState/team ready
-- PC change / travel: previous adapter `Shutdown` (unbind) then `Initialize` on the new local `UGP_SelectionComponent`
-- `Deinitialize`: adapter `Shutdown`
+Group **visual** grid is still not authored / not operator-validated.
 
-## Single / Group / Inspect semantics
+## Context Action modes
 
-Mode enum: `EGP_SelectionPresentationMode { None, Single, Group }`.
+`UGP_ContextActionPresenter` owned by `UGP_HUDViewModelSubsystem`. Source is live local `UGP_SelectionComponent` (not inspect-only SelectionVM Single). Inspect-only → **None**.
 
-Priority (matches current component, not a new gameplay rule):
+| Mode | Rule |
+| --- | --- |
+| **None** | 0 live selected; mixed unit+building; multi-building; non-friendly MainBase |
+| **Unit** | exactly one live selected `IsSelectionTypeUnit()` |
+| **UnitGroup** | >1 live selected, **all** `IsSelectionTypeUnit()` and none `IsSelectionTypeBuilding()` |
+| **Building** | exactly one live selected building that is **not** `AGP_MainBase` |
+| **MainBase** | exactly one live selected **friendly** `AGP_MainBase` (class seam, not DisplayName) |
 
-1. **Selected live units win.** `GetSelectedUnits()` filtered to `IsValid && !IsDead()`.
-   - 0 live selected → inspect fallback
-   - 1 live selected → **Single** (`bIsInspectPresentation = false`)
-   - >1 live selected → **Group** (factual count, cap **24** unchanged)
-2. **Inspect fallback.** If selection is empty and `GetInspectedTarget()` is a live inspectable `AGP_UnitBase` (`IsGameplayInspectable()`), present **Single** with `bIsInspectPresentation = true`.
-3. **None.** Otherwise count 0, single fields cleared, group rows empty.
+Factual selection policy: Shift/Ctrl click and marquee can mix types (no mixed-prevention in the container). Mixed is **not** given invented UnitGroup/Building actions → **None**.
 
-`ClearSelection()` does not clear inspect. `SetInspectedTarget()` notifies `OnSelectionChanged()`. `ReplaceSelectionWithUnit()` does not clear inspect; selection still wins presentation.
+## Exact action availability
 
-Dead selected actors are omitted from presentation only. The adapter does not mutate `UGP_SelectionComponent`. Death/destroy rebuilds presentation via `OnUnitDied` / `OnDestroyed`.
+### Unit / UnitGroup
 
-## Health / cargo push confirmation
+| Action | Visible | Enabled | Notes |
+| --- | --- | --- | --- |
+| Move | yes | **no** | no local Move targeting mode exists (RMB smart-command only) |
+| Stop | yes | **yes** | live selected units |
+| Attack-Move | yes | `SelectionHasAttackMoveEligibleUnit()` | existing Salvage Walker capability query, not actor-class hardcode |
+| Patrol | yes | **no** | backend not implemented; no new tag/RPC |
+| Purchase | **absent** | — | |
 
-On every selection/inspect rebuild:
+### Building (LogisticsHub / Turret)
 
-1. Unbind Health, MaxHealth, `OnUnitDied`, `OnDestroyed`, cargo from previously presented actors.
-2. Rebuild VM from current live selected / inspect.
-3. Bind Health + MaxHealth `GetGameplayAttributeValueChangeDelegate` on **currently presented** actors only.
-4. Health/MaxHealth push updates vitals only (`SetSingleVitals` / `SetGroupRowVitals`) — no selection rebuild, no Tick.
+Empty action list. Purchase absent.
 
-Current health is GAS `UGP_UnitAttributeSet::GetHealth()`, not `UGP_UnitDefinition` initial health.
+### MainBase
 
-Cargo is event-driven: `AGP_Worker::GetCargoComponent()` + `UGP_CargoComponent::OnCargoAmountChanged`. No cargo polling. Single Worker presentation exposes `bHasCargo`, `CargoAmount`, `CargoCapacity`, `CargoNormalized`. Group mode does not project cargo.
+Purchase visible/enabled. Unit actions absent.
 
-Operator PIE confirmed CurrentHealth display and live Worker CargoAmount while mining.
+## Move decision
 
-Definition source: `AGP_UnitBase::ResolveLoadedUnitDefinition()` only. No `LoadSynchronous` from HUD. No icon field (`UGP_UnitDefinition` has none).
+No `EnterMoveMode` / Move targeting modal exists. HUD **Move** is visible and disabled (`DisabledReason`: Move targeting mode is not implemented). Does not emulate clicks or invent world coordinates.
 
-## Manual MVVM slot `GP_SelectionViewModel`
+## Stop implementation / routing
 
-Authored `WBP_GP_HUD` uses Manual slot name **`GP_SelectionViewModel`**. Native injects the subsystem-owned VM into that slot. Operator PIE **PASSED** for Single Selection bindings. Group visual remains unauthored.
+`GP.Command.Stop` already validates and executes on authority. Missing piece was a player/UI emit path.
 
-## Exact changed files (branch vs `origin/main`)
+Added `AGP_PlayerController::RequestStopSelectedUnits()`:
+
+- local-only
+- reads live selection
+- builds `FGP_CommandRequest` with `GP.Command.Stop`
+- submits through existing `Server_RequestCommand`
+- does **not** call unit executors directly
+- no alternate RPC
+
+## AttackMove routing
+
+`RequestContextAction(AttackMove)` calls existing `EnterAttackMoveMode()`. Eligibility uses the same PC query, now public: `SelectionHasAttackMoveEligibleUnit()`. No second modal owner.
+
+## MainBase Purchase entry seam
+
+`RequestContextAction(Purchase)` / `RequestOpenMainBasePurchase()` set presenter panel state to `PurchaseRoot` and broadcast `OnContextActionsChanged`. No spend, no Units/Buildings/Defense, no gameplay Purchase RPC.
+
+Leaving MainBase selection resets panel to `Actions`.
+
+## Exact changed files
 
 New:
 
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPSelectionViewModel.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPSelectionViewModel.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPSelectionViewModelAdapter.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPSelectionViewModelAdapter.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPSelectionViewModelContractTest.cpp`
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPContextActionPresenter.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPContextActionPresenter.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPContextActionPresentationContractTest.cpp`
 
 Modified:
 
+- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
+- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
 - `GP/Source/GPUIRuntime/Public/ViewModels/GPHUDViewModelSubsystem.h`
 - `GP/Source/GPUIRuntime/Private/ViewModels/GPHUDViewModelSubsystem.cpp`
 - `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
 - `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
-- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDViewModelBridge.h`
-- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDViewModelBridge.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPHUDViewModelBridgeContractTest.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPSelectionViewModelContractTest.cpp`
 - `Docs/TDD/12_UI_Architecture.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/Development/Cursor_Work_Report.md` (this file)
 
-`WBP_GP_HUD` is **not** in the branch diff and is **not** in this commit.
+`WBP_GP_HUD` is **not** in the diff and was **not** modified.
 
-## Exact contract results
+## Exact focused tests
 
-Focused re-run after operator PASS. `L_PrototypeArena` `-game -unattended -nop4 -NullRHI`. Log: `Saved/ContractLogs/gp.UI.SelectionVMFinalizationSuite.log`.
+`L_PrototypeArena` `-game -unattended -nop4 -NullRHI`.
 
 | Command | Result |
 | --- | --- |
+| `gp.UI.RunContextActionPresentationContractTest` | **Complete Failures=0 Cancelled=false** |
 | `gp.UI.RunSelectionViewModelContractTest` | **Complete Failures=0 Cancelled=false** |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | **Complete Failures=0 Cancelled=false** |
 | `gp.UI.RunProductionHUDFoundationContractTest` | **Complete Failures=0 Cancelled=false** |
 | `gp.UI.RunHUDBootstrapContractTest` | **Complete Failures=0 Cancelled=false** |
 | `gp.UI.RunLaunchMenuPresentationContractTest` | **Complete Failures=0 Cancelled=false** |
-| Existing Selection **component** contract | **None in repo** — no additional Selection/UI contract to re-run |
+| `gp.Combat.RunAttackMoveContractTest` | **Complete Failures=0 Cancelled=false** |
 
-Full suite: **not run** (no cross-cutting defect found).
+No existing dedicated Stop/command-dispatch contract in repo. Full suite / GP Development / GP Shipping: **not run**.
 
-## Builds
+## GPEditor / UHT
 
 | Target | Result |
 | --- | --- |
-| `GPEditor Win64 Development` + UHT | **Succeeded** (editor incremental GPUIRuntime compile/link; `GP Win64 Development` ran UHT: 10 generated files written) |
-| `GP Win64 Development` | **Succeeded** |
-| `GP Win64 Shipping` | **Succeeded** |
-
-## Final diff audit vs `origin/main`
-
-Behind: **0**. Ahead: implementation + docs/report finalization.
-
-Only expected `GPUIRuntime` C++ / tests / docs. **None** of:
-
-- `Content`
-- `Config`
-- maps
-- Blueprint / DataAsset
-- Tools
-- generated / binary files
-- `WBP_GP_HUD`
+| `GPEditor Win64 Development` + UHT | **Succeeded** (UHT processed GPEditor, 11 generated files written) |
 
 ## Protected-file audit
 
@@ -176,7 +144,7 @@ Only expected `GPUIRuntime` C++ / tests / docs. **None** of:
 - `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
 - `GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`
 - `GP/Content/Basic_VFX/`
-- `GP/Content/GrimProtocol/Blueprint/` (includes authored `WBP_GP_HUD`)
+- `GP/Content/GrimProtocol/Blueprint/` (includes `WBP_GP_HUD`)
 - `GP/Content/GrimProtocol/DataAssets/`
 - `GP/Content/GrimProtocol/Materials/`
 - `GP/Content/Mixed_Magic_VFX_Pack/`
@@ -185,3 +153,19 @@ Only expected `GPUIRuntime` C++ / tests / docs. **None** of:
 - `GP/GP.uproject`
 
 No `git reset --hard`, `git clean`, `git restore .`, or broad stash.
+
+## Operator Blueprint wiring (`WBP_GP_HUD`, local only)
+
+Do **not** commit the WBP.
+
+1. **Group icon row widget** — consume `FGP_SelectionGroupRow` (`Index`, `DisplayName`, health fields, `bIsUnit` / `bIsBuilding`). Placeholder images only; no gameplay icon field.
+2. **Rebuild group grid** on `BP_OnSelectionPresentationChanged`: call `GetSelectionGroupRows()` (stable `Index` 0..N-1, N ≤ 24). Extra reserved cells stay empty. Event also fires when a group-row health value changes.
+3. **Context Action Grid buttons** — rebuild on `BP_OnContextActionsChanged` from `GetContextActionPresentations()`. Drive visibility/enablement from `bVisible` / `bEnabled`. Show `DisabledReason` if useful. Use `GetContextActionMode()` for Unit vs Building vs MainBase layout.
+4. **OnClicked** → `RequestContextAction(ActionId)`. Expected live behavior:
+   - Stop: selected units stop via existing command path
+   - Attack-Move: existing A-mode (LMB ground); only if enabled
+   - Move / Patrol: remain disabled
+   - Purchase: `GetContextActionPanelState()` becomes `PurchaseRoot` (placeholder; no catalog yet)
+5. Do not Tick, do not read Actors/ASC from the widget, do not create presenters/VMs in the widget.
+
+After operator PASS: **do not finalize**. Next Cursor task on this same branch is PURCHASE categories.

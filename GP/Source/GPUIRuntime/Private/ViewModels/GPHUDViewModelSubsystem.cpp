@@ -13,6 +13,7 @@
 #include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
 #include "Settings/GPUIPresentationSettings.h"
+#include "ViewModels/GPContextActionPresenter.h"
 #include "ViewModels/GPLaunchMenuPresenter.h"
 #include "ViewModels/GPMatchViewModel.h"
 #include "ViewModels/GPMatchViewModelAdapter.h"
@@ -35,6 +36,7 @@ void UGP_HUDViewModelSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	MatchAdapter = NewObject<UGP_MatchViewModelAdapter>(this);
 	SelectionAdapter = NewObject<UGP_SelectionViewModelAdapter>(this);
 	LaunchMenuPresenter = NewObject<UGP_LaunchMenuPresenter>(this);
+	ContextActionPresenter = NewObject<UGP_ContextActionPresenter>(this);
 
 	if (UWorld* World = GetWorld())
 	{
@@ -70,6 +72,10 @@ void UGP_HUDViewModelSubsystem::Deinitialize()
 	if (LaunchMenuPresenter != nullptr)
 	{
 		LaunchMenuPresenter->Shutdown();
+	}
+	if (ContextActionPresenter != nullptr)
+	{
+		ContextActionPresenter->Shutdown();
 	}
 	bReady = false;
 	LocalTeamId = -1;
@@ -149,6 +155,7 @@ void UGP_HUDViewModelSubsystem::BindPlayerController(AGP_PlayerController* Playe
 	if (BoundPlayerController.Get() == PlayerController)
 	{
 		BindSelectionAdapter(PlayerController);
+		BindContextActionPresenter(PlayerController);
 		return;
 	}
 
@@ -161,6 +168,7 @@ void UGP_HUDViewModelSubsystem::BindPlayerController(AGP_PlayerController* Playe
 				this, &ThisClass::HandlePlayerStatePresentationReady);
 	}
 	BindSelectionAdapter(PlayerController);
+	BindContextActionPresenter(PlayerController);
 }
 
 void UGP_HUDViewModelSubsystem::UnbindPlayerController()
@@ -168,6 +176,10 @@ void UGP_HUDViewModelSubsystem::UnbindPlayerController()
 	if (SelectionAdapter != nullptr)
 	{
 		SelectionAdapter->Shutdown();
+	}
+	if (ContextActionPresenter != nullptr)
+	{
+		ContextActionPresenter->Shutdown();
 	}
 	if (AGP_PlayerController* PlayerController = BoundPlayerController.Get())
 	{
@@ -194,6 +206,22 @@ void UGP_HUDViewModelSubsystem::BindSelectionAdapter(AGP_PlayerController* Playe
 	}
 
 	SelectionAdapter->Initialize(SelectionViewModel, SelectionComponent);
+}
+
+void UGP_HUDViewModelSubsystem::BindContextActionPresenter(AGP_PlayerController* PlayerController)
+{
+	if (ContextActionPresenter == nullptr)
+	{
+		return;
+	}
+
+	if (!IsValid(PlayerController) || PlayerController->GetSelectionComponent() == nullptr)
+	{
+		ContextActionPresenter->Shutdown();
+		return;
+	}
+
+	ContextActionPresenter->Initialize(PlayerController);
 }
 
 void UGP_HUDViewModelSubsystem::ResetViewModels()

@@ -12,6 +12,7 @@ class APlayerState;
 class AGP_GameState;
 class AGP_PlayerController;
 class AGP_PlayerState;
+class UGP_ContextActionPresenter;
 class UGP_HUDRootWidget;
 class UGP_LaunchMenuPresenter;
 class UGP_MatchViewModel;
@@ -57,6 +58,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|LaunchMenu")
 	UGP_LaunchMenuPresenter* GetLaunchMenuPresenter() const { return LaunchMenuPresenter; }
 
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
+	UGP_ContextActionPresenter* GetContextActionPresenter() const { return ContextActionPresenter; }
+
 	int32 GetResourceDelegateCount() const;
 	int32 GetMatchDelegateCount() const;
 	int32 GetSelectionDelegateCount() const;
@@ -76,6 +80,7 @@ private:
 	void BindPlayerController(AGP_PlayerController* PlayerController);
 	void UnbindPlayerController();
 	void BindSelectionAdapter(AGP_PlayerController* PlayerController);
+	void BindContextActionPresenter(AGP_PlayerController* PlayerController);
 	void BindGameState(AGP_GameState* GameState);
 	void UnbindGameState();
 	void RebuildPlayerStateTeamBindings(AGP_GameState* GameState);
@@ -116,6 +121,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UGP_LaunchMenuPresenter> LaunchMenuPresenter;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGP_ContextActionPresenter> ContextActionPresenter;
 
 	TWeakObjectPtr<AGP_GameState> BoundGameState;
 	TWeakObjectPtr<AGP_PlayerController> BoundPlayerController;

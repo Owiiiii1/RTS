@@ -1659,6 +1659,47 @@ void AGP_PlayerController::CancelBuildingPlacement()
 	DestroyBuildingPlacementGhost();
 }
 
+void AGP_PlayerController::RequestStopSelectedUnits()
+{
+	if (!IsLocalController() || CommandComponent == nullptr || SelectionComponent == nullptr)
+	{
+		return;
+	}
+
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	if (!GPTags.Command_Stop.IsValid())
+	{
+		return;
+	}
+
+	FGP_CommandRequest Request;
+	Request.CommandTag = GPTags.Command_Stop;
+	Request.TargetActor = nullptr;
+	Request.TargetLocation = FVector::ZeroVector;
+	Request.bQueue = false;
+
+	for (const TWeakObjectPtr<AGP_UnitBase>& WeakUnit : SelectionComponent->GetSelectedUnits())
+	{
+		AGP_UnitBase* Unit = WeakUnit.Get();
+		if (IsValid(Unit) && !Unit->IsDead())
+		{
+			Request.IssuingUnits.Add(Unit);
+		}
+	}
+
+	if (Request.IssuingUnits.Num() == 0)
+	{
+		return;
+	}
+
+	UE_LOG(LogGPCommandInput, Log,
+		TEXT("GP CommandInput: Tag=%s Units=%d TargetActor=None Loc=0 Queue=false Reason=HUDStop"),
+		*Request.CommandTag.ToString(),
+		Request.IssuingUnits.Num());
+
+	Server_RequestCommand(Request);
+}
+
 bool AGP_PlayerController::SelectionHasAttackMoveEligibleUnit() const
 {
 	if (SelectionComponent == nullptr)

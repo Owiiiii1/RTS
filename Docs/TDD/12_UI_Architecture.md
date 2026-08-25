@@ -167,8 +167,11 @@ PublicDependencyModuleNames.AddRange(new string[]
   Authored WBP layout is operator-local. Operator PIE **PASSED** (2026-08-25): Manual slot
   `GP_SelectionViewModel` is wired in local `WBP_GP_HUD`; Single Selection data (Worker / Salvage
   Walker / MainBase), CurrentHealth, Damage, and live Worker CargoAmount update in PIE.
-  Group icon-grid visual is **not** authored/operator-validated. `WBP_GP_HUD` remains uncommitted.
-  Still not implemented: Context Action Grid, MainBase PURCHASE panel, minimap function,
+  Group icon-grid visual is **not** authored/operator-validated. Native Context Action Grid
+  presentation exists (`UGP_ContextActionPresenter` owned by `UGP_HUDViewModelSubsystem`; HUD-root
+  accessors / `RequestContextAction` / `BP_OnContextActionsChanged`). Authored Context Action buttons
+  are **not** operator-validated. `WBP_GP_HUD` remains uncommitted.
+  Still not implemented: MainBase PURCHASE categories, minimap function,
   notifications, and production end-of-match screen.
   Operator-validated runtime visibility of authored `WBP_GP_HUD` (local, not committed).
   Operator-validated: `GP_ResourceViewModel.PlanetFerronite` → To Text (Float) →
@@ -374,8 +377,8 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 | Future top-left Threat | `UGP_MatchViewModel.FerroniteThreatNormalized` (bar); raw `FerroniteThreatValue` remains available | Local-team `OnTeamFerroniteThreatValueChanged`, `OnResolvedMainBaseChanged`, MainBase `OnStorageChanged` |
 | Future top-left Score + top-right Orbit/Cap | `UGP_ResourceViewModel.{PlanetFerronite, OrbitalFerronite, FerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates; local MainBase `OnResolvedMainBaseChanged` + `OnStorageChanged` for `PlanetFerronite` |
 | Future top-right Planet Ferronite | `UGP_ResourceViewModel.PlanetFerronite` = local MainBase `GetTotalStored()` | `FindMainBaseForTeamClientSafe` + `OnResolvedMainBaseChanged` + `OnStorageChanged` |
-| Future bottom-center Selection/Info | Native `UGP_SelectionViewModel` None/Single/Group (gameplay cap 24). Operator PIE **PASSED** for authored Single bindings via Manual slot `GP_SelectionViewModel`. Group rows via `UGP_HUDRootWidget::GetSelectionGroupRows` + `BP_OnSelectionPresentationChanged` (native ready; Group visual not authored/operator-validated). `WBP_GP_HUD` operator-local, uncommitted. | `UGP_SelectionComponent.OnSelectionChanged` (local) + GAS health delegates + Worker cargo delegate |
-| Future bottom-right Context Action Grid | Future selection/command + MainBase procurement presentation | Same selection delegate; Unit vs Building vs PURCHASE states |
+| Future bottom-center Selection/Info | Native `UGP_SelectionViewModel` None/Single/Group (gameplay cap 24). Operator PIE **PASSED** for authored Single bindings via Manual slot `GP_SelectionViewModel`. Group rows via `UGP_HUDRootWidget::GetSelectionGroupRows` + `BP_OnSelectionPresentationChanged` (native ready including group-row health push; Group visual not authored/operator-validated). `WBP_GP_HUD` operator-local, uncommitted. | `UGP_SelectionComponent.OnSelectionChanged` (local) + GAS health delegates + Worker cargo delegate |
+| Future bottom-right Context Action Grid | Native `UGP_ContextActionPresenter` modes None/Unit/UnitGroup/Building/MainBase. Unit actions: Move (visible, disabled — no Move targeting mode), Stop (enabled; `RequestStopSelectedUnits` → `Server_RequestCommand`), Attack-Move (`EnterAttackMoveMode` when `SelectionHasAttackMoveEligibleUnit()`), Patrol (visible, disabled; no backend). MainBase: Purchase presentation + local `PurchaseRoot` panel state only. Other buildings: empty. Authored buttons not operator-validated. | Local selection + death/destroy; PC AttackMove eligibility query |
 | Future right-side Message Strip | Contextual procurement/action status (shuttle slots, funds, cap, wall stock) | Existing orbital reject/status; not a global toast stack |
 | Future MainBase PURCHASE panel | Future procurement VM (catalog, manifest, READY, Wall stock) | `UGP_OrbitalDeliverySubsystem` + existing Purchase/Confirm/Deploy RPCs |
 | Future bottom-left Minimap | Future `UGP_MinimapVM` — layout placeholder only in the next visual slice | Later minimap subsystem |

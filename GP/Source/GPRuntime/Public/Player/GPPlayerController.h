@@ -150,6 +150,18 @@ public:
 	 */
 	void UpdateBuildingPlacementInputEdgesForContract(bool bLMBDown, bool bRMBDown);
 
+	/**
+	 * Local Stop intent for the current selection.
+	 * Builds GP.Command.Stop and submits through Server_RequestCommand.
+	 * Does not call unit executors directly.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GP|Commands")
+	void RequestStopSelectedUnits();
+
+	/** Canonical Attack-Move eligibility for the current local selection (Salvage Walker capability). */
+	UFUNCTION(BlueprintPure, Category = "GP|Commands|AttackMove")
+	bool SelectionHasAttackMoveEligibleUnit() const;
+
 	/** GP-S32A: enter local Attack-Move modal (A). Next ground LMB issues AttackMove. */
 	UFUNCTION(BlueprintCallable, Category = "GP|Commands|AttackMove")
 	void EnterAttackMoveMode();
@@ -273,7 +285,6 @@ private:
 
 	void CancelAttackMoveModeFromRMB();
 	void UpdateAttackMoveInputOwnership();
-	bool SelectionHasAttackMoveEligibleUnit() const;
 
 	bool IsControlModifierDown() const;
 	bool IsShiftModifierDown() const;

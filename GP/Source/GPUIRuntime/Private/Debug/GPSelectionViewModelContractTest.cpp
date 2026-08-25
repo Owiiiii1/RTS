@@ -236,6 +236,20 @@ namespace GPSelectionViewModelContractPrivate
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("BP_OnSelectionPresentationChanged")) != nullptr,
 			TEXT("H_HUDRootGroupPresenterSeamExists"));
 
+		Selection->ReplaceSelectionWithUnit(UnitA);
+		Selection->AddUnitToSelection(UnitB);
+		int32 GroupHealthPresentationChanged = 0;
+		const FDelegateHandle GroupHealthHandle = VM->OnSelectionPresentationChanged.AddLambda(
+			[&GroupHealthPresentationChanged]()
+			{
+				++GroupHealthPresentationChanged;
+			});
+		Expect(SetUnitHealth(UnitB, 41.0f), TEXT("J_SetGroupRowHealth"));
+		Expect(FMath::IsNearlyEqual(VM->GetGroupRows()[1].CurrentHealth, 41.0f, 0.05f)
+			&& GroupHealthPresentationChanged > 0,
+			TEXT("J_GroupRowHealthFiresSelectionPresentationChanged"));
+		VM->OnSelectionPresentationChanged.Remove(GroupHealthHandle);
+
 		Selection->ClearAllSelectionState();
 		if (IsValid(UnitA))
 		{

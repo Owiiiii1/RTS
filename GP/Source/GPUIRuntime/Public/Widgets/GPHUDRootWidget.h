@@ -2,11 +2,13 @@
 
 #pragma once
 
+#include "ViewModels/GPContextActionPresenter.h"
 #include "ViewModels/GPLaunchMenuPresenter.h"
 #include "ViewModels/GPSelectionViewModel.h"
 #include "Widgets/GPUserWidgetBase.h"
 #include "GPHUDRootWidget.generated.h"
 
+class UGP_ContextActionPresenter;
 class UGP_LaunchMenuPresenter;
 class UGP_SelectionViewModel;
 
@@ -35,6 +37,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|Selection")
 	TArray<FGP_SelectionGroupRow> GetSelectionGroupRows() const;
 
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
+	TArray<FGP_ContextActionPresentation> GetContextActionPresentations() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
+	EGP_ContextActionMode GetContextActionMode() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
+	EGP_ContextActionPanelState GetContextActionPanelState() const;
+
+	UFUNCTION(BlueprintCallable, Category = "GP|HUD|ContextActions")
+	void RequestContextAction(EGP_ContextActionId ActionId);
+
+	UFUNCTION(BlueprintCallable, Category = "GP|HUD|ContextActions")
+	void RequestOpenMainBasePurchase();
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
@@ -44,6 +61,9 @@ protected:
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "GP|HUD|Selection")
 	void BP_OnSelectionPresentationChanged();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "GP|HUD|ContextActions")
+	void BP_OnContextActionsChanged();
 
 private:
 	void TryAssignOwnedViewModels();
@@ -55,7 +75,12 @@ private:
 	void UnbindSelectionViewModel();
 	void HandleSelectionPresentationChanged();
 	const UGP_SelectionViewModel* ResolveSelectionViewModel() const;
+	void BindContextActionPresenter();
+	void UnbindContextActionPresenter();
+	void HandleContextActionsChanged();
+	const UGP_ContextActionPresenter* ResolveContextActionPresenter() const;
 
 	TWeakObjectPtr<UGP_LaunchMenuPresenter> BoundLaunchMenuPresenter;
 	TWeakObjectPtr<UGP_SelectionViewModel> BoundSelectionViewModel;
+	TWeakObjectPtr<UGP_ContextActionPresenter> BoundContextActionPresenter;
 };

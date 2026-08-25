@@ -5,6 +5,7 @@
 #include "Engine/LocalPlayer.h"
 #include "Player/GPPlayerController.h"
 #include "ViewModels/GPHUDViewModelSubsystem.h"
+#include "ViewModels/GPContextActionPresenter.h"
 #include "ViewModels/GPLaunchMenuPresenter.h"
 #include "ViewModels/GPSelectionViewModel.h"
 #include "Widgets/GPHUDViewModelBridge.h"
@@ -17,10 +18,12 @@ void UGP_HUDRootWidget::NativeConstruct()
 	TryAssignOwnedViewModels();
 	BindLaunchMenuPresenter();
 	BindSelectionViewModel();
+	BindContextActionPresenter();
 }
 
 void UGP_HUDRootWidget::NativeDestruct()
 {
+	UnbindContextActionPresenter();
 	UnbindSelectionViewModel();
 	UnbindLaunchMenuPresenter();
 	Super::NativeDestruct();
@@ -170,4 +173,93 @@ TArray<FGP_SelectionGroupRow> UGP_HUDRootWidget::GetSelectionGroupRows() const
 		return SelectionVM->GetGroupRows();
 	}
 	return TArray<FGP_SelectionGroupRow>();
+}
+
+void UGP_HUDRootWidget::BindContextActionPresenter()
+{
+	UnbindContextActionPresenter();
+	const UGP_ContextActionPresenter* Presenter = ResolveContextActionPresenter();
+	UGP_ContextActionPresenter* MutablePresenter = const_cast<UGP_ContextActionPresenter*>(Presenter);
+	if (MutablePresenter == nullptr)
+	{
+		return;
+	}
+
+	BoundContextActionPresenter = MutablePresenter;
+	MutablePresenter->OnContextActionsChanged.AddUObject(
+		this, &ThisClass::HandleContextActionsChanged);
+	HandleContextActionsChanged();
+}
+
+void UGP_HUDRootWidget::UnbindContextActionPresenter()
+{
+	if (UGP_ContextActionPresenter* Presenter = BoundContextActionPresenter.Get())
+	{
+		Presenter->OnContextActionsChanged.RemoveAll(this);
+	}
+	BoundContextActionPresenter.Reset();
+}
+
+void UGP_HUDRootWidget::HandleContextActionsChanged()
+{
+	BP_OnContextActionsChanged();
+}
+
+const UGP_ContextActionPresenter* UGP_HUDRootWidget::ResolveContextActionPresenter() const
+{
+	if (const UGP_ContextActionPresenter* Bound = BoundContextActionPresenter.Get())
+	{
+		return Bound;
+	}
+	const ULocalPlayer* LocalPlayer = GetOwningLocalPlayer();
+	const UGP_HUDViewModelSubsystem* Subsystem =
+		LocalPlayer != nullptr ? LocalPlayer->GetSubsystem<UGP_HUDViewModelSubsystem>() : nullptr;
+	return Subsystem != nullptr ? Subsystem->GetContextActionPresenter() : nullptr;
+}
+
+TArray<FGP_ContextActionPresentation> UGP_HUDRootWidget::GetContextActionPresentations() const
+{
+	if (const UGP_ContextActionPresenter* Presenter = ResolveContextActionPresenter())
+	{
+		return Presenter->GetActions();
+	}
+	return TArray<FGP_ContextActionPresentation>();
+}
+
+EGP_ContextActionMode UGP_HUDRootWidget::GetContextActionMode() const
+{
+	if (const UGP_ContextActionPresenter* Presenter = ResolveContextActionPresenter())
+	{
+		return Presenter->GetMode();
+	}
+	return EGP_ContextActionMode::None;
+}
+
+EGP_ContextActionPanelState UGP_HUDRootWidget::GetContextActionPanelState() const
+{
+	if (const UGP_ContextActionPresenter* Presenter = ResolveContextActionPresenter())
+	{
+		return Presenter->GetPanelState();
+	}
+	return EGP_ContextActionPanelState::Actions;
+}
+
+void UGP_HUDRootWidget::RequestContextAction(EGP_ContextActionId ActionId)
+{
+	UGP_ContextActionPresenter* Presenter =
+		const_cast<UGP_ContextActionPresenter*>(ResolveContextActionPresenter());
+	if (Presenter != nullptr)
+	{
+		Presenter->RequestContextAction(ActionId);
+	}
+}
+
+void UGP_HUDRootWidget::RequestOpenMainBasePurchase()
+{
+	UGP_ContextActionPresenter* Presenter =
+		const_cast<UGP_ContextActionPresenter*>(ResolveContextActionPresenter());
+	if (Presenter != nullptr)
+	{
+		Presenter->RequestOpenMainBasePurchase();
+	}
 }

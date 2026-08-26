@@ -2,7 +2,7 @@
 
 ## Status
 
-**BOTTOM_HUD_SELECTION_ICON_RANGE_READY_FOR_OPERATOR_VALIDATION**
+**BOTTOM_HUD_GROUP_ROW_CLICK_READY_FOR_OPERATOR_VALIDATION**
 
 This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge. Do not run production finalization.
 
@@ -10,57 +10,38 @@ This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge
 
 - Branch: `ui/gp-bottom-hud`
 - Base: `origin/main` @ `0667b6f912fce288422848d5d2355bc4510b748c`
-- Head: `2d3f68a52c89d66e1dfb9f15bb711ad18cd0099e`
+- Head: `8bb55d5a97db7c844a324c5d87cda68db1b7380e`
 - Behind `origin/main`: **0**
 - `GP Win64 Development` / `GP Win64 Shipping` / full suite: **not run** (intermediate gate)
 
-## Exact icon property
+## Exact Blueprint API
 
-| Location | Name | Type |
-| --- | --- | --- |
-| `UGP_UnitDefinition` | `PresentationIcon` | `TObjectPtr<UTexture2D>` (`EditAnywhere`, `BlueprintReadOnly`, Category `GP\|Identity\|Presentation`) |
-| `UGP_SelectionViewModel` (Single) | `Icon` | `TObjectPtr<UTexture2D>` FieldNotify |
-| `FGP_SelectionGroupRow` | `Icon` | `TObjectPtr<UTexture2D>` |
+```
+UFUNCTION(BlueprintCallable, Category="GP|HUD|Selection")
+void UGP_HUDRootWidget::RequestSelectGroupRow(int32 RowIndex);
+```
 
-Presentation metadata only. Gameplay does not read `PresentationIcon`. No class→texture map. No Worker/SalvageWalker/MainBase hardcode.
+Local HUD only. Resolves `GetOwningPlayer()` → `AGP_PlayerController` → `UGP_SelectionComponent`. No RPC. Selection stays local-only.
 
-**Authored DataAssets were not modified.** Existing unit/building definitions therefore have `PresentationIcon = nullptr` until the operator assigns textures.
+Does **not** write SelectionVM. Does **not** force WidgetSwitcher / presentation mode. Refresh is `OnSelectionChanged` → `UGP_SelectionViewModelAdapter` → `BP_OnSelectionPresentationChanged`.
 
-## AttackRange source
+## How RowIndex maps to the selected actor
 
-Single `AttackRange` is `UGP_UnitDefinition::AttackRangeCm` (cm, no conversion). No second attack-range field was added to gameplay definitions. If the definition is not resident, numeric fallback matches existing Damage/Armor/MoveSpeed (GAS attributes); icon stays null.
+`FGP_SelectionGroupRow.Index` is the compact live index `0..N-1` in `GetSelectedUnits()` order after skipping invalid, `IsActorBeingDestroyed()`, and dead entries. That is the same filter `UGP_SelectionViewModelAdapter::CollectLiveSelectedUnits` / `FillGroupRow` uses when building rows.
 
-## Single fields
+`RequestSelectGroupRow(RowIndex)` walks that same compact live list and resolves the actor shown on that row. No persistent ids. Click is a no-op when:
 
-`DisplayName`, `CurrentHealth`, `MaxHealth`, `HealthNormalized`, `Damage`, `Armor`, `MoveSpeed`, **`AttackRange`**, **`Icon`**, `bIsUnit`, `bIsBuilding`, Worker cargo (`bHasCargo` / `CargoAmount` / `CargoCapacity` / `CargoNormalized`), `bIsInspectPresentation`.
+- live count `< 2` (empty / single / not a group)
+- `RowIndex` out of bounds
+- the resolved unit is invalid, being destroyed, or not `IsGameplaySelectable()`
 
-Icon and AttackRange clear on None / Group / `ResetPresentation`.
+## Canonical mutation
 
-## GroupRow fields
+Uses existing `UGP_SelectionComponent::ReplaceSelectionWithUnit(AGP_UnitBase*)`. No second selection-mutation path.
 
-`Index`, **`Icon`**, `DisplayName`, `CurrentHealth`, `MaxHealth`, `HealthNormalized`, `bIsUnit`, `bIsBuilding`. No Damage/Armor/Speed/Range on rows. Equality includes `Icon`.
+## No Actor* on GroupRow
 
-Each row icon is that actor's `ResolveLoadedUnitDefinition()->PresentationIcon`.
-
-## Missing-icon fallback
-
-Null icon is valid. WBP should show a placeholder. `ResolveLoadedUnitDefinition()` is already-resident only — **no `LoadSynchronous`** on the Selection VM / adapter / HUD path.
-
-## Exact changed files
-
-- `GP/Source/GPRuntime/Public/Units/GPUnitDefinition.h`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPSelectionViewModel.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPSelectionViewModel.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPSelectionViewModelAdapter.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPSelectionViewModelAdapter.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPSelectionViewModelContractTest.cpp`
-- `Docs/TDD/10_Data_Assets.md`
-- `Docs/TDD/12_UI_Architecture.md`
-- `Docs/TDD/04_RTS_Selection_And_Commands.md`
-- `Docs/Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md`
-- `Docs/Development/Cursor_Work_Report.md` (this file)
-
-`WBP_GP_HUD` / `WBP_GP_SelectionGroupRow` / authored UnitDefinition DataAssets: **not modified**.
+`FGP_SelectionGroupRow` is unchanged: `Index`, `DisplayName`, `Icon`, health fields, `bIsUnit`, `bIsBuilding`. No `AActor*` / `AGP_UnitBase*`. HUD does not own gameplay actor refs; `Index` is presentation identity for the click request.
 
 ## Exact focused tests
 
@@ -74,11 +55,20 @@ Null icon is valid. WBP should show a placeholder. `ResolveLoadedUnitDefinition(
 | `gp.UI.RunHUDBootstrapContractTest` | **Complete Failures=0 Cancelled=false** |
 | `gp.UI.RunContextActionPresentationContractTest` | **Complete Failures=0 Cancelled=false** |
 
+SelectionVM click cases (all PASS):
+
+| Case | Result |
+| --- | --- |
+| A. Group A,B,C → `RequestSelectGroupRow(1)` → count 1, selected B, Mode Single, name/icon/health from B | PASS |
+| B. OOB `-1` / `99` → selection unchanged | PASS |
+| C. Destroyed/stale row → safe no-op, no invalid dereference | PASS |
+| D. Single / empty → `RequestSelectGroupRow(0)` does not invent selection | PASS |
+
 ## GPEditor / UHT
 
 | Target | Result |
 | --- | --- |
-| `GPEditor Win64 Development` + UHT | **Succeeded** (UHT processed GPEditor, 9 generated files written) |
+| `GPEditor Win64 Development` + UHT | **Succeeded** (UHT processed GPEditor, 4 generated files written for `RequestSelectGroupRow`) |
 
 ## Protected-file audit
 
@@ -86,10 +76,8 @@ Null icon is valid. WBP should show a placeholder. `ResolveLoadedUnitDefinition(
 
 No `git reset --hard`, `git clean`, `git restore .`, or broad stash.
 
-## Operator wiring (local WBP only — do not commit)
+## Exact WBP operator wiring (local WBP only — do not commit)
 
-1. **`WBP_GP_SelectionGroupRow` Image** — bind/set from `FGP_SelectionGroupRow.Icon`. If null, keep the existing placeholder brush. Rebuild rows from `GetSelectionGroupRows()` on `BP_OnSelectionPresentationChanged`.
-2. **`WBP_GP_HUD` Single icon** — Manual MVVM slot `GP_SelectionViewModel` field `Icon` (`UTexture2D`). Null → placeholder. Visible in Single mode only.
-3. **Single AttackRange** — bind `GP_SelectionViewModel.AttackRange` (cm, same unit convention as MoveSpeed). No extra conversion. Hide or show `0` factually; do not invent a building exception.
+`WBP_GP_SelectionGroupRow` click → parent HUD `RequestSelectGroupRow(RowData.Index)`
 
-Do not Tick. Do not load textures from the widget. Do not finalize after operator PASS; next slice remains PURCHASE categories.
+Do not Tick. Do not store actor refs on the row widget. Do not set SelectionVM or WidgetSwitcher from the row. After operator PASS, do not finalize; next slice remains PURCHASE categories.

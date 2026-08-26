@@ -82,7 +82,7 @@ public:
 | --- | --- | --- | --- |
 | Orbital Drop Definition | `DA_GP_OrbitalDrop_*` | `GPRuntime` | **Building acquisition.** `Cost`, `DropTags`, soft `BuildingDefinition`, `DeliveryDescentSeconds`, `PayloadDeployDelaySeconds`. |
 | Orbital Unit Drop Definition | `DA_GP_OrbitalUnitDrop_*` | `GPRuntime` | **Unit acquisition.** `Cost`, `TransportSlotCost`, soft `UnitDefinition` / `PayloadClass`, unit descent / deploy delay. PrimaryAssetType `GPOrbitalUnitDropDefinition`. |
-| Unit Definition | `DA_GP_Unit_*` | `GPRuntime` | Intrinsic unit/building gameplay + `CargoCapacity`. **No acquisition cost.** |
+| Unit Definition | `DA_GP_Unit_*` | `GPRuntime` | Intrinsic unit/building gameplay + `CargoCapacity` + HUD `PresentationIcon` (nullable `UTexture2D`). **No acquisition cost.** |
 | Building Definition | `DA_GP_Building_*` | `GPRuntime` | Identity, tags, `SpawnedClass`, footprint, `UnitDefinition`, **storage**, **`UnitCapBonus`**. **No acquisition cost.** |
 | Resource Definition | `DA_GP_Resource_*` | `GPRuntime` | Ferronite mining / conversion / threat **+ `DepositMaxAmount` / `MaxConcurrentMiners`**. |
 | Session Config | `DA_GP_Session_*` | `GPRuntime` | Match-level tuning: delivery quota, match duration, win flags, SWARM threat→wave curves. |
@@ -106,7 +106,7 @@ Per [`14_Orbital_Delivery`](14_Orbital_Delivery.md). Each `DA_GP_OrbitalDrop_*` 
 | Asset | Owns |
 | --- | --- |
 | `UGP_BuildingDefinition` | Intrinsic identity/grid/payload + storage + `UnitCapBonus`. `MaxHealth` compatibility-only. |
-| `UGP_UnitDefinition` | Canonical initial MaxHealth / combat / sight / facing / cargo (GP-S38D / GP-S39E). Runtime remains GAS. |
+| `UGP_UnitDefinition` | Canonical initial MaxHealth / combat / sight / facing / cargo (GP-S38D / GP-S39E) plus HUD `PresentationIcon` (`UTexture2D`, nullable). Runtime combat remains GAS. |
 | `UGP_OrbitalDropDefinition` | Building READY acquisition: `Cost`, `DropTags`, soft `BuildingDefinition`, descent / deploy delay. Not Wall Package. |
 | `UGP_OrbitalUnitDropDefinition` | Unit acquisition: `Cost`, slots, payload, descent / deploy delay |
 | `UGP_WallPackageDefinition` | Wall Package: DisplayName, Icon, Cost, SegmentCount=5, delivery timing |
@@ -222,7 +222,7 @@ Building catalog names (content, later): `DA_GP_Building_LogisticsHub` / `Defens
 
 ### Units
 
-> Unit Definitions carry **no local produce cost**. Acquisition cost lives on the matching `DA_GP_OrbitalDrop_*` (`Cost` in OrbitalFerronite). Unit DAs hold identity, stats, allowed commands, and granted abilities only.
+> Unit Definitions carry **no local produce cost**. Acquisition cost lives on the matching `DA_GP_OrbitalDrop_*` (`Cost` in OrbitalFerronite). Unit DAs hold identity, stats, allowed commands, granted abilities, and optional HUD `PresentationIcon` (`UTexture2D`; null until operator assigns). Selection HUD Attack Range is `AttackRangeCm` (cm, no conversion).
 
 - `DA_GP_Unit_Worker` — industrial mining drone.
   - `Acquisition`: via `DA_GP_OrbitalDrop_Worker` (Cost in OrbitalFerronite — TBD).

@@ -6,6 +6,8 @@
 #include "MVVMViewModelBase.h"
 #include "GPSelectionViewModel.generated.h"
 
+class UTexture2D;
+
 UENUM(BlueprintType)
 enum class EGP_SelectionPresentationMode : uint8
 {
@@ -26,6 +28,9 @@ struct GPUIRUNTIME_API FGP_SelectionGroupRow
 	FText DisplayName;
 
 	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Selection")
+	TObjectPtr<UTexture2D> Icon;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Selection")
 	float CurrentHealth = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Selection")
@@ -44,6 +49,7 @@ struct GPUIRUNTIME_API FGP_SelectionGroupRow
 	{
 		return Index == Other.Index
 			&& DisplayName.IdenticalTo(Other.DisplayName)
+			&& Icon == Other.Icon
 			&& FMath::IsNearlyEqual(CurrentHealth, Other.CurrentHealth)
 			&& FMath::IsNearlyEqual(MaxHealth, Other.MaxHealth)
 			&& FMath::IsNearlyEqual(HealthNormalized, Other.HealthNormalized)
@@ -97,6 +103,12 @@ public:
 	float MoveSpeed = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, FieldNotify, Category = "GP|HUD|Selection")
+	float AttackRange = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, FieldNotify, Category = "GP|HUD|Selection")
+	TObjectPtr<UTexture2D> Icon;
+
+	UPROPERTY(BlueprintReadOnly, FieldNotify, Category = "GP|HUD|Selection")
 	bool bIsUnit = false;
 
 	UPROPERTY(BlueprintReadOnly, FieldNotify, Category = "GP|HUD|Selection")
@@ -137,6 +149,8 @@ public:
 		float InDamage,
 		float InArmor,
 		float InMoveSpeed,
+		float InAttackRange,
+		UTexture2D* InIcon,
 		bool bInIsUnit,
 		bool bInIsBuilding,
 		bool bInHasCargo,
@@ -158,6 +172,8 @@ private:
 	void SetDamage(float Value);
 	void SetArmor(float Value);
 	void SetMoveSpeed(float Value);
+	void SetAttackRange(float Value);
+	void SetIcon(UTexture2D* Value);
 	void SetIsUnit(bool bValue);
 	void SetIsBuilding(bool bValue);
 	void SetHasCargo(bool bValue);

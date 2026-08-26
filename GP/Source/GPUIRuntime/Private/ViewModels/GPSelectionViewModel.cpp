@@ -2,6 +2,8 @@
 
 #include "ViewModels/GPSelectionViewModel.h"
 
+#include "Engine/Texture2D.h"
+
 float UGP_SelectionViewModel::SafeNormalized(float Value, float Maximum)
 {
 	if (!FMath::IsFinite(Value) || !FMath::IsFinite(Maximum) || Maximum <= KINDA_SMALL_NUMBER)
@@ -34,6 +36,8 @@ void UGP_SelectionViewModel::ApplySingle(
 	float InDamage,
 	float InArmor,
 	float InMoveSpeed,
+	float InAttackRange,
+	UTexture2D* InIcon,
 	bool bInIsUnit,
 	bool bInIsBuilding,
 	bool bInHasCargo,
@@ -50,6 +54,8 @@ void UGP_SelectionViewModel::ApplySingle(
 	SetDamage(InDamage);
 	SetArmor(InArmor);
 	SetMoveSpeed(InMoveSpeed);
+	SetAttackRange(InAttackRange);
+	SetIcon(InIcon);
 	SetIsUnit(bInIsUnit);
 	SetIsBuilding(bInIsBuilding);
 	SetSingleCargo(bInHasCargo, InCargoAmount, InCargoCapacity);
@@ -109,6 +115,8 @@ void UGP_SelectionViewModel::ClearSingleIdentity()
 	SetDamage(0.0f);
 	SetArmor(0.0f);
 	SetMoveSpeed(0.0f);
+	SetAttackRange(0.0f);
+	SetIcon(nullptr);
 	SetIsUnit(false);
 	SetIsBuilding(false);
 }
@@ -167,6 +175,17 @@ void UGP_SelectionViewModel::SetMoveSpeed(float Value)
 {
 	const float SafeValue = FMath::IsFinite(Value) ? Value : 0.0f;
 	UE_MVVM_SET_PROPERTY_VALUE(MoveSpeed, SafeValue);
+}
+
+void UGP_SelectionViewModel::SetAttackRange(float Value)
+{
+	const float SafeValue = FMath::IsFinite(Value) ? Value : 0.0f;
+	UE_MVVM_SET_PROPERTY_VALUE(AttackRange, SafeValue);
+}
+
+void UGP_SelectionViewModel::SetIcon(UTexture2D* Value)
+{
+	UE_MVVM_SET_PROPERTY_VALUE(Icon, Value);
 }
 
 void UGP_SelectionViewModel::SetIsUnit(bool bValue)

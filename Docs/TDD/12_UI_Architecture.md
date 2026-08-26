@@ -219,7 +219,7 @@ Rules:
 | --- | --- | --- | --- |
 | `UGP_ResourceViewModel` | `UGP_PlayerAttributeSet.{OrbitalFerronite, FerroniteScore, MaxUnits, CurrentUnits}` (own + opponent score) plus exact local MainBase `UGP_StorageComponent::GetTotalStored()` as `PlanetFerronite` | `UGP_ResourceViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-right Planet/Orbit/Cap + top-left Score |
 | `UGP_MatchViewModel` | `AGP_GameState.{MatchStateTag, MatchTimeRemaining, TeamFerroniteThreatValues, WinnerTeamId, WinReasonTag, MatchResult.MatchDuration}` plus presentation `FerroniteThreatNormalized` from local MainBase storage | `UGP_MatchViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Future top-center timer + top-left Threat bar |
-| `UGP_SelectionViewModel` | `UGP_SelectionComponent.{SelectedUnits, InspectedTarget}` (local PC) plus GAS health/max-health delegates and Worker `UGP_CargoComponent.OnCargoAmountChanged` for single presentation. Native foundation implemented: None/Single/Group, inspect fallback, event-driven vitals/cargo. No icon field (none on `UGP_UnitDefinition`). Operator PIE **PASSED** for Manual slot `GP_SelectionViewModel` Single bindings (Worker / Salvage Walker / MainBase, CurrentHealth, Damage, live Worker cargo). Group visual grid is not authored/operator-validated. `WBP_GP_HUD` remains operator-local and uncommitted. | `UGP_SelectionViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Authored bottom-center Selection/Info (`WBP_GP_HUD` Manual slot `GP_SelectionViewModel`). Context Action Grid is not this slice. |
+| `UGP_SelectionViewModel` | `UGP_SelectionComponent.{SelectedUnits, InspectedTarget}` (local PC) plus GAS health/max-health delegates and Worker `UGP_CargoComponent.OnCargoAmountChanged` for single presentation. Native foundation: None/Single/Group, inspect fallback, event-driven vitals/cargo. Single FieldNotify now includes `Icon` (`UTexture2D*` from `UGP_UnitDefinition::PresentationIcon`) and `AttackRange` (`UGP_UnitDefinition::AttackRangeCm`, cm). Group rows include per-actor `Icon`. Null icon is valid (placeholder until authored). No `LoadSynchronous`. Operator PIE **PASSED** for Manual slot `GP_SelectionViewModel` Single bindings (Worker / Salvage Walker / MainBase, CurrentHealth, Damage, live Worker cargo). Group visual grid is not authored/operator-validated. `WBP_GP_HUD` remains operator-local and uncommitted. | `UGP_SelectionViewModelAdapter` (`UGP_HUDViewModelSubsystem`) | Authored bottom-center Selection/Info (`WBP_GP_HUD` Manual slot `GP_SelectionViewModel`). Context Action Grid is not this slice. |
 | `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits`, shuttle slots, READY, Wall stock — **not implemented** | Future adapter | Future MainBase PURCHASE panel (bottom-right). Not a fullscreen Order Menu. |
 | `UGP_CargoVM` | Worker cargo for single presentation is carried on `UGP_SelectionViewModel` (`CargoAmount` / `CargoCapacity` / `CargoNormalized` / `bHasCargo`) via existing `OnCargoAmountChanged`. A separate cargo-only VM is **not implemented**. | Selection adapter (single Worker) | Future single-entity Selection/Info cargo meter |
 | `UGP_NotificationVM` | Local notification queue (PC pushes) — **not implemented** | PC native | Future notification stack |
@@ -316,7 +316,7 @@ WBP_GP_HUD (authored child of UGP_HUDRootWidget; operator-local, not committed)
 │   └── TopRight Planet Ferronite / Orbital Ferronite / CurrentUnits/MaxUnits
 ├── BottomBar
 │   ├── BottomLeft  Minimap square placeholder (function later)
-│   ├── BottomCenter Selection / Current Info (widest; single-entity or 10×3 group)
+│   ├── BottomCenter Selection / Current Info (widest; single-entity or 8×3 group)
 │   └── BottomRight Context Action Grid + Message Strip
 │       (Unit / Building / MainBase PURCHASE → UNITS|BUILDINGS|DEFENSE)
 ├── RightLaunchMenu (authored on WBP_GP_HUD; operator-local, not committed)
@@ -377,7 +377,7 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 | Future top-left Threat | `UGP_MatchViewModel.FerroniteThreatNormalized` (bar); raw `FerroniteThreatValue` remains available | Local-team `OnTeamFerroniteThreatValueChanged`, `OnResolvedMainBaseChanged`, MainBase `OnStorageChanged` |
 | Future top-left Score + top-right Orbit/Cap | `UGP_ResourceViewModel.{PlanetFerronite, OrbitalFerronite, FerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates; local MainBase `OnResolvedMainBaseChanged` + `OnStorageChanged` for `PlanetFerronite` |
 | Future top-right Planet Ferronite | `UGP_ResourceViewModel.PlanetFerronite` = local MainBase `GetTotalStored()` | `FindMainBaseForTeamClientSafe` + `OnResolvedMainBaseChanged` + `OnStorageChanged` |
-| Future bottom-center Selection/Info | Native `UGP_SelectionViewModel` None/Single/Group (gameplay cap 24). Operator PIE **PASSED** for authored Single bindings via Manual slot `GP_SelectionViewModel`. Group rows via `UGP_HUDRootWidget::GetSelectionGroupRows` + `BP_OnSelectionPresentationChanged` (native ready including group-row health push; Group visual not authored/operator-validated). `WBP_GP_HUD` operator-local, uncommitted. | `UGP_SelectionComponent.OnSelectionChanged` (local) + GAS health delegates + Worker cargo delegate |
+| Future bottom-center Selection/Info | Native `UGP_SelectionViewModel` None/Single/Group (gameplay cap **24**). Single: icon, name, HP current/max + normalized, Damage, Armor, Move Speed, Attack Range (`AttackRangeCm`), conditional cargo. Group rows: icon + health (DisplayName remains in row data). Authored visual intent **8×3**. Operator PIE **PASSED** for authored Single bindings via Manual slot `GP_SelectionViewModel`. Group rows via `UGP_HUDRootWidget::GetSelectionGroupRows` + `BP_OnSelectionPresentationChanged`. `WBP_GP_HUD` operator-local, uncommitted. | `UGP_SelectionComponent.OnSelectionChanged` (local) + GAS health delegates + Worker cargo delegate |
 | Future bottom-right Context Action Grid | Native `UGP_ContextActionPresenter` modes None/Unit/UnitGroup/Building/MainBase. Unit actions: Move (visible, disabled — no Move targeting mode), Stop (enabled; `RequestStopSelectedUnits` → `Server_RequestCommand`), Attack-Move (`EnterAttackMoveMode` when `SelectionHasAttackMoveEligibleUnit()`), Patrol (visible, disabled; no backend). MainBase: Purchase presentation + local `PurchaseRoot` panel state only. Other buildings: empty. Authored buttons not operator-validated. | Local selection + death/destroy; PC AttackMove eligibility query |
 | Future right-side Message Strip | Contextual procurement/action status (shuttle slots, funds, cap, wall stock) | Existing orbital reject/status; not a global toast stack |
 | Future MainBase PURCHASE panel | Future procurement VM (catalog, manifest, READY, Wall stock) | `UGP_OrbitalDeliverySubsystem` + existing Purchase/Confirm/Deploy RPCs |
@@ -418,12 +418,15 @@ public:
 Bottom-center Selection / Current Info:
 
 1. Empty selection → hide info content; Action Grid idle / no unit commands.
-2. Exactly one unit **or** one building → **single-entity mode** (icon, name, health, relevant stats).
+2. Exactly one unit **or** one building → **single-entity mode**: icon (`PresentationIcon`, nullable),
+   display name, HP current/max + normalized, Damage, Armor, Move Speed, Attack Range
+   (`UGP_UnitDefinition::AttackRangeCm`, kept in cm), conditional Worker cargo.
    Inspect of a single target uses this same block; a separate overlapping InspectPanel is not canonical.
-3. Multiple units → **group mode**: 10 icons per row, 3 rows, 30 visible slots. Each icon has a small
-   health bar below it. Overflow/paging/aggregation beyond 30 is **TBD / UX DESIGN REQUIRED**.
-   Do not silently cap gameplay selection to 30.
-4. Mixed unit+building selection remains forbidden per GP-0202.
+3. Multiple units → **group mode**: authored visual intent is **8 icons × 3 rows** (24 visible slots),
+   matching gameplay selection cap **24**. Each row is icon + health bar (`FGP_SelectionGroupRow` also
+   carries DisplayName / type flags). Do not cap gameplay selection below 24. Overflow beyond 24 is not
+   an HUD paging feature in this MVP.
+4. Mixed unit+building selection remains forbidden per GP-0202. Marquee selects units only.
 
 ### Context Action Grid Population
 
@@ -531,7 +534,7 @@ UI legitimately owns:
 | --- | --- | --- |
 | 1 | Empty selection | Bottom-center info empty; Action Grid idle. |
 | 2 | Single worker selected | Single-entity mode; Action Grid in Unit Action Mode. |
-| 3 | 24 workers | Group 10×3 grid with per-icon health bars; 24 of 30 slots filled. |
+| 3 | 24 workers | Group 8×3 grid with per-icon health bars; all 24 slots filled. |
 | 4 | Building selected | Single-entity building stats; Action Grid in Building Action Mode (may be empty). |
 | 5 | Inspect enemy | Bottom-center shows that entity; no separate overlapping inspect slot. |
 | 6 | Esc clear | Info and Action Grid return to empty/idle. |
@@ -587,7 +590,7 @@ void UGP_SelectionVMAdapter::HandleSelectionChanged()
 ```
 
 Widget-side (BP or C++) binds через `MVVM View Binding`: future Selection/Info listens to
-`SelectionVM` mode → single-entity vs 10×3 group; Context Action Grid listens to unit vs building mode.
+`SelectionVM` mode → single-entity vs 8×3 group; Context Action Grid listens to unit vs building mode.
 
 Abbreviated adapter pattern (the implementation is `UGP_ResourceViewModelAdapter`):
 

@@ -12,6 +12,7 @@ class AGP_UnitBase;
 class UAbilitySystemComponent;
 class UGP_CargoComponent;
 class UGP_SelectionComponent;
+class UTexture2D;
 
 /** Push-only adapter from local UGP_SelectionComponent + GAS/cargo delegates into SelectionVM. */
 UCLASS()
@@ -65,6 +66,8 @@ private:
 		float& OutDamage,
 		float& OutArmor,
 		float& OutMoveSpeed,
+		float& OutAttackRange,
+		UTexture2D*& OutIcon,
 		bool& bOutIsUnit,
 		bool& bOutIsBuilding);
 	static UGP_CargoComponent* ResolveWorkerCargo(AGP_UnitBase* Unit);

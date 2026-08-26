@@ -130,36 +130,41 @@ Used when exactly one unit **or** one building is selected.
 
 Show:
 
-- entity icon
+- entity icon (`UGP_UnitDefinition::PresentationIcon`; null → placeholder)
 - display name
-- current health
-- relevant gameplay stats
+- current / max health + normalized
+- Damage
+- Armor
+- Move Speed
+- Attack Range (`UGP_UnitDefinition::AttackRangeCm`, cm)
+- conditional Worker cargo
 
-Possible stat categories include Health / Max Health, Damage, Armor, Move Speed, and other
-entity-relevant stats. Do not force irrelevant stats onto every entity. Exact inventory is
-driven by entity type/data and may expand later.
+Do not invent a second attack-range field. Icon is presentation metadata only and may be null
+until an operator assigns textures on authored DataAssets.
 
-Worker/specialized later values (cargo, work state) may appear here. This block also absorbs
-single-target inspect presentation; a separate overlapping InspectPanel slot is no longer canonical.
+Possible later categories remain entity-driven. Worker/specialized later values (work state) may
+appear here. This block also absorbs single-target inspect presentation; a separate overlapping
+InspectPanel slot is no longer canonical.
 
 #### B. Group mode
 
 Used when multiple units are selected.
 
-Compact icon grid:
+Compact icon grid (current MVP authored intent):
 
-- 10 icons per row
+- 8 icons per row
 - 3 rows
-- 30 visible icon slots
+- 24 visible icon slots (matches gameplay selection cap 24)
 
 Each icon:
 
-- unit icon
+- unit icon (`PresentationIcon`; null → placeholder)
 - small current-health bar directly below the icon
 
-Do **not** invent behavior for selections larger than 30.
-Overflow/paging/aggregation beyond 30 is **TBD / UX DESIGN REQUIRED**.
-Do **not** silently cap gameplay selection itself to 30. This is only the visible HUD grid contract.
+Underlying row data may still include DisplayName even if the authored WBP does not show it.
+
+Do **not** invent HUD paging for selections larger than 24.
+Gameplay selection cap remains **24**. This is the visible HUD grid contract.
 
 ### Bottom right — Context Action Grid
 

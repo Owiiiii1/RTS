@@ -393,9 +393,9 @@ The previous SelectionPanel bottom-left / CommandBar bottom-center / InspectPane
 
 | State | Widget slot | Notes |
 | --- | --- | --- |
-| `SelectedUnits` single unit | Bottom-center Selection/Info, single-entity mode | Icon, name, health, relevant stats. Future widget; not implemented. |
-| `SelectedUnits` multi (units only) | Bottom-center Selection/Info, group mode | 10×3 visible icon grid with per-icon health bars. Overflow >30 TBD. Do not cap gameplay selection to 30. |
-| `SelectedUnits` single building | Bottom-center Selection/Info, single-entity mode | Building stats. Procurement does **not** replace this panel. |
+| `SelectedUnits` single unit | Bottom-center Selection/Info, single-entity mode | Icon, name, HP current/max + normalized, Damage, Armor, Move Speed, Attack Range (`AttackRangeCm`), conditional cargo. |
+| `SelectedUnits` multi (units only) | Bottom-center Selection/Info, group mode | Authored visual **8×3** icon+health grid. Gameplay cap **24**. Row data may still include DisplayName. |
+| `SelectedUnits` single building | Bottom-center Selection/Info, single-entity mode | Same Single fields; Attack Range is factual `AttackRangeCm` (0 or authored). Procurement does **not** replace this panel. |
 | `InspectedTarget` (any) | Same bottom-center block | No separate overlapping InspectPanel slot. |
 | Empty selection | Info empty; Context Action Grid idle | |
 | Unit/group selected | Bottom-right Context Action Grid, Unit Action Mode | Move, Stop, Attack-Move; Patrol planned/not implemented. Direct RMB Attack stays separate. |

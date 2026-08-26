@@ -6,6 +6,8 @@
 #include "Engine/DataAsset.h"
 #include "GPUnitDefinition.generated.h"
 
+class UTexture2D;
+
 /**
  * Intrinsic unit/building gameplay stats (GP-S38D).
  * Canonical initial/base-value source. Does not replace GAS runtime state.
@@ -21,6 +23,13 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Identity")
 	FText DisplayName;
+
+	/**
+	 * HUD selection/presentation icon. Metadata only; gameplay does not read this.
+	 * Null is valid until an operator assigns a texture on the authored DataAsset.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Identity|Presentation")
+	TObjectPtr<UTexture2D> PresentationIcon;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Vitals", meta = (ClampMin = "0.0"))
 	float MaxHealth = 100.0f;

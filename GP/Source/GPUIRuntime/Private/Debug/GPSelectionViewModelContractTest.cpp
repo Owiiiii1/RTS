@@ -2,8 +2,10 @@
 
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPUnitAttributeSet.h"
+#include "Buildings/GPMainBase.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
@@ -61,6 +63,24 @@ namespace GPSelectionViewModelContractPrivate
 		}
 		ASC->SetNumericAttributeBase(UGP_UnitAttributeSet::GetHealthAttribute(), Health);
 		return true;
+	}
+
+	static UTexture2D* MakeTransientIcon(UObject* Outer, const TCHAR* Name)
+	{
+		return UTexture2D::CreateTransient(8, 8, PF_B8G8R8A8, Name);
+	}
+
+	static UGP_UnitDefinition* MakeTransientDefinition(
+		UObject* Outer,
+		const TCHAR* Name,
+		UTexture2D* Icon,
+		float AttackRangeCm)
+	{
+		UGP_UnitDefinition* Definition = NewObject<UGP_UnitDefinition>(Outer);
+		Definition->DisplayName = FText::FromString(Name);
+		Definition->PresentationIcon = Icon;
+		Definition->AttackRangeCm = AttackRangeCm;
+		return Definition;
 	}
 
 	static void RunSelectionViewModelContractTest(const TArray<FString>& Args, UWorld* World)
@@ -151,10 +171,15 @@ namespace GPSelectionViewModelContractPrivate
 			Expect(FMath::IsNearlyEqual(VM->Armor, DefA->Armor, 0.01f), TEXT("A_ArmorFromDefinition"));
 			Expect(FMath::IsNearlyEqual(VM->MoveSpeed, DefA->MoveSpeedCmPerSecond, 0.01f),
 				TEXT("A_MoveSpeedFromDefinition"));
+			Expect(VM->Icon == DefA->PresentationIcon
+				&& FMath::IsNearlyEqual(VM->AttackRange, DefA->AttackRangeCm, 0.01f),
+				TEXT("A_ResidentDefinitionIconAndAttackRange"));
 		}
 		else
 		{
 			Expect(true, TEXT("A_DefinitionNotResident_SafeFallback"));
+			Expect(VM->Icon == nullptr && !UnitA->DebugDidRequestAsyncUnitDefinitionLoad(),
+				TEXT("D_MissingUnloadedDefinitionIconNullNoSyncLoad"));
 		}
 		const UGP_UnitAttributeSet* AttrsA = UnitA->GetUnitAttributeSet();
 		Expect(AttrsA != nullptr && FMath::IsNearlyEqual(VM->CurrentHealth, AttrsA->GetHealth(), 0.05f),
@@ -202,6 +227,8 @@ namespace GPSelectionViewModelContractPrivate
 		Selection->ClearSelection();
 		Expect(VM->Mode == EGP_SelectionPresentationMode::None && VM->SelectionCount == 0
 			&& VM->GetGroupRows().Num() == 0
+			&& VM->Icon == nullptr
+			&& FMath::IsNearlyEqual(VM->AttackRange, 0.0f)
 			&& Subsystem->GetSelectionDelegateCount() < BoundWhileGrouped,
 			TEXT("E_ClearReturnsNoneAndDropsUnitBindings"));
 		Expect(SetUnitHealth(UnitA, 25.0f), TEXT("E_StaleHealthMutation"));
@@ -249,6 +276,76 @@ namespace GPSelectionViewModelContractPrivate
 			&& GroupHealthPresentationChanged > 0,
 			TEXT("J_GroupRowHealthFiresSelectionPresentationChanged"));
 		VM->OnSelectionPresentationChanged.Remove(GroupHealthHandle);
+
+		UTexture2D* IconA = MakeTransientIcon(World, TEXT("GPSelIconA"));
+		UTexture2D* IconB = MakeTransientIcon(World, TEXT("GPSelIconB"));
+		UTexture2D* IconBuilding = MakeTransientIcon(World, TEXT("GPSelIconBuilding"));
+		UGP_UnitDefinition* DefA = MakeTransientDefinition(World, TEXT("SelWorkerA"), IconA, 321.0f);
+		UGP_UnitDefinition* DefB = MakeTransientDefinition(World, TEXT("SelWorkerB"), IconB, 654.0f);
+		UGP_UnitDefinition* DefBuilding = MakeTransientDefinition(World, TEXT("SelMainBase"), IconBuilding, 0.0f);
+		Expect(IsValid(IconA) && IsValid(IconB) && IsValid(IconBuilding)
+			&& IsValid(DefA) && IsValid(DefB) && IsValid(DefBuilding),
+			TEXT("K0_TransientPresentationDefs"));
+		if (IsValid(DefA) && IsValid(DefB) && IsValid(DefBuilding))
+		{
+			UnitA->UnitDefinitionAsset = DefA;
+			UnitB->UnitDefinitionAsset = DefB;
+			Selection->ReplaceSelectionWithUnit(UnitA);
+			Expect(UnitA->ResolveLoadedUnitDefinition() == DefA
+				&& VM->Icon == IconA
+				&& FMath::IsNearlyEqual(VM->AttackRange, DefA->AttackRangeCm, 0.01f),
+				TEXT("A_SingleUnitIconAndAttackRangeFromDefinition"));
+
+			Selection->ReplaceSelectionWithUnit(UnitB);
+			Expect(VM->Icon == IconB
+				&& FMath::IsNearlyEqual(VM->AttackRange, DefB->AttackRangeCm, 0.01f)
+				&& !FMath::IsNearlyEqual(VM->AttackRange, DefA->AttackRangeCm, 0.01f),
+				TEXT("F_SwitchUnitUpdatesIconAndAttackRange"));
+
+			Selection->AddUnitToSelection(UnitA);
+			Expect(VM->Mode == EGP_SelectionPresentationMode::Group
+				&& VM->Icon == nullptr
+				&& FMath::IsNearlyEqual(VM->AttackRange, 0.0f)
+				&& VM->GetGroupRows().Num() == 2
+				&& VM->GetGroupRows()[0].Icon == IconB
+				&& VM->GetGroupRows()[1].Icon == IconA
+				&& FMath::IsNearlyEqual(VM->GetGroupRows()[0].CurrentHealth, 41.0f, 0.05f),
+				TEXT("C_GroupRowsUseOwnDefinitionIconsHealthUnchanged"));
+
+			AGP_MainBase* MainBase = nullptr;
+			{
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				MainBase = World->SpawnActor<AGP_MainBase>(
+					AGP_MainBase::StaticClass(),
+					FVector(54200.0f, 54000.0f, 200.0f),
+					FRotator::ZeroRotator,
+					Params);
+			}
+			if (MainBase != nullptr)
+			{
+				MainBase->SetTeamId(1);
+				MainBase->UnitDefinitionAsset = DefBuilding;
+			}
+			Expect(IsValid(MainBase) && MainBase->ResolveLoadedUnitDefinition() == DefBuilding,
+				TEXT("B0_SpawnedBuildingWithDefinition"));
+			if (IsValid(MainBase))
+			{
+				Selection->ReplaceSelectionWithUnit(MainBase);
+				Expect(VM->Mode == EGP_SelectionPresentationMode::Single
+					&& VM->bIsBuilding
+					&& VM->Icon == IconBuilding
+					&& FMath::IsNearlyEqual(VM->AttackRange, DefBuilding->AttackRangeCm, 0.01f),
+					TEXT("B_SingleBuildingIconAndAttackRangeFromDefinition"));
+				MainBase->Destroy();
+			}
+		}
+
+		Selection->ClearAllSelectionState();
+		Expect(VM->Mode == EGP_SelectionPresentationMode::None
+			&& VM->Icon == nullptr
+			&& FMath::IsNearlyEqual(VM->AttackRange, 0.0f),
+			TEXT("E_ResetClearsIconAndAttackRange"));
 
 		Selection->ClearAllSelectionState();
 		if (IsValid(UnitA))

@@ -2,111 +2,94 @@
 
 ## Status
 
-**BOTTOM_HUD_MARQUEE_UNITS_ONLY_READY_FOR_OPERATOR_VALIDATION**
+**BOTTOM_HUD_SELECTION_ICON_RANGE_READY_FOR_OPERATOR_VALIDATION**
 
-This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge. Do not run production finalization. Group/Context Action seams from the previous checkpoint remain; this slice only changes marquee eligibility.
+This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge. Do not run production finalization.
 
 ## Branch / base / head
 
 - Branch: `ui/gp-bottom-hud`
 - Base: `origin/main` @ `0667b6f912fce288422848d5d2355bc4510b748c`
-- Head: `06b47fd985c957b7e3b4b7bfec2b7f7e48c59719`
+- Head: this implementation commit on `ui/gp-bottom-hud`
 - Behind `origin/main`: **0**
 - `GP Win64 Development` / `GP Win64 Shipping` / full suite: **not run** (intermediate gate)
 
-## Exact marquee filter
+## Exact icon property
 
-Path: `AGP_PlayerController::ResolveAndApplyMarqueeSelection` in `GPPlayerController.cpp`.
+| Location | Name | Type |
+| --- | --- | --- |
+| `UGP_UnitDefinition` | `PresentationIcon` | `TObjectPtr<UTexture2D>` (`EditAnywhere`, `BlueprintReadOnly`, Category `GP\|Identity\|Presentation`) |
+| `UGP_SelectionViewModel` (Single) | `Icon` | `TObjectPtr<UTexture2D>` FieldNotify |
+| `FGP_SelectionGroupRow` | `Icon` | `TObjectPtr<UTexture2D>` |
 
-Candidates are `TActorIterator<AGP_UnitBase>`. A candidate is kept only if **all** of the following hold:
+Presentation metadata only. Gameplay does not read `PresentationIcon`. No class→texture map. No Worker/SalvageWalker/MainBase hardcode.
 
-1. `IsValid(Unit)`
-2. `Unit->GetTeamId() == LocalTeamId` (local PS team; blocked if team `< 1`)
-3. `Unit->IsGameplaySelectable()` (dead → false; requires `Capability_Selectable`)
-4. **New:** `Unit->IsSelectionTypeUnit() == true`
-5. **New:** `Unit->IsSelectionTypeBuilding() == false`
-6. `ProjectWorldLocationToScreen` succeeds
-7. Projected point is inside the axis-aligned screen rectangle
+**Authored DataAssets were not modified.** Existing unit/building definitions therefore have `PresentationIcon = nullptr` until the operator assigns textures.
 
-No class hardcode (Worker / SalvageWalker / MainBase / LogisticsHub / DefensiveTurret). Semantic seam is `IsSelectionTypeUnit()` / `IsSelectionTypeBuilding()`.
+## AttackRange source
 
-FoW / local-visibility was **not** previously in this filter and was **not** added.
+Single `AttackRange` is `UGP_UnitDefinition::AttackRangeCm` (cm, no conversion). No second attack-range field was added to gameplay definitions. If the definition is not resident, numeric fallback matches existing Damage/Armor/MoveSpeed (GAS attributes); icon stays null.
 
-Selection cap **24** unchanged. Shift/Ctrl still operate on the filtered candidate list only (Replace / Add / Toggle). Mixed unit+building via marquee can no longer occur.
+## Single fields
 
-## Click-selection unchanged
+`DisplayName`, `CurrentHealth`, `MaxHealth`, `HealthNormalized`, `Damage`, `Armor`, `MoveSpeed`, **`AttackRange`**, **`Icon`**, `bIsUnit`, `bIsBuilding`, Worker cargo (`bHasCargo` / `CargoAmount` / `CargoCapacity` / `CargoNormalized`), `bIsInspectPresentation`.
 
-`ProcessSelectionClickAtScreenPosition` body was not edited. Click on a friendly selectable building still selects that building; click on a friendly selectable unit still selects that unit.
+Icon and AttackRange clear on None / Group / `ResetPresentation`.
 
-Contract-only wrappers (not UFUNCTION, not gameplay input):
+## GroupRow fields
 
-- `ApplyMarqueeSelectionForContract` → `ResolveAndApplyMarqueeSelection`
-- `ProcessSelectionClickForContract` → `ProcessSelectionClickAtScreenPosition`
+`Index`, **`Icon`**, `DisplayName`, `CurrentHealth`, `MaxHealth`, `HealthNormalized`, `bIsUnit`, `bIsBuilding`. No Damage/Armor/Speed/Range on rows. Equality includes `Icon`.
 
-## Context Action consequence
+Each row icon is that actor's `ResolveLoadedUnitDefinition()->PresentationIcon`.
 
-Marquee over units + building now yields **UnitGroup** (all selected are units), not **None** from mixed types. Click-selected single MainBase remains **MainBase** mode.
+## Missing-icon fallback
+
+Null icon is valid. WBP should show a placeholder. `ResolveLoadedUnitDefinition()` is already-resident only — **no `LoadSynchronous`** on the Selection VM / adapter / HUD path.
 
 ## Exact changed files
 
-New:
-
-- `GP/Source/GPRuntime/Private/Debug/GPSelectionMarqueeContractTest.cpp`
-
-Modified:
-
-- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPContextActionPresentationContractTest.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitDefinition.h`
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPSelectionViewModel.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPSelectionViewModel.cpp`
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPSelectionViewModelAdapter.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPSelectionViewModelAdapter.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPSelectionViewModelContractTest.cpp`
+- `Docs/TDD/10_Data_Assets.md`
+- `Docs/TDD/12_UI_Architecture.md`
+- `Docs/TDD/04_RTS_Selection_And_Commands.md`
+- `Docs/Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md`
 - `Docs/Development/Cursor_Work_Report.md` (this file)
+
+`WBP_GP_HUD` / `WBP_GP_SelectionGroupRow` / authored UnitDefinition DataAssets: **not modified**.
 
 ## Exact focused tests
 
-`L_PrototypeArena` `-game -unattended -nop4 -NullRHI`. Editor killed after Complete (no `quit` in ExecCmds). Exit `-1` after kill is not a test failure.
+`L_PrototypeArena` `-game -unattended -nop4 -NullRHI`. Editor killed after Complete.
 
 | Command | Result |
 | --- | --- |
-| `gp.Selection.RunMarqueeUnitsOnlyContractTest` | **Complete Failures=0 Cancelled=false** |
-| `gp.UI.RunContextActionPresentationContractTest` | **Complete Failures=0 Cancelled=false** |
 | `gp.UI.RunSelectionViewModelContractTest` | **Complete Failures=0 Cancelled=false** |
-
-Marquee contract coverage:
-
-- 2 friendly units + MainBase in one rect → selected count **2**, MainBase absent
-- friendly building only in rect → selection **empty**
-- single click projected MainBase → MainBase **still selected**
-
-Context Action case **K**: same mixed marquee → mode **UnitGroup**, count 2, MainBase not selected.
-
-Full suite / GP Development / GP Shipping: **not run**.
+| `gp.UI.RunHUDViewModelBridgeContractTest` | **Complete Failures=0 Cancelled=false** |
+| `gp.UI.RunProductionHUDFoundationContractTest` | **Complete Failures=0 Cancelled=false** |
+| `gp.UI.RunHUDBootstrapContractTest` | **Complete Failures=0 Cancelled=false** |
+| `gp.UI.RunContextActionPresentationContractTest` | **Complete Failures=0 Cancelled=false** |
 
 ## GPEditor / UHT
 
 | Target | Result |
 | --- | --- |
-| `GPEditor Win64 Development` + UHT | **Succeeded** (UHT processed `GPPlayerController.h`; 0 generated files written — contract seams are not UFUNCTION) |
+| `GPEditor Win64 Development` + UHT | **Succeeded** (UHT processed GPEditor, 9 generated files written) |
 
 ## Protected-file audit
 
-**Not staged / not committed:**
-
-- `GP/Config/DefaultEngine.ini`
-- `GP/Config/DefaultGame.ini`
-- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
-- `GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`
-- `GP/Content/Basic_VFX/`
-- `GP/Content/GrimProtocol/Blueprint/` (includes `WBP_GP_HUD`)
-- `GP/Content/GrimProtocol/DataAssets/`
-- `GP/Content/GrimProtocol/Materials/`
-- `GP/Content/Mixed_Magic_VFX_Pack/`
-- `GP/Content/RocketThrusterExhaustFX/`
-- `Tools/`
-- `GP/GP.uproject`
+**Not staged / not committed:** Config, maps, Blueprint (including `WBP_GP_HUD` / `WBP_GP_SelectionGroupRow`), DataAssets, Materials, VFX packs, Tools, `GP.uproject`.
 
 No `git reset --hard`, `git clean`, `git restore .`, or broad stash.
 
-## Operator note
+## Operator wiring (local WBP only — do not commit)
 
-Marquee/drag must select units only. Click a friendly MainBase / LogisticsHub / turret to inspect or select that building. Mixed marquee should no longer produce a mixed group.
+1. **`WBP_GP_SelectionGroupRow` Image** — bind/set from `FGP_SelectionGroupRow.Icon`. If null, keep the existing placeholder brush. Rebuild rows from `GetSelectionGroupRows()` on `BP_OnSelectionPresentationChanged`.
+2. **`WBP_GP_HUD` Single icon** — Manual MVVM slot `GP_SelectionViewModel` field `Icon` (`UTexture2D`). Null → placeholder. Visible in Single mode only.
+3. **Single AttackRange** — bind `GP_SelectionViewModel.AttackRange` (cm, same unit convention as MoveSpeed). No extra conversion. Hide or show `0` factually; do not invent a building exception.
 
-After operator PASS: **do not finalize**. Next Cursor task on this same branch remains PURCHASE categories.
+Do not Tick. Do not load textures from the widget. Do not finalize after operator PASS; next slice remains PURCHASE categories.

@@ -10,6 +10,7 @@
 #include "Units/GPUnitBase.h"
 #include "Units/GPUnitDefinition.h"
 #include "Units/GPWorker.h"
+#include "Engine/Texture2D.h"
 
 bool UGP_SelectionViewModelAdapter::Initialize(
 	UGP_SelectionViewModel* InViewModel,
@@ -101,9 +102,11 @@ void UGP_SelectionViewModelAdapter::RebuildPresentation()
 			float Damage = 0.0f;
 			float Armor = 0.0f;
 			float MoveSpeed = 0.0f;
+			float AttackRange = 0.0f;
+			UTexture2D* Icon = nullptr;
 			bool bIsUnit = false;
 			bool bIsBuilding = false;
-			ReadStaticStats(Unit, Name, Damage, Armor, MoveSpeed, bIsUnit, bIsBuilding);
+			ReadStaticStats(Unit, Name, Damage, Armor, MoveSpeed, AttackRange, Icon, bIsUnit, bIsBuilding);
 			float CurrentHealth = 0.0f;
 			float MaxHealth = 0.0f;
 			ReadVitals(Unit, CurrentHealth, MaxHealth);
@@ -116,6 +119,8 @@ void UGP_SelectionViewModelAdapter::RebuildPresentation()
 				Damage,
 				Armor,
 				MoveSpeed,
+				AttackRange,
+				Icon,
 				bIsUnit,
 				bIsBuilding,
 				bHasCargo,
@@ -145,9 +150,11 @@ void UGP_SelectionViewModelAdapter::RebuildPresentation()
 		float Damage = 0.0f;
 		float Armor = 0.0f;
 		float MoveSpeed = 0.0f;
+		float AttackRange = 0.0f;
+		UTexture2D* Icon = nullptr;
 		bool bIsUnit = false;
 		bool bIsBuilding = false;
-		ReadStaticStats(Inspected, Name, Damage, Armor, MoveSpeed, bIsUnit, bIsBuilding);
+		ReadStaticStats(Inspected, Name, Damage, Armor, MoveSpeed, AttackRange, Icon, bIsUnit, bIsBuilding);
 		float CurrentHealth = 0.0f;
 		float MaxHealth = 0.0f;
 		ReadVitals(Inspected, CurrentHealth, MaxHealth);
@@ -162,6 +169,8 @@ void UGP_SelectionViewModelAdapter::RebuildPresentation()
 			Damage,
 			Armor,
 			MoveSpeed,
+			AttackRange,
+			Icon,
 			bIsUnit,
 			bIsBuilding,
 			bHasCargo,
@@ -360,8 +369,11 @@ void UGP_SelectionViewModelAdapter::FillGroupRow(AGP_UnitBase* Unit, int32 Index
 	float Damage = 0.0f;
 	float Armor = 0.0f;
 	float MoveSpeed = 0.0f;
-	ReadStaticStats(Unit, Name, Damage, Armor, MoveSpeed, OutRow.bIsUnit, OutRow.bIsBuilding);
+	float AttackRange = 0.0f;
+	UTexture2D* Icon = nullptr;
+	ReadStaticStats(Unit, Name, Damage, Armor, MoveSpeed, AttackRange, Icon, OutRow.bIsUnit, OutRow.bIsBuilding);
 	OutRow.DisplayName = Name;
+	OutRow.Icon = Icon;
 	ReadVitals(Unit, OutRow.CurrentHealth, OutRow.MaxHealth);
 	OutRow.HealthNormalized = (OutRow.MaxHealth > KINDA_SMALL_NUMBER)
 		? FMath::Clamp(OutRow.CurrentHealth / OutRow.MaxHealth, 0.0f, 1.0f)
@@ -401,6 +413,8 @@ void UGP_SelectionViewModelAdapter::ReadStaticStats(
 	float& OutDamage,
 	float& OutArmor,
 	float& OutMoveSpeed,
+	float& OutAttackRange,
+	UTexture2D*& OutIcon,
 	bool& bOutIsUnit,
 	bool& bOutIsBuilding)
 {
@@ -408,6 +422,8 @@ void UGP_SelectionViewModelAdapter::ReadStaticStats(
 	OutDamage = 0.0f;
 	OutArmor = 0.0f;
 	OutMoveSpeed = 0.0f;
+	OutAttackRange = 0.0f;
+	OutIcon = nullptr;
 	bOutIsUnit = false;
 	bOutIsBuilding = false;
 	if (Unit == nullptr)
@@ -424,6 +440,8 @@ void UGP_SelectionViewModelAdapter::ReadStaticStats(
 		OutDamage = Definition->Damage;
 		OutArmor = Definition->Armor;
 		OutMoveSpeed = Definition->MoveSpeedCmPerSecond;
+		OutAttackRange = Definition->AttackRangeCm;
+		OutIcon = Definition->PresentationIcon;
 		return;
 	}
 
@@ -432,6 +450,7 @@ void UGP_SelectionViewModelAdapter::ReadStaticStats(
 		OutDamage = Attrs->GetDamage();
 		OutArmor = Attrs->GetArmor();
 		OutMoveSpeed = Attrs->GetMoveSpeed();
+		OutAttackRange = Attrs->GetAttackRange();
 	}
 }
 

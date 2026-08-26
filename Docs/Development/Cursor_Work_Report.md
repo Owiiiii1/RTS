@@ -10,7 +10,7 @@ This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge
 
 - Branch: `ui/gp-bottom-hud`
 - Base: `origin/main` @ `0667b6f912fce288422848d5d2355bc4510b748c`
-- Head: this implementation commit on `ui/gp-bottom-hud`
+- Head: `06b47fd985c957b7e3b4b7bfec2b7f7e48c59719`
 - Behind `origin/main`: **0**
 - `GP Win64 Development` / `GP Win64 Shipping` / full suite: **not run** (intermediate gate)
 

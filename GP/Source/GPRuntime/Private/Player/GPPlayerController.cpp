@@ -1841,6 +1841,28 @@ void AGP_PlayerController::UpdateAttackMoveInputOwnership()
 		IsInputKeyDown(EKeys::Escape));
 }
 
+void AGP_PlayerController::ApplyMarqueeSelectionForContract(
+	const FVector2D& ScreenStart,
+	const FVector2D& ScreenEnd)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	ResolveAndApplyMarqueeSelection(ScreenStart, ScreenEnd);
+}
+
+void AGP_PlayerController::ProcessSelectionClickForContract(const FVector2D& ScreenPosition)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	ProcessSelectionClickAtScreenPosition(ScreenPosition);
+}
+
 void AGP_PlayerController::ConfirmAttackMoveDestination()
 {
 	if (!IsLocalController() || !bAttackMoveModeActive || CommandComponent == nullptr)
@@ -2729,6 +2751,11 @@ void AGP_PlayerController::ResolveAndApplyMarqueeSelection(
 		}
 
 		if (Unit->GetTeamId() != LocalTeamId || !Unit->IsGameplaySelectable())
+		{
+			continue;
+		}
+
+		if (!Unit->IsSelectionTypeUnit() || Unit->IsSelectionTypeBuilding())
 		{
 			continue;
 		}

@@ -187,6 +187,12 @@ public:
 	/** Contract seam for AttackMove modal edges without hardware input. */
 	void UpdateAttackMoveInputEdgesForContract(bool bLMBDown, bool bRMBDown, bool bADown, bool bEscDown);
 
+	/** Contract seam: apply marquee resolve without hardware drag. */
+	void ApplyMarqueeSelectionForContract(const FVector2D& ScreenStart, const FVector2D& ScreenEnd);
+
+	/** Contract seam: click-select at a screen position without hardware input. */
+	void ProcessSelectionClickForContract(const FVector2D& ScreenPosition);
+
 	/** Authority launch intent: resolve own-team MainBase → TryLaunchReadyContainer. */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestLaunchReadyContainer();

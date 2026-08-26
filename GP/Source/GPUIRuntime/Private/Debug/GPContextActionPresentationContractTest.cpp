@@ -4,13 +4,17 @@
 #include "AttributeSets/GPUnitAttributeSet.h"
 #include "Buildings/GPLogisticsHub.h"
 #include "Buildings/GPMainBase.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Command/GPCommandRequest.h"
 #include "Engine/GameInstance.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
 #include "Player/GPPlayerController.h"
+#include "UnrealClient.h"
 #include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
 #include "Tags/GPGameplayTags.h"
@@ -57,6 +61,112 @@ namespace GPContextActionPresentationContractPrivate
 		EGP_ContextActionId ActionId)
 	{
 		return FindAction(Actions, ActionId) == nullptr;
+	}
+
+	static void PrepareLocalView(APlayerController* PlayerController)
+	{
+		if (!IsValid(PlayerController))
+		{
+			return;
+		}
+
+		if (APawn* Pawn = PlayerController->GetPawn())
+		{
+			PlayerController->SetViewTarget(Pawn);
+		}
+
+		if (APlayerCameraManager* CameraManager = PlayerController->PlayerCameraManager)
+		{
+			CameraManager->SetGameCameraCutThisFrame();
+			CameraManager->UpdateCamera(0.0f);
+		}
+
+		ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer();
+		UGameViewportClient* ViewportClient =
+			LocalPlayer != nullptr ? LocalPlayer->ViewportClient : nullptr;
+		int32 SizeX = 0;
+		int32 SizeY = 0;
+		PlayerController->GetViewportSize(SizeX, SizeY);
+		if ((SizeX <= 1 || SizeY <= 1) && ViewportClient != nullptr && ViewportClient->Viewport != nullptr)
+		{
+			ViewportClient->Viewport->SetInitialSize(FIntPoint(1280, 720));
+		}
+	}
+
+	static FVector ResolveMarqueeGround(APlayerController* PlayerController)
+	{
+		PrepareLocalView(PlayerController);
+
+		FVector ViewLoc = FVector::ZeroVector;
+		FRotator ViewRot = FRotator::ZeroRotator;
+		if (IsValid(PlayerController))
+		{
+			PlayerController->GetPlayerViewPoint(ViewLoc, ViewRot);
+		}
+
+		FVector Ground = ViewLoc;
+		const FVector Look = ViewRot.Vector();
+		if (FMath::Abs(Look.Z) > 0.05f)
+		{
+			const float T = (100.0f - ViewLoc.Z) / Look.Z;
+			if (T > 50.0f)
+			{
+				Ground = ViewLoc + Look * T;
+			}
+		}
+		else if (APawn* Pawn = PlayerController != nullptr ? PlayerController->GetPawn() : nullptr)
+		{
+			Ground = Pawn->GetActorLocation();
+		}
+
+		Ground.Z = 100.0f;
+		return Ground;
+	}
+
+	static bool ProjectActor(APlayerController* PlayerController, const AActor* Actor, FVector2D& OutScreen)
+	{
+		if (!IsValid(PlayerController) || !IsValid(Actor))
+		{
+			return false;
+		}
+		return PlayerController->ProjectWorldLocationToScreen(Actor->GetActorLocation(), OutScreen, false);
+	}
+
+	static bool MakeCoveringRect(
+		APlayerController* PlayerController,
+		const TArray<AActor*>& Actors,
+		FVector2D& OutMin,
+		FVector2D& OutMax)
+	{
+		if (Actors.Num() == 0)
+		{
+			return false;
+		}
+
+		TArray<FVector2D> Points;
+		Points.Reserve(Actors.Num());
+		for (AActor* Actor : Actors)
+		{
+			FVector2D Screen = FVector2D::ZeroVector;
+			if (!ProjectActor(PlayerController, Actor, Screen))
+			{
+				return false;
+			}
+			Points.Add(Screen);
+		}
+
+		OutMin = Points[0];
+		OutMax = Points[0];
+		for (const FVector2D& Point : Points)
+		{
+			OutMin.X = FMath::Min(OutMin.X, Point.X);
+			OutMin.Y = FMath::Min(OutMin.Y, Point.Y);
+			OutMax.X = FMath::Max(OutMax.X, Point.X);
+			OutMax.Y = FMath::Max(OutMax.Y, Point.Y);
+		}
+		OutMin -= FVector2D(48.0f, 48.0f);
+		OutMax += FVector2D(48.0f, 48.0f);
+		return OutMax.X > OutMin.X && OutMax.Y > OutMin.Y;
 	}
 
 	static void NeutralizeAuthoredCombat(UWorld* World)
@@ -353,6 +463,54 @@ namespace GPContextActionPresentationContractPrivate
 		Presenter->RequestContextAction(EGP_ContextActionId::Patrol);
 		Expect(Presenter->GetMode() == EGP_ContextActionMode::MainBase,
 			TEXT("PatrolDisabledIsNoOp"));
+
+		for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
+		{
+			AGP_UnitBase* Unit = *It;
+			if (IsValid(Unit))
+			{
+				Unit->SetTeamId(-1);
+			}
+		}
+
+		const FVector MarqueeGround = ResolveMarqueeGround(PlayerController);
+		AGP_Worker* MarqueeWorkerA = SpawnOwned<AGP_Worker>(
+			World, MarqueeGround + FVector(180.0f, 0.0f, 0.0f), LocalTeamId);
+		AGP_Worker* MarqueeWorkerB = SpawnOwned<AGP_Worker>(
+			World, MarqueeGround + FVector(-180.0f, 0.0f, 0.0f), LocalTeamId);
+		AGP_MainBase* MarqueeBase = SpawnOwned<AGP_MainBase>(
+			World, MarqueeGround + FVector(0.0f, 220.0f, 0.0f), LocalTeamId);
+		FlushAsyncLoading();
+		Expect(IsValid(MarqueeWorkerA) && IsValid(MarqueeWorkerB) && IsValid(MarqueeBase),
+			TEXT("K0_MarqueeClusterSpawned"));
+		if (IsValid(MarqueeWorkerA) && IsValid(MarqueeWorkerB) && IsValid(MarqueeBase))
+		{
+			TArray<AActor*> MarqueeActors;
+			MarqueeActors.Add(MarqueeWorkerA);
+			MarqueeActors.Add(MarqueeWorkerB);
+			MarqueeActors.Add(MarqueeBase);
+			FVector2D MarqueeMin = FVector2D::ZeroVector;
+			FVector2D MarqueeMax = FVector2D::ZeroVector;
+			PrepareLocalView(PlayerController);
+			const bool bMarqueeRect = MakeCoveringRect(
+				PlayerController, MarqueeActors, MarqueeMin, MarqueeMax);
+			Expect(bMarqueeRect, TEXT("K1_ProjectedUnitBuildingMarquee"));
+			Selection->ClearAllSelectionState();
+			if (bMarqueeRect)
+			{
+				PlayerController->ApplyMarqueeSelectionForContract(MarqueeMin, MarqueeMax);
+			}
+			Expect(Presenter->GetMode() == EGP_ContextActionMode::UnitGroup
+				&& Selection->GetSelectionCount() == 2
+				&& Selection->IsUnitSelected(MarqueeWorkerA)
+				&& Selection->IsUnitSelected(MarqueeWorkerB)
+				&& !Selection->IsUnitSelected(MarqueeBase),
+				TEXT("K_MarqueeUnitsPlusBuildingIsUnitGroupNotMixedNone"));
+			Selection->ClearAllSelectionState();
+			MarqueeWorkerA->Destroy();
+			MarqueeWorkerB->Destroy();
+			MarqueeBase->Destroy();
+		}
 
 		DestroySpawned();
 		UE_LOG(LogGPContextActionPresentationContract, Log,

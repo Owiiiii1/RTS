@@ -340,7 +340,7 @@ void UGP_SelectionViewModelAdapter::CollectLiveSelectedUnits(
 	for (const TWeakObjectPtr<AGP_UnitBase>& WeakUnit : Selection->GetSelectedUnits())
 	{
 		AGP_UnitBase* Unit = WeakUnit.Get();
-		if (IsValid(Unit) && !Unit->IsDead())
+		if (IsValid(Unit) && !Unit->IsActorBeingDestroyed() && !Unit->IsDead())
 		{
 			OutUnits.Add(Unit);
 		}

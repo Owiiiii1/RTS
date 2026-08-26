@@ -4,6 +4,8 @@
 
 #include "Engine/LocalPlayer.h"
 #include "Player/GPPlayerController.h"
+#include "Player/GPSelectionComponent.h"
+#include "Units/GPUnitBase.h"
 #include "ViewModels/GPHUDViewModelSubsystem.h"
 #include "ViewModels/GPContextActionPresenter.h"
 #include "ViewModels/GPLaunchMenuPresenter.h"
@@ -173,6 +175,45 @@ TArray<FGP_SelectionGroupRow> UGP_HUDRootWidget::GetSelectionGroupRows() const
 		return SelectionVM->GetGroupRows();
 	}
 	return TArray<FGP_SelectionGroupRow>();
+}
+
+void UGP_HUDRootWidget::RequestSelectGroupRow(int32 RowIndex)
+{
+	if (RowIndex < 0)
+	{
+		return;
+	}
+
+	AGP_PlayerController* PlayerController = Cast<AGP_PlayerController>(GetOwningPlayer());
+	UGP_SelectionComponent* Selection =
+		PlayerController != nullptr ? PlayerController->GetSelectionComponent() : nullptr;
+	if (Selection == nullptr)
+	{
+		return;
+	}
+
+	TArray<AGP_UnitBase*> LiveUnits;
+	for (const TWeakObjectPtr<AGP_UnitBase>& WeakUnit : Selection->GetSelectedUnits())
+	{
+		AGP_UnitBase* Unit = WeakUnit.Get();
+		if (IsValid(Unit) && !Unit->IsActorBeingDestroyed() && !Unit->IsDead())
+		{
+			LiveUnits.Add(Unit);
+		}
+	}
+
+	if (LiveUnits.Num() < 2 || !LiveUnits.IsValidIndex(RowIndex))
+	{
+		return;
+	}
+
+	AGP_UnitBase* Unit = LiveUnits[RowIndex];
+	if (!IsValid(Unit) || Unit->IsActorBeingDestroyed() || !Unit->IsGameplaySelectable())
+	{
+		return;
+	}
+
+	Selection->ReplaceSelectionWithUnit(Unit);
 }
 
 void UGP_HUDRootWidget::BindContextActionPresenter()

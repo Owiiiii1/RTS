@@ -147,7 +147,8 @@ namespace GPHUDViewModelBridgeContractPrivate
 
 		Expect(UGP_HUDRootWidget::StaticClass()->FindPropertyByName(TEXT("BridgeRetryTimer")) == nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetAbilitySystemComponent")) == nullptr
-			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetSelectionGroupRows")) != nullptr,
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetSelectionGroupRows")) != nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestSelectGroupRow")) != nullptr,
 			TEXT("I_NoRetryTimerAndNoGameplayQueryOnHUDRoot"));
 
 		UE_LOG(LogGPHUDViewModelBridgeContract, Log,

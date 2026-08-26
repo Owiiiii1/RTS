@@ -260,6 +260,7 @@ namespace GPSelectionViewModelContractPrivate
 			TEXT("G_SelectionOverridesInspect"));
 
 		Expect(UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetSelectionGroupRows")) != nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestSelectGroupRow")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("BP_OnSelectionPresentationChanged")) != nullptr,
 			TEXT("H_HUDRootGroupPresenterSeamExists"));
 
@@ -347,6 +348,82 @@ namespace GPSelectionViewModelContractPrivate
 			&& FMath::IsNearlyEqual(VM->AttackRange, 0.0f),
 			TEXT("E_ResetClearsIconAndAttackRange"));
 
+		AGP_Worker* UnitC = SpawnContractWorker(World, FVector(54200.0f, 54000.0f, 200.0f));
+		FlushAsyncLoading();
+		UGP_HUDRootWidget* HUD = Subsystem->GetProductionHUDWidget();
+		Expect(IsValid(UnitC) && IsValid(HUD), TEXT("L0_GroupRowClickActorsAndHUD"));
+		if (IsValid(UnitC) && IsValid(HUD))
+		{
+			Selection->ReplaceSelectionWithUnit(UnitA);
+			Selection->AddUnitToSelection(UnitB);
+			Selection->AddUnitToSelection(UnitC);
+			Expect(VM->Mode == EGP_SelectionPresentationMode::Group
+				&& VM->GetGroupRows().Num() == 3
+				&& VM->GetGroupRows()[0].Index == 0
+				&& VM->GetGroupRows()[1].Index == 1
+				&& VM->GetGroupRows()[2].Index == 2
+				&& Selection->IsUnitSelected(UnitA)
+				&& Selection->IsUnitSelected(UnitB)
+				&& Selection->IsUnitSelected(UnitC),
+				TEXT("L_GroupRowsMatchSelectedOrderABC"));
+
+			HUD->RequestSelectGroupRow(1);
+			Expect(Selection->GetSelectionCount() == 1
+				&& Selection->IsUnitSelected(UnitB)
+				&& !Selection->IsUnitSelected(UnitA)
+				&& !Selection->IsUnitSelected(UnitC)
+				&& VM->Mode == EGP_SelectionPresentationMode::Single
+				&& VM->SelectionCount == 1
+				&& VM->bIsUnit
+				&& FMath::IsNearlyEqual(VM->CurrentHealth,
+					UnitB->GetUnitAttributeSet() != nullptr
+						? UnitB->GetUnitAttributeSet()->GetHealth()
+						: -1.0f,
+					0.05f),
+				TEXT("A_RequestSelectGroupRowReplacesGroupWithClickedUnit"));
+			if (const UGP_UnitDefinition* ClickedDef = UnitB->ResolveLoadedUnitDefinition())
+			{
+				Expect(VM->Icon == ClickedDef->PresentationIcon
+					&& (ClickedDef->DisplayName.IsEmpty() || VM->DisplayName.EqualTo(ClickedDef->DisplayName)),
+					TEXT("A_ClickedRowSingleMatchesDefinition"));
+			}
+
+			Selection->ReplaceSelectionWithUnit(UnitA);
+			Selection->AddUnitToSelection(UnitB);
+			Selection->AddUnitToSelection(UnitC);
+			const int32 CountBeforeOob = Selection->GetSelectionCount();
+			HUD->RequestSelectGroupRow(-1);
+			HUD->RequestSelectGroupRow(99);
+			Expect(Selection->GetSelectionCount() == CountBeforeOob
+				&& Selection->IsUnitSelected(UnitA)
+				&& Selection->IsUnitSelected(UnitB)
+				&& Selection->IsUnitSelected(UnitC)
+				&& VM->Mode == EGP_SelectionPresentationMode::Group,
+				TEXT("B_OutOfBoundsGroupRowClickIsNoOp"));
+
+			UnitB->Destroy();
+			HUD->RequestSelectGroupRow(2);
+			Expect(Selection->IsUnitSelected(UnitA)
+				&& Selection->IsUnitSelected(UnitC)
+				&& !Selection->IsUnitSelected(UnitB)
+				&& VM->Mode == EGP_SelectionPresentationMode::Group
+				&& VM->GetGroupRows().Num() == 2,
+				TEXT("C_StaleGroupRowIndexIsSafeNoOp"));
+
+			Selection->ReplaceSelectionWithUnit(UnitA);
+			HUD->RequestSelectGroupRow(0);
+			Expect(Selection->GetSelectionCount() == 1
+				&& Selection->IsUnitSelected(UnitA)
+				&& VM->Mode == EGP_SelectionPresentationMode::Single,
+				TEXT("D_SingleSelectionGroupRowClickDoesNotInventSelection"));
+
+			Selection->ClearAllSelectionState();
+			HUD->RequestSelectGroupRow(0);
+			Expect(Selection->GetSelectionCount() == 0
+				&& VM->Mode == EGP_SelectionPresentationMode::None,
+				TEXT("D_EmptySelectionGroupRowClickIsNoOp"));
+		}
+
 		Selection->ClearAllSelectionState();
 		if (IsValid(UnitA))
 		{
@@ -355,6 +432,10 @@ namespace GPSelectionViewModelContractPrivate
 		if (IsValid(UnitB))
 		{
 			UnitB->Destroy();
+		}
+		if (IsValid(UnitC))
+		{
+			UnitC->Destroy();
 		}
 
 		UE_LOG(LogGPSelectionViewModelContract, Log,

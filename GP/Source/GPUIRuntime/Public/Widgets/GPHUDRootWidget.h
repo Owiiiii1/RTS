@@ -37,6 +37,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|Selection")
 	TArray<FGP_SelectionGroupRow> GetSelectionGroupRows() const;
 
+	/**
+	 * Local HUD: replace the current group selection with the unit shown in RowIndex.
+	 * RowIndex matches FGP_SelectionGroupRow.Index (live GetSelectedUnits() order).
+	 * Invalid/stale rows are a no-op. Does not write SelectionVM directly.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GP|HUD|Selection")
+	void RequestSelectGroupRow(int32 RowIndex);
+
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
 	TArray<FGP_ContextActionPresentation> GetContextActionPresentations() const;
 

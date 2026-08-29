@@ -2,7 +2,7 @@
 
 ## Status
 
-**BOTTOM_HUD_RUNTIME_CURSOR_PATROL_COMBAT_READY_FOR_OPERATOR_VALIDATION**
+**BOTTOM_HUD_PURCHASE_NAVIGATION_READY_FOR_OPERATOR_VALIDATION**
 
 This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge. Do not run production finalization.
 
@@ -10,145 +10,94 @@ This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge
 
 - Branch: `ui/gp-bottom-hud`
 - Base: `origin/main` @ `0667b6f912fce288422848d5d2355bc4510b748c`
-- Head (implementation): `c90dceb062ec320da8975a29dfe9a57709489ce7`
-- Previous operator-fail checkpoint: `71d88dcf592184c97fb79d17c5482aef39e276de`
+- Head (implementation): `dffeba00b5b5c8ecdf2f22b5754e1f03da8b08bd`
+- Previous runtime cursor / Patrol combat implementation: `c90dceb062ec320da8975a29dfe9a57709489ce7`
 - Behind `origin/main`: **0**
 - `GP Win64 Development` / `GP Win64 Shipping`: **not run** (intermediate gate)
 
-## Exact old cursor failure
+## Enum states
 
-Two prior attempts wrote `CurrentMouseCursor` / `DefaultMouseCursor` and/or `UGP_HUDRootWidget::NativeOnCursorQuery`. Contracts passed because they asserted the enum. Operator PIE still showed the default arrow.
+`EGP_ContextActionPanelState` (Blueprint display names):
 
-Root cause: under `FInputModeGameAndUI`, `FSlateUser::QueryCursor` walks the widget under the mouse. Production `WBP_GP_HUD` descendants typically return Unhandled, so Slate **forces `EMouseCursor::Default`**. Root `NativeOnCursorQuery` is not a guaranteed query owner. `FSceneViewport::OnCursorQuery` → `GetMouseCursor()` only runs when the hovered widget is the scene viewport.
-
-This slice does **not** try a third hardware-cursor query fix.
-
-## Exact native overlay implementation
-
-New native-only Slate leaf `SGPCommandCursorOverlay` (no `.uasset`, no Blueprint).
-
-- `AGP_PlayerController::ShowCommandCursor(Mode)` / `HideCommandCursor(Reason)`
-- Host: full-viewport `SOverlay`, `EVisibility::HitTestInvisible`
-- Added via local player `UGameViewportClient::AddViewportWidgetContent` at **ZOrder 10000** (HUD 100, marquee 1000)
-- Paint is volatile and follows `FSlateApplication::Get().GetCursorPos()`
-- No tick, no gameplay logic, no click blocking
-- While targeting: `bShowMouseCursor = false`, hardware cursor `None`
-- `GetCommandTargetingCursor` remains a harmless leftover mapping (returns `None` while targeting)
-- `UGP_HUDRootWidget::NativeOnCursorQuery` **removed**
-
-## Viewport ownership and cleanup
-
-Centralized:
-
-| Event | Hide reason |
+| Value | Display |
 | --- | --- |
-| Enter targeting | Show (mode replace updates visual, same overlay) |
-| Confirm | `Confirm` |
-| RMB | `RMB` |
-| Esc | `Esc` |
-| Selection invalidation | `SelectionInvalid` |
-| Building placement enter | `BuildingPlacement` |
-| EndPlay / PC teardown | `EndPlay` (remove viewport content, reset shared ptrs) |
-| Viewport rebuild | `Rebuild` |
+| `Actions` | Actions |
+| `PurchaseRoot` | Purchase Root |
+| `PurchaseUnits` | Purchase Units |
+| `PurchaseBuildings` | Purchase Buildings |
+| `PurchaseDefense` | Purchase Defense |
 
-Building placement cannot leave a command cursor. Overlay pointers are reset after `RemoveViewportWidgetContent`. No dangling Slate widget.
+`EGP_PurchaseCategory`: `Units` / `Buildings` / `Defense`.
 
-## Visual shape per mode
+Same presenter: `UGP_ContextActionPresenter`. No second presenter. No Tick. No catalog/spend.
 
-Slate primitives only. Color is not the only differentiator.
+## Exact transitions
 
-| Mode | Shape |
-| --- | --- |
-| Move | four-tick crosshair + small center square |
-| AttackMove | crosshair + extra ring |
-| Patrol | crosshair + two opposing arrows |
+Friendly MainBase selected (`Mode == MainBase`):
 
-Operator PIE is the visual pixel gate. Automated tests do **not** assert rendered pixels or that the hardware cursor enum must change.
+```
+Actions
+  PURCHASE / RequestOpenMainBasePurchase
+    ↓
+PurchaseRoot
+  Units     → PurchaseUnits      Back → PurchaseRoot
+  Buildings → PurchaseBuildings  Back → PurchaseRoot
+  Defense   → PurchaseDefense    Back → PurchaseRoot
+  Back      → Actions
+```
 
-## Exact Patrol combat gating bug
+Category open is only valid from `PurchaseRoot`. No-op transitions do not broadcast.
 
-`IsCombatCapableForAutoAcquire()` returned true only for:
+## Blueprint API
 
-- `GP.Unit.Type.SalvageWalker`
-- `GP.Building.Type.DefensiveTurret`
+`UGP_HUDRootWidget` (no Actor refs):
 
-Patrol acquire used that method. Operator units that can attack but lack the SalvageWalker **capability tag** never scanned/engaged. Contracts passed because they spawned `AGP_SalvageWalker`.
+- `GetContextActionPanelState()` — unchanged
+- `RequestOpenMainBasePurchase()` — unchanged
+- `RequestOpenPurchaseCategory(EGP_PurchaseCategory Category)` — new
+- `RequestPurchaseBack()` — new (context-sensitive)
+- existing `BP_OnContextActionsChanged` on every real panel-state / presentation change
 
-## New canonical combat capability rule
+## Safety reset semantics
 
-`UGP_UnitCommandComponent::IsCombatCapable()` (no class-name checks, SalvageWalker tag is **not** canonical combat):
+Purchase states exist only while `Mode == MainBase` (friendly selected MainBase).
 
-- live / valid / definition ready
-- not `GP.Unit.Type.Worker`
-- `IsAttackConfigValid()` (`TryResolveEffectiveAttackRange()` range > 0)
-- `UGP_UnitAttributeSet::GetDamage()` finite and > 0
+Forced `Actions` when:
 
-Patrol auto-acquire uses that rule. Idle auto-acquire / timer start now share the same factual surface (turrets keep working via attack config). **Attack-Move eligibility is unchanged:** SalvageWalker capability tag only.
+- selection changes away from that MainBase
+- selection cleared
+- MainBase died / destroyed (`IsActorBeingDestroyed` excluded from live selection)
+- another unit/building selected
+- enemy / inspect MainBase (`ResolveMode` is not MainBase; Purchase requests no-op)
 
-## Prove test uses combat unit WITHOUT SalvageWalker tag
+## Tests
 
-`gp.Combat.RunPatrolCombatContractTest` stages K/L spawn native `AGP_Unit` (`GP_Unit_0`):
+`gp.UI.RunContextActionPresentationContractTest` **Complete Failures=0**
 
-- `K_CombatUnitHasNoSalvageWalkerTag`
-- `K0_CombatCapableWithoutSW`
-- `E_AttackMoveEligibilityStaysSalvageWalker` (`IsEligibleForAttackMoveAcquire()` false)
-- `K_PatrolAcquireWithoutSalvageWalker`
-- `K_TemporaryAttackKeepsPatrolParent`
-- `L_ResumeSamePatrolLeg`
+Covers: friendly MainBase Actions → Root → Units/Buildings/Defense + Back; Root Back → Actions; category request without MainBase is no-op; leaving MainBase resets substate; enemy MainBase cannot enter Purchase; destroy while substate → Actions.
 
-Runtime log proof:
-
-- `GP PatrolAcquire TargetFound Unit=GP_Unit_0 Target=GP_Worker_7`
-- `GP PatrolEngage Started Unit=GP_Unit_0 Target=GP_Worker_7`
-- `GP PatrolResume Unit=GP_Unit_0 ... HeadingToB=true`
-
-Worker: `GP PatrolAcquire Disabled Unit=GP_Worker_5 Reason=NotCombatCapable` and no acquire. SalvageWalker stages remain the regression.
-
-## Patrol temporary engagement / resume
-
-Unchanged architecture, now reachable for any combat-capable unit:
-
-- scan: existing auto-acquire timer + `FindNearestAutoAcquireTarget(..., AttackMove)`
-- hostility / validity / FoW / range / LOS / death: existing filters
-- `StartAttackMoveEngagement` under Held Patrol (parent not replaced)
-- `FinishAttack` → `ResumePatrolTravelAfterEngagement()` same A/B leg, same serial, anchors unchanged
-- non-combat units continue Patrol with no acquire
-
-## Exact tests
-
-All `-game` `L_PrototypeArena` `-unattended -nop4 -NullRHI`, one at a time, no `quit`, editor killed after Complete.
+Regressions (Failures=0):
 
 | Command | Result |
 | --- | --- |
-| `gp.Commands.RunMovePatrolTargetingContractTest` | Complete Failures=0 Cancelled=false |
-| `gp.Combat.RunPatrolCombatContractTest` | Complete Failures=0 Cancelled=false |
-| `gp.Combat.RunAttackMoveContractTest` | Complete Failures=0 Cancelled=false |
-| `gp.Combat.RunAutoAcquireContractTest` | Complete Failures=0 Cancelled=false |
-| `gp.Combat.RunRetaliationPursuitContractTest` | Complete Failures=0 Cancelled=false |
-| `gp.Movement.RunRTSMovementReconciliationContractTest` | Complete Failures=0 Cancelled=false |
-| `gp.Worker.RunCommandIntentContractTest` | Complete Failures=0 Cancelled=None |
-| `gp.UI.RunContextActionPresentationContractTest` | Complete Failures=0 Cancelled=false |
-| `gp.Selection.RunMarqueeUnitsOnlyContractTest` | Complete Failures=0 Cancelled=false |
+| `gp.UI.RunSelectionViewModelContractTest` | Complete Failures=0 |
+| `gp.UI.RunHUDViewModelBridgeContractTest` | Complete Failures=0 |
+| `gp.Commands.RunMovePatrolTargetingContractTest` | Complete Failures=0 |
+| `gp.Selection.RunMarqueeUnitsOnlyContractTest` | Complete Failures=0 |
 
-Cursor contract now checks overlay lifecycle (visible + mode, hardware hidden via `bShowMouseCursor`, Move→Patrol same overlay mode update, confirm/RMB/Esc/placement overlay gone). It does **not** require hardware `EMouseCursor` to change.
+Targeting actions and MainBase Purchase appearance are unchanged.
 
 ## GPEditor / UHT
 
-`GPEditor Win64 Development` **Passed** (UHT ran; makefile invalidated for added overlay source).
+`GPEditor Win64 Development` **Passed**.
 
 ## Changed files (implementation commit)
 
-- `GP/Source/GPRuntime/Public/UI/SGPCommandCursorOverlay.h`
-- `GP/Source/GPRuntime/Private/UI/SGPCommandCursorOverlay.cpp`
-- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
-- `GP/Source/GPRuntime/Public/Combat/GPPatrolCombatContractTest.h`
-- `GP/Source/GPRuntime/Private/Debug/GPPatrolCombatContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPCommandTargetingContractTest.cpp`
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPContextActionPresenter.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPContextActionPresenter.cpp`
 - `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
 - `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPContextActionPresentationContractTest.cpp`
 - `Docs/TDD/12_UI_Architecture.md`
 - `Docs/TDD/04_RTS_Selection_And_Commands.md`
 - `Docs/GDD/09_UI_UX.md`
@@ -156,32 +105,19 @@ Cursor contract now checks overlay lifecycle (visible + mode, hardware hidden vi
 
 ## Protected audit
 
-Not modified in this commit:
+Not modified: `WBP_GP_HUD`, `WBP_GP_SelectionGroupRow`, `Content/`, `Config/`, maps, DataAssets, Materials, VFX, `Tools/`, `GP.uproject`. No destructive git. Local dirty Content/Config/maps/Tools/uproject left unstaged.
 
-- `WBP_GP_HUD`
-- `WBP_GP_SelectionGroupRow`
-- `Content/`
-- `Config/`
-- maps
-- DataAssets
-- Materials
-- VFX
-- `Tools/`
-- `GP.uproject`
+## Operator wiring (WBP_GP_HUD, local, not committed)
 
-No destructive git. Local dirty Content/Config/maps/Tools/uproject left unstaged.
+Authored `WS_ActionPanel` already has index 0 `OV_Actions` and index 1 `OV_PurchaseRoot`.
 
-## Operator test
+Bind:
 
-**Operator PIE is the visual gate.** Automated tests cannot prove pixels.
+- `BTN_PurchaseUnits` → HUD `RequestOpenPurchaseCategory(Units)`
+- `BTN_PurchaseBuildings` → `RequestOpenPurchaseCategory(Buildings)`
+- `BTN_PurchaseDefense` → `RequestOpenPurchaseCategory(Defense)`
+- `BTN_PurchaseBack` → `RequestPurchaseBack()`
 
-1. Select a mobile unit. Press MOVE. Hardware arrow hides. Overlay crosshair + center square follows the mouse above the HUD. Clicks still work.
-2. Without confirming, press PATROL. Overlay stays; visual switches to crosshair + opposing arrows.
-3. LMB ground: overlay gone, normal cursor back, Patrol starts.
-4. RMB or Esc while targeting: overlay gone, no command.
-5. Enter building placement while targeting: overlay gone.
-6. Combat unit that is **not** SalvageWalker (native `AGP_Unit` / any unit with valid range+damage, not Worker): Patrol past a hostile → temporary attack → resume same A/B leg. Held stays Patrol.
-7. Worker Patrol: walks A↔B, never auto-acquires.
-8. SalvageWalker Attack-Move still available; generic combat unit still has **no** Attack-Move cell.
+Drive widget switcher from `GetContextActionPanelState()` on `BP_OnContextActionsChanged`. Later category overlays use the same Back API. No catalog rows yet.
 
 INTERMEDIATE / NOT MERGE READY.

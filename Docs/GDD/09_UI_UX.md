@@ -90,7 +90,7 @@ UX/balance tuning may revisit the presentation scale.
 - Not a permanent Build Menu or global Order Menu. Mode follows selection.
 - A small **Message Strip** sits directly above this block for short contextual
   procurement/action feedback (may be empty). Not a global toast system.
-- **Unit Action Mode:** Move, Stop, Attack-Move ("идти с атакой"), Patrol (MVP: current location ↔ one clicked point; combat-capable units engage then resume the same leg).
+- **Unit Action Mode:** Move, Stop, Attack-Move ("идти с атакой"), Patrol (MVP: current location ↔ one clicked point; combat-capable units — factual attack config, not SalvageWalker-only — engage then resume the same leg).
   Direct RMB target Attack remains a separate contextual behavior and is not Attack-Move.
 - **Building Action Mode:** building-specific actions. Only **MainBase** owns **PURCHASE**.
 - **MainBase PURCHASE** (design / not implemented): replaces the grid with UNITS / BUILDINGS /

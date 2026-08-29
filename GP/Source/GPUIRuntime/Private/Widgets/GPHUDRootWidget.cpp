@@ -3,7 +3,6 @@
 #include "Widgets/GPHUDRootWidget.h"
 
 #include "Engine/LocalPlayer.h"
-#include "Input/CursorReply.h"
 #include "Player/GPPlayerController.h"
 #include "Player/GPSelectionComponent.h"
 #include "Units/GPUnitBase.h"
@@ -302,15 +301,6 @@ EMouseCursor::Type UGP_HUDRootWidget::GetCommandTargetingCursor() const
 		return PlayerController->GetCommandTargetingCursor();
 	}
 	return EMouseCursor::Default;
-}
-
-FCursorReply UGP_HUDRootWidget::NativeOnCursorQuery(
-	const FGeometry& InGeometry,
-	const FPointerEvent& InCursorEvent)
-{
-	(void)InGeometry;
-	(void)InCursorEvent;
-	return FCursorReply::Cursor(GetCommandTargetingCursor());
 }
 
 void UGP_HUDRootWidget::RequestContextAction(EGP_ContextActionId ActionId)

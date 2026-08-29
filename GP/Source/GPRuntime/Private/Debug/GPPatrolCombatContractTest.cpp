@@ -15,6 +15,7 @@
 #include "TimerManager.h"
 #include "UObject/Package.h"
 #include "Units/GPSalvageWalker.h"
+#include "Units/GPUnit.h"
 #include "Units/GPUnitBase.h"
 #include "Units/GPUnitCommandComponent.h"
 #include "Units/GPWorker.h"
@@ -55,6 +56,20 @@ namespace GPPatrolCombatDebug
 			SW->SetTeamId(TeamId);
 		}
 		return SW;
+	}
+
+	static AGP_Unit* SpawnCombatUnit(UWorld* World, const FVector& Loc, int32 TeamId)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Params.ObjectFlags |= RF_Transient;
+		AGP_Unit* Unit = World->SpawnActor<AGP_Unit>(
+			AGP_Unit::StaticClass(), Loc, FRotator::ZeroRotator, Params);
+		if (Unit != nullptr)
+		{
+			Unit->SetTeamId(TeamId);
+		}
+		return Unit;
 	}
 
 	static AGP_Worker* SpawnWorker(UWorld* World, const FVector& Loc, int32 TeamId)
@@ -103,7 +118,8 @@ namespace GPPatrolCombatDebug
 		for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
 		{
 			AGP_UnitBase* Unit = *It;
-			if (IsValid(Unit) && !Unit->IsA<AGP_Worker>() && !Unit->IsA<AGP_SalvageWalker>())
+			if (IsValid(Unit) && !Unit->IsA<AGP_Worker>() && !Unit->IsA<AGP_SalvageWalker>()
+				&& !Unit->IsA<AGP_Unit>())
 			{
 				Unit->SetTeamId(-1);
 			}
@@ -184,9 +200,14 @@ void UGP_PatrolCombatContractTestRunner::CleanupActors()
 	{
 		Walker->Destroy();
 	}
+	if (AGP_Unit* CombatUnit = CombatUnitWeak.Get())
+	{
+		CombatUnit->Destroy();
+	}
 	GPPatrolCombatDebug::DestroyWeakWorker(EnemyWeak);
 	GPPatrolCombatDebug::DestroyWeakWorker(WorkerWeak);
 	WalkerWeak.Reset();
+	CombatUnitWeak.Reset();
 }
 
 void UGP_PatrolCombatContractTestRunner::Finish()
@@ -677,7 +698,126 @@ void UGP_PatrolCombatContractTestRunner::AdvanceStage()
 			Expect(!IsValid(Walker), TEXT("J_DeathDestructionCleanup"));
 		}
 
-		Finish();
+		++StageIndex;
+		ScheduleNext(0.1f);
+		break;
+	}
+	case 13:
+	{
+		GPPatrolCombatDebug::DestroyWeakWorker(EnemyWeak);
+		GPPatrolCombatDebug::DestroyWeakWorker(WorkerWeak);
+
+		const FVector CombatOrigin = Origin + FVector(0.0f, 1800.0f, 0.0f);
+		const FVector CombatPatrolDest = CombatOrigin + FVector(1400.0f, 0.0f, 0.0f);
+		Origin = CombatOrigin;
+		PatrolDest = CombatPatrolDest;
+
+		AGP_Unit* CombatUnit = GPPatrolCombatDebug::SpawnCombatUnit(World, Origin, TeamA);
+		AGP_Worker* Enemy = GPPatrolCombatDebug::SpawnWorker(
+			World, Origin + FVector(500.0f, 0.0f, 0.0f), TeamB);
+		CombatUnitWeak = CombatUnit;
+		EnemyWeak = Enemy;
+		if (!Expect(IsValid(CombatUnit) && IsValid(Enemy), TEXT("K0_SpawnCombatUnitWithoutSW")))
+		{
+			Finish();
+			return;
+		}
+
+		Expect(!CombatUnit->HasCapabilityTag(GPTags.Unit_Type_SalvageWalker),
+			TEXT("K_CombatUnitHasNoSalvageWalkerTag"));
+
+		GPPatrolCombatDebug::ApplyCombatStats(CombatUnit, 200.0f, 8.0f, 600.0f, 0.25f);
+		GPPatrolCombatDebug::ApplyCombatStats(Enemy, 80.0f, 1.0f, 100.0f, 5.0f);
+		UGP_UnitCommandComponent* Cmd = CombatUnit->GetUnitCommandComponent();
+		if (!Expect(Cmd != nullptr && Cmd->IsCombatCapable(), TEXT("K0_CombatCapableWithoutSW")))
+		{
+			Finish();
+			return;
+		}
+
+		Expect(!Cmd->IsEligibleForAttackMoveAcquire(),
+			TEXT("E_AttackMoveEligibilityStaysSalvageWalker"));
+
+		SavedScanInterval = Cmd->AutoAcquireScanIntervalSeconds;
+		SavedSightRange = Cmd->AutoAcquireSightRangeCm;
+		Cmd->AutoAcquireScanIntervalSeconds = 0.1f;
+		Cmd->AutoAcquireSightRangeCm = 900.0f;
+		Cmd->RefreshCombatAutoAcquireTimer();
+
+		GPPatrolCombatDebug::IssueCommand(CombatUnit, GPTags.Command_Patrol, PatrolDest);
+		Expect(Cmd->IsPatrolActive() && Cmd->IsEligibleForPatrolAcquire()
+			&& Cmd->IsCombatCapable()
+			&& !CombatUnit->HasCapabilityTag(GPTags.Unit_Type_SalvageWalker),
+			TEXT("K_PatrolAcquireWithoutSalvageWalker"));
+		WaitTicks = 0;
+		++StageIndex;
+		ScheduleNext(0.25f);
+		break;
+	}
+	case 14:
+	{
+		AGP_Unit* CombatUnit = CombatUnitWeak.Get();
+		AGP_Worker* Enemy = EnemyWeak.Get();
+		UGP_UnitCommandComponent* Cmd = CombatUnit != nullptr ? CombatUnit->GetUnitCommandComponent() : nullptr;
+		if (!Expect(IsValid(CombatUnit) && IsValid(Enemy) && Cmd != nullptr, TEXT("K_ActorsAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		++WaitTicks;
+		if (Cmd->IsPatrolEngaging()
+			&& Cmd->IsPatrolActive()
+			&& Cmd->GetAttackTarget() == Enemy
+			&& Cmd->HasHeldCommand()
+			&& Cmd->GetHeldCommand()->CommandTag == GPTags.Command_Patrol)
+		{
+			Expect(true, TEXT("K_TemporaryAttackKeepsPatrolParent"));
+			bSavedHeadingToB = Cmd->IsPatrolHeadingToB();
+			GPPatrolCombatDebug::ApplyCombatStats(Enemy, 12.0f, 1.0f, 100.0f, 5.0f);
+			GPPatrolCombatDebug::ApplyCombatStats(CombatUnit, 200.0f, 40.0f, 600.0f, 0.12f);
+			WaitTicks = 0;
+			++StageIndex;
+			ScheduleNext(0.25f);
+			break;
+		}
+
+		if (WaitTicks > 24)
+		{
+			Expect(false, TEXT("K_TemporaryAttackKeepsPatrolParent"));
+			Finish();
+			return;
+		}
+		ScheduleNext(0.25f);
+		break;
+	}
+	case 15:
+	{
+		AGP_Unit* CombatUnit = CombatUnitWeak.Get();
+		AGP_Worker* Enemy = EnemyWeak.Get();
+		UGP_UnitCommandComponent* Cmd = CombatUnit != nullptr ? CombatUnit->GetUnitCommandComponent() : nullptr;
+		if (!Expect(IsValid(CombatUnit) && Cmd != nullptr, TEXT("L_CombatUnitAlive")))
+		{
+			Finish();
+			return;
+		}
+
+		++WaitTicks;
+		const bool bEnemyGone = !IsValid(Enemy) || Enemy->IsDead();
+		if (bEnemyGone && Cmd->IsPatrolActive() && !Cmd->IsAttackActive())
+		{
+			Expect(Cmd->IsPatrolHeadingToB() == bSavedHeadingToB, TEXT("L_ResumeSamePatrolLeg"));
+			Finish();
+			break;
+		}
+
+		if (WaitTicks > 28)
+		{
+			Expect(false, TEXT("L_ResumeSamePatrolLeg"));
+			Finish();
+			return;
+		}
+		ScheduleNext(0.25f);
 		break;
 	}
 	default:

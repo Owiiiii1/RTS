@@ -40,6 +40,7 @@ private:
 	FTimerHandle StageTimerHandle;
 	TWeakObjectPtr<UWorld> WorldWeak;
 	TWeakObjectPtr<class AGP_SalvageWalker> WalkerWeak;
+	TWeakObjectPtr<class AGP_Unit> CombatUnitWeak;
 	TWeakObjectPtr<class AGP_Worker> EnemyWeak;
 	TWeakObjectPtr<class AGP_Worker> WorkerWeak;
 	FVector Origin = FVector::ZeroVector;

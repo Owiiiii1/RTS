@@ -169,6 +169,9 @@ public:
 	/** Combat-capable unit with Held Patrol may acquire without replacing Patrol. */
 	bool IsEligibleForPatrolAcquire() const;
 
+	/** Factual attack configuration (live, range, damage). Not a SalvageWalker tag check. */
+	bool IsCombatCapable() const;
+
 	/** GP-S32A: Held command is AttackMove (destination travel or temporary engage). */
 	bool IsAttackMoveActive() const;
 
@@ -540,6 +543,7 @@ private:
 	void StartCombatAutoAcquireTimer();
 	void StopCombatAutoAcquireTimer();
 	void OnCombatAutoAcquireScan();
+	bool IsCombatCapable(const AGP_UnitBase* Unit) const;
 	bool IsCombatCapableForAutoAcquire(const AGP_UnitBase* Unit) const;
 	EGP_AutoAcquireMode ResolveIdleAutoAcquireMode(const AGP_UnitBase* OwnerUnit) const;
 	bool IsEligibleAutoAcquireTarget(
@@ -589,6 +593,10 @@ private:
 	FVector PatrolAnchorA = FVector::ZeroVector;
 	FVector PatrolAnchorB = FVector::ZeroVector;
 	bool bPatrolHeadingToB = true;
+#if !UE_BUILD_SHIPPING
+	bool bLoggedPatrolAcquireDisabled = false;
+	TWeakObjectPtr<AGP_UnitBase> LastLoggedPatrolAcquireTarget;
+#endif
 
 	FDelegateHandle MovementResultHandle;
 	TWeakObjectPtr<UGP_MovementComponent> BoundMovementComponent;

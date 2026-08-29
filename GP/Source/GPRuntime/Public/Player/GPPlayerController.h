@@ -56,6 +56,7 @@ class GPRUNTIME_API AGP_PlayerController : public APlayerController
 
 public:
 	AGP_PlayerController();
+	virtual ~AGP_PlayerController() override;
 
 	UFUNCTION(BlueprintPure, Category = "GP|AbilitySystem")
 	UGP_AbilitySystemComponent* GetGPAbilitySystemComponent() const;
@@ -184,11 +185,17 @@ public:
 	EGP_CommandTargetingMode GetCommandTargetingMode() const { return CommandTargetingMode; }
 
 	/**
-	 * Built-in cursor Slate actually queries: FSceneViewport via GetMouseCursor(),
-	 * and UGP_HUDRootWidget::NativeOnCursorQuery while the HUD is under the mouse.
+	 * Harmless leftover mapping. Visual targeting feedback is the native software overlay,
+	 * not hardware/Slate cursor query.
 	 */
 	UFUNCTION(BlueprintPure, Category = "GP|Commands")
 	EMouseCursor::Type GetCommandTargetingCursor() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Commands")
+	bool IsCommandCursorOverlayVisible() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Commands")
+	EGP_CommandTargetingMode GetCommandCursorOverlayMode() const;
 
 	UFUNCTION(BlueprintCallable, Category = "GP|Commands")
 	void EnterMoveMode();
@@ -343,9 +350,12 @@ private:
 	void CancelAttackMoveModeFromRMB();
 	void UpdateAttackMoveInputOwnership();
 	void EnterCommandTargetingMode(EGP_CommandTargetingMode Mode);
+	void EndCommandTargetingMode(const TCHAR* HideReason);
 	void ConfirmCommandTargetingDestination();
 	void ConfirmCommandTargetingDestinationAt(const FVector& GroundLocation);
 	void RefreshCommandTargetingCursor();
+	void ShowCommandCursor(EGP_CommandTargetingMode Mode);
+	void HideCommandCursor(const TCHAR* Reason);
 	void BindCommandTargetingSelection();
 	void UnbindCommandTargetingSelection();
 	void HandleSelectionChangedForCommandTargeting();
@@ -465,6 +475,9 @@ private:
 	bool bCommandTargetingSuppressCommandUntilRMBRelease = false;
 	FDelegateHandle CommandTargetingSelectionHandle;
 	FGPOnCommandTargetingModeChanged CommandTargetingModeChangedDelegate;
+	TSharedPtr<class SWidget> CommandCursorOverlayHost;
+	TSharedPtr<class SGPCommandCursorOverlay> CommandCursorOverlay;
+	TWeakObjectPtr<class UGameViewportClient> CommandCursorViewport;
 
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */
 	TWeakObjectPtr<APawn> LastInitializedLocalPawn;
@@ -477,6 +490,7 @@ private:
 	static constexpr float SelectionDragThresholdPixels = 8.0f;
 	static constexpr float SelectionTraceDistance = 1000000.0f;
 	static constexpr int32 MarqueeWidgetZOrder = 1000;
+	static constexpr int32 CommandCursorOverlayZOrder = 10000;
 
 	bool bCameraMappingContextAdded = false;
 	bool bCameraInputBindingsInstalled = false;

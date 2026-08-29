@@ -16,6 +16,8 @@
 #include "EnhancedInputSubsystems.h"
 #include "EngineUtils.h"
 #include "Engine/EngineBaseTypes.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "FogOfWar/GPFogOfWarComponent.h"
 #include "FogOfWar/GPLocalFoWComponent.h"
@@ -28,6 +30,7 @@
 #include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
 #include "UI/GPMarqueeSelectionWidget.h"
+#include "UI/SGPCommandCursorOverlay.h"
 #include "Buildings/GPBuildingDefinition.h"
 #include "Buildings/GPBuildingBase.h"
 #include "Buildings/GPMainBase.h"
@@ -48,6 +51,7 @@
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPUnitBase.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Widgets/SOverlay.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPCommandInput, Log, All);
 
@@ -135,7 +139,10 @@ AGP_PlayerController::AGP_PlayerController()
 
 	DefaultMouseCursor = EMouseCursor::Default;
 	CurrentMouseCursor = EMouseCursor::Default;
+	bShowMouseCursor = true;
 }
+
+AGP_PlayerController::~AGP_PlayerController() = default;
 
 UGP_AbilitySystemComponent* AGP_PlayerController::GetGPAbilitySystemComponent() const
 {
@@ -374,9 +381,10 @@ void AGP_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	CancelActiveMarquee(/*bLogCanceled=*/false);
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
-	CancelCommandTargetingMode();
+	EndCommandTargetingMode(TEXT("EndPlay"));
 	UnbindCommandTargetingSelection();
 	CancelBuildingPlacement();
+	HideCommandCursor(TEXT("EndPlay"));
 	DestroyMarqueeWidget();
 
 	bCameraRotateHeld = false;
@@ -1520,7 +1528,7 @@ void AGP_PlayerController::EnterBuildingPlacementMode(FPrimaryAssetId DropDefini
 	}
 
 	ClearSelectionForBuildingPlacementEnter();
-	CancelCommandTargetingMode();
+	EndCommandTargetingMode(TEXT("BuildingPlacement"));
 
 	ActiveBuildingPlacementDropId = DropDefinitionId;
 	bBuildingPlacementActive = true;
@@ -1668,7 +1676,7 @@ void AGP_PlayerController::CancelBuildingPlacement()
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
 	DestroyBuildingPlacementGhost();
-	RefreshCommandTargetingCursor();
+	HideCommandCursor(TEXT("BuildingPlacement"));
 }
 
 void AGP_PlayerController::RequestStopSelectedUnits()
@@ -1793,7 +1801,7 @@ void AGP_PlayerController::HandleSelectionChangedForCommandTargeting()
 
 	if (!IsCommandTargetingSelectionValid())
 	{
-		CancelCommandTargetingMode();
+		EndCommandTargetingMode(TEXT("SelectionInvalid"));
 	}
 }
 
@@ -1812,23 +1820,150 @@ bool AGP_PlayerController::IsCommandTargetingSelectionValid() const
 	}
 }
 
+namespace GPCommandCursorPrivate
+{
+	static const TCHAR* ModeToString(EGP_CommandTargetingMode Mode)
+	{
+		switch (Mode)
+		{
+		case EGP_CommandTargetingMode::Move:
+			return TEXT("Move");
+		case EGP_CommandTargetingMode::AttackMove:
+			return TEXT("AttackMove");
+		case EGP_CommandTargetingMode::Patrol:
+			return TEXT("Patrol");
+		default:
+			return TEXT("None");
+		}
+	}
+}
+
 EMouseCursor::Type AGP_PlayerController::GetCommandTargetingCursor() const
 {
-	if (bBuildingPlacementActive)
+	if (bBuildingPlacementActive || CommandTargetingMode == EGP_CommandTargetingMode::None)
 	{
 		return EMouseCursor::Default;
+	}
+	return EMouseCursor::None;
+}
+
+bool AGP_PlayerController::IsCommandCursorOverlayVisible() const
+{
+	return CommandCursorOverlay.IsValid() && CommandCursorOverlayHost.IsValid();
+}
+
+EGP_CommandTargetingMode AGP_PlayerController::GetCommandCursorOverlayMode() const
+{
+	return CommandCursorOverlay.IsValid()
+		? CommandCursorOverlay->GetMode()
+		: EGP_CommandTargetingMode::None;
+}
+
+void AGP_PlayerController::ShowCommandCursor(EGP_CommandTargetingMode Mode)
+{
+	if (!IsLocalController() || Mode == EGP_CommandTargetingMode::None)
+	{
+		return;
 	}
 
-	switch (CommandTargetingMode)
+	UGameViewportClient* Viewport = nullptr;
+	if (const ULocalPlayer* LocalPlayer = GetLocalPlayer())
 	{
-	case EGP_CommandTargetingMode::Move:
-	case EGP_CommandTargetingMode::AttackMove:
-		return EMouseCursor::Crosshairs;
-	case EGP_CommandTargetingMode::Patrol:
-		return EMouseCursor::CardinalCross;
-	default:
-		return EMouseCursor::Default;
+		Viewport = LocalPlayer->ViewportClient;
 	}
+	if (Viewport == nullptr && GetWorld() != nullptr)
+	{
+		Viewport = GetWorld()->GetGameViewport();
+	}
+
+	bShowMouseCursor = false;
+	DefaultMouseCursor = EMouseCursor::None;
+	CurrentMouseCursor = EMouseCursor::None;
+
+	if (CommandCursorOverlay.IsValid()
+		&& CommandCursorOverlayHost.IsValid()
+		&& CommandCursorViewport.Get() == Viewport
+		&& Viewport != nullptr)
+	{
+		const bool bModeChanged = CommandCursorOverlay->GetMode() != Mode;
+		CommandCursorOverlay->SetMode(Mode);
+#if !UE_BUILD_SHIPPING
+		if (bModeChanged)
+		{
+			UE_LOG(LogGPCommandInput, Log, TEXT("GP CommandCursor Show Mode=%s"),
+				GPCommandCursorPrivate::ModeToString(Mode));
+		}
+#endif
+		return;
+	}
+
+	HideCommandCursor(TEXT("Rebuild"));
+
+	if (Viewport == nullptr)
+	{
+		return;
+	}
+
+	TSharedRef<SOverlay> Host = SNew(SOverlay)
+		.Visibility(EVisibility::HitTestInvisible)
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Fill)
+		.VAlign(VAlign_Fill)
+		[
+			SAssignNew(CommandCursorOverlay, SGPCommandCursorOverlay)
+			.Mode(Mode)
+		];
+	CommandCursorOverlayHost = Host;
+	Viewport->AddViewportWidgetContent(Host, CommandCursorOverlayZOrder);
+	CommandCursorViewport = Viewport;
+	bShowMouseCursor = false;
+	DefaultMouseCursor = EMouseCursor::None;
+	CurrentMouseCursor = EMouseCursor::None;
+
+#if !UE_BUILD_SHIPPING
+	UE_LOG(LogGPCommandInput, Log, TEXT("GP CommandCursor Show Mode=%s"),
+		GPCommandCursorPrivate::ModeToString(Mode));
+#endif
+}
+
+void AGP_PlayerController::HideCommandCursor(const TCHAR* Reason)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	const bool bHadOverlay = CommandCursorOverlayHost.IsValid();
+#if !UE_BUILD_SHIPPING
+	if (bHadOverlay)
+	{
+		UE_LOG(LogGPCommandInput, Log, TEXT("GP CommandCursor Hide Reason=%s"),
+			Reason != nullptr ? Reason : TEXT("Unknown"));
+	}
+#else
+	(void)Reason;
+#endif
+
+	if (CommandCursorOverlayHost.IsValid())
+	{
+		UGameViewportClient* Viewport = CommandCursorViewport.Get();
+		if (Viewport == nullptr && GetWorld() != nullptr)
+		{
+			Viewport = GetWorld()->GetGameViewport();
+		}
+		if (Viewport != nullptr)
+		{
+			Viewport->RemoveViewportWidgetContent(CommandCursorOverlayHost.ToSharedRef());
+		}
+	}
+
+	CommandCursorOverlayHost.Reset();
+	CommandCursorOverlay.Reset();
+	CommandCursorViewport.Reset();
+
+	bShowMouseCursor = true;
+	DefaultMouseCursor = EMouseCursor::Default;
+	CurrentMouseCursor = EMouseCursor::Default;
 }
 
 void AGP_PlayerController::RefreshCommandTargetingCursor()
@@ -1838,13 +1973,13 @@ void AGP_PlayerController::RefreshCommandTargetingCursor()
 		return;
 	}
 
-	const EMouseCursor::Type Cursor = GetCommandTargetingCursor();
-	DefaultMouseCursor = Cursor;
-	CurrentMouseCursor = Cursor;
-	if (FSlateApplication::IsInitialized())
+	if (IsCommandTargetingActive() && !bBuildingPlacementActive)
 	{
-		FSlateApplication::Get().QueryCursor();
+		ShowCommandCursor(CommandTargetingMode);
+		return;
 	}
+
+	HideCommandCursor(TEXT("Idle"));
 }
 
 void AGP_PlayerController::EnterCommandTargetingMode(EGP_CommandTargetingMode Mode)
@@ -1884,7 +2019,7 @@ void AGP_PlayerController::EnterCommandTargetingMode(EGP_CommandTargetingMode Mo
 	bCommandTargetingLMBWasDown = IsInputKeyDown(EKeys::LeftMouseButton);
 	bCommandTargetingSuppressConfirmUntilLMBRelease = bCommandTargetingLMBWasDown;
 	bCommandTargetingSuppressCommandUntilRMBRelease = false;
-	RefreshCommandTargetingCursor();
+	ShowCommandCursor(Mode);
 	CommandTargetingModeChangedDelegate.Broadcast();
 
 	UE_LOG(LogGPCommandInput, Log, TEXT("GP CommandTargeting: Entered Mode=%d"), static_cast<int32>(Mode));
@@ -1905,7 +2040,7 @@ void AGP_PlayerController::EnterAttackMoveMode()
 	EnterCommandTargetingMode(EGP_CommandTargetingMode::AttackMove);
 }
 
-void AGP_PlayerController::CancelCommandTargetingMode()
+void AGP_PlayerController::EndCommandTargetingMode(const TCHAR* HideReason)
 {
 	if (!IsLocalController())
 	{
@@ -1921,8 +2056,13 @@ void AGP_PlayerController::CancelCommandTargetingMode()
 	CommandTargetingMode = EGP_CommandTargetingMode::None;
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
-	RefreshCommandTargetingCursor();
+	HideCommandCursor(HideReason != nullptr ? HideReason : TEXT("Cancel"));
 	CommandTargetingModeChangedDelegate.Broadcast();
+}
+
+void AGP_PlayerController::CancelCommandTargetingMode()
+{
+	EndCommandTargetingMode(TEXT("Cancel"));
 }
 
 void AGP_PlayerController::CancelAttackMoveMode()
@@ -1932,7 +2072,7 @@ void AGP_PlayerController::CancelAttackMoveMode()
 
 void AGP_PlayerController::CancelAttackMoveModeFromRMB()
 {
-	CancelCommandTargetingMode();
+	EndCommandTargetingMode(TEXT("RMB"));
 	bCommandTargetingSuppressCommandUntilRMBRelease = true;
 	bCommandTargetingRMBWasDown = true;
 }
@@ -1971,7 +2111,7 @@ void AGP_PlayerController::UpdateAttackMoveInputEdgesForContract(
 
 	if (IsCommandTargetingActive() && bEscDown && !bCommandTargetingEscWasDown)
 	{
-		CancelCommandTargetingMode();
+		EndCommandTargetingMode(TEXT("Esc"));
 	}
 	bCommandTargetingEscWasDown = bEscDown;
 
@@ -2073,7 +2213,7 @@ void AGP_PlayerController::ConfirmCommandTargetingDestinationAt(const FVector& G
 	CollectCommandTargetingIssuingUnits(Request.IssuingUnits);
 
 	const EGP_CommandTargetingMode ConfirmedMode = CommandTargetingMode;
-	CancelCommandTargetingMode();
+	EndCommandTargetingMode(TEXT("Confirm"));
 	bCommandTargetingSuppressConfirmUntilLMBRelease = true;
 	bCommandTargetingLMBWasDown = true;
 
@@ -2600,7 +2740,7 @@ void AGP_PlayerController::OnSelectionCanceled(const FInputActionValue& Value)
 	}
 	if (IsCommandTargetingActive())
 	{
-		CancelCommandTargetingMode();
+		EndCommandTargetingMode(TEXT("RMB"));
 	}
 
 	CancelActiveMarquee(/*bLogCanceled=*/true);

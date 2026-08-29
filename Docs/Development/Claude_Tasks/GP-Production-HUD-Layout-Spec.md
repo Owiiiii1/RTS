@@ -180,23 +180,21 @@ Base command cells:
 1. **Move** — choose destination point. HUD button enters local Move targeting (LMB ground confirms `GP.Command.Move`).
 2. **Stop** — stop current unit/group command
 3. **Attack-Move** — move toward selected point while engaging enemies ("идти с атакой")
-4. **Patrol** — MVP: one destination click. Anchor A = unit location at accept; Point B = clicked ground. Unit loops A ↔ B until Stop or a replacing explicit command. Combat-capable units auto-acquire while patrolling: temporary Attack under the Patrol parent, then resume the same A/B leg. Workers without combat capability keep patrolling and do not attack.
+4. **Patrol** — MVP: one destination click. Anchor A = unit location at accept; Point B = clicked ground. Unit loops A ↔ B until Stop or a replacing explicit command. Combat-capable units (`IsCombatCapable()`, not SalvageWalker-tag-only) auto-acquire while patrolling: temporary Attack under the Patrol parent, then resume the same A/B leg. Workers without combat capability keep patrolling and do not attack. Attack-Move UI eligibility stays SalvageWalker capability.
 
 Existing direct/context target Attack via RMB remains a separate contextual gameplay behavior.
 Do not rename direct target Attack as Attack-Move.
 
-Active command-targeting cursor (built-in `EMouseCursor`, no custom assets). Production APIs that Slate actually queries:
+Active command-targeting cursor is a native software overlay (`SGPCommandCursorOverlay`), not hardware/Slate cursor query:
 
-- `AGP_PlayerController::GetCommandTargetingCursor()` — mapping source
-- `DefaultMouseCursor` + `CurrentMouseCursor` (FSceneViewport → `GetMouseCursor()`)
-- `UGP_HUDRootWidget::NativeOnCursorQuery` — GameAndUI HUD overlay (writing `CurrentMouseCursor` alone is not visible)
+- Added via local player `GameViewportClient` (ZOrder 10000, HitTestInvisible)
+- Hardware/game cursor hidden while Move / AttackMove / Patrol targeting is active
+- Move: four-tick crosshair + center square
+- Attack-Move: crosshair + ring
+- Patrol: crosshair + two opposing arrows
+- Overlay removed and normal cursor restored on confirm, RMB/Esc, invalid selection, building placement enter, and EndPlay
 
-Mapping:
-- Normal: `Default`
-- Move / Attack-Move: `Crosshairs`
-- Patrol: `CardinalCross`
-
-Cursor resets on confirm, RMB/Esc cancel, invalid selection, building placement enter, and EndPlay.
+**WBP_GP_HUD was not modified.** Operator PIE is the visual pixel gate.
 
 Message Strip (optional): `UGP_HUDRootWidget::GetCommandTargetingPrompt()` —
 "MOVE: Select destination" / "ATTACK MOVE: Select destination" / "PATROL: Select patrol point". Empty when idle.

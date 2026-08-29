@@ -57,7 +57,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
 	FText GetCommandTargetingPrompt() const;
 
-	/** Same production cursor the HUD NativeOnCursorQuery returns to Slate. */
+	/** Harmless leftover mapping. Visual targeting feedback is the native software overlay. */
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
 	EMouseCursor::Type GetCommandTargetingCursor() const;
 
@@ -70,9 +70,6 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
-	virtual FCursorReply NativeOnCursorQuery(
-		const FGeometry& InGeometry,
-		const FPointerEvent& InCursorEvent) override;
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "GP|HUD|LaunchMenu")
 	void BP_OnLaunchMenuChanged();

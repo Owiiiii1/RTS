@@ -43,20 +43,20 @@ namespace GPCommandTargetingDebug
 		return Worker;
 	}
 
-	static bool HasEffectiveCursor(const AGP_PlayerController* PC, EMouseCursor::Type Expected)
+	static bool HasCommandCursorOverlay(const AGP_PlayerController* PC, EGP_CommandTargetingMode Mode)
 	{
-		if (PC == nullptr)
-		{
-			return false;
-		}
-		if (PC->GetCommandTargetingCursor() != Expected
-			|| PC->DefaultMouseCursor != Expected
-			|| PC->CurrentMouseCursor != Expected)
-		{
-			return false;
-		}
-		const EMouseCursor::Type ViewportCursor = PC->GetMouseCursor();
-		return ViewportCursor == Expected || ViewportCursor == EMouseCursor::None;
+		return PC != nullptr
+			&& PC->IsCommandCursorOverlayVisible()
+			&& PC->GetCommandCursorOverlayMode() == Mode
+			&& !PC->bShowMouseCursor;
+	}
+
+	static bool HasNormalHardwareCursor(const AGP_PlayerController* PC)
+	{
+		return PC != nullptr
+			&& !PC->IsCommandCursorOverlayVisible()
+			&& PC->GetCommandCursorOverlayMode() == EGP_CommandTargetingMode::None
+			&& PC->bShowMouseCursor;
 	}
 
 	static AGP_SalvageWalker* SpawnWalker(UWorld* World, const FVector& Loc, int32 TeamId)
@@ -292,9 +292,9 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 			return;
 		}
 
-		Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default)
+		Expect(GPCommandTargetingDebug::HasNormalHardwareCursor(PC)
 			&& !PC->IsCommandTargetingActive(),
-			TEXT("P_NormalCursorIsDefault"));
+			TEXT("P_NormalCursorVisibleOverlayGone"));
 
 		AGP_Worker* Worker = GPCommandTargetingDebug::SpawnWorker(World, Origin, LocalTeamId);
 		AGP_SalvageWalker* Walker = GPCommandTargetingDebug::SpawnWalker(
@@ -347,8 +347,8 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
 		Expect(PC->GetCommandTargetingMode() == EGP_CommandTargetingMode::Move,
 			TEXT("B_EnterMoveMode"));
-		Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Crosshairs),
-			TEXT("Q_MoveCursorNotDefault"));
+		Expect(GPCommandTargetingDebug::HasCommandCursorOverlay(PC, EGP_CommandTargetingMode::Move),
+			TEXT("Q_MoveOverlayVisibleHardwareHidden"));
 
 		PC->ConfirmCommandTargetingDestinationForContract(MoveDest);
 		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
@@ -358,8 +358,8 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 			&& FVector::Dist(Cmd->GetHeldCommand()->TargetLocation, MoveDest) < 150.0f,
 			TEXT("C_MoveRequestHeldThroughPipeline"));
 		Expect(!PC->IsCommandTargetingActive()
-			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
-			TEXT("E_MoveConfirmResetsModalAndCursor"));
+			&& GPCommandTargetingDebug::HasNormalHardwareCursor(PC),
+			TEXT("E_MoveConfirmRemovesOverlay"));
 
 		++StageIndex;
 		ScheduleNext(0.05f);
@@ -388,16 +388,16 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		PC->UpdateAttackMoveInputEdgesForContract(false, true, false, false);
 		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
 		Expect(!PC->IsCommandTargetingActive()
-			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default)
+			&& GPCommandTargetingDebug::HasNormalHardwareCursor(PC)
 			&& (Cmd == nullptr || !Cmd->HasHeldCommand()),
-			TEXT("F_RMBCancelNoCommandCursorReset"));
+			TEXT("F_RMBCancelNoCommandOverlayGone"));
 
 		PC->EnterMoveMode();
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, true);
 		Expect(!PC->IsCommandTargetingActive()
-			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
-			TEXT("F_EscCancelCursorReset"));
+			&& GPCommandTargetingDebug::HasNormalHardwareCursor(PC),
+			TEXT("F_EscCancelOverlayGone"));
 
 		++StageIndex;
 		ScheduleNext(0.05f);
@@ -420,25 +420,25 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		PC->EnterAttackMoveMode();
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
 		Expect(PC->IsAttackMoveModeActive()
-			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Crosshairs),
-			TEXT("R_AttackMoveCursorNotDefault"));
+			&& GPCommandTargetingDebug::HasCommandCursorOverlay(PC, EGP_CommandTargetingMode::AttackMove),
+			TEXT("R_AttackMoveOverlayVisible"));
 		PC->CancelAttackMoveMode();
 		Expect(!PC->IsAttackMoveModeActive()
-			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
-			TEXT("T_AttackMoveCancelRestoresDefault"));
+			&& GPCommandTargetingDebug::HasNormalHardwareCursor(PC),
+			TEXT("T_AttackMoveCancelRemovesOverlay"));
 
 		PC->EnterMoveMode();
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
-		Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Crosshairs),
-			TEXT("E_MoveCursorBeforePatrolReplace"));
+		Expect(GPCommandTargetingDebug::HasCommandCursorOverlay(PC, EGP_CommandTargetingMode::Move),
+			TEXT("E_MoveOverlayBeforePatrolReplace"));
 		PC->EnterPatrolMode();
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
 		Expect(PC->GetCommandTargetingMode() == EGP_CommandTargetingMode::Patrol
-			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::CardinalCross),
-			TEXT("E_PatrolReplacesMoveCursor"));
+			&& GPCommandTargetingDebug::HasCommandCursorOverlay(PC, EGP_CommandTargetingMode::Patrol),
+			TEXT("E_PatrolReplacesMoveOverlayMode"));
 		PC->CancelCommandTargetingMode();
-		Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
-			TEXT("T_ModeReplaceCancelRestoresDefault"));
+		Expect(GPCommandTargetingDebug::HasNormalHardwareCursor(PC),
+			TEXT("T_ModeReplaceCancelRemovesOverlay"));
 
 		++StageIndex;
 		ScheduleNext(0.05f);
@@ -464,9 +464,9 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		PC->EnterPatrolMode();
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
 		Expect(PC->GetCommandTargetingMode() == EGP_CommandTargetingMode::Patrol, TEXT("H_EnterPatrolMode"));
-		Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::CardinalCross)
-			&& PC->GetCommandTargetingCursor() != EMouseCursor::Crosshairs,
-			TEXT("S_PatrolCursorDistinct"));
+		Expect(GPCommandTargetingDebug::HasCommandCursorOverlay(PC, EGP_CommandTargetingMode::Patrol)
+			&& PC->GetCommandCursorOverlayMode() != EGP_CommandTargetingMode::Move,
+			TEXT("S_PatrolOverlayDistinctFromMove"));
 
 		PatrolAnchorA = Worker->GetActorLocation();
 		PC->ConfirmCommandTargetingDestinationForContract(PatrolDest);
@@ -480,8 +480,8 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 			&& Cmd->IsPatrolHeadingToB(),
 			TEXT("I_J_PatrolStoresAnchorsAndRequestsServerPath"));
 		Expect(!PC->IsCommandTargetingActive()
-			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
-			TEXT("T_PatrolConfirmRestoresDefault"));
+			&& GPCommandTargetingDebug::HasNormalHardwareCursor(PC),
+			TEXT("T_PatrolConfirmRemovesOverlay"));
 
 		PatrolWaitTicks = 0;
 		++StageIndex;
@@ -615,22 +615,25 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		PC->EnterMoveMode();
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
 		Expect(PC->GetCommandTargetingMode() == EGP_CommandTargetingMode::Move
-			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Crosshairs),
-			TEXT("U_MoveCursorBeforePlacement"));
+			&& GPCommandTargetingDebug::HasCommandCursorOverlay(PC, EGP_CommandTargetingMode::Move),
+			TEXT("U_MoveOverlayBeforePlacement"));
 		PC->EnterBuildingPlacementMode(EGP_OrbitalBuildingType::LogisticsHub);
 		if (PC->IsBuildingPlacementActive())
 		{
-			Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default)
+			Expect(GPCommandTargetingDebug::HasNormalHardwareCursor(PC)
 				&& !PC->IsCommandTargetingActive(),
-				TEXT("U_BuildingPlacementClearsCommandCursor"));
+				TEXT("U_BuildingPlacementClearsCommandOverlay"));
 			PC->CancelBuildingPlacement();
 		}
 		else
 		{
 			PC->CancelCommandTargetingMode();
-			Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
-				TEXT("U_ForcedCleanupRestoresDefaultWithoutPlacement"));
+			Expect(GPCommandTargetingDebug::HasNormalHardwareCursor(PC),
+				TEXT("U_ForcedCleanupRemovesOverlayWithoutPlacement"));
 		}
+
+		Expect(GPCommandTargetingDebug::HasNormalHardwareCursor(PC),
+			TEXT("V_EndPlayUsesSameOverlayHidePath"));
 
 		Finish();
 		break;

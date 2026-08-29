@@ -565,20 +565,42 @@ bool UGP_UnitCommandComponent::ValidateAttackTarget(
 	return true;
 }
 
-bool UGP_UnitCommandComponent::IsCombatCapableForAutoAcquire(const AGP_UnitBase* Unit) const
+bool UGP_UnitCommandComponent::IsCombatCapable() const
 {
-	if (Unit == nullptr)
+	return IsCombatCapable(Cast<AGP_UnitBase>(GetOwner()));
+}
+
+bool UGP_UnitCommandComponent::IsCombatCapable(const AGP_UnitBase* Unit) const
+{
+	if (Unit == nullptr || Unit->IsDead() || !Unit->IsUnitDefinitionReady())
 	{
 		return false;
 	}
+
 	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
-	if (GPTags.Unit_Type_SalvageWalker.IsValid()
-		&& Unit->HasCapabilityTag(GPTags.Unit_Type_SalvageWalker))
+	if (GPTags.Unit_Type_Worker.IsValid() && Unit->HasCapabilityTag(GPTags.Unit_Type_Worker))
 	{
-		return true;
+		return false;
 	}
-	return GPTags.Building_Type_DefensiveTurret.IsValid()
-		&& Unit->HasCapabilityTag(GPTags.Building_Type_DefensiveTurret);
+
+	if (!IsAttackConfigValid())
+	{
+		return false;
+	}
+
+	const UGP_UnitAttributeSet* Attrs = Unit->GetUnitAttributeSet();
+	if (Attrs == nullptr)
+	{
+		return false;
+	}
+
+	const float Damage = Attrs->GetDamage();
+	return FMath::IsFinite(Damage) && Damage > 0.0f;
+}
+
+bool UGP_UnitCommandComponent::IsCombatCapableForAutoAcquire(const AGP_UnitBase* Unit) const
+{
+	return IsCombatCapable(Unit);
 }
 
 EGP_AutoAcquireMode UGP_UnitCommandComponent::ResolveIdleAutoAcquireMode(const AGP_UnitBase* OwnerUnit) const
@@ -724,7 +746,7 @@ bool UGP_UnitCommandComponent::IsEligibleForPatrolAcquire() const
 
 	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
 	if (OwnerUnit == nullptr || !OwnerUnit->IsUnitDefinitionReady() || OwnerUnit->IsDead()
-		|| !IsCombatCapableForAutoAcquire(OwnerUnit))
+		|| !IsCombatCapable(OwnerUnit))
 	{
 		return false;
 	}
@@ -810,6 +832,10 @@ void UGP_UnitCommandComponent::ResetPatrolExecutor()
 	PatrolAnchorA = FVector::ZeroVector;
 	PatrolAnchorB = FVector::ZeroVector;
 	bPatrolHeadingToB = true;
+#if !UE_BUILD_SHIPPING
+	bLoggedPatrolAcquireDisabled = false;
+	LastLoggedPatrolAcquireTarget.Reset();
+#endif
 }
 
 void UGP_UnitCommandComponent::BeginPatrolExecutor()
@@ -833,6 +859,17 @@ void UGP_UnitCommandComponent::BeginPatrolExecutor()
 	PatrolAnchorB = HeldCommand.GetValue().TargetLocation;
 	bPatrolHeadingToB = true;
 	HeldCommand.GetValue().TargetLocation = PatrolAnchorB;
+#if !UE_BUILD_SHIPPING
+	bLoggedPatrolAcquireDisabled = false;
+	LastLoggedPatrolAcquireTarget.Reset();
+	if (!IsCombatCapable())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP PatrolAcquire Disabled Unit=%s Reason=NotCombatCapable"),
+			*GetNameSafe(Owner));
+		bLoggedPatrolAcquireDisabled = true;
+	}
+#endif
 }
 
 bool UGP_UnitCommandComponent::TryConsumePatrolMovementResult(
@@ -915,6 +952,13 @@ bool UGP_UnitCommandComponent::ResumePatrolTravelAfterEngagement()
 
 	const FGP_MovementRequestOutcome Outcome =
 		Movement->RequestMove(NextDestination, Held.CommandSerial);
+#if !UE_BUILD_SHIPPING
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP PatrolResume Unit=%s Destination=%s HeadingToB=%s"),
+		*GetNameSafe(Owner),
+		*NextDestination.ToCompactString(),
+		bPatrolHeadingToB ? TEXT("true") : TEXT("false"));
+#endif
 	UE_LOG(LogGPUnitCommandExecution, Log,
 		TEXT("GP UnitCommandExecution PatrolResume: Unit=%s Serial=%u Destination=%s HeadingToB=%s Accepted=%s"),
 		*GetNameSafe(Owner),
@@ -1158,6 +1202,16 @@ bool UGP_UnitCommandComponent::StartAttackMoveEngagement(AGP_UnitBase* Target)
 		EnterAttackApproaching();
 	}
 
+#if !UE_BUILD_SHIPPING
+	if (IsPatrolActive())
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP PatrolEngage Started Unit=%s Target=%s"),
+			*GetNameSafe(Owner),
+			*GetNameSafe(ValidTarget));
+	}
+#endif
+
 	return IsAttackActive();
 }
 
@@ -1244,12 +1298,32 @@ void UGP_UnitCommandComponent::OnCombatAutoAcquireScan()
 	{
 		AGP_UnitBase* Target = FindNearestAutoAcquireTarget(Range, EGP_AutoAcquireMode::AttackMove);
 		LastAutoAcquireCandidate = Target;
+#if !UE_BUILD_SHIPPING
+		if (IsPatrolActive() && Target != nullptr && LastLoggedPatrolAcquireTarget.Get() != Target)
+		{
+			UE_LOG(LogGPUnitCommandExecution, Log,
+				TEXT("GP PatrolAcquire TargetFound Unit=%s Target=%s"),
+				*GetNameSafe(GetOwner()),
+				*GetNameSafe(Target));
+			LastLoggedPatrolAcquireTarget = Target;
+		}
+#endif
 		if (Target != nullptr)
 		{
 			TryIssueAttackMoveAcquire(Target);
 		}
 		return;
 	}
+
+#if !UE_BUILD_SHIPPING
+	if (IsPatrolActive() && !IsCombatCapable() && !bLoggedPatrolAcquireDisabled)
+	{
+		UE_LOG(LogGPUnitCommandExecution, Log,
+			TEXT("GP PatrolAcquire Disabled Unit=%s Reason=NotCombatCapable"),
+			*GetNameSafe(GetOwner()));
+		bLoggedPatrolAcquireDisabled = true;
+	}
+#endif
 
 	if (!IsEligibleForCombatAutoAcquire())
 	{

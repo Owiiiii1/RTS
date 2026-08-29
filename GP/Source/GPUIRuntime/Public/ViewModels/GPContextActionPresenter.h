@@ -80,6 +80,8 @@ public:
 	const TArray<FGP_ContextActionPresentation>& GetActions() const { return Actions; }
 	int32 GetBoundDelegateCount() const;
 
+	FText GetTargetingPrompt() const;
+
 	void RequestContextAction(EGP_ContextActionId ActionId);
 	void RequestOpenMainBasePurchase();
 
@@ -96,6 +98,7 @@ private:
 	};
 
 	void HandleSelectionChanged();
+	void HandleCommandTargetingModeChanged();
 	void RebuildPresentation();
 	void UnbindSelectedUnits();
 	void BindSelectedUnits(const TArray<AGP_UnitBase*>& Units);
@@ -120,6 +123,7 @@ private:
 	TWeakObjectPtr<AGP_PlayerController> BoundPlayerController;
 	TWeakObjectPtr<UGP_SelectionComponent> BoundSelection;
 	FDelegateHandle SelectionChangedHandle;
+	FDelegateHandle CommandTargetingChangedHandle;
 	TArray<FBoundSelectedUnit> BoundUnits;
 	TArray<FGP_ContextActionPresentation> Actions;
 	EGP_ContextActionMode Mode = EGP_ContextActionMode::None;

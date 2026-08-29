@@ -177,14 +177,23 @@ When one unit or a unit group is selected.
 
 Base command cells:
 
-1. **Move** — choose destination point
+1. **Move** — choose destination point. HUD button enters local Move targeting (LMB ground confirms `GP.Command.Move`).
 2. **Stop** — stop current unit/group command
 3. **Attack-Move** — move toward selected point while engaging enemies ("идти с атакой")
-4. **Patrol** — **PLANNED / DESIGN TARGET**, not runtime-complete. Patrol from current/assigned
-   point to target and back repeatedly.
+4. **Patrol** — MVP: one destination click. Anchor A = unit location at accept; Point B = clicked ground. Unit loops A ↔ B until Stop or a replacing explicit command.
 
 Existing direct/context target Attack via RMB remains a separate contextual gameplay behavior.
 Do not rename direct target Attack as Attack-Move.
+
+Active command-targeting cursor (built-in `EMouseCursor`, no custom assets):
+- Normal: `Default`
+- Move / Attack-Move: `Crosshairs`
+- Patrol: `CardinalCross`
+
+Cursor resets on confirm, RMB/Esc cancel, invalid selection, building placement enter, and EndPlay.
+
+Message Strip (optional): `UGP_HUDRootWidget::GetCommandTargetingPrompt()` —
+"MOVE: Select destination" / "ATTACK MOVE: Select destination" / "PATROL: Select patrol point". Empty when idle.
 
 Future unit-specific abilities may populate additional cells. Do not fully design ability slots yet.
 

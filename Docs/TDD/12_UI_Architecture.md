@@ -378,7 +378,7 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 | Future top-left Score + top-right Orbit/Cap | `UGP_ResourceViewModel.{PlanetFerronite, OrbitalFerronite, FerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates; local MainBase `OnResolvedMainBaseChanged` + `OnStorageChanged` for `PlanetFerronite` |
 | Future top-right Planet Ferronite | `UGP_ResourceViewModel.PlanetFerronite` = local MainBase `GetTotalStored()` | `FindMainBaseForTeamClientSafe` + `OnResolvedMainBaseChanged` + `OnStorageChanged` |
 | Future bottom-center Selection/Info | Native `UGP_SelectionViewModel` None/Single/Group (gameplay cap **24**). Single: icon, name, HP current/max + normalized, Damage, Armor, Move Speed, Attack Range (`AttackRangeCm`), conditional cargo. Group rows: icon + health (DisplayName remains in row data). Authored visual intent **8×3**. Operator PIE **PASSED** for authored Single bindings via Manual slot `GP_SelectionViewModel`. Group rows via `UGP_HUDRootWidget::GetSelectionGroupRows` + `BP_OnSelectionPresentationChanged`. `WBP_GP_HUD` operator-local, uncommitted. | `UGP_SelectionComponent.OnSelectionChanged` (local) + GAS health delegates + Worker cargo delegate |
-| Future bottom-right Context Action Grid | Native `UGP_ContextActionPresenter` modes None/Unit/UnitGroup/Building/MainBase. Unit actions: Move (visible, disabled — no Move targeting mode), Stop (enabled; `RequestStopSelectedUnits` → `Server_RequestCommand`), Attack-Move (`EnterAttackMoveMode` when `SelectionHasAttackMoveEligibleUnit()`), Patrol (visible, disabled; no backend). MainBase: Purchase presentation + local `PurchaseRoot` panel state only. Other buildings: empty. Authored buttons not operator-validated. | Local selection + death/destroy; PC AttackMove eligibility query |
+| Future bottom-right Context Action Grid | Native `UGP_ContextActionPresenter` modes None/Unit/UnitGroup/Building/MainBase. Unit actions: Move (visible, enabled for `IsMobileCommandEligible()`; `EnterMoveMode` → local targeting → `GP.Command.Move` via `Server_RequestCommand`), Stop (enabled; `RequestStopSelectedUnits` → `Server_RequestCommand`), Attack-Move (`EnterAttackMoveMode` when `SelectionHasAttackMoveEligibleUnit()`), Patrol (visible, enabled for mobile units; `EnterPatrolMode` → `GP.Command.Patrol`, current location ↔ clicked point). MainBase: Purchase presentation + local `PurchaseRoot` panel state only. Other buildings: empty. Command targeting cursor: Move/AttackMove `Crosshairs`, Patrol `CardinalCross`, otherwise `Default`. Message Strip prompt via `GetCommandTargetingPrompt()`. Authored buttons operator-local. | Local selection + death/destroy; PC eligibility queries + `OnCommandTargetingModeChanged` |
 | Future right-side Message Strip | Contextual procurement/action status (shuttle slots, funds, cap, wall stock) | Existing orbital reject/status; not a global toast stack |
 | Future MainBase PURCHASE panel | Future procurement VM (catalog, manifest, READY, Wall stock) | `UGP_OrbitalDeliverySubsystem` + existing Purchase/Confirm/Deploy RPCs |
 | Future bottom-left Minimap | Future `UGP_MinimapVM` — layout placeholder only in the next visual slice | Later minimap subsystem |
@@ -436,10 +436,10 @@ Bottom-right panel. Not a Build Menu. Not orbital production.
 
 | Cell | Command | Status |
 | --- | --- | --- |
-| 1 | Move — choose destination | Existing command |
+| 1 | Move — choose destination | Implemented: HUD `RequestContextAction(Move)` → `EnterMoveMode` → LMB ground → `GP.Command.Move` |
 | 2 | Stop — halt current command | Existing command |
 | 3 | Attack-Move — move toward point while engaging ("идти с атакой") | Existing `GP.Command.AttackMove` |
-| 4 | Patrol — current/assigned point to target and back | **PLANNED / DESIGN TARGET**, not implemented |
+| 4 | Patrol — current position ↔ clicked patrol point | Implemented MVP: one destination click; Stop/replacement cancels |
 
 Direct RMB target Attack remains a separate contextual gameplay behavior. Do not rename it Attack-Move.
 
@@ -489,7 +489,9 @@ NotificationStack — local-only, no replication, queue cap 3 active. Toast dura
 UI legitimately owns:
 
 - Camera transform mirror for minimap viewport rectangle.
-- Modal mode flags: `bAttackModeActive` (A pressed), `bBuildModeActive` (B menu open), `bGhostActive` (ghost placement live).
+- Modal mode flags: `EGP_CommandTargetingMode` (None / Move / AttackMove / Patrol) on the local PlayerController; building-placement ghost remains independent and takes input precedence.
+- Command targeting is local-only. Enter via Context Action (`RequestContextAction` Move / AttackMove / Patrol) or the existing A-key Attack-Move seam. LMB on valid ground confirms; RMB and Esc cancel. While active: selection/marquee and smart RMB click-through are blocked; building placement cannot co-own input (placement cancels targeting first).
+- Built-in cursor via `RefreshCommandTargetingCursor()`: None/`Default`; Move and AttackMove/`Crosshairs`; Patrol/`CardinalCross`. Placement keeps `Default` precedence. Cursor restores to `Default` on confirm, RMB cancel, Esc cancel, invalid selection, entering building placement, `CancelBuildingPlacement`, and EndPlay.
 - Notification queue.
 - Settings panel state.
 - Cached minimap snapshot.

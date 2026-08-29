@@ -131,6 +131,9 @@ AGP_PlayerController::AGP_PlayerController()
 		TEXT("/Game/GrimProtocol/Input/Commands/IMC_GP_Commands.IMC_GP_Commands")));
 	CommandAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(
 		TEXT("/Game/GrimProtocol/Input/Commands/IA_Command.IA_Command")));
+
+	DefaultMouseCursor = EMouseCursor::Default;
+	CurrentMouseCursor = EMouseCursor::Default;
 }
 
 UGP_AbilitySystemComponent* AGP_PlayerController::GetGPAbilitySystemComponent() const
@@ -354,6 +357,7 @@ void AGP_PlayerController::BeginPlay()
 			TryInitializeLocalPawn(ControlledPawn);
 		}
 		TryInitializePlayerStateLink();
+		BindCommandTargetingSelection();
 	}
 }
 
@@ -369,6 +373,8 @@ void AGP_PlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	CancelActiveMarquee(/*bLogCanceled=*/false);
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
+	CancelCommandTargetingMode();
+	UnbindCommandTargetingSelection();
 	CancelBuildingPlacement();
 	DestroyMarqueeWidget();
 
@@ -414,8 +420,8 @@ void AGP_PlayerController::Tick(float DeltaSeconds)
 	// Temporary validation-only boxes; not marquee work and not a world scan.
 	DrawLocalSelectionDebugVisualization();
 
-	// Placement / AttackMove modal owns LMB — never start/update marquee while active.
-	if (bBuildingPlacementActive || bAttackMoveModeActive)
+	// Placement / command-targeting modal owns LMB — never start/update marquee while active.
+	if (bBuildingPlacementActive || IsCommandTargetingActive())
 	{
 		return;
 	}
@@ -504,8 +510,11 @@ void AGP_PlayerController::BeginPlayingState()
 
 	TryInitializeLocalPawn(GetPawn());
 	TryInitializePlayerStateLink();
+	BindCommandTargetingSelection();
 
 	bShowMouseCursor = true;
+	DefaultMouseCursor = EMouseCursor::Default;
+	CurrentMouseCursor = EMouseCursor::Default;
 
 	FInputModeGameAndUI InputMode;
 	InputMode.SetHideCursorDuringCapture(false);
@@ -1510,6 +1519,7 @@ void AGP_PlayerController::EnterBuildingPlacementMode(FPrimaryAssetId DropDefini
 	}
 
 	ClearSelectionForBuildingPlacementEnter();
+	CancelCommandTargetingMode();
 
 	ActiveBuildingPlacementDropId = DropDefinitionId;
 	bBuildingPlacementActive = true;
@@ -1657,6 +1667,7 @@ void AGP_PlayerController::CancelBuildingPlacement()
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
 	DestroyBuildingPlacementGhost();
+	RefreshCommandTargetingCursor();
 }
 
 void AGP_PlayerController::RequestStopSelectedUnits()
@@ -1724,14 +1735,134 @@ bool AGP_PlayerController::SelectionHasAttackMoveEligibleUnit() const
 	return false;
 }
 
-void AGP_PlayerController::EnterAttackMoveMode()
+bool AGP_PlayerController::SelectionHasMoveEligibleUnit() const
 {
-	if (!IsLocalController() || bBuildingPlacementActive)
+	if (SelectionComponent == nullptr)
+	{
+		return false;
+	}
+
+	for (const TWeakObjectPtr<AGP_UnitBase>& WeakUnit : SelectionComponent->GetSelectedUnits())
+	{
+		const AGP_UnitBase* Unit = WeakUnit.Get();
+		if (IsValid(Unit) && Unit->IsMobileCommandEligible())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool AGP_PlayerController::SelectionHasPatrolEligibleUnit() const
+{
+	return SelectionHasMoveEligibleUnit();
+}
+
+FGPOnCommandTargetingModeChanged& AGP_PlayerController::OnCommandTargetingModeChanged()
+{
+	return CommandTargetingModeChangedDelegate;
+}
+
+void AGP_PlayerController::BindCommandTargetingSelection()
+{
+	if (!IsLocalController() || SelectionComponent == nullptr || CommandTargetingSelectionHandle.IsValid())
 	{
 		return;
 	}
 
-	if (!SelectionHasAttackMoveEligibleUnit())
+	CommandTargetingSelectionHandle = SelectionComponent->OnSelectionChanged().AddUObject(
+		this, &ThisClass::HandleSelectionChangedForCommandTargeting);
+}
+
+void AGP_PlayerController::UnbindCommandTargetingSelection()
+{
+	if (SelectionComponent != nullptr && CommandTargetingSelectionHandle.IsValid())
+	{
+		SelectionComponent->OnSelectionChanged().Remove(CommandTargetingSelectionHandle);
+	}
+	CommandTargetingSelectionHandle.Reset();
+}
+
+void AGP_PlayerController::HandleSelectionChangedForCommandTargeting()
+{
+	if (!IsCommandTargetingActive())
+	{
+		return;
+	}
+
+	if (!IsCommandTargetingSelectionValid())
+	{
+		CancelCommandTargetingMode();
+	}
+}
+
+bool AGP_PlayerController::IsCommandTargetingSelectionValid() const
+{
+	switch (CommandTargetingMode)
+	{
+	case EGP_CommandTargetingMode::Move:
+		return SelectionHasMoveEligibleUnit();
+	case EGP_CommandTargetingMode::Patrol:
+		return SelectionHasPatrolEligibleUnit();
+	case EGP_CommandTargetingMode::AttackMove:
+		return SelectionHasAttackMoveEligibleUnit();
+	default:
+		return false;
+	}
+}
+
+void AGP_PlayerController::RefreshCommandTargetingCursor()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	if (bBuildingPlacementActive)
+	{
+		CurrentMouseCursor = EMouseCursor::Default;
+		return;
+	}
+
+	switch (CommandTargetingMode)
+	{
+	case EGP_CommandTargetingMode::Move:
+	case EGP_CommandTargetingMode::AttackMove:
+		CurrentMouseCursor = EMouseCursor::Crosshairs;
+		break;
+	case EGP_CommandTargetingMode::Patrol:
+		CurrentMouseCursor = EMouseCursor::CardinalCross;
+		break;
+	default:
+		CurrentMouseCursor = EMouseCursor::Default;
+		break;
+	}
+}
+
+void AGP_PlayerController::EnterCommandTargetingMode(EGP_CommandTargetingMode Mode)
+{
+	if (!IsLocalController() || bBuildingPlacementActive || Mode == EGP_CommandTargetingMode::None)
+	{
+		return;
+	}
+
+	bool bEligible = false;
+	switch (Mode)
+	{
+	case EGP_CommandTargetingMode::Move:
+		bEligible = SelectionHasMoveEligibleUnit();
+		break;
+	case EGP_CommandTargetingMode::Patrol:
+		bEligible = SelectionHasPatrolEligibleUnit();
+		break;
+	case EGP_CommandTargetingMode::AttackMove:
+		bEligible = SelectionHasAttackMoveEligibleUnit();
+		break;
+	default:
+		break;
+	}
+
+	if (!bEligible)
 	{
 		return;
 	}
@@ -1740,57 +1871,82 @@ void AGP_PlayerController::EnterAttackMoveMode()
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
 
-	bAttackMoveModeActive = true;
-	bAttackMoveRMBWasDown = IsInputKeyDown(EKeys::RightMouseButton);
-	bAttackMoveLMBWasDown = IsInputKeyDown(EKeys::LeftMouseButton);
-	bAttackMoveSuppressConfirmUntilLMBRelease = bAttackMoveLMBWasDown;
-	bAttackMoveSuppressCommandUntilRMBRelease = false;
+	CommandTargetingMode = Mode;
+	bCommandTargetingRMBWasDown = IsInputKeyDown(EKeys::RightMouseButton);
+	bCommandTargetingLMBWasDown = IsInputKeyDown(EKeys::LeftMouseButton);
+	bCommandTargetingSuppressConfirmUntilLMBRelease = bCommandTargetingLMBWasDown;
+	bCommandTargetingSuppressCommandUntilRMBRelease = false;
+	RefreshCommandTargetingCursor();
+	CommandTargetingModeChangedDelegate.Broadcast();
 
-	UE_LOG(LogGPCommandInput, Log, TEXT("GP AttackMoveMode: Entered"));
+	UE_LOG(LogGPCommandInput, Log, TEXT("GP CommandTargeting: Entered Mode=%d"), static_cast<int32>(Mode));
 }
 
-void AGP_PlayerController::CancelAttackMoveMode()
+void AGP_PlayerController::EnterMoveMode()
+{
+	EnterCommandTargetingMode(EGP_CommandTargetingMode::Move);
+}
+
+void AGP_PlayerController::EnterPatrolMode()
+{
+	EnterCommandTargetingMode(EGP_CommandTargetingMode::Patrol);
+}
+
+void AGP_PlayerController::EnterAttackMoveMode()
+{
+	EnterCommandTargetingMode(EGP_CommandTargetingMode::AttackMove);
+}
+
+void AGP_PlayerController::CancelCommandTargetingMode()
 {
 	if (!IsLocalController())
 	{
 		return;
 	}
 
-	if (bAttackMoveModeActive)
+	if (CommandTargetingMode != EGP_CommandTargetingMode::None)
 	{
-		UE_LOG(LogGPCommandInput, Log, TEXT("GP AttackMoveMode: Cancelled"));
+		UE_LOG(LogGPCommandInput, Log, TEXT("GP CommandTargeting: Cancelled Mode=%d"),
+			static_cast<int32>(CommandTargetingMode));
 	}
 
-	bAttackMoveModeActive = false;
+	CommandTargetingMode = EGP_CommandTargetingMode::None;
 	bSelectionPressActive = false;
 	SelectionPressScreenPosition = FVector2D::ZeroVector;
+	RefreshCommandTargetingCursor();
+	CommandTargetingModeChangedDelegate.Broadcast();
+}
+
+void AGP_PlayerController::CancelAttackMoveMode()
+{
+	CancelCommandTargetingMode();
 }
 
 void AGP_PlayerController::CancelAttackMoveModeFromRMB()
 {
-	CancelAttackMoveMode();
-	bAttackMoveSuppressCommandUntilRMBRelease = true;
-	bAttackMoveRMBWasDown = true;
+	CancelCommandTargetingMode();
+	bCommandTargetingSuppressCommandUntilRMBRelease = true;
+	bCommandTargetingRMBWasDown = true;
 }
 
 bool AGP_PlayerController::IsAttackMoveCommandInputBlocked() const
 {
-	return bAttackMoveModeActive || bAttackMoveSuppressCommandUntilRMBRelease;
+	return IsCommandTargetingActive() || bCommandTargetingSuppressCommandUntilRMBRelease;
 }
 
 bool AGP_PlayerController::IsAttackMoveSelectionInputBlocked() const
 {
-	return bAttackMoveModeActive || bAttackMoveSuppressConfirmUntilLMBRelease;
+	return IsCommandTargetingActive() || bCommandTargetingSuppressConfirmUntilLMBRelease;
 }
 
 bool AGP_PlayerController::ConsumeAttackMoveCommandInput()
 {
-	if (bAttackMoveModeActive)
+	if (IsCommandTargetingActive())
 	{
 		CancelAttackMoveModeFromRMB();
 		return true;
 	}
-	return bAttackMoveSuppressCommandUntilRMBRelease;
+	return bCommandTargetingSuppressCommandUntilRMBRelease;
 }
 
 void AGP_PlayerController::UpdateAttackMoveInputEdgesForContract(
@@ -1805,30 +1961,30 @@ void AGP_PlayerController::UpdateAttackMoveInputEdgesForContract(
 	}
 	bAttackMoveKeyWasDown = bADown;
 
-	if (bAttackMoveModeActive && bEscDown && !bAttackMoveEscWasDown)
+	if (IsCommandTargetingActive() && bEscDown && !bCommandTargetingEscWasDown)
 	{
-		CancelAttackMoveMode();
+		CancelCommandTargetingMode();
 	}
-	bAttackMoveEscWasDown = bEscDown;
+	bCommandTargetingEscWasDown = bEscDown;
 
-	if (bAttackMoveModeActive)
+	if (IsCommandTargetingActive())
 	{
-		if (bRMBDown && !bAttackMoveRMBWasDown)
+		if (bRMBDown && !bCommandTargetingRMBWasDown)
 		{
 			CancelAttackMoveModeFromRMB();
 		}
 	}
 
-	bAttackMoveRMBWasDown = bRMBDown;
-	bAttackMoveLMBWasDown = bLMBDown;
+	bCommandTargetingRMBWasDown = bRMBDown;
+	bCommandTargetingLMBWasDown = bLMBDown;
 
-	if (bAttackMoveSuppressConfirmUntilLMBRelease && !bLMBDown)
+	if (bCommandTargetingSuppressConfirmUntilLMBRelease && !bLMBDown)
 	{
-		bAttackMoveSuppressConfirmUntilLMBRelease = false;
+		bCommandTargetingSuppressConfirmUntilLMBRelease = false;
 	}
-	if (bAttackMoveSuppressCommandUntilRMBRelease && !bRMBDown)
+	if (bCommandTargetingSuppressCommandUntilRMBRelease && !bRMBDown)
 	{
-		bAttackMoveSuppressCommandUntilRMBRelease = false;
+		bCommandTargetingSuppressCommandUntilRMBRelease = false;
 	}
 }
 
@@ -1839,6 +1995,114 @@ void AGP_PlayerController::UpdateAttackMoveInputOwnership()
 		IsInputKeyDown(EKeys::RightMouseButton),
 		IsInputKeyDown(EKeys::A),
 		IsInputKeyDown(EKeys::Escape));
+}
+
+void AGP_PlayerController::CollectCommandTargetingIssuingUnits(TArray<TObjectPtr<AGP_UnitBase>>& OutUnits) const
+{
+	OutUnits.Reset();
+	if (SelectionComponent == nullptr)
+	{
+		return;
+	}
+
+	for (const TWeakObjectPtr<AGP_UnitBase>& WeakUnit : SelectionComponent->GetSelectedUnits())
+	{
+		AGP_UnitBase* Unit = WeakUnit.Get();
+		if (!IsValid(Unit) || Unit->IsDead())
+		{
+			continue;
+		}
+
+		if (CommandTargetingMode == EGP_CommandTargetingMode::AttackMove)
+		{
+			OutUnits.Add(Unit);
+			continue;
+		}
+
+		if (Unit->IsMobileCommandEligible())
+		{
+			OutUnits.Add(Unit);
+		}
+	}
+}
+
+void AGP_PlayerController::ConfirmCommandTargetingDestinationAt(const FVector& GroundLocation)
+{
+	if (!IsLocalController() || !IsCommandTargetingActive() || CommandComponent == nullptr)
+	{
+		return;
+	}
+
+	if (bCommandTargetingSuppressConfirmUntilLMBRelease)
+	{
+		return;
+	}
+
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	FGP_CommandRequest Request;
+	Request.TargetLocation = GroundLocation;
+	Request.TargetActor = nullptr;
+	Request.bQueue = false;
+
+	switch (CommandTargetingMode)
+	{
+	case EGP_CommandTargetingMode::Move:
+		Request.CommandTag = GPTags.Command_Move;
+		Request.bQueue = IsShiftModifierDown();
+		break;
+	case EGP_CommandTargetingMode::AttackMove:
+		Request.CommandTag = GPTags.Command_AttackMove;
+		Request.bQueue = IsShiftModifierDown();
+		break;
+	case EGP_CommandTargetingMode::Patrol:
+		Request.CommandTag = GPTags.Command_Patrol;
+		Request.bQueue = false;
+		break;
+	default:
+		return;
+	}
+
+	CollectCommandTargetingIssuingUnits(Request.IssuingUnits);
+
+	const EGP_CommandTargetingMode ConfirmedMode = CommandTargetingMode;
+	CancelCommandTargetingMode();
+	bCommandTargetingSuppressConfirmUntilLMBRelease = true;
+	bCommandTargetingLMBWasDown = true;
+
+	if (Request.IssuingUnits.Num() == 0 || !Request.CommandTag.IsValid())
+	{
+		return;
+	}
+
+	UE_LOG(LogGPCommandInput, Log,
+		TEXT("GP CommandTargeting: Confirm Mode=%d Destination=%s Units=%d"),
+		static_cast<int32>(ConfirmedMode),
+		*GroundLocation.ToCompactString(),
+		Request.IssuingUnits.Num());
+
+	Server_RequestCommand(Request);
+}
+
+void AGP_PlayerController::ConfirmCommandTargetingDestination()
+{
+	FVector GroundLoc = FVector::ZeroVector;
+	FRotator GroundRot = FRotator::ZeroRotator;
+	if (!TraceGroundUnderCursor(GroundLoc, GroundRot))
+	{
+		return;
+	}
+
+	ConfirmCommandTargetingDestinationAt(GroundLoc);
+}
+
+void AGP_PlayerController::ConfirmAttackMoveDestination()
+{
+	ConfirmCommandTargetingDestination();
+}
+
+void AGP_PlayerController::ConfirmCommandTargetingDestinationForContract(const FVector& GroundLocation)
+{
+	ConfirmCommandTargetingDestinationAt(GroundLocation);
 }
 
 void AGP_PlayerController::ApplyMarqueeSelectionForContract(
@@ -1861,61 +2125,6 @@ void AGP_PlayerController::ProcessSelectionClickForContract(const FVector2D& Scr
 	}
 
 	ProcessSelectionClickAtScreenPosition(ScreenPosition);
-}
-
-void AGP_PlayerController::ConfirmAttackMoveDestination()
-{
-	if (!IsLocalController() || !bAttackMoveModeActive || CommandComponent == nullptr)
-	{
-		return;
-	}
-
-	if (bAttackMoveSuppressConfirmUntilLMBRelease)
-	{
-		return;
-	}
-
-	FVector GroundLoc = FVector::ZeroVector;
-	FRotator GroundRot = FRotator::ZeroRotator;
-	if (!TraceGroundUnderCursor(GroundLoc, GroundRot))
-	{
-		return;
-	}
-
-	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
-	FGP_CommandRequest Request;
-	Request.CommandTag = GPTags.Command_AttackMove;
-	Request.TargetLocation = GroundLoc;
-	Request.TargetActor = nullptr;
-	Request.bQueue = IsShiftModifierDown();
-
-	if (SelectionComponent != nullptr)
-	{
-		for (const TWeakObjectPtr<AGP_UnitBase>& WeakUnit : SelectionComponent->GetSelectedUnits())
-		{
-			AGP_UnitBase* Unit = WeakUnit.Get();
-			if (IsValid(Unit))
-			{
-				Request.IssuingUnits.Add(Unit);
-			}
-		}
-	}
-
-	CancelAttackMoveMode();
-	bAttackMoveSuppressConfirmUntilLMBRelease = true;
-	bAttackMoveLMBWasDown = true;
-
-	if (Request.IssuingUnits.Num() == 0 || !GPTags.Command_AttackMove.IsValid())
-	{
-		return;
-	}
-
-	UE_LOG(LogGPCommandInput, Log,
-		TEXT("GP AttackMoveMode: Confirm Destination=%s Units=%d"),
-		*GroundLoc.ToCompactString(),
-		Request.IssuingUnits.Num());
-
-	Server_RequestCommand(Request);
 }
 
 bool AGP_PlayerController::ApplyLocalFoWPlacementPreviewGate(
@@ -2237,12 +2446,12 @@ void AGP_PlayerController::OnSelectionStarted(const FInputActionValue& Value)
 		return;
 	}
 
-	// Placement / AttackMove own LMB: track confirm press only — no marquee / click-select start.
-	if (bBuildingPlacementActive || bAttackMoveModeActive)
+	// Placement / command targeting own LMB: track confirm press only — no marquee / click-select start.
+	if (bBuildingPlacementActive || IsCommandTargetingActive())
 	{
 		const bool bSuppressConfirm = bBuildingPlacementActive
 			? bBuildingPlacementSuppressConfirmUntilLMBRelease
-			: bAttackMoveSuppressConfirmUntilLMBRelease;
+			: bCommandTargetingSuppressConfirmUntilLMBRelease;
 		if (bSuppressConfirm)
 		{
 			return;
@@ -2262,7 +2471,7 @@ void AGP_PlayerController::OnSelectionStarted(const FInputActionValue& Value)
 		return;
 	}
 
-	if (bBuildingPlacementSuppressConfirmUntilLMBRelease || bAttackMoveSuppressConfirmUntilLMBRelease)
+	if (bBuildingPlacementSuppressConfirmUntilLMBRelease || bCommandTargetingSuppressConfirmUntilLMBRelease)
 	{
 		return;
 	}
@@ -2300,7 +2509,7 @@ void AGP_PlayerController::OnSelectionCompleted(const FInputActionValue& Value)
 	}
 
 	if ((bBuildingPlacementSuppressConfirmUntilLMBRelease && !bBuildingPlacementActive)
-		|| (bAttackMoveSuppressConfirmUntilLMBRelease && !bAttackMoveModeActive))
+		|| (bCommandTargetingSuppressConfirmUntilLMBRelease && !IsCommandTargetingActive()))
 	{
 		bSelectionPressActive = false;
 		SelectionPressScreenPosition = FVector2D::ZeroVector;
@@ -2338,16 +2547,16 @@ void AGP_PlayerController::OnSelectionCompleted(const FInputActionValue& Value)
 		return;
 	}
 
-	if (bAttackMoveModeActive)
+	if (IsCommandTargetingActive())
 	{
 		const float PixelDistance =
 			FVector2D::Distance(SelectionPressScreenPosition, ReleasePosition);
 		bSelectionPressActive = false;
 		SelectionPressScreenPosition = FVector2D::ZeroVector;
-		if (!bAttackMoveSuppressConfirmUntilLMBRelease
+		if (!bCommandTargetingSuppressConfirmUntilLMBRelease
 			&& PixelDistance <= SelectionDragThresholdPixels)
 		{
-			ConfirmAttackMoveDestination();
+			ConfirmCommandTargetingDestination();
 		}
 		return;
 	}
@@ -2381,9 +2590,9 @@ void AGP_PlayerController::OnSelectionCanceled(const FInputActionValue& Value)
 	{
 		CancelBuildingPlacement();
 	}
-	if (bAttackMoveModeActive)
+	if (IsCommandTargetingActive())
 	{
-		CancelAttackMoveMode();
+		CancelCommandTargetingMode();
 	}
 
 	CancelActiveMarquee(/*bLogCanceled=*/true);

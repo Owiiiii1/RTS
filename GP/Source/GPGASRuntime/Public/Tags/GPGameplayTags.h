@@ -63,6 +63,7 @@ public:
 	FGameplayTag Command_Stop;
 	FGameplayTag Command_Attack;
 	FGameplayTag Command_AttackMove;
+	FGameplayTag Command_Patrol;
 	FGameplayTag Command_Mine;
 	FGameplayTag Command_Repair;
 	FGameplayTag Command_Sell;

@@ -964,6 +964,22 @@ bool AGP_UnitBase::IsSelectionTypeBuilding() const
 	return HasCapabilityTag(FGPGameplayTags::Get().Selection_Type_Building);
 }
 
+bool AGP_UnitBase::IsMobileCommandEligible() const
+{
+	if (!IsValid(this) || IsDead() || IsActorBeingDestroyed())
+	{
+		return false;
+	}
+
+	if (!IsSelectionTypeUnit())
+	{
+		return false;
+	}
+
+	const AGP_MobileUnit* Mobile = Cast<AGP_MobileUnit>(this);
+	return Mobile != nullptr && Mobile->GetUnitMovementComponent() != nullptr;
+}
+
 void AGP_UnitBase::ReceiveCommand(const FGP_UnitCommand& Command)
 {
 	if (!HasAuthority())

@@ -244,7 +244,7 @@ See [`../GDD/13_Terrain_Engineering_And_Foundations.md`](../GDD/13_Terrain_Engin
 ## Out of MVP
 
 - Command queue (Shift+RMB chain) — design exists у `bQueue`, але queue логіка може бути спрощена до 1-deep replace-only у MVP.
-- Hold position, patrol points (Patrol — є у Command tag, але повна implementation deferred).
+- Hold position. Patrol MVP is implemented (`GP.Command.Patrol`: current location ↔ one clicked point; two-click A→B patrol remains out of MVP).
 - Formation movement.
 - ~~Attack-move.~~ **Implemented by GP-S32A** (`GP.Command.AttackMove`, A → LMB ground) — see `Claude_Tasks/GP-S32A_Attack_Move_Reconciliation.md`. **Operator FULL PASS / FINALIZATION_READY_FOR_MERGE** (not yet merged).
 - Smart auto-acquire targets without explicit attack command — **Idle auto-acquire delivered by GP-S30R**; Attack-Move acquisition while travelling by GP-S32A.
@@ -398,7 +398,7 @@ The previous SelectionPanel bottom-left / CommandBar bottom-center / InspectPane
 | `SelectedUnits` single building | Bottom-center Selection/Info, single-entity mode | Same Single fields; Attack Range is factual `AttackRangeCm` (0 or authored). Procurement does **not** replace this panel. |
 | `InspectedTarget` (any) | Same bottom-center block | No separate overlapping InspectPanel slot. |
 | Empty selection | Info empty; Context Action Grid idle | |
-| Unit/group selected | Bottom-right Context Action Grid, Unit Action Mode | Move, Stop, Attack-Move; Patrol planned/not implemented. Direct RMB Attack stays separate. |
+| Unit/group selected | Bottom-right Context Action Grid, Unit Action Mode | Move, Stop, Attack-Move, Patrol. Direct RMB Attack stays separate. |
 | Building selected (not MainBase) | Bottom-right Context Action Grid, Building Action Mode | Contextual actions only. Not a procurement source. |
 | MainBase selected | Bottom-right Building Actions include **PURCHASE** | Design / not implemented. PURCHASE → UNITS / BUILDINGS / DEFENSE in the same panel. |
 
@@ -621,7 +621,7 @@ UnitDefinition `AllowedCommands` має містити `GP.Command.Move` для 
 - Formation movement (line, wedge, box).
 - Move queue (Shift+RMB chain) — `bQueue` exists, але implementation deferred to GP-0203B.
 - ~~Attack-move (covered у GP-0204).~~ **GP-S32A** implements Attack-Move MVP — **FINALIZATION_READY_FOR_MERGE** (operator FULL PASS).
-- Patrol.
+- ~~Patrol.~~ **Implemented MVP:** HUD PATROL / `EnterPatrolMode` → one LMB destination → `GP.Command.Patrol`. Anchor A = unit location at accept; Point B = clicked ground; Stop or a replacing explicit command cancels. Two-click A→B patrol remains out of MVP.
 - Stance-aware move (aggressive, hold-fire) — post-MVP.
 - Path preview indicator before click.
 

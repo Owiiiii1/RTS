@@ -175,6 +175,11 @@ public:
 	/** GP-S32A: original AttackMove destination (Held TargetLocation while active). */
 	FVector GetAttackMoveDestination() const;
 
+	bool IsPatrolActive() const;
+	FVector GetPatrolAnchorA() const;
+	FVector GetPatrolAnchorB() const;
+	bool IsPatrolHeadingToB() const;
+
 	/** GP-S30R diagnostic: last auto-acquire scan found a candidate (not replicated). */
 	AGP_UnitBase* DebugGetLastAutoAcquireCandidate() const { return LastAutoAcquireCandidate.Get(); }
 
@@ -328,6 +333,13 @@ private:
 		EGP_AttackTerminalResult Result,
 		EGP_AttackTerminalReason Reason);
 	bool TryConsumeAttackMovementResult(
+		uint32 Serial,
+		EGP_MovementResult Result,
+		EGP_MovementResultReason Reason);
+
+	void ResetPatrolExecutor();
+	void BeginPatrolExecutor();
+	bool TryConsumePatrolMovementResult(
 		uint32 Serial,
 		EGP_MovementResult Result,
 		EGP_MovementResultReason Reason);
@@ -566,6 +578,11 @@ private:
 
 	TOptional<FGP_StoredUnitCommand> HeldCommand;
 	uint32 NextCommandSerial = 1;
+
+	bool bPatrolActive = false;
+	FVector PatrolAnchorA = FVector::ZeroVector;
+	FVector PatrolAnchorB = FVector::ZeroVector;
+	bool bPatrolHeadingToB = true;
 
 	FDelegateHandle MovementResultHandle;
 	TWeakObjectPtr<UGP_MovementComponent> BoundMovementComponent;

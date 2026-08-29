@@ -285,6 +285,15 @@ EGP_ContextActionPanelState UGP_HUDRootWidget::GetContextActionPanelState() cons
 	return EGP_ContextActionPanelState::Actions;
 }
 
+FText UGP_HUDRootWidget::GetCommandTargetingPrompt() const
+{
+	if (const UGP_ContextActionPresenter* Presenter = ResolveContextActionPresenter())
+	{
+		return Presenter->GetTargetingPrompt();
+	}
+	return FText::GetEmpty();
+}
+
 void UGP_HUDRootWidget::RequestContextAction(EGP_ContextActionId ActionId)
 {
 	UGP_ContextActionPresenter* Presenter =

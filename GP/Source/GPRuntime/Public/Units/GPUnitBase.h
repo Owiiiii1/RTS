@@ -140,6 +140,13 @@ public:
 	bool IsSelectionTypeBuilding() const;
 
 	/**
+	 * Factual Move/Patrol eligibility: live selection-type unit with mobility composition.
+	 * Not a Worker/SalvageWalker class-name check.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GP|Commands")
+	bool IsMobileCommandEligible() const;
+
+	/**
 	 * Designer-facing intrinsic stats. Soft only — no LoadSynchronous.
 	 * Valid non-empty ref async-loads then initializes. Empty = immediate Default* fallback.
 	 */

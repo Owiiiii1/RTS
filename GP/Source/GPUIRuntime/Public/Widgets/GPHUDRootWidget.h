@@ -54,6 +54,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
 	EGP_ContextActionPanelState GetContextActionPanelState() const;
 
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
+	FText GetCommandTargetingPrompt() const;
+
 	UFUNCTION(BlueprintCallable, Category = "GP|HUD|ContextActions")
 	void RequestContextAction(EGP_ContextActionId ActionId);
 

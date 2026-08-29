@@ -285,6 +285,7 @@ void UGP_UnitCommandComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 	ResetAttackExecutor();
 	ResetMineExecutor();
+	ResetPatrolExecutor();
 	// ResetMineExecutor → ResetHaulExecutor clears drop-off subscriptions/timers.
 	// Explicit haul cleanup remains safe if mine reset short-circuits in future.
 
@@ -650,6 +651,7 @@ bool UGP_UnitCommandComponent::IsEligibleForCombatAutoAcquire() const
 		if (HeldTag == GPTags.Command_Move
 			|| HeldTag == GPTags.Command_Attack
 			|| HeldTag == GPTags.Command_AttackMove
+			|| HeldTag == GPTags.Command_Patrol
 			|| HeldTag == GPTags.Command_Mine)
 		{
 			return false;
@@ -730,6 +732,120 @@ FVector UGP_UnitCommandComponent::GetAttackMoveDestination() const
 		return FVector::ZeroVector;
 	}
 	return HeldCommand.GetValue().TargetLocation;
+}
+
+bool UGP_UnitCommandComponent::IsPatrolActive() const
+{
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	return bPatrolActive
+		&& HeldCommand.IsSet()
+		&& HeldCommand.GetValue().CommandTag == GPTags.Command_Patrol;
+}
+
+FVector UGP_UnitCommandComponent::GetPatrolAnchorA() const
+{
+	return IsPatrolActive() ? PatrolAnchorA : FVector::ZeroVector;
+}
+
+FVector UGP_UnitCommandComponent::GetPatrolAnchorB() const
+{
+	return IsPatrolActive() ? PatrolAnchorB : FVector::ZeroVector;
+}
+
+bool UGP_UnitCommandComponent::IsPatrolHeadingToB() const
+{
+	return IsPatrolActive() && bPatrolHeadingToB;
+}
+
+void UGP_UnitCommandComponent::ResetPatrolExecutor()
+{
+	bPatrolActive = false;
+	PatrolAnchorA = FVector::ZeroVector;
+	PatrolAnchorB = FVector::ZeroVector;
+	bPatrolHeadingToB = true;
+}
+
+void UGP_UnitCommandComponent::BeginPatrolExecutor()
+{
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority() || !HeldCommand.IsSet())
+	{
+		ResetPatrolExecutor();
+		return;
+	}
+
+	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
+	if (HeldCommand.GetValue().CommandTag != GPTags.Command_Patrol)
+	{
+		ResetPatrolExecutor();
+		return;
+	}
+
+	bPatrolActive = true;
+	PatrolAnchorA = Owner->GetActorLocation();
+	PatrolAnchorB = HeldCommand.GetValue().TargetLocation;
+	bPatrolHeadingToB = true;
+	HeldCommand.GetValue().TargetLocation = PatrolAnchorB;
+}
+
+bool UGP_UnitCommandComponent::TryConsumePatrolMovementResult(
+	uint32 Serial,
+	EGP_MovementResult Result,
+	EGP_MovementResultReason Reason)
+{
+	if (!IsPatrolActive())
+	{
+		return false;
+	}
+
+	const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
+	if (Held.CommandSerial != Serial)
+	{
+		return false;
+	}
+
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority())
+	{
+		return true;
+	}
+
+	if (Result == EGP_MovementResult::Reached)
+	{
+		bPatrolHeadingToB = !bPatrolHeadingToB;
+		const FVector NextDestination = bPatrolHeadingToB ? PatrolAnchorB : PatrolAnchorA;
+		HeldCommand.GetValue().TargetLocation = NextDestination;
+
+		UGP_MovementComponent* Movement = ResolveMovementComponent();
+		if (Movement == nullptr)
+		{
+			ResetPatrolExecutor();
+			ClearHeldCommand();
+			return true;
+		}
+
+		const FGP_MovementRequestOutcome Outcome = Movement->RequestMove(NextDestination, Serial);
+		if (!Outcome.IsAccepted())
+		{
+			ResetPatrolExecutor();
+			ClearHeldCommand();
+		}
+		return true;
+	}
+
+	if (Result == EGP_MovementResult::Cancelled
+		&& (Reason == EGP_MovementResultReason::Superseded
+			|| Reason == EGP_MovementResultReason::CommandReplaced))
+	{
+		return true;
+	}
+
+	ResetPatrolExecutor();
+	if (Result == EGP_MovementResult::Failed)
+	{
+		ClearHeldCommand();
+	}
+	return true;
 }
 
 bool UGP_UnitCommandComponent::IsHeldAttackMove(uint32 Serial) const
@@ -5410,6 +5526,11 @@ void UGP_UnitCommandComponent::HandleMovementResult(
 		return;
 	}
 
+	if (TryConsumePatrolMovementResult(Serial, Result, Reason))
+	{
+		return;
+	}
+
 	if (TryConsumeHaulMovementResult(Serial, Result, Reason))
 	{
 		return;
@@ -5546,7 +5667,8 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 	{
 		const FGPGameplayTags& BuildingCommandTags = FGPGameplayTags::Get();
 		if (Command.CommandTag == BuildingCommandTags.Command_Move
-			|| Command.CommandTag == BuildingCommandTags.Command_AttackMove)
+			|| Command.CommandTag == BuildingCommandTags.Command_AttackMove
+			|| Command.CommandTag == BuildingCommandTags.Command_Patrol)
 		{
 			UE_LOG(LogGPUnitCommandState, Log,
 				TEXT("GP UnitCommandState RejectedStationary: Unit=%s Tag=%s Role=%s NetMode=%s"),
@@ -5564,6 +5686,7 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 		const TOptional<FGP_StoredUnitCommand> PreviousCommand = HeldCommand;
 		ResetAttackExecutorForReplacement(PreviousCommand);
 		ResetMineExecutorForReplacement(PreviousCommand);
+		ResetPatrolExecutor();
 		if (UGP_MovementComponent* Movement = ResolveMovementComponent())
 		{
 			Movement->StopMove(EGP_MovementStopReason::Manual);
@@ -5632,6 +5755,13 @@ void UGP_UnitCommandComponent::HandleCommand(const FGP_UnitCommand& Command)
 
 	ResetAttackExecutorForReplacement(PreviousCommand);
 	ResetMineExecutorForReplacement(PreviousCommand);
+	ResetPatrolExecutor();
+
+	if (HeldCommand.IsSet()
+		&& HeldCommand.GetValue().CommandTag == FGPGameplayTags::Get().Command_Patrol)
+	{
+		BeginPatrolExecutor();
+	}
 
 	const bool bOneShotMainBaseDeposit = TryStartOneShotMainBaseDeposit();
 	if (!bOneShotMainBaseDeposit)
@@ -5710,9 +5840,11 @@ bool UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 	const FGP_StoredUnitCommand& CurrentHeld = HeldCommand.GetValue();
 	const FGameplayTag MoveTag = FGPGameplayTags::Get().Command_Move;
 	const FGameplayTag AttackMoveTag = FGPGameplayTags::Get().Command_AttackMove;
+	const FGameplayTag PatrolTag = FGPGameplayTags::Get().Command_Patrol;
 	const bool bCurrentIsMove = CurrentHeld.CommandTag == MoveTag;
 	const bool bCurrentIsAttackMove = CurrentHeld.CommandTag == AttackMoveTag;
-	const bool bCurrentRequestsDestinationTravel = bCurrentIsMove || bCurrentIsAttackMove;
+	const bool bCurrentIsPatrol = CurrentHeld.CommandTag == PatrolTag;
+	const bool bCurrentRequestsDestinationTravel = bCurrentIsMove || bCurrentIsAttackMove || bCurrentIsPatrol;
 
 	const uint32 PreviousSerial = PreviousCommand.IsSet() ? PreviousCommand.GetValue().CommandSerial : 0;
 	const FString PreviousTagString = PreviousCommand.IsSet()
@@ -5787,9 +5919,10 @@ bool UGP_UnitCommandComponent::SynchronizeMovementWithHeldCommand(
 		if (HeldCommand.IsSet())
 		{
 			const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
-			if ((Held.CommandTag == MoveTag || Held.CommandTag == AttackMoveTag)
+			if ((Held.CommandTag == MoveTag || Held.CommandTag == AttackMoveTag || Held.CommandTag == PatrolTag)
 				&& Held.CommandSerial == RequestedSerial)
 			{
+				ResetPatrolExecutor();
 				HeldCommand.Reset();
 
 				UE_LOG(LogGPUnitCommandState, Log,
@@ -5935,6 +6068,7 @@ void UGP_UnitCommandComponent::NotifyOwnerDied()
 	CancelRetaliation(TEXT("OwnerDied"), false);
 	ResetAttackExecutor();
 	ResetMineExecutor();
+	ResetPatrolExecutor();
 
 	if (UGP_MovementComponent* Movement = ResolveMovementComponent())
 	{
@@ -6032,6 +6166,7 @@ bool UGP_UnitCommandComponent::HasCommandThatBlocksRetaliationStart() const
 	return HeldTag == GPTags.Command_Move
 		|| HeldTag == GPTags.Command_Attack
 		|| HeldTag == GPTags.Command_AttackMove
+		|| HeldTag == GPTags.Command_Patrol
 		|| HeldTag == GPTags.Command_Mine;
 }
 

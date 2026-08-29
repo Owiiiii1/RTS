@@ -77,6 +77,7 @@ void FGPGameplayTags::AddAllTags()
 	AddTag(Command_Stop, "GP.Command.Stop", "Stop current unit orders.");
 	AddTag(Command_Attack, "GP.Command.Attack", "Attack a specific target.");
 	AddTag(Command_AttackMove, "GP.Command.AttackMove", "Attack-move to a destination with auto-acquire.");
+	AddTag(Command_Patrol, "GP.Command.Patrol", "Patrol between the unit's start location and a destination.");
 	AddTag(Command_Mine, "GP.Command.Mine", "Mine a resource node.");
 	AddTag(Command_Repair, "GP.Command.Repair", "Worker repair command.");
 	AddTag(Command_Sell, "GP.Command.Sell", "Sell a building for partial OrbitalFerronite refund.");

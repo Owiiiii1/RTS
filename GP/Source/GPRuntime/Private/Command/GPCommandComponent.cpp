@@ -320,9 +320,10 @@ bool UGP_CommandComponent::ValidateAndNormalizeCommand(
 	const bool bIsMove = CommandTag == GPTags.Command_Move;
 	const bool bIsAttack = CommandTag == GPTags.Command_Attack;
 	const bool bIsAttackMove = CommandTag == GPTags.Command_AttackMove;
+	const bool bIsPatrol = CommandTag == GPTags.Command_Patrol;
 	const bool bIsMine = CommandTag == GPTags.Command_Mine;
 	const bool bIsStop = CommandTag == GPTags.Command_Stop;
-	if (!bIsMove && !bIsAttack && !bIsAttackMove && !bIsMine && !bIsStop)
+	if (!bIsMove && !bIsAttack && !bIsAttackMove && !bIsPatrol && !bIsMine && !bIsStop)
 	{
 		return Fail(EGP_CommandRejectReason::UnsupportedCommandTag);
 	}
@@ -391,7 +392,7 @@ bool UGP_CommandComponent::ValidateAndNormalizeCommand(
 	AActor* NormalizedTargetActor = nullptr;
 	FVector NormalizedLocation = FVector::ZeroVector;
 
-	if (bIsMove || bIsAttackMove)
+	if (bIsMove || bIsAttackMove || bIsPatrol)
 	{
 		NormalizedTargetActor = nullptr;
 		NormalizedLocation = ClientRequest.TargetLocation;
@@ -433,6 +434,27 @@ bool UGP_CommandComponent::ValidateAndNormalizeCommand(
 			}
 
 			AcceptedUnits = MoveTemp(CombatUnits);
+		}
+
+		if (bIsPatrol)
+		{
+			TArray<TObjectPtr<AGP_UnitBase>> MobileUnits;
+			MobileUnits.Reserve(AcceptedUnits.Num());
+			for (const TObjectPtr<AGP_UnitBase>& UnitPtr : AcceptedUnits)
+			{
+				AGP_UnitBase* Unit = UnitPtr.Get();
+				if (IsValid(Unit) && Unit->IsMobileCommandEligible())
+				{
+					MobileUnits.Add(UnitPtr);
+				}
+			}
+
+			if (MobileUnits.Num() == 0)
+			{
+				return Fail(EGP_CommandRejectReason::UnsupportedUnit);
+			}
+
+			AcceptedUnits = MoveTemp(MobileUnits);
 		}
 	}
 	else if (bIsAttack)
@@ -569,7 +591,8 @@ int32 UGP_CommandComponent::DispatchValidatedCommand(const FGP_CommandRequest& V
 		&& Cast<AGP_MainBase>(ValidatedRequest.TargetActor.Get()) != nullptr;
 	const bool bSpreadDestination =
 		(ValidatedRequest.CommandTag == GPTags.Command_Move
-			|| ValidatedRequest.CommandTag == GPTags.Command_AttackMove)
+			|| ValidatedRequest.CommandTag == GPTags.Command_AttackMove
+			|| ValidatedRequest.CommandTag == GPTags.Command_Patrol)
 		&& !bFriendlyMainBaseMove;
 
 	TArray<FVector> SpreadSlots;

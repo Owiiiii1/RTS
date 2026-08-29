@@ -22,6 +22,7 @@ class UGP_SelectionComponent;
 class AGP_MainBase;
 class AGP_GameState;
 class AGP_PlayerState;
+class AGP_UnitBase;
 class UInputAction;
 class UInputMappingContext;
 class UEnhancedInputComponent;
@@ -31,6 +32,17 @@ enum class EGP_BuildingDropRejectReason : uint8;
 DECLARE_MULTICAST_DELEGATE_OneParam(
 	FOnGP_PlayerStatePresentationReady,
 	APlayerState* /*PlayerState*/);
+
+UENUM(BlueprintType)
+enum class EGP_CommandTargetingMode : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Move UMETA(DisplayName = "Move"),
+	AttackMove UMETA(DisplayName = "Attack-Move"),
+	Patrol UMETA(DisplayName = "Patrol")
+};
+
+DECLARE_MULTICAST_DELEGATE(FGPOnCommandTargetingModeChanged);
 
 /**
  * Network-correct PlayerController.
@@ -162,6 +174,30 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Commands|AttackMove")
 	bool SelectionHasAttackMoveEligibleUnit() const;
 
+	UFUNCTION(BlueprintPure, Category = "GP|Commands")
+	bool SelectionHasMoveEligibleUnit() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Commands")
+	bool SelectionHasPatrolEligibleUnit() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|Commands")
+	EGP_CommandTargetingMode GetCommandTargetingMode() const { return CommandTargetingMode; }
+
+	UFUNCTION(BlueprintCallable, Category = "GP|Commands")
+	void EnterMoveMode();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|Commands")
+	void EnterPatrolMode();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|Commands")
+	void CancelCommandTargetingMode();
+
+	UFUNCTION(BlueprintPure, Category = "GP|Commands")
+	bool IsCommandTargetingActive() const
+	{
+		return CommandTargetingMode != EGP_CommandTargetingMode::None;
+	}
+
 	/** GP-S32A: enter local Attack-Move modal (A). Next ground LMB issues AttackMove. */
 	UFUNCTION(BlueprintCallable, Category = "GP|Commands|AttackMove")
 	void EnterAttackMoveMode();
@@ -173,7 +209,10 @@ public:
 	void ConfirmAttackMoveDestination();
 
 	UFUNCTION(BlueprintPure, Category = "GP|Commands|AttackMove")
-	bool IsAttackMoveModeActive() const { return bAttackMoveModeActive; }
+	bool IsAttackMoveModeActive() const
+	{
+		return CommandTargetingMode == EGP_CommandTargetingMode::AttackMove;
+	}
 
 	UFUNCTION(BlueprintPure, Category = "GP|Commands|AttackMove")
 	bool IsAttackMoveCommandInputBlocked() const;
@@ -181,11 +220,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Commands|AttackMove")
 	bool IsAttackMoveSelectionInputBlocked() const;
 
-	/** RMB while AttackMove modal: cancel mode and block command click-through. */
+	/** RMB while command targeting modal: cancel mode and block command click-through. */
 	bool ConsumeAttackMoveCommandInput();
 
-	/** Contract seam for AttackMove modal edges without hardware input. */
+	/** Contract seam for command-targeting modal edges without hardware input. */
 	void UpdateAttackMoveInputEdgesForContract(bool bLMBDown, bool bRMBDown, bool bADown, bool bEscDown);
+
+	/** Contract seam: confirm active targeting at a world location without cursor trace. */
+	void ConfirmCommandTargetingDestinationForContract(const FVector& GroundLocation);
+
+	FGPOnCommandTargetingModeChanged& OnCommandTargetingModeChanged();
 
 	/** Contract seam: apply marquee resolve without hardware drag. */
 	void ApplyMarqueeSelectionForContract(const FVector2D& ScreenStart, const FVector2D& ScreenEnd);
@@ -291,6 +335,15 @@ private:
 
 	void CancelAttackMoveModeFromRMB();
 	void UpdateAttackMoveInputOwnership();
+	void EnterCommandTargetingMode(EGP_CommandTargetingMode Mode);
+	void ConfirmCommandTargetingDestination();
+	void ConfirmCommandTargetingDestinationAt(const FVector& GroundLocation);
+	void RefreshCommandTargetingCursor();
+	void BindCommandTargetingSelection();
+	void UnbindCommandTargetingSelection();
+	void HandleSelectionChangedForCommandTargeting();
+	bool IsCommandTargetingSelectionValid() const;
+	void CollectCommandTargetingIssuingUnits(TArray<TObjectPtr<AGP_UnitBase>>& OutUnits) const;
 
 	bool IsControlModifierDown() const;
 	bool IsShiftModifierDown() const;
@@ -395,14 +448,16 @@ private:
 	/** Block command until the RMB that cancelled placement is released. */
 	bool bBuildingPlacementSuppressCommandUntilRMBRelease = false;
 
-	/** GP-S32A local Attack-Move modal (A → LMB ground). Independent of building placement. */
-	bool bAttackMoveModeActive = false;
+	/** Local-only command targeting modal (Move / AttackMove / Patrol). */
+	EGP_CommandTargetingMode CommandTargetingMode = EGP_CommandTargetingMode::None;
 	bool bAttackMoveKeyWasDown = false;
-	bool bAttackMoveEscWasDown = false;
-	bool bAttackMoveRMBWasDown = false;
-	bool bAttackMoveLMBWasDown = false;
-	bool bAttackMoveSuppressConfirmUntilLMBRelease = false;
-	bool bAttackMoveSuppressCommandUntilRMBRelease = false;
+	bool bCommandTargetingEscWasDown = false;
+	bool bCommandTargetingRMBWasDown = false;
+	bool bCommandTargetingLMBWasDown = false;
+	bool bCommandTargetingSuppressConfirmUntilLMBRelease = false;
+	bool bCommandTargetingSuppressCommandUntilRMBRelease = false;
+	FDelegateHandle CommandTargetingSelectionHandle;
+	FGPOnCommandTargetingModeChanged CommandTargetingModeChangedDelegate;
 
 	/** Lifecycle guards only — not replicated / not authoritative gameplay state. */
 	TWeakObjectPtr<APawn> LastInitializedLocalPawn;

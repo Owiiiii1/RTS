@@ -30,6 +30,8 @@ bool UGP_ContextActionPresenter::Initialize(AGP_PlayerController* InPlayerContro
 	BoundSelection = Selection;
 	SelectionChangedHandle = Selection->OnSelectionChanged().AddUObject(
 		this, &ThisClass::HandleSelectionChanged);
+	CommandTargetingChangedHandle = InPlayerController->OnCommandTargetingModeChanged().AddUObject(
+		this, &ThisClass::HandleCommandTargetingModeChanged);
 	RebuildPresentation();
 	return true;
 }
@@ -37,6 +39,14 @@ bool UGP_ContextActionPresenter::Initialize(AGP_PlayerController* InPlayerContro
 void UGP_ContextActionPresenter::Shutdown()
 {
 	UnbindSelectedUnits();
+	if (AGP_PlayerController* PlayerController = BoundPlayerController.Get())
+	{
+		if (CommandTargetingChangedHandle.IsValid())
+		{
+			PlayerController->OnCommandTargetingModeChanged().Remove(CommandTargetingChangedHandle);
+		}
+	}
+	CommandTargetingChangedHandle.Reset();
 	if (UGP_SelectionComponent* Selection = BoundSelection.Get())
 	{
 		Selection->OnSelectionChanged().Remove(SelectionChangedHandle);
@@ -56,6 +66,7 @@ void UGP_ContextActionPresenter::BeginDestroy()
 int32 UGP_ContextActionPresenter::GetBoundDelegateCount() const
 {
 	int32 Count = SelectionChangedHandle.IsValid() ? 1 : 0;
+	Count += CommandTargetingChangedHandle.IsValid() ? 1 : 0;
 	for (const FBoundSelectedUnit& Bound : BoundUnits)
 	{
 		Count += Bound.DiedHandle.IsValid() ? 1 : 0;
@@ -65,6 +76,11 @@ int32 UGP_ContextActionPresenter::GetBoundDelegateCount() const
 }
 
 void UGP_ContextActionPresenter::HandleSelectionChanged()
+{
+	RebuildPresentation();
+}
+
+void UGP_ContextActionPresenter::HandleCommandTargetingModeChanged()
 {
 	RebuildPresentation();
 }
@@ -227,13 +243,19 @@ void UGP_ContextActionPresenter::RebuildPresentation()
 	case EGP_ContextActionMode::UnitGroup:
 	{
 		const AGP_PlayerController* PlayerController = BoundPlayerController.Get();
+		const bool bMoveEnabled =
+			PlayerController != nullptr && PlayerController->SelectionHasMoveEligibleUnit();
 		const bool bAttackMoveEnabled =
 			PlayerController != nullptr && PlayerController->SelectionHasAttackMoveEligibleUnit();
+		const bool bPatrolEnabled =
+			PlayerController != nullptr && PlayerController->SelectionHasPatrolEligibleUnit();
 		Actions.Add(MakeAction(
 			EGP_ContextActionId::Move,
 			LOCTEXT("Move", "Move"),
-			false,
-			LOCTEXT("MovePendingTargeting", "Move targeting mode is not implemented")));
+			bMoveEnabled,
+			bMoveEnabled
+				? FText::GetEmpty()
+				: LOCTEXT("MoveIneligible", "Selection has no Move eligible units")));
 		Actions.Add(MakeAction(
 			EGP_ContextActionId::Stop,
 			LOCTEXT("Stop", "Stop"),
@@ -249,8 +271,10 @@ void UGP_ContextActionPresenter::RebuildPresentation()
 		Actions.Add(MakeAction(
 			EGP_ContextActionId::Patrol,
 			LOCTEXT("Patrol", "Patrol"),
-			false,
-			LOCTEXT("PatrolUnimplemented", "Patrol is not implemented")));
+			bPatrolEnabled,
+			bPatrolEnabled
+				? FText::GetEmpty()
+				: LOCTEXT("PatrolIneligible", "Selection has no Patrol eligible units")));
 		break;
 	}
 	case EGP_ContextActionMode::MainBase:
@@ -267,6 +291,27 @@ void UGP_ContextActionPresenter::RebuildPresentation()
 	}
 
 	OnContextActionsChanged.Broadcast();
+}
+
+FText UGP_ContextActionPresenter::GetTargetingPrompt() const
+{
+	const AGP_PlayerController* PlayerController = BoundPlayerController.Get();
+	if (PlayerController == nullptr)
+	{
+		return FText::GetEmpty();
+	}
+
+	switch (PlayerController->GetCommandTargetingMode())
+	{
+	case EGP_CommandTargetingMode::Move:
+		return LOCTEXT("PromptMove", "MOVE: Select destination");
+	case EGP_CommandTargetingMode::AttackMove:
+		return LOCTEXT("PromptAttackMove", "ATTACK MOVE: Select destination");
+	case EGP_CommandTargetingMode::Patrol:
+		return LOCTEXT("PromptPatrol", "PATROL: Select patrol point");
+	default:
+		return FText::GetEmpty();
+	}
 }
 
 bool UGP_ContextActionPresenter::IsActionEnabled(EGP_ContextActionId ActionId) const
@@ -307,7 +352,17 @@ void UGP_ContextActionPresenter::RequestContextAction(EGP_ContextActionId Action
 		RequestOpenMainBasePurchase();
 		break;
 	case EGP_ContextActionId::Move:
+		if (PlayerController != nullptr)
+		{
+			PlayerController->EnterMoveMode();
+		}
+		break;
 	case EGP_ContextActionId::Patrol:
+		if (PlayerController != nullptr)
+		{
+			PlayerController->EnterPatrolMode();
+		}
+		break;
 	case EGP_ContextActionId::None:
 	default:
 		break;

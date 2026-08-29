@@ -240,6 +240,7 @@ namespace GPContextActionPresentationContractPrivate
 			TEXT("A0_NoTickOnContextActionPresenter"));
 		Expect(UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetContextActionPresentations")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetContextActionMode")) != nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetCommandTargetingPrompt")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestContextAction")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("BP_OnContextActionsChanged")) != nullptr,
 			TEXT("A0_HUDRootExposesContextActionAPI"));
@@ -247,6 +248,8 @@ namespace GPContextActionPresentationContractPrivate
 			&& AGP_PlayerController::StaticClass()->FindFunctionByName(
 				TEXT("SelectionHasAttackMoveEligibleUnit")) != nullptr
 			&& AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("EnterAttackMoveMode")) != nullptr
+			&& AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("EnterMoveMode")) != nullptr
+			&& AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("EnterPatrolMode")) != nullptr
 			&& AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("Server_RequestCommand")) != nullptr,
 			TEXT("A0_StopAndAttackMoveUseExistingPCSeams"));
 
@@ -333,8 +336,8 @@ namespace GPContextActionPresentationContractPrivate
 		Expect(Presenter->GetMode() == EGP_ContextActionMode::Unit, TEXT("B_UnitMode"));
 		Expect(HasAction(Presenter->GetActions(), EGP_ContextActionId::Stop, true)
 			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::AttackMove, true)
-			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::Patrol, false)
-			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::Move, false)
+			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::Patrol, true)
+			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::Move, true)
 			&& HasNoAction(Presenter->GetActions(), EGP_ContextActionId::Purchase),
 			TEXT("B_UnitActionsStopAttackMovePatrolNoPurchase"));
 		Expect(PlayerController->SelectionHasAttackMoveEligibleUnit(),
@@ -344,6 +347,8 @@ namespace GPContextActionPresentationContractPrivate
 		Expect(Presenter->GetMode() == EGP_ContextActionMode::Unit, TEXT("C_WorkerUnitMode"));
 		Expect(HasNoAction(Presenter->GetActions(), EGP_ContextActionId::Purchase)
 			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::AttackMove, false)
+			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::Move, true)
+			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::Patrol, true)
 			&& !PlayerController->SelectionHasAttackMoveEligibleUnit(),
 			TEXT("C_WorkerAttackMoveFollowsCapabilityNotClassHardcode"));
 
@@ -353,6 +358,8 @@ namespace GPContextActionPresentationContractPrivate
 			&& Presenter->GetActions().Num() == 4
 			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::Stop, true)
 			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::AttackMove, true)
+			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::Move, true)
+			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::Patrol, true)
 			&& HasNoAction(Presenter->GetActions(), EGP_ContextActionId::Purchase),
 			TEXT("D_UnitGroupActionsFactual"));
 
@@ -403,6 +410,19 @@ namespace GPContextActionPresentationContractPrivate
 			TEXT("I_AttackMoveRequestEntersExistingPCMode"));
 		PlayerController->CancelAttackMoveMode();
 		Expect(!PlayerController->IsAttackMoveModeActive(), TEXT("I_ExistingPCModeCancelled"));
+
+		Expect(!PlayerController->IsCommandTargetingActive(), TEXT("I_MoveInactiveBeforeRequest"));
+		Presenter->RequestContextAction(EGP_ContextActionId::Move);
+		Expect(PlayerController->GetCommandTargetingMode() == EGP_CommandTargetingMode::Move,
+			TEXT("I_MoveRequestEntersTargetingMode"));
+		PlayerController->CancelCommandTargetingMode();
+		Expect(!PlayerController->IsCommandTargetingActive(), TEXT("I_MoveModeCancelled"));
+
+		Presenter->RequestContextAction(EGP_ContextActionId::Patrol);
+		Expect(PlayerController->GetCommandTargetingMode() == EGP_CommandTargetingMode::Patrol,
+			TEXT("I_PatrolRequestEntersTargetingMode"));
+		PlayerController->CancelCommandTargetingMode();
+		Expect(!PlayerController->IsCommandTargetingActive(), TEXT("I_PatrolModeCancelled"));
 
 		Selection->ReplaceSelectionWithUnit(Worker);
 		AGP_Worker* WorkerB = SpawnOwned<AGP_Worker>(

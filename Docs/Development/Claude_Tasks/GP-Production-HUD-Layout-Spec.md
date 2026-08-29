@@ -244,7 +244,7 @@ Examples:
 - Wall stock full
 - Delivery already pending / Wall delivery already pending
 
-## MainBase procurement (navigation implemented; catalog/spend not yet)
+## MainBase procurement (catalog presentation implemented; execution still next)
 
 Uses existing server-authoritative orbital flows. Do **not** redesign gameplay authority or
 spending semantics. Do **not** invent a new building-spawn RPC.
@@ -281,8 +281,10 @@ Click **PURCHASE** still replaces the action-grid content with three large categ
 - BUILDINGS
 - DEFENSE
 
-Category catalogs, prices, OrbitalFerronite spend, RPC, stock, and row widgets are **not** in
-this checkpoint. Navigation stays inside the same bottom-right panel.
+Category catalogs and prices are presented via `UGP_HUDRootWidget::GetPurchaseCatalogRows()`
+for `PurchaseUnits` / `PurchaseBuildings` / `PurchaseDefense` (empty on Actions / PurchaseRoot).
+OrbitalFerronite spend, RPC, manifests, LAUNCH, and authored row widgets are **not** in this
+checkpoint. Navigation stays inside the same bottom-right panel.
 
 A later keyboard shortcut may convenience-activate MainBase procurement. It is **not** the
 canonical visible entry. Global `O` Order Menu as the production HUD path is **SUPERSEDED**.
@@ -298,7 +300,7 @@ PurchaseRoot
   → category chooser: UNITS | BUILDINGS | DEFENSE
   → Back → Actions
 
-UNITS / BUILDINGS / DEFENSE (panel state only; no catalog rows yet)
+UNITS / BUILDINGS / DEFENSE (`GetPurchaseCatalogRows()`; no purchase execution yet)
   → Back → PurchaseRoot
 ```
 

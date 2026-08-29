@@ -342,3 +342,12 @@ void UGP_HUDRootWidget::RequestPurchaseBack()
 		Presenter->RequestPurchaseBack();
 	}
 }
+
+TArray<FGP_PurchaseCatalogRow> UGP_HUDRootWidget::GetPurchaseCatalogRows() const
+{
+	if (const UGP_ContextActionPresenter* Presenter = ResolveContextActionPresenter())
+	{
+		return Presenter->GetPurchaseCatalogRows();
+	}
+	return TArray<FGP_PurchaseCatalogRow>();
+}

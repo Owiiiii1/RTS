@@ -8,7 +8,11 @@
 
 class AGP_PlayerController;
 class AGP_UnitBase;
+class UAbilitySystemComponent;
 class UGP_SelectionComponent;
+class UGP_WallSegmentInventoryComponent;
+class UTexture2D;
+struct FOnAttributeChangeData;
 
 UENUM(BlueprintType)
 enum class EGP_ContextActionMode : uint8
@@ -47,6 +51,58 @@ enum class EGP_PurchaseCategory : uint8
 	Units UMETA(DisplayName = "Units"),
 	Buildings UMETA(DisplayName = "Buildings"),
 	Defense UMETA(DisplayName = "Defense")
+};
+
+UENUM(BlueprintType)
+enum class EGP_PurchaseCatalogItemKind : uint8
+{
+	Unit UMETA(DisplayName = "Unit"),
+	Building UMETA(DisplayName = "Building"),
+	DefensiveBuilding UMETA(DisplayName = "Defensive Building"),
+	WallPackage UMETA(DisplayName = "Wall Package")
+};
+
+/**
+ * Factual MainBase PURCHASE catalog row. Presentation only — no spend / RPC / manifest.
+ * ItemId is the product PrimaryAssetId. Icon is already-loaded only (null allowed).
+ */
+USTRUCT(BlueprintType)
+struct GPUIRUNTIME_API FGP_PurchaseCatalogRow
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|PurchaseCatalog")
+	FPrimaryAssetId ItemId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|PurchaseCatalog")
+	EGP_PurchaseCatalogItemKind ItemKind = EGP_PurchaseCatalogItemKind::Unit;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|PurchaseCatalog")
+	EGP_PurchaseCategory Category = EGP_PurchaseCategory::Units;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|PurchaseCatalog")
+	FText DisplayName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|PurchaseCatalog")
+	TObjectPtr<UTexture2D> Icon;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|PurchaseCatalog")
+	float Cost = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|PurchaseCatalog")
+	bool bVisible = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|PurchaseCatalog")
+	bool bEnabled = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|PurchaseCatalog")
+	FText DisabledReason;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|PurchaseCatalog")
+	int32 TransportSlotCost = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|PurchaseCatalog")
+	int32 SegmentCount = 0;
 };
 
 USTRUCT(BlueprintType)
@@ -89,6 +145,7 @@ public:
 	EGP_ContextActionMode GetMode() const { return Mode; }
 	EGP_ContextActionPanelState GetPanelState() const { return PanelState; }
 	const TArray<FGP_ContextActionPresentation>& GetActions() const { return Actions; }
+	const TArray<FGP_PurchaseCatalogRow>& GetPurchaseCatalogRows() const { return PurchaseCatalogRows; }
 	int32 GetBoundDelegateCount() const;
 
 	FText GetTargetingPrompt() const;
@@ -113,12 +170,25 @@ private:
 	void HandleSelectionChanged();
 	void HandleCommandTargetingModeChanged();
 	void RebuildPresentation();
+	void RebuildPurchaseCatalogRows();
 	void UnbindSelectedUnits();
 	void BindSelectedUnits(const TArray<AGP_UnitBase*>& Units);
 	void HandleUnitDied(AGP_UnitBase* Unit);
+	void EnsureOrbitalFerroniteBinding();
+	void UnbindOrbitalFerronite();
+	void BindWallInventory(class AGP_MainBase* MainBase);
+	void UnbindWallInventory();
+	void HandleOrbitalFerroniteChanged(const FOnAttributeChangeData& Data);
+	void RefreshPurchaseCatalogIfCategoryActive();
 
 	UFUNCTION()
 	void HandleBoundActorDestroyed(AActor* DestroyedActor);
+
+	UFUNCTION()
+	void HandleWallInventoryChanged(int32 NewCount);
+
+	UFUNCTION()
+	void HandleWallPackagePendingChanged(bool bPending);
 
 	static void CollectLiveSelectedUnits(
 		const UGP_SelectionComponent* Selection,
@@ -142,6 +212,10 @@ private:
 	FDelegateHandle CommandTargetingChangedHandle;
 	TArray<FBoundSelectedUnit> BoundUnits;
 	TArray<FGP_ContextActionPresentation> Actions;
+	TArray<FGP_PurchaseCatalogRow> PurchaseCatalogRows;
+	TWeakObjectPtr<UAbilitySystemComponent> BoundOrbitalASC;
+	TWeakObjectPtr<UGP_WallSegmentInventoryComponent> BoundWallInventory;
+	FDelegateHandle OrbitalFerroniteHandle;
 	EGP_ContextActionMode Mode = EGP_ContextActionMode::None;
 	EGP_ContextActionPanelState PanelState = EGP_ContextActionPanelState::Actions;
 };

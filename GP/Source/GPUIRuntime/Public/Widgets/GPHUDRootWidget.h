@@ -73,6 +73,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GP|HUD|ContextActions")
 	void RequestPurchaseBack();
 
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|PurchaseCatalog")
+	TArray<FGP_PurchaseCatalogRow> GetPurchaseCatalogRows() const;
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;

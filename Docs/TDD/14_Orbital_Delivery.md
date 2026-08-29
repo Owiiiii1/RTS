@@ -178,9 +178,11 @@ Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / 
 
 ## Order UI (target / TEMP)
 
-Production HUD (design / **not implemented**): Select MainBase → PURCHASE in the bottom-right
-Context Action Grid → UNITS / BUILDINGS / DEFENSE. Not a permanent global Order Menu.
-Keyboard `O` is not the canonical production HUD entry. Message Strip is panel-local feedback.
+Production HUD (catalog presentation implemented; execution / manifests / LAUNCH still next):
+Select MainBase → PURCHASE in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE.
+`GetPurchaseCatalogRows()` is the factual catalog SoT for the active category. Not a permanent
+global Order Menu. Keyboard `O` is not the canonical production HUD entry. Message Strip is
+panel-local feedback.
 
 - **UNITS:** manifest builder — LMB add / RMB remove, quantity on icon, shuttle
   `PodTransportSlotCapacity` (not unit cap), Confirm = existing `Server_RequestUnitDrop`.
@@ -192,7 +194,8 @@ Keyboard `O` is not the canonical production HUD entry. Message Strip is panel-l
 - **Foundation (future):** Buy Foundation Slab package (cost/quantity TBD). HUD category **TBD**;
   do not force into Units / Buildings / Defense in this pass. Plan install job; Workers
   progressively install onto leveled cells. Not READY. Not a building spawn.
-- TEMP HUD buttons remain acceptable scaffolding. Do not claim the MainBase PURCHASE UI exists yet.
+- TEMP HUD buttons remain acceptable scaffolding. Purchase catalog presentation exists on the
+  production HUD presenter; click-to-buy / LAUNCH wiring is still next.
 
 ## RPCs (illustrative)
 

@@ -246,6 +246,7 @@ namespace GPContextActionPresentationContractPrivate
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestOpenMainBasePurchase")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestOpenPurchaseCategory")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestPurchaseBack")) != nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetPurchaseCatalogRows")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("BP_OnContextActionsChanged")) != nullptr,
 			TEXT("A0_HUDRootExposesContextActionAPI"));
 		Expect(AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("RequestStopSelectedUnits")) != nullptr

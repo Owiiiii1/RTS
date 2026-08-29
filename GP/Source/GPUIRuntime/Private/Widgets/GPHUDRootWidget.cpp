@@ -322,3 +322,23 @@ void UGP_HUDRootWidget::RequestOpenMainBasePurchase()
 		Presenter->RequestOpenMainBasePurchase();
 	}
 }
+
+void UGP_HUDRootWidget::RequestOpenPurchaseCategory(EGP_PurchaseCategory Category)
+{
+	UGP_ContextActionPresenter* Presenter =
+		const_cast<UGP_ContextActionPresenter*>(ResolveContextActionPresenter());
+	if (Presenter != nullptr)
+	{
+		Presenter->RequestOpenPurchaseCategory(Category);
+	}
+}
+
+void UGP_HUDRootWidget::RequestPurchaseBack()
+{
+	UGP_ContextActionPresenter* Presenter =
+		const_cast<UGP_ContextActionPresenter*>(ResolveContextActionPresenter());
+	if (Presenter != nullptr)
+	{
+		Presenter->RequestPurchaseBack();
+	}
+}

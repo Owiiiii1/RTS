@@ -243,6 +243,9 @@ namespace GPContextActionPresentationContractPrivate
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetCommandTargetingPrompt")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetCommandTargetingCursor")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestContextAction")) != nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestOpenMainBasePurchase")) != nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestOpenPurchaseCategory")) != nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestPurchaseBack")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("BP_OnContextActionsChanged")) != nullptr,
 			TEXT("A0_HUDRootExposesContextActionAPI"));
 		Expect(AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("RequestStopSelectedUnits")) != nullptr
@@ -478,13 +481,89 @@ namespace GPContextActionPresentationContractPrivate
 		}
 
 		Selection->ReplaceSelectionWithUnit(MainBase);
+		Expect(Presenter->GetMode() == EGP_ContextActionMode::MainBase
+			&& Presenter->GetPanelState() == EGP_ContextActionPanelState::Actions
+			&& HasAction(Presenter->GetActions(), EGP_ContextActionId::Purchase, true),
+			TEXT("P_FriendlyMainBaseStartsInActions"));
 		Presenter->RequestContextAction(EGP_ContextActionId::Purchase);
 		Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseRoot,
-			TEXT("F2_PurchaseOpensLocalPurchaseRoot"));
+			TEXT("P_PurchaseOpensLocalPurchaseRoot"));
+
+		Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+		Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseUnits,
+			TEXT("P_RootOpensPurchaseUnits"));
+		Presenter->RequestPurchaseBack();
+		Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseRoot,
+			TEXT("P_UnitsBackReturnsToPurchaseRoot"));
+
+		Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Buildings);
+		Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseBuildings,
+			TEXT("P_RootOpensPurchaseBuildings"));
+		Presenter->RequestPurchaseBack();
+		Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseRoot,
+			TEXT("P_BuildingsBackReturnsToPurchaseRoot"));
+
+		Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Defense);
+		Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseDefense,
+			TEXT("P_RootOpensPurchaseDefense"));
+		Presenter->RequestPurchaseBack();
+		Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseRoot,
+			TEXT("P_DefenseBackReturnsToPurchaseRoot"));
+
+		Presenter->RequestPurchaseBack();
+		Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::Actions
+			&& Presenter->GetMode() == EGP_ContextActionMode::MainBase,
+			TEXT("P_RootBackReturnsToActions"));
 
 		Presenter->RequestContextAction(EGP_ContextActionId::Patrol);
-		Expect(Presenter->GetMode() == EGP_ContextActionMode::MainBase,
+		Expect(Presenter->GetMode() == EGP_ContextActionMode::MainBase
+			&& Presenter->GetPanelState() == EGP_ContextActionPanelState::Actions,
 			TEXT("PatrolDisabledIsNoOp"));
+
+		Selection->ReplaceSelectionWithUnit(WalkerA);
+		Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+		Presenter->RequestPurchaseBack();
+		Presenter->RequestOpenMainBasePurchase();
+		Expect(Presenter->GetMode() == EGP_ContextActionMode::Unit
+			&& Presenter->GetPanelState() == EGP_ContextActionPanelState::Actions,
+			TEXT("P_CategoryRequestWithoutMainBaseIsNoOp"));
+
+		Selection->ReplaceSelectionWithUnit(MainBase);
+		Presenter->RequestOpenMainBasePurchase();
+		Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Buildings);
+		Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseBuildings,
+			TEXT("P_SubstateBeforeSelectionChange"));
+		Selection->ReplaceSelectionWithUnit(WalkerA);
+		Expect(Presenter->GetMode() == EGP_ContextActionMode::Unit
+			&& Presenter->GetPanelState() == EGP_ContextActionPanelState::Actions,
+			TEXT("P_LeavingMainBaseResetsPurchaseSubstate"));
+
+		AGP_MainBase* EnemyBase = SpawnOwned<AGP_MainBase>(
+			World, FVector(-51000.0f, 8100.0f, 100.0f), LocalTeamId == 1 ? 2 : 1);
+		FlushAsyncLoading();
+		Expect(IsValid(EnemyBase), TEXT("P_EnemyMainBaseSpawned"));
+		if (IsValid(EnemyBase))
+		{
+			Selection->ReplaceSelectionWithUnit(EnemyBase);
+			Presenter->RequestOpenMainBasePurchase();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+			Expect(Presenter->GetMode() != EGP_ContextActionMode::MainBase
+				&& Presenter->GetPanelState() == EGP_ContextActionPanelState::Actions
+				&& HasNoAction(Presenter->GetActions(), EGP_ContextActionId::Purchase),
+				TEXT("P_EnemyMainBaseCannotEnterPurchase"));
+			EnemyBase->Destroy();
+		}
+
+		Selection->ReplaceSelectionWithUnit(MainBase);
+		Presenter->RequestOpenMainBasePurchase();
+		Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Defense);
+		Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseDefense,
+			TEXT("P_SubstateBeforeMainBaseDestroyed"));
+		MainBase->Destroy();
+		MainBase = nullptr;
+		Expect(Presenter->GetMode() != EGP_ContextActionMode::MainBase
+			&& Presenter->GetPanelState() == EGP_ContextActionPanelState::Actions,
+			TEXT("P_DestroyedMainBaseResetsPurchaseSubstate"));
 
 		for (TActorIterator<AGP_UnitBase> It(World); It; ++It)
 		{

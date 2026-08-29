@@ -35,7 +35,18 @@ UENUM(BlueprintType)
 enum class EGP_ContextActionPanelState : uint8
 {
 	Actions UMETA(DisplayName = "Actions"),
-	PurchaseRoot UMETA(DisplayName = "Purchase Root")
+	PurchaseRoot UMETA(DisplayName = "Purchase Root"),
+	PurchaseUnits UMETA(DisplayName = "Purchase Units"),
+	PurchaseBuildings UMETA(DisplayName = "Purchase Buildings"),
+	PurchaseDefense UMETA(DisplayName = "Purchase Defense")
+};
+
+UENUM(BlueprintType)
+enum class EGP_PurchaseCategory : uint8
+{
+	Units UMETA(DisplayName = "Units"),
+	Buildings UMETA(DisplayName = "Buildings"),
+	Defense UMETA(DisplayName = "Defense")
 };
 
 USTRUCT(BlueprintType)
@@ -84,6 +95,8 @@ public:
 
 	void RequestContextAction(EGP_ContextActionId ActionId);
 	void RequestOpenMainBasePurchase();
+	void RequestOpenPurchaseCategory(EGP_PurchaseCategory Category);
+	void RequestPurchaseBack();
 
 	FOnGPContextActionsChanged OnContextActionsChanged;
 
@@ -119,6 +132,9 @@ private:
 		bool bEnabled,
 		const FText& DisabledReason);
 	bool IsActionEnabled(EGP_ContextActionId ActionId) const;
+	void SetPanelState(EGP_ContextActionPanelState NewState);
+	static bool IsPurchaseCategoryState(EGP_ContextActionPanelState State);
+	static EGP_ContextActionPanelState PanelStateForCategory(EGP_PurchaseCategory Category);
 
 	TWeakObjectPtr<AGP_PlayerController> BoundPlayerController;
 	TWeakObjectPtr<UGP_SelectionComponent> BoundSelection;

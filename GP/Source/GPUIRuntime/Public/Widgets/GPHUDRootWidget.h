@@ -67,6 +67,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GP|HUD|ContextActions")
 	void RequestOpenMainBasePurchase();
 
+	UFUNCTION(BlueprintCallable, Category = "GP|HUD|ContextActions")
+	void RequestOpenPurchaseCategory(EGP_PurchaseCategory Category);
+
+	UFUNCTION(BlueprintCallable, Category = "GP|HUD|ContextActions")
+	void RequestPurchaseBack();
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;

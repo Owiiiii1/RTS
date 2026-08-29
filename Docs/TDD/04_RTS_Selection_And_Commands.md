@@ -400,7 +400,7 @@ The previous SelectionPanel bottom-left / CommandBar bottom-center / InspectPane
 | Empty selection | Info empty; Context Action Grid idle | |
 | Unit/group selected | Bottom-right Context Action Grid, Unit Action Mode | Move, Stop, Attack-Move, Patrol. Direct RMB Attack stays separate. |
 | Building selected (not MainBase) | Bottom-right Context Action Grid, Building Action Mode | Contextual actions only. Not a procurement source. |
-| MainBase selected | Bottom-right Building Actions include **PURCHASE** | Design / not implemented. PURCHASE → UNITS / BUILDINGS / DEFENSE in the same panel. |
+| MainBase selected | Bottom-right Building Actions include **PURCHASE** | Navigation: Actions → PurchaseRoot → Units / Buildings / Defense. Back: category → root, root → actions. Catalog/spend not yet. |
 
 ### Edge Cases
 

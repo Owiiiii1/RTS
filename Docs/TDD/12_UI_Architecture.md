@@ -171,7 +171,7 @@ PublicDependencyModuleNames.AddRange(new string[]
   presentation exists (`UGP_ContextActionPresenter` owned by `UGP_HUDViewModelSubsystem`; HUD-root
   accessors / `RequestContextAction` / `BP_OnContextActionsChanged`). Authored Context Action buttons
   are **not** operator-validated. `WBP_GP_HUD` remains uncommitted.
-  Still not implemented: MainBase PURCHASE categories, minimap function,
+  Still not implemented: MainBase PURCHASE catalogs/spend, minimap function,
   notifications, and production end-of-match screen.
   Operator-validated runtime visibility of authored `WBP_GP_HUD` (local, not committed).
   Operator-validated: `GP_ResourceViewModel.PlanetFerronite` → To Text (Float) →
@@ -378,7 +378,7 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 | Future top-left Score + top-right Orbit/Cap | `UGP_ResourceViewModel.{PlanetFerronite, OrbitalFerronite, FerroniteScore, CurrentUnits, MaxUnits}` | Own ASC attribute-change delegates; local MainBase `OnResolvedMainBaseChanged` + `OnStorageChanged` for `PlanetFerronite` |
 | Future top-right Planet Ferronite | `UGP_ResourceViewModel.PlanetFerronite` = local MainBase `GetTotalStored()` | `FindMainBaseForTeamClientSafe` + `OnResolvedMainBaseChanged` + `OnStorageChanged` |
 | Future bottom-center Selection/Info | Native `UGP_SelectionViewModel` None/Single/Group (gameplay cap **24**). Single: icon, name, HP current/max + normalized, Damage, Armor, Move Speed, Attack Range (`AttackRangeCm`), conditional cargo. Group rows: icon + health (DisplayName remains in row data). Authored visual intent **8×3**. Operator PIE **PASSED** for authored Single bindings via Manual slot `GP_SelectionViewModel`. Group rows via `UGP_HUDRootWidget::GetSelectionGroupRows` + `BP_OnSelectionPresentationChanged`. `WBP_GP_HUD` operator-local, uncommitted. | `UGP_SelectionComponent.OnSelectionChanged` (local) + GAS health delegates + Worker cargo delegate |
-| Future bottom-right Context Action Grid | Native `UGP_ContextActionPresenter` modes None/Unit/UnitGroup/Building/MainBase. Unit actions: Move (visible, enabled for `IsMobileCommandEligible()`; `EnterMoveMode` → local targeting → `GP.Command.Move` via `Server_RequestCommand`), Stop (enabled; `RequestStopSelectedUnits` → `Server_RequestCommand`), Attack-Move (`EnterAttackMoveMode` when `SelectionHasAttackMoveEligibleUnit()`), Patrol (visible, enabled for mobile units; `EnterPatrolMode` → `GP.Command.Patrol`, current location ↔ clicked point). MainBase: Purchase presentation + local `PurchaseRoot` panel state only. Other buildings: empty. Command targeting visual: native `SGPCommandCursorOverlay` (Move crosshair, AttackMove crosshair+ring, Patrol crosshair+opposing arrows). Hardware cursor hidden while targeting. Message Strip prompt via `GetCommandTargetingPrompt()`. Authored buttons operator-local. | Local selection + death/destroy; PC eligibility queries + `OnCommandTargetingModeChanged` |
+| Future bottom-right Context Action Grid | Native `UGP_ContextActionPresenter` modes None/Unit/UnitGroup/Building/MainBase. Unit actions: Move (visible, enabled for `IsMobileCommandEligible()`; `EnterMoveMode` → local targeting → `GP.Command.Move` via `Server_RequestCommand`), Stop (enabled; `RequestStopSelectedUnits` → `Server_RequestCommand`), Attack-Move (`EnterAttackMoveMode` when `SelectionHasAttackMoveEligibleUnit()`), Patrol (visible, enabled for mobile units; `EnterPatrolMode` → `GP.Command.Patrol`, current location ↔ clicked point). MainBase: Purchase + local panel state machine Actions → PurchaseRoot → PurchaseUnits / PurchaseBuildings / PurchaseDefense. Back is context-sensitive (category → root, root → actions). No catalog/spend yet. Other buildings: empty. Command targeting visual: native `SGPCommandCursorOverlay`. Hardware cursor hidden while targeting. Message Strip prompt via `GetCommandTargetingPrompt()`. Authored buttons operator-local. | Local selection + death/destroy; PC eligibility queries + `OnCommandTargetingModeChanged` |ngModeChanged` |
 | Future right-side Message Strip | Contextual procurement/action status (shuttle slots, funds, cap, wall stock) | Existing orbital reject/status; not a global toast stack |
 | Future MainBase PURCHASE panel | Future procurement VM (catalog, manifest, READY, Wall stock) | `UGP_OrbitalDeliverySubsystem` + existing Purchase/Confirm/Deploy RPCs |
 | Future bottom-left Minimap | Future `UGP_MinimapVM` — layout placeholder only in the next visual slice | Later minimap subsystem |
@@ -450,9 +450,14 @@ selection actually grants them. Do not fully design ability slots yet.
 Only **MainBase** owns orbital **PURCHASE**. Other buildings: contextual actions only; MVP may
 still have no functional actions. Do not invent upgrades. Do not treat as local production.
 
-**MainBase PURCHASE** (design / not implemented): replace grid with UNITS / BUILDINGS / DEFENSE
-inside this panel. Message Strip sits above it. Bottom-center stays on MainBase info.
-LAUNCH uses existing unit Confirm / building Purchase→READY→ghost / Wall Package buy.
+**MainBase PURCHASE** (navigation implemented; catalog/spend not yet): native panel state
+
+`Actions` → PURCHASE → `PurchaseRoot` → Units / Buildings / Defense.
+
+Back: category → `PurchaseRoot`; root → `Actions`. Leaving friendly MainBase (selection change,
+death, destroy, enemy/inspect) forces `Actions`. HUD Blueprint: `RequestOpenPurchaseCategory`,
+`RequestPurchaseBack`. No catalog rows, prices, RPC, or stock in this checkpoint.
+LAUNCH remains existing unit Confirm / building Purchase→READY→ghost / Wall Package buy.
 A global Order Menu is superseded for production HUD. See
 [`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
 

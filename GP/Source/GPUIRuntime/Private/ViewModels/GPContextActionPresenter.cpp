@@ -110,7 +110,7 @@ void UGP_ContextActionPresenter::CollectLiveSelectedUnits(
 	for (const TWeakObjectPtr<AGP_UnitBase>& WeakUnit : Selection->GetSelectedUnits())
 	{
 		AGP_UnitBase* Unit = WeakUnit.Get();
-		if (IsValid(Unit) && !Unit->IsDead())
+		if (IsValid(Unit) && !Unit->IsDead() && !Unit->IsActorBeingDestroyed())
 		{
 			OutUnits.Add(Unit);
 		}
@@ -376,13 +376,71 @@ void UGP_ContextActionPresenter::RequestOpenMainBasePurchase()
 		return;
 	}
 
-	if (PanelState == EGP_ContextActionPanelState::PurchaseRoot)
+	SetPanelState(EGP_ContextActionPanelState::PurchaseRoot);
+}
+
+void UGP_ContextActionPresenter::RequestOpenPurchaseCategory(EGP_PurchaseCategory Category)
+{
+	if (Mode != EGP_ContextActionMode::MainBase
+		|| PanelState != EGP_ContextActionPanelState::PurchaseRoot)
 	{
 		return;
 	}
 
-	PanelState = EGP_ContextActionPanelState::PurchaseRoot;
+	SetPanelState(PanelStateForCategory(Category));
+}
+
+void UGP_ContextActionPresenter::RequestPurchaseBack()
+{
+	if (Mode != EGP_ContextActionMode::MainBase)
+	{
+		return;
+	}
+
+	if (IsPurchaseCategoryState(PanelState))
+	{
+		SetPanelState(EGP_ContextActionPanelState::PurchaseRoot);
+		return;
+	}
+
+	if (PanelState == EGP_ContextActionPanelState::PurchaseRoot)
+	{
+		SetPanelState(EGP_ContextActionPanelState::Actions);
+	}
+}
+
+void UGP_ContextActionPresenter::SetPanelState(EGP_ContextActionPanelState NewState)
+{
+	if (PanelState == NewState)
+	{
+		return;
+	}
+
+	PanelState = NewState;
 	OnContextActionsChanged.Broadcast();
+}
+
+bool UGP_ContextActionPresenter::IsPurchaseCategoryState(EGP_ContextActionPanelState State)
+{
+	return State == EGP_ContextActionPanelState::PurchaseUnits
+		|| State == EGP_ContextActionPanelState::PurchaseBuildings
+		|| State == EGP_ContextActionPanelState::PurchaseDefense;
+}
+
+EGP_ContextActionPanelState UGP_ContextActionPresenter::PanelStateForCategory(
+	EGP_PurchaseCategory Category)
+{
+	switch (Category)
+	{
+	case EGP_PurchaseCategory::Units:
+		return EGP_ContextActionPanelState::PurchaseUnits;
+	case EGP_PurchaseCategory::Buildings:
+		return EGP_ContextActionPanelState::PurchaseBuildings;
+	case EGP_PurchaseCategory::Defense:
+		return EGP_ContextActionPanelState::PurchaseDefense;
+	default:
+		return EGP_ContextActionPanelState::PurchaseRoot;
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

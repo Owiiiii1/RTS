@@ -244,7 +244,7 @@ Examples:
 - Wall stock full
 - Delivery already pending / Wall delivery already pending
 
-## MainBase procurement (design / not implemented)
+## MainBase procurement (navigation implemented; catalog/spend not yet)
 
 Uses existing server-authoritative orbital flows. Do **not** redesign gameplay authority or
 spending semantics. Do **not** invent a new building-spawn RPC.
@@ -252,13 +252,37 @@ spending semantics. Do **not** invent a new building-spawn RPC.
 Bottom-center Selection/Info **does not** switch to procurement while MainBase is selected.
 It continues to show MainBase icon, name, health, and relevant stats/state.
 
-Click **PURCHASE** replaces the action-grid content with three large category buttons:
+Native `EGP_ContextActionPanelState` on `UGP_ContextActionPresenter` (HUD root exposes it):
+
+```
+Actions
+  PURCHASE
+    ↓
+PurchaseRoot
+  Units → PurchaseUnits     Back → PurchaseRoot
+  Buildings → PurchaseBuildings  Back → PurchaseRoot
+  Defense → PurchaseDefense  Back → PurchaseRoot
+  Back → Actions
+```
+
+Blueprint wiring (WBP_GP_HUD is operator-local, not committed):
+
+- `BTN_PurchaseUnits` → `RequestOpenPurchaseCategory(Units)`
+- `BTN_PurchaseBuildings` → `RequestOpenPurchaseCategory(Buildings)`
+- `BTN_PurchaseDefense` → `RequestOpenPurchaseCategory(Defense)`
+- `BTN_PurchaseBack` → `RequestPurchaseBack()` (same API on category panels later)
+
+Purchase states exist only while a friendly MainBase is selected. Selection change, death,
+destroy, or enemy/inspect MainBase forces Actions.
+
+Click **PURCHASE** still replaces the action-grid content with three large category buttons:
 
 - UNITS
 - BUILDINGS
 - DEFENSE
 
-Navigation stays inside the same bottom-right panel.
+Category catalogs, prices, OrbitalFerronite spend, RPC, stock, and row widgets are **not** in
+this checkpoint. Navigation stays inside the same bottom-right panel.
 
 A later keyboard shortcut may convenience-activate MainBase procurement. It is **not** the
 canonical visible entry. Global `O` Order Menu as the production HUD path is **SUPERSEDED**.
@@ -266,15 +290,17 @@ canonical visible entry. Global `O` Order Menu as the production HUD path is **S
 ### Right-panel state machine
 
 ```
-NO / GENERIC SELECTION
-  → relevant unit/building commands
-
 MAINBASE SELECTED
   → Building Actions
   → PURCHASE available
 
-PURCHASE
+PurchaseRoot
   → category chooser: UNITS | BUILDINGS | DEFENSE
+  → Back → Actions
+
+UNITS / BUILDINGS / DEFENSE (panel state only; no catalog rows yet)
+  → Back → PurchaseRoot
+```
 
 UNITS
   → unit manifest grid/list

@@ -472,9 +472,10 @@ bool UGP_UnitCommandComponent::HasExactActiveHeldAttack() const
 		return false;
 	}
 
-	// Explicit Attack or AttackMove engagement share the Attack FSM serial ownership.
+	// Explicit Attack or locomotion-parent engagement share the Attack FSM serial.
 	return Held.CommandTag == GPTags.Command_Attack
-		|| Held.CommandTag == GPTags.Command_AttackMove;
+		|| Held.CommandTag == GPTags.Command_AttackMove
+		|| Held.CommandTag == GPTags.Command_Patrol;
 }
 
 bool UGP_UnitCommandComponent::ValidateAttackTarget(
@@ -713,6 +714,38 @@ bool UGP_UnitCommandComponent::IsEligibleForAttackMoveAcquire() const
 	return HeldCommand.GetValue().CommandTag == GPTags.Command_AttackMove;
 }
 
+bool UGP_UnitCommandComponent::IsEligibleForPatrolAcquire() const
+{
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority())
+	{
+		return false;
+	}
+
+	const AGP_UnitBase* OwnerUnit = Cast<AGP_UnitBase>(Owner);
+	if (OwnerUnit == nullptr || !OwnerUnit->IsUnitDefinitionReady() || OwnerUnit->IsDead()
+		|| !IsCombatCapableForAutoAcquire(OwnerUnit))
+	{
+		return false;
+	}
+
+	if (IsAttackActive())
+	{
+		return false;
+	}
+
+	if (MineState != EGP_MineExecutionState::Idle || ActiveMineSerial != 0)
+	{
+		return false;
+	}
+	if (HaulState != EGP_HaulExecutionState::Idle || ActiveHaulSerial != 0)
+	{
+		return false;
+	}
+
+	return IsPatrolActive();
+}
+
 bool UGP_UnitCommandComponent::IsAttackMoveActive() const
 {
 	const FGPGameplayTags& GPTags = FGPGameplayTags::Get();
@@ -757,6 +790,20 @@ bool UGP_UnitCommandComponent::IsPatrolHeadingToB() const
 	return IsPatrolActive() && bPatrolHeadingToB;
 }
 
+bool UGP_UnitCommandComponent::IsPatrolEngaging() const
+{
+	return IsPatrolActive() && IsAttackActive();
+}
+
+FVector UGP_UnitCommandComponent::GetPendingPatrolDestination() const
+{
+	if (!IsPatrolActive())
+	{
+		return FVector::ZeroVector;
+	}
+	return bPatrolHeadingToB ? PatrolAnchorB : PatrolAnchorA;
+}
+
 void UGP_UnitCommandComponent::ResetPatrolExecutor()
 {
 	bPatrolActive = false;
@@ -793,7 +840,7 @@ bool UGP_UnitCommandComponent::TryConsumePatrolMovementResult(
 	EGP_MovementResult Result,
 	EGP_MovementResultReason Reason)
 {
-	if (!IsPatrolActive())
+	if (!IsPatrolActive() || IsAttackActive())
 	{
 		return false;
 	}
@@ -846,6 +893,36 @@ bool UGP_UnitCommandComponent::TryConsumePatrolMovementResult(
 		ClearHeldCommand();
 	}
 	return true;
+}
+
+bool UGP_UnitCommandComponent::ResumePatrolTravelAfterEngagement()
+{
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr || !Owner->HasAuthority() || !IsPatrolActive())
+	{
+		return false;
+	}
+
+	const FGP_StoredUnitCommand& Held = HeldCommand.GetValue();
+	const FVector NextDestination = GetPendingPatrolDestination();
+	HeldCommand.GetValue().TargetLocation = NextDestination;
+
+	UGP_MovementComponent* Movement = ResolveMovementComponent();
+	if (Movement == nullptr)
+	{
+		return false;
+	}
+
+	const FGP_MovementRequestOutcome Outcome =
+		Movement->RequestMove(NextDestination, Held.CommandSerial);
+	UE_LOG(LogGPUnitCommandExecution, Log,
+		TEXT("GP UnitCommandExecution PatrolResume: Unit=%s Serial=%u Destination=%s HeadingToB=%s Accepted=%s"),
+		*GetNameSafe(Owner),
+		Held.CommandSerial,
+		*NextDestination.ToCompactString(),
+		bPatrolHeadingToB ? TEXT("true") : TEXT("false"),
+		Outcome.IsAccepted() ? TEXT("true") : TEXT("false"));
+	return Outcome.IsAccepted();
 }
 
 bool UGP_UnitCommandComponent::IsHeldAttackMove(uint32 Serial) const
@@ -986,17 +1063,19 @@ void UGP_UnitCommandComponent::TryIssueAutoAcquireAttack(AGP_UnitBase* Target)
 
 void UGP_UnitCommandComponent::TryIssueAttackMoveAcquire(AGP_UnitBase* Target)
 {
-	if (!IsValid(Target) || !IsEligibleForAttackMoveAcquire())
+	if (!IsValid(Target)
+		|| (!IsEligibleForAttackMoveAcquire() && !IsEligibleForPatrolAcquire()))
 	{
 		return;
 	}
 
 	UE_LOG(LogGPUnitCommandExecution, Log,
-		TEXT("GP UnitCommandExecution AttackMoveAcquire: Unit=%s Target=%s Sight=%.1f Dest=%s"),
+		TEXT("GP UnitCommandExecution LocomotionAcquire: Unit=%s Target=%s Sight=%.1f Parent=%s Dest=%s"),
 		*GetNameSafe(GetOwner()),
 		*GetNameSafe(Target),
 		GetEffectiveAutoAcquireRange(),
-		*GetAttackMoveDestination().ToCompactString());
+		IsPatrolActive() ? TEXT("Patrol") : TEXT("AttackMove"),
+		*(IsPatrolActive() ? GetPendingPatrolDestination() : GetAttackMoveDestination()).ToCompactString());
 
 	StartAttackMoveEngagement(Target);
 }
@@ -1007,7 +1086,7 @@ bool UGP_UnitCommandComponent::StartAttackMoveEngagement(AGP_UnitBase* Target)
 	const ENetMode NetMode = GPUnitCommandStatePrivate::GetOwnerNetMode(Owner);
 	const ENetRole Role = Owner != nullptr ? Owner->GetLocalRole() : ROLE_None;
 
-	if (Owner == nullptr || !Owner->HasAuthority() || !IsAttackMoveActive())
+	if (Owner == nullptr || !Owner->HasAuthority() || (!IsAttackMoveActive() && !IsPatrolActive()))
 	{
 		return false;
 	}
@@ -1160,8 +1239,8 @@ void UGP_UnitCommandComponent::OnCombatAutoAcquireScan()
 		return;
 	}
 
-	// GP-S32A: AttackMove travelling may acquire; pure Move stays suppressed via Idle eligibility.
-	if (IsEligibleForAttackMoveAcquire())
+	// AttackMove / Patrol travelling may acquire; pure Move stays suppressed via Idle eligibility.
+	if (IsEligibleForAttackMoveAcquire() || IsEligibleForPatrolAcquire())
 	{
 		AGP_UnitBase* Target = FindNearestAutoAcquireTarget(Range, EGP_AutoAcquireMode::AttackMove);
 		LastAutoAcquireCandidate = Target;
@@ -5284,6 +5363,11 @@ void UGP_UnitCommandComponent::FinishAttack(
 		{
 			// Engagement ended under AttackMove ownership — resume original destination.
 			ResumeAttackMoveTravelAfterEngagement();
+		}
+		else if (Held.CommandTag == FGPGameplayTags::Get().Command_Patrol
+			&& Held.CommandSerial == FinishedSerial)
+		{
+			ResumePatrolTravelAfterEngagement();
 		}
 	}
 

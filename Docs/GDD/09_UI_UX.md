@@ -90,7 +90,7 @@ UX/balance tuning may revisit the presentation scale.
 - Not a permanent Build Menu or global Order Menu. Mode follows selection.
 - A small **Message Strip** sits directly above this block for short contextual
   procurement/action feedback (may be empty). Not a global toast system.
-- **Unit Action Mode:** Move, Stop, Attack-Move ("идти с атакой"), Patrol (MVP: current location ↔ one clicked point).
+- **Unit Action Mode:** Move, Stop, Attack-Move ("идти с атакой"), Patrol (MVP: current location ↔ one clicked point; combat-capable units engage then resume the same leg).
   Direct RMB target Attack remains a separate contextual behavior and is not Attack-Move.
 - **Building Action Mode:** building-specific actions. Only **MainBase** owns **PURCHASE**.
 - **MainBase PURCHASE** (design / not implemented): replaces the grid with UNITS / BUILDINGS /
@@ -217,7 +217,7 @@ Smart context, що читає target і issues найбільш intuitive comma
 - `O` → optional later convenience to open MainBase procurement. **Not** the canonical production HUD entry.
   Canonical path: select MainBase → PURCHASE. Global Order Menu is superseded for production HUD.
 - ~~`B` → Build menu~~ — removed (orbital model; no Worker Build).
-- `P` → Patrol targeting (optional hotkey; canonical entry is the Context Action **PATROL** button). Patrol MVP: current location ↔ one clicked point.
+- `P` → Patrol targeting (optional hotkey; canonical entry is the Context Action **PATROL** button). Patrol MVP: current location ↔ one clicked point; combat-capable units auto-acquire while patrolling.
 - `Esc` → Cancel current mode (incl. building deploy ghost).
 
 ### Other Mandatory Hotkeys

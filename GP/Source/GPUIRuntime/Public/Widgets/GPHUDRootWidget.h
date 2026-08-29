@@ -57,6 +57,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
 	FText GetCommandTargetingPrompt() const;
 
+	/** Same production cursor the HUD NativeOnCursorQuery returns to Slate. */
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
+	EMouseCursor::Type GetCommandTargetingCursor() const;
+
 	UFUNCTION(BlueprintCallable, Category = "GP|HUD|ContextActions")
 	void RequestContextAction(EGP_ContextActionId ActionId);
 
@@ -66,6 +70,9 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual FCursorReply NativeOnCursorQuery(
+		const FGeometry& InGeometry,
+		const FPointerEvent& InCursorEvent) override;
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "GP|HUD|LaunchMenu")
 	void BP_OnLaunchMenuChanged();

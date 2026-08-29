@@ -180,12 +180,18 @@ Base command cells:
 1. **Move** — choose destination point. HUD button enters local Move targeting (LMB ground confirms `GP.Command.Move`).
 2. **Stop** — stop current unit/group command
 3. **Attack-Move** — move toward selected point while engaging enemies ("идти с атакой")
-4. **Patrol** — MVP: one destination click. Anchor A = unit location at accept; Point B = clicked ground. Unit loops A ↔ B until Stop or a replacing explicit command.
+4. **Patrol** — MVP: one destination click. Anchor A = unit location at accept; Point B = clicked ground. Unit loops A ↔ B until Stop or a replacing explicit command. Combat-capable units auto-acquire while patrolling: temporary Attack under the Patrol parent, then resume the same A/B leg. Workers without combat capability keep patrolling and do not attack.
 
 Existing direct/context target Attack via RMB remains a separate contextual gameplay behavior.
 Do not rename direct target Attack as Attack-Move.
 
-Active command-targeting cursor (built-in `EMouseCursor`, no custom assets):
+Active command-targeting cursor (built-in `EMouseCursor`, no custom assets). Production APIs that Slate actually queries:
+
+- `AGP_PlayerController::GetCommandTargetingCursor()` — mapping source
+- `DefaultMouseCursor` + `CurrentMouseCursor` (FSceneViewport → `GetMouseCursor()`)
+- `UGP_HUDRootWidget::NativeOnCursorQuery` — GameAndUI HUD overlay (writing `CurrentMouseCursor` alone is not visible)
+
+Mapping:
 - Normal: `Default`
 - Move / Attack-Move: `Crosshairs`
 - Patrol: `CardinalCross`

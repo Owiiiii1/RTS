@@ -183,6 +183,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|Commands")
 	EGP_CommandTargetingMode GetCommandTargetingMode() const { return CommandTargetingMode; }
 
+	/**
+	 * Built-in cursor Slate actually queries: FSceneViewport via GetMouseCursor(),
+	 * and UGP_HUDRootWidget::NativeOnCursorQuery while the HUD is under the mouse.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GP|Commands")
+	EMouseCursor::Type GetCommandTargetingCursor() const;
+
 	UFUNCTION(BlueprintCallable, Category = "GP|Commands")
 	void EnterMoveMode();
 

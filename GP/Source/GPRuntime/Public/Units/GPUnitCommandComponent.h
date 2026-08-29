@@ -166,6 +166,9 @@ public:
 	 */
 	bool IsEligibleForAttackMoveAcquire() const;
 
+	/** Combat-capable unit with Held Patrol may acquire without replacing Patrol. */
+	bool IsEligibleForPatrolAcquire() const;
+
 	/** GP-S32A: Held command is AttackMove (destination travel or temporary engage). */
 	bool IsAttackMoveActive() const;
 
@@ -179,6 +182,8 @@ public:
 	FVector GetPatrolAnchorA() const;
 	FVector GetPatrolAnchorB() const;
 	bool IsPatrolHeadingToB() const;
+	bool IsPatrolEngaging() const;
+	FVector GetPendingPatrolDestination() const;
 
 	/** GP-S30R diagnostic: last auto-acquire scan found a candidate (not replicated). */
 	AGP_UnitBase* DebugGetLastAutoAcquireCandidate() const { return LastAutoAcquireCandidate.Get(); }
@@ -343,6 +348,7 @@ private:
 		uint32 Serial,
 		EGP_MovementResult Result,
 		EGP_MovementResultReason Reason);
+	bool ResumePatrolTravelAfterEngagement();
 
 	bool TryAcceptIdempotentMineCommand(const FGP_UnitCommand& Command) const;
 	bool TryRejectMineCommandBeforeAccept(const FGP_UnitCommand& Command) const;

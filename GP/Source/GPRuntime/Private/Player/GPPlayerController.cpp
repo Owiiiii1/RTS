@@ -47,6 +47,7 @@
 #include "Resources/GPStorageComponent.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPUnitBase.h"
+#include "Framework/Application/SlateApplication.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPCommandInput, Log, All);
 
@@ -1811,6 +1812,25 @@ bool AGP_PlayerController::IsCommandTargetingSelectionValid() const
 	}
 }
 
+EMouseCursor::Type AGP_PlayerController::GetCommandTargetingCursor() const
+{
+	if (bBuildingPlacementActive)
+	{
+		return EMouseCursor::Default;
+	}
+
+	switch (CommandTargetingMode)
+	{
+	case EGP_CommandTargetingMode::Move:
+	case EGP_CommandTargetingMode::AttackMove:
+		return EMouseCursor::Crosshairs;
+	case EGP_CommandTargetingMode::Patrol:
+		return EMouseCursor::CardinalCross;
+	default:
+		return EMouseCursor::Default;
+	}
+}
+
 void AGP_PlayerController::RefreshCommandTargetingCursor()
 {
 	if (!IsLocalController())
@@ -1818,24 +1838,12 @@ void AGP_PlayerController::RefreshCommandTargetingCursor()
 		return;
 	}
 
-	if (bBuildingPlacementActive)
+	const EMouseCursor::Type Cursor = GetCommandTargetingCursor();
+	DefaultMouseCursor = Cursor;
+	CurrentMouseCursor = Cursor;
+	if (FSlateApplication::IsInitialized())
 	{
-		CurrentMouseCursor = EMouseCursor::Default;
-		return;
-	}
-
-	switch (CommandTargetingMode)
-	{
-	case EGP_CommandTargetingMode::Move:
-	case EGP_CommandTargetingMode::AttackMove:
-		CurrentMouseCursor = EMouseCursor::Crosshairs;
-		break;
-	case EGP_CommandTargetingMode::Patrol:
-		CurrentMouseCursor = EMouseCursor::CardinalCross;
-		break;
-	default:
-		CurrentMouseCursor = EMouseCursor::Default;
-		break;
+		FSlateApplication::Get().QueryCursor();
 	}
 }
 

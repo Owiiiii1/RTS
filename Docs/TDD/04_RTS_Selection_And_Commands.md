@@ -621,7 +621,7 @@ UnitDefinition `AllowedCommands` має містити `GP.Command.Move` для 
 - Formation movement (line, wedge, box).
 - Move queue (Shift+RMB chain) — `bQueue` exists, але implementation deferred to GP-0203B.
 - ~~Attack-move (covered у GP-0204).~~ **GP-S32A** implements Attack-Move MVP — **FINALIZATION_READY_FOR_MERGE** (operator FULL PASS).
-- ~~Patrol.~~ **Implemented MVP:** HUD PATROL / `EnterPatrolMode` → one LMB destination → `GP.Command.Patrol`. Anchor A = unit location at accept; Point B = clicked ground; Stop or a replacing explicit command cancels. Two-click A→B patrol remains out of MVP.
+- ~~Patrol.~~ **Implemented MVP:** HUD PATROL / `EnterPatrolMode` → one LMB destination → `GP.Command.Patrol`. Anchor A = unit location at accept; Point B = clicked ground. Combat-capable units may temporarily engage via existing Attack FSM without replacing Held Patrol, then resume the same A/B leg. Stop or a replacing explicit command cancels. Two-click A→B patrol remains out of MVP.
 - Stance-aware move (aggressive, hold-fire) — post-MVP.
 - Path preview indicator before click.
 

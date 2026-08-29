@@ -439,7 +439,7 @@ Bottom-right panel. Not a Build Menu. Not orbital production.
 | 1 | Move — choose destination | Implemented: HUD `RequestContextAction(Move)` → `EnterMoveMode` → LMB ground → `GP.Command.Move` |
 | 2 | Stop — halt current command | Existing command |
 | 3 | Attack-Move — move toward point while engaging ("идти с атакой") | Existing `GP.Command.AttackMove` |
-| 4 | Patrol — current position ↔ clicked patrol point | Implemented MVP: one destination click; Stop/replacement cancels |
+| 4 | Patrol — current position ↔ clicked patrol point | Implemented MVP: one destination click; combat auto-acquire as temporary engagement; resume same leg; Stop/replacement cancels |
 
 Direct RMB target Attack remains a separate contextual gameplay behavior. Do not rename it Attack-Move.
 
@@ -491,7 +491,7 @@ UI legitimately owns:
 - Camera transform mirror for minimap viewport rectangle.
 - Modal mode flags: `EGP_CommandTargetingMode` (None / Move / AttackMove / Patrol) on the local PlayerController; building-placement ghost remains independent and takes input precedence.
 - Command targeting is local-only. Enter via Context Action (`RequestContextAction` Move / AttackMove / Patrol) or the existing A-key Attack-Move seam. LMB on valid ground confirms; RMB and Esc cancel. While active: selection/marquee and smart RMB click-through are blocked; building placement cannot co-own input (placement cancels targeting first).
-- Built-in cursor via `RefreshCommandTargetingCursor()`: None/`Default`; Move and AttackMove/`Crosshairs`; Patrol/`CardinalCross`. Placement keeps `Default` precedence. Cursor restores to `Default` on confirm, RMB cancel, Esc cancel, invalid selection, entering building placement, `CancelBuildingPlacement`, and EndPlay.
+- Built-in cursor via `GetCommandTargetingCursor()` / `RefreshCommandTargetingCursor()`: writes both `DefaultMouseCursor` and `CurrentMouseCursor` (the pair `FSceneViewport::OnCursorQuery` reads through `UGameViewportClient::GetCursor` → `GetMouseCursor()`). Full-screen GameAndUI HUD would otherwise force Slate `Default` when widgets return Unhandled; `UGP_HUDRootWidget::NativeOnCursorQuery` returns the same mapping so PIE overlay matches. None/`Default`; Move and AttackMove/`Crosshairs`; Patrol/`CardinalCross`. Placement keeps `Default` precedence. Cursor restores to `Default` on confirm, RMB cancel, Esc cancel, invalid selection, entering building placement, `CancelBuildingPlacement`, and EndPlay.
 - Notification queue.
 - Settings panel state.
 - Cached minimap snapshot.

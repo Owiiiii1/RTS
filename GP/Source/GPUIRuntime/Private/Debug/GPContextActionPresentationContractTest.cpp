@@ -241,6 +241,7 @@ namespace GPContextActionPresentationContractPrivate
 		Expect(UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetContextActionPresentations")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetContextActionMode")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetCommandTargetingPrompt")) != nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetCommandTargetingCursor")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestContextAction")) != nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("BP_OnContextActionsChanged")) != nullptr,
 			TEXT("A0_HUDRootExposesContextActionAPI"));
@@ -250,6 +251,7 @@ namespace GPContextActionPresentationContractPrivate
 			&& AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("EnterAttackMoveMode")) != nullptr
 			&& AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("EnterMoveMode")) != nullptr
 			&& AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("EnterPatrolMode")) != nullptr
+			&& AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("GetCommandTargetingCursor")) != nullptr
 			&& AGP_PlayerController::StaticClass()->FindFunctionByName(TEXT("Server_RequestCommand")) != nullptr,
 			TEXT("A0_StopAndAttackMoveUseExistingPCSeams"));
 

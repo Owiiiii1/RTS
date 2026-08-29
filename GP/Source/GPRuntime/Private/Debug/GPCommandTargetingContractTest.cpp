@@ -43,6 +43,22 @@ namespace GPCommandTargetingDebug
 		return Worker;
 	}
 
+	static bool HasEffectiveCursor(const AGP_PlayerController* PC, EMouseCursor::Type Expected)
+	{
+		if (PC == nullptr)
+		{
+			return false;
+		}
+		if (PC->GetCommandTargetingCursor() != Expected
+			|| PC->DefaultMouseCursor != Expected
+			|| PC->CurrentMouseCursor != Expected)
+		{
+			return false;
+		}
+		const EMouseCursor::Type ViewportCursor = PC->GetMouseCursor();
+		return ViewportCursor == Expected || ViewportCursor == EMouseCursor::None;
+	}
+
 	static AGP_SalvageWalker* SpawnWalker(UWorld* World, const FVector& Loc, int32 TeamId)
 	{
 		FActorSpawnParameters Params;
@@ -276,7 +292,7 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 			return;
 		}
 
-		Expect(PC->CurrentMouseCursor == EMouseCursor::Default
+		Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default)
 			&& !PC->IsCommandTargetingActive(),
 			TEXT("P_NormalCursorIsDefault"));
 
@@ -331,8 +347,7 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
 		Expect(PC->GetCommandTargetingMode() == EGP_CommandTargetingMode::Move,
 			TEXT("B_EnterMoveMode"));
-		Expect(PC->CurrentMouseCursor == EMouseCursor::Crosshairs
-			&& PC->CurrentMouseCursor != EMouseCursor::Default,
+		Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Crosshairs),
 			TEXT("Q_MoveCursorNotDefault"));
 
 		PC->ConfirmCommandTargetingDestinationForContract(MoveDest);
@@ -343,7 +358,7 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 			&& FVector::Dist(Cmd->GetHeldCommand()->TargetLocation, MoveDest) < 150.0f,
 			TEXT("C_MoveRequestHeldThroughPipeline"));
 		Expect(!PC->IsCommandTargetingActive()
-			&& PC->CurrentMouseCursor == EMouseCursor::Default,
+			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
 			TEXT("E_MoveConfirmResetsModalAndCursor"));
 
 		++StageIndex;
@@ -373,7 +388,7 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		PC->UpdateAttackMoveInputEdgesForContract(false, true, false, false);
 		UGP_UnitCommandComponent* Cmd = Worker->GetUnitCommandComponent();
 		Expect(!PC->IsCommandTargetingActive()
-			&& PC->CurrentMouseCursor == EMouseCursor::Default
+			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default)
 			&& (Cmd == nullptr || !Cmd->HasHeldCommand()),
 			TEXT("F_RMBCancelNoCommandCursorReset"));
 
@@ -381,7 +396,7 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, true);
 		Expect(!PC->IsCommandTargetingActive()
-			&& PC->CurrentMouseCursor == EMouseCursor::Default,
+			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
 			TEXT("F_EscCancelCursorReset"));
 
 		++StageIndex;
@@ -405,13 +420,25 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		PC->EnterAttackMoveMode();
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
 		Expect(PC->IsAttackMoveModeActive()
-			&& PC->CurrentMouseCursor == EMouseCursor::Crosshairs
-			&& PC->CurrentMouseCursor != EMouseCursor::Default,
+			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Crosshairs),
 			TEXT("R_AttackMoveCursorNotDefault"));
 		PC->CancelAttackMoveMode();
 		Expect(!PC->IsAttackMoveModeActive()
-			&& PC->CurrentMouseCursor == EMouseCursor::Default,
+			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
 			TEXT("T_AttackMoveCancelRestoresDefault"));
+
+		PC->EnterMoveMode();
+		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
+		Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Crosshairs),
+			TEXT("E_MoveCursorBeforePatrolReplace"));
+		PC->EnterPatrolMode();
+		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
+		Expect(PC->GetCommandTargetingMode() == EGP_CommandTargetingMode::Patrol
+			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::CardinalCross),
+			TEXT("E_PatrolReplacesMoveCursor"));
+		PC->CancelCommandTargetingMode();
+		Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
+			TEXT("T_ModeReplaceCancelRestoresDefault"));
 
 		++StageIndex;
 		ScheduleNext(0.05f);
@@ -437,9 +464,8 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		PC->EnterPatrolMode();
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
 		Expect(PC->GetCommandTargetingMode() == EGP_CommandTargetingMode::Patrol, TEXT("H_EnterPatrolMode"));
-		Expect(PC->CurrentMouseCursor == EMouseCursor::CardinalCross
-			&& PC->CurrentMouseCursor != EMouseCursor::Default
-			&& PC->CurrentMouseCursor != EMouseCursor::Crosshairs,
+		Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::CardinalCross)
+			&& PC->GetCommandTargetingCursor() != EMouseCursor::Crosshairs,
 			TEXT("S_PatrolCursorDistinct"));
 
 		PatrolAnchorA = Worker->GetActorLocation();
@@ -454,7 +480,7 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 			&& Cmd->IsPatrolHeadingToB(),
 			TEXT("I_J_PatrolStoresAnchorsAndRequestsServerPath"));
 		Expect(!PC->IsCommandTargetingActive()
-			&& PC->CurrentMouseCursor == EMouseCursor::Default,
+			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
 			TEXT("T_PatrolConfirmRestoresDefault"));
 
 		PatrolWaitTicks = 0;
@@ -589,12 +615,12 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		PC->EnterMoveMode();
 		PC->UpdateAttackMoveInputEdgesForContract(false, false, false, false);
 		Expect(PC->GetCommandTargetingMode() == EGP_CommandTargetingMode::Move
-			&& PC->CurrentMouseCursor != EMouseCursor::Default,
+			&& GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Crosshairs),
 			TEXT("U_MoveCursorBeforePlacement"));
 		PC->EnterBuildingPlacementMode(EGP_OrbitalBuildingType::LogisticsHub);
 		if (PC->IsBuildingPlacementActive())
 		{
-			Expect(PC->CurrentMouseCursor == EMouseCursor::Default
+			Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default)
 				&& !PC->IsCommandTargetingActive(),
 				TEXT("U_BuildingPlacementClearsCommandCursor"));
 			PC->CancelBuildingPlacement();
@@ -602,7 +628,7 @@ void UGP_CommandTargetingContractTestRunner::AdvanceStage()
 		else
 		{
 			PC->CancelCommandTargetingMode();
-			Expect(PC->CurrentMouseCursor == EMouseCursor::Default,
+			Expect(GPCommandTargetingDebug::HasEffectiveCursor(PC, EMouseCursor::Default),
 				TEXT("U_ForcedCleanupRestoresDefaultWithoutPlacement"));
 		}
 

@@ -826,4 +826,30 @@ void UGP_PatrolCombatContractTestRunner::AdvanceStage()
 	}
 }
 
+#else // UE_BUILD_SHIPPING
+
+void UGP_PatrolCombatContractTestRunner::BeginDestroy()
+{
+	Super::BeginDestroy();
+}
+void UGP_PatrolCombatContractTestRunner::Start(UWorld* InWorld) { (void)InWorld; }
+void UGP_PatrolCombatContractTestRunner::ScheduleNext(float DelaySeconds) { (void)DelaySeconds; }
+void UGP_PatrolCombatContractTestRunner::AdvanceStage() {}
+bool UGP_PatrolCombatContractTestRunner::Expect(bool bOk, const TCHAR* Label)
+{
+	(void)bOk;
+	(void)Label;
+	return true;
+}
+void UGP_PatrolCombatContractTestRunner::Abort(const TCHAR* Reason) { (void)Reason; }
+void UGP_PatrolCombatContractTestRunner::Finish() {}
+void UGP_PatrolCombatContractTestRunner::OnWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	(void)World;
+	(void)bSessionEnded;
+	(void)bCleanupResources;
+}
+void UGP_PatrolCombatContractTestRunner::UnbindWorldCleanup() {}
+void UGP_PatrolCombatContractTestRunner::CleanupActors() {}
+
 #endif

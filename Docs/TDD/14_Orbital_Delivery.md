@@ -180,9 +180,10 @@ Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / 
 
 Production HUD (catalog presentation implemented; execution / manifests / LAUNCH still next):
 Select MainBase → PURCHASE in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE.
-`GetPurchaseCatalogRows()` is the factual catalog SoT for the active category. Not a permanent
-global Order Menu. Keyboard `O` is not the canonical production HUD entry. Message Strip is
-panel-local feedback.
+`GetPurchaseCatalogRows()` is the factual catalog SoT for the active category. Building category
+assignment uses `BuildingDefinition.BuildingTags` as identity; `DropTags` are acquisition/fallback
+and must not hide a known Logistics Hub. Not a permanent global Order Menu. Keyboard `O` is not
+the canonical production HUD entry. Message Strip is panel-local feedback.
 
 - **UNITS:** manifest builder — LMB add / RMB remove, quantity on icon, shuttle
   `PodTransportSlotCapacity` (not unit cap), Confirm = existing `Server_RequestUnitDrop`.

@@ -365,6 +365,8 @@ Show orbital buildings available for purchase.
 
 - Do **not** include Wall Package (that is DEFENSE).
 - Do **not** include MainBase (initial-only).
+- Category uses `BuildingDefinition.BuildingTags` (e.g. `GP.Building.Type.LogisticsHub`).
+  `DropTags` are acquisition/fallback only and must not hide a known Logistics Hub.
 
 **LMB on a building icon** replaces the panel with a selected-item launch state:
 

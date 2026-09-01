@@ -3,6 +3,8 @@
 #include "AbilitySystem/GPAbilitySystemComponent.h"
 #include "AttributeSets/GPPlayerAttributeSet.h"
 #include "Buildings/GPBuildingDefinition.h"
+#include "Buildings/GPDefensiveTurret.h"
+#include "Buildings/GPLogisticsHub.h"
 #include "Buildings/GPMainBase.h"
 #include "Buildings/GPWallSegmentInventoryComponent.h"
 #include "Engine/GameInstance.h"
@@ -355,6 +357,110 @@ namespace GPPurchaseCatalogPresentationContractPrivate
 			&& WallRow->SegmentCount == WallPackage->SegmentCount
 			&& WallRow->bEnabled,
 			TEXT("D_G_WallPackageCostAndSegmentFromDefinition"));
+
+		{
+			UGP_BuildingDefinition* AuthoredHubBuilding = NewObject<UGP_BuildingDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_Building_LogisticsHub_AuthoredNoDropTag")), RF_Transient);
+			AuthoredHubBuilding->DisplayName =
+				NSLOCTEXT("GPPurchaseCatalog", "AuthoredHub", "Authored Logistics Hub");
+			if (Tags.Unit_Type_Building.IsValid())
+			{
+				AuthoredHubBuilding->BuildingTags.AddTag(Tags.Unit_Type_Building);
+			}
+			AuthoredHubBuilding->BuildingTags.AddTag(Tags.Building_Type_LogisticsHub);
+			AuthoredHubBuilding->SpawnedClass = AGP_LogisticsHub::StaticClass();
+			AuthoredHubBuilding->FootprintCells = FIntPoint(4, 4);
+
+			UGP_OrbitalDropDefinition* AuthoredHubDrop = NewObject<UGP_OrbitalDropDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_AuthoredNoDropTag")), RF_Transient);
+			AuthoredHubDrop->Cost = 77.0f;
+			AuthoredHubDrop->BuildingDefinition = AuthoredHubBuilding;
+			AuthoredHubDrop->DropTags.Reset();
+			Expect(!Tags.Drop_Type_Building.IsValid()
+				|| !AuthoredHubDrop->DropTags.HasTagExact(Tags.Drop_Type_Building),
+				TEXT("AuthoredHubHasNoDropTypeBuilding"));
+
+			BuildingCatalog.DebugAssignLoadedAuthoredLogisticsHub(AuthoredHubDrop);
+
+			TArray<UGP_OrbitalDropDefinition*> VisibleAfterAuthored;
+			BuildingCatalog.GetOperatorVisibleDrops(VisibleAfterAuthored);
+			Expect(VisibleAfterAuthored.Contains(AuthoredHubDrop)
+				&& BuildingCatalog.GetLegacyLogisticsHubDrop() == AuthoredHubDrop,
+				TEXT("AuthoredA_OperatorVisibleIncludesAuthoredHub"));
+
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Buildings);
+			const TArray<FGP_PurchaseCatalogRow>& AuthoredBuildingRows = Presenter->GetPurchaseCatalogRows();
+			const FGP_PurchaseCatalogRow* AuthoredHubRow =
+				FindRowById(AuthoredBuildingRows, AuthoredHubDrop->GetPrimaryAssetId());
+			Expect(AuthoredHubRow != nullptr
+				&& AuthoredBuildingRows.Num() == 1
+				&& AuthoredHubRow->ItemKind == EGP_PurchaseCatalogItemKind::Building
+				&& AuthoredHubRow->Category == EGP_PurchaseCategory::Buildings,
+				TEXT("AuthoredB_PurchaseBuildingsShowsAuthoredHub"));
+			Expect(AuthoredHubRow != nullptr
+				&& AuthoredHubRow->ItemId != HubDrop->GetPrimaryAssetId()
+				&& AuthoredHubRow->ItemId == AuthoredHubDrop->GetPrimaryAssetId(),
+				TEXT("AuthoredC_ItemIdIsAuthoredNotNative"));
+			Expect(AuthoredHubRow != nullptr
+				&& FMath::IsNearlyEqual(AuthoredHubRow->Cost, AuthoredHubDrop->Cost)
+				&& !FMath::IsNearlyEqual(AuthoredHubRow->Cost, HubDrop->Cost),
+				TEXT("AuthoredD_CostFromAuthoredDrop"));
+			Expect(AuthoredHubRow != nullptr
+				&& AuthoredHubRow->DisplayName.EqualTo(AuthoredHubBuilding->DisplayName),
+				TEXT("AuthoredE_DisplayNameFromLinkedBuildingDefinition"));
+			Expect(AuthoredHubRow != nullptr
+				&& !AuthoredHubDrop->DropTags.HasTagExact(Tags.Drop_Type_Building),
+				TEXT("AuthoredF_RowDoesNotRequireDropTypeBuilding"));
+
+			UGP_BuildingDefinition* AuthoredTurretBuilding = NewObject<UGP_BuildingDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_Building_DefensiveTurret_AuthoredGenericDrop")), RF_Transient);
+			AuthoredTurretBuilding->DisplayName =
+				NSLOCTEXT("GPPurchaseCatalog", "AuthoredTurret", "Authored Defensive Turret");
+			if (Tags.Unit_Type_Building.IsValid())
+			{
+				AuthoredTurretBuilding->BuildingTags.AddTag(Tags.Unit_Type_Building);
+			}
+			AuthoredTurretBuilding->BuildingTags.AddTag(Tags.Building_Type_DefensiveTurret);
+			AuthoredTurretBuilding->SpawnedClass = AGP_DefensiveTurret::StaticClass();
+			AuthoredTurretBuilding->FootprintCells = FIntPoint(2, 2);
+
+			UGP_OrbitalDropDefinition* AuthoredTurretDrop = NewObject<UGP_OrbitalDropDefinition>(
+				GetTransientPackage(),
+				FName(TEXT("DA_GP_OrbitalDrop_DefensiveTurret_AuthoredGenericDrop")),
+				RF_Transient);
+			AuthoredTurretDrop->Cost = 88.0f;
+			AuthoredTurretDrop->BuildingDefinition = AuthoredTurretBuilding;
+			AuthoredTurretDrop->DropTags.Reset();
+			if (Tags.Drop_Type_Building.IsValid())
+			{
+				AuthoredTurretDrop->DropTags.AddTag(Tags.Drop_Type_Building);
+			}
+			BuildingCatalog.DebugAssignLoadedAuthoredDefensiveTurret(AuthoredTurretDrop);
+
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Buildings);
+			const TArray<FGP_PurchaseCatalogRow>& BuildingsAfterTurret = Presenter->GetPurchaseCatalogRows();
+			Expect(FindRowById(BuildingsAfterTurret, AuthoredHubDrop->GetPrimaryAssetId()) != nullptr
+				&& FindRowById(BuildingsAfterTurret, AuthoredTurretDrop->GetPrimaryAssetId()) == nullptr
+				&& !HasBuildingType(BuildingsAfterTurret, Tags.Building_Type_DefensiveTurret)
+				&& !HasBuildingType(BuildingsAfterTurret, Tags.Building_Type_Wall)
+				&& !HasBuildingType(BuildingsAfterTurret, Tags.Building_Type_MainBase)
+				&& !HasBuildingType(BuildingsAfterTurret, Tags.Building_Type_WallTurret),
+				TEXT("AuthoredLane_TurretWallMainBaseStayOutOfBuildings"));
+
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Defense);
+			const TArray<FGP_PurchaseCatalogRow>& DefenseAfterAuthored = Presenter->GetPurchaseCatalogRows();
+			Expect(FindRowById(DefenseAfterAuthored, AuthoredTurretDrop->GetPrimaryAssetId()) != nullptr
+				&& FindRowById(DefenseAfterAuthored, AuthoredHubDrop->GetPrimaryAssetId()) == nullptr
+				&& HasBuildingType(DefenseAfterAuthored, Tags.Building_Type_DefensiveTurret)
+				&& !HasBuildingType(DefenseAfterAuthored, Tags.Building_Type_LogisticsHub)
+				&& !HasBuildingType(DefenseAfterAuthored, Tags.Building_Type_WallTurret),
+				TEXT("AuthoredLane_TurretStaysDefenseHubAbsentWallTurretUnchanged"));
+
+			BuildingCatalog.DebugClearAuthoredBuildingDropOverrides();
+		}
 
 		Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseDefense
 			&& !HasKind(Presenter->GetPurchaseCatalogRows(), EGP_PurchaseCatalogItemKind::Unit)

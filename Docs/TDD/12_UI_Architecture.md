@@ -459,6 +459,14 @@ death, destroy, enemy/inspect) forces `Actions`. HUD Blueprint: `RequestOpenPurc
 `RequestPurchaseBack`, `GetPurchaseCatalogRows()`. Rows rebuild with `BP_OnContextActionsChanged`.
 No spend, RPC, unit manifests, LAUNCH, READY purchase, placement, or wall buy in this checkpoint.
 LAUNCH remains existing unit Confirm / building Purchase→READY→ghost / Wall Package buy.
+
+**Purchase catalog classification:** `UGP_BuildingDefinition.BuildingTags` is canonical for category
+assignment. `UGP_OrbitalDropDefinition.DropTags` are acquisition/fallback metadata and must not hide
+a known Logistics Hub. Precedence: MainBase skip; `Drop_Type_WallPackage` / `Drop_Type_Wall` /
+`Building_Type_Wall` skip; `Building_Type_DefensiveTurret` → Defense; `Building_Type_WallTurret` →
+Defense only when spawned class is already resolved; `Building_Type_LogisticsHub` → Buildings;
+`Drop_Type_Building` is fallback OrdinaryBuilding when no more specific building identity applies.
+
 A global Order Menu is superseded for production HUD. See
 [`GP-Production-HUD-Layout-Spec`](../Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md).
 

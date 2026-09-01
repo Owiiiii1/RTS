@@ -20,6 +20,8 @@
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPUnitBase.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogGPPurchaseCatalog, Log, All);
+
 #define LOCTEXT_NAMESPACE "GPContextActions"
 
 namespace GPPurchaseCatalogPresentationPrivate
@@ -85,6 +87,10 @@ namespace GPPurchaseCatalogPresentationPrivate
 				? EBuildingDropLane::WallTurret
 				: EBuildingDropLane::Skip;
 		}
+		if (Building != nullptr && HasExact(Building->BuildingTags, Tags.Building_Type_LogisticsHub))
+		{
+			return EBuildingDropLane::OrdinaryBuilding;
+		}
 		if (HasExact(Drop->DropTags, Tags.Drop_Type_Building))
 		{
 			return EBuildingDropLane::OrdinaryBuilding;
@@ -92,6 +98,23 @@ namespace GPPurchaseCatalogPresentationPrivate
 
 		return EBuildingDropLane::Skip;
 	}
+
+#if !UE_BUILD_SHIPPING
+	static void LogSkippedOperatorVisibleDrop(const UGP_OrbitalDropDefinition* Drop)
+	{
+		if (!IsValid(Drop))
+		{
+			return;
+		}
+
+		const UGP_BuildingDefinition* Building = Drop->ResolveLoadedBuildingDefinition();
+		UE_LOG(LogGPPurchaseCatalog, Log,
+			TEXT("GP PurchaseCatalog SkipBuilding Drop=%s DropTags=%s BuildingTags=%s"),
+			*Drop->GetName(),
+			*Drop->DropTags.ToStringSimple(),
+			Building != nullptr ? *Building->BuildingTags.ToStringSimple() : TEXT("<none>"));
+	}
+#endif
 
 	static void ApplyAvailabilityGates(
 		FGP_PurchaseCatalogRow& Row,
@@ -516,8 +539,15 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 		BuildingCatalog.GetOperatorVisibleDrops(VisibleDrops);
 		for (UGP_OrbitalDropDefinition* Drop : VisibleDrops)
 		{
-			if (ClassifyBuildingDrop(Drop) != EBuildingDropLane::OrdinaryBuilding)
+			const EBuildingDropLane Lane = ClassifyBuildingDrop(Drop);
+			if (Lane != EBuildingDropLane::OrdinaryBuilding)
 			{
+#if !UE_BUILD_SHIPPING
+				if (Lane == EBuildingDropLane::Skip)
+				{
+					LogSkippedOperatorVisibleDrop(Drop);
+				}
+#endif
 				continue;
 			}
 
@@ -543,6 +573,12 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 			const EBuildingDropLane Lane = ClassifyBuildingDrop(Drop);
 			if (Lane != EBuildingDropLane::DefensiveTurret && Lane != EBuildingDropLane::WallTurret)
 			{
+#if !UE_BUILD_SHIPPING
+				if (Lane == EBuildingDropLane::Skip)
+				{
+					LogSkippedOperatorVisibleDrop(Drop);
+				}
+#endif
 				continue;
 			}
 

@@ -4,12 +4,14 @@
 
 #include "ViewModels/GPContextActionPresenter.h"
 #include "ViewModels/GPLaunchMenuPresenter.h"
+#include "ViewModels/GPMinimapPresenter.h"
 #include "ViewModels/GPSelectionViewModel.h"
 #include "Widgets/GPUserWidgetBase.h"
 #include "GPHUDRootWidget.generated.h"
 
 class UGP_ContextActionPresenter;
 class UGP_LaunchMenuPresenter;
+class UGP_MinimapPresenter;
 class UGP_SelectionViewModel;
 
 /** Native lifetime root for the authored WBP_GP_HUD production HUD. */
@@ -98,6 +100,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GP|HUD|PurchaseCatalog")
 	void RequestLaunchSelectedPurchaseItem();
 
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|Minimap")
+	bool IsMinimapReady() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|Minimap")
+	FVector2D WorldToMinimapNormalized(FVector WorldLocation) const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|Minimap")
+	FVector MinimapNormalizedToWorld(FVector2D Normalized, float WorldZ) const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|Minimap")
+	EGP_FoWState GetMinimapFoWStateNormalized(FVector2D Normalized) const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|Minimap")
+	FGP_MinimapPresentation GetMinimapPresentation() const;
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
@@ -110,6 +127,9 @@ protected:
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "GP|HUD|ContextActions")
 	void BP_OnContextActionsChanged();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "GP|HUD|Minimap")
+	void BP_OnMinimapChanged();
 
 private:
 	void TryAssignOwnedViewModels();
@@ -125,8 +145,13 @@ private:
 	void UnbindContextActionPresenter();
 	void HandleContextActionsChanged();
 	const UGP_ContextActionPresenter* ResolveContextActionPresenter() const;
+	void BindMinimapPresenter();
+	void UnbindMinimapPresenter();
+	void HandleMinimapPresentationChanged();
+	const UGP_MinimapPresenter* ResolveMinimapPresenter() const;
 
 	TWeakObjectPtr<UGP_LaunchMenuPresenter> BoundLaunchMenuPresenter;
 	TWeakObjectPtr<UGP_SelectionViewModel> BoundSelectionViewModel;
 	TWeakObjectPtr<UGP_ContextActionPresenter> BoundContextActionPresenter;
+	TWeakObjectPtr<UGP_MinimapPresenter> BoundMinimapPresenter;
 };

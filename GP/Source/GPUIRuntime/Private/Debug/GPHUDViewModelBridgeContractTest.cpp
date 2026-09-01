@@ -7,6 +7,7 @@
 #include "View/MVVMView.h"
 #include "ViewModels/GPHUDViewModelSubsystem.h"
 #include "ViewModels/GPMatchViewModel.h"
+#include "ViewModels/GPMinimapPresenter.h"
 #include "ViewModels/GPResourceViewModel.h"
 #include "ViewModels/GPSelectionViewModel.h"
 #include "Widgets/GPFoWWorldOverlayWidget.h"
@@ -148,8 +149,15 @@ namespace GPHUDViewModelBridgeContractPrivate
 		Expect(UGP_HUDRootWidget::StaticClass()->FindPropertyByName(TEXT("BridgeRetryTimer")) == nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetAbilitySystemComponent")) == nullptr
 			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("GetSelectionGroupRows")) != nullptr
-			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestSelectGroupRow")) != nullptr,
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("RequestSelectGroupRow")) != nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("IsMinimapReady")) != nullptr
+			&& UGP_HUDRootWidget::StaticClass()->FindFunctionByName(TEXT("BP_OnMinimapChanged")) != nullptr,
 			TEXT("I_NoRetryTimerAndNoGameplayQueryOnHUDRoot"));
+
+		Expect(Subsystem != nullptr
+			&& Subsystem->GetMinimapPresenter() != nullptr
+			&& Subsystem->GetMinimapPresenter()->GetOuter() == Subsystem,
+			TEXT("J_SubsystemOwnsMinimapPresenter"));
 
 		UE_LOG(LogGPHUDViewModelBridgeContract, Log,
 			TEXT("gp.UI.RunHUDViewModelBridgeContractTest: Complete Failures=%d Cancelled=false"),

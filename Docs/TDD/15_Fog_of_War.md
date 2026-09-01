@@ -35,7 +35,10 @@ Current-compatible deviations from the older pseudocode:
   non-Visible cell). Post-process and fullscreen/sampled mask approaches are abandoned. Canonical
   gameplay grid is 100 cm / 10 Hz / 2000×2000;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
-  relevance, minimap, and the full production HUD remain later FoW slices.
+  relevance, minimap **blips / camera / input**, and remaining production HUD panels remain later
+  slices. Native minimap presentation foundation (`UGP_MinimapPresenter`) now consumes the trusted
+  local FoW mirror for bounds, Revision, and per-query cell state; it does not allocate a 2000×2000
+  texture or copy the cell arrays.
 - **Voxel terrain integration is NOT reopened here.** World FoW presentation was finalized against
   effectively planar terrain and a fixed ground-projection assumption. After Voxel Plugin deformation
   ships, world FoW presentation must follow the actual terrain surface. That work belongs to the
@@ -54,8 +57,9 @@ Current-compatible deviations from the older pseudocode:
    Visual smoothness is a presentation-only per-cell feathered quad overlay; post-process and
    fullscreen mask paths are abandoned.
 5. **No client-side FoW gameplay.** Client can render fog mask, but server arbiters all visibility-gated logic.
-6. **No tick-poll у widgets.** FoW reads through `UGP_FoWViewModel` and reacts to coarse Revision
-   FieldNotify (Common UI + MVVM per TDD/12).
+6. **No tick-poll у widgets.** FoW HUD reads through `UGP_FoWViewModel` (Revision FieldNotify) or
+   `UGP_MinimapPresenter` (`OnMinimapPresentationChanged` from the same trusted mirror). Widgets
+   do not Tick-poll FoW and do not copy the 2000×2000 cell arrays.
 
 ## Data Structures
 
@@ -322,6 +326,13 @@ Drop reticle on client:
 
 ## Minimap Rendering (Per TDD/12 Update)
 
+**Current production path (foundation):** `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem`
+queries the trusted `UGP_LocalFoWComponent` by world location. Normalized minimap XY maps
+axis-aligned onto the current FoW grid bounds. No `UGP_MinimapSubsystem`, no 10 Hz poll, no
+per-cell array on the ViewModel, and no terrain capture in this checkpoint.
+
+The older snapshot sketch below remains **future visual/blip design**, not shipped production code:
+
 `UGP_MinimapSubsystem` snapshot uses 3 layers:
 
 ```cpp
@@ -349,6 +360,7 @@ TArray<FGP_MinimapCellRender> Cells;
 ```
 
 VM Adapter polls `UGP_LocalFoWComponent` snapshot at 10 Hz (matches sight tick).
+**Not implemented. Do not treat this poll as the current HUD path.**
 
 ## Tag Surface
 

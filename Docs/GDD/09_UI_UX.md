@@ -74,8 +74,11 @@ UX/balance tuning may revisit the presentation scale.
 
 **Bottom left — Minimap block**
 
-- Square reserved region. Minimap function is not implemented in the next visual HUD slice.
-  Placeholder sizing/alignment only.
+- Square reserved region. Native presentation foundation exists (`UGP_MinimapPresenter` +
+  `UGP_HUDRootWidget` accessors / `BP_OnMinimapChanged`): FoW-grid bounds, Revision, and
+  normalized world mapping from the trusted local FoW mirror. Event-driven; no widget Tick.
+- Not yet a complete minimap: no unit/building blips, camera rectangle, click-to-move, last-known
+  actors, or terrain capture. Authored WBP wiring is operator-local.
 
 **Bottom center — Selection / Current Info** (widest lower block)
 
@@ -127,7 +130,7 @@ Future authored names; none of these visual widgets are implemented yet.
 - `WBP_GP_Lobby`
 - `WBP_GP_HUD` (root; native base `UGP_HUDRootWidget`)
 - Top-bar blocks: Threat+Score, Match Timer, Planet/Orbit/Cap
-- Bottom-bar blocks: Minimap placeholder, Selection/Info, Context Action Grid + Message Strip
+- Bottom-bar blocks: Minimap (native foundation; visual/blips later), Selection/Info, Context Action Grid + Message Strip
   (MainBase PURCHASE lives in this panel; not a fullscreen Order Menu)
 - Right-side Launch Menu: Launch button on top, vertical local-MainBase container fill bars below
   (yellow while filling, green when full/ready). Event-driven from local storage. Authored in
@@ -192,8 +195,9 @@ SWARM / Ferronite Threat lives in the **top-left Threat + Score** block. Form:
 
 ### Minimap
 
-**Mandatory у MVP as a reserved bottom-left square.** Function is a later slice; the next visual HUD
-only reserves the placeholder. When implemented it показує:
+**Mandatory у MVP as a reserved bottom-left square.** Native presentation foundation now exists
+and consumes trusted local FoW metadata. Function beyond that mapping is still later slices.
+When complete it показує:
 
 - Player base (own and opponent, if visible).
 - Ferronite deposits (location + capacity status).

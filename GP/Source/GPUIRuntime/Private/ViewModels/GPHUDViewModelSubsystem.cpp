@@ -16,6 +16,7 @@
 #include "ViewModels/GPContextActionPresenter.h"
 #include "ViewModels/GPLaunchMenuPresenter.h"
 #include "ViewModels/GPMatchViewModel.h"
+#include "ViewModels/GPMinimapPresenter.h"
 #include "ViewModels/GPMatchViewModelAdapter.h"
 #include "ViewModels/GPResourceViewModel.h"
 #include "ViewModels/GPResourceViewModelAdapter.h"
@@ -37,6 +38,7 @@ void UGP_HUDViewModelSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	SelectionAdapter = NewObject<UGP_SelectionViewModelAdapter>(this);
 	LaunchMenuPresenter = NewObject<UGP_LaunchMenuPresenter>(this);
 	ContextActionPresenter = NewObject<UGP_ContextActionPresenter>(this);
+	MinimapPresenter = NewObject<UGP_MinimapPresenter>(this);
 
 	if (UWorld* World = GetWorld())
 	{
@@ -76,6 +78,10 @@ void UGP_HUDViewModelSubsystem::Deinitialize()
 	if (ContextActionPresenter != nullptr)
 	{
 		ContextActionPresenter->Shutdown();
+	}
+	if (MinimapPresenter != nullptr)
+	{
+		MinimapPresenter->Shutdown();
 	}
 	bReady = false;
 	LocalTeamId = -1;
@@ -156,6 +162,7 @@ void UGP_HUDViewModelSubsystem::BindPlayerController(AGP_PlayerController* Playe
 	{
 		BindSelectionAdapter(PlayerController);
 		BindContextActionPresenter(PlayerController);
+		BindMinimapPresenter(PlayerController);
 		return;
 	}
 
@@ -169,6 +176,7 @@ void UGP_HUDViewModelSubsystem::BindPlayerController(AGP_PlayerController* Playe
 	}
 	BindSelectionAdapter(PlayerController);
 	BindContextActionPresenter(PlayerController);
+	BindMinimapPresenter(PlayerController);
 }
 
 void UGP_HUDViewModelSubsystem::UnbindPlayerController()
@@ -180,6 +188,10 @@ void UGP_HUDViewModelSubsystem::UnbindPlayerController()
 	if (ContextActionPresenter != nullptr)
 	{
 		ContextActionPresenter->Shutdown();
+	}
+	if (MinimapPresenter != nullptr)
+	{
+		MinimapPresenter->Shutdown();
 	}
 	if (AGP_PlayerController* PlayerController = BoundPlayerController.Get())
 	{
@@ -222,6 +234,22 @@ void UGP_HUDViewModelSubsystem::BindContextActionPresenter(AGP_PlayerController*
 	}
 
 	ContextActionPresenter->Initialize(PlayerController);
+}
+
+void UGP_HUDViewModelSubsystem::BindMinimapPresenter(AGP_PlayerController* PlayerController)
+{
+	if (MinimapPresenter == nullptr)
+	{
+		return;
+	}
+
+	if (!IsValid(PlayerController) || PlayerController->GetLocalFogOfWarComponent() == nullptr)
+	{
+		MinimapPresenter->Shutdown();
+		return;
+	}
+
+	MinimapPresenter->Initialize(PlayerController);
 }
 
 void UGP_HUDViewModelSubsystem::ResetViewModels()

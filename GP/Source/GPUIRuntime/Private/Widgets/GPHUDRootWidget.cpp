@@ -9,6 +9,7 @@
 #include "ViewModels/GPHUDViewModelSubsystem.h"
 #include "ViewModels/GPContextActionPresenter.h"
 #include "ViewModels/GPLaunchMenuPresenter.h"
+#include "ViewModels/GPMinimapPresenter.h"
 #include "ViewModels/GPSelectionViewModel.h"
 #include "Widgets/GPHUDViewModelBridge.h"
 
@@ -21,10 +22,12 @@ void UGP_HUDRootWidget::NativeConstruct()
 	BindLaunchMenuPresenter();
 	BindSelectionViewModel();
 	BindContextActionPresenter();
+	BindMinimapPresenter();
 }
 
 void UGP_HUDRootWidget::NativeDestruct()
 {
+	UnbindMinimapPresenter();
 	UnbindContextActionPresenter();
 	UnbindSelectionViewModel();
 	UnbindLaunchMenuPresenter();
@@ -417,4 +420,88 @@ void UGP_HUDRootWidget::RequestLaunchSelectedPurchaseItem()
 	{
 		Presenter->RequestLaunchSelectedPurchaseItem();
 	}
+}
+
+void UGP_HUDRootWidget::BindMinimapPresenter()
+{
+	UnbindMinimapPresenter();
+	const UGP_MinimapPresenter* Presenter = ResolveMinimapPresenter();
+	UGP_MinimapPresenter* MutablePresenter = const_cast<UGP_MinimapPresenter*>(Presenter);
+	if (MutablePresenter == nullptr)
+	{
+		return;
+	}
+
+	BoundMinimapPresenter = MutablePresenter;
+	MutablePresenter->OnMinimapPresentationChanged.AddUObject(
+		this, &ThisClass::HandleMinimapPresentationChanged);
+	HandleMinimapPresentationChanged();
+}
+
+void UGP_HUDRootWidget::UnbindMinimapPresenter()
+{
+	if (UGP_MinimapPresenter* Presenter = BoundMinimapPresenter.Get())
+	{
+		Presenter->OnMinimapPresentationChanged.RemoveAll(this);
+	}
+	BoundMinimapPresenter.Reset();
+}
+
+void UGP_HUDRootWidget::HandleMinimapPresentationChanged()
+{
+	BP_OnMinimapChanged();
+}
+
+const UGP_MinimapPresenter* UGP_HUDRootWidget::ResolveMinimapPresenter() const
+{
+	if (const UGP_MinimapPresenter* Bound = BoundMinimapPresenter.Get())
+	{
+		return Bound;
+	}
+	const ULocalPlayer* LocalPlayer = GetOwningLocalPlayer();
+	const UGP_HUDViewModelSubsystem* Subsystem =
+		LocalPlayer != nullptr ? LocalPlayer->GetSubsystem<UGP_HUDViewModelSubsystem>() : nullptr;
+	return Subsystem != nullptr ? Subsystem->GetMinimapPresenter() : nullptr;
+}
+
+bool UGP_HUDRootWidget::IsMinimapReady() const
+{
+	const UGP_MinimapPresenter* Presenter = ResolveMinimapPresenter();
+	return Presenter != nullptr && Presenter->IsMinimapReady();
+}
+
+FVector2D UGP_HUDRootWidget::WorldToMinimapNormalized(FVector WorldLocation) const
+{
+	if (const UGP_MinimapPresenter* Presenter = ResolveMinimapPresenter())
+	{
+		return Presenter->WorldToMinimapNormalized(WorldLocation);
+	}
+	return FVector2D::ZeroVector;
+}
+
+FVector UGP_HUDRootWidget::MinimapNormalizedToWorld(FVector2D Normalized, float WorldZ) const
+{
+	if (const UGP_MinimapPresenter* Presenter = ResolveMinimapPresenter())
+	{
+		return Presenter->MinimapNormalizedToWorld(Normalized, WorldZ);
+	}
+	return FVector(0.0f, 0.0f, WorldZ);
+}
+
+EGP_FoWState UGP_HUDRootWidget::GetMinimapFoWStateNormalized(FVector2D Normalized) const
+{
+	if (const UGP_MinimapPresenter* Presenter = ResolveMinimapPresenter())
+	{
+		return Presenter->GetMinimapFoWStateNormalized(Normalized);
+	}
+	return EGP_FoWState::Unexplored;
+}
+
+FGP_MinimapPresentation UGP_HUDRootWidget::GetMinimapPresentation() const
+{
+	if (const UGP_MinimapPresenter* Presenter = ResolveMinimapPresenter())
+	{
+		return Presenter->GetMinimapPresentation();
+	}
+	return FGP_MinimapPresentation();
 }

@@ -16,6 +16,7 @@ class UGP_ContextActionPresenter;
 class UGP_HUDRootWidget;
 class UGP_LaunchMenuPresenter;
 class UGP_MatchViewModel;
+class UGP_MinimapPresenter;
 class UGP_MatchViewModelAdapter;
 class UGP_ResourceViewModel;
 class UGP_ResourceViewModelAdapter;
@@ -61,6 +62,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
 	UGP_ContextActionPresenter* GetContextActionPresenter() const { return ContextActionPresenter; }
 
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|Minimap")
+	UGP_MinimapPresenter* GetMinimapPresenter() const { return MinimapPresenter; }
+
 	int32 GetResourceDelegateCount() const;
 	int32 GetMatchDelegateCount() const;
 	int32 GetSelectionDelegateCount() const;
@@ -81,6 +85,7 @@ private:
 	void UnbindPlayerController();
 	void BindSelectionAdapter(AGP_PlayerController* PlayerController);
 	void BindContextActionPresenter(AGP_PlayerController* PlayerController);
+	void BindMinimapPresenter(AGP_PlayerController* PlayerController);
 	void BindGameState(AGP_GameState* GameState);
 	void UnbindGameState();
 	void RebuildPlayerStateTeamBindings(AGP_GameState* GameState);
@@ -124,6 +129,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UGP_ContextActionPresenter> ContextActionPresenter;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGP_MinimapPresenter> MinimapPresenter;
 
 	TWeakObjectPtr<AGP_GameState> BoundGameState;
 	TWeakObjectPtr<AGP_PlayerController> BoundPlayerController;

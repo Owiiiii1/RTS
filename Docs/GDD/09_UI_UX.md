@@ -96,10 +96,12 @@ UX/balance tuning may revisit the presentation scale.
 - **MainBase PURCHASE** (catalog + execution implemented; WBP wiring operator-local): Actions → PurchaseRoot →
   Units / Buildings / Defense, plus selected-item states for Buildings/Defense. `GetPurchaseCatalogRows()`
   for the active category. Unit purchase row icon: optional `UGP_OrbitalUnitDropDefinition::Icon`
-  override, else `UGP_UnitDefinition::PresentationIcon` (no duplicate drop-icon authoring). Building /
-  Wall Package icons are async-resolved from soft textures (null until ready; event rebuild; no sync
-  load). Unresolved unit-drop override still async-loads and shows `PresentationIcon` until complete.
-  Local unit manifest until Launch Shuttle. Back is context-sensitive.
+  override, else `UGP_UnitDefinition::PresentationIcon`. Building / Defense icon: optional
+  `UGP_BuildingDefinition::Icon` override, else linked `UnitDefinition.PresentationIcon`. Wall Package
+  icons stay async from the package soft texture. Unresolved overrides still async-load and show
+  `PresentationIcon` until complete. PurchaseUnits first-open pending products appear automatically
+  when the unit-drop catalog becomes canonical ready (no second category entry). No duplicate required
+  icon authoring. Local unit manifest until Launch Shuttle. Back is context-sensitive.
   Bottom-center stays on MainBase info. Message Strip: `GetContextMessage()`.
 - BUILDINGS / Defensive Turret LAUNCH = existing Purchase → READY increment → auto-enter deploy ghost.
   Cancel keeps READY. Wall Package LAUNCH = existing Buy Wall Package (no READY, no placement mode).

@@ -199,6 +199,7 @@ bool UGP_ContextActionPresenter::Initialize(AGP_PlayerController* InPlayerContro
 	BoundPlayerController = InPlayerController;
 	BoundSelection = Selection;
 	bPurchaseIconLoadsAbandoned = false;
+	BindUnitDropCatalog();
 	SelectionChangedHandle = Selection->OnSelectionChanged().AddUObject(
 		this, &ThisClass::HandleSelectionChanged);
 	CommandTargetingChangedHandle = InPlayerController->OnCommandTargetingModeChanged().AddUObject(
@@ -211,6 +212,7 @@ void UGP_ContextActionPresenter::Shutdown()
 {
 	bPurchaseIconLoadsAbandoned = true;
 	CancelPurchaseIconLoads();
+	UnbindUnitDropCatalog();
 	UnbindWallInventory();
 	UnbindBuildingInventory();
 	UnbindOrbitalFerronite();
@@ -243,6 +245,7 @@ int32 UGP_ContextActionPresenter::GetBoundDelegateCount() const
 {
 	int32 Count = SelectionChangedHandle.IsValid() ? 1 : 0;
 	Count += CommandTargetingChangedHandle.IsValid() ? 1 : 0;
+	Count += UnitDropCatalogChangedHandle.IsValid() ? 1 : 0;
 	Count += OrbitalFerroniteHandle.IsValid() ? 1 : 0;
 	Count += BuildingReadyChangedHandle.IsValid() ? 1 : 0;
 	Count += BoundWallInventory.IsValid() ? 2 : 0;
@@ -252,6 +255,39 @@ int32 UGP_ContextActionPresenter::GetBoundDelegateCount() const
 		Count += Bound.Unit.IsValid() ? 1 : 0;
 	}
 	return Count;
+}
+
+void UGP_ContextActionPresenter::BindUnitDropCatalog()
+{
+	UnbindUnitDropCatalog();
+	UGP_OrbitalUnitDropCatalog& Catalog = UGP_OrbitalUnitDropCatalog::Get();
+	UnitDropCatalogChangedHandle = Catalog.OnCatalogChanged.AddUObject(
+		this, &ThisClass::HandleUnitDropCatalogChanged);
+}
+
+void UGP_ContextActionPresenter::UnbindUnitDropCatalog()
+{
+	if (!UnitDropCatalogChangedHandle.IsValid())
+	{
+		return;
+	}
+	if (UGP_OrbitalUnitDropCatalog* Catalog = UGP_OrbitalUnitDropCatalog::TryGetExisting())
+	{
+		Catalog->OnCatalogChanged.Remove(UnitDropCatalogChangedHandle);
+	}
+	UnitDropCatalogChangedHandle.Reset();
+}
+
+void UGP_ContextActionPresenter::HandleUnitDropCatalogChanged()
+{
+	if (!IsValid(this) || !BoundPlayerController.IsValid())
+	{
+		return;
+	}
+	if (PanelState == EGP_ContextActionPanelState::PurchaseUnits)
+	{
+		RefreshPurchaseCatalogIfCategoryActive();
+	}
 }
 
 void UGP_ContextActionPresenter::HandleSelectionChanged()
@@ -604,7 +640,7 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 			UTexture2D* Icon = nullptr;
 			if (const UGP_BuildingDefinition* Building = Drop->ResolveLoadedBuildingDefinition())
 			{
-				Icon = ResolvePurchaseIcon(Building->Icon);
+				Icon = ResolveBuildingPurchaseIcon(Building);
 			}
 			PurchaseCatalogRows.Add(MakeBuildingRow(
 				Drop,
@@ -641,7 +677,7 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 			UTexture2D* Icon = nullptr;
 			if (const UGP_BuildingDefinition* Building = Drop->ResolveLoadedBuildingDefinition())
 			{
-				Icon = ResolvePurchaseIcon(Building->Icon);
+				Icon = ResolveBuildingPurchaseIcon(Building);
 			}
 			PurchaseCatalogRows.Add(MakeBuildingRow(
 				Drop,
@@ -1158,7 +1194,7 @@ void UGP_ContextActionPresenter::RebuildSelectedPurchaseRow()
 		UTexture2D* Icon = nullptr;
 		if (const UGP_BuildingDefinition* Building = Drop->ResolveLoadedBuildingDefinition())
 		{
-			Icon = ResolvePurchaseIcon(Building->Icon);
+			Icon = ResolveBuildingPurchaseIcon(Building);
 		}
 		SelectedPurchaseRow = MakeBuildingRow(
 			Drop,
@@ -1564,6 +1600,35 @@ UTexture2D* UGP_ContextActionPresenter::ResolveUnitPurchaseIcon(const UGP_Orbita
 	}
 
 	if (const UGP_UnitDefinition* UnitDef = Drop->ResolveLoadedUnitDefinition())
+	{
+		if (IsValid(UnitDef->PresentationIcon))
+		{
+			return UnitDef->PresentationIcon.Get();
+		}
+	}
+
+	return nullptr;
+}
+
+UTexture2D* UGP_ContextActionPresenter::ResolveBuildingPurchaseIcon(const UGP_BuildingDefinition* Building)
+{
+	if (!IsValid(Building))
+	{
+		return nullptr;
+	}
+
+	if (!Building->Icon.IsNull())
+	{
+		if (UTexture2D* Override = FindResolvedPurchaseIcon(Building->Icon))
+		{
+			ResolvedPurchaseIcons.Add(Building->Icon.ToSoftObjectPath(), Override);
+			return Override;
+		}
+
+		RequestPurchaseIconLoad(Building->Icon.ToSoftObjectPath());
+	}
+
+	if (const UGP_UnitDefinition* UnitDef = Building->ResolveLoadedUnitDefinition())
 	{
 		if (IsValid(UnitDef->PresentationIcon))
 		{

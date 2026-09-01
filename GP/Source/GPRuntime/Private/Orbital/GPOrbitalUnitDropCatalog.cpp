@@ -6,6 +6,7 @@
 #include "Engine/StreamableManager.h"
 #include "Misc/CoreDelegates.h"
 #include "Misc/CoreMisc.h"
+#include "Misc/ScopeExit.h"
 #include "Orbital/GPOrbitalUnitDropDefinition.h"
 #include "Orbital/GPUnitDropManifest.h"
 #include "Settings/GPOrbitalDeliverySettings.h"
@@ -104,6 +105,7 @@ void UGP_OrbitalUnitDropCatalog::ShutdownCatalog()
 	if (GPOrbitalUnitDropCatalogPrivate::GCatalog.IsValid())
 	{
 		GPOrbitalUnitDropCatalogPrivate::GCatalog->CancelAllAuthoredLoads();
+		GPOrbitalUnitDropCatalogPrivate::GCatalog->OnCatalogChanged.Clear();
 	}
 	GPOrbitalUnitDropCatalogPrivate::GCatalog.Reset();
 	if (!GPOrbitalUnitDropCatalogPrivate::bEngineExitLocked && !IsEngineExitRequested())
@@ -306,6 +308,11 @@ void UGP_OrbitalUnitDropCatalog::RefreshAuthoredSlot(EUnitAuthoredSlot Slot)
 		return;
 	}
 
+	ON_SCOPE_EXIT
+	{
+		BroadcastCatalogChangedIfNeeded();
+	};
+
 	const TSoftObjectPtr<UGP_OrbitalUnitDropDefinition> Soft = GetAuthoredSoftRef(Slot);
 	if (Soft.IsNull())
 	{
@@ -336,6 +343,12 @@ void UGP_OrbitalUnitDropCatalog::RefreshAuthoredSlot(EUnitAuthoredSlot Slot)
 	if (UGP_OrbitalUnitDropDefinition* Loaded = ResolveLoadedAuthored(Soft))
 	{
 		ApplyLoadedAuthoredDrop(Slot, Loaded);
+		return;
+	}
+
+	if (AuthoredStates[Index] == EAuthoredSlotState::Failed
+		&& AuthoredRequestedPaths[Index] == SoftPath)
+	{
 		return;
 	}
 
@@ -517,6 +530,35 @@ bool UGP_OrbitalUnitDropCatalog::IsCatalogCallbackSafe() const
 	return IsValid(this)
 		&& !GPOrbitalUnitDropCatalogPrivate::IsCreationBlocked()
 		&& GPOrbitalUnitDropCatalogPrivate::GCatalog.Get() == this;
+}
+
+void UGP_OrbitalUnitDropCatalog::BroadcastCatalogChangedIfNeeded()
+{
+	if (GPOrbitalUnitDropCatalogPrivate::bInShutdownCatalog || !IsValid(this))
+	{
+		return;
+	}
+
+	UGP_OrbitalUnitDropDefinition* Worker = CanonicalForSlot(EUnitAuthoredSlot::Worker);
+	UGP_OrbitalUnitDropDefinition* Walker = CanonicalForSlot(EUnitAuthoredSlot::SalvageWalker);
+	const bool bWorkerPending = IsWorkerDropDefinitionPending();
+	const bool bWalkerPending = IsSalvageWalkerDropDefinitionPending();
+
+	if (bCatalogChangedSnapshotValid
+		&& LastNotifiedWorker == Worker
+		&& LastNotifiedWalker == Walker
+		&& bLastNotifiedWorkerPending == bWorkerPending
+		&& bLastNotifiedWalkerPending == bWalkerPending)
+	{
+		return;
+	}
+
+	LastNotifiedWorker = Worker;
+	LastNotifiedWalker = Walker;
+	bLastNotifiedWorkerPending = bWorkerPending;
+	bLastNotifiedWalkerPending = bWalkerPending;
+	bCatalogChangedSnapshotValid = true;
+	OnCatalogChanged.Broadcast();
 }
 
 void UGP_OrbitalUnitDropCatalog::HandleAuthoredLoaded(EUnitAuthoredSlot Slot)
@@ -747,6 +789,11 @@ void UGP_OrbitalUnitDropCatalog::ApplyLoadedAuthoredDrop(
 		return;
 	}
 
+	ON_SCOPE_EXIT
+	{
+		BroadcastCatalogChangedIfNeeded();
+	};
+
 	CancelAuthoredTopLevelLoad(Slot);
 	AuthoredRequestedPaths[Index] = GetAuthoredSoftRef(Slot).ToSoftObjectPath();
 	AuthoredSlotDrops[Index] = Loaded;
@@ -892,6 +939,7 @@ void UGP_OrbitalUnitDropCatalog::MarkAuthoredSlotFailed(EUnitAuthoredSlot Slot)
 	{
 		AuthoredStates[Index] = EAuthoredSlotState::Failed;
 	}
+	BroadcastCatalogChangedIfNeeded();
 }
 
 void UGP_OrbitalUnitDropCatalog::CancelAuthoredTopLevelLoad(EUnitAuthoredSlot Slot)
@@ -1288,6 +1336,13 @@ void UGP_OrbitalUnitDropCatalog::DebugForceUnresolvedAuthoredWorkerLoad(
 	DebugForceUnresolvedAuthoredLoad(EUnitAuthoredSlot::Worker, InjectedDefinition, bHoldCompletion);
 }
 
+void UGP_OrbitalUnitDropCatalog::DebugForceUnresolvedAuthoredSalvageWalkerLoad(
+	UGP_OrbitalUnitDropDefinition* InjectedDefinition,
+	bool bHoldCompletion)
+{
+	DebugForceUnresolvedAuthoredLoad(EUnitAuthoredSlot::SalvageWalker, InjectedDefinition, bHoldCompletion);
+}
+
 void UGP_OrbitalUnitDropCatalog::DebugCompletePendingAuthoredLoad(EUnitAuthoredSlot Slot)
 {
 	const int32 Index = static_cast<int32>(Slot);
@@ -1307,6 +1362,11 @@ void UGP_OrbitalUnitDropCatalog::DebugCompletePendingAuthoredWorkerLoad()
 	DebugCompletePendingAuthoredLoad(EUnitAuthoredSlot::Worker);
 }
 
+void UGP_OrbitalUnitDropCatalog::DebugCompletePendingAuthoredSalvageWalkerLoad()
+{
+	DebugCompletePendingAuthoredLoad(EUnitAuthoredSlot::SalvageWalker);
+}
+
 void UGP_OrbitalUnitDropCatalog::DebugForceAuthoredWorkerLoadFailure()
 {
 	const int32 Index = static_cast<int32>(EUnitAuthoredSlot::Worker);
@@ -1319,6 +1379,21 @@ void UGP_OrbitalUnitDropCatalog::DebugForceAuthoredWorkerLoadFailure()
 	if (AuthoredStates.IsValidIndex(Index) && AuthoredStates[Index] == EAuthoredSlotState::Pending)
 	{
 		FinishAuthoredLoadResolve(EUnitAuthoredSlot::Worker);
+	}
+}
+
+void UGP_OrbitalUnitDropCatalog::DebugForceAuthoredSalvageWalkerLoadFailure()
+{
+	const int32 Index = static_cast<int32>(EUnitAuthoredSlot::SalvageWalker);
+	EnsureDebugSlotArrays();
+	DebugInjectedDrops[Index] = nullptr;
+	if (DebugHoldDropCompletion.IsValidIndex(Index))
+	{
+		DebugHoldDropCompletion[Index] = 0;
+	}
+	if (AuthoredStates.IsValidIndex(Index) && AuthoredStates[Index] == EAuthoredSlotState::Pending)
+	{
+		FinishAuthoredLoadResolve(EUnitAuthoredSlot::SalvageWalker);
 	}
 }
 
@@ -1620,6 +1695,7 @@ void UGP_OrbitalUnitDropCatalog::DebugClearAuthoredUnitDropOverrides()
 	bDebugSavedSettings = false;
 	DebugSavedWorkerSettingsRef.Reset();
 	DebugSavedWalkerSettingsRef.Reset();
+	BroadcastCatalogChangedIfNeeded();
 }
 
 void UGP_OrbitalUnitDropCatalog::DebugBeginContractIsolation()
@@ -1660,6 +1736,7 @@ void UGP_OrbitalUnitDropCatalog::DebugBeginContractIsolation()
 			AuthoredPayloadRequestedPaths[i].Reset();
 		}
 	}
+	BroadcastCatalogChangedIfNeeded();
 }
 
 void UGP_OrbitalUnitDropCatalog::DebugEndContractIsolation()

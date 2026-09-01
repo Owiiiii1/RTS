@@ -180,13 +180,16 @@ Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / 
 
 Production HUD (catalog + purchase execution implemented; WBP wiring operator-local):
 Select MainBase → PURCHASE in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE.
-`GetPurchaseCatalogRows()` is the factual catalog SoT for the active category. Building / Wall
-Package row `Icon` is asynchronously resolved from definition soft textures; null until ready.
-Unit purchase `Icon` precedence: loaded `UGP_OrbitalUnitDropDefinition::Icon` override, else
+`GetPurchaseCatalogRows()` is the factual catalog SoT for the active category. Wall Package row
+`Icon` is asynchronously resolved from the package soft texture; null until ready. Unit purchase
+`Icon` precedence: loaded `UGP_OrbitalUnitDropDefinition::Icon` override, else
 `UGP_UnitDefinition::PresentationIcon` from `Drop->ResolveLoadedUnitDefinition()`, else null.
-An unresolved drop override still requests async load and shows `PresentationIcon` until the
-override arrives. Rebuild is event-driven on StreamableManager completion. No duplicate required
-icon authoring on the unit drop. Building category
+Building / Defense building `Icon` precedence: loaded `UGP_BuildingDefinition::Icon` override, else
+`BuildingDefinition->ResolveLoadedUnitDefinition()->PresentationIcon` (already-loaded only), else
+null. An unresolved soft override still requests async load and shows `PresentationIcon` until the
+override arrives. PurchaseUnits first open: pending authored Worker/Walker omit rows; when
+`UGP_OrbitalUnitDropCatalog::OnCatalogChanged` fires (Ready or Failed→native), the presenter
+rebuilds without leaving the category. No duplicate required icon authoring. Building category
 assignment uses `BuildingDefinition.BuildingTags` as identity; `DropTags` are acquisition/fallback
 and must not hide a known Logistics Hub. Not a permanent global Order Menu. Keyboard `O` is not
 the canonical production HUD entry. Message Strip is panel-local `GetContextMessage()`.

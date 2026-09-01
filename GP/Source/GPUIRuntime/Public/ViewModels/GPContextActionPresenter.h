@@ -11,6 +11,7 @@
 class AGP_PlayerController;
 class AGP_UnitBase;
 class UAbilitySystemComponent;
+class UGP_BuildingDefinition;
 class UGP_OrbitalUnitDropDefinition;
 class UGP_SelectionComponent;
 class UGP_WallSegmentInventoryComponent;
@@ -69,8 +70,9 @@ enum class EGP_PurchaseCatalogItemKind : uint8
 
 /**
  * Factual MainBase PURCHASE catalog row. Presentation only — no spend / RPC / manifest.
- * ItemId is the product PrimaryAssetId. Unit rows may show UnitDefinition PresentationIcon
- * immediately; soft overrides / building / wall icons stay async (null until ready).
+ * ItemId is the product PrimaryAssetId. Unit and building rows may show UnitDefinition
+ * PresentationIcon immediately; drop/building/wall soft overrides stay async (null until ready
+ * when no PresentationIcon fallback exists).
  */
 USTRUCT(BlueprintType)
 struct GPUIRUNTIME_API FGP_PurchaseCatalogRow
@@ -261,9 +263,13 @@ private:
 	UTexture2D* FindResolvedPurchaseIcon(const TSoftObjectPtr<UTexture2D>& Soft) const;
 	UTexture2D* ResolvePurchaseIcon(const TSoftObjectPtr<UTexture2D>& Soft);
 	UTexture2D* ResolveUnitPurchaseIcon(const UGP_OrbitalUnitDropDefinition* Drop);
+	UTexture2D* ResolveBuildingPurchaseIcon(const UGP_BuildingDefinition* Building);
 	void RequestPurchaseIconLoad(const FSoftObjectPath& Path);
 	void HandlePurchaseIconLoaded(FSoftObjectPath Path);
 	void CancelPurchaseIconLoads();
+	void BindUnitDropCatalog();
+	void UnbindUnitDropCatalog();
+	void HandleUnitDropCatalogChanged();
 
 	UFUNCTION()
 	void HandleBoundActorDestroyed(AActor* DestroyedActor);
@@ -296,6 +302,7 @@ private:
 	TWeakObjectPtr<UGP_SelectionComponent> BoundSelection;
 	FDelegateHandle SelectionChangedHandle;
 	FDelegateHandle CommandTargetingChangedHandle;
+	FDelegateHandle UnitDropCatalogChangedHandle;
 	TArray<FBoundSelectedUnit> BoundUnits;
 	TArray<FGP_ContextActionPresentation> Actions;
 	TArray<FGP_PurchaseCatalogRow> PurchaseCatalogRows;

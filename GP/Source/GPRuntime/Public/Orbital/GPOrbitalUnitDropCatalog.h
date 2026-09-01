@@ -14,6 +14,8 @@ class UGP_UnitDefinition;
 struct FGP_UnitDropManifest;
 struct FStreamableHandle;
 
+DECLARE_MULTICAST_DELEGATE(FOnGPOrbitalUnitDropCatalogChanged);
+
 /**
  * Native bootstrap + authored unit acquisition definitions (GP-S39E).
  * Precedence: authored settings soft ref (Ready only after nested UnitDefinition + PayloadClass
@@ -71,13 +73,19 @@ public:
 
 	void OverrideDeliveryTiming(float DescentSeconds, float PayloadDeployDelaySeconds);
 
+	/** Fires when canonical Worker/Walker availability may have changed (Ready, Failed→native, Pending omit). */
+	FOnGPOrbitalUnitDropCatalogChanged OnCatalogChanged;
+
 #if !UE_BUILD_SHIPPING
 	void DebugAssignLoadedAuthoredWorker(UGP_OrbitalUnitDropDefinition* Definition);
 	void DebugAssignLoadedAuthoredSalvageWalker(UGP_OrbitalUnitDropDefinition* Definition);
 	void DebugForceUnresolvedAuthoredWorkerLoad(UGP_OrbitalUnitDropDefinition* InjectedDefinition, bool bHoldCompletion);
+	void DebugForceUnresolvedAuthoredSalvageWalkerLoad(UGP_OrbitalUnitDropDefinition* InjectedDefinition, bool bHoldCompletion);
 	bool DebugDidRequestAsyncAuthoredWorkerLoad() const { return bDebugDidRequestAsyncWorkerLoad; }
 	void DebugCompletePendingAuthoredWorkerLoad();
+	void DebugCompletePendingAuthoredSalvageWalkerLoad();
 	void DebugForceAuthoredWorkerLoadFailure();
+	void DebugForceAuthoredSalvageWalkerLoadFailure();
 	void DebugForceUnresolvedNestedWorkerUnitDefinitionLoad(
 		UGP_OrbitalUnitDropDefinition* InjectedDrop,
 		UGP_UnitDefinition* InjectedUnitDefinition,
@@ -145,6 +153,7 @@ private:
 	bool HasResolvedAuthoredDependencies(const UGP_OrbitalUnitDropDefinition* Drop, EUnitAuthoredSlot Slot) const;
 	bool IsPayloadClassValidForSlot(EUnitAuthoredSlot Slot, const UClass* PayloadClass) const;
 	TSubclassOf<AGP_UnitBase> ResolveFallbackPayloadClass(EUnitAuthoredSlot Slot) const;
+	void BroadcastCatalogChangedIfNeeded();
 
 	void HandleWorkerLoaded() { HandleAuthoredLoaded(EUnitAuthoredSlot::Worker); }
 	void HandleWalkerLoaded() { HandleAuthoredLoaded(EUnitAuthoredSlot::SalvageWalker); }
@@ -173,6 +182,11 @@ private:
 	TArray<FSoftObjectPath> AuthoredPayloadRequestedPaths;
 	TArray<EAuthoredSlotState> AuthoredStates;
 	bool bNativeCatalogReady = false;
+	UGP_OrbitalUnitDropDefinition* LastNotifiedWorker = nullptr;
+	UGP_OrbitalUnitDropDefinition* LastNotifiedWalker = nullptr;
+	bool bLastNotifiedWorkerPending = false;
+	bool bLastNotifiedWalkerPending = false;
+	bool bCatalogChangedSnapshotValid = false;
 
 #if !UE_BUILD_SHIPPING
 	void EnsureDebugSlotArrays();

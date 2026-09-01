@@ -460,17 +460,26 @@ death, destroy, enemy/inspect) forces `Actions`. HUD Blueprint: `RequestOpenPurc
 No spend, RPC, unit manifests, LAUNCH, READY purchase, placement, or wall buy in this checkpoint.
 LAUNCH remains existing unit Confirm / building Purchase→READY→ghost / Wall Package buy.
 
-**Purchase catalog icons:** Building and Wall Package rows resolve `UGP_BuildingDefinition::Icon`
-and `UGP_WallPackageDefinition::Icon` asynchronously (`TSoftObjectPtr<UTexture2D>`). Unit purchase
-rows use `ResolveUnitPurchaseIcon`: loaded `UGP_OrbitalUnitDropDefinition::Icon` is an optional
-purchase-specific override; otherwise the row uses already-loaded
-`UGP_UnitDefinition::PresentationIcon` (no duplicate drop-icon authoring). If a drop override is
-assigned but not yet loaded, the presenter requests the existing StreamableManager async load and
-shows `PresentationIcon` until completion, then rebuilds the row with the override and broadcasts
-`OnContextActionsChanged`. Empty override plus empty `PresentationIcon` yields null. No Tick. No
-`LoadSynchronous`. Empty soft refs request nothing. UI must not sync-load presentation assets. Do
-not copy `PresentationIcon` onto the drop. Async requests stay presenter-owned and deduped by
-`FSoftObjectPath`.
+**Purchase catalog icons:** Wall Package rows resolve `UGP_WallPackageDefinition::Icon`
+asynchronously (`TSoftObjectPtr<UTexture2D>`). Unit purchase rows use `ResolveUnitPurchaseIcon`:
+loaded `UGP_OrbitalUnitDropDefinition::Icon` is an optional purchase-specific override; otherwise
+the row uses already-loaded `UGP_UnitDefinition::PresentationIcon`. Building / Defense building
+rows use `ResolveBuildingPurchaseIcon`: loaded `UGP_BuildingDefinition::Icon` is an optional
+override; otherwise `BuildingDefinition->ResolveLoadedUnitDefinition()->PresentationIcon` (no
+sync-load of UnitDefinition; catalog-ready buildings already expose a loaded BuildingDefinition,
+and UnitDefinition is used only when already resident). If a soft override is assigned but not yet
+loaded, the presenter requests the existing StreamableManager async load and shows `PresentationIcon`
+until completion, then rebuilds the row / selected item with the override and broadcasts
+`OnContextActionsChanged`. Empty override plus empty `PresentationIcon` yields null. Do not copy
+`PresentationIcon` onto BuildingDefinition or the unit drop. Async requests stay presenter-owned
+and deduped by `FSoftObjectPath`. No Tick. No `LoadSynchronous`.
+
+**PurchaseUnits first-open readiness:** `UGP_OrbitalUnitDropCatalog` getters are null while an
+authored slot is Pending (native bootstrap is not shown). `UGP_ContextActionPresenter` binds once
+to `OnCatalogChanged` (unbind on Shutdown / BeginDestroy / catalog shutdown). When a slot becomes
+Ready or Failed (canonical native fallback), PurchaseUnits rebuilds automatically — no second
+category entry is required. Duplicate catalog-changed events are suppressed when canonical
+Worker/Walker availability did not change.
 
 **Purchase catalog classification:** `UGP_BuildingDefinition.BuildingTags` is canonical for category
 assignment. `UGP_OrbitalDropDefinition.DropTags` are acquisition/fallback metadata and must not hide

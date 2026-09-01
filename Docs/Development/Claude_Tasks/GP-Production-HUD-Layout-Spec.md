@@ -299,13 +299,18 @@ for `PurchaseUnits` / `PurchaseBuildings` / `PurchaseDefense` (empty on Actions 
 selected-item states). Selected identity is `GetSelectedPurchaseItem()`. Unit shuttle readout is
 `GetPurchaseUnitManifestPresentation()`.
 
-Row `Icon` for buildings / Wall Package comes from definition `TSoftObjectPtr<UTexture2D>`.
+Row `Icon` for Wall Package comes from `UGP_WallPackageDefinition` `TSoftObjectPtr<UTexture2D>`.
 Unit purchase `Icon` precedence: loaded `UGP_OrbitalUnitDropDefinition::Icon` (optional acquisition
-override) → else `UGP_UnitDefinition::PresentationIcon` → else null. Do not require a second icon
-on the unit drop. If a drop override is assigned but unresolved, show `PresentationIcon` immediately
-and replace it when the existing presenter async load completes. The presenter async-loads unresolved
-soft textures (deduped by path) and rebuilds rows via `BP_OnContextActionsChanged`. Initial null is
-valid when both override and `PresentationIcon` are empty. Do not `LoadSynchronous` in WBP.
+override) → else `UGP_UnitDefinition::PresentationIcon` → else null. Building / Defense building
+`Icon` precedence: loaded `UGP_BuildingDefinition::Icon` (optional override) → else linked
+`UnitDefinition.PresentationIcon` → else null. Do not require a second icon on the unit drop or
+BuildingDefinition. If a soft override is assigned but unresolved, show `PresentationIcon`
+immediately and replace it when the existing presenter async load completes. PurchaseUnits first
+open: pending authored products omit rows; `UGP_OrbitalUnitDropCatalog::OnCatalogChanged` rebuilds
+the list when canonical Ready/Failed without leaving the category. The presenter async-loads
+unresolved soft textures (deduped by path) and rebuilds rows via `BP_OnContextActionsChanged`.
+Initial null is valid when both override and `PresentationIcon` are empty. Do not `LoadSynchronous`
+in WBP.
 
 A later keyboard shortcut may convenience-activate MainBase procurement. It is **not** the
 canonical visible entry. Global `O` Order Menu as the production HUD path is **SUPERSEDED**.

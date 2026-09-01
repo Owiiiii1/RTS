@@ -606,44 +606,129 @@ namespace GPPurchaseCatalogPresentationContractPrivate
 			Expect(OverrideReadyRow != nullptr && OverrideReadyRow->Icon == UnitTex,
 				TEXT("IconC_OverrideReplacesFallbackAfterAsyncComplete"));
 
-			UGP_BuildingDefinition* IconHubBuilding = NewObject<UGP_BuildingDefinition>(
-				GetTransientPackage(), FName(TEXT("DA_GP_Building_LogisticsHub_IconStub")), RF_Transient);
-			IconHubBuilding->DisplayName = NSLOCTEXT("GPPurchaseCatalog", "IconHub", "Icon Logistics Hub");
-			if (Tags.Unit_Type_Building.IsValid())
+			auto StampHubIdentity = [&Tags](UGP_BuildingDefinition* Building, const FText& Name)
 			{
-				IconHubBuilding->BuildingTags.AddTag(Tags.Unit_Type_Building);
-			}
-			IconHubBuilding->BuildingTags.AddTag(Tags.Building_Type_LogisticsHub);
-			IconHubBuilding->SpawnedClass = AGP_LogisticsHub::StaticClass();
-			IconHubBuilding->FootprintCells = FIntPoint(4, 4);
-			IconHubBuilding->Icon = TSoftObjectPtr<UTexture2D>(BuildingIconPath);
+				Building->DisplayName = Name;
+				if (Tags.Unit_Type_Building.IsValid())
+				{
+					Building->BuildingTags.AddTag(Tags.Unit_Type_Building);
+				}
+				Building->BuildingTags.AddTag(Tags.Building_Type_LogisticsHub);
+				Building->SpawnedClass = AGP_LogisticsHub::StaticClass();
+				Building->FootprintCells = FIntPoint(4, 4);
+			};
+			auto MakeHubDrop = [](const TCHAR* Name, float Cost, UGP_BuildingDefinition* Building)
+				-> UGP_OrbitalDropDefinition*
+			{
+				UGP_OrbitalDropDefinition* Drop = NewObject<UGP_OrbitalDropDefinition>(
+					GetTransientPackage(), FName(Name), RF_Transient);
+				Drop->Cost = Cost;
+				Drop->BuildingDefinition = Building;
+				return Drop;
+			};
 
-			UGP_OrbitalDropDefinition* IconHubDrop = NewObject<UGP_OrbitalDropDefinition>(
-				GetTransientPackage(), FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_IconStub")), RF_Transient);
-			IconHubDrop->Cost = HubDrop->Cost;
-			IconHubDrop->BuildingDefinition = IconHubBuilding;
-
-			BuildingCatalog.DebugAssignLoadedAuthoredLogisticsHub(IconHubDrop);
+			UGP_BuildingDefinition* FallbackHubBuilding = NewObject<UGP_BuildingDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_Building_LogisticsHub_FallbackIcon")), RF_Transient);
+			StampHubIdentity(FallbackHubBuilding, NSLOCTEXT("GPPurchaseCatalog", "FallbackHub", "Fallback Hub"));
+			FallbackHubBuilding->UnitDefinition = MakeUnitDef(
+				TEXT("DA_GP_Unit_LogisticsHub_FallbackIcon"), FallbackTex);
+			UGP_OrbitalDropDefinition* FallbackHubDrop = MakeHubDrop(
+				TEXT("DA_GP_OrbitalDrop_LogisticsHub_FallbackIcon"), HubDrop->Cost, FallbackHubBuilding);
+			BuildingCatalog.DebugAssignLoadedAuthoredLogisticsHub(FallbackHubDrop);
 			Presenter->RequestPurchaseBack();
 			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Buildings);
-			const FGP_PurchaseCatalogRow* HeldHubRow =
-				FindRowById(Presenter->GetPurchaseCatalogRows(), IconHubDrop->GetPrimaryAssetId());
-			Expect(HeldHubRow != nullptr && HeldHubRow->Icon == nullptr
-				&& Presenter->DebugHasPendingPurchaseIcon(BuildingIconPath),
-				TEXT("IconB_BuildingIconNullUntilReady"));
-			Presenter->RequestPurchaseRowPrimary(IconHubDrop->GetPrimaryAssetId());
+			const FGP_PurchaseCatalogRow* FallbackHubRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), FallbackHubDrop->GetPrimaryAssetId());
+			Expect(FallbackHubRow != nullptr && FallbackHubRow->Icon == FallbackTex,
+				TEXT("BuildingIconA_EmptyBuildingIconUsesUnitDefinitionPresentationIcon"));
+			Presenter->RequestPurchaseRowPrimary(FallbackHubDrop->GetPrimaryAssetId());
 			Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseBuildingSelected
-				&& Presenter->GetSelectedPurchaseItem().Icon == nullptr,
-				TEXT("IconB_SelectedNullWhileHeld"));
-			Presenter->DebugCompleteHeldPurchaseIconLoad(BuildingIconPath);
-			Expect(Presenter->GetSelectedPurchaseItem().ItemId == IconHubDrop->GetPrimaryAssetId()
-				&& Presenter->GetSelectedPurchaseItem().Icon == BuildingTex,
-				TEXT("IconB_SelectedBuildingIconValidAfterAsyncComplete"));
+				&& Presenter->GetSelectedPurchaseItem().Icon == FallbackTex,
+				TEXT("BuildingIconE_SelectedUsesPresentationIconFallback"));
+
+			UGP_BuildingDefinition* EmptyBothHubBuilding = NewObject<UGP_BuildingDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_Building_LogisticsHub_EmptyBothIcon")), RF_Transient);
+			StampHubIdentity(EmptyBothHubBuilding, NSLOCTEXT("GPPurchaseCatalog", "EmptyHub", "Empty Hub"));
+			EmptyBothHubBuilding->UnitDefinition = MakeUnitDef(
+				TEXT("DA_GP_Unit_LogisticsHub_EmptyBothIcon"), nullptr);
+			UGP_OrbitalDropDefinition* EmptyBothHubDrop = MakeHubDrop(
+				TEXT("DA_GP_OrbitalDrop_LogisticsHub_EmptyBothIcon"), HubDrop->Cost, EmptyBothHubBuilding);
+			BuildingCatalog.DebugAssignLoadedAuthoredLogisticsHub(EmptyBothHubDrop);
 			Presenter->RequestPurchaseBack();
-			const FGP_PurchaseCatalogRow* ReadyHubRow =
-				FindRowById(Presenter->GetPurchaseCatalogRows(), IconHubDrop->GetPrimaryAssetId());
-			Expect(ReadyHubRow != nullptr && ReadyHubRow->Icon == BuildingTex,
-				TEXT("IconB_BuildingListIconValidAfterAsyncComplete"));
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Buildings);
+			const FGP_PurchaseCatalogRow* EmptyBothHubRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), EmptyBothHubDrop->GetPrimaryAssetId());
+			Expect(EmptyBothHubRow != nullptr && EmptyBothHubRow->Icon == nullptr,
+				TEXT("BuildingIconD_BothEmptyYieldsNull"));
+
+			UGP_BuildingDefinition* LoadedOverrideHubBuilding = NewObject<UGP_BuildingDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_Building_LogisticsHub_LoadedOverride")), RF_Transient);
+			StampHubIdentity(LoadedOverrideHubBuilding, NSLOCTEXT("GPPurchaseCatalog", "OverrideHub", "Override Hub"));
+			LoadedOverrideHubBuilding->UnitDefinition = MakeUnitDef(
+				TEXT("DA_GP_Unit_LogisticsHub_LoadedOverride"), FallbackTex);
+			LoadedOverrideHubBuilding->Icon = BuildingTex;
+			UGP_OrbitalDropDefinition* LoadedOverrideHubDrop = MakeHubDrop(
+				TEXT("DA_GP_OrbitalDrop_LogisticsHub_LoadedOverride"), HubDrop->Cost, LoadedOverrideHubBuilding);
+			BuildingCatalog.DebugAssignLoadedAuthoredLogisticsHub(LoadedOverrideHubDrop);
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Buildings);
+			const FGP_PurchaseCatalogRow* LoadedOverrideHubRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), LoadedOverrideHubDrop->GetPrimaryAssetId());
+			Expect(LoadedOverrideHubRow != nullptr && LoadedOverrideHubRow->Icon == BuildingTex,
+				TEXT("BuildingIconB_LoadedBuildingOverrideWinsOverPresentationIcon"));
+
+			UGP_BuildingDefinition* PendingOverrideHubBuilding = NewObject<UGP_BuildingDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_Building_LogisticsHub_PendingOverride")), RF_Transient);
+			StampHubIdentity(PendingOverrideHubBuilding, NSLOCTEXT("GPPurchaseCatalog", "PendingHub", "Pending Hub"));
+			PendingOverrideHubBuilding->UnitDefinition = MakeUnitDef(
+				TEXT("DA_GP_Unit_LogisticsHub_PendingOverride"), FallbackTex);
+			PendingOverrideHubBuilding->Icon = TSoftObjectPtr<UTexture2D>(BuildingIconPath);
+			UGP_OrbitalDropDefinition* PendingOverrideHubDrop = MakeHubDrop(
+				TEXT("DA_GP_OrbitalDrop_LogisticsHub_PendingOverride"), HubDrop->Cost, PendingOverrideHubBuilding);
+			BuildingCatalog.DebugAssignLoadedAuthoredLogisticsHub(PendingOverrideHubDrop);
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Buildings);
+			const FGP_PurchaseCatalogRow* PendingFallbackHubRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), PendingOverrideHubDrop->GetPrimaryAssetId());
+			Expect(PendingFallbackHubRow != nullptr && PendingFallbackHubRow->Icon == FallbackTex
+				&& Presenter->DebugHasPendingPurchaseIcon(BuildingIconPath),
+				TEXT("BuildingIconC_UnresolvedOverrideKeepsPresentationIcon"));
+			Presenter->RequestPurchaseRowPrimary(PendingOverrideHubDrop->GetPrimaryAssetId());
+			Expect(Presenter->GetSelectedPurchaseItem().Icon == FallbackTex,
+				TEXT("BuildingIconE_SelectedKeepsPresentationIconWhileOverridePending"));
+			Presenter->DebugCompleteHeldPurchaseIconLoad(BuildingIconPath);
+			Expect(Presenter->GetSelectedPurchaseItem().ItemId == PendingOverrideHubDrop->GetPrimaryAssetId()
+				&& Presenter->GetSelectedPurchaseItem().Icon == BuildingTex,
+				TEXT("BuildingIconE_SelectedOverrideReplacesFallbackAfterAsyncComplete"));
+			Presenter->RequestPurchaseBack();
+			const FGP_PurchaseCatalogRow* OverrideReadyHubRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), PendingOverrideHubDrop->GetPrimaryAssetId());
+			Expect(OverrideReadyHubRow != nullptr && OverrideReadyHubRow->Icon == BuildingTex,
+				TEXT("BuildingIconC_OverrideReplacesFallbackAfterAsyncComplete"));
+
+			UGP_BuildingDefinition* FallbackTurretBuilding = NewObject<UGP_BuildingDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_Building_DefensiveTurret_FallbackIcon")), RF_Transient);
+			FallbackTurretBuilding->DisplayName =
+				NSLOCTEXT("GPPurchaseCatalog", "FallbackTurret", "Fallback Turret");
+			if (Tags.Unit_Type_Building.IsValid())
+			{
+				FallbackTurretBuilding->BuildingTags.AddTag(Tags.Unit_Type_Building);
+			}
+			FallbackTurretBuilding->BuildingTags.AddTag(Tags.Building_Type_DefensiveTurret);
+			FallbackTurretBuilding->SpawnedClass = AGP_DefensiveTurret::StaticClass();
+			FallbackTurretBuilding->UnitDefinition = MakeUnitDef(
+				TEXT("DA_GP_Unit_DefensiveTurret_FallbackIcon"), FallbackTex);
+			UGP_OrbitalDropDefinition* FallbackTurretDrop = NewObject<UGP_OrbitalDropDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_OrbitalDrop_DefensiveTurret_FallbackIcon")), RF_Transient);
+			FallbackTurretDrop->Cost = TurretDrop->Cost;
+			FallbackTurretDrop->BuildingDefinition = FallbackTurretBuilding;
+			BuildingCatalog.DebugAssignLoadedAuthoredDefensiveTurret(FallbackTurretDrop);
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Defense);
+			const FGP_PurchaseCatalogRow* FallbackTurretRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), FallbackTurretDrop->GetPrimaryAssetId());
+			Expect(FallbackTurretRow != nullptr && FallbackTurretRow->Icon == FallbackTex,
+				TEXT("BuildingIconF_DefenseBuildingUsesPresentationIconFallback"));
 
 			UGP_WallPackageDefinition* IconWall = NewObject<UGP_WallPackageDefinition>(
 				GetTransientPackage(), FName(TEXT("DA_GP_WallPackage_IconStub")), RF_Transient);
@@ -689,6 +774,100 @@ namespace GPPurchaseCatalogPresentationContractPrivate
 			{
 				WallCatalog->DebugClearAuthoredOverrides();
 			}
+		}
+
+		Presenter->RequestPurchaseBack();
+		{
+			auto MakeReadyUnitDrop = [](const TCHAR* Name, const UGP_OrbitalUnitDropDefinition* Seed)
+				-> UGP_OrbitalUnitDropDefinition*
+			{
+				UGP_OrbitalUnitDropDefinition* Drop = NewObject<UGP_OrbitalUnitDropDefinition>(
+					GetTransientPackage(), FName(Name), RF_Transient);
+				Drop->DisplayName = Seed->DisplayName;
+				Drop->Cost = Seed->Cost;
+				Drop->TransportSlotCost = Seed->TransportSlotCost;
+				Drop->UnitDefinition = Seed->UnitDefinition;
+				Drop->PayloadClass = Seed->PayloadClass;
+				return Drop;
+			};
+
+			const int32 BoundBeforeCategoryChurn = Presenter->GetBoundDelegateCount();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+			Presenter->RequestPurchaseBack();
+			Expect(Presenter->GetBoundDelegateCount() == BoundBeforeCategoryChurn
+				&& UGP_ContextActionPresenter::StaticClass()->FindFunctionByName(TEXT("Tick")) == nullptr,
+				TEXT("FirstOpen_NoDuplicateBindOnRepeatedPresentationRebuilds"));
+
+			UGP_OrbitalUnitDropDefinition* FirstOpenWorker = MakeReadyUnitDrop(
+				TEXT("DA_GP_OrbitalUnitDrop_Worker_FirstOpen"), WorkerDrop);
+			UGP_OrbitalUnitDropDefinition* FirstOpenWalker = MakeReadyUnitDrop(
+				TEXT("DA_GP_OrbitalUnitDrop_Walker_FirstOpen"), WalkerDrop);
+			UnitCatalog.DebugForceUnresolvedAuthoredWorkerLoad(FirstOpenWorker, true);
+			UnitCatalog.DebugForceUnresolvedAuthoredSalvageWalkerLoad(FirstOpenWalker, true);
+			Expect(UnitCatalog.IsWorkerDropDefinitionPending()
+				&& UnitCatalog.IsSalvageWalkerDropDefinitionPending()
+				&& UnitCatalog.GetWorkerDrop() == nullptr
+				&& UnitCatalog.GetSalvageWalkerDrop() == nullptr,
+				TEXT("FirstOpen_PendingOmitsCanonicalWithoutNativeBootstrap"));
+
+			int32 ContextBroadcasts = 0;
+			const FDelegateHandle ContextBroadcastHandle = Presenter->OnContextActionsChanged.AddLambda(
+				[&ContextBroadcasts]()
+				{
+					++ContextBroadcasts;
+				});
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+			Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseUnits
+				&& FindRowById(Presenter->GetPurchaseCatalogRows(), FirstOpenWorker->GetPrimaryAssetId()) == nullptr
+				&& FindRowById(Presenter->GetPurchaseCatalogRows(), FirstOpenWalker->GetPrimaryAssetId()) == nullptr
+				&& FindRowById(Presenter->GetPurchaseCatalogRows(), WorkerDrop->GetPrimaryAssetId()) == nullptr
+				&& FindRowById(Presenter->GetPurchaseCatalogRows(), WalkerDrop->GetPrimaryAssetId()) == nullptr,
+				TEXT("FirstOpen_FirstEntryOmitsPendingProducts"));
+
+			const int32 BroadcastsBeforeReady = ContextBroadcasts;
+			UnitCatalog.DebugCompletePendingAuthoredWorkerLoad();
+			UnitCatalog.DebugCompletePendingAuthoredSalvageWalkerLoad();
+			Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseUnits
+				&& FindRowById(Presenter->GetPurchaseCatalogRows(), FirstOpenWorker->GetPrimaryAssetId()) != nullptr
+				&& FindRowById(Presenter->GetPurchaseCatalogRows(), FirstOpenWalker->GetPrimaryAssetId()) != nullptr
+				&& ContextBroadcasts > BroadcastsBeforeReady,
+				TEXT("FirstOpen_ReadyRebuildsRowsWithoutLeavingCategory"));
+			Presenter->OnContextActionsChanged.Remove(ContextBroadcastHandle);
+			UnitCatalog.DebugClearAuthoredUnitDropOverrides();
+
+			Presenter->RequestPurchaseBack();
+			UGP_OrbitalUnitDropDefinition* FailWorker = MakeReadyUnitDrop(
+				TEXT("DA_GP_OrbitalUnitDrop_Worker_FailOpen"), WorkerDrop);
+			UnitCatalog.DebugForceUnresolvedAuthoredWorkerLoad(FailWorker, true);
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+			Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseUnits
+				&& FindRowById(Presenter->GetPurchaseCatalogRows(), FailWorker->GetPrimaryAssetId()) == nullptr
+				&& FindRowById(Presenter->GetPurchaseCatalogRows(), WorkerDrop->GetPrimaryAssetId()) == nullptr
+				&& FindRowById(Presenter->GetPurchaseCatalogRows(), WalkerDrop->GetPrimaryAssetId()) != nullptr,
+				TEXT("FirstOpenFail_PendingWorkerOmittedWalkerNativeRemains"));
+			UnitCatalog.DebugForceAuthoredWorkerLoadFailure();
+			Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseUnits
+				&& UnitCatalog.GetWorkerDrop() == WorkerDrop
+				&& FindRowById(Presenter->GetPurchaseCatalogRows(), WorkerDrop->GetPrimaryAssetId()) != nullptr,
+				TEXT("FirstOpenFail_NativeFallbackAppearsWithoutLeavingCategory"));
+			UnitCatalog.DebugClearAuthoredUnitDropOverrides();
+
+			UGP_ContextActionPresenter* IsolatedPresenter = NewObject<UGP_ContextActionPresenter>(
+				GetTransientPackage());
+			IsolatedPresenter->Initialize(PlayerController);
+			const int32 IsolatedBound = IsolatedPresenter->GetBoundDelegateCount();
+			IsolatedPresenter->Initialize(PlayerController);
+			Expect(IsolatedPresenter->GetBoundDelegateCount() == IsolatedBound,
+				TEXT("FirstOpen_RepeatedInitializeDoesNotDuplicateCatalogBind"));
+			IsolatedPresenter->Shutdown();
+			IsolatedPresenter->Shutdown();
+			Expect(IsolatedPresenter->GetBoundDelegateCount() == 0,
+				TEXT("FirstOpen_ShutdownUnbindSafe"));
+			UnitCatalog.DebugForceUnresolvedAuthoredWorkerLoad(FailWorker, true);
+			UnitCatalog.DebugCompletePendingAuthoredWorkerLoad();
+			UnitCatalog.DebugClearAuthoredUnitDropOverrides();
 		}
 
 		Presenter->RequestPurchaseBack();

@@ -2,132 +2,118 @@
 
 ## Status
 
-**BOTTOM_HUD_FINALIZED_MERGE_READY**
+**MINIMAP_FOUNDATION_READY_FOR_OPERATOR_VALIDATION**
 
-This is the **FINALIZATION checkpoint** for the complete Bottom HUD on `ui/gp-bottom-hud`. Fast-forward merge to `main` is safe. Do not auto-merge; human merge only.
+**INTERMEDIATE / NOT MERGE READY**
+
+This checkpoint is native Minimap Presentation Foundation only. Do not merge to `main`. Operator Blueprint wiring of the protected `WBP_GP_HUD` minimap seam is next.
 
 ## Branch / SHAs
 
-- Branch: `ui/gp-bottom-hud`
-- `origin/main`: `0667b6f912fce288422848d5d2355bc4510b748c` (unchanged)
-- Merge-base with `origin/main`: `0667b6f912fce288422848d5d2355bc4510b748c`
-- Head (implementation): `163930d5d0536452f0f47ab96df72f237d06a35a`
-- Ahead of `origin/main`: **29** (this report commit makes **30**)
+- Branch: `ui/gp-minimap`
+- `origin/main`: `3b1d3aff293049cd3014f03e047b21a3dd2e6665`
+- Merge-base with `origin/main`: `3b1d3aff293049cd3014f03e047b21a3dd2e6665`
+- Head (implementation): `6a76c204f3540dbf0ab7c041c96623933b5cba8e`
+- Ahead of `origin/main`: **1** (this report commit makes **2**)
 - Behind `origin/main`: **0**
-- Fast-forward merge to `main`: **safe** (`origin/main` is a direct ancestor)
+- Fast-forward merge to `main`: **not requested / not merge-ready**
 
-## Complete Bottom HUD operator PASS scope
+## Exact implementation
 
-Operator validation **PASSED** for:
+`UGP_MinimapPresenter` is owned by `UGP_HUDViewModelSubsystem` (one per LocalPlayer). It is presentation-only and binds `UGP_LocalFoWComponent::OnLocalFoWUpdated` on the owning PlayerController. It never ticks, never polls, never scans the world, never sync-loads, and never copies the FoW cell arrays / 2000×2000 texture.
 
-1. **Selection / Bottom Center** — None / Single / Group; single unit/building data; single icon; Group 8×3 rows; row click → single selection; units-only marquee
-2. **Context Actions** — Move / Stop / Attack-Move / Patrol / MainBase Purchase; correct context modes; command cursor overlay; targeting prompts
-3. **Purchase navigation** — Purchase Root / Units / Buildings / Defense; Back; leaving MainBase → Actions
-4. **Purchase presentation** — unit icons; building/defense icons; first-open Units readiness; catalog rows; selected-item presentation
-5. **Purchase Units execution** — LMB +1 / RMB −1 min 0; quantity UI; Message Strip; unit cap / Ferronite / shuttle rejects; Launch Shuttle; manifest clears after submit; real unit drop; server authority / currency correct
-6. **Buildings / Defense execution** — row → selected page; name/icon/cost; Back; Launch; Logistics Hub and Defensive Turret purchase → placement mode; Wall Package existing flow; spend once, deploy does not charge again
+`UGP_HUDRootWidget` Blueprint seam (do not modify WBP in this checkpoint):
+
+- `IsMinimapReady()`
+- `WorldToMinimapNormalized(FVector)`
+- `MinimapNormalizedToWorld(FVector2D, float WorldZ)`
+- `GetMinimapFoWStateNormalized(FVector2D)`
+- `GetMinimapPresentation()` → `FGP_MinimapPresentation`
+- `BP_OnMinimapChanged()`
+
+`FGP_MinimapPresentation` fields: `bIsReady`, `LocalTeamId`, `WorldOrigin`, `GridOrigin`, `WorldSizeCm`, `GridDimensions`, `CellSizeCm`, `Revision`.
+
+Bounds source of truth for this checkpoint = trusted FoW metadata (canonical 100 cm cells, 2000×2000, origin currently deterministic on the FoW component). No map-bounds actor.
+
+Not in this checkpoint: blips, camera rectangle, click-to-move-camera, last-known actors, terrain capture/render target, new FoW gameplay, actor world scans, Voxel/Terrain.
+
+## Coordinate orientation contract
+
+Normalized minimap XY is axis-aligned to the current trusted FoW grid:
+
+- `Normalized.X = 0` at `GridOrigin.X`, `1` at `GridOrigin.X + WorldSizeCm.X`
+- `Normalized.Y = 0` at `GridOrigin.Y`, `1` at `GridOrigin.Y + WorldSizeCm.Y`
+- World `+X` → minimap `+X`
+- World `+Y` → minimap `+Y`
+- No rotation, mirroring, or Slate Y-flip in the presenter
+- `WorldToMinimapNormalized` clamps out-of-grid world XY onto `[0,1]`
+- `MinimapNormalizedToWorld` clamps input XY onto `[0,1]` before mapping; `WorldZ` is passed through
+- `GetMinimapFoWStateNormalized` does **not** clamp: XY outside `[0,1]` or not-ready → `Unexplored`; inside `[0,1]` queries the trusted mirror at the corresponding cell center (inclusive `1.0` uses the last cell)
+
+## Event / binding lifecycle
+
+- Subsystem creates the presenter in `Initialize` and `Shutdown`s it in `Deinitialize` / controller unbind.
+- `BindMinimapPresenter` / `Initialize` always unbinds first, then adds a single `OnLocalFoWUpdated` handle. Repeated Initialize/Rebind does not duplicate delegates.
+- Presentation metadata rebuilds only when readiness / grid metadata / Revision change, then `OnMinimapPresentationChanged` fires.
+- HUD root binds that multicast in `NativeConstruct` and forwards `BP_OnMinimapChanged`. No Blueprint polling.
+- Controller teardown / presenter `Shutdown` returns not-ready (`LocalTeamId = -1`, FoW queries `Unexplored`) and ignores later mirror updates.
+
+Architecture unchanged: `GPUIRuntime` → `GPRuntime` → `GPGASRuntime`.
 
 ## Tests
 
-Headless `-game -nullrhi -unattended -nop4` `L_PrototypeArena`. No quit. Editor killed after Complete.
+Headless `-game -unattended -nop4 -NullRHI` `L_PrototypeArena`. No quit. Editor killed after Complete.
 
 | Command | Result |
 | --- | --- |
-| `gp.UI.RunSelectionViewModelContractTest` | Complete Failures=0 |
+| `gp.UI.RunMinimapPresentationContractTest` | Complete Failures=0 |
+| `gp.FoW.RunClientPresentationFoundationContractTest` | Complete Failures=0 |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | Complete Failures=0 |
+| `gp.UI.RunSelectionViewModelContractTest` | Complete Failures=0 |
 | `gp.UI.RunContextActionPresentationContractTest` | Complete Failures=0 |
-| `gp.UI.RunPurchaseCatalogPresentationContractTest` | Complete Failures=0 |
-| `gp.UI.RunPurchaseExecutionContractTest` | Complete Failures=0 |
-| `gp.Resource.RunOrbitalUnitDropContractTest` | Complete Failures=0 |
-| `gp.Building.RunOrbitalBuildingDropContractTest` | Complete Failures=0 |
-| `gp.Commands.RunMovePatrolTargetingContractTest` | Complete Failures=0 |
-| `gp.Combat.RunPatrolCombatContractTest` | Complete Failures=0 |
-| `gp.Selection.RunMarqueeUnitsOnlyContractTest` | Complete Failures=0 |
 
 ## Builds
 
 | Command | Result |
 | --- | --- |
 | `GPEditor Win64 Development` (UHT included) | **Passed** |
-| `GP Win64 Development` | **Passed** |
-| `GP Win64 Shipping` | **Passed** (Shipping link stubs added for Move/Patrol contract runners) |
+| `GP Win64 Development` | **not run** (intermediate checkpoint) |
+| `GP Win64 Shipping` | **not run** (intermediate checkpoint) |
 
-## Architecture / no-regression audit
+## Changed files (`origin/main...HEAD`)
 
-- Module graph unchanged: `GPUIRuntime` → `GPRuntime` → `GPGASRuntime` (no reverse deps).
-- Bottom HUD presentation path remains event-driven: no Tick / polling timer on `UGP_ContextActionPresenter`, selection VM/adapter, or command cursor overlay (`SetCanTick(false)`).
-- Purchase icons remain async StreamableManager; no presentation `LoadSynchronous`.
-- Unit-drop catalog Pending omits native bootstrap; PurchaseUnits rebuilds on `OnCatalogChanged`.
-
-## Complete changed-file audit (`origin/main...HEAD`)
-
-Docs:
-
-- `Docs/Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md`
-- `Docs/Development/Cursor_Work_Report.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/GDD/09_UI_UX.md`
-- `Docs/GDD/10_Orbital_Delivery.md`
-- `Docs/TDD/04_RTS_Selection_And_Commands.md`
-- `Docs/TDD/10_Data_Assets.md`
 - `Docs/TDD/12_UI_Architecture.md`
-- `Docs/TDD/14_Orbital_Delivery.md`
-
-GPGASRuntime (Patrol tag):
-
-- `GP/Source/GPGASRuntime/Public/Tags/GPGameplayTags.h`
-- `GP/Source/GPGASRuntime/Private/Tags/GPGameplayTags.cpp`
-
-GPRuntime:
-
-- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-- `GP/Source/GPRuntime/Public/Command/GPCommandTargetingContractTest.h`
-- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPCommandTargetingContractTest.cpp`
-- `GP/Source/GPRuntime/Public/Combat/GPPatrolCombatContractTest.h`
-- `GP/Source/GPRuntime/Private/Debug/GPPatrolCombatContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPSelectionMarqueeContractTest.cpp`
-- `GP/Source/GPRuntime/Public/UI/SGPCommandCursorOverlay.h`
-- `GP/Source/GPRuntime/Private/UI/SGPCommandCursorOverlay.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitDefinition.h`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
-- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalUnitDropCatalog.h`
-- `GP/Source/GPRuntime/Private/Orbital/GPOrbitalUnitDropCatalog.cpp`
-- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalUnitDropDefinition.h`
-- `GP/Source/GPRuntime/Public/Orbital/GPUnitDropAuthority.h`
-
-GPUIRuntime:
-
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPContextActionPresenter.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPContextActionPresenter.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPSelectionViewModel.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPSelectionViewModel.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPSelectionViewModelAdapter.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPSelectionViewModelAdapter.cpp`
+- `Docs/TDD/15_Fog_of_War.md`
+- `Docs/Development/Cursor_Work_Report.md` (this report commit)
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPMinimapPresenter.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPMinimapPresenter.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapPresentationContractTest.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPHUDViewModelBridgeContractTest.cpp`
 - `GP/Source/GPUIRuntime/Public/ViewModels/GPHUDViewModelSubsystem.h`
 - `GP/Source/GPUIRuntime/Private/ViewModels/GPHUDViewModelSubsystem.cpp`
 - `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
 - `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPContextActionPresentationContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPPurchaseCatalogPresentationContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPPurchaseExecutionContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPSelectionViewModelContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPHUDViewModelBridgeContractTest.cpp`
 
 ## Protected-file audit
 
-**Not committed** on this branch: `WBP_GP_HUD`, `WBP_GP_PurchaseRow`, `WBP_GP_SelectionGroupRow`, `WBP_GP_LaunchContainerRow`, `Content/`, `Config/`, authored maps, Materials, VFX, `GP.uproject`, `Tools/`.
+**Not committed:** `WBP_GP_HUD`, `WBP_GP_PurchaseRow`, `WBP_GP_SelectionGroupRow`, `WBP_GP_LaunchContainerRow`, `Content/`, `Config/`, authored maps, Materials, VFX, `GP.uproject`, `Tools/`.
 
-Local dirty/untracked Content/Config/maps/Tools/`GP.uproject` left unstaged (operator Blueprint/local content). No destructive git.
+Local dirty/untracked Content/Config/maps/Tools/`GP.uproject` left unstaged. No destructive git.
+
+## Next operator Blueprint seam
+
+In protected `WBP_GP_HUD` (local, uncommitted):
+
+- Bind `BP_OnMinimapChanged` on the HUD root.
+- Read `GetMinimapPresentation()` / `IsMinimapReady()` for the bottom-left square.
+- Use `WorldToMinimapNormalized` / `MinimapNormalizedToWorld` / `GetMinimapFoWStateNormalized` for FoW-aware presentation.
+- Do not poll. Do not expect blips or camera rectangle yet.
 
 ## Remaining known non-blocking limitations
 
-- Authored `WBP_GP_HUD` and purchase/selection/launch row widgets stay operator-local and uncommitted.
-- Production HUD outside Bottom HUD remains incomplete: minimap, notifications, production end-of-match.
-- Non-MainBase buildings may still have empty contextual actions (MVP; no invented upgrades).
-- Wall Turret remains omitted from Defense until spawned class is ready (existing catalog rule).
+- Minimap foundation ≠ complete minimap.
+- Blips, camera rectangle, click-to-pan, last-known actors, and terrain/render-target remain later checkpoints.
+- Authored `WBP_GP_HUD` remains operator-local and uncommitted.
+- Notifications and production end-of-match remain outside this slice.

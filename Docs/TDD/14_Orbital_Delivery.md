@@ -180,9 +180,13 @@ Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / 
 
 Production HUD (catalog + purchase execution implemented; WBP wiring operator-local):
 Select MainBase → PURCHASE in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE.
-`GetPurchaseCatalogRows()` is the factual catalog SoT for the active category. Row `Icon` is
-asynchronously resolved from unit / BuildingDefinition / WallPackage soft textures; null until
-ready; rebuild is event-driven on StreamableManager completion. Building category
+`GetPurchaseCatalogRows()` is the factual catalog SoT for the active category. Building / Wall
+Package row `Icon` is asynchronously resolved from definition soft textures; null until ready.
+Unit purchase `Icon` precedence: loaded `UGP_OrbitalUnitDropDefinition::Icon` override, else
+`UGP_UnitDefinition::PresentationIcon` from `Drop->ResolveLoadedUnitDefinition()`, else null.
+An unresolved drop override still requests async load and shows `PresentationIcon` until the
+override arrives. Rebuild is event-driven on StreamableManager completion. No duplicate required
+icon authoring on the unit drop. Building category
 assignment uses `BuildingDefinition.BuildingTags` as identity; `DropTags` are acquisition/fallback
 and must not hide a known Logistics Hub. Not a permanent global Order Menu. Keyboard `O` is not
 the canonical production HUD entry. Message Strip is panel-local `GetContextMessage()`.

@@ -23,6 +23,7 @@
 #include "Player/GPSelectionComponent.h"
 #include "Tags/GPGameplayTags.h"
 #include "UObject/Package.h"
+#include "Units/GPUnitDefinition.h"
 #include "Units/GPWorker.h"
 #include "ViewModels/GPContextActionPresenter.h"
 #include "ViewModels/GPHUDViewModelSubsystem.h"
@@ -296,8 +297,34 @@ namespace GPPurchaseCatalogPresentationContractPrivate
 			&& WalkerRowLow->TransportSlotCost == WalkerDrop->TransportSlotCost
 			&& WalkerRowLow->TransportSlotCost == UnitCatalog.GetSalvageWalkerTransportSlotCost(),
 			TEXT("A_D_WalkerNameCostSlotFromCatalog"));
-		Expect(WorkerRowLow == nullptr || WorkerRowLow->Icon == nullptr,
-			TEXT("E_NullIconAcceptedOnNativeWorker"));
+		{
+			auto ExpectedUnitRowIcon = [](const UGP_OrbitalUnitDropDefinition* Drop) -> UTexture2D*
+			{
+				if (!IsValid(Drop))
+				{
+					return nullptr;
+				}
+				if (!Drop->Icon.IsNull())
+				{
+					if (UTexture2D* Loaded = Drop->Icon.Get())
+					{
+						return Loaded;
+					}
+					if (UTexture2D* Resolved = Cast<UTexture2D>(Drop->Icon.ToSoftObjectPath().ResolveObject()))
+					{
+						return Resolved;
+					}
+				}
+				if (const UGP_UnitDefinition* Def = Drop->ResolveLoadedUnitDefinition())
+				{
+					return Def->PresentationIcon.Get();
+				}
+				return nullptr;
+			};
+			Expect(WorkerRowLow != nullptr && WorkerRowLow->Icon == ExpectedUnitRowIcon(WorkerDrop)
+				&& WalkerRowLow != nullptr && WalkerRowLow->Icon == ExpectedUnitRowIcon(WalkerDrop),
+				TEXT("IconE_NativeWorkerWalkerFallbackToPresentationIcon"));
+		}
 		Expect(WorkerRowLow != nullptr
 			&& !WorkerRowLow->bEnabled
 			&& WorkerRowLow->DisabledReason.ToString().Contains(TEXT("Insufficient")),
@@ -488,76 +515,96 @@ namespace GPPurchaseCatalogPresentationContractPrivate
 			const FSoftObjectPath WallIconPath(
 				TEXT("/Game/GrimProtocol/UI/T_GP_PurchaseIcon_WallContractStub.T_GP_PurchaseIcon_WallContractStub"));
 			UTexture2D* UnitTex = UTexture2D::CreateTransient(8, 8, PF_B8G8R8A8, TEXT("GPPurchaseIconUnit"));
+			UTexture2D* FallbackTex = UTexture2D::CreateTransient(8, 8, PF_B8G8R8A8, TEXT("GPPurchaseIconFallback"));
 			UTexture2D* BuildingTex = UTexture2D::CreateTransient(8, 8, PF_B8G8R8A8, TEXT("GPPurchaseIconBuilding"));
 			UTexture2D* WallTex = UTexture2D::CreateTransient(8, 8, PF_B8G8R8A8, TEXT("GPPurchaseIconWall"));
-			Expect(IsValid(UnitTex) && IsValid(BuildingTex) && IsValid(WallTex),
+			Expect(IsValid(UnitTex) && IsValid(FallbackTex) && IsValid(BuildingTex) && IsValid(WallTex),
 				TEXT("Icon_TransientTextures"));
 
-			UGP_OrbitalUnitDropDefinition* IconWorker = NewObject<UGP_OrbitalUnitDropDefinition>(
-				GetTransientPackage(), FName(TEXT("DA_GP_OrbitalUnitDrop_Worker_IconStub")), RF_Transient);
-			IconWorker->DisplayName = WorkerDrop->DisplayName;
-			IconWorker->Cost = WorkerDrop->Cost;
-			IconWorker->TransportSlotCost = WorkerDrop->TransportSlotCost;
-			IconWorker->UnitDefinition = WorkerDrop->UnitDefinition;
-			IconWorker->PayloadClass = WorkerDrop->PayloadClass;
-			IconWorker->Icon = TSoftObjectPtr<UTexture2D>(UnitIconPath);
+			auto MakeUnitDef = [](const TCHAR* Name, UTexture2D* Presentation) -> UGP_UnitDefinition*
+			{
+				UGP_UnitDefinition* Def = NewObject<UGP_UnitDefinition>(
+					GetTransientPackage(), FName(Name), RF_Transient);
+				Def->PresentationIcon = Presentation;
+				return Def;
+			};
+			auto MakeUnitDrop = [](const TCHAR* Name, const UGP_OrbitalUnitDropDefinition* Seed)
+				-> UGP_OrbitalUnitDropDefinition*
+			{
+				UGP_OrbitalUnitDropDefinition* Drop = NewObject<UGP_OrbitalUnitDropDefinition>(
+					GetTransientPackage(), FName(Name), RF_Transient);
+				Drop->DisplayName = Seed->DisplayName;
+				Drop->Cost = Seed->Cost;
+				Drop->TransportSlotCost = Seed->TransportSlotCost;
+				Drop->PayloadClass = Seed->PayloadClass;
+				return Drop;
+			};
 
-			UGP_OrbitalUnitDropDefinition* IconWalker = NewObject<UGP_OrbitalUnitDropDefinition>(
-				GetTransientPackage(), FName(TEXT("DA_GP_OrbitalUnitDrop_Walker_IconStub")), RF_Transient);
-			IconWalker->DisplayName = WalkerDrop->DisplayName;
-			IconWalker->Cost = WalkerDrop->Cost;
-			IconWalker->TransportSlotCost = WalkerDrop->TransportSlotCost;
-			IconWalker->UnitDefinition = WalkerDrop->UnitDefinition;
-			IconWalker->PayloadClass = WalkerDrop->PayloadClass;
-			IconWalker->Icon = TSoftObjectPtr<UTexture2D>(UnitIconPath);
+			UGP_OrbitalUnitDropDefinition* FallbackWorker = MakeUnitDrop(
+				TEXT("DA_GP_OrbitalUnitDrop_Worker_FallbackIcon"), WorkerDrop);
+			FallbackWorker->UnitDefinition = MakeUnitDef(TEXT("DA_GP_Unit_Worker_FallbackIcon"), FallbackTex);
+			UGP_OrbitalUnitDropDefinition* FallbackWalker = MakeUnitDrop(
+				TEXT("DA_GP_OrbitalUnitDrop_Walker_FallbackIcon"), WalkerDrop);
+			FallbackWalker->UnitDefinition = MakeUnitDef(TEXT("DA_GP_Unit_Walker_FallbackIcon"), FallbackTex);
 
-			UGP_OrbitalUnitDropDefinition* EmptyIconWalker = NewObject<UGP_OrbitalUnitDropDefinition>(
-				GetTransientPackage(), FName(TEXT("DA_GP_OrbitalUnitDrop_Walker_EmptyIconStub")), RF_Transient);
-			EmptyIconWalker->DisplayName = WalkerDrop->DisplayName;
-			EmptyIconWalker->Cost = WalkerDrop->Cost;
-			EmptyIconWalker->TransportSlotCost = WalkerDrop->TransportSlotCost;
-			EmptyIconWalker->UnitDefinition = WalkerDrop->UnitDefinition;
-			EmptyIconWalker->PayloadClass = WalkerDrop->PayloadClass;
+			UnitCatalog.DebugAssignLoadedAuthoredWorker(FallbackWorker);
+			UnitCatalog.DebugAssignLoadedAuthoredSalvageWalker(FallbackWalker);
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+			const FGP_PurchaseCatalogRow* FallbackWorkerRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), FallbackWorker->GetPrimaryAssetId());
+			const FGP_PurchaseCatalogRow* FallbackWalkerRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), FallbackWalker->GetPrimaryAssetId());
+			Expect(FallbackWorkerRow != nullptr && FallbackWorkerRow->Icon == FallbackTex
+				&& FallbackWalkerRow != nullptr && FallbackWalkerRow->Icon == FallbackTex,
+				TEXT("IconA_EmptyDropIconUsesUnitDefinitionPresentationIcon"));
 
+			UGP_OrbitalUnitDropDefinition* EmptyBothWalker = MakeUnitDrop(
+				TEXT("DA_GP_OrbitalUnitDrop_Walker_EmptyBothIcon"), WalkerDrop);
+			EmptyBothWalker->UnitDefinition = MakeUnitDef(TEXT("DA_GP_Unit_Walker_EmptyBothIcon"), nullptr);
+			UnitCatalog.DebugAssignLoadedAuthoredSalvageWalker(EmptyBothWalker);
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+			const FGP_PurchaseCatalogRow* EmptyBothRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), EmptyBothWalker->GetPrimaryAssetId());
+			Expect(EmptyBothRow != nullptr && EmptyBothRow->Icon == nullptr,
+				TEXT("IconD_BothEmptyYieldsNull"));
+
+			UGP_OrbitalUnitDropDefinition* OverrideLoadedWorker = MakeUnitDrop(
+				TEXT("DA_GP_OrbitalUnitDrop_Worker_LoadedOverride"), WorkerDrop);
+			OverrideLoadedWorker->UnitDefinition = MakeUnitDef(
+				TEXT("DA_GP_Unit_Worker_LoadedOverride"), FallbackTex);
+			OverrideLoadedWorker->Icon = UnitTex;
+			UnitCatalog.DebugAssignLoadedAuthoredWorker(OverrideLoadedWorker);
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+			const FGP_PurchaseCatalogRow* LoadedOverrideRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), OverrideLoadedWorker->GetPrimaryAssetId());
+			Expect(LoadedOverrideRow != nullptr && LoadedOverrideRow->Icon == UnitTex,
+				TEXT("IconB_LoadedDropOverrideWinsOverPresentationIcon"));
+
+			UGP_OrbitalUnitDropDefinition* PendingOverrideWorker = MakeUnitDrop(
+				TEXT("DA_GP_OrbitalUnitDrop_Worker_PendingOverride"), WorkerDrop);
+			PendingOverrideWorker->UnitDefinition = MakeUnitDef(
+				TEXT("DA_GP_Unit_Worker_PendingOverride"), FallbackTex);
+			PendingOverrideWorker->Icon = TSoftObjectPtr<UTexture2D>(UnitIconPath);
 			Presenter->DebugHoldPurchaseIconCompletion(true);
 			Presenter->DebugInjectHeldPurchaseIcon(UnitIconPath, UnitTex);
 			Presenter->DebugInjectHeldPurchaseIcon(BuildingIconPath, BuildingTex);
 			Presenter->DebugInjectHeldPurchaseIcon(WallIconPath, WallTex);
-
-			UnitCatalog.DebugAssignLoadedAuthoredWorker(IconWorker);
-			UnitCatalog.DebugAssignLoadedAuthoredSalvageWalker(EmptyIconWalker);
+			UnitCatalog.DebugAssignLoadedAuthoredWorker(PendingOverrideWorker);
 			Presenter->RequestPurchaseBack();
 			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
-			const int32 RequestsAfterEmpty = Presenter->DebugGetPurchaseIconRequestCount();
-			const FGP_PurchaseCatalogRow* EmptyWalkerRow =
-				FindRowById(Presenter->GetPurchaseCatalogRows(), EmptyIconWalker->GetPrimaryAssetId());
-			Expect(EmptyWalkerRow != nullptr && EmptyWalkerRow->Icon == nullptr
-				&& Presenter->DebugHasPendingPurchaseIcon(UnitIconPath)
-				&& RequestsAfterEmpty >= 1,
-				TEXT("IconEmpty_NoRequestForNullSoftAndWorkerPending"));
-
-			UnitCatalog.DebugAssignLoadedAuthoredSalvageWalker(IconWalker);
-			Presenter->RequestPurchaseBack();
-			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
-			const int32 RequestsAfterShared = Presenter->DebugGetPurchaseIconRequestCount();
-			const FGP_PurchaseCatalogRow* SharedWorkerRow =
-				FindRowById(Presenter->GetPurchaseCatalogRows(), IconWorker->GetPrimaryAssetId());
-			const FGP_PurchaseCatalogRow* SharedWalkerRow =
-				FindRowById(Presenter->GetPurchaseCatalogRows(), IconWalker->GetPrimaryAssetId());
-			Expect(SharedWorkerRow != nullptr && SharedWorkerRow->Icon == nullptr
-				&& SharedWalkerRow != nullptr && SharedWalkerRow->Icon == nullptr
-				&& RequestsAfterShared == RequestsAfterEmpty
-				&& Presenter->DebugGetPendingPurchaseIconCount() == 1,
-				TEXT("IconDedup_SharedPathRequestsOnceAndRowsNullUntilReady"));
-
+			const FGP_PurchaseCatalogRow* PendingFallbackRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), PendingOverrideWorker->GetPrimaryAssetId());
+			Expect(PendingFallbackRow != nullptr && PendingFallbackRow->Icon == FallbackTex
+				&& Presenter->DebugHasPendingPurchaseIcon(UnitIconPath),
+				TEXT("IconC_UnresolvedOverrideKeepsPresentationIcon"));
 			Presenter->DebugCompleteHeldPurchaseIconLoad(UnitIconPath);
-			const FGP_PurchaseCatalogRow* ReadyWorkerRow =
-				FindRowById(Presenter->GetPurchaseCatalogRows(), IconWorker->GetPrimaryAssetId());
-			const FGP_PurchaseCatalogRow* ReadyWalkerRow =
-				FindRowById(Presenter->GetPurchaseCatalogRows(), IconWalker->GetPrimaryAssetId());
-			Expect(ReadyWorkerRow != nullptr && ReadyWorkerRow->Icon == UnitTex
-				&& ReadyWalkerRow != nullptr && ReadyWalkerRow->Icon == UnitTex,
-				TEXT("IconA_UnitDropIconValidAfterAsyncComplete"));
+			const FGP_PurchaseCatalogRow* OverrideReadyRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), PendingOverrideWorker->GetPrimaryAssetId());
+			Expect(OverrideReadyRow != nullptr && OverrideReadyRow->Icon == UnitTex,
+				TEXT("IconC_OverrideReplacesFallbackAfterAsyncComplete"));
 
 			UGP_BuildingDefinition* IconHubBuilding = NewObject<UGP_BuildingDefinition>(
 				GetTransientPackage(), FName(TEXT("DA_GP_Building_LogisticsHub_IconStub")), RF_Transient);

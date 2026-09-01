@@ -26,6 +26,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Identity")
 	FText DisplayName;
 
+	/** Optional purchase-row override. Empty → UGP_UnitDefinition::PresentationIcon. Do not duplicate required authoring. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Identity")
 	TSoftObjectPtr<UTexture2D> Icon;
 

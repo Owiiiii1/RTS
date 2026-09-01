@@ -25,8 +25,9 @@ public:
 	FText DisplayName;
 
 	/**
-	 * HUD selection/presentation icon. Metadata only; gameplay does not read this.
-	 * Null is valid until an operator assigns a texture on the authored DataAsset.
+	 * HUD selection and unit-purchase catalog icon. Canonical generic HUD icon for this unit.
+	 * Metadata only; gameplay does not read this. Null is valid until an operator assigns a texture.
+	 * Purchase rows use this when UGP_OrbitalUnitDropDefinition::Icon is empty or still loading.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GP|Identity|Presentation")
 	TObjectPtr<UTexture2D> PresentationIcon;

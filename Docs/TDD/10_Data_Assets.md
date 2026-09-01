@@ -106,9 +106,9 @@ Per [`14_Orbital_Delivery`](14_Orbital_Delivery.md). Each `DA_GP_OrbitalDrop_*` 
 | Asset | Owns |
 | --- | --- |
 | `UGP_BuildingDefinition` | Intrinsic identity/grid/payload + storage + `UnitCapBonus`. `MaxHealth` compatibility-only. |
-| `UGP_UnitDefinition` | Canonical initial MaxHealth / combat / sight / facing / cargo (GP-S38D / GP-S39E) plus HUD `PresentationIcon` (`UTexture2D`, nullable). Runtime combat remains GAS. |
+| `UGP_UnitDefinition` | Canonical initial MaxHealth / combat / sight / facing / cargo (GP-S38D / GP-S39E) plus HUD `PresentationIcon` (`UTexture2D`, nullable; canonical generic HUD icon including unit purchase fallback). Runtime combat remains GAS. |
 | `UGP_OrbitalDropDefinition` | Building READY acquisition: `Cost`, `DropTags`, soft `BuildingDefinition`, descent / deploy delay. Not Wall Package. |
-| `UGP_OrbitalUnitDropDefinition` | Unit acquisition: `Cost`, slots, payload, descent / deploy delay |
+| `UGP_OrbitalUnitDropDefinition` | Unit acquisition: `Cost`, slots, payload, descent / deploy delay. Optional soft `Icon` is a purchase-row override only; empty uses `UnitDefinition.PresentationIcon`. |
 | `UGP_WallPackageDefinition` | Wall Package: DisplayName, Icon, Cost, SegmentCount=5, delivery timing |
 | `UGP_OrbitalDeliverySettings` | Global transport tunables + **soft refs only** to authored unit/building/package DataAssets. No balance values on those refs. |
 

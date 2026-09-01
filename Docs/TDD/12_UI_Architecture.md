@@ -460,12 +460,17 @@ death, destroy, enemy/inspect) forces `Actions`. HUD Blueprint: `RequestOpenPurc
 No spend, RPC, unit manifests, LAUNCH, READY purchase, placement, or wall buy in this checkpoint.
 LAUNCH remains existing unit Confirm / building Purchase→READY→ghost / Wall Package buy.
 
-**Purchase catalog icons:** `UGP_OrbitalUnitDropDefinition::Icon`, `UGP_BuildingDefinition::Icon`,
-and `UGP_WallPackageDefinition::Icon` are `TSoftObjectPtr<UTexture2D>`. Rows expose `Icon=null`
-until the texture is loaded. `UGP_ContextActionPresenter` requests `UAssetManager` StreamableManager
-async loads (deduped by `FSoftObjectPath`), keeps handles while in flight, and on completion rebuilds
-the active catalog or selected-item row and broadcasts `OnContextActionsChanged`. No Tick. No
-`LoadSynchronous`. Empty soft refs request nothing. UI must not sync-load presentation assets.
+**Purchase catalog icons:** Building and Wall Package rows resolve `UGP_BuildingDefinition::Icon`
+and `UGP_WallPackageDefinition::Icon` asynchronously (`TSoftObjectPtr<UTexture2D>`). Unit purchase
+rows use `ResolveUnitPurchaseIcon`: loaded `UGP_OrbitalUnitDropDefinition::Icon` is an optional
+purchase-specific override; otherwise the row uses already-loaded
+`UGP_UnitDefinition::PresentationIcon` (no duplicate drop-icon authoring). If a drop override is
+assigned but not yet loaded, the presenter requests the existing StreamableManager async load and
+shows `PresentationIcon` until completion, then rebuilds the row with the override and broadcasts
+`OnContextActionsChanged`. Empty override plus empty `PresentationIcon` yields null. No Tick. No
+`LoadSynchronous`. Empty soft refs request nothing. UI must not sync-load presentation assets. Do
+not copy `PresentationIcon` onto the drop. Async requests stay presenter-owned and deduped by
+`FSoftObjectPath`.
 
 **Purchase catalog classification:** `UGP_BuildingDefinition.BuildingTags` is canonical for category
 assignment. `UGP_OrbitalDropDefinition.DropTags` are acquisition/fallback metadata and must not hide

@@ -11,6 +11,7 @@
 class AGP_PlayerController;
 class AGP_UnitBase;
 class UAbilitySystemComponent;
+class UGP_OrbitalUnitDropDefinition;
 class UGP_SelectionComponent;
 class UGP_WallSegmentInventoryComponent;
 class UTexture2D;
@@ -68,7 +69,8 @@ enum class EGP_PurchaseCatalogItemKind : uint8
 
 /**
  * Factual MainBase PURCHASE catalog row. Presentation only — no spend / RPC / manifest.
- * ItemId is the product PrimaryAssetId. Icon is asynchronously resolved; null until ready.
+ * ItemId is the product PrimaryAssetId. Unit rows may show UnitDefinition PresentationIcon
+ * immediately; soft overrides / building / wall icons stay async (null until ready).
  */
 USTRUCT(BlueprintType)
 struct GPUIRUNTIME_API FGP_PurchaseCatalogRow
@@ -256,7 +258,9 @@ private:
 	FGP_PurchaseUnitManifestPresentation BuildUnitManifestPresentation() const;
 	float GetLocalOrbitalFerronite() const;
 	static int32 GetShuttleSlotCapacity();
+	UTexture2D* FindResolvedPurchaseIcon(const TSoftObjectPtr<UTexture2D>& Soft) const;
 	UTexture2D* ResolvePurchaseIcon(const TSoftObjectPtr<UTexture2D>& Soft);
+	UTexture2D* ResolveUnitPurchaseIcon(const UGP_OrbitalUnitDropDefinition* Drop);
 	void RequestPurchaseIconLoad(const FSoftObjectPath& Path);
 	void HandlePurchaseIconLoaded(FSoftObjectPath Path);
 	void CancelPurchaseIconLoads();

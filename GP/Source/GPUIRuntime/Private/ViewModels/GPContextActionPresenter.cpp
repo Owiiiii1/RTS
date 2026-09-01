@@ -25,6 +25,7 @@
 #include "Settings/GPOrbitalDeliverySettings.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPUnitBase.h"
+#include "Units/GPUnitDefinition.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPPurchaseCatalog, Log, All);
 
@@ -552,7 +553,7 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 			Row.ItemKind = EGP_PurchaseCatalogItemKind::Unit;
 			Row.Category = EGP_PurchaseCategory::Units;
 			Row.DisplayName = Drop->DisplayName;
-			Row.Icon = ResolvePurchaseIcon(Drop->Icon);
+			Row.Icon = ResolveUnitPurchaseIcon(Drop);
 			Row.Cost = Drop->Cost;
 			Row.TransportSlotCost = Drop->TransportSlotCost;
 			if (const UGP_OrbitalUnitDropDefinition* WorkerDrop = UnitCatalog.GetWorkerDrop())
@@ -1501,7 +1502,7 @@ void UGP_ContextActionPresenter::HandleBuildingReadyChanged(FPrimaryAssetId Drop
 	}
 }
 
-UTexture2D* UGP_ContextActionPresenter::ResolvePurchaseIcon(const TSoftObjectPtr<UTexture2D>& Soft)
+UTexture2D* UGP_ContextActionPresenter::FindResolvedPurchaseIcon(const TSoftObjectPtr<UTexture2D>& Soft) const
 {
 	using namespace GPPurchaseCatalogPresentationPrivate;
 
@@ -1512,12 +1513,11 @@ UTexture2D* UGP_ContextActionPresenter::ResolvePurchaseIcon(const TSoftObjectPtr
 
 	if (UTexture2D* Loaded = PeekLoadedTexture(Soft))
 	{
-		ResolvedPurchaseIcons.Add(Soft.ToSoftObjectPath(), Loaded);
 		return Loaded;
 	}
 
 	const FSoftObjectPath Path = Soft.ToSoftObjectPath();
-	if (TObjectPtr<UTexture2D>* Cached = ResolvedPurchaseIcons.Find(Path))
+	if (const TObjectPtr<UTexture2D>* Cached = ResolvedPurchaseIcons.Find(Path))
 	{
 		if (IsValid(*Cached))
 		{
@@ -1525,7 +1525,52 @@ UTexture2D* UGP_ContextActionPresenter::ResolvePurchaseIcon(const TSoftObjectPtr
 		}
 	}
 
-	RequestPurchaseIconLoad(Path);
+	return nullptr;
+}
+
+UTexture2D* UGP_ContextActionPresenter::ResolvePurchaseIcon(const TSoftObjectPtr<UTexture2D>& Soft)
+{
+	if (Soft.IsNull())
+	{
+		return nullptr;
+	}
+
+	if (UTexture2D* Loaded = FindResolvedPurchaseIcon(Soft))
+	{
+		ResolvedPurchaseIcons.Add(Soft.ToSoftObjectPath(), Loaded);
+		return Loaded;
+	}
+
+	RequestPurchaseIconLoad(Soft.ToSoftObjectPath());
+	return nullptr;
+}
+
+UTexture2D* UGP_ContextActionPresenter::ResolveUnitPurchaseIcon(const UGP_OrbitalUnitDropDefinition* Drop)
+{
+	if (!IsValid(Drop))
+	{
+		return nullptr;
+	}
+
+	if (!Drop->Icon.IsNull())
+	{
+		if (UTexture2D* Override = FindResolvedPurchaseIcon(Drop->Icon))
+		{
+			ResolvedPurchaseIcons.Add(Drop->Icon.ToSoftObjectPath(), Override);
+			return Override;
+		}
+
+		RequestPurchaseIconLoad(Drop->Icon.ToSoftObjectPath());
+	}
+
+	if (const UGP_UnitDefinition* UnitDef = Drop->ResolveLoadedUnitDefinition())
+	{
+		if (IsValid(UnitDef->PresentationIcon))
+		{
+			return UnitDef->PresentationIcon.Get();
+		}
+	}
+
 	return nullptr;
 }
 

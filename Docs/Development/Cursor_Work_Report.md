@@ -2,7 +2,7 @@
 
 ## Status
 
-**BOTTOM_HUD_PURCHASE_ICON_ASYNC_READY_FOR_OPERATOR_VALIDATION**
+**BOTTOM_HUD_UNIT_PURCHASE_ICON_FALLBACK_READY_FOR_OPERATOR_VALIDATION**
 
 This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge. Do not run production finalization.
 
@@ -10,44 +10,44 @@ This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge
 
 - Branch: `ui/gp-bottom-hud`
 - Base: `origin/main` @ `0667b6f912fce288422848d5d2355bc4510b748c`
-- Head (implementation): `0304a45d0f87a9f91cd0c0d04a674d9771c7072a`
+- Head (implementation): `c06743d613c6fea71f5d492f7acdfd16fbae22e5`
+- Previous Purchase icon async: `0304a45d0f87a9f91cd0c0d04a674d9771c7072a`
 - Previous Purchase execution: `0adab58ed826f2904c37385b230719f021da5d01`
 - Behind `origin/main`: **0**
 - `GP Win64 Development` / `GP Win64 Shipping`: **not run** (intermediate gate)
 
-## Exact root cause
+## Icon precedence
 
-Purchase rows bind `FGP_PurchaseCatalogRow.Icon` from soft presentation textures:
+Unit purchase rows (`PurchaseUnits`) resolve via `UGP_ContextActionPresenter::ResolveUnitPurchaseIcon(Drop)`:
 
-- Units: `UGP_OrbitalUnitDropDefinition::Icon`
-- Buildings / Defense buildings: `UGP_BuildingDefinition::Icon`
-- Wall Package: `UGP_WallPackageDefinition::Icon`
+1. Loaded / cached `UGP_OrbitalUnitDropDefinition::Icon` — optional purchase-specific override.
+2. Else `Drop->ResolveLoadedUnitDefinition()->PresentationIcon` — canonical generic HUD icon.
+3. Else `nullptr`.
 
-The presenter only did `TSoftObjectPtr::Get()` or `ResolveObject()`. Authored icons are valid soft paths that are not resident when the catalog first rebuilds, so `RowData.Icon` stayed null. Selection icons work because `UGP_UnitDefinition::PresentationIcon` is an already-loaded `UTexture2D*`. WBP `SetBrushFromTexture` was wired; the native row data never became valid. No sync load is allowed.
+`UGP_UnitDefinition::PresentationIcon` is the canonical generic HUD icon (selection and unit purchase fallback). `UGP_OrbitalUnitDropDefinition::Icon` is an optional acquisition override only. No duplicate required authoring. `PresentationIcon` is not copied onto the drop. Authored DataAssets were not modified.
 
-## Async ownership
+Building / Wall Package rows still use generic `ResolvePurchaseIcon` on definition soft `Icon`. No unit semantics were pushed into that helper.
 
-Presenter-owned lightweight StreamableManager requests (`UAssetManager::GetStreamableManager().RequestAsyncLoad`). Catalogs still own drop/definition readiness; they do not load HUD icons. DataAssets are not mutated.
+## Immediate fallback while async override pending
 
-## Request dedup
+Existing presenter StreamableManager async icon loading remains.
 
-Requests are keyed by `FSoftObjectPath`. In-flight map + attempted set: one path is requested once even when Worker and Salvage Walker share it. Empty / null soft refs request nothing.
+If `Drop->Icon` is non-null but unresolved:
 
-Handles are retained in `PendingPurchaseIconLoads` until completion, cancel, or Shutdown. Shutdown / BeginDestroy sets `bPurchaseIconLoadsAbandoned`, cancels handles, and clears caches so a late callback is a no-op.
+- request the async override (deduped by `FSoftObjectPath`)
+- show `PresentationIcon` immediately so the row is not blank
+- on completion, rebuild the catalog row and replace the fallback with the override
 
-## Rebuild callback
+No Tick. No `LoadSynchronous`. Empty drop `Icon` requests nothing.
 
-`HandlePurchaseIconLoaded` caches the loaded `UTexture2D`, then `RefreshPurchaseCatalogIfCategoryActive()` (category lists **and** `PurchaseBuildingSelected` / `PurchaseDefenseSelected`). That rebuilds rows / `GetSelectedPurchaseItem()` and broadcasts existing `OnContextActionsChanged`. No Tick. No `LoadSynchronous`. Inline Streamable completion during a rebuild is deferred via `bPurchaseIconRefreshDeferred` to avoid reentrancy.
+## Native / authored coverage
 
-Non-shipping hold/release seam (same idea as catalog definition hold tests): `DebugHoldPurchaseIconCompletion`, `DebugInjectHeldPurchaseIcon`, `DebugCompleteHeldPurchaseIconLoad`, `DebugCancelPurchaseIconLoads`.
+Fallback uses factual loaded `UnitDefinition` only (no sync load).
 
-## Unit / building / wall coverage
-
-`ResolvePurchaseIcon` is used for unit drop rows, `MakeBuildingRow` (Logistics Hub / turret), Wall Package list rows, and selected-item rebuild for Building / DefensiveBuilding / WallPackage.
-
-## Selected-item coverage
-
-While `PurchaseBuildingSelected` or `PurchaseDefenseSelected`, completion rebuilds `SelectedPurchaseRow`. `GetSelectedPurchaseItem().Icon` becomes the loaded texture and the same UI change broadcast fires.
+- Native Worker / Salvage Walker drops (empty `Icon`, catalog `UnitDefinition`) use `PresentationIcon`.
+- Authored Worker / Salvage Walker drops with loaded `UnitDefinition` use the same fallback.
+- Loaded drop override still wins over `PresentationIcon`.
+- Both empty → null icon.
 
 ## Tests / build
 
@@ -57,19 +57,20 @@ Headless `-game -nullrhi -unattended -nop4` `L_PrototypeArena`. No quit. Editor 
 
 | Command | Result |
 | --- | --- |
-| `gp.UI.RunPurchaseCatalogPresentationContractTest` | Complete Failures=0 (includes A unit / B building / C wall, dedup, empty-icon no request, selected-item, shutdown-safe cancel) |
+| `gp.UI.RunPurchaseCatalogPresentationContractTest` | Complete Failures=0 (A empty-drop→PresentationIcon; B loaded override wins; C pending override keeps PresentationIcon then replaces; D both empty→null; E native Worker/Walker fallback; F building/wall async unchanged) |
 | `gp.UI.RunPurchaseExecutionContractTest` | Complete Failures=0 |
 | `gp.UI.RunSelectionViewModelContractTest` | Complete Failures=0 |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | Complete Failures=0 |
 | `gp.Resource.RunOrbitalUnitDropContractTest` | Complete Failures=0 |
-| `gp.Building.RunOrbitalBuildingDropContractTest` | Complete Failures=0 |
-| `gp.Orbital.RunWallPackageInventoryContractTest` | Complete Failures=0 |
 
 ## Changed files (implementation commit)
 
 - `GP/Source/GPUIRuntime/Public/ViewModels/GPContextActionPresenter.h`
 - `GP/Source/GPUIRuntime/Private/ViewModels/GPContextActionPresenter.cpp`
 - `GP/Source/GPUIRuntime/Private/Debug/GPPurchaseCatalogPresentationContractTest.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPUnitDefinition.h` (comment only)
+- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalUnitDropDefinition.h` (comment only)
+- `Docs/TDD/10_Data_Assets.md`
 - `Docs/TDD/12_UI_Architecture.md`
 - `Docs/TDD/14_Orbital_Delivery.md`
 - `Docs/GDD/09_UI_UX.md`
@@ -77,8 +78,6 @@ Headless `-game -nullrhi -unattended -nop4` `L_PrototypeArena`. No quit. Editor 
 
 ## Protected audit
 
-Not modified: purchase authority/RPCs, manifest rules, READY, placement, costs, category classification, authored DataAssets, `WBP_GP_HUD`, `WBP_GP_PurchaseRow`, `Content/`, `Config/`, maps, `GP.uproject`, `Tools/`. No destructive git. Local dirty Content/Config/maps/Tools/uproject left unstaged.
+Not modified: purchase authority/RPCs, manifest rules, READY, placement, costs, category classification, authored DataAssets, `WBP_GP_HUD`, `WBP_GP_PurchaseRow`, `WBP_GP_SelectionGroupRow`, `Content/`, `Config/`, maps, Materials, VFX, `GP.uproject`, `Tools/`. No destructive git. Local dirty Content/Config/maps/Tools/uproject left unstaged.
 
-## Operator note
-
-Re-enter PurchaseUnits / Buildings / Defense after this head. Authored row icons should appear after async load without WBP changes. INTERMEDIATE / NOT MERGE READY.
+INTERMEDIATE / NOT MERGE READY.

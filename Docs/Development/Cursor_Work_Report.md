@@ -2,7 +2,7 @@
 
 ## Status
 
-**BOTTOM_HUD_AUTHORED_BUILDING_CATALOG_FIX_READY_FOR_OPERATOR_VALIDATION**
+**BOTTOM_HUD_PURCHASE_EXECUTION_READY_FOR_OPERATOR_VALIDATION**
 
 This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge. Do not run production finalization.
 
@@ -10,91 +10,148 @@ This is an **INTERMEDIATE Bottom HUD checkpoint**, not merge-ready. Do not merge
 
 - Branch: `ui/gp-bottom-hud`
 - Base: `origin/main` @ `0667b6f912fce288422848d5d2355bc4510b748c`
-- Head (implementation): `335b201c1a14e97590f1f177beeba8decd9b6cd3`
-- Previous catalog presentation implementation: `43dd8275cb27a97d09d5cd272521b3770037391f`
+- Head (implementation): `0adab58ed826f2904c37385b230719f021da5d01`
+- Previous authored Logistics Hub classification: `335b201c1a14e97590f1f177beeba8decd9b6cd3`
 - Behind `origin/main`: **0**
 - `GP Win64 Development` / `GP Win64 Shipping`: **not run** (intermediate gate)
 
-## Exact root cause
+## Exact reused RPCs
 
-`GetOperatorVisibleDrops()` was already returning the canonical authored Logistics Hub when that slot was ready. PurchaseBuildings was empty because `ClassifyBuildingDrop()` required `Drop->DropTags` to contain `GP.Drop.Type.Building` before assigning `OrdinaryBuilding`.
+No new RPCs. HUD / presenter call existing local PlayerController wrappers, which still send the same server RPCs:
 
-Native bootstrap `CreateNativeDrop` always stamps that drop tag. Authored `UGP_OrbitalDropDefinition` products do not: identity lives on the linked `UGP_BuildingDefinition.BuildingTags` (`GP.Building.Type.LogisticsHub`). The authored drop reached the catalog and was then classified `Skip`.
-
-Catalog precedence, purchase authority, cost, READY, and deploy were not wrong. This was presentation classification only.
-
-## Real authored-vs-native difference
-
-| | Native bootstrap Logistics Hub | Authored Logistics Hub |
+| HUD / presenter API | Existing PC wrapper | Existing RPC |
 | --- | --- | --- |
-| `BuildingTags` | `GP.Building.Type.LogisticsHub` | `GP.Building.Type.LogisticsHub` |
-| `DropTags` | includes `GP.Drop.Type.Building` | typically **empty** / no `Drop.Type.Building` |
-| Catalog | `GetOperatorVisibleDrops` native fallback | canonical authored drop when ready |
-| Old presenter | shown (drop-tag test passed) | **skipped** (no drop tag) |
-| New presenter | shown (`Building_Type_LogisticsHub`) | **shown** (same building tag) |
+| `RequestLaunchUnitShuttle()` | `RequestUnitDrop(PendingUnitManifest)` | `Server_RequestUnitDrop` |
+| `RequestLaunchSelectedPurchaseItem()` Building / DefensiveBuilding | `RequestBuildingPurchase(ItemId)` | `Server_RequestBuildingPurchase` |
+| Placement confirm (unchanged) | `RequestBuildingDeploy` / `ConfirmBuildingPlacement` | `Server_RequestBuildingDeploy` |
+| `RequestLaunchSelectedPurchaseItem()` WallPackage | `RequestWallPackagePurchase()` | `Server_RequestWallPackagePurchase` |
 
-## New classification precedence
+Placement enter reuses `EnterBuildingPlacementMode(ItemId)`. Cancel reuses `CancelBuildingPlacement`.
 
-`BuildingDefinition.BuildingTags` is canonical for category assignment. `DropTags` remain acquisition/fallback metadata and must not hide a known Logistics Hub.
+## Unit manifest state and gates
 
-1. `Building_Type_MainBase` → Skip
-2. `Drop_Type_WallPackage` → Skip
-3. `Drop_Type_Wall` or `Building_Type_Wall` → Skip
-4. `Building_Type_DefensiveTurret` → Defense (`DefensiveBuilding`)
-5. `Building_Type_WallTurret` → Defense only if spawned class is already resolved; else Skip
-6. `Building_Type_LogisticsHub` → Buildings (`OrdinaryBuilding`)
-7. `Drop_Type_Building` → fallback OrdinaryBuilding when no more specific building identity applies
+Presenter owns local `FGP_UnitDropManifest PendingUnitManifest`. Row clicks do not RPC.
 
-Specific BuildingDefinition identity wins over generic `Drop_Type_Building` (turret with that drop tag stays Defense).
+- `RequestPurchaseRowPrimary` in PurchaseUnits: +1 Worker or SalvageWalker if local gates pass
+- `RequestPurchaseRowSecondary`: −1, min 0
+- Quantity on `FGP_PurchaseCatalogRow.Quantity`
+- Gates use `GPUnitDropAuthority::ComputeManifestCosts` (now `GPRUNTIME_API` for the UI module), `UGP_OrbitalDeliverySettings::PodTransportSlotCapacity`, local OrbitalFerronite, and `AGP_PlayerState::CanAcceptManifestUnitCount`
+- Reject reasons stored as purchase contextual text: Shuttle capacity reached / Not enough Orbital Ferronite / Unit cap reached
+- `GetPurchaseUnitManifestPresentation()`: WorkerCount, SalvageWalkerCount, UnitCount, UsedSlots, MaxSlots, TotalCost, bCanLaunch, DisabledReason
 
-Non-shipping skip diagnostic (rebuild only, no Tick): `GP PurchaseCatalog SkipBuilding Drop=... DropTags=... BuildingTags=...`
+## Message strip state
 
-## Authored LogisticsHub test WITHOUT Drop_Type_Building
+`UGP_HUDRootWidget::GetContextMessage()`:
 
-Inside `gp.UI.RunPurchaseCatalogPresentationContractTest`:
+1. Command targeting prompt wins while Move / AttackMove / Patrol targeting is active (`GetCommandTargetingPrompt()` unchanged)
+2. Else PurchaseUnits: empty manifest `Shuttle capacity: 0 / X slots`; non-empty `Shuttle: N / X slots`; or last local add-reject reason
+3. Else empty
 
-- Inject authored drop + `UGP_BuildingDefinition` tagged `Building_Type_LogisticsHub`
-- `DropTags` intentionally empty (no `Drop_Type_Building`)
-- Valid `AGP_LogisticsHub` spawned class
-- Drive via `DebugAssignLoadedAuthoredLogisticsHub`
+No global toast system.
 
-Asserted:
+## Selected-item states
 
-- A. `GetOperatorVisibleDrops` includes the authored drop
-- B. PurchaseBuildings shows that authored row
-- C. `ItemId` is authored, not native
-- D. Cost from authored drop (`77`, not native `100`)
-- E. DisplayName from linked BuildingDefinition
-- F. Row does not require `Drop_Type_Building`
+Enum extended with `PurchaseBuildingSelected` and `PurchaseDefenseSelected`. No separate Wall state.
 
-Lane regressions in the same block: authored DefensiveTurret **with** `Drop_Type_Building` stays Defense; Wall / MainBase / WallTurret stay excluded from Buildings; WallTurret still omitted without a resolved spawned class.
+- Buildings LMB → `SelectedPurchaseItemId` + PurchaseBuildingSelected
+- Defense DefensiveBuilding or WallPackage LMB → same for PurchaseDefenseSelected
+- Select does not spend
+- Building/Defense RMB: no-op
+- `GetSelectedPurchaseItem()` returns identity row (ItemId, kind, name, icon, cost, enabled/reason, metadata). Empty catalog rows in selected states
+- Selection away from friendly MainBase clears selected item, pending manifest, pending auto-deploy, and returns to Actions
+- Back: PurchaseBuildingSelected → PurchaseBuildings; PurchaseDefenseSelected → PurchaseDefense; category Back → PurchaseRoot
 
-## Tests / build
+## Building Purchase → READY → auto-placement sequencing
+
+Factual: `Server_RequestBuildingPurchase` has **no client success ack**. READY is not faked.
+
+1. Launch sets `PendingAutoDeployItemId` and snapshots `GetReadyCount` as `PendingAutoDeployReadyBefore`
+2. Calls existing `RequestBuildingPurchase(ItemId)`
+3. Server spends once and READY++
+4. Presenter binds PlayerState `UGP_OrbitalBuildingInventoryComponent::OnReadyChanged`
+5. If ItemId matches and `NewCount > ReadyBefore`, clear pending auto-deploy and call existing `EnterBuildingPlacementMode` (requires READY > 0)
+6. Cancel placement: ghost exits, READY retained
+7. Confirm: existing `Server_RequestBuildingDeploy` only. No second purchase/spend. No new spawn RPC
+
+Pre-existing READY for the same ItemId does not auto-enter placement (`NewCount > ReadyBefore`).
+
+## WallPackage flow
+
+Selected WallPackage Launch → `RequestWallPackagePurchase()` only. No building purchase RPC. No READY. No placement mode. Returns to PurchaseDefense. Full stock / pending delivery disables selected launch (`bEnabled` false).
+
+## No double spend proof / tests
+
+- Building select / Back: OrbitalFerronite unchanged
+- Launch increments presenter `DebugBuildingPurchaseRequestCount` once and READY +1
+- Cancel keeps READY; `ConfirmBuildingPlacement` while inactive does not increment purchase count
+- Wall Launch increments wall request count only; building purchase count and READY totals unchanged
+- Unit Launch clears pending manifest immediately (no client success seam exists; avoids duplicate launch from stale manifest). Documented limitation: submit is optimistic; server remains final authority / logs
+
+Focused contract: `gp.UI.RunPurchaseExecutionContractTest`
+
+## Blueprint API
+
+HUD root (do not modify WBP):
+
+- `RequestPurchaseRowPrimary(FPrimaryAssetId)`
+- `RequestPurchaseRowSecondary(FPrimaryAssetId)`
+- `RequestLaunchUnitShuttle()`
+- `RequestLaunchSelectedPurchaseItem()`
+- `GetSelectedPurchaseItem()`
+- `GetPurchaseUnitManifestPresentation()`
+- `GetContextMessage()`
+- existing `RequestPurchaseBack()` / catalog getters / panel state
+
+`GetCommandTargetingPrompt()` remains targeting-only.
+
+## Exact operator wiring
+
+Protected WBP remain operator-owned. Minimal wiring:
+
+- `WBP_GP_PurchaseRow` `BTN_Row` OnClicked → `RequestPurchaseRowPrimary(RowData.ItemId)`
+- Row RMB: Blueprint `OnMouseButtonDown` RightMouseButton → `RequestPurchaseRowSecondary(RowData.ItemId)` (Button OnClicked cannot distinguish RMB)
+- Quantity text from `RowData.Quantity`
+- Units `BTN_LaunchShuttle` → `RequestLaunchUnitShuttle()`
+- Selected overlay (operator may add later): `BTN_SelectedLaunch` → `RequestLaunchSelectedPurchaseItem()`; `BTN_SelectedBack` → `RequestPurchaseBack()`
+
+## Tests
 
 `GPEditor Win64 Development` **Passed** (UHT included). No GP Dev/Shipping.
 
+Headless `-game -nullrhi -unattended -nop4` `L_PrototypeArena`. No quit. Editor killed after Complete.
+
 | Command | Result |
 | --- | --- |
+| `gp.UI.RunPurchaseExecutionContractTest` | Complete Failures=0 |
 | `gp.UI.RunPurchaseCatalogPresentationContractTest` | Complete Failures=0 |
 | `gp.UI.RunContextActionPresentationContractTest` | Complete Failures=0 |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | Complete Failures=0 |
+| `gp.Resource.RunOrbitalUnitDropContractTest` | Complete Failures=0 |
 | `gp.Building.RunOrbitalBuildingDropContractTest` | Complete Failures=0 |
+| `gp.Orbital.RunWallPackageInventoryContractTest` | Complete Failures=0 |
+| `gp.Building.RunBuildGridContractTest` | Complete Failures=0 |
 | `gp.Building.RunMultiBuildingDataContractTest` | Complete Failures=0 |
+| `gp.Resource.RunUnitCapLogisticsHubContractTest` | Complete Failures=0 |
+| `gp.Commands.RunMovePatrolTargetingContractTest` | Complete Failures=0 |
 
 ## Changed files (implementation commit)
 
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPContextActionPresenter.h`
 - `GP/Source/GPUIRuntime/Private/ViewModels/GPContextActionPresenter.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPPurchaseCatalogPresentationContractTest.cpp`
+- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
+- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPPurchaseExecutionContractTest.cpp`
+- `GP/Source/GPRuntime/Public/Orbital/GPUnitDropAuthority.h` (`ComputeManifestCosts` export only)
 - `Docs/TDD/12_UI_Architecture.md`
 - `Docs/TDD/14_Orbital_Delivery.md`
+- `Docs/GDD/09_UI_UX.md`
+- `Docs/GDD/10_Orbital_Delivery.md`
 - `Docs/Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md`
 
 ## Protected audit
 
-Not modified: `WBP_GP_HUD`, `WBP_GP_PurchaseRow`, `Content/`, authored DataAssets, `Config/`, maps, `GP.uproject`, `Tools/`. No building purchase authority / READY / cost / deploy / catalog precedence change. No destructive git. Local dirty Content/Config/maps/Tools/uproject left unstaged.
+Not modified: `WBP_GP_HUD`, `WBP_GP_PurchaseRow`, `WBP_GP_SelectionGroupRow`, `Content/`, authored DataAssets, `Config/`, maps, Materials, VFX, `Tools/`, `GP.uproject`. No destructive git. Local dirty Content/Config/maps/Tools/uproject left unstaged.
 
 ## Operator note
 
-Re-enter PurchaseBuildings after this head. Authored Logistics Hub should appear with authored `ItemId`, BuildingDefinition display name/icon, and authored Cost. Do not add `GP.Drop.Type.Building` to the DataAsset as a workaround.
-
-INTERMEDIATE / NOT MERGE READY.
+Wire row LMB/RMB, Launch Shuttle, and selected-item Launch/Back to the HUD root APIs above. Authored selected-item overlays/pages may still be added locally. INTERMEDIATE / NOT MERGE READY.

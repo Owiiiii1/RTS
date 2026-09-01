@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/StreamableManager.h"
 #include "Orbital/GPUnitDropManifest.h"
 #include "UObject/Object.h"
 #include "GPContextActionPresenter.generated.h"
@@ -67,7 +68,7 @@ enum class EGP_PurchaseCatalogItemKind : uint8
 
 /**
  * Factual MainBase PURCHASE catalog row. Presentation only — no spend / RPC / manifest.
- * ItemId is the product PrimaryAssetId. Icon is already-loaded only (null allowed).
+ * ItemId is the product PrimaryAssetId. Icon is asynchronously resolved; null until ready.
  */
 USTRUCT(BlueprintType)
 struct GPUIRUNTIME_API FGP_PurchaseCatalogRow
@@ -205,6 +206,16 @@ public:
 	FPrimaryAssetId DebugGetLastRequestedBuildingPurchaseId() const { return DebugLastRequestedBuildingPurchaseId; }
 	int32 DebugGetWallPackagePurchaseRequestCount() const { return DebugWallPackagePurchaseRequestCount; }
 	FPrimaryAssetId DebugGetPendingAutoDeployItemId() const { return PendingAutoDeployItemId; }
+	int32 DebugGetPurchaseIconRequestCount() const { return DebugPurchaseIconRequestCount; }
+	int32 DebugGetPendingPurchaseIconCount() const { return PendingPurchaseIconLoads.Num(); }
+	bool DebugHasPendingPurchaseIcon(const FSoftObjectPath& Path) const
+	{
+		return PendingPurchaseIconLoads.Contains(Path);
+	}
+	void DebugHoldPurchaseIconCompletion(bool bHold);
+	void DebugInjectHeldPurchaseIcon(const FSoftObjectPath& Path, UTexture2D* Texture);
+	void DebugCompleteHeldPurchaseIconLoad(const FSoftObjectPath& Path);
+	void DebugCancelPurchaseIconLoads();
 #endif
 
 	FOnGPContextActionsChanged OnContextActionsChanged;
@@ -245,6 +256,10 @@ private:
 	FGP_PurchaseUnitManifestPresentation BuildUnitManifestPresentation() const;
 	float GetLocalOrbitalFerronite() const;
 	static int32 GetShuttleSlotCapacity();
+	UTexture2D* ResolvePurchaseIcon(const TSoftObjectPtr<UTexture2D>& Soft);
+	void RequestPurchaseIconLoad(const FSoftObjectPath& Path);
+	void HandlePurchaseIconLoaded(FSoftObjectPath Path);
+	void CancelPurchaseIconLoads();
 
 	UFUNCTION()
 	void HandleBoundActorDestroyed(AActor* DestroyedActor);
@@ -292,6 +307,12 @@ private:
 	TWeakObjectPtr<class UGP_OrbitalBuildingInventoryComponent> BoundBuildingInventory;
 	FDelegateHandle OrbitalFerroniteHandle;
 	FDelegateHandle BuildingReadyChangedHandle;
+	TMap<FSoftObjectPath, TSharedPtr<FStreamableHandle>> PendingPurchaseIconLoads;
+	TMap<FSoftObjectPath, TObjectPtr<UTexture2D>> ResolvedPurchaseIcons;
+	TSet<FSoftObjectPath> PurchaseIconLoadAttempted;
+	bool bPurchaseIconLoadsAbandoned = false;
+	bool bInsidePurchaseCatalogRebuild = false;
+	bool bPurchaseIconRefreshDeferred = false;
 	EGP_ContextActionMode Mode = EGP_ContextActionMode::None;
 	EGP_ContextActionPanelState PanelState = EGP_ContextActionPanelState::Actions;
 #if !UE_BUILD_SHIPPING
@@ -300,5 +321,8 @@ private:
 	int32 DebugBuildingPurchaseRequestCount = 0;
 	FPrimaryAssetId DebugLastRequestedBuildingPurchaseId;
 	int32 DebugWallPackagePurchaseRequestCount = 0;
+	int32 DebugPurchaseIconRequestCount = 0;
+	bool bDebugHoldPurchaseIconCompletion = false;
+	TMap<FSoftObjectPath, TObjectPtr<UTexture2D>> DebugHeldPurchaseIcons;
 #endif
 };

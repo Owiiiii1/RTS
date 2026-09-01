@@ -7,6 +7,7 @@
 #include "Buildings/GPLogisticsHub.h"
 #include "Buildings/GPMainBase.h"
 #include "Buildings/GPWallSegmentInventoryComponent.h"
+#include "Engine/Texture2D.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
@@ -477,6 +478,170 @@ namespace GPPurchaseCatalogPresentationContractPrivate
 				&& FullStockRow->DisabledReason.ToString().Contains(TEXT("stock")),
 				TEXT("WallStockFullDisablesPackage"));
 			Inventory->DebugForceSetStock(0);
+		}
+
+		{
+			const FSoftObjectPath UnitIconPath(
+				TEXT("/Game/GrimProtocol/UI/T_GP_PurchaseIcon_UnitContractStub.T_GP_PurchaseIcon_UnitContractStub"));
+			const FSoftObjectPath BuildingIconPath(
+				TEXT("/Game/GrimProtocol/UI/T_GP_PurchaseIcon_BuildingContractStub.T_GP_PurchaseIcon_BuildingContractStub"));
+			const FSoftObjectPath WallIconPath(
+				TEXT("/Game/GrimProtocol/UI/T_GP_PurchaseIcon_WallContractStub.T_GP_PurchaseIcon_WallContractStub"));
+			UTexture2D* UnitTex = UTexture2D::CreateTransient(8, 8, PF_B8G8R8A8, TEXT("GPPurchaseIconUnit"));
+			UTexture2D* BuildingTex = UTexture2D::CreateTransient(8, 8, PF_B8G8R8A8, TEXT("GPPurchaseIconBuilding"));
+			UTexture2D* WallTex = UTexture2D::CreateTransient(8, 8, PF_B8G8R8A8, TEXT("GPPurchaseIconWall"));
+			Expect(IsValid(UnitTex) && IsValid(BuildingTex) && IsValid(WallTex),
+				TEXT("Icon_TransientTextures"));
+
+			UGP_OrbitalUnitDropDefinition* IconWorker = NewObject<UGP_OrbitalUnitDropDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_OrbitalUnitDrop_Worker_IconStub")), RF_Transient);
+			IconWorker->DisplayName = WorkerDrop->DisplayName;
+			IconWorker->Cost = WorkerDrop->Cost;
+			IconWorker->TransportSlotCost = WorkerDrop->TransportSlotCost;
+			IconWorker->UnitDefinition = WorkerDrop->UnitDefinition;
+			IconWorker->PayloadClass = WorkerDrop->PayloadClass;
+			IconWorker->Icon = TSoftObjectPtr<UTexture2D>(UnitIconPath);
+
+			UGP_OrbitalUnitDropDefinition* IconWalker = NewObject<UGP_OrbitalUnitDropDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_OrbitalUnitDrop_Walker_IconStub")), RF_Transient);
+			IconWalker->DisplayName = WalkerDrop->DisplayName;
+			IconWalker->Cost = WalkerDrop->Cost;
+			IconWalker->TransportSlotCost = WalkerDrop->TransportSlotCost;
+			IconWalker->UnitDefinition = WalkerDrop->UnitDefinition;
+			IconWalker->PayloadClass = WalkerDrop->PayloadClass;
+			IconWalker->Icon = TSoftObjectPtr<UTexture2D>(UnitIconPath);
+
+			UGP_OrbitalUnitDropDefinition* EmptyIconWalker = NewObject<UGP_OrbitalUnitDropDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_OrbitalUnitDrop_Walker_EmptyIconStub")), RF_Transient);
+			EmptyIconWalker->DisplayName = WalkerDrop->DisplayName;
+			EmptyIconWalker->Cost = WalkerDrop->Cost;
+			EmptyIconWalker->TransportSlotCost = WalkerDrop->TransportSlotCost;
+			EmptyIconWalker->UnitDefinition = WalkerDrop->UnitDefinition;
+			EmptyIconWalker->PayloadClass = WalkerDrop->PayloadClass;
+
+			Presenter->DebugHoldPurchaseIconCompletion(true);
+			Presenter->DebugInjectHeldPurchaseIcon(UnitIconPath, UnitTex);
+			Presenter->DebugInjectHeldPurchaseIcon(BuildingIconPath, BuildingTex);
+			Presenter->DebugInjectHeldPurchaseIcon(WallIconPath, WallTex);
+
+			UnitCatalog.DebugAssignLoadedAuthoredWorker(IconWorker);
+			UnitCatalog.DebugAssignLoadedAuthoredSalvageWalker(EmptyIconWalker);
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+			const int32 RequestsAfterEmpty = Presenter->DebugGetPurchaseIconRequestCount();
+			const FGP_PurchaseCatalogRow* EmptyWalkerRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), EmptyIconWalker->GetPrimaryAssetId());
+			Expect(EmptyWalkerRow != nullptr && EmptyWalkerRow->Icon == nullptr
+				&& Presenter->DebugHasPendingPurchaseIcon(UnitIconPath)
+				&& RequestsAfterEmpty >= 1,
+				TEXT("IconEmpty_NoRequestForNullSoftAndWorkerPending"));
+
+			UnitCatalog.DebugAssignLoadedAuthoredSalvageWalker(IconWalker);
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Units);
+			const int32 RequestsAfterShared = Presenter->DebugGetPurchaseIconRequestCount();
+			const FGP_PurchaseCatalogRow* SharedWorkerRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), IconWorker->GetPrimaryAssetId());
+			const FGP_PurchaseCatalogRow* SharedWalkerRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), IconWalker->GetPrimaryAssetId());
+			Expect(SharedWorkerRow != nullptr && SharedWorkerRow->Icon == nullptr
+				&& SharedWalkerRow != nullptr && SharedWalkerRow->Icon == nullptr
+				&& RequestsAfterShared == RequestsAfterEmpty
+				&& Presenter->DebugGetPendingPurchaseIconCount() == 1,
+				TEXT("IconDedup_SharedPathRequestsOnceAndRowsNullUntilReady"));
+
+			Presenter->DebugCompleteHeldPurchaseIconLoad(UnitIconPath);
+			const FGP_PurchaseCatalogRow* ReadyWorkerRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), IconWorker->GetPrimaryAssetId());
+			const FGP_PurchaseCatalogRow* ReadyWalkerRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), IconWalker->GetPrimaryAssetId());
+			Expect(ReadyWorkerRow != nullptr && ReadyWorkerRow->Icon == UnitTex
+				&& ReadyWalkerRow != nullptr && ReadyWalkerRow->Icon == UnitTex,
+				TEXT("IconA_UnitDropIconValidAfterAsyncComplete"));
+
+			UGP_BuildingDefinition* IconHubBuilding = NewObject<UGP_BuildingDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_Building_LogisticsHub_IconStub")), RF_Transient);
+			IconHubBuilding->DisplayName = NSLOCTEXT("GPPurchaseCatalog", "IconHub", "Icon Logistics Hub");
+			if (Tags.Unit_Type_Building.IsValid())
+			{
+				IconHubBuilding->BuildingTags.AddTag(Tags.Unit_Type_Building);
+			}
+			IconHubBuilding->BuildingTags.AddTag(Tags.Building_Type_LogisticsHub);
+			IconHubBuilding->SpawnedClass = AGP_LogisticsHub::StaticClass();
+			IconHubBuilding->FootprintCells = FIntPoint(4, 4);
+			IconHubBuilding->Icon = TSoftObjectPtr<UTexture2D>(BuildingIconPath);
+
+			UGP_OrbitalDropDefinition* IconHubDrop = NewObject<UGP_OrbitalDropDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_OrbitalDrop_LogisticsHub_IconStub")), RF_Transient);
+			IconHubDrop->Cost = HubDrop->Cost;
+			IconHubDrop->BuildingDefinition = IconHubBuilding;
+
+			BuildingCatalog.DebugAssignLoadedAuthoredLogisticsHub(IconHubDrop);
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Buildings);
+			const FGP_PurchaseCatalogRow* HeldHubRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), IconHubDrop->GetPrimaryAssetId());
+			Expect(HeldHubRow != nullptr && HeldHubRow->Icon == nullptr
+				&& Presenter->DebugHasPendingPurchaseIcon(BuildingIconPath),
+				TEXT("IconB_BuildingIconNullUntilReady"));
+			Presenter->RequestPurchaseRowPrimary(IconHubDrop->GetPrimaryAssetId());
+			Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseBuildingSelected
+				&& Presenter->GetSelectedPurchaseItem().Icon == nullptr,
+				TEXT("IconB_SelectedNullWhileHeld"));
+			Presenter->DebugCompleteHeldPurchaseIconLoad(BuildingIconPath);
+			Expect(Presenter->GetSelectedPurchaseItem().ItemId == IconHubDrop->GetPrimaryAssetId()
+				&& Presenter->GetSelectedPurchaseItem().Icon == BuildingTex,
+				TEXT("IconB_SelectedBuildingIconValidAfterAsyncComplete"));
+			Presenter->RequestPurchaseBack();
+			const FGP_PurchaseCatalogRow* ReadyHubRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), IconHubDrop->GetPrimaryAssetId());
+			Expect(ReadyHubRow != nullptr && ReadyHubRow->Icon == BuildingTex,
+				TEXT("IconB_BuildingListIconValidAfterAsyncComplete"));
+
+			UGP_WallPackageDefinition* IconWall = NewObject<UGP_WallPackageDefinition>(
+				GetTransientPackage(), FName(TEXT("DA_GP_WallPackage_IconStub")), RF_Transient);
+			IconWall->DisplayName = WallPackage->DisplayName;
+			IconWall->Cost = WallPackage->Cost;
+			IconWall->SegmentCount = WallPackage->SegmentCount;
+			IconWall->Icon = TSoftObjectPtr<UTexture2D>(WallIconPath);
+			if (WallCatalog != nullptr)
+			{
+				WallCatalog->DebugAssignLoadedAuthored(IconWall);
+			}
+			Presenter->RequestPurchaseBack();
+			Presenter->RequestOpenPurchaseCategory(EGP_PurchaseCategory::Defense);
+			const FGP_PurchaseCatalogRow* HeldWallRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), IconWall->GetPrimaryAssetId());
+			Expect(HeldWallRow != nullptr && HeldWallRow->Icon == nullptr
+				&& Presenter->DebugHasPendingPurchaseIcon(WallIconPath),
+				TEXT("IconC_WallPackageIconNullUntilReady"));
+			Presenter->RequestPurchaseRowPrimary(IconWall->GetPrimaryAssetId());
+			Expect(Presenter->GetPanelState() == EGP_ContextActionPanelState::PurchaseDefenseSelected
+				&& Presenter->GetSelectedPurchaseItem().Icon == nullptr,
+				TEXT("IconC_SelectedWallNullWhileHeld"));
+			Presenter->DebugCompleteHeldPurchaseIconLoad(WallIconPath);
+			Expect(Presenter->GetSelectedPurchaseItem().Icon == WallTex,
+				TEXT("IconC_SelectedWallIconValidAfterAsyncComplete"));
+			Presenter->RequestPurchaseBack();
+			const FGP_PurchaseCatalogRow* ReadyWallRow =
+				FindRowById(Presenter->GetPurchaseCatalogRows(), IconWall->GetPrimaryAssetId());
+			Expect(ReadyWallRow != nullptr && ReadyWallRow->Icon == WallTex,
+				TEXT("IconC_WallPackageIconValidAfterAsyncComplete"));
+
+			const int32 RequestsBeforeCancel = Presenter->DebugGetPurchaseIconRequestCount();
+			Presenter->DebugCancelPurchaseIconLoads();
+			Presenter->DebugCompleteHeldPurchaseIconLoad(WallIconPath);
+			Expect(Presenter->DebugGetPendingPurchaseIconCount() == 0
+				&& Presenter->DebugGetPurchaseIconRequestCount() == RequestsBeforeCancel,
+				TEXT("IconShutdown_HeldCompletionAfterCancelIsNoOp"));
+
+			Presenter->DebugHoldPurchaseIconCompletion(false);
+			UnitCatalog.DebugClearAuthoredUnitDropOverrides();
+			BuildingCatalog.DebugClearAuthoredBuildingDropOverrides();
+			if (WallCatalog != nullptr)
+			{
+				WallCatalog->DebugClearAuthoredOverrides();
+			}
 		}
 
 		Presenter->RequestPurchaseBack();

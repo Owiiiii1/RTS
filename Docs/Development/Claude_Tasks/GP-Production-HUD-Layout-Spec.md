@@ -299,6 +299,10 @@ for `PurchaseUnits` / `PurchaseBuildings` / `PurchaseDefense` (empty on Actions 
 selected-item states). Selected identity is `GetSelectedPurchaseItem()`. Unit shuttle readout is
 `GetPurchaseUnitManifestPresentation()`.
 
+Row `Icon` comes from unit-drop / BuildingDefinition / Wall Package `TSoftObjectPtr<UTexture2D>`.
+The presenter async-loads unresolved textures (deduped by path) and rebuilds rows via
+`BP_OnContextActionsChanged`. Initial null is valid. Do not `LoadSynchronous` in WBP.
+
 A later keyboard shortcut may convenience-activate MainBase procurement. It is **not** the
 canonical visible entry. Global `O` Order Menu as the production HUD path is **SUPERSEDED**.
 

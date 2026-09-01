@@ -180,7 +180,9 @@ Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / 
 
 Production HUD (catalog + purchase execution implemented; WBP wiring operator-local):
 Select MainBase → PURCHASE in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE.
-`GetPurchaseCatalogRows()` is the factual catalog SoT for the active category. Building category
+`GetPurchaseCatalogRows()` is the factual catalog SoT for the active category. Row `Icon` is
+asynchronously resolved from unit / BuildingDefinition / WallPackage soft textures; null until
+ready; rebuild is event-driven on StreamableManager completion. Building category
 assignment uses `BuildingDefinition.BuildingTags` as identity; `DropTags` are acquisition/fallback
 and must not hide a known Logistics Hub. Not a permanent global Order Menu. Keyboard `O` is not
 the canonical production HUD entry. Message Strip is panel-local `GetContextMessage()`.

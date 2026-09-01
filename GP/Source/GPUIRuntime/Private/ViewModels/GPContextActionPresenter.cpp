@@ -7,7 +7,10 @@
 #include "Buildings/GPBuildingDefinition.h"
 #include "Buildings/GPMainBase.h"
 #include "Buildings/GPWallSegmentInventoryComponent.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 #include "Engine/Texture2D.h"
+#include "Misc/ScopeExit.h"
 #include "Orbital/GPBuildingDropCatalog.h"
 #include "Orbital/GPOrbitalBuildingInventoryComponent.h"
 #include "Orbital/GPOrbitalDropDefinition.h"
@@ -42,7 +45,7 @@ namespace GPPurchaseCatalogPresentationPrivate
 		return Tag.IsValid() && Container.HasTagExact(Tag);
 	}
 
-	static UTexture2D* ResolveLoadedTexture(const TSoftObjectPtr<UTexture2D>& Soft)
+	static UTexture2D* PeekLoadedTexture(const TSoftObjectPtr<UTexture2D>& Soft)
 	{
 		if (Soft.IsNull())
 		{
@@ -161,17 +164,15 @@ namespace GPPurchaseCatalogPresentationPrivate
 		EGP_PurchaseCatalogItemKind ItemKind,
 		EGP_PurchaseCategory Category,
 		float OrbitalFerronite,
-		bool bProductReady)
+		bool bProductReady,
+		UTexture2D* Icon)
 	{
 		FGP_PurchaseCatalogRow Row;
 		Row.ItemId = Drop->GetPrimaryAssetId();
 		Row.ItemKind = ItemKind;
 		Row.Category = Category;
 		Row.DisplayName = Drop->GetAcquisitionDisplayName();
-		if (const UGP_BuildingDefinition* Building = Drop->ResolveLoadedBuildingDefinition())
-		{
-			Row.Icon = ResolveLoadedTexture(Building->Icon);
-		}
+		Row.Icon = Icon;
 		Row.Cost = Drop->Cost;
 		ApplyAvailabilityGates(Row, OrbitalFerronite, bProductReady, FText::GetEmpty());
 		return Row;
@@ -196,6 +197,7 @@ bool UGP_ContextActionPresenter::Initialize(AGP_PlayerController* InPlayerContro
 
 	BoundPlayerController = InPlayerController;
 	BoundSelection = Selection;
+	bPurchaseIconLoadsAbandoned = false;
 	SelectionChangedHandle = Selection->OnSelectionChanged().AddUObject(
 		this, &ThisClass::HandleSelectionChanged);
 	CommandTargetingChangedHandle = InPlayerController->OnCommandTargetingModeChanged().AddUObject(
@@ -206,6 +208,8 @@ bool UGP_ContextActionPresenter::Initialize(AGP_PlayerController* InPlayerContro
 
 void UGP_ContextActionPresenter::Shutdown()
 {
+	bPurchaseIconLoadsAbandoned = true;
+	CancelPurchaseIconLoads();
 	UnbindWallInventory();
 	UnbindBuildingInventory();
 	UnbindOrbitalFerronite();
@@ -491,6 +495,17 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 {
 	using namespace GPPurchaseCatalogPresentationPrivate;
 
+	bInsidePurchaseCatalogRebuild = true;
+	ON_SCOPE_EXIT
+	{
+		bInsidePurchaseCatalogRebuild = false;
+		if (bPurchaseIconRefreshDeferred)
+		{
+			bPurchaseIconRefreshDeferred = false;
+			RefreshPurchaseCatalogIfCategoryActive();
+		}
+	};
+
 	PurchaseCatalogRows.Reset();
 	if (Mode != EGP_ContextActionMode::MainBase)
 	{
@@ -537,7 +552,7 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 			Row.ItemKind = EGP_PurchaseCatalogItemKind::Unit;
 			Row.Category = EGP_PurchaseCategory::Units;
 			Row.DisplayName = Drop->DisplayName;
-			Row.Icon = ResolveLoadedTexture(Drop->Icon);
+			Row.Icon = ResolvePurchaseIcon(Drop->Icon);
 			Row.Cost = Drop->Cost;
 			Row.TransportSlotCost = Drop->TransportSlotCost;
 			if (const UGP_OrbitalUnitDropDefinition* WorkerDrop = UnitCatalog.GetWorkerDrop())
@@ -585,12 +600,18 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 
 			const bool bReady = !BuildingCatalog.IsDropDefinitionPending(Drop)
 				&& Drop->ResolveLoadedBuildingDefinition() != nullptr;
+			UTexture2D* Icon = nullptr;
+			if (const UGP_BuildingDefinition* Building = Drop->ResolveLoadedBuildingDefinition())
+			{
+				Icon = ResolvePurchaseIcon(Building->Icon);
+			}
 			PurchaseCatalogRows.Add(MakeBuildingRow(
 				Drop,
 				EGP_PurchaseCatalogItemKind::Building,
 				EGP_PurchaseCategory::Buildings,
 				OrbitalFerronite,
-				bReady));
+				bReady,
+				Icon));
 		}
 		return;
 	}
@@ -616,12 +637,18 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 
 			const bool bReady = !BuildingCatalog.IsDropDefinitionPending(Drop)
 				&& Drop->ResolveLoadedBuildingDefinition() != nullptr;
+			UTexture2D* Icon = nullptr;
+			if (const UGP_BuildingDefinition* Building = Drop->ResolveLoadedBuildingDefinition())
+			{
+				Icon = ResolvePurchaseIcon(Building->Icon);
+			}
 			PurchaseCatalogRows.Add(MakeBuildingRow(
 				Drop,
 				EGP_PurchaseCatalogItemKind::DefensiveBuilding,
 				EGP_PurchaseCategory::Defense,
 				OrbitalFerronite,
-				bReady));
+				bReady,
+				Icon));
 		}
 
 		if (UGP_WallPackageCatalog* WallCatalog = UGP_WallPackageCatalog::Get())
@@ -633,7 +660,7 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 				Row.ItemKind = EGP_PurchaseCatalogItemKind::WallPackage;
 				Row.Category = EGP_PurchaseCategory::Defense;
 				Row.DisplayName = Package->DisplayName;
-				Row.Icon = ResolveLoadedTexture(Package->Icon);
+				Row.Icon = ResolvePurchaseIcon(Package->Icon);
 				Row.Cost = Package->Cost;
 				Row.SegmentCount = Package->SegmentCount;
 
@@ -1100,7 +1127,7 @@ void UGP_ContextActionPresenter::RebuildSelectedPurchaseRow()
 					SelectedPurchaseRow.ItemKind = EGP_PurchaseCatalogItemKind::WallPackage;
 					SelectedPurchaseRow.Category = EGP_PurchaseCategory::Defense;
 					SelectedPurchaseRow.DisplayName = Package->DisplayName;
-					SelectedPurchaseRow.Icon = ResolveLoadedTexture(Package->Icon);
+					SelectedPurchaseRow.Icon = ResolvePurchaseIcon(Package->Icon);
 					SelectedPurchaseRow.Cost = Package->Cost;
 					SelectedPurchaseRow.SegmentCount = Package->SegmentCount;
 					FText ExtraReason;
@@ -1127,6 +1154,11 @@ void UGP_ContextActionPresenter::RebuildSelectedPurchaseRow()
 	{
 		const bool bReady = !BuildingCatalog.IsDropDefinitionPending(Drop)
 			&& Drop->ResolveLoadedBuildingDefinition() != nullptr;
+		UTexture2D* Icon = nullptr;
+		if (const UGP_BuildingDefinition* Building = Drop->ResolveLoadedBuildingDefinition())
+		{
+			Icon = ResolvePurchaseIcon(Building->Icon);
+		}
 		SelectedPurchaseRow = MakeBuildingRow(
 			Drop,
 			SelectedPurchaseItemKind,
@@ -1134,7 +1166,8 @@ void UGP_ContextActionPresenter::RebuildSelectedPurchaseRow()
 				? EGP_PurchaseCategory::Defense
 				: EGP_PurchaseCategory::Buildings,
 			OrbitalFerronite,
-			bReady);
+			bReady,
+			Icon);
 	}
 }
 
@@ -1467,5 +1500,167 @@ void UGP_ContextActionPresenter::HandleBuildingReadyChanged(FPrimaryAssetId Drop
 		PlayerController->EnterBuildingPlacementMode(DeployId);
 	}
 }
+
+UTexture2D* UGP_ContextActionPresenter::ResolvePurchaseIcon(const TSoftObjectPtr<UTexture2D>& Soft)
+{
+	using namespace GPPurchaseCatalogPresentationPrivate;
+
+	if (Soft.IsNull())
+	{
+		return nullptr;
+	}
+
+	if (UTexture2D* Loaded = PeekLoadedTexture(Soft))
+	{
+		ResolvedPurchaseIcons.Add(Soft.ToSoftObjectPath(), Loaded);
+		return Loaded;
+	}
+
+	const FSoftObjectPath Path = Soft.ToSoftObjectPath();
+	if (TObjectPtr<UTexture2D>* Cached = ResolvedPurchaseIcons.Find(Path))
+	{
+		if (IsValid(*Cached))
+		{
+			return Cached->Get();
+		}
+	}
+
+	RequestPurchaseIconLoad(Path);
+	return nullptr;
+}
+
+void UGP_ContextActionPresenter::RequestPurchaseIconLoad(const FSoftObjectPath& Path)
+{
+	if (bPurchaseIconLoadsAbandoned || !Path.IsValid())
+	{
+		return;
+	}
+	if (PendingPurchaseIconLoads.Contains(Path) || PurchaseIconLoadAttempted.Contains(Path))
+	{
+		return;
+	}
+
+	PurchaseIconLoadAttempted.Add(Path);
+
+#if !UE_BUILD_SHIPPING
+	++DebugPurchaseIconRequestCount;
+	if (bDebugHoldPurchaseIconCompletion)
+	{
+		PendingPurchaseIconLoads.Add(Path, nullptr);
+		return;
+	}
+#endif
+
+	TSharedPtr<FStreamableHandle> Handle = UAssetManager::GetStreamableManager().RequestAsyncLoad(
+		Path,
+		FStreamableDelegate::CreateUObject(this, &UGP_ContextActionPresenter::HandlePurchaseIconLoaded, Path));
+	PendingPurchaseIconLoads.Add(Path, Handle);
+	if (!Handle.IsValid())
+	{
+		PendingPurchaseIconLoads.Remove(Path);
+	}
+}
+
+void UGP_ContextActionPresenter::HandlePurchaseIconLoaded(FSoftObjectPath Path)
+{
+	if (bPurchaseIconLoadsAbandoned || !IsValid(this))
+	{
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	if (bDebugHoldPurchaseIconCompletion)
+	{
+		return;
+	}
+#endif
+
+	TSharedPtr<FStreamableHandle> Handle;
+	PendingPurchaseIconLoads.RemoveAndCopyValue(Path, Handle);
+	UTexture2D* Loaded = nullptr;
+	if (Handle.IsValid())
+	{
+		Loaded = Cast<UTexture2D>(Handle->GetLoadedAsset());
+	}
+	if (Loaded == nullptr)
+	{
+		Loaded = Cast<UTexture2D>(Path.ResolveObject());
+	}
+	if (IsValid(Loaded))
+	{
+		ResolvedPurchaseIcons.Add(Path, Loaded);
+	}
+
+	if (bInsidePurchaseCatalogRebuild)
+	{
+		bPurchaseIconRefreshDeferred = true;
+		return;
+	}
+
+	RefreshPurchaseCatalogIfCategoryActive();
+}
+
+void UGP_ContextActionPresenter::CancelPurchaseIconLoads()
+{
+	for (TPair<FSoftObjectPath, TSharedPtr<FStreamableHandle>>& Pair : PendingPurchaseIconLoads)
+	{
+		if (Pair.Value.IsValid())
+		{
+			Pair.Value->CancelHandle();
+			Pair.Value.Reset();
+		}
+	}
+	PendingPurchaseIconLoads.Reset();
+	ResolvedPurchaseIcons.Reset();
+	PurchaseIconLoadAttempted.Reset();
+}
+
+#if !UE_BUILD_SHIPPING
+void UGP_ContextActionPresenter::DebugHoldPurchaseIconCompletion(bool bHold)
+{
+	bDebugHoldPurchaseIconCompletion = bHold;
+}
+
+void UGP_ContextActionPresenter::DebugInjectHeldPurchaseIcon(const FSoftObjectPath& Path, UTexture2D* Texture)
+{
+	if (Path.IsValid() && IsValid(Texture))
+	{
+		DebugHeldPurchaseIcons.Add(Path, Texture);
+	}
+}
+
+void UGP_ContextActionPresenter::DebugCompleteHeldPurchaseIconLoad(const FSoftObjectPath& Path)
+{
+	if (!Path.IsValid() || bPurchaseIconLoadsAbandoned || !PendingPurchaseIconLoads.Contains(Path))
+	{
+		return;
+	}
+
+	if (TObjectPtr<UTexture2D>* Held = DebugHeldPurchaseIcons.Find(Path))
+	{
+		if (IsValid(*Held))
+		{
+			ResolvedPurchaseIcons.Add(Path, *Held);
+		}
+	}
+	PendingPurchaseIconLoads.Remove(Path);
+
+	if (bInsidePurchaseCatalogRebuild)
+	{
+		bPurchaseIconRefreshDeferred = true;
+		return;
+	}
+
+	RefreshPurchaseCatalogIfCategoryActive();
+}
+
+void UGP_ContextActionPresenter::DebugCancelPurchaseIconLoads()
+{
+	const bool bWasAbandoned = bPurchaseIconLoadsAbandoned;
+	bPurchaseIconLoadsAbandoned = true;
+	CancelPurchaseIconLoads();
+	bPurchaseIconLoadsAbandoned = bWasAbandoned;
+}
+#endif
 
 #undef LOCTEXT_NAMESPACE

@@ -460,6 +460,13 @@ death, destroy, enemy/inspect) forces `Actions`. HUD Blueprint: `RequestOpenPurc
 No spend, RPC, unit manifests, LAUNCH, READY purchase, placement, or wall buy in this checkpoint.
 LAUNCH remains existing unit Confirm / building Purchase→READY→ghost / Wall Package buy.
 
+**Purchase catalog icons:** `UGP_OrbitalUnitDropDefinition::Icon`, `UGP_BuildingDefinition::Icon`,
+and `UGP_WallPackageDefinition::Icon` are `TSoftObjectPtr<UTexture2D>`. Rows expose `Icon=null`
+until the texture is loaded. `UGP_ContextActionPresenter` requests `UAssetManager` StreamableManager
+async loads (deduped by `FSoftObjectPath`), keeps handles while in flight, and on completion rebuilds
+the active catalog or selected-item row and broadcasts `OnContextActionsChanged`. No Tick. No
+`LoadSynchronous`. Empty soft refs request nothing. UI must not sync-load presentation assets.
+
 **Purchase catalog classification:** `UGP_BuildingDefinition.BuildingTags` is canonical for category
 assignment. `UGP_OrbitalDropDefinition.DropTags` are acquisition/fallback metadata and must not hide
 a known Logistics Hub. Precedence: MainBase skip; `Drop_Type_WallPackage` / `Drop_Type_Wall` /

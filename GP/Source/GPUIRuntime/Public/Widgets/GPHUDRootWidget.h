@@ -57,6 +57,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
 	FText GetCommandTargetingPrompt() const;
 
+	/** Targeting prompt while command targeting is active; otherwise purchase contextual text. */
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
+	FText GetContextMessage() const;
+
 	/** Harmless leftover mapping. Visual targeting feedback is the native software overlay. */
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|ContextActions")
 	EMouseCursor::Type GetCommandTargetingCursor() const;
@@ -75,6 +79,24 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "GP|HUD|PurchaseCatalog")
 	TArray<FGP_PurchaseCatalogRow> GetPurchaseCatalogRows() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|PurchaseCatalog")
+	FGP_PurchaseCatalogRow GetSelectedPurchaseItem() const;
+
+	UFUNCTION(BlueprintPure, Category = "GP|HUD|PurchaseCatalog")
+	FGP_PurchaseUnitManifestPresentation GetPurchaseUnitManifestPresentation() const;
+
+	UFUNCTION(BlueprintCallable, Category = "GP|HUD|PurchaseCatalog")
+	void RequestPurchaseRowPrimary(FPrimaryAssetId ItemId);
+
+	UFUNCTION(BlueprintCallable, Category = "GP|HUD|PurchaseCatalog")
+	void RequestPurchaseRowSecondary(FPrimaryAssetId ItemId);
+
+	UFUNCTION(BlueprintCallable, Category = "GP|HUD|PurchaseCatalog")
+	void RequestLaunchUnitShuttle();
+
+	UFUNCTION(BlueprintCallable, Category = "GP|HUD|PurchaseCatalog")
+	void RequestLaunchSelectedPurchaseItem();
 
 protected:
 	virtual void NativeConstruct() override;

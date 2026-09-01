@@ -93,10 +93,12 @@ UX/balance tuning may revisit the presentation scale.
 - **Unit Action Mode:** Move, Stop, Attack-Move ("идти с атакой"), Patrol (MVP: current location ↔ one clicked point; combat-capable units — factual attack config, not SalvageWalker-only — engage then resume the same leg).
   Direct RMB target Attack remains a separate contextual behavior and is not Attack-Move.
 - **Building Action Mode:** building-specific actions. Only **MainBase** owns **PURCHASE**.
-- **MainBase PURCHASE** (catalog presentation implemented; execution still next): Actions → PurchaseRoot →
-  Units / Buildings / Defense. `GetPurchaseCatalogRows()` for the active category. Back is context-sensitive. Bottom-center stays on MainBase info.
-- BUILDINGS / Defensive Turret LAUNCH = existing Purchase → READY → immediately enter deploy ghost.
-  Wall Package LAUNCH = existing Buy Wall Package (no READY, no placement mode).
+- **MainBase PURCHASE** (catalog + execution implemented; WBP wiring operator-local): Actions → PurchaseRoot →
+  Units / Buildings / Defense, plus selected-item states for Buildings/Defense. `GetPurchaseCatalogRows()`
+  for the active category. Local unit manifest until Launch Shuttle. Back is context-sensitive.
+  Bottom-center stays on MainBase info. Message Strip: `GetContextMessage()`.
+- BUILDINGS / Defensive Turret LAUNCH = existing Purchase → READY increment → auto-enter deploy ghost.
+  Cancel keeps READY. Wall Package LAUNCH = existing Buy Wall Package (no READY, no placement mode).
 - TEMP HUD is retired. Future production context-action UI will call existing PlayerController gameplay request APIs.
 - **Right-side Launch Menu (production HUD):** Launch at the top of a vertical right panel.
   Container fill bars sit below it, one per local MainBase container. Yellow = filling.

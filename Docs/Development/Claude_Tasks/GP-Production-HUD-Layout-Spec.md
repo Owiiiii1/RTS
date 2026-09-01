@@ -196,8 +196,13 @@ Active command-targeting cursor is a native software overlay (`SGPCommandCursorO
 
 **WBP_GP_HUD was not modified.** Operator PIE is the visual pixel gate.
 
-Message Strip (optional): `UGP_HUDRootWidget::GetCommandTargetingPrompt()` —
-"MOVE: Select destination" / "ATTACK MOVE: Select destination" / "PATROL: Select patrol point". Empty when idle.
+Message Strip: prefer `UGP_HUDRootWidget::GetContextMessage()`.
+While command targeting is active this equals `GetCommandTargetingPrompt()`
+("MOVE: Select destination" / "ATTACK MOVE: Select destination" / "PATROL: Select patrol point").
+Otherwise, in PurchaseUnits: shuttle capacity / used slots, or the last local add-reject reason
+("Shuttle capacity reached" / "Not enough Orbital Ferronite" / "Unit cap reached"). Empty when idle.
+
+`GetCommandTargetingPrompt()` remains targeting-only so existing WBP bindings keep working.
 
 Future unit-specific abilities may populate additional cells. Do not fully design ability slots yet.
 
@@ -244,7 +249,7 @@ Examples:
 - Wall stock full
 - Delivery already pending / Wall delivery already pending
 
-## MainBase procurement (catalog presentation implemented; execution still next)
+## MainBase procurement (catalog + execution implemented; WBP wiring operator-local)
 
 Uses existing server-authoritative orbital flows. Do **not** redesign gameplay authority or
 spending semantics. Do **not** invent a new building-spawn RPC.
@@ -261,19 +266,27 @@ Actions
 PurchaseRoot
   Units → PurchaseUnits     Back → PurchaseRoot
   Buildings → PurchaseBuildings  Back → PurchaseRoot
+    LMB row → PurchaseBuildingSelected  Back → PurchaseBuildings
   Defense → PurchaseDefense  Back → PurchaseRoot
+    LMB row → PurchaseDefenseSelected  Back → PurchaseDefense
   Back → Actions
 ```
 
-Blueprint wiring (WBP_GP_HUD is operator-local, not committed):
+Blueprint wiring (WBP_GP_HUD / WBP_GP_PurchaseRow are operator-local, not committed):
 
 - `BTN_PurchaseUnits` → `RequestOpenPurchaseCategory(Units)`
 - `BTN_PurchaseBuildings` → `RequestOpenPurchaseCategory(Buildings)`
 - `BTN_PurchaseDefense` → `RequestOpenPurchaseCategory(Defense)`
-- `BTN_PurchaseBack` → `RequestPurchaseBack()` (same API on category panels later)
+- `BTN_PurchaseBack` / `BTN_SelectedBack` → `RequestPurchaseBack()`
+- `WBP_GP_PurchaseRow` `BTN_Row` OnClicked → `RequestPurchaseRowPrimary(RowData.ItemId)`
+- Row RMB: Blueprint `OnMouseButtonDown` RightMouseButton → `RequestPurchaseRowSecondary(RowData.ItemId)`
+- Quantity text from `RowData.Quantity`
+- Units `BTN_LaunchShuttle` → `RequestLaunchUnitShuttle()`
+- Selected overlay `BTN_SelectedLaunch` → `RequestLaunchSelectedPurchaseItem()`
 
 Purchase states exist only while a friendly MainBase is selected. Selection change, death,
-destroy, or enemy/inspect MainBase forces Actions.
+destroy, or enemy/inspect MainBase forces Actions and clears the local pending unit manifest
+and selected purchase item.
 
 Click **PURCHASE** still replaces the action-grid content with three large category buttons:
 
@@ -282,9 +295,9 @@ Click **PURCHASE** still replaces the action-grid content with three large categ
 - DEFENSE
 
 Category catalogs and prices are presented via `UGP_HUDRootWidget::GetPurchaseCatalogRows()`
-for `PurchaseUnits` / `PurchaseBuildings` / `PurchaseDefense` (empty on Actions / PurchaseRoot).
-OrbitalFerronite spend, RPC, manifests, LAUNCH, and authored row widgets are **not** in this
-checkpoint. Navigation stays inside the same bottom-right panel.
+for `PurchaseUnits` / `PurchaseBuildings` / `PurchaseDefense` (empty on Actions / PurchaseRoot /
+selected-item states). Selected identity is `GetSelectedPurchaseItem()`. Unit shuttle readout is
+`GetPurchaseUnitManifestPresentation()`.
 
 A later keyboard shortcut may convenience-activate MainBase procurement. It is **not** the
 canonical visible entry. Global `O` Order Menu as the production HUD path is **SUPERSEDED**.
@@ -300,8 +313,12 @@ PurchaseRoot
   → category chooser: UNITS | BUILDINGS | DEFENSE
   → Back → Actions
 
-UNITS / BUILDINGS / DEFENSE (`GetPurchaseCatalogRows()`; no purchase execution yet)
+UNITS / BUILDINGS / DEFENSE (`GetPurchaseCatalogRows()`)
   → Back → PurchaseRoot
+
+PurchaseBuildingSelected / PurchaseDefenseSelected (`GetSelectedPurchaseItem()`)
+  → Back → parent list (no spend)
+  → LAUNCH → existing PC request APIs
 ```
 
 UNITS

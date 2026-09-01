@@ -27,7 +27,7 @@ namespace GPUnitDropAuthority
 	};
 
 	/** Compute slots/cost from unit drop definitions, settings as fallback (no mutation). */
-	bool ComputeManifestCosts(
+	GPRUNTIME_API bool ComputeManifestCosts(
 		const FGP_UnitDropManifest& Manifest,
 		int32& OutSlotCost,
 		float& OutOrbitalCost,

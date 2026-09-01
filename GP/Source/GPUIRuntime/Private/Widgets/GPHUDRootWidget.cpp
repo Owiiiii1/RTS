@@ -351,3 +351,70 @@ TArray<FGP_PurchaseCatalogRow> UGP_HUDRootWidget::GetPurchaseCatalogRows() const
 	}
 	return TArray<FGP_PurchaseCatalogRow>();
 }
+
+FGP_PurchaseCatalogRow UGP_HUDRootWidget::GetSelectedPurchaseItem() const
+{
+	if (const UGP_ContextActionPresenter* Presenter = ResolveContextActionPresenter())
+	{
+		return Presenter->GetSelectedPurchaseItem();
+	}
+	return FGP_PurchaseCatalogRow();
+}
+
+FGP_PurchaseUnitManifestPresentation UGP_HUDRootWidget::GetPurchaseUnitManifestPresentation() const
+{
+	if (const UGP_ContextActionPresenter* Presenter = ResolveContextActionPresenter())
+	{
+		return Presenter->GetPurchaseUnitManifestPresentation();
+	}
+	return FGP_PurchaseUnitManifestPresentation();
+}
+
+FText UGP_HUDRootWidget::GetContextMessage() const
+{
+	if (const UGP_ContextActionPresenter* Presenter = ResolveContextActionPresenter())
+	{
+		return Presenter->GetContextMessage();
+	}
+	return FText::GetEmpty();
+}
+
+void UGP_HUDRootWidget::RequestPurchaseRowPrimary(FPrimaryAssetId ItemId)
+{
+	UGP_ContextActionPresenter* Presenter =
+		const_cast<UGP_ContextActionPresenter*>(ResolveContextActionPresenter());
+	if (Presenter != nullptr)
+	{
+		Presenter->RequestPurchaseRowPrimary(ItemId);
+	}
+}
+
+void UGP_HUDRootWidget::RequestPurchaseRowSecondary(FPrimaryAssetId ItemId)
+{
+	UGP_ContextActionPresenter* Presenter =
+		const_cast<UGP_ContextActionPresenter*>(ResolveContextActionPresenter());
+	if (Presenter != nullptr)
+	{
+		Presenter->RequestPurchaseRowSecondary(ItemId);
+	}
+}
+
+void UGP_HUDRootWidget::RequestLaunchUnitShuttle()
+{
+	UGP_ContextActionPresenter* Presenter =
+		const_cast<UGP_ContextActionPresenter*>(ResolveContextActionPresenter());
+	if (Presenter != nullptr)
+	{
+		Presenter->RequestLaunchUnitShuttle();
+	}
+}
+
+void UGP_HUDRootWidget::RequestLaunchSelectedPurchaseItem()
+{
+	UGP_ContextActionPresenter* Presenter =
+		const_cast<UGP_ContextActionPresenter*>(ResolveContextActionPresenter());
+	if (Presenter != nullptr)
+	{
+		Presenter->RequestLaunchSelectedPurchaseItem();
+	}
+}

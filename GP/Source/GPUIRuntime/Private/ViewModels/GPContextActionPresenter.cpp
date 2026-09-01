@@ -9,14 +9,17 @@
 #include "Buildings/GPWallSegmentInventoryComponent.h"
 #include "Engine/Texture2D.h"
 #include "Orbital/GPBuildingDropCatalog.h"
+#include "Orbital/GPOrbitalBuildingInventoryComponent.h"
 #include "Orbital/GPOrbitalDropDefinition.h"
 #include "Orbital/GPOrbitalUnitDropCatalog.h"
 #include "Orbital/GPOrbitalUnitDropDefinition.h"
+#include "Orbital/GPUnitDropAuthority.h"
 #include "Orbital/GPWallPackageCatalog.h"
 #include "Orbital/GPWallPackageDefinition.h"
 #include "Player/GPPlayerController.h"
 #include "Player/GPPlayerState.h"
 #include "Player/GPSelectionComponent.h"
+#include "Settings/GPOrbitalDeliverySettings.h"
 #include "Tags/GPGameplayTags.h"
 #include "Units/GPUnitBase.h"
 
@@ -204,6 +207,7 @@ bool UGP_ContextActionPresenter::Initialize(AGP_PlayerController* InPlayerContro
 void UGP_ContextActionPresenter::Shutdown()
 {
 	UnbindWallInventory();
+	UnbindBuildingInventory();
 	UnbindOrbitalFerronite();
 	UnbindSelectedUnits();
 	if (AGP_PlayerController* PlayerController = BoundPlayerController.Get())
@@ -235,6 +239,7 @@ int32 UGP_ContextActionPresenter::GetBoundDelegateCount() const
 	int32 Count = SelectionChangedHandle.IsValid() ? 1 : 0;
 	Count += CommandTargetingChangedHandle.IsValid() ? 1 : 0;
 	Count += OrbitalFerroniteHandle.IsValid() ? 1 : 0;
+	Count += BuildingReadyChangedHandle.IsValid() ? 1 : 0;
 	Count += BoundWallInventory.IsValid() ? 2 : 0;
 	for (const FBoundSelectedUnit& Bound : BoundUnits)
 	{
@@ -473,7 +478,7 @@ void UGP_ContextActionPresenter::HandleWallPackagePendingChanged(bool bPending)
 
 void UGP_ContextActionPresenter::RefreshPurchaseCatalogIfCategoryActive()
 {
-	if (!IsPurchaseCategoryState(PanelState))
+	if (!IsPurchasePresentationState(PanelState))
 	{
 		return;
 	}
@@ -487,8 +492,21 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 	using namespace GPPurchaseCatalogPresentationPrivate;
 
 	PurchaseCatalogRows.Reset();
-	if (Mode != EGP_ContextActionMode::MainBase || !IsPurchaseCategoryState(PanelState))
+	if (Mode != EGP_ContextActionMode::MainBase)
 	{
+		SelectedPurchaseRow = FGP_PurchaseCatalogRow();
+		return;
+	}
+
+	if (IsPurchaseSelectedState(PanelState))
+	{
+		RebuildSelectedPurchaseRow();
+		return;
+	}
+
+	if (!IsPurchaseCategoryState(PanelState))
+	{
+		SelectedPurchaseRow = FGP_PurchaseCatalogRow();
 		return;
 	}
 
@@ -522,6 +540,20 @@ void UGP_ContextActionPresenter::RebuildPurchaseCatalogRows()
 			Row.Icon = ResolveLoadedTexture(Drop->Icon);
 			Row.Cost = Drop->Cost;
 			Row.TransportSlotCost = Drop->TransportSlotCost;
+			if (const UGP_OrbitalUnitDropDefinition* WorkerDrop = UnitCatalog.GetWorkerDrop())
+			{
+				if (WorkerDrop->GetPrimaryAssetId() == Drop->GetPrimaryAssetId())
+				{
+					Row.Quantity = PendingUnitManifest.WorkerCount;
+				}
+			}
+			if (const UGP_OrbitalUnitDropDefinition* WalkerDrop = UnitCatalog.GetSalvageWalkerDrop())
+			{
+				if (WalkerDrop->GetPrimaryAssetId() == Drop->GetPrimaryAssetId())
+				{
+					Row.Quantity = PendingUnitManifest.SalvageWalkerCount;
+				}
+			}
 			ApplyAvailabilityGates(Row, OrbitalFerronite, true, FText::GetEmpty());
 			PurchaseCatalogRows.Add(MoveTemp(Row));
 		};
@@ -634,6 +666,7 @@ void UGP_ContextActionPresenter::RebuildPresentation()
 	CollectLiveSelectedUnits(BoundSelection.Get(), LiveSelected);
 	BindSelectedUnits(LiveSelected);
 	EnsureOrbitalFerroniteBinding();
+	EnsureBuildingInventoryBinding();
 
 	int32 LocalTeamId = -1;
 	if (const AGP_PlayerController* PlayerController = BoundPlayerController.Get())
@@ -648,6 +681,7 @@ void UGP_ContextActionPresenter::RebuildPresentation()
 	if (Mode != EGP_ContextActionMode::MainBase)
 	{
 		PanelState = EGP_ContextActionPanelState::Actions;
+		ClearPurchaseSession();
 	}
 
 	Actions.Reset();
@@ -736,6 +770,54 @@ FText UGP_ContextActionPresenter::GetTargetingPrompt() const
 	}
 }
 
+FText UGP_ContextActionPresenter::GetContextMessage() const
+{
+	const FText Targeting = GetTargetingPrompt();
+	if (!Targeting.IsEmpty())
+	{
+		return Targeting;
+	}
+
+	if (!PurchaseContextMessage.IsEmpty()
+		&& PanelState == EGP_ContextActionPanelState::PurchaseUnits)
+	{
+		return PurchaseContextMessage;
+	}
+
+	if (PanelState == EGP_ContextActionPanelState::PurchaseUnits)
+	{
+		const FGP_PurchaseUnitManifestPresentation Manifest = BuildUnitManifestPresentation();
+		if (Manifest.UnitCount <= 0)
+		{
+			return FText::Format(
+				LOCTEXT("ShuttleEmpty", "Shuttle capacity: {0} / {1} slots"),
+				FText::AsNumber(0),
+				FText::AsNumber(Manifest.MaxSlots));
+		}
+
+		return FText::Format(
+			LOCTEXT("ShuttleUsed", "Shuttle: {0} / {1} slots"),
+			FText::AsNumber(Manifest.UsedSlots),
+			FText::AsNumber(Manifest.MaxSlots));
+	}
+
+	return FText::GetEmpty();
+}
+
+FGP_PurchaseCatalogRow UGP_ContextActionPresenter::GetSelectedPurchaseItem() const
+{
+	if (!IsPurchaseSelectedState(PanelState))
+	{
+		return FGP_PurchaseCatalogRow();
+	}
+	return SelectedPurchaseRow;
+}
+
+FGP_PurchaseUnitManifestPresentation UGP_ContextActionPresenter::GetPurchaseUnitManifestPresentation() const
+{
+	return BuildUnitManifestPresentation();
+}
+
 bool UGP_ContextActionPresenter::IsActionEnabled(EGP_ContextActionId ActionId) const
 {
 	for (const FGP_ContextActionPresentation& Row : Actions)
@@ -819,6 +901,20 @@ void UGP_ContextActionPresenter::RequestPurchaseBack()
 		return;
 	}
 
+	if (PanelState == EGP_ContextActionPanelState::PurchaseBuildingSelected)
+	{
+		ClearSelectedPurchaseItem();
+		SetPanelState(EGP_ContextActionPanelState::PurchaseBuildings);
+		return;
+	}
+
+	if (PanelState == EGP_ContextActionPanelState::PurchaseDefenseSelected)
+	{
+		ClearSelectedPurchaseItem();
+		SetPanelState(EGP_ContextActionPanelState::PurchaseDefense);
+		return;
+	}
+
 	if (IsPurchaseCategoryState(PanelState))
 	{
 		SetPanelState(EGP_ContextActionPanelState::PurchaseRoot);
@@ -850,6 +946,17 @@ bool UGP_ContextActionPresenter::IsPurchaseCategoryState(EGP_ContextActionPanelS
 		|| State == EGP_ContextActionPanelState::PurchaseDefense;
 }
 
+bool UGP_ContextActionPresenter::IsPurchaseSelectedState(EGP_ContextActionPanelState State)
+{
+	return State == EGP_ContextActionPanelState::PurchaseBuildingSelected
+		|| State == EGP_ContextActionPanelState::PurchaseDefenseSelected;
+}
+
+bool UGP_ContextActionPresenter::IsPurchasePresentationState(EGP_ContextActionPanelState State)
+{
+	return IsPurchaseCategoryState(State) || IsPurchaseSelectedState(State);
+}
+
 EGP_ContextActionPanelState UGP_ContextActionPresenter::PanelStateForCategory(
 	EGP_PurchaseCategory Category)
 {
@@ -863,6 +970,501 @@ EGP_ContextActionPanelState UGP_ContextActionPresenter::PanelStateForCategory(
 		return EGP_ContextActionPanelState::PurchaseDefense;
 	default:
 		return EGP_ContextActionPanelState::PurchaseRoot;
+	}
+}
+
+void UGP_ContextActionPresenter::ClearPurchaseSession()
+{
+	PendingUnitManifest = FGP_UnitDropManifest();
+	ClearSelectedPurchaseItem();
+	PendingAutoDeployItemId = FPrimaryAssetId();
+	PendingAutoDeployReadyBefore = 0;
+	PurchaseContextMessage = FText::GetEmpty();
+}
+
+void UGP_ContextActionPresenter::ClearSelectedPurchaseItem()
+{
+	SelectedPurchaseItemId = FPrimaryAssetId();
+	SelectedPurchaseItemKind = EGP_PurchaseCatalogItemKind::Unit;
+	SelectedPurchaseRow = FGP_PurchaseCatalogRow();
+}
+
+float UGP_ContextActionPresenter::GetLocalOrbitalFerronite() const
+{
+	if (const AGP_PlayerController* PlayerController = BoundPlayerController.Get())
+	{
+		if (const AGP_PlayerState* PlayerState = PlayerController->GetPlayerState<AGP_PlayerState>())
+		{
+			if (const UGP_PlayerAttributeSet* Attributes = PlayerState->GetPlayerAttributeSet())
+			{
+				return Attributes->GetOrbitalFerronite();
+			}
+		}
+	}
+	return 0.0f;
+}
+
+int32 UGP_ContextActionPresenter::GetShuttleSlotCapacity()
+{
+	const UGP_OrbitalDeliverySettings* Settings = UGP_OrbitalDeliverySettings::Get();
+	return Settings != nullptr ? FMath::Max(1, Settings->PodTransportSlotCapacity) : 1;
+}
+
+FGP_PurchaseUnitManifestPresentation UGP_ContextActionPresenter::BuildUnitManifestPresentation() const
+{
+	FGP_PurchaseUnitManifestPresentation Out;
+	Out.WorkerCount = FMath::Max(0, PendingUnitManifest.WorkerCount);
+	Out.SalvageWalkerCount = FMath::Max(0, PendingUnitManifest.SalvageWalkerCount);
+	Out.UnitCount = PendingUnitManifest.GetTotalUnitCount();
+	Out.MaxSlots = GetShuttleSlotCapacity();
+
+	if (Out.UnitCount <= 0)
+	{
+		Out.bCanLaunch = false;
+		Out.DisabledReason = LOCTEXT("LaunchEmptyManifest", "Manifest is empty");
+		return Out;
+	}
+
+	int32 SlotCost = 0;
+	float OrbitalCost = 0.0f;
+	int32 UnitCount = 0;
+	EGP_UnitDropRejectReason Reject = EGP_UnitDropRejectReason::None;
+	if (!GPUnitDropAuthority::ComputeManifestCosts(
+			PendingUnitManifest, SlotCost, OrbitalCost, UnitCount, Reject))
+	{
+		Out.UsedSlots = SlotCost;
+		Out.TotalCost = OrbitalCost;
+		Out.bCanLaunch = false;
+		if (Reject == EGP_UnitDropRejectReason::SlotOverflow)
+		{
+			Out.DisabledReason = LOCTEXT("LaunchSlotOverflow", "Shuttle capacity reached");
+		}
+		else if (Reject == EGP_UnitDropRejectReason::DefinitionNotReady)
+		{
+			Out.DisabledReason = LOCTEXT("LaunchDefinitionNotReady", "DefinitionNotReady");
+		}
+		else
+		{
+			Out.DisabledReason = LOCTEXT("LaunchManifestInvalid", "Manifest is invalid");
+		}
+		return Out;
+	}
+
+	Out.UsedSlots = SlotCost;
+	Out.TotalCost = OrbitalCost;
+	if (GetLocalOrbitalFerronite() + KINDA_SMALL_NUMBER < OrbitalCost)
+	{
+		Out.bCanLaunch = false;
+		Out.DisabledReason = LOCTEXT("LaunchInsufficientOrbital", "Not enough Orbital Ferronite");
+		return Out;
+	}
+
+	if (const AGP_PlayerController* PlayerController = BoundPlayerController.Get())
+	{
+		if (const AGP_PlayerState* PlayerState = PlayerController->GetPlayerState<AGP_PlayerState>())
+		{
+			if (!PlayerState->CanAcceptManifestUnitCount(Out.UnitCount))
+			{
+				Out.bCanLaunch = false;
+				Out.DisabledReason = LOCTEXT("LaunchUnitCap", "Unit cap reached");
+				return Out;
+			}
+		}
+	}
+
+	Out.bCanLaunch = Mode == EGP_ContextActionMode::MainBase
+		&& PanelState == EGP_ContextActionPanelState::PurchaseUnits;
+	return Out;
+}
+
+void UGP_ContextActionPresenter::RebuildSelectedPurchaseRow()
+{
+	using namespace GPPurchaseCatalogPresentationPrivate;
+
+	SelectedPurchaseRow = FGP_PurchaseCatalogRow();
+	if (!SelectedPurchaseItemId.IsValid())
+	{
+		return;
+	}
+
+	const float OrbitalFerronite = GetLocalOrbitalFerronite();
+	if (SelectedPurchaseItemKind == EGP_PurchaseCatalogItemKind::WallPackage)
+	{
+		if (UGP_WallPackageCatalog* WallCatalog = UGP_WallPackageCatalog::Get())
+		{
+			if (UGP_WallPackageDefinition* Package = WallCatalog->GetWallPackage())
+			{
+				if (Package->GetPrimaryAssetId() == SelectedPurchaseItemId)
+				{
+					SelectedPurchaseRow.ItemId = Package->GetPrimaryAssetId();
+					SelectedPurchaseRow.ItemKind = EGP_PurchaseCatalogItemKind::WallPackage;
+					SelectedPurchaseRow.Category = EGP_PurchaseCategory::Defense;
+					SelectedPurchaseRow.DisplayName = Package->DisplayName;
+					SelectedPurchaseRow.Icon = ResolveLoadedTexture(Package->Icon);
+					SelectedPurchaseRow.Cost = Package->Cost;
+					SelectedPurchaseRow.SegmentCount = Package->SegmentCount;
+					FText ExtraReason;
+					if (const UGP_WallSegmentInventoryComponent* Inventory = BoundWallInventory.Get())
+					{
+						if (Inventory->IsWallPackagePending())
+						{
+							ExtraReason = LOCTEXT("PurchaseWallDeliveryPending", "Delivery already pending");
+						}
+						else if (!Inventory->CanPurchaseWallPackage())
+						{
+							ExtraReason = LOCTEXT("PurchaseWallStockFull", "Wall stock full");
+						}
+					}
+					ApplyAvailabilityGates(SelectedPurchaseRow, OrbitalFerronite, true, ExtraReason);
+				}
+			}
+		}
+		return;
+	}
+
+	UGP_BuildingDropCatalog& BuildingCatalog = UGP_BuildingDropCatalog::Get();
+	if (UGP_OrbitalDropDefinition* Drop = BuildingCatalog.FindDropDefinition(SelectedPurchaseItemId))
+	{
+		const bool bReady = !BuildingCatalog.IsDropDefinitionPending(Drop)
+			&& Drop->ResolveLoadedBuildingDefinition() != nullptr;
+		SelectedPurchaseRow = MakeBuildingRow(
+			Drop,
+			SelectedPurchaseItemKind,
+			SelectedPurchaseItemKind == EGP_PurchaseCatalogItemKind::DefensiveBuilding
+				? EGP_PurchaseCategory::Defense
+				: EGP_PurchaseCategory::Buildings,
+			OrbitalFerronite,
+			bReady);
+	}
+}
+
+void UGP_ContextActionPresenter::RequestPurchaseRowPrimary(FPrimaryAssetId ItemId)
+{
+	if (Mode != EGP_ContextActionMode::MainBase || !ItemId.IsValid())
+	{
+		return;
+	}
+
+	if (PanelState == EGP_ContextActionPanelState::PurchaseUnits)
+	{
+		TryAddUnitToManifest(ItemId);
+		return;
+	}
+
+	if (PanelState == EGP_ContextActionPanelState::PurchaseBuildings
+		|| PanelState == EGP_ContextActionPanelState::PurchaseDefense)
+	{
+		SelectPurchaseItem(ItemId);
+	}
+}
+
+void UGP_ContextActionPresenter::RequestPurchaseRowSecondary(FPrimaryAssetId ItemId)
+{
+	if (Mode != EGP_ContextActionMode::MainBase || !ItemId.IsValid())
+	{
+		return;
+	}
+
+	if (PanelState == EGP_ContextActionPanelState::PurchaseUnits)
+	{
+		TryRemoveUnitFromManifest(ItemId);
+	}
+}
+
+bool UGP_ContextActionPresenter::TryAddUnitToManifest(FPrimaryAssetId ItemId)
+{
+	UGP_OrbitalUnitDropCatalog& UnitCatalog = UGP_OrbitalUnitDropCatalog::Get();
+	FGP_UnitDropManifest Next = PendingUnitManifest;
+	bool bMatched = false;
+	if (const UGP_OrbitalUnitDropDefinition* WorkerDrop = UnitCatalog.GetWorkerDrop())
+	{
+		if (WorkerDrop->GetPrimaryAssetId() == ItemId)
+		{
+			Next.WorkerCount = FMath::Max(0, Next.WorkerCount) + 1;
+			bMatched = true;
+		}
+	}
+	if (!bMatched)
+	{
+		if (const UGP_OrbitalUnitDropDefinition* WalkerDrop = UnitCatalog.GetSalvageWalkerDrop())
+		{
+			if (WalkerDrop->GetPrimaryAssetId() == ItemId)
+			{
+				Next.SalvageWalkerCount = FMath::Max(0, Next.SalvageWalkerCount) + 1;
+				bMatched = true;
+			}
+		}
+	}
+	if (!bMatched)
+	{
+		return false;
+	}
+
+	int32 SlotCost = 0;
+	float OrbitalCost = 0.0f;
+	int32 UnitCount = 0;
+	EGP_UnitDropRejectReason Reject = EGP_UnitDropRejectReason::None;
+	if (!GPUnitDropAuthority::ComputeManifestCosts(Next, SlotCost, OrbitalCost, UnitCount, Reject))
+	{
+		if (Reject == EGP_UnitDropRejectReason::SlotOverflow)
+		{
+			PurchaseContextMessage = LOCTEXT("AddSlotOverflow", "Shuttle capacity reached");
+		}
+		else
+		{
+			PurchaseContextMessage = LOCTEXT("AddDefinitionNotReady", "DefinitionNotReady");
+		}
+		RebuildPurchaseCatalogRows();
+		OnContextActionsChanged.Broadcast();
+		return false;
+	}
+
+	if (GetLocalOrbitalFerronite() + KINDA_SMALL_NUMBER < OrbitalCost)
+	{
+		PurchaseContextMessage = LOCTEXT("AddInsufficientOrbital", "Not enough Orbital Ferronite");
+		RebuildPurchaseCatalogRows();
+		OnContextActionsChanged.Broadcast();
+		return false;
+	}
+
+	if (const AGP_PlayerController* PlayerController = BoundPlayerController.Get())
+	{
+		if (const AGP_PlayerState* PlayerState = PlayerController->GetPlayerState<AGP_PlayerState>())
+		{
+			if (!PlayerState->CanAcceptManifestUnitCount(Next.GetTotalUnitCount()))
+			{
+				PurchaseContextMessage = LOCTEXT("AddUnitCap", "Unit cap reached");
+				RebuildPurchaseCatalogRows();
+				OnContextActionsChanged.Broadcast();
+				return false;
+			}
+		}
+	}
+
+	PendingUnitManifest = Next;
+	PurchaseContextMessage = FText::GetEmpty();
+	RebuildPurchaseCatalogRows();
+	OnContextActionsChanged.Broadcast();
+	return true;
+}
+
+bool UGP_ContextActionPresenter::TryRemoveUnitFromManifest(FPrimaryAssetId ItemId)
+{
+	UGP_OrbitalUnitDropCatalog& UnitCatalog = UGP_OrbitalUnitDropCatalog::Get();
+	bool bChanged = false;
+	if (const UGP_OrbitalUnitDropDefinition* WorkerDrop = UnitCatalog.GetWorkerDrop())
+	{
+		if (WorkerDrop->GetPrimaryAssetId() == ItemId && PendingUnitManifest.WorkerCount > 0)
+		{
+			--PendingUnitManifest.WorkerCount;
+			bChanged = true;
+		}
+	}
+	if (!bChanged)
+	{
+		if (const UGP_OrbitalUnitDropDefinition* WalkerDrop = UnitCatalog.GetSalvageWalkerDrop())
+		{
+			if (WalkerDrop->GetPrimaryAssetId() == ItemId && PendingUnitManifest.SalvageWalkerCount > 0)
+			{
+				--PendingUnitManifest.SalvageWalkerCount;
+				bChanged = true;
+			}
+		}
+	}
+	if (!bChanged)
+	{
+		return false;
+	}
+
+	PurchaseContextMessage = FText::GetEmpty();
+	RebuildPurchaseCatalogRows();
+	OnContextActionsChanged.Broadcast();
+	return true;
+}
+
+void UGP_ContextActionPresenter::SelectPurchaseItem(FPrimaryAssetId ItemId)
+{
+	const FGP_PurchaseCatalogRow* Found = nullptr;
+	for (const FGP_PurchaseCatalogRow& Row : PurchaseCatalogRows)
+	{
+		if (Row.ItemId == ItemId)
+		{
+			Found = &Row;
+			break;
+		}
+	}
+	if (Found == nullptr)
+	{
+		return;
+	}
+
+	SelectedPurchaseItemId = Found->ItemId;
+	SelectedPurchaseItemKind = Found->ItemKind;
+	if (PanelState == EGP_ContextActionPanelState::PurchaseBuildings
+		&& Found->ItemKind == EGP_PurchaseCatalogItemKind::Building)
+	{
+		SetPanelState(EGP_ContextActionPanelState::PurchaseBuildingSelected);
+		return;
+	}
+	if (PanelState == EGP_ContextActionPanelState::PurchaseDefense
+		&& (Found->ItemKind == EGP_PurchaseCatalogItemKind::DefensiveBuilding
+			|| Found->ItemKind == EGP_PurchaseCatalogItemKind::WallPackage))
+	{
+		SetPanelState(EGP_ContextActionPanelState::PurchaseDefenseSelected);
+	}
+}
+
+void UGP_ContextActionPresenter::RequestLaunchUnitShuttle()
+{
+	if (Mode != EGP_ContextActionMode::MainBase
+		|| PanelState != EGP_ContextActionPanelState::PurchaseUnits)
+	{
+		return;
+	}
+
+	const FGP_PurchaseUnitManifestPresentation Manifest = BuildUnitManifestPresentation();
+	if (!Manifest.bCanLaunch || PendingUnitManifest.IsEmpty())
+	{
+		return;
+	}
+
+	AGP_PlayerController* PlayerController = BoundPlayerController.Get();
+	if (PlayerController == nullptr)
+	{
+		return;
+	}
+
+#if !UE_BUILD_SHIPPING
+	++DebugUnitDropRequestCount;
+	DebugLastRequestedUnitManifest = PendingUnitManifest;
+#endif
+	PlayerController->RequestUnitDrop(PendingUnitManifest);
+	PendingUnitManifest = FGP_UnitDropManifest();
+	PurchaseContextMessage = FText::GetEmpty();
+	RebuildPurchaseCatalogRows();
+	OnContextActionsChanged.Broadcast();
+}
+
+void UGP_ContextActionPresenter::RequestLaunchSelectedPurchaseItem()
+{
+	if (Mode != EGP_ContextActionMode::MainBase || !IsPurchaseSelectedState(PanelState))
+	{
+		return;
+	}
+
+	RebuildSelectedPurchaseRow();
+	if (!SelectedPurchaseRow.bEnabled || !SelectedPurchaseItemId.IsValid())
+	{
+		return;
+	}
+
+	LaunchSelectedBuildingOrDefense();
+}
+
+void UGP_ContextActionPresenter::LaunchSelectedBuildingOrDefense()
+{
+	AGP_PlayerController* PlayerController = BoundPlayerController.Get();
+	if (PlayerController == nullptr)
+	{
+		return;
+	}
+
+	if (SelectedPurchaseItemKind == EGP_PurchaseCatalogItemKind::WallPackage)
+	{
+#if !UE_BUILD_SHIPPING
+		++DebugWallPackagePurchaseRequestCount;
+#endif
+		PlayerController->RequestWallPackagePurchase();
+		ClearSelectedPurchaseItem();
+		SetPanelState(EGP_ContextActionPanelState::PurchaseDefense);
+		return;
+	}
+
+	if (SelectedPurchaseItemKind != EGP_PurchaseCatalogItemKind::Building
+		&& SelectedPurchaseItemKind != EGP_PurchaseCatalogItemKind::DefensiveBuilding)
+	{
+		return;
+	}
+
+	int32 ReadyBefore = 0;
+	if (const AGP_PlayerState* PlayerState = PlayerController->GetPlayerState<AGP_PlayerState>())
+	{
+		if (const UGP_OrbitalBuildingInventoryComponent* Inventory =
+				PlayerState->GetOrbitalBuildingInventoryComponent())
+		{
+			ReadyBefore = Inventory->GetReadyCount(SelectedPurchaseItemId);
+		}
+	}
+
+	PendingAutoDeployItemId = SelectedPurchaseItemId;
+	PendingAutoDeployReadyBefore = ReadyBefore;
+#if !UE_BUILD_SHIPPING
+	++DebugBuildingPurchaseRequestCount;
+	DebugLastRequestedBuildingPurchaseId = SelectedPurchaseItemId;
+#endif
+	PlayerController->RequestBuildingPurchase(SelectedPurchaseItemId);
+}
+
+void UGP_ContextActionPresenter::EnsureBuildingInventoryBinding()
+{
+	UGP_OrbitalBuildingInventoryComponent* Inventory = nullptr;
+	if (const AGP_PlayerController* PlayerController = BoundPlayerController.Get())
+	{
+		if (const AGP_PlayerState* PlayerState = PlayerController->GetPlayerState<AGP_PlayerState>())
+		{
+			Inventory = PlayerState->GetOrbitalBuildingInventoryComponent();
+		}
+	}
+
+	if (BoundBuildingInventory.Get() == Inventory && BuildingReadyChangedHandle.IsValid())
+	{
+		return;
+	}
+
+	UnbindBuildingInventory();
+	if (!IsValid(Inventory))
+	{
+		return;
+	}
+
+	BoundBuildingInventory = Inventory;
+	BuildingReadyChangedHandle = Inventory->OnReadyChanged.AddUObject(
+		this, &ThisClass::HandleBuildingReadyChanged);
+}
+
+void UGP_ContextActionPresenter::UnbindBuildingInventory()
+{
+	if (UGP_OrbitalBuildingInventoryComponent* Inventory = BoundBuildingInventory.Get())
+	{
+		if (BuildingReadyChangedHandle.IsValid())
+		{
+			Inventory->OnReadyChanged.Remove(BuildingReadyChangedHandle);
+		}
+	}
+	BuildingReadyChangedHandle.Reset();
+	BoundBuildingInventory.Reset();
+}
+
+void UGP_ContextActionPresenter::HandleBuildingReadyChanged(FPrimaryAssetId DropDefinitionId, int32 NewCount)
+{
+	if (!PendingAutoDeployItemId.IsValid() || DropDefinitionId != PendingAutoDeployItemId)
+	{
+		RefreshPurchaseCatalogIfCategoryActive();
+		return;
+	}
+
+	if (NewCount <= PendingAutoDeployReadyBefore)
+	{
+		return;
+	}
+
+	const FPrimaryAssetId DeployId = PendingAutoDeployItemId;
+	PendingAutoDeployItemId = FPrimaryAssetId();
+	PendingAutoDeployReadyBefore = 0;
+
+	if (AGP_PlayerController* PlayerController = BoundPlayerController.Get())
+	{
+		PlayerController->EnterBuildingPlacementMode(DeployId);
 	}
 }
 

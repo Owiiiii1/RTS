@@ -178,25 +178,29 @@ Building acquisition has the same class of seam: `LogisticsHubDropDefinition` / 
 
 ## Order UI (target / TEMP)
 
-Production HUD (catalog presentation implemented; execution / manifests / LAUNCH still next):
+Production HUD (catalog + purchase execution implemented; WBP wiring operator-local):
 Select MainBase → PURCHASE in the bottom-right Context Action Grid → UNITS / BUILDINGS / DEFENSE.
 `GetPurchaseCatalogRows()` is the factual catalog SoT for the active category. Building category
 assignment uses `BuildingDefinition.BuildingTags` as identity; `DropTags` are acquisition/fallback
 and must not hide a known Logistics Hub. Not a permanent global Order Menu. Keyboard `O` is not
-the canonical production HUD entry. Message Strip is panel-local feedback.
+the canonical production HUD entry. Message Strip is panel-local `GetContextMessage()`.
 
-- **UNITS:** manifest builder — LMB add / RMB remove, quantity on icon, shuttle
-  `PodTransportSlotCapacity` (not unit cap), Confirm = existing `Server_RequestUnitDrop`.
-- **BUILDINGS:** list (no Wall Package, no MainBase). Select → selected-item launch state
-  (BACK / LAUNCH). LAUNCH = existing `Server_RequestBuildingPurchase` then immediately enter
-  current deploy ghost using that READY item. BACK = no spend. RMB/Esc on ghost keeps READY.
+- **UNITS:** presenter-owned local `FGP_UnitDropManifest`. LMB add / RMB remove, quantity on row,
+  shuttle `PodTransportSlotCapacity` (not unit cap). Local gates: slots / Orbital Ferronite /
+  unit cap from known values. Confirm = existing `RequestUnitDrop` → `Server_RequestUnitDrop`.
+  No client success ack exists; pending manifest is cleared after submit to avoid duplicate launch.
+  Server remains final authority.
+- **BUILDINGS:** list (no Wall Package, no MainBase). Select → `PurchaseBuildingSelected`
+  (BACK / LAUNCH). Select does not spend. LAUNCH = existing `Server_RequestBuildingPurchase(ItemId)`.
+  Client does not fake READY. On replicated READY increment for `PendingAutoDeployItemId`, enter
+  existing `EnterBuildingPlacementMode`. BACK = no spend. RMB/Esc on ghost keeps READY.
+  Confirm uses existing `Server_RequestBuildingDeploy` only (no second purchase).
 - **DEFENSE:** Defensive Turret uses the BUILDINGS launch pattern. Wall Package LAUNCH =
-  existing `Server_RequestWallPackagePurchase` (no READY, no placement mode).
+  existing `Server_RequestWallPackagePurchase` (no building purchase RPC, no READY, no placement
+  mode). After wall request, return to PurchaseDefense list.
 - **Foundation (future):** Buy Foundation Slab package (cost/quantity TBD). HUD category **TBD**;
   do not force into Units / Buildings / Defense in this pass. Plan install job; Workers
   progressively install onto leveled cells. Not READY. Not a building spawn.
-- TEMP HUD buttons remain acceptable scaffolding. Purchase catalog presentation exists on the
-  production HUD presenter; click-to-buy / LAUNCH wiring is still next.
 
 ## RPCs (illustrative)
 

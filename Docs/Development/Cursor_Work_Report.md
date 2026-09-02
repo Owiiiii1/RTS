@@ -2,132 +2,135 @@
 
 ## Status
 
-**BOTTOM_HUD_FINALIZED_MERGE_READY**
+**SWARM_CONCEPT_APPROVED_DOCUMENTED**
 
-This is the **FINALIZATION checkpoint** for the complete Bottom HUD on `ui/gp-bottom-hud`. Fast-forward merge to `main` is safe. Do not auto-merge; human merge only.
+Documentation-only checkpoint. Runtime SWARM implementation **not started**. Do **not** start SWARM implementation from this branch. NEXT remains leftover production HUD / minimap (then terrain, AI, …) per the MVP roadmap.
 
 ## Branch / SHAs
 
-- Branch: `ui/gp-bottom-hud`
-- `origin/main`: `0667b6f912fce288422848d5d2355bc4510b748c` (unchanged)
-- Merge-base with `origin/main`: `0667b6f912fce288422848d5d2355bc4510b748c`
-- Head (implementation): `163930d5d0536452f0f47ab96df72f237d06a35a`
-- Ahead of `origin/main`: **29** (this report commit makes **30**)
-- Behind `origin/main`: **0**
-- Fast-forward merge to `main`: **safe** (`origin/main` is a direct ancestor)
+- Branch: `docs/swarm-concept`
+- Worktree: `D:\Progects\RTS-worktrees\docs-swarm-concept` (clean checkout from `origin/main`; main working copy left untouched)
+- Base `origin/main`: `3b1d3aff293049cd3014f03e047b21a3dd2e6665`
+- Docs commit SHA: `6ea8600218068abec694efaf6c72051920b804f0`
+- Report commit SHA: recorded after this file is committed (follow-up on the same branch)
 
-## Complete Bottom HUD operator PASS scope
+## Changed documents
 
-Operator validation **PASSED** for:
+### New canonical
 
-1. **Selection / Bottom Center** — None / Single / Group; single unit/building data; single icon; Group 8×3 rows; row click → single selection; units-only marquee
-2. **Context Actions** — Move / Stop / Attack-Move / Patrol / MainBase Purchase; correct context modes; command cursor overlay; targeting prompts
-3. **Purchase navigation** — Purchase Root / Units / Buildings / Defense; Back; leaving MainBase → Actions
-4. **Purchase presentation** — unit icons; building/defense icons; first-open Units readiness; catalog rows; selected-item presentation
-5. **Purchase Units execution** — LMB +1 / RMB −1 min 0; quantity UI; Message Strip; unit cap / Ferronite / shuttle rejects; Launch Shuttle; manifest clears after submit; real unit drop; server authority / currency correct
-6. **Buildings / Defense execution** — row → selected page; name/icon/cost; Back; Launch; Logistics Hub and Defensive Turret purchase → placement mode; Wall Package existing flow; spend once, deploy does not charge again
+- `Docs/GDD/14_SWARM.md`
+- `Docs/TDD/17_SWARM_Architecture.md`
 
-## Tests
+### GDD reconciliation
 
-Headless `-game -nullrhi -unattended -nop4` `L_PrototypeArena`. No quit. Editor killed after Complete.
-
-| Command | Result |
-| --- | --- |
-| `gp.UI.RunSelectionViewModelContractTest` | Complete Failures=0 |
-| `gp.UI.RunHUDViewModelBridgeContractTest` | Complete Failures=0 |
-| `gp.UI.RunContextActionPresentationContractTest` | Complete Failures=0 |
-| `gp.UI.RunPurchaseCatalogPresentationContractTest` | Complete Failures=0 |
-| `gp.UI.RunPurchaseExecutionContractTest` | Complete Failures=0 |
-| `gp.Resource.RunOrbitalUnitDropContractTest` | Complete Failures=0 |
-| `gp.Building.RunOrbitalBuildingDropContractTest` | Complete Failures=0 |
-| `gp.Commands.RunMovePatrolTargetingContractTest` | Complete Failures=0 |
-| `gp.Combat.RunPatrolCombatContractTest` | Complete Failures=0 |
-| `gp.Selection.RunMarqueeUnitsOnlyContractTest` | Complete Failures=0 |
-
-## Builds
-
-| Command | Result |
-| --- | --- |
-| `GPEditor Win64 Development` (UHT included) | **Passed** |
-| `GP Win64 Development` | **Passed** |
-| `GP Win64 Shipping` | **Passed** (Shipping link stubs added for Move/Patrol contract runners) |
-
-## Architecture / no-regression audit
-
-- Module graph unchanged: `GPUIRuntime` → `GPRuntime` → `GPGASRuntime` (no reverse deps).
-- Bottom HUD presentation path remains event-driven: no Tick / polling timer on `UGP_ContextActionPresenter`, selection VM/adapter, or command cursor overlay (`SetCanTick(false)`).
-- Purchase icons remain async StreamableManager; no presentation `LoadSynchronous`.
-- Unit-drop catalog Pending omits native bootstrap; PurchaseUnits rebuilds on `OnCatalogChanged`.
-
-## Complete changed-file audit (`origin/main...HEAD`)
-
-Docs:
-
-- `Docs/Development/Claude_Tasks/GP-Production-HUD-Layout-Spec.md`
-- `Docs/Development/Cursor_Work_Report.md`
-- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
+- `Docs/GDD/00_Project_Overview.md`
+- `Docs/GDD/01_Game_Pillars.md`
+- `Docs/GDD/02_Core_Gameplay_Loop.md`
+- `Docs/GDD/03_Factions.md`
+- `Docs/GDD/04_Units.md`
+- `Docs/GDD/05_Buildings.md`
+- `Docs/GDD/06_Resources.md`
+- `Docs/GDD/07_Match_Flow.md`
+- `Docs/GDD/08_Win_Lose_Conditions.md`
 - `Docs/GDD/09_UI_UX.md`
-- `Docs/GDD/10_Orbital_Delivery.md`
-- `Docs/TDD/04_RTS_Selection_And_Commands.md`
+- `Docs/GDD/11_Fog_of_War.md`
+- `Docs/GDD/12_Session_Tuning_And_Calibration.md`
+- `Docs/GDD/First_Playable_Match.md`
+- `Docs/GDD/Lore_Setting.md`
+- `Docs/GDD/Backlog.md`
+- `Docs/GDD/Out_Of_Scope.md`
+- `Docs/GDD/README.md`
+
+### TDD reconciliation
+
+- `Docs/TDD/03_Multiplayer_Architecture.md`
+- `Docs/TDD/05_Unit_Architecture.md`
+- `Docs/TDD/06_Building_Architecture.md`
+- `Docs/TDD/07_Resource_Architecture.md`
 - `Docs/TDD/10_Data_Assets.md`
 - `Docs/TDD/12_UI_Architecture.md`
-- `Docs/TDD/14_Orbital_Delivery.md`
+- `Docs/TDD/13_Architecture_Proposal.md`
+- `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
+- `Docs/TDD/README.md`
 
-GPGASRuntime (Patrol tag):
+### Indexes / ops
 
-- `GP/Source/GPGASRuntime/Public/Tags/GPGameplayTags.h`
-- `GP/Source/GPGASRuntime/Private/Tags/GPGameplayTags.cpp`
+- `Docs/README.md`
+- `README.md`
+- `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
+- `Docs/Development/Claude_Tasks/README.md`
+- `Docs/Development/Claude_Tasks/GP-0306_AI_Opponent.md`
+- `Docs/Development/Claude_Work_Plan.md`
+- `Docs/Development/Next_Slice_Audit_Post_S29R.md`
+- `Docs/Development/Orbital_Delivery_Mechanics_Review.md`
+- `Docs/Development/Cursor_Work_Report.md` (this file)
 
-GPRuntime:
+## Superseded placeholder rules
 
-- `GP/Source/GPRuntime/Public/Player/GPPlayerController.h`
-- `GP/Source/GPRuntime/Private/Player/GPPlayerController.cpp`
-- `GP/Source/GPRuntime/Public/Command/GPCommandTargetingContractTest.h`
-- `GP/Source/GPRuntime/Private/Command/GPCommandComponent.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPCommandTargetingContractTest.cpp`
-- `GP/Source/GPRuntime/Public/Combat/GPPatrolCombatContractTest.h`
-- `GP/Source/GPRuntime/Private/Debug/GPPatrolCombatContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPSelectionMarqueeContractTest.cpp`
-- `GP/Source/GPRuntime/Public/UI/SGPCommandCursorOverlay.h`
-- `GP/Source/GPRuntime/Private/UI/SGPCommandCursorOverlay.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitBase.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitBase.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitCommandComponent.h`
-- `GP/Source/GPRuntime/Private/Units/GPUnitCommandComponent.cpp`
-- `GP/Source/GPRuntime/Public/Units/GPUnitDefinition.h`
-- `GP/Source/GPRuntime/Public/Buildings/GPBuildingDefinition.h`
-- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalUnitDropCatalog.h`
-- `GP/Source/GPRuntime/Private/Orbital/GPOrbitalUnitDropCatalog.cpp`
-- `GP/Source/GPRuntime/Public/Orbital/GPOrbitalUnitDropDefinition.h`
-- `GP/Source/GPRuntime/Public/Orbital/GPUnitDropAuthority.h`
+- Discrete numbered waves as the production model (`WaveInterval`, `WaveSize`, `WaveStartDelay` as a required wave model, `WaveSpawnPoints` as known fixed entries).
+- `ThreatToWaveSize` / `ThreatToWaveFrequency` as production schema (`UGP_SwarmThreatCurves`).
+- Predetermined wave schedule / first-wave delay / wave-size tables as approved balance.
+- `SwarmAggressionLevel` / `AggressionPerUnitShipped` / `AggressionPerUnitMined` (already deprecated; restated).
+- Claim that SWARM cannot finish the match.
+- Two almost-non-overlapping wars (Small/Medium as harmless to combat machines).
+- Nearest-asset targeting as the strategic goal (replaced by that team's MainBase).
+- Grunt-only roster / `SpawnSwarmWave` as approved production API.
+- Mass Entity as required baseline.
+- Thousands of persistent Decal Actors as the blood architecture.
+- Mandatory runtime NavMesh rebuild for corpses.
 
-GPUIRuntime:
+If code or Data Assets still use old names, they are **legacy / current-runtime placeholders**. This checkpoint did **not** rename code.
 
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPContextActionPresenter.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPContextActionPresenter.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPSelectionViewModel.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPSelectionViewModel.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPSelectionViewModelAdapter.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPSelectionViewModelAdapter.cpp`
-- `GP/Source/GPUIRuntime/Public/ViewModels/GPHUDViewModelSubsystem.h`
-- `GP/Source/GPUIRuntime/Private/ViewModels/GPHUDViewModelSubsystem.cpp`
-- `GP/Source/GPUIRuntime/Public/Widgets/GPHUDRootWidget.h`
-- `GP/Source/GPUIRuntime/Private/Widgets/GPHUDRootWidget.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPContextActionPresentationContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPPurchaseCatalogPresentationContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPPurchaseExecutionContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPSelectionViewModelContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPHUDViewModelBridgeContractTest.cpp`
+## Canonical decisions
 
-## Protected-file audit
+- SWARM is environmental pressure, not a playable third faction.
+- Per-team pressure from current raw Planetary Ferronite in that team's MainBase containers.
+- `FerroniteScore` and `OrbitalFerronite` do not drive SWARM.
+- Player cannot control or aim SWARM at the opponent.
+- MainBase is the strategic target and primary store; MainBase death is immediate annihilation; no Ferronite-eating.
+- Continuous flow; threat bands (budget, spawn directions, replenishment, roster, Large cap); existing creatures do not despawn on threat drop.
+- Closed outer spawn spline; circular defense, not known spawn-point forts.
+- Large / Medium group / Small group presentation vs gameplay authority split.
+- AoE hits a gameplay group once; attack damage scales with living visual members.
+- Living crush vs corpse crush split; Small vehicle avoidance is local-only.
+- Blood is cosmetic accumulated mask; not thousands of Decal Actors.
+- Lightweight group simulation is the baseline; Mass considered, not chosen.
+- Prototype targets: ~500 visuals per player represented as dozens of groups + few Large Actors; server replicates group state, not per-member transforms.
+- Per-team `FerroniteThreatValue` already exists on `AGP_GameState`. Per-team **director / spawn stream is not implemented**.
 
-**Not committed** on this branch: `WBP_GP_HUD`, `WBP_GP_PurchaseRow`, `WBP_GP_SelectionGroupRow`, `WBP_GP_LaunchContainerRow`, `Content/`, `Config/`, authored maps, Materials, VFX, `GP.uproject`, `Tools/`.
+## Prototype / TBD
 
-Local dirty/untracked Content/Config/maps/Tools/`GP.uproject` left unstaged (operator Blueprint/local content). No destructive git.
+- Exact DA schema and director class.
+- Concrete threat-band numbers (none invented).
+- Renderer mix (Niagara / VAT / skeletal / far sprites) after visual/performance prototype.
+- Navigation/obstacle backend (transient traversability vs local repath; no mandatory NavMesh rebuild).
+- Reservation/queue algorithm for Medium/Large chokes.
+- Mass as a later reserve after prototype/profile — not forbidden forever, not baseline.
+- Performance numbers are targets, not measured guarantees. Mandatory performance spike before backend lock.
 
-## Remaining known non-blocking limitations
+## Validation
 
-- Authored `WBP_GP_HUD` and purchase/selection/launch row widgets stay operator-local and uncommitted.
-- Production HUD outside Bottom HUD remains incomplete: minimap, notifications, production end-of-match.
-- Non-MainBase buildings may still have empty contextual actions (MVP; no invented upgrades).
-- Wall Turret remains omitted from Defense until spawned class is ready (existing catalog rule).
+### rg
+
+Remaining hits for `WaveInterval`, `WaveSize`, `WaveStartDelay`, `WaveSpawnPoints`, `ThreatToWaveSize`, `ThreatToWaveFrequency`, `SwarmAggressionLevel` are explicitly **superseded / legacy / current-runtime placeholders**. No unmarked production-schema claims found in active GDD/TDD.
+
+`wave` / `waves` remain only as contrast (“not numbered waves”), historical audit banners, or explicitly superseded examples.
+
+### Links
+
+New/changed GDD/TDD/index relative links to `14_SWARM` / `17_SWARM_Architecture` resolve. Pre-existing broken `SKILLS/` links were not in scope.
+
+### Diff / status
+
+Docs commit contains **only Markdown**. No C++, Blueprint, `Content/`, `Config/`, `GP.uproject`, or authored assets. Main working copy dirty Content/Config files were not touched (worktree from `origin/main`).
+
+### Build / tests
+
+**Not required** for this documentation-only checkpoint. Unreal builds and tests were not run.
+
+## NEXT
+
+Not SWARM implementation. Remaining queue: leftover production HUD / minimap, then terrain, AI opponent, later stages. SWARM remains the **final gameplay implementation stage** after the now-complete design/docs gate.
+
+This checkpoint does **not** re-verify unrelated HUD/minimap branches as merged. Factual on `origin/main` @ `3b1d3af`: Bottom HUD finalization is present. Do not treat `feature/gp-hud-threat-normalized` or minimap as completed from this pass.

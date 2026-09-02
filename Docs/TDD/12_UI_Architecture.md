@@ -82,7 +82,8 @@ PublicDependencyModuleNames.AddRange(new string[]
   FoW is 100 cm / 10 Hz / 2000×2000. Post-process and fullscreen/sampled mask approaches are abandoned.
 - This direct mirror binding is intentionally limited to the project-owned world renderer.
   Ordinary HUD widgets still consume ViewModels or HUD-root presenter accessors. The minimap
-  HUD seam is `UGP_MinimapPresenter` (not a 4-million-cell ViewModel copy): it binds the same
+  HUD seam is `UGP_MinimapPresenter` (not a 4-million-cell ViewModel copy) plus `UGP_MinimapWidget`
+  for the static background + bounded FoW overlay. The presenter binds the same
   trusted `UGP_LocalFoWComponent` as `UGP_FoWViewModelAdapter` and queries that mirror by world
   location. Coarse Revision drives `OnMinimapPresentationChanged`; there is no widget Tick and
   no 10 Hz poll.
@@ -176,10 +177,12 @@ PublicDependencyModuleNames.AddRange(new string[]
   accessors / `RequestContextAction` / `BP_OnContextActionsChanged`). Authored Context Action buttons
   are **not** operator-validated. Native minimap presentation foundation exists
   (`UGP_MinimapPresenter` owned by `UGP_HUDViewModelSubsystem`; HUD-root accessors /
-  `BP_OnMinimapChanged`). It is event-driven from the trusted local FoW mirror and is **not** a
-  complete minimap. `WBP_GP_HUD` remains uncommitted.
-  Still not implemented: minimap blips / camera rectangle / click-to-move (native minimap
-  presentation foundation exists on `UGP_MinimapPresenter`),
+  `BP_OnMinimapChanged`). Native surface widget `UGP_MinimapWidget` paints a static authored
+  background texture plus a bounded FoW overlay from that presenter. It is **not** SceneCapture,
+  live camera, or render-target terrain, and it is **not** a complete minimap.
+  `WBP_GP_HUD` remains uncommitted.
+  Still not implemented: minimap blips / camera rectangle / click-to-pan / last-known
+  (surface widget exists; operator inserts it into the protected HUD),
   notifications, and production end-of-match screen.
   Operator-validated runtime visibility of authored `WBP_GP_HUD` (local, not committed).
   Operator-validated: `GP_ResourceViewModel.PlanetFerronite` → To Text (Float) →
@@ -231,7 +234,7 @@ Rules:
 | `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits`, shuttle slots, READY, Wall stock — **not implemented** | Future adapter | Future MainBase PURCHASE panel (bottom-right). Not a fullscreen Order Menu. |
 | `UGP_CargoVM` | Worker cargo for single presentation is carried on `UGP_SelectionViewModel` (`CargoAmount` / `CargoCapacity` / `CargoNormalized` / `bHasCargo`) via existing `OnCargoAmountChanged`. A separate cargo-only VM is **not implemented**. | Selection adapter (single Worker) | Future single-entity Selection/Info cargo meter |
 | `UGP_NotificationVM` | Local notification queue (PC pushes) — **not implemented** | PC native | Future notification stack |
-| `UGP_MinimapVM` | Superseded as the production HUD path for this checkpoint. Native `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem` is the minimap presentation foundation. It exposes FoW-grid bounds, Revision, and normalized world mapping; it does **not** snapshot blips or copy the FoW cell arrays. | `UGP_MinimapPresenter` binds `UGP_LocalFoWComponent::OnLocalFoWUpdated` | Bottom-left minimap. Authored visual still operator-local. Blips / camera rectangle / click-to-pan remain later checkpoints. |
+| `UGP_MinimapVM` | Superseded as the production HUD path. Native `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem` is the minimap presentation foundation. `UGP_MinimapWidget` is the native UMG surface: static authored background (`UGP_UIPresentationSettings::MinimapBackgroundTexture`, async only) plus a bounded FoW downsample overlay. It does **not** snapshot blips or copy the FoW cell arrays. | `UGP_MinimapPresenter` binds `UGP_LocalFoWComponent::OnLocalFoWUpdated`; widget binds `OnMinimapPresentationChanged` | Bottom-left minimap. Operator inserts `GP Minimap` into protected `WBP_GP_HUD`. Blips / camera rectangle / click-to-pan remain later checkpoints. |
 
 Production Resource/Match/Selection VMs are created once by `UGP_HUDViewModelSubsystem` per `ULocalPlayer`.
 Future widgets receive them from that subsystem; no gameplay module type owns a `GPUIRuntime` object.
@@ -323,7 +326,7 @@ WBP_GP_HUD (authored child of UGP_HUDRootWidget; operator-local, not committed)
 │   ├── TopCenter Match Timer
 │   └── TopRight Planet Ferronite / Orbital Ferronite / CurrentUnits/MaxUnits
 ├── BottomBar
-│   ├── BottomLeft  Minimap square (native presentation foundation; visual/blips later)
+│   ├── BottomLeft  Minimap square (`UGP_MinimapWidget` background + FoW; blips/camera/input later)
 │   ├── BottomCenter Selection / Current Info (widest; single-entity or 8×3 group)
 │   └── BottomRight Context Action Grid + Message Strip
 │       (Unit / Building / MainBase PURCHASE → UNITS|BUILDINGS|DEFENSE)
@@ -389,7 +392,7 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 | Future bottom-right Context Action Grid | Native `UGP_ContextActionPresenter` modes None/Unit/UnitGroup/Building/MainBase. Unit actions: Move / Stop / Attack-Move / Patrol. MainBase: Purchase panel Actions → PurchaseRoot → PurchaseUnits / PurchaseBuildings / PurchaseDefense / PurchaseBuildingSelected / PurchaseDefenseSelected. `GetPurchaseCatalogRows()` is factual catalog presentation for the active category (empty on Actions / PurchaseRoot / selected-item states). Local unit manifest + LMB/RMB row APIs + Launch Shuttle reuse `RequestUnitDrop` / `Server_RequestUnitDrop`. Building/Defense Launch reuses `Server_RequestBuildingPurchase` then READY auto-deploy into existing placement ghost; Wall Package Launch reuses `Server_RequestWallPackagePurchase` only. Other buildings: empty. Command targeting visual: native `SGPCommandCursorOverlay`. Hardware cursor hidden while targeting. Message Strip: `GetContextMessage()` (targeting prompt wins while command targeting is active; else shuttle/reject text). `GetCommandTargetingPrompt()` remains targeting-only. Authored buttons operator-local. | Local selection + death/destroy; PC eligibility + `OnCommandTargetingModeChanged`; OrbitalFerronite ASC delegate; selected MainBase wall inventory delegates; PlayerState READY `OnReadyChanged` |
 | Future right-side Message Strip | Contextual procurement/action status (shuttle slots, funds, cap). `UGP_HUDRootWidget::GetContextMessage()`. | Presenter local gates + targeting prompt; not a global toast stack |
 | Future MainBase PURCHASE panel | Native catalog rows + local unit manifest + selected-item Launch. No new RPCs. | Existing orbital catalogs + PlayerAttributeSet OrbitalFerronite + MainBase wall inventory + READY auto-deploy. No new gameplay catalog. |
-| Future bottom-left Minimap | Native `UGP_MinimapPresenter` metadata + `UGP_HUDRootWidget` accessors (`IsMinimapReady`, `WorldToMinimapNormalized`, `MinimapNormalizedToWorld`, `GetMinimapFoWStateNormalized`, `GetMinimapPresentation`) and `BP_OnMinimapChanged`. Bounds = trusted FoW grid (no map-bounds actor yet). Normalized: world +X/+Y → minimap +X/+Y, no hidden flip. Blips / camera rectangle / click-to-pan **not** in this checkpoint. | Trusted `UGP_LocalFoWComponent` (same mirror as `UGP_FoWViewModel`) |
+| Future bottom-left Minimap | Native `UGP_MinimapWidget` (UMG palette: **GP Minimap**) self-binds to `UGP_HUDViewModelSubsystem::GetMinimapPresenter()`. Background = static authored `UTexture2D` on `UGP_UIPresentationSettings` (async; empty/loading → dark fallback). FoW = presentation-only downsample (default 128², clamp 32–256) of the trusted mirror; Unexplored black, Explored dim, Visible clear. Widget-only `ScreenY = 1 - NormalizedY`; presenter world +X/+Y → normalized +X/+Y is unchanged. Shared dest rect for background and FoW. No Tick / poll / world scan. Blips / camera rectangle / click-to-pan **not** in this checkpoint. | Trusted `UGP_LocalFoWComponent` via `UGP_MinimapPresenter` |
 | Future `WBP_GP_HUD_NotificationStack` | `UGP_NotificationVM.{ActiveToasts[]}` | PC `OnHUDNotification` multicast |
 | Future `WBP_GP_EndOfMatch` (Activatable) | `UGP_MatchViewModel.{MatchStateTag, WinnerTeamId, WinReasonTag, MatchDuration, bMatchFinished}` | `AGP_GameState` match-state/result delegates |
 
@@ -557,15 +560,27 @@ UI legitimately owns:
 | `FerroniteThreatValue` | All clients | Shared world state (swarm pressure). |
 | `MatchTimeRemaining`, `MatchState` | All clients | Universal. |
 
-### Minimap (native presentation foundation; visual later)
+### Minimap (native surface: static background + FoW overlay)
 
 - Bottom-left **square** remains the approved HUD IA slot.
 - Native foundation is `UGP_MinimapPresenter` owned by `UGP_HUDViewModelSubsystem`.
   Event-driven from the trusted local FoW mirror. No Tick, no cell-array copy, no terrain capture.
-- Coordinate contract: normalized XY in `[0,1]` maps axis-aligned to the current FoW grid
-  (`GridOrigin` + `GridDimensions * CellSizeCm`). World `+X` → minimap `+X`; world `+Y` →
-  minimap `+Y`. No rotation/mirroring. Out-of-grid world locations clamp in
-  `WorldToMinimapNormalized`; `GetMinimapFoWStateNormalized` returns Unexplored outside `[0,1]`.
+- Production surface is `UGP_MinimapWidget` (`UWidget` / Slate leaf). Background is a **static
+  authored map image** (`UGP_UIPresentationSettings::MinimapBackgroundTexture`), async-loaded.
+  Not SceneCapture, live camera, or render-target terrain. Empty/loading → solid dark fallback.
+  Authored image uses the same world XY bounds as the presenter / FoW grid, with world +Y
+  (NormalizedY = 1) at the **top** of the texture. No hidden rotate/mirror.
+- FoW overlay is a bounded presentation downsample (default 128×128, clamp 32–256) of the
+  trusted `GetMinimapFoWStateNormalized` queries. One compact texture, not a widget per cell.
+  Rebuilds only on `OnMinimapPresentationChanged` (Revision / metadata). Unexplored ≈ black,
+  Explored = dim overlay, Visible = background seen normally.
+- Coordinate contract (presenter, unchanged): normalized XY in `[0,1]` maps axis-aligned to the
+  current FoW grid (`GridOrigin` + `GridDimensions * CellSizeCm`). World `+X` → minimap `+X`;
+  world `+Y` → minimap `+Y`. No rotation/mirroring in the presenter. Out-of-grid world locations
+  clamp in `WorldToMinimapNormalized`; `GetMinimapFoWStateNormalized` returns Unexplored outside
+  `[0,1]`.
+- Widget-layer orientation only: `ScreenY = 1 - NormalizedY` so NormalizedY = 1 is the top of
+  the square. Background and FoW share that transform and the same letterboxed dest rect.
 - This is **not** a complete minimap. Blips, camera rectangle, click-to-pan, last-known actors,
   and terrain/render-target work remain later checkpoints.
 - Historical `UGP_MinimapSubsystem` 5/10 Hz snapshot + `UGP_MinimapVM` cell arrays are **not**

@@ -36,9 +36,10 @@ Current-compatible deviations from the older pseudocode:
   gameplay grid is 100 cm / 10 Hz / 2000×2000;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
   relevance, minimap **blips / camera / input**, and remaining production HUD panels remain later
-  slices. Native minimap presentation foundation (`UGP_MinimapPresenter`) now consumes the trusted
+  slices. Native minimap presentation foundation (`UGP_MinimapPresenter`) consumes the trusted
   local FoW mirror for bounds, Revision, and per-query cell state; it does not allocate a 2000×2000
-  texture or copy the cell arrays.
+  texture or copy the cell arrays. `UGP_MinimapWidget` downsamples that trusted query to a bounded
+  overlay (default 128²) over a static authored background; it is not a new gameplay grid.
 - **Voxel terrain integration is NOT reopened here.** World FoW presentation was finalized against
   effectively planar terrain and a fixed ground-projection assumption. After Voxel Plugin deformation
   ships, world FoW presentation must follow the actual terrain surface. That work belongs to the
@@ -58,8 +59,9 @@ Current-compatible deviations from the older pseudocode:
    fullscreen mask paths are abandoned.
 5. **No client-side FoW gameplay.** Client can render fog mask, but server arbiters all visibility-gated logic.
 6. **No tick-poll у widgets.** FoW HUD reads through `UGP_FoWViewModel` (Revision FieldNotify) or
-   `UGP_MinimapPresenter` (`OnMinimapPresentationChanged` from the same trusted mirror). Widgets
-   do not Tick-poll FoW and do not copy the 2000×2000 cell arrays.
+   `UGP_MinimapPresenter` (`OnMinimapPresentationChanged` from the same trusted mirror).
+   `UGP_MinimapWidget` rebuilds its overlay only on that event. Widgets do not Tick-poll FoW and
+   do not copy the 2000×2000 cell arrays.
 
 ## Data Structures
 
@@ -326,10 +328,13 @@ Drop reticle on client:
 
 ## Minimap Rendering (Per TDD/12 Update)
 
-**Current production path (foundation):** `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem`
+**Current production path (surface):** `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem`
 queries the trusted `UGP_LocalFoWComponent` by world location. Normalized minimap XY maps
-axis-aligned onto the current FoW grid bounds. No `UGP_MinimapSubsystem`, no 10 Hz poll, no
-per-cell array on the ViewModel, and no terrain capture in this checkpoint.
+axis-aligned onto the current FoW grid bounds. `UGP_MinimapWidget` paints a static authored
+background plus a bounded FoW overlay (default 128×128 downsample, Unexplored/Explored/Visible).
+Widget-only `ScreenY = 1 - NormalizedY`; presenter mapping is unchanged. Overlay rebuilds on
+`OnMinimapPresentationChanged` only. No `UGP_MinimapSubsystem`, no 10 Hz poll, no per-cell
+widget, no 2000×2000 texture copy, and no terrain capture / SceneCapture in this checkpoint.
 
 The older snapshot sketch below remains **future visual/blip design**, not shipped production code:
 

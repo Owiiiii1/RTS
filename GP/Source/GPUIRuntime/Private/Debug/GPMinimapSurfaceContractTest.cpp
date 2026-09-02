@@ -242,8 +242,22 @@ namespace GPMinimapSurfaceContractPrivate
 		Expect(Subsystem != nullptr && Subsystem->GetMinimapPresenter() != nullptr,
 			TEXT("S_SubsystemPresenterStillOwned"));
 
-		Expect(UGP_MinimapWidget::StaticClass()->HasAnyClassFlags(CLASS_Abstract) == false,
+		Expect(UGP_MinimapWidget::StaticClass()->HasAnyClassFlags(CLASS_Abstract) == false
+			&& !UGP_MinimapWidget::StaticClass()->HasAnyClassFlags(
+				CLASS_Deprecated | CLASS_Hidden | CLASS_HideDropDown),
 			TEXT("T_WidgetIsPlaceableInUMGDesigner"));
+#if WITH_EDITOR
+		{
+			const FString PaletteCategory =
+				Widget != nullptr ? Widget->GetPaletteCategory().ToString() : FString();
+			const FString DisplayName =
+				UGP_MinimapWidget::StaticClass()->GetMetaData(TEXT("DisplayName"));
+			Expect(!PaletteCategory.IsEmpty()
+				&& PaletteCategory == TEXT("GP")
+				&& DisplayName == TEXT("GP Minimap"),
+				TEXT("T2_UMGPaletteCategoryIsGP"));
+		}
+#endif
 
 		UE_LOG(LogGPMinimapSurfaceContract, Log,
 			TEXT("gp.UI.RunMinimapSurfaceContractTest: Complete Failures=%d Cancelled=false"),

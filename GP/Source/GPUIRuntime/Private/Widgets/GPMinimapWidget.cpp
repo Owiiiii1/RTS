@@ -157,6 +157,13 @@ UGP_MinimapWidget::UGP_MinimapWidget(const FObjectInitializer& ObjectInitializer
 	BackgroundBrush.Tiling = ESlateBrushTileType::NoTile;
 }
 
+#if WITH_EDITOR
+const FText UGP_MinimapWidget::GetPaletteCategory()
+{
+	return NSLOCTEXT("GPMinimapWidget", "PaletteCategory", "GP");
+}
+#endif
+
 FVector2D UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(const FVector2D& Normalized)
 {
 	return FVector2D(Normalized.X, 1.0f - Normalized.Y);

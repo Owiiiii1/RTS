@@ -30,6 +30,10 @@ public:
 	virtual void SynchronizeProperties() override;
 	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
 
+#if WITH_EDITOR
+	virtual const FText GetPaletteCategory() override;
+#endif
+
 	static FVector2D PresenterNormalizedToSurfaceUV(const FVector2D& Normalized);
 	static FVector2D SurfaceUVToPresenterNormalized(const FVector2D& SurfaceUV);
 	static int32 ClampFoWPresentationResolution(int32 Requested);

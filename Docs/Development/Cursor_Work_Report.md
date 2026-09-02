@@ -16,6 +16,7 @@ Minimap displayed world extents now follow the same resolved camera/playable bou
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
 | Pre-checkpoint HEAD | `d54db93b5e22ed2e88af3c98c15e555c83369a63` |
+| Checkpoint HEAD | `d2eba077097a042a6c8e4f4b4adecd7767f8a082` |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 | `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` (behind main = 0) |
 

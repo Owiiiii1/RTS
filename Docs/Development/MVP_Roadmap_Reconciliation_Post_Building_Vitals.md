@@ -303,14 +303,15 @@ Resolved by the design review (canonical):
 - continuous flow (no numbered waves); threat bands, not wave-size curves;
 - outer closed spawn spline; MainBase as strategic target; annihilation on MainBase death;
 - Large / Medium-group / Small-group model; crush / corpse / blood rules;
-- lightweight group simulation as baseline; Mass considered but not chosen;
+- lightweight group simulation as the **only allowed** gameplay backend under ADR-0006; Mass Entity **forbidden** (not a reserve) until a new ADR supersedes that ban;
+- visual renderer (Niagara / VAT / skeletal) is a **separate** prototype choice, not a gameplay ECS backend;
 - prototype performance targets, not measured guarantees.
 
 Still **prototype / TBD** until implementation:
 
 - exact DA schema and director class;
-- renderer (Niagara / VAT / skeletal mix);
-- navigation/obstacle backend (no mandatory NavMesh rebuild);
+- **visual renderer** (Niagara / VAT / skeletal mix) after prototype — not a Mass / gameplay-backend choice;
+- navigation/obstacle approach (no mandatory NavMesh rebuild);
 - concrete balance numbers.
 
 **Superseded:** Grunt-only roster, `WaveStartDelay` / `WaveInterval` / `WaveSize` as required model,

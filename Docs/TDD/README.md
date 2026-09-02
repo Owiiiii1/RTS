@@ -21,7 +21,7 @@ Engineering-canonical документація GrimProtocol. Описує **як
 - [14_Orbital_Delivery](14_Orbital_Delivery.md) — Drop pod mechanic, order menu, drop validation, `UGP_OrbitalDeliverySubsystem`, replaces local production/construction.
 - [15_Fog_of_War](15_Fog_of_War.md) — 3-level FoW (Unexplored/Explored/Visible), sight scan, replication relevance, selection/combat/drop interactions.
 - [16_Voxel_Terrain_And_Foundations](16_Voxel_Terrain_And_Foundations.md) — Voxel Plugin terrain backend direction, generic deformation contract, local engineering jobs, BuildGrid vs voxels, per-cell foundation, Wall-without-foundation, nav and FoW surface integration requirements.
-- [17_SWARM_Architecture](17_SWARM_Architecture.md) — continuous per-team director direction, lightweight group simulation, Mass considered-not-chosen, prototype performance targets. Runtime not started.
+- [17_SWARM_Architecture](17_SWARM_Architecture.md) — continuous per-team director direction, lightweight group simulation (only allowed gameplay backend under ADR-0006; Mass forbidden), visual renderer separate, prototype performance targets. Runtime not started.
 
 ## Cross-Reference з ADR
 

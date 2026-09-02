@@ -218,7 +218,14 @@
 
 ## 7. Simple Machines, Strong Readability
 
-**Identity statement.** Production budget і visual clarity вимагають, щоб усі gameplay-active обʼєкти були simple machines: бури, поршні, гусениці, крани, конвеєри, прості turret-like nodes, світлові індикатори. Жодних cinematic skeletal anims, animation-heavy juggernauts, hero rigs.
+**Identity statement.** Production budget і visual clarity вимагають, щоб **corporate / player-controlled**
+units і buildings були simple machines: бури, поршні, гусениці, крани, конвеєри, прості turret-like
+nodes, світлові індикатори. Жодних cinematic skeletal anims, animation-heavy juggernauts, hero rigs
+на player fantasy.
+
+**SWARM exception.** SWARM — явний **environmental biological** виняток. Organic skeletal animation для
+SWARM **дозволена**. Це не скасовує industrial identity player faction і не відкриває hero-quality /
+cinematic creature sets. Canonical: [`14_SWARM`](14_SWARM.md), [`../TDD/17_SWARM_Architecture`](../TDD/17_SWARM_Architecture.md).
 
 ### Player Goal
 
@@ -226,27 +233,31 @@
 
 ### What It Allows
 
-- Mechanical animations (rotation, pistons, conveyor loops, drill spins, crane swings).
+- Mechanical animations (rotation, pistons, conveyor loops, drill spins, crane swings) for **player / corporate** assets.
 - Simple turret rotation animations.
-- Skeletal animation тільки для walkers, що clearly industrial (treaded, tripod, quadruped excavator).
+- Skeletal animation тільки для player walkers, що clearly industrial (treaded, tripod, quadruped excavator).
 - Modular visual kits (interchangeable parts, swappable arm attachments) для variety без anim cost.
+- **SWARM only:** organic skeletal animation that stays production-bounded, readable from the RTS camera, and LOD-friendly.
+- **SWARM Large** (small count): full skeletal animation.
+- **SWARM Medium / Small:** Animation Sharing, VAT, Niagara, and LOD where a prototype confirms it.
 
 ### What It Forbids
 
-- Humanoid combat animations (punches, kicks, dramatic poses).
-- Hero unit animation sets (idle variants, victory poses, cinematic transitions).
-- Creature-like skeletal animation з organic motion curves.
-- Animation-heavy юніти, які потребують >2 hours specialized animator time на one-off behavior.
+- Humanoid combat animations (punches, kicks, dramatic poses) on **player / corporate** units.
+- Hero unit animation sets (idle variants, victory poses, cinematic transitions) — player **and** SWARM.
+- Creature-like skeletal animation з organic motion curves for **player-controlled** units and buildings.
+- Hero-quality bespoke SWARM animation sets, cinematic SWARM animation complexity, or a heavy unique AnimBP on every SWARM visual member.
+- Animation-heavy **player** юніти, які потребують >2 hours specialized animator time на one-off behavior.
 
 ### 5-Component Check
 
 | Component | Implication |
 | --- | --- |
-| **Clarity** | Силует читається з top-down camera. Function = visible mechanical action. |
-| **Motivation** | Гравець довіряє, що обʼєкт робить те, що виглядає. |
-| **Response** | Animation = function feedback. Drill spinning = mining. Turret rotating = engaging. |
-| **Satisfaction** | Mechanical impact + sparks + industrial audio. |
-| **Fit** | Узгоджено з Engineer-Not-Soldier і Industrial Extraction First. Production cost — низький. |
+| **Clarity** | Силует читається з top-down camera. Player function = visible mechanical action. SWARM reads as biological pressure, not as a second industrial army. |
+| **Motivation** | Гравець довіряє, що corporate обʼєкт робить те, що виглядає; SWARM looks like ecology, not like a hero monster showcase. |
+| **Response** | Player animation = function feedback. Drill spinning = mining. Turret rotating = engaging. SWARM attack/move/death stay readable under RTS camera + LOD. |
+| **Satisfaction** | Mechanical impact + sparks + industrial audio for the player; bounded organic motion for SWARM. |
+| **Fit** | Узгоджено з Engineer-Not-Soldier і Industrial Extraction First. SWARM exception is explicit and production-capped. |
 
 ---
 

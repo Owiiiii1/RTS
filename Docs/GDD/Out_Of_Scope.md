@@ -38,10 +38,10 @@
 - **Bipedal humanoid soldiers** — infantry, troopers, riflemen, snipers.
 - **Combat mech aesthetic** — Battletech / Gundam / MechWarrior-style mechs з military framing.
 - **Hero unit visual centerpieces** — outsize, cinematic, hand-animated juggernauts.
-- **Creature-like player units** — organic motion, biological silhouettes.
+- **Creature-like player units** — organic motion, biological silhouettes. SWARM is the Pillar 7 biological exception ([`14_SWARM`](14_SWARM.md)), not a player unit type.
 - **Humanoid combat animations** — punches, kicks, dramatic poses, melee combos.
-- **Cinematic skeletal animation sets** для player-controlled units (idle variants, victory poses, cinematic transitions).
-- **Animation-heavy юніти** що потребують >2 hours specialized animator time на one-off behavior.
+- **Cinematic skeletal animation sets** для player-controlled units (idle variants, victory poses, cinematic transitions). SWARM organic animation must stay production-bounded / LOD-friendly — no hero-quality or cinematic creature sets.
+- **Animation-heavy юніти** що потребують >2 hours specialized animator time на one-off behavior (player). Hero-quality unique AnimBP per SWARM visual member is also forbidden.
 
 ### Gameplay Identity Bans (Pillar 1, Pillar 3, Pillar 4, Pillar 6)
 

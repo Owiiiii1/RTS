@@ -138,7 +138,7 @@ transports.
 
 - Light vehicles **не** розчавлюють живий SWARM.
 - Medium і Heavy vehicles розчавлюють **тільки Small** SWARM.
-- Medium і Heavy **сповільнюються**, рухаючись крізь Small SWARM. Заповільнення може залежати від
+- Medium і Heavy **сповільнюються**, рухаючись крізь Small SWARM. Сповільнення може залежати від
   кількості перетинаних Small groups, але має **cap**.
 - Crush damage діє лише при русі **вище мінімальної швидкості**.
 - Живих Medium і Large **не можна** просто переїхати: їх треба знищити зброєю.
@@ -178,37 +178,57 @@ transports.
 Обов'язковий runtime NavMesh rebuild **не** затверджується. Переважний напрям: transient obstacle
 data / traversability layer або локальна перевірка і repath. Узгоджувати з
 [`../TDD/16_Voxel_Terrain_And_Foundations.md`](../TDD/16_Voxel_Terrain_And_Foundations.md). Конкретний
-backend — prototype / profile pass.
+navigation/obstacle підхід — prototype / profile pass. Це **не** вибір Mass / gameplay backend.
 
 ## Blood
 
-- Одна істота загинула — з'являється **одне** кроваве пятно, одночасно з corpse mesh.
-- Пятно **не** розтікається і **не** збільшується з часом.
+- Одна істота загинула — з'являється **одна** кривава пляма, одночасно з corpse mesh.
+- Пляма **не** розтікається і **не** збільшується з часом.
 - Persistent blood splashes не створюються; бризки допустимі лише як короткочасний impact VFX.
-- Розмір пятна залежить від класу Small / Medium / Large. У кожному розмірі має бути багато
+- Розмір плями залежить від класу Small / Medium / Large. У кожному розмірі має бути багато
   візуальних варіантів (masks, rotation, scale variation, mirror, tint / intensity).
-- Пятна лишаються **до кінця матчу**, накладаються і збільшують насиченість поверхні.
-- Якщо вся передбачувана площа нового пятна вже має максимальну інтенсивність — новий stamp не
+- Плями лишаються **до кінця матчу**, накладаються і збільшують насиченість поверхні.
+- Якщо вся передбачувана площа нової плями вже має максимальну інтенсивність — новий stamp не
   малюється. Якщо насичена лише частина — stamp має розширити / посилити решту області.
 - Тисячі постійних Decal Actors **не** є цільовою архітектурою. Переважний напрям: accumulated
   world-space blood mask, tiled render targets / splat map, або RVT-compatible approach.
 - Blood — **cosmetic-only**: не впливає на рух, damage або navigation.
 - Враховувати вільне обертання камери і збільшення приблизно вдвічі відносно звичайного виду.
 
+## Animation (Pillar 7 Exception)
+
+SWARM — явний **environmental biological exception** до Pillar 7. Вимоги simple machines,
+mechanical primitives і заборона humanoid / military / cinematic animation стосуються
+**corporate / player-controlled** units і buildings.
+
+- SWARM **може** використовувати organic skeletal animation.
+- Animation має лишатися production-bounded, readable з RTS camera і LOD-friendly.
+- Жодних hero-quality bespoke animation sets, cinematic animation complexity або важкого унікального
+  AnimBP на кожного visual member.
+- Large (невелика кількість) допускає повноцінну skeletal animation.
+- Medium / Small використовують sharing / VAT / Niagara / LOD там, де це підтвердить прототип.
+
+Деталі — [`../TDD/17_SWARM_Architecture.md`](../TDD/17_SWARM_Architecture.md) і
+[`01_Game_Pillars.md`](01_Game_Pillars.md) §Pillar 7.
+
 ## What This Page Does Not Decide
 
 - Конкретні threat-band числа, spawn rates, HP, damage.
 - Імена C++ класів director / group actor.
-- Остаточний renderer (Niagara / VAT / sprites) і Mass vs lightweight groups — див. TDD/17.
+- Остаточний **visual renderer** (Niagara / VAT / skeletal / sprites) після prototype. Це не вибір
+  gameplay backend.
+- Mass Entity: **заборонений** при чинному ADR-0006. Lightweight group simulation — єдиний дозволений
+  gameplay backend. Див. TDD/17.
 - Нові player unit types як відповідь на crush / transport fantasy.
 
 ## References
 
-- Pillar 6 — [`01_Game_Pillars.md`](01_Game_Pillars.md).
+- Pillar 6 / Pillar 7 — [`01_Game_Pillars.md`](01_Game_Pillars.md).
 - Factions framing — [`03_Factions.md`](03_Factions.md).
 - MainBase / walls — [`05_Buildings.md`](05_Buildings.md).
 - Threat SoT — [`06_Resources.md`](06_Resources.md).
 - Match flow — [`07_Match_Flow.md`](07_Match_Flow.md).
 - Annihilation — [`08_Win_Lose_Conditions.md`](08_Win_Lose_Conditions.md).
 - Technical architecture — [`../TDD/17_SWARM_Architecture.md`](../TDD/17_SWARM_Architecture.md).
+- Mass / ECS ban — [`../Architecture_Decisions/ADR_0006_Indie_Scope_No_Overengineering.md`](../Architecture_Decisions/ADR_0006_Indie_Scope_No_Overengineering.md).
 - Terrain / traversability — [`../TDD/16_Voxel_Terrain_And_Foundations.md`](../TDD/16_Voxel_Terrain_And_Foundations.md).

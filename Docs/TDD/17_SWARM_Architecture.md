@@ -3,8 +3,9 @@
 > **Status (2026-09-02):** approved technical direction / documentation-only. Runtime SWARM
 > implementation **not started**. Gameplay WHAT: [`../GDD/14_SWARM.md`](../GDD/14_SWARM.md).
 >
-> Do not treat sketched owner names as existing classes. Exact schema, director class, renderer, and
-> navigation backend remain **prototype / TBD**.
+> Do not treat sketched owner names as existing classes. Exact schema, director class, **visual**
+> renderer, and navigation approach remain **prototype / TBD**. Gameplay backend is already constrained:
+> lightweight group simulation only, under current [`ADR-0006`](../Architecture_Decisions/ADR_0006_Indie_Scope_No_Overengineering.md).
 
 ## Current Runtime vs This Direction
 
@@ -59,11 +60,13 @@ acceptable reveal, and direction separation unless a concentrated pulse is chose
 
 Do not implement a numbered wave timer as the production model.
 
-## Lightweight Group Simulation (Baseline)
+## Lightweight Group Simulation (Only Allowed Gameplay Backend)
 
-First SWARM implementation **is not required to use Mass**.
+Under current [`ADR-0006`](../Architecture_Decisions/ADR_0006_Indie_Scope_No_Overengineering.md),
+**lightweight group simulation is the only allowed SWARM gameplay backend**.
 
-Baseline: **lightweight group simulation**.
+This is a **gameplay-authority** decision. It is **not** the visual renderer decision (Niagara / VAT /
+skeletal). See §Gameplay Backend vs Visual Renderer and §Mass Entity.
 
 - Small / Medium: one gameplay Actor (or equivalent authority object) owns HP, path, target,
   collision/footprint, attack, and replication.
@@ -132,15 +135,30 @@ visually occludes the path; sink-then-remove, no instant despawn.
 
 Align with [`16_Voxel_Terrain_And_Foundations.md`](16_Voxel_Terrain_And_Foundations.md): naive full
 NavMesh rebuilds after every deformation are already rejected there. SWARM corpses use the same
-spirit. Exact backend after prototype / profile.
+spirit. Exact navigation/obstacle approach after prototype / profile. This is **not** a Mass /
+gameplay-backend choice.
 
 ## Animation
+
+SWARM is the explicit **environmental biological exception** to Pillar 7 simple-machines identity
+(see [`../GDD/01_Game_Pillars.md`](../GDD/01_Game_Pillars.md)). Organic skeletal animation is **allowed
+for SWARM**. Corporate / player units remain mechanical.
+
+Bounds:
+
+- Production-bounded, readable from the RTS camera, LOD-friendly.
+- No hero-quality bespoke sets, no cinematic animation complexity, no heavy unique AnimBP on every
+  visual member.
+- Large (small count): full skeletal animation is allowed.
+- Medium nearby: several `USkeletalMeshComponent`s on one gameplay Actor are allowed; sharing / VAT /
+  LOD where a prototype confirms it.
+- Small: sharing / VAT / Niagara / LOD where a prototype confirms it.
+
+Presentation rules:
 
 - Different visual members use different **start phases** of the same animation.
 - Small play-rate variation and a few variants of one state are allowed.
 - Shared states: Move / Attack / Death (others only if needed).
-- Medium nearby: several `USkeletalMeshComponent`s on one gameplay Actor are allowed.
-- Do not put a heavy unique AnimBP on every visual member without proven need.
 - Animation Sharing is an allowed optimization (shared poses / state buckets).
 - On a death threshold, that member switches to death / corpse presentation.
 
@@ -163,33 +181,48 @@ Constraints:
 - Sprites must tolerate free camera rotation; directional sprite sets may be too expensive in
   content production and remain a far-LOD option.
 - Masked sprites are preferred over many overlapping translucent sprites (overdraw).
-- Concrete renderer is chosen after a visual / performance prototype.
+- Concrete **visual renderer** is chosen after a visual / performance prototype. That choice does
+  **not** select a gameplay ECS backend.
 
 Offscreen visual members are **not** rendered. Use distance / visibility / importance LOD for
 representation and update frequency.
 
-## Mass Entity Decision
+## Gameplay Backend vs Visual Renderer
 
-Mass was **considered** and is **not** the baseline.
+These are **different decisions**. Do not mix them.
 
-**Pros:** data-oriented fragments / archetypes / processors; batch processing; simulation /
-representation / replication LOD; Actor / ISM / no-representation switching; fits thousands of
-independent entities.
+| Decision | What it covers | Current lock |
+| --- | --- | --- |
+| **Gameplay backend** | Authority simulation: groups, HP, path, targeting, replication | **Lightweight group simulation only.** Mass Entity gameplay is **forbidden** under ADR-0006. |
+| **Visual renderer** | How members look: skeletal / VAT / Niagara / far sprites | Chosen after visual / performance prototype. **Not** an ECS gameplay backend. |
 
-**Cons for Grim Protocol:** a second architectural model beside existing `AGP_Unit` / component /
-GAS runtime; costly integration with damage, targeting, buildings, commands, navigation, and
-listen-server replication; extra C++ + profiling for Mass representation / replication; overkill if
-~500 visuals collapse to tens of gameplay groups.
+Niagara / VAT / skeletal rendering may be selected after prototype. That is presentation, not
+permission to introduce Mass.
 
-**Decision:**
+## Mass Entity (Forbidden Under ADR-0006)
 
-- first SWARM implementation **need not** use Mass;
-- lightweight group simulation is the **baseline direction**;
-- Mass remains a **reserve** after prototype / profile;
-- do not adopt Mass only for visual members inside a group — Niagara / VAT is simpler;
-- do not lock the backend before measurements.
+[`ADR-0006`](../Architecture_Decisions/ADR_0006_Indie_Scope_No_Overengineering.md) is **Accepted**. It
+hard-bans ECS-like abstraction and UE Mass Entity gameplay. This documentation checkpoint does **not**
+change ADR-0006.
 
-This is consistent with Pillar 9 / ADR-0006: Mass is not the default gameplay stack.
+Mass was **considered** as an industry option (fragments / archetypes / processors; batch LOD;
+Actor / ISM switching; thousands of independent entities). For Grim Protocol it would sit beside the
+existing `AGP_Unit` / component / GAS runtime and is a costly integration with damage, targeting,
+buildings, commands, navigation, and listen-server replication. It is also overkill if ~500 visuals
+collapse to tens of gameplay groups.
+
+**Decision (current ADRs):**
+
+- Lightweight group simulation is the **only allowed** SWARM gameplay backend.
+- Mass Entity **must not** be used in SWARM implementation while ADR-0006 stands.
+- A performance spike may show that lightweight groups **miss** the prototype targets.
+- Even then, Mass **must not** be adopted automatically.
+- Using Mass would require a **new ADR** that explicitly changes / supersedes the relevant ADR-0006
+  ban, with migration scope and profiling evidence.
+- Until that ADR is accepted, Mass remains **forbidden**, not a reserve and not an unlocked later
+  backend.
+- Do not introduce Mass merely to drive visual members inside a group — Niagara / VAT is the
+  presentation path.
 
 ## Performance And Networking Targets
 
@@ -202,7 +235,10 @@ These are **prototype targets**, not measured guarantees.
 - Server simulates groups, not each visual.
 - Orientation: 500 visuals → **tens of groups** plus a small number of Large Actors.
 - Client: member offsets / phases / cosmetic variation from replicated group state + seed.
-- Mandatory **performance spike** before a final Mass / VAT / Niagara backend choice.
+- Mandatory **performance spike** before locking the **visual renderer** (Niagara / VAT / skeletal)
+  and before claiming lightweight groups meet these targets.
+- Spike results do **not** authorize Mass. Mass stays **forbidden** until a new ADR supersedes the
+  ADR-0006 Mass / ECS ban.
 
 ## Blood Presentation
 
@@ -239,3 +275,5 @@ reconciliation.
 - Data Assets inventory — [`10_Data_Assets.md`](10_Data_Assets.md).
 - Terrain / nav — [`16_Voxel_Terrain_And_Foundations.md`](16_Voxel_Terrain_And_Foundations.md).
 - Architecture map — [`13_Architecture_Proposal.md`](13_Architecture_Proposal.md).
+- Indie scope / Mass ban — [`../Architecture_Decisions/ADR_0006_Indie_Scope_No_Overengineering.md`](../Architecture_Decisions/ADR_0006_Indie_Scope_No_Overengineering.md).
+- Pillar 7 (player machines vs SWARM organic exception) — [`../GDD/01_Game_Pillars.md`](../GDD/01_Game_Pillars.md).

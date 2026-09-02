@@ -280,6 +280,9 @@ Per-team `FerroniteThreatValue` — raw Planetary Ferronite **currently stored**
 - `FerroniteScore` and `OrbitalFerronite` do **NOT** drive SWARM pressure.
 - Optional per-unit scalar `ThreatPerStoredUnit` (default 1.0).
 - Per-team director / spawn stream is **required future implementation**, not a shipped system.
+- SWARM **gameplay backend** under current ADR-0006: lightweight group simulation **only**. Mass Entity
+  gameplay is **forbidden** until a new ADR explicitly supersedes that ban. Visual renderer (Niagara /
+  VAT / skeletal) is a **separate** prototype choice — see [`17_SWARM_Architecture`](17_SWARM_Architecture.md).
 
 Deprecated/removed: `SwarmAggressionLevel` (monotonic shipped/mined accumulator), `AggressionPerUnitShipped`, `AggressionPerUnitMined`. There is no monotonic aggression accumulator — pressure tracks the live stored stock.
 

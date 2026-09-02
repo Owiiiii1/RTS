@@ -129,8 +129,8 @@ GrimProtocol — **engineer expedition aesthetic**, не military aesthetic. П�
 - **Bipedal humanoid soldiers.** Infantry, troopers, riflemen, snipers — будь-яка людиноподібна combat фігура.
 - **Combat mech aesthetic.** Battletech / Gundam / MechWarrior-style mechs. Якщо є walker — це industrial excavator з combat retrofit, не bipedal warmachine.
 - **Hero unit visual centerpieces.** Outsize, cinematic, hand-animated juggernauts.
-- **Creature-like player units.** Organic motion, biological silhouettes для player faction.
-- **Heavy skeletal animation** як основа visual identity (per Pillar 7).
+- **Creature-like player units.** Organic motion, biological silhouettes для player faction. SWARM is the Pillar 7 biological exception — [`14_SWARM`](14_SWARM.md).
+- **Heavy skeletal animation** як основа **player / corporate** visual identity (per Pillar 7).
 
 Концептуально — кожна combat-capable машина має lore "це переобладнаний шахтарський інструмент, бо корпорація не повезла достатньо armed escort". Це **зафіксована візуальна канва**, не optional flavor.
 
@@ -143,7 +143,7 @@ Visual identity:
 - Хітинові панцирі з вкрапленнями ферроніту (світяться приглушеним помаранчевим або синім).
 - Силуети — гострі, кутасті, без округлих форм.
 - Розмір варіюється від worker-sized (рядові) до building-sized (elite tiers, post-MVP).
-- Animation budget — мінімальний; SWARM units мають basic locomotion і single-pose attack. Жодних cinematic creature anims.
+- Animation budget — production-bounded organic motion; readable з RTS camera; LOD-friendly. Large може мати повноцінну skeletal animation в обмеженій кількості. Medium / Small — sharing / VAT / Niagara / LOD за прототипом. Жодних hero-quality або cinematic creature sets. Канон: [`14_SWARM`](14_SWARM.md), Pillar 7.
 
 ## Player Fantasy
 

@@ -123,7 +123,7 @@ Bottom HUD finalization is on `main` @ `3b1d3aff293049cd3014f03e047b21a3dd2e6665
 | [`TDD/16_Voxel_Terrain_And_Foundations.md`](../TDD/16_Voxel_Terrain_And_Foundations.md) | Technical direction; Voxel Plugin spike still required |
 | [`ADR_0010_Voxel_Terrain_And_Foundation_System.md`](../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md) | Accepted documentation decision |
 | [`GDD/14_SWARM.md`](../GDD/14_SWARM.md) | Approved SWARM gameplay concept (continuous per-team pressure). Runtime **not started**. |
-| [`TDD/17_SWARM_Architecture.md`](../TDD/17_SWARM_Architecture.md) | Approved SWARM technical direction. Lightweight groups baseline; Mass considered, not chosen. |
+| [`TDD/17_SWARM_Architecture.md`](../TDD/17_SWARM_Architecture.md) | Approved SWARM technical direction. Lightweight groups = only allowed gameplay backend under ADR-0006; Mass Entity **forbidden** until a new ADR. Visual renderer is a separate choice. |
 
 ### Stale / needs cleanup (still in active tree)
 

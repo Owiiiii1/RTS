@@ -212,6 +212,8 @@ Per Pillar 4 (Capacity Is Strategy) — unit capacity це **strategic resource*
 
 Будь-яке додавання unit type **повинно проходити перевірку** per [`gp-mechanics-validator`](../../SKILLS/gp-mechanics-validator/SKILL.md):
 
+Ці constraints стосуються **player / corporate** unit types. SWARM — Pillar 7 biological exception ([`14_SWARM`](14_SWARM.md)): organic skeletal animation дозволена в production-bounded межах.
+
 - Visual identity — industrial / engineering / mining-derived. Не military, не creature-like, не humanoid soldier.
 - Animation budget — mechanical primitives. Не cinematic skeletal sets.
 - Combat role — defensive / industrial defense, не frontline assault як primary fantasy.
@@ -224,6 +226,6 @@ Per Pillar 4 (Capacity Is Strategy) — unit capacity це **strategic resource*
 - Commands — [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md), [`../TDD/04_RTS_Selection_And_Commands`](../TDD/04_RTS_Selection_And_Commands.md).
 - Mining mechanic — [`06_Resources`](06_Resources.md).
 - Terrain leveling / foundations — [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
-- SWARM units (non-player) — [`03_Factions`](03_Factions.md).
+- SWARM units (non-player) — [`03_Factions`](03_Factions.md), [`14_SWARM`](14_SWARM.md).
 - Visual style — [`Lore_Setting`](Lore_Setting.md).
 - Pillars — [`01_Game_Pillars`](01_Game_Pillars.md).

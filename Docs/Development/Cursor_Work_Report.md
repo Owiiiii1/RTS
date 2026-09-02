@@ -2,135 +2,97 @@
 
 ## Status
 
-**SWARM_CONCEPT_APPROVED_DOCUMENTED**
+**SWARM_CONCEPT_ADR_PILLAR7_LANGUAGE_RECONCILED**
 
-Documentation-only checkpoint. Runtime SWARM implementation **not started**. Do **not** start SWARM implementation from this branch. NEXT remains leftover production HUD / minimap (then terrain, AI, …) per the MVP roadmap.
+Documentation-only correction on `docs/swarm-concept`. Approved SWARM gameplay concept is unchanged. Runtime implementation **not started**. ADR-0006 was **not** modified.
 
 ## Branch / SHAs
 
 - Branch: `docs/swarm-concept`
-- Worktree: `D:\Progects\RTS-worktrees\docs-swarm-concept` (clean checkout from `origin/main`; main working copy left untouched)
+- Worktree: `D:\Progects\RTS-worktrees\docs-swarm-concept`
 - Base `origin/main`: `3b1d3aff293049cd3014f03e047b21a3dd2e6665`
-- Docs commit SHA: `6ea8600218068abec694efaf6c72051920b804f0`
-- Report commit SHA: recorded after this file is committed (follow-up on the same branch)
+- Previous branch head: `bcdd2f9b4eab5bf88419ec93d819c62f40d49868`
+- Correction commit: `b2fe522e2e59ee8e82ebc5eda460f7615fbf08c8` (`docs: reconcile swarm concept with architecture constraints`)
+- This report is a follow-up commit on the same branch
 
-## Changed documents
+## Corrected documents
 
-### New canonical
-
-- `Docs/GDD/14_SWARM.md`
 - `Docs/TDD/17_SWARM_Architecture.md`
-
-### GDD reconciliation
-
-- `Docs/GDD/00_Project_Overview.md`
+- `Docs/GDD/14_SWARM.md`
 - `Docs/GDD/01_Game_Pillars.md`
-- `Docs/GDD/02_Core_Gameplay_Loop.md`
-- `Docs/GDD/03_Factions.md`
-- `Docs/GDD/04_Units.md`
-- `Docs/GDD/05_Buildings.md`
-- `Docs/GDD/06_Resources.md`
-- `Docs/GDD/07_Match_Flow.md`
-- `Docs/GDD/08_Win_Lose_Conditions.md`
-- `Docs/GDD/09_UI_UX.md`
-- `Docs/GDD/11_Fog_of_War.md`
-- `Docs/GDD/12_Session_Tuning_And_Calibration.md`
-- `Docs/GDD/First_Playable_Match.md`
-- `Docs/GDD/Lore_Setting.md`
-- `Docs/GDD/Backlog.md`
-- `Docs/GDD/Out_Of_Scope.md`
-- `Docs/GDD/README.md`
-
-### TDD reconciliation
-
-- `Docs/TDD/03_Multiplayer_Architecture.md`
-- `Docs/TDD/05_Unit_Architecture.md`
-- `Docs/TDD/06_Building_Architecture.md`
-- `Docs/TDD/07_Resource_Architecture.md`
-- `Docs/TDD/10_Data_Assets.md`
-- `Docs/TDD/12_UI_Architecture.md`
 - `Docs/TDD/13_Architecture_Proposal.md`
-- `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
-- `Docs/TDD/README.md`
-
-### Indexes / ops
-
-- `Docs/README.md`
-- `README.md`
 - `Docs/Development/DOCUMENTATION_INDEX.md`
+- `Docs/TDD/README.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
-- `Docs/Development/Claude_Tasks/README.md`
-- `Docs/Development/Claude_Tasks/GP-0306_AI_Opponent.md`
-- `Docs/Development/Claude_Work_Plan.md`
-- `Docs/Development/Next_Slice_Audit_Post_S29R.md`
-- `Docs/Development/Orbital_Delivery_Mechanics_Review.md`
+- `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
+- `Docs/GDD/04_Units.md`
+- `Docs/GDD/Lore_Setting.md`
+- `Docs/GDD/Out_Of_Scope.md`
 - `Docs/Development/Cursor_Work_Report.md` (this file)
 
-## Superseded placeholder rules
+ADR-0006 was not changed.
 
-- Discrete numbered waves as the production model (`WaveInterval`, `WaveSize`, `WaveStartDelay` as a required wave model, `WaveSpawnPoints` as known fixed entries).
-- `ThreatToWaveSize` / `ThreatToWaveFrequency` as production schema (`UGP_SwarmThreatCurves`).
-- Predetermined wave schedule / first-wave delay / wave-size tables as approved balance.
-- `SwarmAggressionLevel` / `AggressionPerUnitShipped` / `AggressionPerUnitMined` (already deprecated; restated).
-- Claim that SWARM cannot finish the match.
-- Two almost-non-overlapping wars (Small/Medium as harmless to combat machines).
-- Nearest-asset targeting as the strategic goal (replaced by that team's MainBase).
-- Grunt-only roster / `SpawnSwarmWave` as approved production API.
-- Mass Entity as required baseline.
-- Thousands of persistent Decal Actors as the blood architecture.
-- Mandatory runtime NavMesh rebuild for corpses.
+## Mass / ADR-0006 reconciliation
 
-If code or Data Assets still use old names, they are **legacy / current-runtime placeholders**. This checkpoint did **not** rename code.
+ADR-0006 remains Accepted. ECS-like abstraction and UE Mass Entity gameplay stay hard-banned.
 
-## Canonical decisions
+Corrected:
 
-- SWARM is environmental pressure, not a playable third faction.
-- Per-team pressure from current raw Planetary Ferronite in that team's MainBase containers.
-- `FerroniteScore` and `OrbitalFerronite` do not drive SWARM.
-- Player cannot control or aim SWARM at the opponent.
-- MainBase is the strategic target and primary store; MainBase death is immediate annihilation; no Ferronite-eating.
-- Continuous flow; threat bands (budget, spawn directions, replenishment, roster, Large cap); existing creatures do not despawn on threat drop.
-- Closed outer spawn spline; circular defense, not known spawn-point forts.
-- Large / Medium group / Small group presentation vs gameplay authority split.
-- AoE hits a gameplay group once; attack damage scales with living visual members.
-- Living crush vs corpse crush split; Small vehicle avoidance is local-only.
-- Blood is cosmetic accumulated mask; not thousands of Decal Actors.
-- Lightweight group simulation is the baseline; Mass considered, not chosen.
-- Prototype targets: ~500 visuals per player represented as dozens of groups + few Large Actors; server replicates group state, not per-member transforms.
-- Per-team `FerroniteThreatValue` already exists on `AGP_GameState`. Per-team **director / spawn stream is not implemented**.
+- Lightweight group simulation is the **only allowed** SWARM gameplay backend under current ADRs.
+- Mass Entity is **forbidden** in SWARM implementation while ADR-0006 stands — not a reserve, not “not chosen”, not an unlocked later backend.
+- A performance spike may show lightweight groups miss prototype targets.
+- Even then Mass **must not** be adopted automatically.
+- Mass requires a **new ADR** that explicitly changes / supersedes the relevant ADR-0006 ban, with migration scope and profiling evidence.
+- Niagara / VAT / skeletal are **visual renderer** choices, not a gameplay ECS backend.
+- Gameplay backend and visual renderer are documented as **separate decisions**.
 
-## Prototype / TBD
+## Pillar 7 reconciliation
 
-- Exact DA schema and director class.
-- Concrete threat-band numbers (none invented).
-- Renderer mix (Niagara / VAT / skeletal / far sprites) after visual/performance prototype.
-- Navigation/obstacle backend (transient traversability vs local repath; no mandatory NavMesh rebuild).
-- Reservation/queue algorithm for Medium/Large chokes.
-- Mass as a later reserve after prototype/profile — not forbidden forever, not baseline.
-- Performance numbers are targets, not measured guarantees. Mandatory performance spike before backend lock.
+Pillar 7 no longer claims every gameplay-active object is a simple machine with a total creature-skeletal ban.
+
+Corrected:
+
+- Simple machines / mechanical primitives / no humanoid-military-cinematic animation apply to **corporate / player-controlled** units and buildings.
+- SWARM is an explicit **environmental biological exception**.
+- SWARM may use organic skeletal animation.
+- SWARM animation stays production-bounded, RTS-camera readable, LOD-friendly.
+- No hero-quality bespoke sets, cinematic complexity, or heavy unique AnimBP per visual member.
+- Large: full skeletal in small count. Medium / Small: sharing / VAT / Niagara / LOD where a prototype confirms it.
+
+Approved SWARM pressure / spawn / class / crush / blood / networking concept is unchanged.
+
+## Language audit
+
+In `Docs/GDD/14_SWARM.md`:
+
+- «кроваве пятно» → «кривава пляма»
+- «пятно» / «пятна» → «пляма» / «плями»
+- «Заповільнення» → «Сповільнення»
+
+`rg` after edits: no remaining `кровав`, `пятн`, or `Заповільнення` in Docs.
 
 ## Validation
 
 ### rg
 
-Remaining hits for `WaveInterval`, `WaveSize`, `WaveStartDelay`, `WaveSpawnPoints`, `ThreatToWaveSize`, `ThreatToWaveFrequency`, `SwarmAggressionLevel` are explicitly **superseded / legacy / current-runtime placeholders**. No unmarked production-schema claims found in active GDD/TDD.
-
-`wave` / `waves` remain only as contrast (“not numbered waves”), historical audit banners, or explicitly superseded examples.
+- `Mass` / `MassEntity` / `ADR-0006`: Mass is forbidden under current ADR-0006; allowed path requires a new ADR. TDD/00, GDD/01 Pillar 9, and Out_Of_Scope already reject MassEntity gameplay.
+- `reserve`: remaining hits are grid/inventory/minimap “reserve”, or the explicit phrase that Mass is **not** a reserve.
+- `backend`: gameplay backend vs visual renderer vs navigation/obstacle approach are split.
+- `creature-like` / `skeletal`: player bans retained; SWARM organic skeletal allowed and bounded.
+- Language terms: cleared as above.
 
 ### Links
 
-New/changed GDD/TDD/index relative links to `14_SWARM` / `17_SWARM_Architecture` resolve. Pre-existing broken `SKILLS/` links were not in scope.
+New/changed relative links to GDD/14, TDD/17, ADR-0006 resolve. Pre-existing broken `SKILLS/` links were not in scope.
 
 ### Diff / status
 
-Docs commit contains **only Markdown**. No C++, Blueprint, `Content/`, `Config/`, `GP.uproject`, or authored assets. Main working copy dirty Content/Config files were not touched (worktree from `origin/main`).
+Correction commit is **Markdown only**. No C++, Blueprint, `Content/`, `Config/`, `GP.uproject`, or authored assets. ADR-0006 untouched. Main working copy left on `ui/gp-minimap` with dirty Content/Config.
 
 ### Build / tests
 
-**Not required** for this documentation-only checkpoint. Unreal builds and tests were not run.
+**Not required.** Documentation-only correction. Unreal builds and tests were not run.
 
 ## NEXT
 
-Not SWARM implementation. Remaining queue: leftover production HUD / minimap, then terrain, AI opponent, later stages. SWARM remains the **final gameplay implementation stage** after the now-complete design/docs gate.
-
-This checkpoint does **not** re-verify unrelated HUD/minimap branches as merged. Factual on `origin/main` @ `3b1d3af`: Bottom HUD finalization is present. Do not treat `feature/gp-hud-threat-normalized` or minimap as completed from this pass.
+Unchanged: leftover production HUD / minimap, then terrain, AI. SWARM runtime still **not started** and is **not** NEXT.

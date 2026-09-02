@@ -186,7 +186,7 @@ SWARM / Ferronite Threat lives in the **top-left Threat + Score** block. Form:
 - `WBP_GP_HUD` and `ThreatToColor` remain uncommitted. Final art is not claimed complete.
 - Current gameplay/storage tuning can reach high/full threat quickly; later UX/balance
   tuning may revisit the presentation scale. This is not a defect in the normalization slice.
-- Optional later minimap wave marker is minimap-slice work, not this layout.
+- Optional later minimap SWARM approach marker is minimap-slice work, not this layout.
 
 Гравець має знати рівень threat за ≤ 1 second.
 
@@ -198,7 +198,7 @@ only reserves the placeholder. When implemented it показує:
 - Player base (own and opponent, if visible).
 - Ferronite deposits (location + capacity status).
 - Own units і buildings.
-- SWARM spawn locations (на момент wave спавн — pulse marker).
+- SWARM approach / spawn pulse (continuous outer pressure; not a numbered-wave countdown).
 - Camera viewport rectangle.
 
 Mini-map clickable — re-center camera. Mini-map тримає player у курсі map state, особливо при mid-match expansion.

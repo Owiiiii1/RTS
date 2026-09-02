@@ -80,7 +80,7 @@ Gameplay (orbital delivery MVP loop):
 - Main Base + 2 Workers на старті; OrbitalFerronite = 0.
 - Worker mineить raw (Planetary) Ferronite і носить його у MainBase containers.
 - Container ships to orbit → Planetary Ferronite конвертується у OrbitalFerronite (spendable) + FerroniteScore (cumulative shipped score).
-- FerroniteThreatValue = raw stock at base (up on drop-off, down on launch) → drives SWARM waves.
+- FerroniteThreatValue = raw stock at base (up on drop-off, down on launch) → drives continuous SWARM pressure (numbered waves **superseded**; see [`../GDD/14_SWARM.md`](../GDD/14_SWARM.md)).
 - Logistics Hub + Order Menu (`UGP_OrbitalDeliverySubsystem`) — spend OrbitalFerronite на orbital drops (Workers / combat units / buildings / walls) via `AGP_DropPod`. No local production / construction.
 - Worker repairs (`GP.Command.Repair`, cost TBD). No build, no produce.
 - Base receives damage.

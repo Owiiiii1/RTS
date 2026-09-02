@@ -88,7 +88,7 @@ Replicated, RepNotify тригерить client-side end-of-match UI.
 - **Host disconnect:** match aborts, no winner (per [`07_Match_Flow`](07_Match_Flow.md) multiplayer specifics).
 - **Both players reach quota same tick:** tie-break ladder вирішує (FerroniteScore exact → OrbitalFerronite → CurrentUnits → seed).
 - **Both players score 0 на 10:00:** tie-break ladder спускається до deterministic seed → один winner (немає `Draw` у MVP).
-- **SWARM waves знищують гравця у останню секунду:** якщо це Main Base destruction — immediate annihilation loss; інакше score замерзає, winner по cumulative.
+- **SWARM знищує гравця у останню секунду:** якщо це Main Base destruction — immediate annihilation loss; інакше score замерзає, winner по cumulative.
 
 ## Surrender / Forfeit
 

@@ -85,7 +85,7 @@ public:
 | Unit Definition | `DA_GP_Unit_*` | `GPRuntime` | Intrinsic unit/building gameplay + `CargoCapacity` + HUD `PresentationIcon` (nullable `UTexture2D`). **No acquisition cost.** |
 | Building Definition | `DA_GP_Building_*` | `GPRuntime` | Identity, tags, `SpawnedClass`, footprint, `UnitDefinition`, **storage**, **`UnitCapBonus`**. **No acquisition cost.** |
 | Resource Definition | `DA_GP_Resource_*` | `GPRuntime` | Ferronite mining / conversion / threat **+ `DepositMaxAmount` / `MaxConcurrentMiners`**. |
-| Session Config | `DA_GP_Session_*` | `GPRuntime` | Match-level tuning: delivery quota, match duration, win flags, SWARM threat→wave curves. |
+| Session Config | `DA_GP_Session_*` | `GPRuntime` | Match-level tuning: delivery quota, match duration, win flags. SWARM threat→wave curves are **legacy / superseded**; future director params — [`17_SWARM_Architecture`](17_SWARM_Architecture.md). |
 | Faction Definition | `DA_GP_Faction_*` | `GPRuntime` | Starting units/buildings, visual team identity, allowed orbital drops, faction tags. |
 | SWARM Definition | `DA_GP_Swarm_*` | `GPRuntime` | SWARM unit identity, base stats, AI behavior reference. |
 | Ability Definition | `DA_GP_Ability_*` | `GPGASRuntime` | Ability-facing config when C++ ability needs designer tuning. |
@@ -149,7 +149,7 @@ Building catalog names (content, later): `DA_GP_Building_LogisticsHub` / `Defens
   - `Tint`: teal-blue glow color.
   - `Icon`: `TSoftObjectPtr<UTexture2D>` for UI.
 
-> **Deprecated (pre-pivot)** — do not author: `AggressionPerUnitMined`, `AggressionPerUnitShipped`. SWARM pressure is now keyed on `FerroniteThreatValue` (raw stock stored at base — up on Worker drop-off, down on orbital launch) via `ThreatPerStoredUnit` + the Session-level threat→wave curves.
+> **Deprecated (pre-pivot)** — do not author: `AggressionPerUnitMined`, `AggressionPerUnitShipped`. SWARM pressure is keyed on `FerroniteThreatValue` (raw stock stored at base — up on Worker drop-off, down on orbital launch) via `ThreatPerStoredUnit`. Session-level `ThreatToWaveSize` / `ThreatToWaveFrequency` are **legacy placeholder names** — **superseded**. Future schema: threat-band / director parameters ([`17_SWARM_Architecture`](17_SWARM_Architecture.md)). Exact schema = future implementation.
 
 ### Session
 
@@ -158,8 +158,8 @@ Building catalog names (content, later): `DA_GP_Building_LogisticsHub` / `Defens
   - `DeliveryQuotaFerroniteScore`: 5000 (placeholder; primary win condition — first to `FerroniteScore >= quota` wins).
   - `bAnnihilationCountsAsWin`: true.
   - `MatchDurationSeconds`: 600 (timer; on expiry highest `FerroniteScore` wins — `GP.Match.WinReason.TimerScore`).
-  - `ThreatToWaveSize`: `TSoftObjectPtr<UCurveFloat>` — keyed on `FerroniteThreatValue` → SWARM wave unit count.
-  - `ThreatToWaveFrequency`: `TSoftObjectPtr<UCurveFloat>` — keyed on `FerroniteThreatValue` → seconds between waves.
+  - `ThreatToWaveSize`: `TSoftObjectPtr<UCurveFloat>` — **legacy placeholder** if sketched. **Superseded.** Do not treat as production schema.
+  - `ThreatToWaveFrequency`: `TSoftObjectPtr<UCurveFloat>` — **legacy placeholder** if sketched. **Superseded.** Future: threat-band / director params ([`17_SWARM_Architecture`](17_SWARM_Architecture.md)).
   - Win reasons surfaced via `GP.Match.WinReason.*` (`DeliveryQuota`, `TimerScore`, `Annihilation`, `OpponentDisconnect`).
 
 ### Buildings
@@ -247,15 +247,9 @@ Building catalog names (content, later): `DA_GP_Building_LogisticsHub` / `Defens
 
 ### SWARM
 
-- `DA_GP_Swarm_Grunt` — baseline SWARM unit (MVP only tier).
-  - Не покупається, не виробляється; спавн через `AGP_GameMode::SpawnSwarmWave` server-side.
-  - `MaxHealth`: TBD (recommended starting 30; SWARM trivially loses to Salvage Walker single attack).
-  - `Damage`: TBD (recommended starting 5; lethal до worker за кілька ticks).
-  - `AttackRange`: TBD (mix melee 150 і ranged 600 у наступних tiers; MVP — single tier).
-  - `MoveSpeed`: TBD.
-  - `AggroRadius`: TBD.
-  - `SpawnWeight`: 1.0 (for wave composition rolling — MVP all-Grunt).
-  - `UnitTags`: `{GP.Unit.Type.Swarm, GP.Faction.Swarm, GP.Mob.Tier.Grunt}`.
+- `DA_GP_Swarm_Grunt` — **legacy sketch**, not approved production roster. Canonical classes: Large / Medium group / Small group ([`../GDD/14_SWARM`](../GDD/14_SWARM.md)). Exact DA schema = future implementation ([`17_SWARM_Architecture`](17_SWARM_Architecture.md)).
+  - Не покупається, не виробляється. `AGP_GameMode::SpawnSwarmWave` — **legacy placeholder name**, not the approved continuous director.
+  - Stats / `SpawnWeight` wave-composition rolling — **superseded placeholders**. Do not treat Grunt-only waves as canon.
 
 ### AI Behavior
 

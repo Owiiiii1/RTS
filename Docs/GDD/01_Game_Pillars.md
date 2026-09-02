@@ -183,35 +183,36 @@
 
 ## 6. SWARM as Environmental Pressure
 
-**Identity statement.** SWARM — це **environmental / ecological threat**, не playable third faction. Це force-of-nature, що тисне на обох гравців пропорційно до їхнього видобутку. SWARM створює natural escalation curve без manual designer pacing.
+**Identity statement.** SWARM — це **environmental / ecological threat**, не playable third faction. Це force-of-nature, що тисне на **кожну команду окремо** пропорційно до її поточного raw Ferronite у MainBase. Continuous pressure без numbered waves. Canonical concept: [`14_SWARM`](14_SWARM.md).
 
 ### Player Goal
 
-Захистити operation від ескалюючої SWARM aggression, балансуючи investment у defense проти score push. SWARM не може бути "переможений" — тільки витриманий до timer expiry.
+Захистити operation (насамперед MainBase) від безперервного SWARM pressure, балансуючи defense проти score push. SWARM не можна "перемогти" як фракцію — тільки витримати, знизити threat shipping-ом, або програти annihilation, якщо падає MainBase.
 
 ### What It Allows
 
-- AI-only SWARM faction.
-- SWARM, що реагує на player economy через `FerroniteThreatValue` (raw Ferronite, складений у контейнерах на MainBase; зростає при drop-off, спадає при launch на орбіту).
-- SWARM tiered units (Grunt MVP; Elite / Brood / Siege post-MVP).
-- SWARM як design tool для economy self-balancing (більше нескинутого Ferronite на базі = більший threat; відправка на орбіту знижує тиск).
+- AI-only SWARM as environmental pressure (not a playable faction).
+- Per-team pressure from `FerroniteThreatValue` (raw Ferronite у контейнерах MainBase; ↑ drop-off, ↓ launch).
+- Continuous flow with threat bands (budget, spawn directions, roster, Large caps). Short density pulses inside the stream are allowed; they are not numbered waves.
+- SWARM targeting that team's MainBase; annihilation if MainBase dies.
+- Circular defense / walls as the answer to random outer-spline approaches.
 
 ### What It Forbids
 
-- Player control над SWARM (commanding, summoning, directly buffing).
+- Player control над SWARM (commanding, summoning, directing onto the opponent).
 - SWARM як selectable playable faction.
-- SWARM, що не реагує на economy (constant predetermined waves).
-- SWARM, що завершує матч (e.g., "wipe out → instant lose" — match завершується по timer + score).
+- SWARM, що не реагує на economy (constant predetermined waves / fixed known spawn points as the model).
+- Claim that SWARM cannot end the match: destroying a team's MainBase **is** immediate annihilation loss.
 
 ### 5-Component Check
 
 | Component | Implication |
 | --- | --- |
-| **Clarity** | SWARM aggression HUD indicator readable; wave spawn telegraph; minimap markers. |
-| **Motivation** | Threat = constant tension; кожен mining decision adds threat. |
-| **Response** | Defensive structures, Salvage Walker-class defenders, positioning — все player response tools. |
-| **Satisfaction** | Repelling wave with defense investment — readable success. |
-| **Fit** | EREBUS-9 ecosystem react до extraction — узгоджено з worldbuilding. |
+| **Clarity** | Threat HUD readable; continuous outer pressure, not a wave countdown. |
+| **Motivation** | Hoarded raw Ferronite = living perimeter threat against your own MainBase. |
+| **Response** | Circular walls/turrets, industrial combat vehicles, salvage coverage. |
+| **Satisfaction** | Holding the perimeter / punching a corridor through dense flow. |
+| **Fit** | EREBUS-9 ecology reacts to stored metal — узгоджено з worldbuilding. |
 
 ---
 
@@ -401,6 +402,7 @@ Identity тепер несе 8 gameplay pillars (1–8), що відповіда
 
 ## References
 
+- SWARM concept — [`14_SWARM`](14_SWARM.md).
 - Gameplay loop, побудований на pillars — [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md).
 - Visual / lore implications — [`Lore_Setting`](Lore_Setting.md).
 - Engineering implications — [`../TDD/00_Technical_Overview`](../TDD/00_Technical_Overview.md).

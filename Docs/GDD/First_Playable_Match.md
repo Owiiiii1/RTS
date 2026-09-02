@@ -1,10 +1,9 @@
 # First Playable Match
 
-> **SWARM roadmap gate (2026-08-20):** SWARM remains in MVP and is the final gameplay implementation
-> stage, but a dedicated design/reconciliation review is mandatory before implementation. Grunt counts,
-> first-wave timing, spawn points, targeting, and escalation examples in this story are illustrative
-> placeholders until that review; they are not approved implementation requirements. SWARM is separate
-> from the player-like RTS AI Opponent.
+> **SWARM concept approved (2026-09-02):** [`14_SWARM`](14_SWARM.md) / [`../TDD/17_SWARM_Architecture`](../TDD/17_SWARM_Architecture.md).
+> Discrete numbered waves, Grunt counts, first-wave timing, fixed spawn points, and nearest-asset
+> targeting in older story beats are **superseded**. Runtime implementation **not started**. SWARM
+> remains the final gameplay implementation stage and is separate from the RTS AI Opponent.
 
 ## Scope
 
@@ -110,24 +109,26 @@ Player вирішує — spend OrbitalFerronite через Order Menu (Logistic
 
 AI робить аналогічні дії у власному tempo (state machine з [`03_Factions`](03_Factions.md): mine → ship → order → defend).
 
-### Step 5 — First SWARM Wave (~1:00)
+### Step 5 — SWARM Pressure Appears
 
-`AGP_GameMode` тригерить першу SWARM wave:
+Як тільки raw Ferronite накопичується в MainBase containers, per-team `FerroniteThreatValue` росте і
+майбутній director починає **безперервний** потік (runtime **not started**). Немає numbered first wave,
+фіксованого `WaveSpawnPoint` чи Grunt count як approved requirement.
 
-- 3-5 SWARM Grunts спавняться у `WaveSpawnPoint` поза стартовою зоною.
-- SWARM AI знаходить найближчий player asset (Worker, building, Salvage Walker) і рухається до нього.
-- При attack range — SWARM атакує.
+- Спавн — з зовнішнього замкненого spline за межами бази / start zone.
+- Стратегічна ціль потоку — **MainBase цієї команди**. SWARM атакує те, що стоїть на шляху.
+- Кругова оборона (Walls / Turrets / combat units), не кілька відомих входів.
 
 Player реагує:
 
 - Якщо є Salvage Walker — командує `GP.Command.Attack`.
 - Якщо є Defensive Turret — turret auto-engages SWARM у range.
-- Якщо нічого немає — Worker може бути знищений.
+- Якщо нічого немає — Workers і база під загрозою; знищення MainBase = annihilation.
 
 UI показує:
 
-- Minimap pulse у місці спавна.
-- SWARM Threat indicator (driven by FerroniteThreatValue) показує поточний raw stock pressure.
+- Threat indicator (driven by `FerroniteThreatValue`) — поточний raw stock pressure.
+- Optional later minimap approach pulse (minimap slice).
 
 ### Step 6 — Mid Match (3:00 – 7:00)
 
@@ -145,18 +146,19 @@ AI продовжує state machine (orbital model):
 - `Order` → spends OrbitalFerronite на orbital drops (Workers / Salvage Walker / Turret / Logistics Hub).
 - `Defend` → react to SWARM threat / enemy near base.
 
-SWARM waves escalate per поточний `FerroniteThreatValue`:
+SWARM pressure escalates per поточний `FerroniteThreatValue`:
 
-- Кожна wave масштабується від `FerroniteThreatValue` (raw stock at base): зростає на drop-off, падає на launch. Чим більше raw stock тримає гравець / AI — тим більша загроза.
-- Час матчу сам по собі не масштабує SWARM. Якщо гравець швидко shipить (низький raw stock) — waves залишаються невеликими, навіть на 7-й хвилині.
+- Інтенсивність — функція raw stock at base: зростає на drop-off, падає на launch. Чим більше raw stock тримає гравець / AI — тим більша загроза.
+- Час матчу сам по собі не масштабує SWARM. Якщо гравець швидко shipить (низький raw stock) — pressure лишається нижчим, навіть пізно в матчі.
 - Greed-vs-safety loop: тримати raw stock = більше score-ready Ferronite, але більше SWARM pressure.
+- Numbered waves / wave-size tables — **superseded**. Канон: [`14_SWARM`](14_SWARM.md).
 
 Player і AI score race паралельно. Player бачить opponent score у HUD у real time.
 
 ### Step 7 — Late Match (7:00 – 9:30)
 
 - Score gap visible. Lagging side агресивніше mineить + shipить, агресивніше push.
-- SWARM waves typically (але не гарантовано) сягають peak — це emergent наслідок того, що гравці тримають високий `FerroniteThreatValue` (raw stock) заради shipping. Fast-shipping (low-stock) matches буде з відносно нижчим SWARM.
+- SWARM typically (але не гарантовано) сягає peak — emergent наслідок високого `FerroniteThreatValue` заради shipping. Fast-shipping (low-stock) matches буде з відносно нижчим SWARM.
 - Player decides між final push (attack AI base) і final mine + ship (last-second score acceleration; тримати raw stock для shipping = більше threat, але більше score).
 
 ### Step 8 — Final 30 Seconds (9:30 – 10:00)
@@ -266,7 +268,7 @@ Per Pillar Clarity / Pillar 1 — new player повинен зрозуміти �
 | 0:00 | HUD з Timer / FerroniteScore / OrbitalFerronite / Opponent Score / SWARM Threat. Workers idle. Main Base. Deposit nearby. | "У мене Workers і база. Поруч ресурс. Треба mineити і shipити." |
 | 0:05 | Player command Workers → Mine. | "Workers рухаються до deposit." |
 | 0:30 | Перший container ships to orbit → FerroniteScore flash. | "Ага, shipити raw Ferronite = очки + spendable currency." |
-| 1:00 | SWARM wave спавн. | "Це загроза від мого raw stock. Треба захист АБО shipити швидше." |
+| 1:00 | SWARM pressure відчутний, якщо raw stock уже росте. | "Це загроза від мого raw stock. Треба захист АБО shipити швидше." |
 | 5:00 | Score gap у HUD. | "Я програю за FerroniteScore. Треба mineити + shipити швидше." |
 | 9:30 | Timer на 30 секундах. Score race. | "Останні секунди — final push." |
 | 10:00 | End screen. | "Match закінчений. Хто переміг — readable." |

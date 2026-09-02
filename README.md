@@ -49,6 +49,9 @@ Docs/
 │   ├── 09_UI_UX
 │   ├── 10_Orbital_Delivery    ← Helldivers-style drop pod model
 │   ├── 11_Fog_of_War          ← 3-level visibility system
+│   ├── 12_Session_Tuning_And_Calibration
+│   ├── 13_Terrain_Engineering_And_Foundations
+│   ├── 14_SWARM             ← continuous per-team pressure (runtime not started)
 │   ├── First_Playable_Match
 │   ├── Lore_Setting / Backlog / Out_Of_Scope
 ├── TDD/                       ← Technical Design Document (how it's built)
@@ -68,6 +71,8 @@ Docs/
 │   ├── 13_Architecture_Proposal (consolidated, stop point before C++ code)
 │   ├── 14_Orbital_Delivery
 │   ├── 15_Fog_of_War
+│   ├── 16_Voxel_Terrain_And_Foundations
+│   ├── 17_SWARM_Architecture
 ├── Architecture_Decisions/    ← ADRs (immutable decisions)
 │   ├── ADR_0001..0007 (foundational)
 │   ├── ADR_0008_AI_Opponent_AAIController

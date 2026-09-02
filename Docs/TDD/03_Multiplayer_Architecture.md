@@ -15,8 +15,8 @@
 | Player faction / team | Server (assigned on join) | `AGP_PlayerState`, replicated |
 | Player OrbitalFerronite (spendable currency) | Server | `AGP_PlayerState.ASC` + `UGP_PlayerAttributeSet.OrbitalFerronite`, `COND_OwnerOnly` |
 | Player FerroniteScore (cumulative) | Server | `AGP_PlayerState.ASC` + `UGP_PlayerAttributeSet.FerroniteScore`, monotonically increasing, RepNotify |
-| `FerroniteThreatValue` (swarm pressure) | Server | `AGP_GameState.FerroniteThreatValue` — raw Ferronite stored at MainBase (up on container drop-off, down on launch), replicated. Drives wave intensity. Deprecates `SwarmAggressionLevel` / `AggressionPerUnit*` |
-| SWARM unit spawn / AI tick | Server | `AGP_GameMode` тригерить waves; SWARM units — server-only AIControlled. Multicast тільки cosmetic (death VFX) |
+| `FerroniteThreatValue` (swarm pressure) | Server | Per-team SoT on `AGP_GameState` (`GetFerroniteThreatValueForTeam`). Raw Ferronite stored at that team's MainBase (up on drop-off, down on launch), replicated. Future director consumes this. Deprecates `SwarmAggressionLevel` / `AggressionPerUnit*`. Does **not** imply a shipped wave director. |
+| SWARM spawn / group sim | Server | **Not implemented.** Future: per-team continuous director + lightweight groups ([`17_SWARM_Architecture`](17_SWARM_Architecture.md)). Multicast тільки cosmetic. |
 | AI opponent decision tick (singleplayer) | Server (host) | `AGP_AIController : AAIController` low-frequency (2-5s), не client-side |
 | Score tie-break execution | Server | `AGP_GameMode` evaluates while `Playing`, then `FinishMatch` writes `FGP_MatchResult` and sets `Finished`. Ladder: `FerroniteScore` → `OrbitalFerronite` → `CurrentUnits` → stored `MatchSeed` (no RNG at finish). |
 | `MatchResult` struct write | Server | `AGP_GameState.MatchResult` (`TArray<FGP_MatchTeamScore>` snapshot, not `TMap`) plus compatibility `WinnerTeamId` / `WinReasonTag`. |
@@ -42,11 +42,13 @@
 
 ### SWARM Authority Notes
 
-- SWARM units спавняться через `AGP_GameMode::SpawnSwarmWave` server-only.
-- Кожен SWARM unit — `AGP_UnitBase` child з `GP.Faction.Swarm` tag.
-- SWARM AI — server-only `AAIController` subclass з простим targeting (closest player asset у aggro radius).
-- SWARM **не приймає player commands**. Будь-яка спроба `Server_RequestCommand` з SWARM target як attacker — Validation reject.
-- Multicast тільки на death VFX / attack montage (cosmetic).
+Runtime SWARM director / spawn stream **not started**. Canonical direction: [`17_SWARM_Architecture`](17_SWARM_Architecture.md).
+
+- Future: server-only per-team continuous director. Do **not** treat `AGP_GameMode::SpawnSwarmWave` as approved production API if that name still exists — **legacy placeholder**.
+- Server simulates **gameplay groups** (plus a small number of Large Actors), not each visual member.
+- SWARM **не приймає player commands**. Будь-яка спроба `Server_RequestCommand` з SWARM як attacker — Validation reject.
+- Multicast тільки cosmetic (death / attack presentation).
+- Targeting: MainBase цієї команди як стратегічна ціль — не player-directed onto the opponent.
 
 ### AI Opponent Authority Notes (Singleplayer)
 

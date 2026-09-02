@@ -202,7 +202,7 @@ Stage — design only (per [`Claude_Tasks/GP-0301_Main_Base`](../Development/Cla
 
 ### Swarm Threat Coupling
 
-`FerroniteThreatValue` (GameState) = raw Ferronite currently stored in MainBase containers. Drop-off raises it; launching a container to orbit lowers it. Swarm wave size/frequency scale from `FerroniteThreatValue` via DA curves (`ThreatToWaveSize`, `ThreatToWaveFrequency`). `FerroniteScore` and `OrbitalFerronite` do **not** drive Swarm pressure. This is the greed-vs-safety loop: hoarding raw Ferronite at base for a big launch attracts heavier waves. See TDD Swarm spec + memory rule `project_swarm_escalation` for the full coupling.
+`FerroniteThreatValue` (per-team GameState) = raw Ferronite currently stored in that team's MainBase containers. Drop-off raises it; launching a container to orbit lowers it. Future SWARM **director** (not implemented) consumes this SoT as continuous pressure — **not** numbered waves. `ThreatToWaveSize` / `ThreatToWaveFrequency` are **legacy placeholder names** if still present. `FerroniteScore` and `OrbitalFerronite` do **not** drive Swarm pressure. Canonical: [`17_SWARM_Architecture`](17_SWARM_Architecture.md), [`../GDD/14_SWARM`](../GDD/14_SWARM.md).
 
 ### Worker Repair Ability
 
@@ -297,7 +297,7 @@ Health, MaxHealth, Armor — через `UGP_UnitAttributeSet` (per TDD/02 / TDD
 | 4 | Repair under fire | Worker repairs MainBase while it takes damage → repair fights damage; if dps > heal, base dies. |
 | 5 | Repair cancel on death | Worker dies mid-repair → ability ends cleanly, no stuck VFX. |
 | 6 | Base destruction | Health 0 → containers destroyed, drop-off + launch blocked, annihilation win check fires. |
-| 7 | Threat-driven waves | Hoard raw Ferronite (high `FerroniteThreatValue`) → Swarm waves intensify per `ThreatToWaveSize`/`ThreatToWaveFrequency`. |
+| 7 | Threat-driven pressure | Hoard raw Ferronite (high `FerroniteThreatValue`) → continuous SWARM intensifies. Numbered waves / `ThreatToWave*` curves are **superseded**. |
 | 8 | Concurrent damage from two attackers | Damage stacks correctly, Health monotone decreases. |
 
 ### Out of MVP (Main Base)

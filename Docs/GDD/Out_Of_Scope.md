@@ -49,7 +49,7 @@
 - **Capacity decoupled від economy** (auto-scaling cap, time-based cap).
 - **Player control over SWARM** — direct commands, summoning, buffs, indirect manipulation як primary mechanic.
 - **SWARM as playable faction.**
-- **SWARM that doesn't react to economy** (constant predetermined waves).
+- **SWARM that doesn't react to economy** (constant predetermined numbered waves / fixed known spawn points as the model). Canonical: [`14_SWARM`](14_SWARM.md).
 - **Hero units** як combat centerpiece з unique anim set.
 - **Military RTS metagame** — focus на army composition / push-the-base як primary loop.
 

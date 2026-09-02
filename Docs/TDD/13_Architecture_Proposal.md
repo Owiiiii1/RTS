@@ -163,12 +163,12 @@ Per [`10_Data_Assets`](10_Data_Assets.md) + [`ADR-0002`](../Architecture_Decisio
 | `UGP_CameraConfigDataAsset` | Camera tuning | GPRuntime |
 | `UGP_FeedbackBundle_*` | Per-system VFX/SFX/anim soft refs | GPUIRuntime / GPRuntime split TBD |
 | `UGP_NotificationConfig` | Toast metadata per tag | GPUIRuntime |
-| `UGP_SwarmDefinition` (**MVP, design required**) | Possible SWARM unit identity; exact schema/roster is not approved and must be resolved by the final-gameplay-stage design review | GPRuntime |
+| `UGP_SwarmDefinition` (**MVP, concept approved; runtime not started**) | Large / Medium-group / Small-group identity. Exact schema remains future implementation ([`17_SWARM_Architecture`](17_SWARM_Architecture.md)) | GPRuntime |
 | `UGP_AIBehaviorDefinition` | AI thresholds, decision tick rate, action probabilities | GPRuntime |
 | `UGP_OrbitalDropDefinition` (family `DA_GP_OrbitalDrop_*`) | Building READY purchase: cost, tags, BuildingDefinition, timing. Not Wall Package. | GPRuntime |
 | `UGP_WallPackageDefinition` (`DA_GP_WallPackage`) | Wall Package: DisplayName, Icon, Cost, SegmentCount=5, delivery timing. Not READY. | GPRuntime |
 | `UGP_BuildGridConfig` | Grid cell size (200 cm), pathfinding iteration cap, A* heuristic flavor | GPRuntime |
-| `UGP_SwarmThreatCurves` | `ThreatToWaveSize` / `ThreatToWaveFrequency` curves over `FerroniteThreatValue`; `ThreatPerStoredUnit` (default 1.0) | GPRuntime |
+| `UGP_SwarmThreatCurves` | **Superseded as production schema.** Legacy names `ThreatToWaveSize` / `ThreatToWaveFrequency` if still sketched. Future: threat-band / director params ([`17_SWARM_Architecture`](17_SWARM_Architecture.md)). `ThreatPerStoredUnit` remains on resource definition. | GPRuntime |
 
 DataAssets зберігаються у `/Game/GrimProtocol/DataAssets/<Category>/`. PrimaryAssetType per category для `UAssetManager` registration.
 
@@ -269,12 +269,17 @@ Effects живуть у `/Game/GrimProtocol/Effects/`. `TSoftClassPtr` refs у D
 
 ## SWARM Threat Model
 
-SWARM wave intensity / frequency / targeting scale from `FerroniteThreatValue` — the raw Planetary Ferronite **currently stored** in MainBase containers (a fluctuating stock on GameState), via DA curves `ThreatToWaveSize` and `ThreatToWaveFrequency` (`UGP_SwarmThreatCurves`).
+Canonical gameplay: [`../GDD/14_SWARM`](../GDD/14_SWARM.md). Technical direction: [`17_SWARM_Architecture`](17_SWARM_Architecture.md).
+
+Per-team `FerroniteThreatValue` — raw Planetary Ferronite **currently stored** in that team's MainBase containers — is the SoT. Future **director** (not implemented) maps threat bands to continuous pressure (budget, spawn directions, replenishment, roster, Large cap). Discrete numbered waves are **superseded**.
+
+`UGP_SwarmThreatCurves` with `ThreatToWaveSize` / `ThreatToWaveFrequency` is **superseded as the production schema**. If those names still exist on Data Assets, treat them as **legacy / current-runtime placeholders**. Exact replacement schema = future implementation task.
 
 - Worker drop-off **raises** `FerroniteThreatValue` → more pressure (greed has a cost).
 - Container launch-to-orbit **lowers** it → less pressure (shipping = relief / safety).
 - `FerroniteScore` and `OrbitalFerronite` do **NOT** drive SWARM pressure.
 - Optional per-unit scalar `ThreatPerStoredUnit` (default 1.0).
+- Per-team director / spawn stream is **required future implementation**, not a shipped system.
 
 Deprecated/removed: `SwarmAggressionLevel` (monotonic shipped/mined accumulator), `AggressionPerUnitShipped`, `AggressionPerUnitMined`. There is no monotonic aggression accumulator — pressure tracks the live stored stock.
 
@@ -461,10 +466,11 @@ Slice 13 — Match End + Polish
 Each `GP-S##` slice — окрема code task; не починається без зеленого світла.
 
 The block above is a **historical decomposition**, not the current execution order. Current dependency
-order is maintained in the post-vitals reconciliation: FoW runtime first; production UI/minimap; RTS AI
+order is maintained in the post-vitals reconciliation: production UI/minimap; terrain; RTS AI
 Opponent; remaining bounded gameplay and redesign-approved building work; Steam/session and match
-completion; then a dedicated SWARM design gate and SWARM as the **last gameplay implementation stage of
-MVP**. SWARM and the RTS AI Opponent are separate systems. Full end-to-end validation follows SWARM.
+completion; then SWARM as the **last gameplay implementation stage of MVP**. SWARM **concept is
+approved / documented** ([`17_SWARM_Architecture`](17_SWARM_Architecture.md)); runtime **not started**.
+SWARM and the RTS AI Opponent are separate systems. Full end-to-end validation follows SWARM.
 
 ## Pillar 8 — MVP Production Rule (Cross-Slice Gate)
 

@@ -721,8 +721,8 @@ Stage — design only (per [`Claude_Tasks/GP-0402_Feedback_Pass`](../Development
 | **Worker idle (no deposit)** | — | — | — | — | — | — | IdleChime 2D | "Worker idle" | — | IdleWorker indicator (count) | Per GP-0302 / GP-0303. |
 | **Score increment** | — | — | — | — | ResourceVM Score `+N` flash | — | ScoreTick 2D (volume-scaled by N) | — | Score +N flash | — | Subtle audio, не loud spam. |
 | **Opponent score increment** | — | — | — | — | OpponentScore flash | — | — | — | OpponentScore flash | — | Quiet, не distracting. |
-| **SWARM aggression level shift** | — | — | — | — | SwarmAggression VM update | — | — | At threshold | Indicator color shift | — | Toast тільки на threshold cross (Moderate → High → Critical). |
-| **SWARM wave incoming** | — | — | — | — | Pulse on aggression indicator | — | WarningKlaxon 2D | "SWARM incoming" | — | — | Critical severity. |
+| **SWARM threat band shift** | — | — | — | — | Threat VM update | — | — | At threshold | Indicator color shift | — | Toast тільки на threshold cross. `SwarmAggression` naming is **superseded**; bind to `FerroniteThreatValue` / normalized presentation. |
+| **SWARM pressure incoming** | — | — | — | — | Pulse on threat indicator | — | WarningKlaxon 2D | "SWARM incoming" | — | — | Critical severity. Not a numbered-wave countdown. |
 | **Match timer 60 s remaining** | — | — | — | — | Timer turns yellow | — | TimerWarning 2D | "1 minute remaining" | — | — | One-shot. |
 | **Match timer 15 s remaining** | — | — | — | — | Timer turns red, pulses | — | TimerCrunch 2D | — | Timer pulse | — | Pulse animation. |
 | **Match end — win** | — | — | — | — | EndOfMatch overlay (Activatable) | VictoryFanfare 3D ambient | VictoryChime 2D | — | — | — | One-shot, blocks input. |

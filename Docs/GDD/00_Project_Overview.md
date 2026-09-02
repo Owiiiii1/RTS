@@ -24,7 +24,7 @@ PC players, що цінують:
 
 - Швидкі match-based RTS (10 хв per game).
 - Економну механіку (single resource, single combat archetype, без overwhelming production trees у MVP).
-- Symmetric PvP з environmental pressure (SWARM waves) як engagement multiplier.
+- Symmetric PvP з environmental pressure (continuous SWARM) як engagement multiplier.
 - Industrial sci-fi setting (Deep Rock Galactic — primary reference; Aliens 2 atmosphere; Starship Troopers pacing of hostile ecology — **не** military aesthetic).
 
 ## Team Profile
@@ -54,14 +54,15 @@ PC players, що цінують:
 - **Main Base** (initial expedition pod — already deployed at match start; drop-off + container storage + ship-to-orbit launch site).
 - **Worker unit** (mining + repair; arrives via orbital drop after order).
 - **Salvage Walker** (combat-capable industrial defender; orbital drop).
-- **Defensive Turret** (oborona проти SWARM waves; orbital drop placement).
+- **Defensive Turret** (oborona проти continuous SWARM pressure; orbital drop placement).
 - **Logistics Hub** (was "Assembly Yard"; orbital drop placement; +5 MaxUnits cap; expanded storage cap).
 - **Ferronite** як MVP resource у **two states**: Planetary (containers at base, not spendable) → Orbital (currency, spendable on orbital drops). Containers ship to orbit when full.
 - **3-Level Fog of War**: Unexplored / Explored / Actively Visible.
-- **SWARM waves (MVP, final gameplay implementation stage):** pressure is driven by
-  `FerroniteThreatValue` — raw Planetary Ferronite currently stored in MainBase containers. Worker
-  drop-off raises it; container launch lowers it. `FerroniteScore` and `OrbitalFerronite` do not drive
-  SWARM pressure. Exact wave/director/roster/spawn/targeting rules are **DESIGN REQUIRED** before implementation.
+- **SWARM (MVP, final gameplay implementation stage):** environmental pressure, not a playable faction.
+  Driven by per-team `FerroniteThreatValue` — raw Planetary Ferronite currently stored in that team's
+  MainBase containers. Worker drop-off raises it; container launch lowers it. `FerroniteScore` and
+  `OrbitalFerronite` do not drive SWARM. Concept **approved** in [`14_SWARM`](14_SWARM.md); runtime
+  **not started**. Discrete numbered waves are **superseded**.
 - **Orbital Delivery System**: spend Orbital Ferronite → select drop target → pod arrives → asset deployed.
 - 10-min match timer з **delivery-quota** win condition (highest Orbital Ferronite shipped wins if neither hits quota first).
 
@@ -109,9 +110,9 @@ Meta-rule (scope discipline):
 
 - 2 players joining via Steam, partying у lobby, starting match.
 - Кожен гравець керує Main Base + Workers, видобуває ферроніт з deposits, повертає workers у Main Base для drop-off, бачить score інкремент.
-- SWARM provides hostile PvE pressure driven by `FerroniteThreatValue`; its exact first-wave timing,
-  roster, spawning, scaling, targeting, multiplayer, and performance contract must be approved in the
-  mandatory design review before its final-MVP implementation stage.
+- SWARM provides hostile PvE pressure driven by per-team `FerroniteThreatValue`. Approved concept:
+  [`14_SWARM`](14_SWARM.md) / [`../TDD/17_SWARM_Architecture`](../TDD/17_SWARM_Architecture.md).
+  Runtime implementation is **not started** and remains the final gameplay implementation stage.
 - Гравець може замовляти з орбіти Logistics Hub (для +5 cap + storage) і Defensive Turret (для оборони бази). Per [10_Orbital_Delivery](10_Orbital_Delivery.md).
 - Salvage Walker виконує move/attack команди, atackує SWARM і enemy units, отримує damage, помирає.
 - Building отримує damage, руйнується.

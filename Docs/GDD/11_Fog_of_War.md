@@ -32,7 +32,7 @@
 - Orbital drop mechanic створює legitimate scouting decision. Без FoW — drop "anywhere" не має cost.
 - PvP read of opponent requires hidden information. Без FoW — обидва гравці бачать все, no surprise factor.
 - Greed-vs-safety risk loop (per Container System) працює only with hidden enemy intent.
-- SWARM wave anticipation потребує scouting effort.
+- SWARM approach anticipation потребує scouting effort.
 
 **What FoW enables:**
 
@@ -111,7 +111,7 @@ Camera viewport rectangle still drawn. Drop pod incoming markers shown to droppi
 
 **Pillar 1 (Extraction):** scout cost = part of expansion calculus.
 
-**Pillar 6 (SWARM):** scouting effort scales з ambition; player must invest у sight to see incoming waves.
+**Pillar 6 (SWARM):** scouting effort scales з ambition; player must invest у sight to see incoming pressure.
 
 ## Edge Cases
 

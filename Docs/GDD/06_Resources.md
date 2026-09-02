@@ -97,7 +97,7 @@ Capacity не є passive cap. Це conscious strategic axis з visible OrbitalFe
 
 Цей buffer створює central tension. Ключовий механізм — **накопичений на базі raw Ferronite сам по собі притягує рій** (`FerroniteThreatValue`):
 
-- **Накопичувати (hoard)** багато raw Ferronite у containers = high score potential при successful launch, АЛЕ `FerroniteThreatValue` росте → **сильніший і частіший SWARM** + vulnerable до raid (raw ferronite втрачається разом з базою).
+- **Накопичувати (hoard)** багато raw Ferronite у containers = high score potential при successful launch, АЛЕ `FerroniteThreatValue` росте → **сильніший безперервний SWARM pressure** + vulnerable до raid (raw ferronite втрачається разом з базою).
 - **Регулярно ship-ити** = launch скидає `FerroniteThreatValue` → **менше SWARM pressure** (relief/safety), resource у безпеці на орбіті, але slower bank, бо ship delay є.
 - **Late-game decision:** hold container щоб накопичити більший залп балів (ризикуючи піком рою), чи ship зараз щоб зняти threat magnet?
 
@@ -105,20 +105,16 @@ Greed-vs-Safety: **hoard = high score potential + high swarm danger; ship = safe
 
 ## SWARM Pressure Tie-In (FerroniteThreatValue)
 
-Per [`01_Game_Pillars`](01_Game_Pillars.md) Pillar 6 — SWARM wave intensity / frequency / targeting масштабується від **`FerroniteThreatValue`** = обсягу raw Planetary Ferronite, що фізично зберігається у Main Base containers ПРЯМО ЗАРАЗ. Це fluctuating stock, не accumulator. Рій реагує на сирий метал, що лежить незахищеним на поверхні.
+Per [`01_Game_Pillars`](01_Game_Pillars.md) Pillar 6 і [`14_SWARM`](14_SWARM.md) — безперервний per-team SWARM pressure масштабується від **`FerroniteThreatValue`** = обсягу raw Planetary Ferronite у Main Base containers ПРЯМО ЗАРАЗ. Це fluctuating stock, не accumulator.
 
-> **Roadmap gate (2026-08-20):** SWARM is MVP's final gameplay implementation stage, separate from the
-> RTS AI Opponent. A dedicated design/reconciliation review is mandatory first. Curve names and wave
-> examples below express the established threat relationship, not approved final roster, spawning,
-> director, targeting, authority, replication, or balance answers.
+> **Concept approved (2026-09-02):** discrete waves superseded. `ThreatToWaveSize` / `ThreatToWaveFrequency` are **legacy placeholder names** if still present on Data Assets. Future director uses conceptual **threat-band parameters** (budget, active spawn directions, replenishment, roster, Large cap). Exact schema = future implementation. Do not invent numbers. Current resource/threat accounting runtime stays as-is.
 
 Implementation:
 
-- `FerroniteThreatValue` живе на `AGP_GameState` per player.
-- Worker drop-off → `FerroniteThreatValue += AcceptedAmount` (× `ThreatPerStoredUnit`, default 1.0 — threat = stored volume) → **БІЛЬШЕ swarm pressure**.
-- Container launch (state → Departed) → `FerroniteThreatValue -= Container.Volume` → **МЕНШЕ swarm pressure**.
-- Wave size / frequency = `DA_GP_Resource_Ferronite.ThreatToWaveSize` / `ThreatToWaveFrequency` curves keyed on `FerroniteThreatValue`.
-- **Deprecated (superseded):** `SwarmAggressionLevel` як monotonic shipped/mined accumulator, `AggressionPerUnitShipped`, `AggressionPerUnitMined`. Driver рою — це поточний stored stock, не сумарний обсяг видобутого чи відправленого. FerroniteScore і OrbitalFerronite **не** впливають на swarm pressure.
+- `FerroniteThreatValue` живе на `AGP_GameState` **per team** (`GetFerroniteThreatValueForTeam`). Future director must consume this per-team SoT; a dedicated per-team spawn stream is **not implemented yet**.
+- Worker drop-off → `FerroniteThreatValue += AcceptedAmount` (× `ThreatPerStoredUnit`) → **БІЛЬШЕ swarm pressure**.
+- Container launch → `FerroniteThreatValue -= Container.Volume` → **МЕНШЕ swarm pressure**.
+- **Deprecated (superseded):** `SwarmAggressionLevel`, `AggressionPerUnitShipped`, `AggressionPerUnitMined`, numbered-wave curves. `FerroniteScore` і `OrbitalFerronite` **не** впливають на swarm pressure.
 
 > **Open Question (design TBD):** оскільки shipping ЗНИЖУЄ pressure, fast-shipper match може ніколи не ескалювати до climax. Можливо потрібен повільний secondary **global escalation floor** (наприклад mild time- або score-driven baseline під threat curve), щоб гарантувати, що матч завжди ескалює і завершується. Це **design question, не firm decision** — стартове значення + test plan визначаються у balance pass; чисел не вигадуємо.
 
@@ -156,7 +152,7 @@ Worldbuilding rationale: експедиція щойно висадилася, �
 
 | Data Asset | Owner | Responsibility |
 | --- | --- | --- |
-| `DA_GP_Resource_Ferronite` | This page (resource type metadata) | DisplayName, gameplay tag, score conversion rate per unit, orbital conversion rate per unit, `ThreatPerStoredUnit` + `ThreatToWaveSize` / `ThreatToWaveFrequency` curves, visual tint / icon hint. |
+| `DA_GP_Resource_Ferronite` | This page (resource type metadata) | DisplayName, gameplay tag, score conversion rate per unit, orbital conversion rate per unit, `ThreatPerStoredUnit`, visual tint / icon hint. Wave curves (`ThreatToWaveSize` / `ThreatToWaveFrequency`) — **legacy placeholder names** if still on the asset; future director params live in TDD/17. |
 | `DA_GP_Building_FerroniteDeposit` | [`05_Buildings`](05_Buildings.md) (actor properties) | Capacity, MineRatePerWorker, MaxConcurrentWorkers, DepletedBehavior, visual mesh, collision. References `DA_GP_Resource_Ferronite` для type identity. |
 
 Це anti-duplication routing per [`documentation-knowledge-manager`](../../SKILLS/documentation-knowledge-manager/SKILL.md). Resource type — generic метадані. Deposit — instance actor properties.
@@ -170,7 +166,7 @@ Worldbuilding rationale: експедиція щойно висадилася, �
 - `ScoreConversionRate` — units of FerroniteScore per unit Ferronite shipped to orbit (MVP — 1:1; TBD у balance pass).
 - `OrbitalConversionRate` — units of OrbitalFerronite per unit shipped (MVP — 1:1; TBD у balance pass).
 - `ThreatPerStoredUnit` — float, scalar для `FerroniteThreatValue` per unit raw Ferronite stored at base (default 1.0 — threat = stored volume; TBD у balance pass).
-- `ThreatToWaveSize` / `ThreatToWaveFrequency` — `UCurveFloat` curves keyed on `FerroniteThreatValue` → SWARM wave size / frequency.
+- `ThreatToWaveSize` / `ThreatToWaveFrequency` — **legacy placeholder** `UCurveFloat` names if still authored; **superseded** as the production model. Future director uses threat-band parameters ([`14_SWARM`](14_SWARM.md) / [`../TDD/17_SWARM_Architecture`](../TDD/17_SWARM_Architecture.md)).
 - `Tint` — `FLinearColor` для UI / VFX tinting (наприклад teal-blue glow).
 - `Icon` — `TSoftObjectPtr<UTexture2D>` для UI readouts.
 
@@ -254,7 +250,7 @@ At Main Base drop-off range:
 
 ## SWARM Escalation Tie-In
 
-Незахищений сирий ферроніт на базі збуджує рій. Що **більше raw Ferronite фізично лежить у containers зараз** (`FerroniteThreatValue`) → сильніші і частіші waves. Hoarding небезпечний; shipping знижує тиск. Це зворотний баланс, що запобігає необмеженому snowball-у накопичення. Конкретна шкала — `DA_GP_Resource_Ferronite.ThreatToWaveSize` / `ThreatToWaveFrequency` curves keyed on `FerroniteThreatValue`; per-unit scalar — `ThreatPerStoredUnit`. Деталі match-flow — у [`07_Match_Flow`](07_Match_Flow.md).
+Незахищений сирий ферроніт на базі збуджує рій. Що **більше raw Ferronite лежить у containers зараз** (`FerroniteThreatValue`) → сильніший **безперервний** per-team pressure. Hoarding небезпечний; shipping знижує тиск. Конкретні band/budget числа не затверджені. Scalar — `ThreatPerStoredUnit`. Канон — [`14_SWARM`](14_SWARM.md).
 
 ## UI Surface
 
@@ -284,5 +280,5 @@ HUD показує (per [`09_UI_UX`](09_UI_UX.md)):
 - Deposit як `AGP_BuildingBase` child — [`05_Buildings`](05_Buildings.md).
 - GAS attribute / effect setup — [`../TDD/02_GAS_Architecture`](../TDD/02_GAS_Architecture.md).
 - Score mechanic — [`08_Win_Lose_Conditions`](08_Win_Lose_Conditions.md).
-- SWARM waves escalation — [`07_Match_Flow`](07_Match_Flow.md), [`03_Factions`](03_Factions.md).
+- SWARM pressure — [`14_SWARM`](14_SWARM.md), [`07_Match_Flow`](07_Match_Flow.md), [`03_Factions`](03_Factions.md).
 - Worldbuilding — [`Lore_Setting`](Lore_Setting.md).

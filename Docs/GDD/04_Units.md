@@ -5,7 +5,7 @@
 | Unit | Type Tag | Role | Data Asset |
 | --- | --- | --- | --- |
 | Worker | `GP.Unit.Type.Worker` | Ferronite mining + transport до MainBase containers + repair + **local engineering** (level / foundation install / foundation repair / Wall construction) | `DA_GP_Unit_Worker` |
-| Salvage Walker | `GP.Unit.Type.SalvageWalker` | Industrial defender — protects workers, repels SWARM waves, engages opposing player units | `DA_GP_Unit_SalvageWalker` |
+| Salvage Walker | `GP.Unit.Type.SalvageWalker` | Industrial defender — захищає workers, стримує SWARM pressure, б'ється з юнітами суперника | `DA_GP_Unit_SalvageWalker` |
 
 Дві unit-категорії у MVP. Жодних support / siege / hero / specialist юнітів. SWARM units описані у [`03_Factions`](03_Factions.md) (не player-controllable).
 
@@ -57,7 +57,7 @@ Role — **mining + transport + repair + site engineering**:
 - Ремонтує own-team damaged buildings / units (`GP.Command.Repair`, GAS-driven). Деталі — нижче §Repair.
 - **Does not construct/build the actual READY building.** READY buildings still arrive complete from orbit. There is no Barracks / factory / local building-production queue.
 - **Does** later perform **local engineering** on planned jobs: **level terrain**, **install already-delivered Foundation Slab material** (progressive per-cell labor), **repair damaged foundation**, and **construct Walls** from delivered Wall Package stock. Plan first; work starts only after assigned Workers reach valid positions; multiple Workers accelerate (formula TBD). Generic work-presentation pulses follow the mining pattern (gameplay events, Blueprint Niagara). See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md), [ADR-0010](../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md).
-- **Не атакує** у MVP. Це навмисне обмеження — workers є м'якою ціллю для SWARM waves, що стимулює оборону.
+- **Не атакує** у MVP. Це навмисне обмеження — workers є м'якою ціллю для SWARM pressure, що стимулює оборону.
 - Уразливий до SWARM атак — низький HP, без attack response.
 
 ### Repair
@@ -87,7 +87,7 @@ Salvage Walker — primary defender MVP. **Не military mech.** Це перео
 
 Призначення:
 
-- Захист бази від SWARM waves.
+- Захист бази від безперервного SWARM pressure (див. [`14_SWARM`](14_SWARM.md)). Не затверджувати тут нові конкретні player unit types.
 - Escort workers під час mid-match expansion до додаткових Ferronite Deposits.
 - Engagement з ворожою армією у direct combat (industrial brawl, не military skirmish).
 

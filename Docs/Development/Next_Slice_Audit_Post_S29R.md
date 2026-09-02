@@ -1,5 +1,7 @@
 # Post-S29R Next Slice Audit
 
+> **Historical audit.** Numbered-wave rows below are **superseded**. Canonical SWARM concept: [`../GDD/14_SWARM.md`](../GDD/14_SWARM.md). Runtime still not started.
+
 ## Baseline
 
 | Fact | Value |
@@ -44,7 +46,7 @@ Canonical GDD loop still blocked at **container launch** (no spendable OrbitalFe
 | General NavMesh pathfollowing / LOS reposition | Straight-line only | Optional QoL | Medium | Explicitly deferred after S29R LOS hold behavior |
 | TargetingComponent / AttackMove | Tags / docs only | Combat FSM exists | Medium | Improves combat QoL; does **not** unlock economy |
 | CombatComponent (TDD/13 S29) | **Superseded** | — | N/A | Attack lives in UnitCommand; do not duplicate |
-| SWARM / FerroniteThreatValue waves | Threat tracked; no waves | Threat + launch relief | High (after launch) | Threat already mutates on drop-off |
+| SWARM / FerroniteThreatValue | Threat tracked; no director | Threat + launch relief | High (after launch) | Numbered waves **superseded**; continuous pressure in GDD/14 |
 | AI opponent (`AGP_AIController`) | Absent | Economy + commands | High later | ADR-0008 MVP; needs ship/order loop |
 | FoW / minimap layers | Absent | Presentation + net | Medium–High | GDD/11 MVP; not economy unlock |
 | Steam lobby / session | LobbyState scaffold | Match flow | Later | Slice 12 |
@@ -112,7 +114,7 @@ Canonical GDD loop still blocked at **container launch** (no spendable OrbitalFe
 - `UGP_OrbitalDeliverySubsystem` / `AGP_DropPod` / Order Menu UI
 - Logistics Hub / walls / grid
 - Pathfinding / AttackMove / TargetingComponent / CombatComponent
-- SWARM waves / AI opponent / FoW / Steam
+- SWARM continuous pressure / AI opponent / FoW / Steam (SWARM waves **superseded**)
 - Match DeliveryQuota evaluation (can follow once score is live)
 - Changing S29R LOS hold-and-retry semantics
 

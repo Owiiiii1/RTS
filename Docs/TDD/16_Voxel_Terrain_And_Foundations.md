@@ -163,6 +163,8 @@ Terrain implementation must account for:
 
 Exact NavMesh vs voxel-navigation update strategy is **DESIGN / TECH-SPIKE REQUIRED**. Do not assume a full NavMesh rebuild after every explosion is acceptable.
 
+SWARM Medium/Large corpses as temporary obstacles (see [`17_SWARM_Architecture`](17_SWARM_Architecture.md)) must **not** mandate a runtime NavMesh rebuild. Preferred direction: transient obstacle data / traversability layer, or local check + repath, aligned with this voxel terrain / traversability work. Concrete backend remains prototype / profile TBD.
+
 ## Multiplayer Tech-Spike Requirements
 
 Before production implementation, a spike must prove:

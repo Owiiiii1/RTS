@@ -37,8 +37,9 @@ a fullscreen Order Menu are later slices / superseded as the production path.
 TEMP HUD remains active. Documentation only — do not change runtime/content.
 
 Do **not** start footprint/geometry cleanup; it is deferred pending building construction redesign.
-Do **not** implement SWARM now. SWARM is separate from the RTS AI Opponent and is
-**MVP — FINAL IMPLEMENTATION STAGE; DESIGN REVIEW REQUIRED BEFORE IMPLEMENTATION**.
+Do **not** implement SWARM now. SWARM **concept is approved / documented** ([`../../GDD/14_SWARM.md`](../../GDD/14_SWARM.md),
+[`../../TDD/17_SWARM_Architecture.md`](../../TDD/17_SWARM_Architecture.md)); runtime **not started**.
+SWARM remains **MVP — FINAL IMPLEMENTATION STAGE** and is separate from the RTS AI Opponent.
 
 ### Drift Warning
 

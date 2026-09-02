@@ -1,6 +1,6 @@
 # Resource Architecture
 
-> **CANONICAL MODEL (post-pivot 2026-05-16).** The active resource model is the **Two-State Container model** documented in §"Container System (CANONICAL)" below. Ferronite lives in two states: **Planetary** (raw, mined by Workers, stored in MainBase containers via `UGP_StorageComponent`, NOT spendable) and **Orbital** (`OrbitalFerronite`, spendable currency, created only on container launch). SWARM pressure is driven by **`FerroniteThreatValue`** — the raw Planetary Ferronite *currently* stored at base (a fluctuating stock on `AGP_GameState`), NOT by any monotonic shipped/mined accumulator.
+> SWARM pressure is driven by per-team **`FerroniteThreatValue`** — raw Planetary Ferronite currently stored at that team's MainBase (`AGP_GameState::GetFerroniteThreatValueForTeam`). Future SWARM **director / spawn stream** is **not implemented**; integrate it against this SoT without claiming it exists. See [`17_SWARM_Architecture`](17_SWARM_Architecture.md).
 >
 > **Sections below marked `[SUPERSEDED — pre-pivot]` describe the OLD single-pool model (`Ferronite`/`MaxFerronite` attribute, drop-off income GE chain, spend-on-build, Assembly Yard, Server_BuildAt/Server_QueueProduction). They are retained for migration reference only and are NOT current canon.** Read the Container System section as authoritative wherever the two conflict.
 
@@ -239,8 +239,8 @@ Resource-type metadata (per GDD/06):
 | `ScoreConversionRate` | `float` | `1.0` | FerroniteScore per unit shipped to orbit; TBD balance |
 | `OrbitalConversionRate` | `float` | `1.0` | OrbitalFerronite per unit shipped; TBD balance |
 | `ThreatPerStoredUnit` | `float` | `1.0` | `FerroniteThreatValue` scalar per unit raw Ferronite stored at base (default 1.0 = threat is stored volume); TBD balance |
-| `ThreatToWaveSize` | `TSoftObjectPtr<UCurveFloat>` | (asset) | Wave size keyed on `FerroniteThreatValue` |
-| `ThreatToWaveFrequency` | `TSoftObjectPtr<UCurveFloat>` | (asset) | Wave frequency keyed on `FerroniteThreatValue` |
+| `ThreatToWaveSize` | `TSoftObjectPtr<UCurveFloat>` | (asset) | **Legacy placeholder** if present. **Superseded** as production schema. Future: threat-band / director params ([`17_SWARM_Architecture`](17_SWARM_Architecture.md)). |
+| `ThreatToWaveFrequency` | `TSoftObjectPtr<UCurveFloat>` | (asset) | **Legacy placeholder** if present. **Superseded** as production schema. |
 | `Tint` | `FLinearColor` | teal-blue glow | UI / VFX |
 | `Icon` | `TSoftObjectPtr<UTexture2D>` | (asset) | HUD readout |
 
@@ -585,7 +585,7 @@ Container System має **central risk-vs-greed loop**. Per 5-component rubric, 
 - 2-3 s descent telegraph (window of vulnerability):
   - Container actor у scene starts rocket VFX (engine ignite + smoke billow).
   - HUD container icon shows "launching" overlay z countdown ring.
-  - SWARM AI може react (post-MVP: redirect waves).
+  - SWARM AI може react (post-MVP: **not** player-directed SWARM; approved concept forbids directing SWARM onto the opponent).
 - Launch complete: rocket lift-off VFX (vertical, fast), audio rumble.
 - HUD: container icon empties, dimmed, slot reusable.
 

@@ -11,7 +11,7 @@
 | Domain | Canonical path | Notes |
 | --- | --- | --- |
 | **Architecture** | `Docs/Architecture_Decisions/` (ADR wins) + `Docs/TDD/13_Architecture_Proposal.md` | ADR-0009 overrides pre-pivot examples; current implementation order/status is reconciled by [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md). |
-| **Gameplay** | `Docs/GDD/` + `Docs/Game_Pitch.md` | Prefer `02`, `06`, `08`, `10`, `11`, `12`, `13` over stale fragments in `00` / `09` / `Out_Of_Scope`. |
+| **Gameplay** | `Docs/GDD/` + `Docs/Game_Pitch.md` | Prefer `02`, `06`, `08`, `10`, `11`, `12`, `13`, **`14`** over stale fragments in `00` / `09` / `Out_Of_Scope`. SWARM concept: `GDD/14` + `TDD/17`. |
 | **Workflow / process** | `GRIM_PROTOCOL_START_RULES.md` (root + `Docs/Development/`) + [`Risk_Based_Development_Workflow.md`](Risk_Based_Development_Workflow.md) + `/CONTRIBUTING.md` + `/STYLE.md` + `Docs/Development/Git_Workflow.md` + `Coding_Rules.md` | One stage at a time; operator validates in UE Editor. Test/build selection is risk-based. |
 | **Current status / NEXT** | `Docs/Development/AI_Project_Log.md` + **this file** + `Docs/Development/Claude_Tasks/README.md` (cursor) | Cursor must match disk/`AI_Project_Log`. |
 | **Engineering rules** | `/CONTRIBUTING.md`, `/STYLE.md`, `Docs/Development/Coding_Rules.md` | Review-blocking rules. |
@@ -34,12 +34,12 @@
 | Fact | Value |
 | --- | --- |
 | Engine | **Unreal Engine 5.8.1** |
-| Code baseline | Current slice base: `origin/main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310` |
+| Code baseline | Current slice base: `origin/main` @ `3b1d3aff293049cd3014f03e047b21a3dd2e6665` |
 | Runtime modules on disk | `GP` + `GPRuntime` + `GPGASRuntime` + `GPUIRuntime` (+ `GPEditor`) |
-| Last closed / merged stage | **FoW world visualization** operator-accepted / **MERGED** on `main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f` |
+| Last closed / merged stage | **Bottom HUD finalization** is on `main` @ `3b1d3aff293049cd3014f03e047b21a3dd2e6665` (this SWARM docs checkpoint does **not** re-audit remaining HUD/minimap product gates) |
 | Slice 6 | **Completed** |
 | Slice 7 combat reconciliation (S29R) | **DONE / MERGED** |
-| Current stage | [`docs/gp-production-hud-layout-spec`](Claude_Tasks/GP-Production-HUD-Layout-Spec.md) — **PRODUCTION_HUD_LAYOUT_AND_MAINBASE_PROCUREMENT_DOCUMENTATION_READY_FOR_REVIEW** |
+| Current stage | SWARM **concept** documented on `docs/swarm-concept`. **Do not** treat SWARM implementation as NEXT. Remaining product queue still starts at production HUD leftover work / minimap per [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md). |
 
 ---
 
@@ -53,20 +53,18 @@
 
 **Closed on `main`:** Delivery timing ownership cleanup @ `d2c1abcfcf4fe2f61ae00793294c0cc31919cd65`; Unit payload compatibility cleanup @ `75b13fc193531170eb3d4c1eaf9ee3f736d1d160`; Unit numeric compatibility cleanup @ `47a220b480e455f1cf5dfb6ca0613c13cf760a53`; Dead overlap setting removal @ `967e6ea3a5b81ddc1a2c19c4bfe292f5ef989507`; Settings Visibility Truth @ `f38e803771261c60d865949c693a52a73fbcedb2`; Unit Drop Nested Readiness @ `283297012c1cefe162028a7ba4166c02a81230cc`; Configuration / Data Ownership Audit @ `9c4ef72e44fad28d9922d82e8cded1f5d00a473f`; GP-S42A Wall Package Data + MainBase Wall Inventory; GP-S41M Movement Shortest Yaw; GP-0305R Wall Package canon.
 
-**Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — Terrain / Voxel / Foundation inserted after production UI + minimap and **before** RTS AI Opponent. FoW world visualization is **MERGED**, not pending.
+**Current docs reconciliation:** [`MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`](MVP_Roadmap_Reconciliation_Post_Building_Vitals.md) — Terrain / Voxel / Foundation inserted after production UI + minimap and **before** RTS AI Opponent.
 
 **Closed:** Production HUD data foundation — on `main` @ `317ce3f0367111081e3a8987c8ac8beebfbd6310`.
 Production HUD layout + MainBase procurement documentation is on `main`.
 Production HUD ViewModel bridge + runtime bootstrap is on `main`.
+Bottom HUD finalization is on `main` @ `3b1d3aff293049cd3014f03e047b21a3dd2e6665`.
 
-**Exactly one current gate:** merge of `feature/gp-hud-threat-normalized`.
-Status: **HUD_THREAT_NORMALIZED_FINALIZED_READY_TO_MERGE**. **NOT MERGED.**
-Threat bar uses presentation-only `FerroniteThreatNormalized` from MainBase storage capacity ×
-ThreatPerStoredUnit. Authored `WBP_GP_HUD` / `ThreatToColor` remain operator-local.
-Do not claim remaining HUD fields, SelectionVM, minimap, action grid, MainBase PURCHASE UI, Patrol,
-or final Threat tuning/art complete.
+**This checkpoint (`docs/swarm-concept`):** SWARM **design review complete**. GDD/TDD concept **approved / documented** (`GDD/14_SWARM`, `TDD/17_SWARM_Architecture`). Runtime implementation **not started**. Do **not** start SWARM implementation from this docs-only pass.
 
-**Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and is the final gameplay implementation stage after a mandatory design review.
+**NEXT is not SWARM implementation.** Remaining product queue still starts at leftover production HUD / minimap (then terrain, AI, …) per the MVP roadmap. This checkpoint does **not** re-verify unrelated HUD or minimap branches as merged. Do not treat `feature/gp-hud-threat-normalized` or minimap as completed/merged from this pass.
+
+**Owner decisions:** cleanup phase closed; footprint/geometry cleanup deferred pending building-system redesign; existing orbital building ghost/placement capability is DONE; SWARM is separate from RTS AI Opponent and remains the **final gameplay implementation stage**.
 
 **Do not** implement old pod-per-segment Wall.
 
@@ -105,8 +103,8 @@ or final Threat tuning/art complete.
 
 | Area | Status |
 | --- | --- |
-| `Docs/GDD/` (post-pivot core: 02, 04–08, 10–13, Lore, First_Playable, Backlog) | Active |
-| `Docs/TDD/` (esp. 03, 05–07 CANONICAL parts, 09–16, 13) | Active |
+| `Docs/GDD/` (post-pivot core: 02, 04–08, 10–14, Lore, First_Playable, Backlog) | Active |
+| `Docs/TDD/` (esp. 03, 05–07 CANONICAL parts, 09–17, 13) | Active |
 | `Docs/Architecture_Decisions/ADR_0001`…`0006`, `0008`, `0009`, `0010` | Active (Accepted) |
 | `ADR_0007` Building-As-Pawn | Active but **Draft** — pattern stands; examples superseded by ADR-0009 |
 | Root `README.md`, `CONTRIBUTING.md`, `STYLE.md` | Active |
@@ -124,6 +122,8 @@ or final Threat tuning/art complete.
 | [`GDD/13_Terrain_Engineering_And_Foundations.md`](../GDD/13_Terrain_Engineering_And_Foundations.md) | Canonical WHAT for voxel terrain, Worker leveling, per-cell foundations |
 | [`TDD/16_Voxel_Terrain_And_Foundations.md`](../TDD/16_Voxel_Terrain_And_Foundations.md) | Technical direction; Voxel Plugin spike still required |
 | [`ADR_0010_Voxel_Terrain_And_Foundation_System.md`](../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md) | Accepted documentation decision |
+| [`GDD/14_SWARM.md`](../GDD/14_SWARM.md) | Approved SWARM gameplay concept (continuous per-team pressure). Runtime **not started**. |
+| [`TDD/17_SWARM_Architecture.md`](../TDD/17_SWARM_Architecture.md) | Approved SWARM technical direction. Lightweight groups baseline; Mass considered, not chosen. |
 
 ### Stale / needs cleanup (still in active tree)
 
@@ -154,7 +154,7 @@ or final Threat tuning/art complete.
 
 1. **Engine version (resolved in active rules):** process/start rules + SETUP-001 → **5.8.1**. Older gameplay/tech overviews said 5.7 — updated in DOCS-001 for active docs.
 2. **Task cursor vs disk:** Claude_Tasks claimed S01–S03 DONE / NEXT S04; disk has blank `GP` only → corrected to **NEXT = GP-S01**.
-3. **Economy / SWARM (resolved 2026-08-20):** `FerroniteThreatValue` from raw planetary stock at base is canonical; `GDD/00` was aligned. Final SWARM behavior remains DESIGN REQUIRED.
+3. **Economy / SWARM (resolved 2026-09-02):** `FerroniteThreatValue` from raw planetary stock at base is canonical. SWARM **concept approved** in `GDD/14` + `TDD/17` (continuous per-team pressure; numbered waves superseded). Runtime director / group simulation **not started**.
 4. **FoW MVP (resolved 2026-08-20):** three-state FoW is in MVP per GDD/11 + TDD/15; `GDD/Out_Of_Scope.md` now excludes only advanced embellishments.
 5. **Common UI enablement timing:** Mandatory per TDD/12 + CONTRIBUTING/README. Residual: TDD/00 still says deferred in places; `GP.uproject` lacks CommonUI until GP-S01 (expected).
 6. **CommonGame / Lyra UI stack (RESOLVED 2026-08-01):** Active docs previously listed `CommonGame` (+ often a separate `CommonInput` plugin entry) as mandatory. **Resolution:** blank UE 5.8.1 uses stock plugins `CommonUI` + `ModelViewViewModel` only; `CommonInput` is a module dependency provided with Common UI; `EnhancedInput` remains for gameplay IMC. `CommonGame` / `CommonUser` / Lyra foundation are **not** required and must not be imported (ADR-0005). Updated: GP-S01, TDD/12, TDD/13 (S47), GP-0401.
@@ -186,7 +186,9 @@ Active docs must not prescribe 5.7. Archive/legacy RN docs may keep historical 5
 
 ## Stop
 
-Current baseline: `origin/main` @ `26e0dfa2ec2ff8ff9eb84c9702f38036b1db3e2f`. Current stage:
-**VOXEL_TERRAIN_FOUNDATION_DOCUMENTATION_FINALIZED_READY_FOR_MERGE** on
-`docs/gp-voxel-terrain-foundations`.
-**NOT MERGED.** Documentation-only. No runtime / Content / Config / Tools changes.
+Current baseline: `origin/main` @ `3b1d3aff293049cd3014f03e047b21a3dd2e6665`.
+Current checkpoint: **SWARM_CONCEPT_APPROVED_DOCUMENTED** on `docs/swarm-concept`.
+Documentation-only. No runtime / Content / Config / Tools / `GP.uproject` changes.
+Build / tests **not required**.
+
+SWARM runtime implementation is **not started** and is **not** the current NEXT task.

@@ -7,6 +7,8 @@
 
 Scope оцінки — поточна canonical модель: mining → MainBase containers → launch → OrbitalFerronite + FerroniteScore, orbital orders → drop pods, SWARM pressure = `FerroniteThreatValue`, win = delivery quota / highest FerroniteScore, Worker repair у MVP.
 
+> **Historical (2026-05).** Numbered-wave wording below is **superseded**. Canonical SWARM: [`../GDD/14_SWARM.md`](../GDD/14_SWARM.md).
+
 ---
 
 # Pass 1 — Game Design Framework
@@ -50,7 +52,7 @@ Entry (Order Menu select) → targeting mode → valid click (server validate sp
 ## Debugging Priorities (if it feels wrong)
 
 1. "I don't care at the end" → **Motivation/escalation** — resolve via escalation-floor balance pass (не tune numbers першим; це structural).
-2. "Didn't know wave was coming" → **Clarity** — verify threat-bar + wave telegraph before tuning wave size.
+2. "Didn't know pressure was coming" → **Clarity** — verify threat-bar before tuning director intensity. Numbered-wave telegraph / wave size are **superseded**.
 3. "Drop feels laggy" → **Response** — verify 200 ms green pulse acknowledges intent before pod spawn.
 
 ## Definition of Done — Core Loop
@@ -78,7 +80,7 @@ resource/economy + building + match flow + UI + Steam/multiplayer (cross-domain 
 Видобути Ferronite, відвантажити на орбіту заради FerroniteScore (delivery quota), при цьому утримуючи swarm pressure (стимульований сирим Ferronite на базі) і opponent під контролем.
 
 ## System Rules
-No local production/construction. Усі non-initial assets — orbital drop. Planetary Ferronite (containers, не spendable) → launch → OrbitalFerronite (spendable) + FerroniteScore (victory). `FerroniteThreatValue` = raw stored-at-base stock: ↑ на drop-off, ↓ на launch; драйвить wave intensity. Failure: storage full → drop-off lost; MainBase destroyed → loss (if `bAnnihilationCountsAsWin`).
+No local production/construction. Усі non-initial assets — orbital drop. Planetary Ferronite (containers, не spendable) → launch → OrbitalFerronite (spendable) + FerroniteScore (victory). `FerroniteThreatValue` = raw stored-at-base stock: ↑ на drop-off, ↓ на launch; драйвить continuous SWARM pressure (numbered waves **superseded**). Failure: storage full → drop-off lost; MainBase destroyed → loss (if `bAnnihilationCountsAsWin`).
 
 ## Authority Model
 Client = intent (`Server_RequestOrbitalDrop`, `Server_RequestCommand`). Server = validation + spend (`GE_GP_SpendOrbital`) + pod spawn + payload spawn + container state machine + threat tracking. AI (`AGP_AIController : AAIController`) викликає той самий server-side command layer напряму (no client RPC). UI — read-only через MVVM ViewModels (`UGP_OrderMenuVM`, storage VM); local-only: drop reticle, selection.
@@ -116,7 +118,7 @@ Cost виправданий: одна subsystem замінює production+constr
 - New player test: чи зрозуміло, що сирий Ferronite на базі притягує SWARM і що launch знижує тиск (без tooltip)?
 - Stress test: spam orders при pod cap; всі containers Ready (storage full); масовий late-game shipping race.
 - Abuse test: fast-ship-everything стратегія — чи матч лишається грабельним без escalation floor (валідація A14)?
-- Readability test: спостерігач бачить хто веде (FerroniteScore visible), чому прийшов wave (threat bar), що падає (pod silhouette).
+- Readability test: спостерігач бачить хто веде (FerroniteScore visible), чому росте SWARM pressure (threat bar), що падає (pod silhouette).
 
 ## Recommendations
 1. Закрити escalation-floor питання у balance pass: задати starting value для secondary global threat baseline + pass/fail метрику (matches that never reach "Crisis" state).

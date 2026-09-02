@@ -145,6 +145,11 @@ public:
 
 Actor Class Defaults pointer category: `GP|Components|Movement`. Tunables on the component remain `GP|Movement`.
 
+Player (and AI-opponent) mobile units use this path. Future SWARM Small/Medium groups use a
+**lightweight group simulation** ([`17_SWARM_Architecture`](17_SWARM_Architecture.md)) and are **not**
+required to use `UGP_MovementComponent`. Do not assume SWARM is an `AGP_MobileUnit` subclass until
+implementation chooses otherwise.
+
 ## AGP_Unit
 
 Concrete Blueprintable generic mobile unit layer:
@@ -274,7 +279,7 @@ Worker — економічний primary unit:
 - Виконує repair (`GP.Ability.Repair` per GP-0301) — repair STAYS in MVP.
 - **Does NOT build and does NOT produce.** Units and READY buildings arrive via orbital DropPod. Wall Package arrives via DropPod; `AGP_Wall` segments are placed from MainBase inventory (not Worker-built). No Worker Build ability and no local construction.
 - **Не атакує.** Per GDD/04 і GP-0204 — `bAutoAttacks=false`, `AllowedCommands` без `Command_Attack/AttackMove`.
-- Soft target для SWARM waves (low HP = strategic vulnerability).
+- Soft target для SWARM pressure (low HP = strategic vulnerability).
 
 ### Class
 

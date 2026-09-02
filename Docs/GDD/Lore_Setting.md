@@ -80,7 +80,7 @@ Industrial Siege Sci-Fi. "Втомлений" сай-фай, не вилизан
 
 - Deep Rock Galactic, Moon Miners — primary reference. Шахтарська експедиція на ворожу планету, industrial / engineering identity.
 - Aliens 2 — для **atmosphere** колоніальної expedition (atmosphere of overstretched corporate operation), **не** для military combat aesthetic.
-- Starship Troopers — **only** для general "hostile planet ecology / waves of biological threat" pacing. **Не** для military soldier visual identity — це порушує Pillar 2 (Engineer, Not Soldier).
+- Starship Troopers — **only** для general "hostile planet ecology / continuous biological threat" pacing. **Не** для military soldier visual identity — це порушує Pillar 2 (Engineer, Not Soldier). Discrete numbered waves are **superseded** ([`14_SWARM`](14_SWARM.md)).
 
 Pillar 2 переважає над усіма visual references. Якщо reference тягне у military aesthetic — він відкидається на користь industrial / engineering read.
 
@@ -166,7 +166,7 @@ Visual identity:
 ## References
 
 - Resource mechanic — [`06_Resources`](06_Resources.md).
-- Factions and SWARM design — [`03_Factions`](03_Factions.md).
+- Factions and SWARM design — [`03_Factions`](03_Factions.md), [`14_SWARM`](14_SWARM.md).
 - Win condition tied to score — [`08_Win_Lose_Conditions`](08_Win_Lose_Conditions.md).
-- Match flow з SWARM wave escalation — [`07_Match_Flow`](07_Match_Flow.md).
+- Match flow з continuous SWARM pressure — [`07_Match_Flow`](07_Match_Flow.md).
 - Game pillars — [`01_Game_Pillars`](01_Game_Pillars.md).

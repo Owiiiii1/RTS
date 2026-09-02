@@ -75,9 +75,9 @@ SWARM — це **environmental / ecological pressure**, не повноцінн�
 - **AI-only.** Не може бути обраний як playable faction.
 - **Не контрольований гравцем** ні прямо (commands), ні опосередковано (buffs, summoning, controlling structures).
 - Не має economy, base, production.
-- Спавниться server-side з map spawn points за wave schedule.
-- Атакує найближчого player asset (worker, building) у радіусі aggro.
-- Інтенсивність зростає від `FerroniteThreatValue` — raw Ferronite, накопиченого у контейнерах на базах (тиск спадає, коли гравець відправляє Ferronite на орбіту).
+- Спавниться server-side з **замкненого зовнішнього spawn spline** (випадкові допустимі ділянки), не з фіксованого набору відомих входів.
+- Стратегічна ціль потоку — **MainBase цієї команди**. Усе на шляху атакується як перешкода.
+- Інтенсивність — безперервний per-team pressure від `FerroniteThreatValue` (raw Ferronite у контейнерах MainBase; ↓ при launch). Canonical: [`14_SWARM`](14_SWARM.md).
 
 Це **hard constraint** з Pillar 6. Будь-яка mechanic, що дозволяє гравцю керувати SWARM або суттєво впливати на його напрям — review-blocking.
 
@@ -85,37 +85,35 @@ SWARM — це **environmental / ecological pressure**, не повноцінн�
 
 SWARM у MVP — **background pressure**, не main combat focus. Це означає:
 
-- SWARM units значно слабкіші за player combat units (Salvage Walker трощить рядових grunts).
-- SWARM дуже небезпечний для **незахищених workers і будівель** (workers без supply core, undefended Logistics Hub deplet-ються швидко).
-- Гравець мусить інвестувати у Defensive Turrets ([`05_Buildings`](05_Buildings.md)) і тримати кілька Salvage Walker-ів біля бази.
+- Small / Medium значно небезпечніші для **будівель і Workers**, ніж для бойових машин; Medium / Large все одно **блокують** рух армії.
+- На високому pressure потік стає живим бар'єром навколо бази; потрібна кругова оборона і важка промислова техніка, щоб пробити периметр.
+- Гравець мусить інвестувати у Defensive Turrets / Walls ([`05_Buildings`](05_Buildings.md)) і тримати бойове покриття біля бази.
 
 Це створює стратегічний trade-off: more workers = more score, але більше SWARM aggro = більше потреби в обороні. Гравець постійно балансує економіку проти захисту.
 
-### Wave Schedule
+### Continuous Pressure (supersedes Wave Schedule)
 
-SWARM waves тригерить `AGP_GameMode` за server-side таймером. Параметри waves:
+Дискретна wave-модель (`WaveInterval`, `WaveSize`, `WaveStartDelay`, `WaveSpawnPoints`,
+`ThreatToWaveSize` / `ThreatToWaveFrequency`) **superseded**. Канон — безперервний per-team потік:
+[`14_SWARM`](14_SWARM.md), технічно [`../TDD/17_SWARM_Architecture`](../TDD/17_SWARM_Architecture.md).
 
-- `WaveInterval` — секунди між waves (наприклад 60-90s; TBD).
-- `WaveSize` — кількість SWARM units у хвилі (динамічно зростає від `FerroniteThreatValue`).
-- `WaveSpawnPoints` — на map, поза стартовими зонами гравців.
-- `FerroniteThreatValue` — global float у `AGP_GameState`: raw Ferronite, що зберігається у контейнерах на MainBase (зростає при drop-off, спадає при launch на орбіту). Visible greed-vs-safety: чим більше нескинутого Ferronite на базі, тим сильніший swarm-тиск. Замінює `SwarmAggressionLevel` / `AggressionPerUnit*`.
+- Threat bands задають budget, кількість активних spline-напрямків, replenishment, roster, Large cap.
+- `FerroniteThreatValue` — per-team raw Ferronite у MainBase containers (↑ drop-off, ↓ launch).
+  Замінює `SwarmAggressionLevel` / `AggressionPerUnit*`. `FerroniteScore` / `OrbitalFerronite` не
+  керують SWARM.
+- Якщо код/DA ще містить старі wave-імена — legacy placeholders, не approved production schema.
 
-Кожен SWARM тип — окремий Data Asset:
-
-- `DA_GP_Swarm_Grunt` (MVP baseline SWARM unit — basic ranged or melee, low HP).
-- Інші SWARM tiers — у Backlog (брудер, наглядач, елітна особина).
+Класи: Large (окремий gameplay unit), Medium group, Small group. Конкретні DA / roster — future
+implementation, не вигадувати числа тут.
 
 ### SWARM Targeting
 
-SWARM AI — server-side, простий:
+1. Спавн на допустимій ділянці зовнішнього spline.
+2. Кінцева стратегічна ціль — MainBase **цієї** команди.
+3. Рух до MainBase; атака всього, що блокує шлях (стіни, юніти, інші будівлі).
+4. SWARM не керує економікою і не займає ferronite deposit.
 
-1. Спавн у `WaveSpawnPoint`.
-2. Знаходження найближчого player-owned actor (worker, building, або player unit) у aggro radius.
-3. Рух до цілі (`UGP_MovementComponent`).
-4. Attack у range через `UGP_CombatComponent`.
-5. При смерті цілі — пошук нової найближчої.
-
-SWARM не має authority over economy. SWARM не може зайняти ferronite deposit.
+Рух груп — lightweight group simulation (TDD/17), **не** обов'язково поточний `UGP_MovementComponent`.
 
 ### SWARM Tags
 
@@ -129,7 +127,7 @@ Owner надав 4 варіанти SWARM design. У MVP — Variant 2 (backgrou
 
 - **Variant 1 (Distributed Corridors):** один вхід постійно атакується SWARM, інші — для player conflict. Map-design heavy. → `Backlog`.
 - **Variant 3 (Influence Structures):** гравець будує inhibitor / energy corridor / decoy, що впливає на SWARM spawn або поведінку. Нова механіка, нові building Data Assets. → `Backlog`.
-- **Variant 4 (SWARM Manipulation):** гравець опосередковано спрямовує SWARM waves проти опонента. Asymmetric warfare layer. → `Backlog`. **Note:** цей варіант сильно зачіпає Pillar 6 (SWARM as Environmental Pressure) — потребує pillar amendment перед розглядом.
+- **Variant 4 (SWARM Manipulation):** гравець опосередковано спрямовує SWARM проти опонента. Asymmetric warfare layer. → `Backlog`. **Note:** approved concept **forbids** directing SWARM onto the opponent (Pillar 6 / GDD/14). This variant still needs a pillar amendment before any reconsideration.
 
 Усі три — `Strong Mechanic, Production Trap` за [`gp-mechanics-validator`](../../SKILLS/gp-mechanics-validator/SKILL.md): кожен додає мінімум одну нову систему, не критичну для MVP playable.
 
@@ -143,7 +141,7 @@ Singleplayer MVP має **primitive AI opponent**, що використовує
 2. AI mineить ferronite (1-2 worker-и mineять, інші — резерв) і відправляє контейнери на орбіту (Planetary → Orbital Ferronite).
 3. AI замовляє defenders до early-mid roster size (5-8 Salvage Walkers) через orbital drops.
 4. AI атакує player base, коли roster threshold досягнутий.
-5. AI passively реагує на SWARM waves (defenders + turrets handle), не намагається micro.
+5. AI passively реагує на SWARM pressure (defenders + turrets handle), не намагається micro.
 
 Це не goal-oriented і не utility AI. Це state machine з 4-5 станами, що оцінює прості умови (orbital Ferronite pool, unit count, time elapsed).
 
@@ -172,7 +170,8 @@ Singleplayer MVP має **primitive AI opponent**, що використовує
 
 - Player units — [`04_Units`](04_Units.md).
 - Player buildings (Main Base, Logistics Hub, Defensive Turret) — [`05_Buildings`](05_Buildings.md).
-- SWARM waves у timeline — [`07_Match_Flow`](07_Match_Flow.md).
+- SWARM concept — [`14_SWARM`](14_SWARM.md).
+- SWARM у timeline — [`07_Match_Flow`](07_Match_Flow.md).
 - Score-based win — [`08_Win_Lose_Conditions`](08_Win_Lose_Conditions.md).
 - Resource as aggro trigger — [`06_Resources`](06_Resources.md).
 - Worldbuilding — [`Lore_Setting`](Lore_Setting.md).

@@ -1,10 +1,9 @@
 # Match Flow
 
-> **SWARM roadmap gate (2026-08-20):** SWARM is the final gameplay implementation stage of MVP and
-> requires a dedicated design/reconciliation review first. Timings, wave/director behavior, spawn
-> rules, roster, and targeting below are placeholders until that review. The established invariant is
-> only that `FerroniteThreatValue` reflects raw stock at MainBase (drop-off up, launch down);
-> `FerroniteScore` and `OrbitalFerronite` do not drive SWARM pressure.
+> **SWARM concept (2026-09-02):** approved in [`14_SWARM`](14_SWARM.md). Continuous per-team pressure.
+> Discrete wave placeholders below are **superseded**. Runtime director **not started**. Invariant:
+> `FerroniteThreatValue` = raw stock at MainBase (drop-off up, launch down);
+> `FerroniteScore` and `OrbitalFerronite` do not drive SWARM.
 
 ## Match Length
 
@@ -64,7 +63,7 @@ Finished  (triggered by Delivery Quota hit, MainBase annihilation, OR 10-min tim
 - Match timer starts (`AGP_GameState.MatchTimeRemaining = 600.0`). Countdown.
 - Players spawn з initial state (per `DA_GP_Faction_Default` — 1 Main Base + 2 Workers pre-deployed, `OrbitalFerronite = 0`).
 - Core loop activated: mine → carry до MainBase containers → launch до орбіти (+OrbitalFerronite +FerroniteScore) → order orbital drops → expand / defend проти SWARM.
-- SWARM waves починають спавнитися після `WaveStartDelay` (initial grace period, TBD у balance pass, e.g. 60 s). Подальша інтенсивність — розмір wave і частота — є функцією `AGP_GameState.FerroniteThreatValue` = **raw Ferronite, що зараз зберігається у MainBase containers** (per [`../TDD/07_Resource_Architecture`](../TDD/07_Resource_Architecture.md)). Drop-off raw Ferronite ↑ `FerroniteThreatValue` (небезпечніше), launch до орбіти ↓ `FerroniteThreatValue` (безпечніше). `FerroniteScore` / `OrbitalFerronite` НЕ масштабують SWARM. Час матчу не масштабує SWARM напряму. Це central tension per Pillar 6: hoard raw Ferronite = dangerous, ship = safe. Greed-vs-safety loop. Заборонено: predetermined time-based escalation.
+- SWARM — безперервний per-team потік від `FerroniteThreatValue` (raw Ferronite у MainBase containers). Drop-off ↑, launch ↓. `FerroniteScore` / `OrbitalFerronite` НЕ масштабують SWARM. Час матчу не масштабує SWARM напряму. Pillar 6 greed-vs-safety. **Заборонено:** predetermined numbered-wave schedule. Канон: [`14_SWARM`](14_SWARM.md).
 - Quota hit (`FerroniteScore >= DeliveryQuotaFerroniteScore`) → immediate `Finished`. MainBase destruction → immediate `Finished` (annihilation). Timer expiry → automatic transition у `Finished`.
 
 ### Spectating
@@ -85,42 +84,29 @@ Finished  (triggered by Delivery Quota hit, MainBase annihilation, OR 10-min tim
 MVP не має явних early / mid / late phases. Один безперервний "**Mine, Ship, Defend**" phase з organic escalation, що керується `FerroniteThreatValue` (stored-at-base stock), не годинником:
 
 ```
-0:00  [match start]   Initial state: MainBase + 2 Workers, OrbitalFerronite = 0. Низький threat, no SWARM.
-~1:00 [first wave]    Threat перетнув перший поріг (накопичено raw у containers) -> мала тестова wave.
-mid   [escalation]    Гравець, що hoardить raw Ferronite, тримає high FerroniteThreatValue -> більші waves;
-                      гравець, що часто ship -> low threat, спокійніше. Defensive drops (Turret/Wall/Salvage Walker).
-late  [quota push]    Lagging player наздоганяє: швидше mine -> threat росте -> ризик. Або push до Delivery Quota.
-end   Quota hit -> immediate win; інакше 10:00 timer expiry -> highest FerroniteScore wins.
+0:00  [match start]   Initial state: MainBase + 2 Workers, OrbitalFerronite = 0. Низький threat.
+mid   [escalation]    Hoard raw Ferronite → high FerroniteThreatValue → щільніший continuous SWARM;
+                      часто ship → lower threat. Circular walls / turrets / industrial combat coverage.
+late  [quota push]    Lagging player наздоганяє: швидше mine → threat росте → ризик. Або push до Delivery Quota.
+end   Quota hit -> immediate win; MainBase loss -> annihilation; інакше 10:00 timer → highest FerroniteScore.
 ```
 
-Це не явні phases і не time-based curve у data — escalation = функція поточного `FerroniteThreatValue`. Документовано для design alignment.
+Це не явні numbered-wave phases і не time-based wave curve. Escalation = функція поточного per-team `FerroniteThreatValue`.
 
-## SWARM Wave Escalation
+## SWARM Pressure Escalation
 
-SWARM waves тригерить `AGP_GameMode` server-side per схемою з [`03_Factions`](03_Factions.md). Параметри escalation:
+Канон: [`14_SWARM`](14_SWARM.md) + [`../TDD/17_SWARM_Architecture`](../TDD/17_SWARM_Architecture.md).
 
-- `WaveBaseInterval`: 60 s між waves у early match (TBD).
-- `WaveSize` зростає від `AGP_GameState.FerroniteThreatValue` (raw Ferronite stored-at-base; ↑ on drop-off, ↓ on launch).
-- `WaveSpawnPoints` поза стартовими зонами, ближче до active mining зон.
+**Superseded:** `WaveBaseInterval`, `WaveSize`, `WaveSpawnPoints`, `WaveStartDelay` як обов'язкова модель,
+і illustrative wave-size tables. Не вигадувати нові числа.
 
-### Threat Curve (Recommendation, MVP)
-
-Escalation керується **поточним `FerroniteThreatValue`**, не годинником. Таблиця нижче — рекомендований mapping порогів threat → інтенсивність (illustrative bands):
-
-| FerroniteThreatValue band | Typical Wave Size | Pressure Level |
-| --- | --- | --- |
-| ~0 (just shipped / start) | 0 | Quiet (build-up grace). |
-| Low stored stock | 3-5 grunts | Low. |
-| Moderate stored stock | 6-10 | Moderate. |
-| High stored stock (hoarding) | 10-15 | High. |
-| Very high (heavy hoard) | 15-25 | Peak. |
-
-Numbers і band thresholds — TBD у balance pass. Tunable через DA. Гравець керує власним pressure level: ship швидко → опускається у нижчі bands; hoard → піднімається у вищі.
+Threat bands (conceptual) задають active budget, кількість spline-напрямків, replenishment, roster,
+Large cap. Інтенсивність змінюється поступово. Вже створені істоти не despawn-яться при зниженні threat.
+Director / spawn stream — **future implementation**.
 
 ## Timing (MVP)
 
 - Match duration: **10:00 hard cap** (600 seconds).
-- SWARM first wave: ~60 s після match start.
 - End-of-match screen display: 15 s before forced return to lobby/menu.
 
 ## Multiplayer Specifics
@@ -141,12 +127,12 @@ Numbers і band thresholds — TBD у balance pass. Tunable через DA. Гр�
 - **Player disconnect mid-match (multiplayer):** server marks player як lost, опонент продовжує сам до timer expiry, виграє по умовчанню.
 - **Both players disconnect:** match aborts.
 - **Score tie на 10:00:** tie-break ladder per [`08_Win_Lose_Conditions`](08_Win_Lose_Conditions.md) — `FerroniteScore` → `OrbitalFerronite` → `CurrentUnits` → deterministic seed (єдиний winner, без draw).
-- **SWARM waves overwhelm обох гравців:** match закінчується по timer (або по annihilation, якщо MainBase падає першим). Final `FerroniteScore` + tie-break ladder визначає winner.
+- **SWARM overwhelm:** якщо падає MainBase — immediate annihilation; інакше матч іде до quota/timer. Final `FerroniteScore` + tie-break ladder визначає winner.
 
 ## References
 
 - Win/lose conditions, score model, tie-break — [`08_Win_Lose_Conditions`](08_Win_Lose_Conditions.md).
-- SWARM faction і wave design — [`03_Factions`](03_Factions.md).
+- SWARM faction і continuous pressure — [`14_SWARM`](14_SWARM.md), [`03_Factions`](03_Factions.md).
 - Resource score generation — [`06_Resources`](06_Resources.md).
 - State machine technical — [`../TDD/00_Technical_Overview`](../TDD/00_Technical_Overview.md), [`../TDD/03_Multiplayer_Architecture`](../TDD/03_Multiplayer_Architecture.md).
 - Steam flow — [`../TDD/08_Steam_Matchmaking`](../TDD/08_Steam_Matchmaking.md).

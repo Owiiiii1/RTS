@@ -183,41 +183,49 @@
 
 ## 6. SWARM as Environmental Pressure
 
-**Identity statement.** SWARM — це **environmental / ecological threat**, не playable third faction. Це force-of-nature, що тисне на обох гравців пропорційно до їхнього видобутку. SWARM створює natural escalation curve без manual designer pacing.
+**Identity statement.** SWARM — це **environmental / ecological threat**, не playable third faction. Це force-of-nature, що тисне на **кожну команду окремо** пропорційно до її поточного raw Ferronite у MainBase. Continuous pressure без numbered waves. Canonical concept: [`14_SWARM`](14_SWARM.md).
 
 ### Player Goal
 
-Захистити operation від ескалюючої SWARM aggression, балансуючи investment у defense проти score push. SWARM не може бути "переможений" — тільки витриманий до timer expiry.
+Захистити operation (насамперед MainBase) від безперервного SWARM pressure, балансуючи defense проти score push. SWARM не можна "перемогти" як фракцію — тільки витримати, знизити threat shipping-ом, або програти annihilation, якщо падає MainBase.
 
 ### What It Allows
 
-- AI-only SWARM faction.
-- SWARM, що реагує на player economy через `FerroniteThreatValue` (raw Ferronite, складений у контейнерах на MainBase; зростає при drop-off, спадає при launch на орбіту).
-- SWARM tiered units (Grunt MVP; Elite / Brood / Siege post-MVP).
-- SWARM як design tool для economy self-balancing (більше нескинутого Ferronite на базі = більший threat; відправка на орбіту знижує тиск).
+- AI-only SWARM as environmental pressure (not a playable faction).
+- Per-team pressure from `FerroniteThreatValue` (raw Ferronite у контейнерах MainBase; ↑ drop-off, ↓ launch).
+- Continuous flow with threat bands (budget, spawn directions, roster, Large caps). Short density pulses inside the stream are allowed; they are not numbered waves.
+- SWARM targeting that team's MainBase; annihilation if MainBase dies.
+- Circular defense / walls as the answer to random outer-spline approaches.
 
 ### What It Forbids
 
-- Player control над SWARM (commanding, summoning, directly buffing).
+- Player control над SWARM (commanding, summoning, directing onto the opponent).
 - SWARM як selectable playable faction.
-- SWARM, що не реагує на economy (constant predetermined waves).
-- SWARM, що завершує матч (e.g., "wipe out → instant lose" — match завершується по timer + score).
+- SWARM, що не реагує на economy (constant predetermined waves / fixed known spawn points as the model).
+- Claim that SWARM cannot end the match: destroying a team's MainBase **is** immediate annihilation loss.
 
 ### 5-Component Check
 
 | Component | Implication |
 | --- | --- |
-| **Clarity** | SWARM aggression HUD indicator readable; wave spawn telegraph; minimap markers. |
-| **Motivation** | Threat = constant tension; кожен mining decision adds threat. |
-| **Response** | Defensive structures, Salvage Walker-class defenders, positioning — все player response tools. |
-| **Satisfaction** | Repelling wave with defense investment — readable success. |
-| **Fit** | EREBUS-9 ecosystem react до extraction — узгоджено з worldbuilding. |
+| **Clarity** | Threat HUD readable; continuous outer pressure, not a wave countdown. |
+| **Motivation** | Hoarded raw Ferronite = living perimeter threat against your own MainBase. |
+| **Response** | Circular walls/turrets, industrial combat vehicles, salvage coverage. |
+| **Satisfaction** | Holding the perimeter / punching a corridor through dense flow. |
+| **Fit** | EREBUS-9 ecology reacts to stored metal — узгоджено з worldbuilding. |
 
 ---
 
 ## 7. Simple Machines, Strong Readability
 
-**Identity statement.** Production budget і visual clarity вимагають, щоб усі gameplay-active обʼєкти були simple machines: бури, поршні, гусениці, крани, конвеєри, прості turret-like nodes, світлові індикатори. Жодних cinematic skeletal anims, animation-heavy juggernauts, hero rigs.
+**Identity statement.** Production budget і visual clarity вимагають, щоб **corporate / player-controlled**
+units і buildings були simple machines: бури, поршні, гусениці, крани, конвеєри, прості turret-like
+nodes, світлові індикатори. Жодних cinematic skeletal anims, animation-heavy juggernauts, hero rigs
+на player fantasy.
+
+**SWARM exception.** SWARM — явний **environmental biological** виняток. Organic skeletal animation для
+SWARM **дозволена**. Це не скасовує industrial identity player faction і не відкриває hero-quality /
+cinematic creature sets. Canonical: [`14_SWARM`](14_SWARM.md), [`../TDD/17_SWARM_Architecture`](../TDD/17_SWARM_Architecture.md).
 
 ### Player Goal
 
@@ -225,27 +233,31 @@
 
 ### What It Allows
 
-- Mechanical animations (rotation, pistons, conveyor loops, drill spins, crane swings).
+- Mechanical animations (rotation, pistons, conveyor loops, drill spins, crane swings) for **player / corporate** assets.
 - Simple turret rotation animations.
-- Skeletal animation тільки для walkers, що clearly industrial (treaded, tripod, quadruped excavator).
+- Skeletal animation тільки для player walkers, що clearly industrial (treaded, tripod, quadruped excavator).
 - Modular visual kits (interchangeable parts, swappable arm attachments) для variety без anim cost.
+- **SWARM only:** organic skeletal animation that stays production-bounded, readable from the RTS camera, and LOD-friendly.
+- **SWARM Large** (small count): full skeletal animation.
+- **SWARM Medium / Small:** Animation Sharing, VAT, Niagara, and LOD where a prototype confirms it.
 
 ### What It Forbids
 
-- Humanoid combat animations (punches, kicks, dramatic poses).
-- Hero unit animation sets (idle variants, victory poses, cinematic transitions).
-- Creature-like skeletal animation з organic motion curves.
-- Animation-heavy юніти, які потребують >2 hours specialized animator time на one-off behavior.
+- Humanoid combat animations (punches, kicks, dramatic poses) on **player / corporate** units.
+- Hero unit animation sets (idle variants, victory poses, cinematic transitions) — player **and** SWARM.
+- Creature-like skeletal animation з organic motion curves for **player-controlled** units and buildings.
+- Hero-quality bespoke SWARM animation sets, cinematic SWARM animation complexity, or a heavy unique AnimBP on every SWARM visual member.
+- Animation-heavy **player** юніти, які потребують >2 hours specialized animator time на one-off behavior.
 
 ### 5-Component Check
 
 | Component | Implication |
 | --- | --- |
-| **Clarity** | Силует читається з top-down camera. Function = visible mechanical action. |
-| **Motivation** | Гравець довіряє, що обʼєкт робить те, що виглядає. |
-| **Response** | Animation = function feedback. Drill spinning = mining. Turret rotating = engaging. |
-| **Satisfaction** | Mechanical impact + sparks + industrial audio. |
-| **Fit** | Узгоджено з Engineer-Not-Soldier і Industrial Extraction First. Production cost — низький. |
+| **Clarity** | Силует читається з top-down camera. Player function = visible mechanical action. SWARM reads as biological pressure, not as a second industrial army. |
+| **Motivation** | Гравець довіряє, що corporate обʼєкт робить те, що виглядає; SWARM looks like ecology, not like a hero monster showcase. |
+| **Response** | Player animation = function feedback. Drill spinning = mining. Turret rotating = engaging. SWARM attack/move/death stay readable under RTS camera + LOD. |
+| **Satisfaction** | Mechanical impact + sparks + industrial audio for the player; bounded organic motion for SWARM. |
+| **Fit** | Узгоджено з Engineer-Not-Soldier і Industrial Extraction First. SWARM exception is explicit and production-capped. |
 
 ---
 
@@ -401,6 +413,7 @@ Identity тепер несе 8 gameplay pillars (1–8), що відповіда
 
 ## References
 
+- SWARM concept — [`14_SWARM`](14_SWARM.md).
 - Gameplay loop, побудований на pillars — [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md).
 - Visual / lore implications — [`Lore_Setting`](Lore_Setting.md).
 - Engineering implications — [`../TDD/00_Technical_Overview`](../TDD/00_Technical_Overview.md).

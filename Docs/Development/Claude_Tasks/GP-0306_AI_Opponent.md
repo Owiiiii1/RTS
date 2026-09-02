@@ -1,5 +1,7 @@
 # GP-0306 AI Opponent
 
+> Numbered-wave SWARM wording below is **superseded**. Canonical: [`../../GDD/14_SWARM.md`](../../GDD/14_SWARM.md). AI remains subject to **its own** per-team `FerroniteThreatValue` / future director.
+
 ## Goal
 
 Описати singleplayer AI opponent — primitive state machine, що грає симетрично з людиною (через orbital model). MVP-required per memory rule `project_ai_opponent_in_mvp` і [ADR-0008](../../Architecture_Decisions/ADR_0008_AI_Opponent_AAIController.md).
@@ -85,7 +87,7 @@ EGP_AIState:
 - AI has standard `AGP_PlayerState` з ASC + `UGP_PlayerAttributeSet` (per ADR-0008).
 - AI має own FoW grid (`UGP_FogOfWarComponent::VisibleByTeam[AI.TeamId]`). Не bypassing.
 - AI spends Real `OrbitalFerronite` via `GE_GP_SpendOrbital`.
-- AI subject to FerroniteThreatValue (raw stock at its own base): rises on drop-off, falls on launch, drives SWARM waves against AI symmetrically.
+- AI subject to FerroniteThreatValue (raw stock at its own base): rises on drop-off, falls on launch, drives continuous SWARM pressure against AI symmetrically (numbered waves **superseded**).
 - AI cannot see hidden enemies (`IsNetRelevantFor` filters apply).
 
 ### Drop Targeting Heuristics
@@ -128,7 +130,7 @@ MVP — single AI behavior tier. Post-MVP: easy / medium / hard via different `D
 - AI uses same RPCs / APIs as human (no AI-only authority hooks).
 - AI bound by FoW (cannot target hidden enemies / drop into Unexplored).
 - AI bound by `OrbitalFerronite` cost rules.
-- AI subject до `FerroniteThreatValue` (raw stock at base; up on drop-off, down on launch) driving its own SWARM waves.
+- AI subject до `FerroniteThreatValue` (raw stock at base; up on drop-off, down on launch) driving its own SWARM pressure (numbered waves **superseded**).
 - AI 5-state machine описана з explicit transitions.
 - All thresholds / values DA-driven (placeholders only).
 - Pillar 8 5-question gate: passes (1-2 sentence explanation, fun у v1 via competitive pressure, new decision type — AI behavior recognition, cheap implementation, scales via more behavior DAs post-MVP).
@@ -153,7 +155,7 @@ AI повинен **читатися як competitor**, не як "rule-based bo
 
 **AI reactive triggers feel earned (Satisfaction):**
 - Damage MainBase → AI defends within 1-2 decision ticks (3-6 s). Player **sees** Salvage Walkers rally to base. Cause-effect readable.
-- SWARM wave near AI base → AI orders Defensive Turret. Player can scout to see it.
+- SWARM pressure near AI base → AI orders Defensive Turret. Player can scout to see it.
 
 **Asymmetric difficulty curve (Motivation + MVP scope):**
 - MVP — single tier (`DA_GP_AI_Behavior_Default`).

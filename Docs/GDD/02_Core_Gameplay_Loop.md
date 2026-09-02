@@ -48,7 +48,7 @@ Land  ->  Scout  ->  Mine  ->  Carry to MainBase containers (raw Planetary Ferro
   - **Walls:** Buy Wall Package → one rocket to MainBase (stock 5, max 5) → later **plan Build Wall** (no READY, no second spend, no per-segment rocket, **no Foundation**). Workers must physically construct the planned segments.
 - Prepare construction sites: plan **Level Terrain** / **Foundation install** jobs (grey = already level, yellow = needs work). Workers travel to the job; work progresses only while they are present. Worker still does **not** construct the READY building. See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
 - Increase unit cap via Logistics Hub (purchase/deploy onto prepared foundation). Per Pillar 4 — capacity expansion є свідомий strategic spend.
-- React to SWARM waves: position Salvage Walker, drop Defensive Turret / Walls біля threatened deposits / buildings; Worker repairs damaged assets (`GP.Command.Repair`).
+- React to continuous SWARM pressure: position Salvage Walker, drop Defensive Turret / Walls for circular base defense; Worker repairs damaged assets (`GP.Command.Repair`). See [`14_SWARM`](14_SWARM.md).
 - Scout opponent (minimap awareness, mid-match push для denied expansion).
 - Balance **greed vs safety**: тримати raw Ferronite у containers = вищий `FerroniteThreatValue` = більше swarm pressure; швидко shipping = безпечніше + швидше score.
 
@@ -185,15 +185,18 @@ AGP_PlayerController (local)
 
 ## SWARM Pressure Loop (FerroniteThreatValue-Driven)
 
-1. Server `AGP_GameMode` тікає `WaveTimer`. На expiry → trigger SWARM wave.
-2. Wave size — function of `AGP_GameState.FerroniteThreatValue` = **raw Ferronite, що зараз зберігається у MainBase containers**.
-3. Drop-off ↑ `FerroniteThreatValue` (більше зберігаєш на базі = небезпечніше); launch до орбіти ↓ `FerroniteThreatValue` (shipping = безпека).
-4. `FerroniteScore` / `OrbitalFerronite` **не** впливають на swarm pressure — лише stored-at-base stock.
-5. SWARM units спавняться у `WaveSpawnPoints`, рухаються до найближчого player asset.
-6. Player Salvage Walker, Turret, Wall engage / block SWARM.
-7. Якщо undefended — SWARM знищує worker, building, або сам MainBase (annihilation loss).
+**Superseded:** `WaveTimer`, numbered waves, `WaveSpawnPoints` as fixed known entries, nearest-asset targeting as the strategic goal.
 
-**Greed-vs-safety:** hoard raw Ferronite = dangerous (high threat); ship швидко = safe (low threat). Це central tension per Pillar 6. Деталі — [`03_Factions`](03_Factions.md), [`07_Match_Flow`](07_Match_Flow.md).
+Canonical ([`14_SWARM`](14_SWARM.md)):
+
+1. Per-team `FerroniteThreatValue` = **raw Ferronite, що зараз зберігається у MainBase containers цієї команди**.
+2. Drop-off ↑ threat (більше зберігаєш на базі = небезпечніше); launch до орбіти ↓ threat (shipping = безпека).
+3. `FerroniteScore` / `OrbitalFerronite` **не** впливають на swarm pressure.
+4. Future director тримає **безперервний** потік з зовнішнього spawn spline. Кінцева стратегічна ціль — MainBase цієї команди. Runtime director **not started**.
+5. Player Salvage Walker, Turret, Wall engage / block SWARM; стіни формують кругову оборону.
+6. Якщо undefended — SWARM може знищити MainBase (immediate annihilation loss).
+
+**Greed-vs-safety:** hoard raw Ferronite = dangerous (high threat); ship швидко = safe (low threat). Це central tension per Pillar 6. Деталі — [`03_Factions`](03_Factions.md), [`07_Match_Flow`](07_Match_Flow.md), [`14_SWARM`](14_SWARM.md).
 
 ## Score / Win Pressure Loop
 
@@ -207,7 +210,7 @@ AGP_PlayerController (local)
 ## Failure Loops
 
 - Player не керує economy → не може ship → не може order drops → SWARM знищує base → annihilation loss.
-- Player hoardить raw Ferronite, не ship → `FerroniteThreatValue` росте → SWARM waves знищують workers → mining stops → програш.
+- Player hoardить raw Ferronite, не ship → `FerroniteThreatValue` росте → SWARM тисне на Workers / базу → mining stops або MainBase гине → програш.
 - Player overcommits до defense → `OrbitalFerronite` іде на Turrets/Walls замість швидшого темпу → opponent випереджає у score → програш.
 
 Balance цих failure loops — primary gameplay tension.

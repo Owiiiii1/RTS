@@ -5,7 +5,7 @@
 | Unit | Type Tag | Role | Data Asset |
 | --- | --- | --- | --- |
 | Worker | `GP.Unit.Type.Worker` | Ferronite mining + transport до MainBase containers + repair + **local engineering** (level / foundation install / foundation repair / Wall construction) | `DA_GP_Unit_Worker` |
-| Salvage Walker | `GP.Unit.Type.SalvageWalker` | Industrial defender — protects workers, repels SWARM waves, engages opposing player units | `DA_GP_Unit_SalvageWalker` |
+| Salvage Walker | `GP.Unit.Type.SalvageWalker` | Industrial defender — захищає workers, стримує SWARM pressure, б'ється з юнітами суперника | `DA_GP_Unit_SalvageWalker` |
 
 Дві unit-категорії у MVP. Жодних support / siege / hero / specialist юнітів. SWARM units описані у [`03_Factions`](03_Factions.md) (не player-controllable).
 
@@ -57,7 +57,7 @@ Role — **mining + transport + repair + site engineering**:
 - Ремонтує own-team damaged buildings / units (`GP.Command.Repair`, GAS-driven). Деталі — нижче §Repair.
 - **Does not construct/build the actual READY building.** READY buildings still arrive complete from orbit. There is no Barracks / factory / local building-production queue.
 - **Does** later perform **local engineering** on planned jobs: **level terrain**, **install already-delivered Foundation Slab material** (progressive per-cell labor), **repair damaged foundation**, and **construct Walls** from delivered Wall Package stock. Plan first; work starts only after assigned Workers reach valid positions; multiple Workers accelerate (formula TBD). Generic work-presentation pulses follow the mining pattern (gameplay events, Blueprint Niagara). See [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md), [ADR-0010](../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md).
-- **Не атакує** у MVP. Це навмисне обмеження — workers є м'якою ціллю для SWARM waves, що стимулює оборону.
+- **Не атакує** у MVP. Це навмисне обмеження — workers є м'якою ціллю для SWARM pressure, що стимулює оборону.
 - Уразливий до SWARM атак — низький HP, без attack response.
 
 ### Repair
@@ -87,7 +87,7 @@ Salvage Walker — primary defender MVP. **Не military mech.** Це перео
 
 Призначення:
 
-- Захист бази від SWARM waves.
+- Захист бази від безперервного SWARM pressure (див. [`14_SWARM`](14_SWARM.md)). Не затверджувати тут нові конкретні player unit types.
 - Escort workers під час mid-match expansion до додаткових Ferronite Deposits.
 - Engagement з ворожою армією у direct combat (industrial brawl, не military skirmish).
 
@@ -212,6 +212,8 @@ Per Pillar 4 (Capacity Is Strategy) — unit capacity це **strategic resource*
 
 Будь-яке додавання unit type **повинно проходити перевірку** per [`gp-mechanics-validator`](../../SKILLS/gp-mechanics-validator/SKILL.md):
 
+Ці constraints стосуються **player / corporate** unit types. SWARM — Pillar 7 biological exception ([`14_SWARM`](14_SWARM.md)): organic skeletal animation дозволена в production-bounded межах.
+
 - Visual identity — industrial / engineering / mining-derived. Не military, не creature-like, не humanoid soldier.
 - Animation budget — mechanical primitives. Не cinematic skeletal sets.
 - Combat role — defensive / industrial defense, не frontline assault як primary fantasy.
@@ -224,6 +226,6 @@ Per Pillar 4 (Capacity Is Strategy) — unit capacity це **strategic resource*
 - Commands — [`02_Core_Gameplay_Loop`](02_Core_Gameplay_Loop.md), [`../TDD/04_RTS_Selection_And_Commands`](../TDD/04_RTS_Selection_And_Commands.md).
 - Mining mechanic — [`06_Resources`](06_Resources.md).
 - Terrain leveling / foundations — [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
-- SWARM units (non-player) — [`03_Factions`](03_Factions.md).
+- SWARM units (non-player) — [`03_Factions`](03_Factions.md), [`14_SWARM`](14_SWARM.md).
 - Visual style — [`Lore_Setting`](Lore_Setting.md).
 - Pillars — [`01_Game_Pillars`](01_Game_Pillars.md).

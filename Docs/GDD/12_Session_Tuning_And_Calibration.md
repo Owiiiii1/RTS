@@ -5,6 +5,8 @@ Production document для команди. Що ми крутимо щоб на�
 **Не** теорія геймдизайну. **Так** — operational guide для дизайнерів, балансерів і tech lead-а.
 
 > **Working principle:** усі параметри живуть у Data Assets (per [ADR-0002](../Architecture_Decisions/ADR_0002_Data_Driven_First.md)). Жоден balance number не hardcoded у C++. Designer змінює — engine reads — playtest проходить — рішення приймається.
+>
+> **SWARM (2026-09-02):** numbered-wave session fields (`WaveStartDelay`, `ThreatToWaveSize`, `ThreatToWaveFrequency`, etc.) are **superseded placeholders**. Canonical: [`14_SWARM`](14_SWARM.md). Do not invent replacement numbers here. Runtime director not started.
 
 ## 1. Game Session Tuning — Global Parameter Inventory
 
@@ -56,17 +58,19 @@ public:
     float TieBreakWindowSeconds = 60.f;         // tie-break sliding window
 
     // === SWARM escalation ===
+    // SUPERSEDED discrete-wave placeholders — not production schema.
+    // Canonical continuous pressure: GDD/14 + TDD/17. Do not invent replacement numbers here.
     UPROPERTY(EditAnywhere, Category = "GP|SWARM")
-    float WaveStartDelaySeconds = 60.f;         // first wave grace period
+    float WaveStartDelaySeconds = 60.f;         // legacy placeholder; superseded as required wave model
 
     UPROPERTY(EditAnywhere, Category = "GP|SWARM")
-    float MinWaveSpacingSeconds = 30.f;         // floor between waves
+    float MinWaveSpacingSeconds = 30.f;         // legacy placeholder; superseded
 
     UPROPERTY(EditAnywhere, Category = "GP|SWARM")
-    TSoftObjectPtr<UCurveFloat> ThreatToWaveSize;          // keyed on FerroniteThreatValue
+    TSoftObjectPtr<UCurveFloat> ThreatToWaveSize;          // legacy placeholder name; superseded
 
     UPROPERTY(EditAnywhere, Category = "GP|SWARM")
-    TSoftObjectPtr<UCurveFloat> ThreatToWaveFrequency;     // keyed on FerroniteThreatValue
+    TSoftObjectPtr<UCurveFloat> ThreatToWaveFrequency;     // legacy placeholder name; superseded
 
     // === Orbital cycle ===
     UPROPERTY(EditAnywhere, Category = "GP|Orbital")
@@ -172,7 +176,7 @@ Per-map overrides applied AFTER `DA_GP_Session_Default` load.
 | `gp.cheat.spawn.unit <DropDefName> <X> <Y>` | Bypass orbital — spawn payload immediately at world (X,Y) for caller team. |
 | `gp.cheat.spawn.building <DropDefName> <X> <Y>` | Same as above for buildings. |
 | `gp.cheat.spawn.swarm <Count> <X> <Y>` | Spawn N SWARM units at (X,Y). |
-| `gp.cheat.spawn.wave <Intensity>` | Trigger immediate SWARM wave proportional to Intensity (1-10). |
+| `gp.cheat.spawn.wave <Intensity>` | **Legacy placeholder name.** Future: intensity pulse inside continuous stream, not a numbered wave. |
 | `gp.cheat.kill.target` | Apply lethal damage to actor under cursor. |
 
 #### Time / Difficulty (server-only)
@@ -198,8 +202,8 @@ Per-map overrides applied AFTER `DA_GP_Session_Default` load.
 | --- | --- |
 | `gp.cheat.tune.minerate <multiplier>` | Runtime multiplier applied to `MineRatePerSecond`. Affects all workers. |
 | `gp.cheat.tune.unitcost <DropDefName> <newCost>` | Override Cost of specific drop type at runtime. |
-| `gp.cheat.tune.wavefreq <multiplier>` | Multiplier on wave frequency. |
-| `gp.cheat.tune.wavesize <multiplier>` | Multiplier on wave size. |
+| `gp.cheat.tune.wavefreq <multiplier>` | **Legacy placeholder.** Future: replenishment / budget multiplier, not wave frequency. |
+| `gp.cheat.tune.wavesize <multiplier>` | **Legacy placeholder.** Future: active swarm budget multiplier, not wave size. |
 | `gp.cheat.tune.threat.per_stored <value>` | Override ThreatPerStoredUnit runtime. |
 | `gp.cheat.tune.ai.tier <name>` | Hot-swap AI behavior DA (e.g., `easy`, `default`, `hard`). |
 | `gp.cheat.tune.reset` | Reset all runtime tuning multipliers to DA defaults. |
@@ -240,7 +244,7 @@ Per-map overrides applied AFTER `DA_GP_Session_Default` load.
 | 0:00 - 1:00 | Discovery | Player знаходить deposit, відправляє Workers, бачить перший Container fill. |
 | 1:00 - 2:00 | First ship | Перший Container launched. Player отримує перший Orbital Ferronite. |
 | 2:00 - 3:00 | First drop | Player order-ить перший Worker/Walker/Turret. Перший pod descent. |
-| 3:00 - 5:00 | Economy ramp | 2-3 containers shipped. SWARM перші waves з'являються. Player building defense or expanding. |
+| 3:00 - 5:00 | Economy ramp | 2-3 containers shipped. SWARM continuous pressure відчутний. Player building circular defense or expanding. |
 | 5:00 - 7:00 | Mid-match tension | Player feels economy AND threat tension. Defending while shipping. |
 | 7:00 - 9:00 | Late push | Player optimizing — куди останні Orbital Ferronite. Може engage opponent. |
 | 9:00 - 10:00 | Climax | Last containers shipping, peak SWARM, score race tight. |
@@ -266,7 +270,7 @@ Per-map overrides applied AFTER `DA_GP_Session_Default` load.
 | --- | --- | --- |
 | "Workers all mining, нема чим зайнятись" | Mining too slow / cap too tight | Increase `MineRatePerSecond` 20% OR lower `Cost` для перших drops |
 | "Жду drop pod descent" | Descent too slow | Decrease `PodDescentDurationDefault` 20% (was 2.5s → try 2.0s) |
-| "Wave довго не приходить" | `WaveStartDelaySeconds` too high | Lower; OR scale `ThreatToWaveFrequency` curve steeper |
+| "Pressure довго не відчувається" | Director / threat-band TBD too quiet | Future director tuning — not `WaveStartDelaySeconds` as production model |
 | "Орбітальний пул заповнюється швидше ніж я можу витратити" | Drops cost too low | Raise key drop costs OR raise pod cap to force batching |
 
 ### Avoid: Chaos / Overwhelm
@@ -275,7 +279,7 @@ Per-map overrides applied AFTER `DA_GP_Session_Default` load.
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| "Wave too big занадто рано" | Threat curve steep | Flatten `ThreatToWaveSize` curve у early (low-threat) region |
+| "Pressure too heavy занадто рано" | Threat-band mapping too steep | Flatten early (low-threat) band — not `ThreatToWaveSize` as production schema |
 | "Decisions неможливо встигати" | Too many concurrent prompts | Lengthen `MinStateDuration` для AI/SWARM, throttle notifications |
 | "UI забивається toast-ами" | Notification deduplication broken | Increase deduplication window у `UGP_NotificationConfig` |
 | "Container management constantly required" | `BaseMaxContainerCount` too low | Raise default to 7-8 (placeholder) for less micro |
@@ -286,10 +290,10 @@ Per-map overrides applied AFTER `DA_GP_Session_Default` load.
 
 | State | What player does | When it should occur |
 | --- | --- | --- |
-| **Calm** | Mining loop, base building | 0-30 s after wave defense, after big drop |
+| **Calm** | Mining loop, base building | After a pressure pulse eases, after big drop |
 | **Plan** | Decide next drop, reposition | Every 30-60 s |
-| **Risk** | Aggressive ship while wave incoming | Container nears full в late game |
-| **Crisis** | Defend під tier-N wave / opponent push | Every 90-180 s |
+| **Risk** | Aggressive ship while pressure rising | Container nears full в late game |
+| **Crisis** | Defend під dense SWARM / opponent push | Every 90-180 s |
 | **Reward** | Container launches, drop arrives, opponent score visible behind | After plan + risk completion |
 
 If a state extends beyond 90 s without rotation → broken pacing.
@@ -332,11 +336,11 @@ Mine more → containers fill → raw Ferronite stored at base → ship → orbi
 5.  Container fill        — Drop-off accumulates у containers; raw stock at base raises FerroniteThreatValue (more SWARM).
 6.  Launch                — Full container ships to orbit (2-3 s telegraph window); FerroniteThreatValue drops (SWARM relief).
 7.  Orbital reward        — OrbitalFerronite + FerroniteScore increment.
-8.  SWARM pressure        — Wave size/frequency scale with FerroniteThreatValue (raw Ferronite stored at base RIGHT NOW; up on drop-off, down on launch).
+8.  SWARM pressure        — Continuous per-team stream scales with FerroniteThreatValue (raw Ferronite stored at base RIGHT NOW; up on drop-off, down on launch). Numbered waves superseded.
 9.  Order                 — Spend OrbitalFerronite на Worker / Walker / Turret / Wall Package / Hub drops.
 10. Drop                  — Pod descent (telegraph). Asset lands.
 11. Expand                — More territory revealed, more deposits available.
-12. Defend                — React to SWARM waves + opponent harass.
+12. Defend                — React to SWARM pressure + opponent harass.
 13. Decision pressure     — Greed vs Safety; Push vs Turtle; Economy vs Combat.
 14. Repeat 3-13            — Until match end.
 15. Match end             — Delivery quota reached OR timer expiry → score / annihilation resolution.
@@ -373,7 +377,7 @@ Reward — не просто UI number. Це **feedback signal**, що підт�
 | Trigger | Reward | Channel |
 | --- | --- | --- |
 | Container launched to orbit | Rocket lift-off VFX + OrbitalFerronite +N flash + Score +N flash + audio rumble | V-VFX + V-UI flash × 2 + A-3D |
-| Major wave defended | "Wave repelled" toast + threat bar relief | HUD-Toast + V-UI |
+| Major SWARM pulse held | "Pressure held" toast + threat bar relief | HUD-Toast + V-UI |
 | First Salvage Walker deployed | Spotlight on unit + voice line (post-MVP) | V-Mat + A-2D |
 | Opponent score milestone | Their score visible passes yours / yours passes theirs — flash | V-UI flash |
 
@@ -401,10 +405,10 @@ Reserved для post-MVP. У MVP — single-match focus.
 | 1 | **Orientation** | 0:00 landing | "Що тут? Звідки почати?" | UI прозоро показує MainBase + Workers. Tooltip-free. |
 | 2 | **First simple decision** | 0:15 | "Я бачу deposit. Send Worker?" | LMB на Worker + RMB на deposit працює immediately. Smart-command resolves. |
 | 3 | **First reward** | 0:30 | "О, container fills!" | Container fill visibly animates. Сo per-tick UX. |
-| 4 | **First risk** | 1:00 | "Container майже повний. Wave скоро?" | Threat bar (FerroniteThreatValue) visible. SWARM telegraph не surprise. |
-| 5 | **First threat** | 1:30 - 2:00 | "Перші SWARM grunts. Defense?" | Wave size manageable. Salvage Walker оrderable якщо economy ok. |
+| 4 | **First risk** | 1:00 | "Container майже повний. Pressure росте?" | Threat bar (FerroniteThreatValue) visible. SWARM не surprise. |
+| 5 | **First threat** | 1:30 - 2:00 | "Перший SWARM contact. Defense?" | Early pressure defendable. Salvage Walker оrderable якщо economy ok. |
 | 6 | **First expansion** | 2:30 - 3:30 | "Order перший Salvage Walker. Drop pod arrives." | Drop telegraph satisfying. Tier-1 unit feels powerful enough. |
-| 7 | **First crisis** | 4:00 - 5:00 | "MainBase під tiск!" | Wave bigger but defendable з committed defense. Walls / Turrets recommended. |
+| 7 | **First crisis** | 4:00 - 5:00 | "MainBase під тиск!" | Denser pressure but defendable з committed circular defense. Walls / Turrets recommended. |
 | 8 | **First strong success** | 5:00 - 7:00 | "I'm shipping consistently. Score climbing." | Visible score lead OR catch-up against opponent. |
 | 9 | **Final tension** | 8:30 - 9:30 | "Last 90 s. Все або нічого." | Threat peak. Timer red. Containers all-in. |
 | 10 | **Session completion** | 10:00 | "I won / I lost. Чому?" | Clear EndOfMatch screen з причиною (quota / annihilation / timer-tie). |
@@ -456,11 +460,12 @@ Master snapshot **тільки** placeholders (TBD у balance pass). Designers �
 
 ### SWARM
 
+Conceptual threat-band / director parameters only. **Do not** treat the old numbered-wave table as approved production schema. Exact values = future implementation / balance pass. See [`14_SWARM`](14_SWARM.md).
+
 | Parameter | Default | Range | Owner |
 | --- | --- | --- | --- |
-| First wave delay | 60 s | 30-120 | Design |
-| Wave threat scaling (ThreatToWaveSize / ThreatToWaveFrequency) | curve | DA editable | Design |
-| Min wave spacing | 30 s | 15-60 | Design |
+| Threat-band → active budget / spawn directions / replenishment / roster / Large cap | TBD | DA editable | Design |
+| `WaveStartDelay` / `MinWaveSpacing` / `ThreatToWaveSize` / `ThreatToWaveFrequency` | — | — | **Superseded legacy names** |
 
 ### Drop Costs (placeholder)
 
@@ -532,9 +537,9 @@ Designer може крутити будь-коли:
 
 - Cost numbers (`UGP_*Definition.Cost`).
 - Stat numbers (`Health`, `Damage`, `MoveSpeed`, `Mine rate`, `AttackRange`, `AttackSpeed`).
-- Timing numbers (`DescentDuration`, `LaunchDelay`, `WaveStartDelay`).
+- Timing numbers (`DescentDuration`, `LaunchDelay`). `WaveStartDelay` is a **superseded** discrete-wave placeholder.
 - Container parameters (`Volume`, `BaseMaxContainerCount`).
-- Threat curves (`ThreatPerStoredUnit`, `ThreatToWaveSize` / `ThreatToWaveFrequency`).
+- Threat scalar (`ThreatPerStoredUnit`). `ThreatToWaveSize` / `ThreatToWaveFrequency` are **superseded** names; future director uses threat-band parameters.
 - AI thresholds (`DecisionInterval`, `TargetWorkerCount`, ...).
 - Map-level overrides (`AGP_MapSettings`).
 

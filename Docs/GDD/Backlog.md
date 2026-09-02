@@ -49,7 +49,7 @@ Skill для повного analysis — [`gp-mechanics-validator`](../../SKILLS
 
 **Validated:** 2026-05-16.
 
-**Why deferred:** Map-design heavy. Потребує специфічну map layout (один "SWARM corridor" як constant pressure, інші — для PvP). Це окрема map design pass, окрема spawn pipeline configuration, окремий wave routing.
+**Why deferred:** Map-design heavy. Потребує специфічну map layout (один "SWARM corridor" як constant pressure, інші — для PvP). Це окрема map design pass, окрема spawn pipeline configuration. Discrete numbered-wave routing is **superseded** for MVP ([`14_SWARM`](14_SWARM.md)); this backlog item remains a post-MVP map-asymmetry idea.
 
 **Notes:**
 
@@ -79,7 +79,7 @@ Skill для повного analysis — [`gp-mechanics-validator`](../../SKILLS
 
 **Validated:** 2026-05-16.
 
-**Why deferred:** Найбільший scope з 4 варіантів. Гравець опосередковано спрямовує SWARM waves проти опонента — або через SWARM attractor structures, або через ability що "evolves" SWARM у певній зоні, або через partial command над SWARM aggro vectors. Це повноцінна asymmetric warfare layer, що потребує:
+**Why deferred / conflicts with approved MVP concept:** Найбільший scope з 4 варіантів. Гравець опосередковано спрямовує SWARM проти опонента. Approved MVP ([`14_SWARM`](14_SWARM.md)) **forbids** controlling or directing SWARM onto the opponent. This remains a post-MVP idea, not current canon. Потребує:
 
 - SWARM faction перебудована з passive-pressure у dynamic actor.
 - Нова UI для SWARM manipulation tools.

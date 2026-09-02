@@ -97,7 +97,7 @@ Grid overlay прихований за default — з'являється тіл�
 - Replicate health через `UGP_UnitAttributeSet`.
 - Server-spawn only (orbital DropPod, initial deployment, or **Build Wall** inventory consume for `AGP_Wall`). Wall segments are not DropPod payloads.
 - Можуть отримувати damage. При `Health <= 0` → destroyed → server тригерить destruction state → multicast VFX.
-- Учасники SWARM aggro (SWARM waves цілять usable assets, building destruction скорочує оборону гравця).
+- Учасники SWARM aggro: потік цілить **MainBase** команди; будівлі / юніти на шляху — перешкоди. Знищення оборони скорочує шанс витримати continuous pressure.
 - Sight source (різний `SightRadius` per type) — contribute до FoW visibility per [`11_Fog_of_War`](11_Fog_of_War.md).
 
 ## Main Base
@@ -122,7 +122,8 @@ Grid overlay прихований за default — з'являється тіл�
 - Initial MainBase begins on an authored / prepared starting site / starter foundation. Player is **not** required to level terrain first. Exact starter-foundation implementation is **deferred** ([`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md)).
 - **Не виробляє Workers.** Workers arrive via orbital drop (per [`10_Orbital_Delivery`](10_Orbital_Delivery.md)). Production HUD (design): selecting MainBase exposes **PURCHASE** in the bottom-right Action Grid (UNITS / BUILDINGS / DEFENSE). MainBase is the only building that owns orbital PURCHASE. Bottom-center keeps MainBase info. TEMP HUD order buttons remain scaffolding.
 - Приймає Ferronite drop-off від Workers (див. [`06_Resources`](06_Resources.md) §Container System). Raw drop-off піднімає `AGP_GameState.FerroniteThreatValue` (stored-at-base stock). Container fills → launch до орбіти → `GE_GP_AddOrbital` (+`OrbitalFerronite`) + `GE_GP_AddScore` (+`FerroniteScore`); launch знижує `FerroniteThreatValue`.
-- Якщо Main Base знищено → **immediate annihilation loss** (за `bAnnihilationCountsAsWin`, default true). Без MainBase containers ship не може, нова Orbital Ferronite не надходить → no path до victory. Opponent wins. Деталі — [`08_Win_Lose_Conditions`](08_Win_Lose_Conditions.md).
+- Якщо Main Base знищено → **immediate annihilation loss** (за `bAnnihilationCountsAsWin`, default true). SWARM, що знищує MainBase, **завершує матч**. Окремого поїдання Ferronite немає — ресурс зникає разом із базою. Деталі — [`08_Win_Lose_Conditions`](08_Win_Lose_Conditions.md), [`14_SWARM`](14_SWARM.md).
+- MainBase — **primary SWARM target** для потоку цієї команди.
 
 ### Visual / Style
 
@@ -177,7 +178,7 @@ Modular industrial logistics node: heavy crane gantry, exposed conveyor system, 
 
 ### Design Intent
 
-Wall — це **захисна периметральна структура**. Замикає choke points, формує defensive corridor, hosts wall-mounted turrets для economy fortification. Без walls — open-field SWARM rush легко добирається до Workers. Wall — це **інженерне рішення** проти organic threat: ти не оборонюєшся армією, ти будуєш периметр.
+Wall — це **захисна периметральна структура**. Випадковий зовнішній SWARM spline вимагає **кругової** оборони, а не укріплення кількох відомих spawn points. Стіни затримують потік і створюють kill zones; SWARM може зруйнувати перешкоду і йти далі. Large corpse у проході може тимчасово затримати Medium/Large — див. [`14_SWARM`](14_SWARM.md). Wall — інженерне рішення проти organic threat.
 
 **`Wall Foundation Rule — RESOLVED:`** Wall segments do **not** require Foundation Slabs. They are locally assembled from delivered Wall Package stock by Workers and may be constructed directly on terrain. Wall-mounted Turret follows the Wall system. Terrain suitability (max slope, visual adapt, auto-level vs player-level, voxel base interaction) is **TBD / DESIGN REQUIRED**.
 
@@ -297,7 +298,7 @@ Industrial salvage walls: переобладнані cargo containers, welded pl
 
 ### Design Intent
 
-Defensive Turret — primary oborona проти SWARM waves і opponent harass. Necessary tool у MVP, де гравець мусить балансувати economy (Workers + shipping) і survival (Turrets + Salvage Walker coverage). Без Turret — SWARM waves тривіально знищують undefended base.
+Defensive Turret — primary статична оборона проти безперервного SWARM pressure і opponent harass. Разом зі стінами формує круговий периметр. Без покриття потік добиває незахищену базу / Workers.
 
 ### Definition
 
@@ -407,7 +408,7 @@ Static defense node: tripod або quadruped mounting на industrial base plate
 ### Чому Walls не sellable
 
 - Walls arrive as a paid **package**; placed segments are already-spent material. Refund створює exploits:
-  - **No-commitment defense:** place walls per wave, demolish between waves з refund → defensive flexibility without economy cost.
+  - **No-commitment defense:** place walls, demolish after pressure eases з refund → defensive flexibility without economy cost.
   - Preview/cancel does not spend; only confirmed placement consumes inventory (no pod-scout refund loop).
 - Permanent demolish форсить considered placement. Per Pillar 8 — глибина від positional decision, не від undo loops.
 
@@ -472,7 +473,7 @@ Foundation destruction is **per cell**. Do not destroy an entire original slab b
 - Orbital Delivery System (drop mechanics) — [`10_Orbital_Delivery`](10_Orbital_Delivery.md).
 - Terrain / foundations — [`13_Terrain_Engineering_And_Foundations`](13_Terrain_Engineering_And_Foundations.md).
 - Fog of War (sight source contribution, drop zone gating) — [`11_Fog_of_War`](11_Fog_of_War.md).
-- SWARM waves як defense trigger — [`03_Factions`](03_Factions.md), [`07_Match_Flow`](07_Match_Flow.md).
+- SWARM pressure / MainBase target — [`14_SWARM`](14_SWARM.md), [`03_Factions`](03_Factions.md), [`07_Match_Flow`](07_Match_Flow.md).
 - Pillars — [`01_Game_Pillars`](01_Game_Pillars.md).
 - Unit cap mechanic — [`04_Units`](04_Units.md).
 - Visual style — [`Lore_Setting`](Lore_Setting.md).

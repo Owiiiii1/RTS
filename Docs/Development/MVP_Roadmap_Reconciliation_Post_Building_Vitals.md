@@ -200,8 +200,8 @@ Defend using the same economy and authority rules as a player. It is not SWARM.
 | Capability | Status | Factual evidence / boundary |
 | --- | --- | --- |
 | Threat input (`FerroniteThreatValue`) | **DONE** | Raw Planetary Ferronite currently stored in MainBase containers; drop-off raises it, launch lowers it. |
-| SWARM actors/director/waves | **NOT STARTED** | No SWARM production classes, spawning pipeline, or wave director were found. |
-| Final MVP design | **DESIGN REQUIRED** | Existing docs contain concepts and placeholders, not an approved implementable MVP contract. |
+| SWARM actors/director | **NOT STARTED** | No SWARM production classes, spawn spline, or continuous director were found. Numbered-wave director is **superseded**. |
+| Final MVP concept | **APPROVED / DOCUMENTED** | [`../GDD/14_SWARM.md`](../GDD/14_SWARM.md) + [`../TDD/17_SWARM_Architecture.md`](../TDD/17_SWARM_Architecture.md). Runtime still not started. |
 
 `FerroniteScore` and `OrbitalFerronite` do not drive SWARM pressure. SWARM is hostile PvE pressure and
 must remain separate from the RTS AI Opponent.
@@ -241,7 +241,7 @@ These are factual product gaps, not an implied strict order:
 6. Building-system design gate (Wall terrain suitability, drag/path, Worker construction details, auto-connect, Wall Turret, Sell/Demolish).
 7. Steam 2-player session/lobby/host/find/join/travel/disconnect flow.
 8. Match completion product flow.
-9. SWARM design/reconciliation gate.
+9. SWARM design/reconciliation gate — **DONE (docs, 2026-09-02)**.
 10. SWARM implementation.
 11. Full MVP validation/stabilization.
 
@@ -279,7 +279,7 @@ This order replaces mechanical continuation of the historical Slice 8 -> 13 sequ
 7. **Steam multiplayer product flow** — sessions, lobby, host/find/join, travel, disconnect, and menus.
 8. **Match completion product flow** — production end screen, OpponentDisconnect result, cleanup/
    return, and singleplayer/multiplayer completion checks.
-9. **SWARM design/reconciliation gate.**
+9. **SWARM design/reconciliation gate — DONE (docs, 2026-09-02).** Concept approved in GDD/14 + TDD/17. Runtime **not started**. This is **not** the current NEXT task.
 10. **SWARM implementation — last gameplay implementation stage of MVP.**
 11. **Full MVP end-to-end validation and stabilization.**
 
@@ -289,29 +289,33 @@ S-number titles.
 ## 8. SWARM final-MVP stage
 
 **Status: MVP — FINAL IMPLEMENTATION STAGE**
-**Gate: DESIGN REVIEW REQUIRED BEFORE IMPLEMENTATION**
+**Gate: CONCEPT APPROVED / DOCUMENTED (2026-09-02). Runtime implementation not started.**
 
-SWARM must not be implemented from the current placeholders. The dedicated design/reconciliation gate
-must resolve:
+Do **not** start SWARM implementation from this documentation checkpoint. NEXT remains earlier
+roadmap stages (production HUD remaining work, minimap, terrain, AI, …).
 
-- what exactly constitutes SWARM in MVP;
-- enemy archetypes and minimum roster;
-- spawning model;
-- spawn locations, zones, and constraints;
-- wave/director model;
-- `FerroniteThreatValue -> pressure/intensity/frequency` mapping;
-- target selection and strategic objectives;
-- interaction with MainBase, Workers, combat units, and defenses;
-- navigation rules;
-- scaling during a match;
-- multiplayer/server authority;
-- replication requirements;
-- victory/loss interaction;
-- performance/scalability budget;
-- what is explicitly out of scope for MVP.
+Approved concept: [`../GDD/14_SWARM.md`](../GDD/14_SWARM.md). Technical direction:
+[`../TDD/17_SWARM_Architecture.md`](../TDD/17_SWARM_Architecture.md).
 
-All items above are **DESIGN REQUIRED**. Existing references to Grunts, wave timing, spawn points, curves,
-or priorities are concepts/placeholders, not approved final answers.
+Resolved by the design review (canonical):
+
+- SWARM is environmental pressure, not a playable faction; per-team, driven by raw Planetary Ferronite in that team's MainBase;
+- continuous flow (no numbered waves); threat bands, not wave-size curves;
+- outer closed spawn spline; MainBase as strategic target; annihilation on MainBase death;
+- Large / Medium-group / Small-group model; crush / corpse / blood rules;
+- lightweight group simulation as the **only allowed** gameplay backend under ADR-0006; Mass Entity **forbidden** (not a reserve) until a new ADR supersedes that ban;
+- visual renderer (Niagara / VAT / skeletal) is a **separate** prototype choice, not a gameplay ECS backend;
+- prototype performance targets, not measured guarantees.
+
+Still **prototype / TBD** until implementation:
+
+- exact DA schema and director class;
+- **visual renderer** (Niagara / VAT / skeletal mix) after prototype — not a Mass / gameplay-backend choice;
+- navigation/obstacle approach (no mandatory NavMesh rebuild);
+- concrete balance numbers.
+
+**Superseded:** Grunt-only roster, `WaveStartDelay` / `WaveInterval` / `WaveSize` as required model,
+`ThreatToWaveSize` / `ThreatToWaveFrequency`, fixed known spawn points, player-directed SWARM.
 
 Canonical relationship already fixed:
 
@@ -374,7 +378,7 @@ After SWARM implementation:
 | S65 | Quota/timer/annihilation/result **DONE** through GP-S34W; disconnect completion remains. |
 | S66 | Production end screen **REMAINING**; TEMP result display exists. |
 | S67 | Full-match stress/acceptance **REMAINING** and belongs after SWARM. |
-| SWARM (new final gameplay stage) | **DESIGN REQUIRED, THEN IMPLEMENT LAST**. Not an alias for S54-S56. |
+| SWARM (new final gameplay stage) | **CONCEPT APPROVED / DOCUMENTED; IMPLEMENTATION NOT STARTED.** Last gameplay stage. Not an alias for S54-S56. Not current NEXT. |
 
 ## 11. Immediate NEXT recommendation
 
@@ -390,7 +394,7 @@ Status: `HUD_PLANET_FERRONITE_FINALIZED_READY_TO_MERGE`. **NOT MERGED.**
 
 Execution order remains: implement remaining production UI/HUD visuals using the approved layout →
 minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps →
-Building-system / Walls gate → Steam → match completion → SWARM gate → SWARM → full MVP
+Building-system / Walls gate → Steam → match completion → SWARM implementation → full MVP
 stabilization.
 
 **Wall Foundation Rule — RESOLVED:** Walls do not require Foundation. Do not list it as an open design gate.

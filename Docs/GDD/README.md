@@ -11,13 +11,14 @@ Gameplay-canonical документація GrimProtocol. Без implementation 
 - [04_Units](04_Units.md) — список юнітів MVP, ролі, capability tags.
 - [05_Buildings](05_Buildings.md) — список будівель MVP, ролі, dependencies.
 - [06_Resources](06_Resources.md) — Ferronite economy, mining, drop-off.
-- [07_Match_Flow](07_Match_Flow.md) — phases матчу, timing, SWARM escalation.
+- [07_Match_Flow](07_Match_Flow.md) — phases матчу, timing, continuous SWARM pressure.
 - [08_Win_Lose_Conditions](08_Win_Lose_Conditions.md) — score-based primary, time-out resolve.
 - [09_UI_UX](09_UI_UX.md) — screens, canonical two-bar production HUD IA, and MainBase PURCHASE (UNITS / BUILDINGS / DEFENSE) inside the bottom-right panel.
 - [10_Orbital_Delivery](10_Orbital_Delivery.md) — orbital drop pod mechanic, two-state resource, order flow, drop zone rules.
 - [11_Fog_of_War](11_Fog_of_War.md) — 3-level FoW (Unexplored / Explored / Visible), sight sources, selection / combat / drop interactions.
 - [12_Session_Tuning_And_Calibration](12_Session_Tuning_And_Calibration.md) — **production operational doc.** Session params, debug cheats, balance calibration workflow, canonical post-pivot core loop, reward loop, player flow states, parameters table, playtest metrics, hot/warm/cold change rules, ownership matrix.
 - [13_Terrain_Engineering_And_Foundations](13_Terrain_Engineering_And_Foundations.md) — destructible voxel terrain, Worker leveling / site prep, per-cell foundation slabs, building placement dependency.
+- [14_SWARM](14_SWARM.md) — approved environmental-pressure concept: continuous per-team flow, spawn spline, group classes, crush / corpse / blood. Runtime not started.
 - [Lore_Setting](Lore_Setting.md) — EREBUS-9, Ferronite, SWARM ecology, visual style, hard lore bans.
 - [First_Playable_Match](First_Playable_Match.md) — end-to-end player story, singleplayer + PvP, без gaps.
 - [Backlog](Backlog.md) — validated ideas після MVP.
@@ -47,4 +48,5 @@ Gameplay-canonical документація GrimProtocol. Без implementation 
 | `10_Orbital_Delivery` | `14_Orbital_Delivery` |
 | `11_Fog_of_War` | `15_Fog_of_War` |
 | `13_Terrain_Engineering_And_Foundations` | `16_Voxel_Terrain_And_Foundations` |
+| `14_SWARM` | `17_SWARM_Architecture` |
 | `Lore_Setting` | (no direct TDD; informs visual / asset pipeline) |

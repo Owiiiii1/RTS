@@ -10,8 +10,8 @@
 
 - [Development/DOCUMENTATION_INDEX.md](Development/DOCUMENTATION_INDEX.md) — **единый индекс**: sources of truth, deprecated docs, conflicts, current NEXT task.
 - [Game_Pitch.md](Game_Pitch.md) — **non-technical onboarding** (Ukrainian, no tech-speak). What the game is, why it's interesting, how a match plays.
-- [GDD/](GDD/README.md) — Game Design Document. Gameplay-canonical: pillars, gameplay loop, factions, units, buildings, resources, match flow, win/lose conditions, UI/UX, orbital delivery, fog of war, terrain engineering / foundations.
-- [TDD/](TDD/README.md) — Technical Design Document. Engineering-canonical: module architecture, GAS, multiplayer, RTS pipeline, unit/building/resource architecture, Steam matchmaking, camera, UI/MVVM, orbital delivery system, fog of war, voxel terrain / foundations, consolidated architecture proposal.
+- [GDD/](GDD/README.md) — Game Design Document. Gameplay-canonical: pillars, gameplay loop, factions, units, buildings, resources, match flow, win/lose conditions, UI/UX, orbital delivery, fog of war, terrain engineering / foundations, SWARM.
+- [TDD/](TDD/README.md) — Technical Design Document. Engineering-canonical: module architecture, GAS, multiplayer, RTS pipeline, unit/building/resource architecture, Steam matchmaking, camera, UI/MVVM, orbital delivery system, fog of war, voxel terrain / foundations, SWARM architecture, consolidated architecture proposal.
 - [Architecture_Decisions/](Architecture_Decisions/README.md) — ADRs. Прийняті архітектурні рішення з context, decision, consequences.
 - [Development/](Development/README.md) — operational rules. Coding rules, naming, git workflow, slice template, per-task specs.
 - [Archive/](Archive/README.md) — legacy документи попереднього проєкту, reference-only.
@@ -61,7 +61,7 @@
 
 ## What's Recent (Pivots)
 
-- **2026-05-16** — Orbital Delivery Model pivot. Усе крім initial MainBase прибуває з орбіти. Container System (two-state Ferronite). Helldivers fantasy. Win condition → delivery quota. AssemblyYard → Logistics Hub. See [ADR-0009](Architecture_Decisions/ADR_0009_Orbital_Delivery_Pillar.md).
+- **2026-09-02** — SWARM concept approved: continuous per-team environmental pressure (not numbered waves). See [GDD/14_SWARM](GDD/14_SWARM.md) і [TDD/17_SWARM_Architecture](TDD/17_SWARM_Architecture.md). Runtime implementation **not started**.
 - **2026-05-16** — 3-Level Fog of War у MVP (was deferred). See [GDD/11_Fog_of_War](GDD/11_Fog_of_War.md) і [TDD/15_Fog_of_War](TDD/15_Fog_of_War.md).
 - **2026-05-16** — AI opponent reaffirmed у MVP (primitive state machine, `AAIController` per [ADR-0008](Architecture_Decisions/ADR_0008_AI_Opponent_AAIController.md)).
 - **2026-05-16** — New Pillar 8 (Simple Core, Combinatorial Depth) inserted. Technical Pillar renumbered 8 → 9.

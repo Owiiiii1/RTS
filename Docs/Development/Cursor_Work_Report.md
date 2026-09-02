@@ -2,92 +2,116 @@
 
 ## Status
 
-**MINIMAP_SURFACE_PALETTE_FIX_READY_FOR_OPERATOR_VALIDATION**
+**MINIMAP_PRIMARY_WORKTREE_READY_FOR_OPERATOR_VALIDATION**
 
 **INTERMEDIATE / NOT MERGE READY**
 
-Point fix only: native `UGP_MinimapWidget` UMG Palette exposure. Runtime/rendering/FoW unchanged. `WBP_GP_HUD` untouched.
+This checkpoint is operator-workflow only: the primary working tree `D:\Progects\RTS` now owns `ui/gp-minimap` source + a fresh `GPEditor` build of `D:\Progects\RTS\GP\GP.uproject`. Native **GP → GP Minimap** is compiled into that tree. `WBP_GP_HUD` was not edited.
 
-## Branch / SHAs
+## Worktree layout
 
-- Branch: `ui/gp-minimap`
-- Checkpoint base `origin/main` (as specified earlier): `3b1d3aff293049cd3014f03e047b21a3dd2e6665`
-- Current `origin/main`: `cfd3d3858993b372ea69bd55865b831584297a83` (not rebased)
-- Merge-base with `origin/main`: `3b1d3aff293049cd3014f03e047b21a3dd2e6665`
-- Previous surface tip: `52454dcfb9b58bb3b0eab378b468e383fc0458f1`
-- Head (implementation): `7968c4a7ca84a4bb910d948c8fae73e79c146901`
-- This report commit is the following commit on the same branch
-- Fast-forward merge to `main`: **not requested / not merge-ready**
+### Before (this conversation / prior Cursor session)
 
-## Exact cause
+- Primary: `D:\Progects\RTS` (operator Content/Config; historically `main`)
+- Secondary: `D:\Progects\RTS-worktrees\ui-gp-minimap` (minimap C++ built there; no operator authored Content)
 
-UMG Palette does **not** use `UCLASS` `DisplayName` as the catalog key.
+### After audit (this session)
 
-`SPaletteViewModel::BuildClassWidgetList` gathers `GetDerivedClasses(UWidget)` then `UWidget::GetPaletteCategory()` on the CDO (`FWidgetBlueprintEditorUtils::GetPaletteCategory`). Engine native widgets (`UImage`, `UButton`, …) override `GetPaletteCategory()` under `WITH_EDITOR` and return a real category (`"Common"`, etc.). Default `UWidget::GetPaletteCategory()` is `"Uncategorized"`.
+`git worktree list` showed **only**:
 
-`UGP_MinimapWidget` only had `meta = (DisplayName = "GP Minimap", ShortTooltip = ...)`. That names the entry if it is listed; it does **not** register a palette category. After a full editor restart the widget was not findable as **GP Minimap**.
+`D:/Progects/RTS` @ `ui/gp-minimap`
 
-Project audit of the named examples:
+- `D:\Progects\RTS-worktrees\ui-gp-minimap` — **already absent** (no remove needed)
+- `D:\Progects\RTS-worktrees\docs-swarm-concept` — **already absent**; not touched
 
-| Class | Super | Palette-relevant flags | GetPaletteCategory |
-| --- | --- | --- | --- |
-| `UGP_FoWWorldOverlayWidget` | `UUserWidget` | `UCLASS(NotBlueprintable)` — hidden from palette | none (UserWidget default `"User Created"` unused because NotBlueprintable) |
-| `UGP_HealthBarWidget` | `UUserWidget` | default Blueprintable native user widget | none → `"User Created"` |
-| `UGP_MarqueeSelectionWidget` | `UUserWidget` | same | none → `"User Created"` |
-| `UGP_MinimapWidget` | `UWidget` (native leaf, like `UImage`) | not Abstract/Hidden/HideDropDown | **was missing** → `"Uncategorized"` |
+No `git worktree remove` was required. No EngineAssociation restore. No operator files discarded.
 
-Those three are not the same UMG-leaf pattern. The production match for a native `UWidget` is the engine `UImage` override.
+## Primary tree branch / HEAD
 
-No existing project `GetPaletteCategory` string. New category: **GP**.
+| Item | Value |
+| --- | --- |
+| Path | `D:\Progects\RTS` |
+| `git branch --show-current` | `ui/gp-minimap` |
+| HEAD after merge | `8b64f0af4770463558ba8d2edddd865d5a7695a7` |
+| Remote tip before this session | `4173346cdc6bf9bf964a6061f218a719bcddc4cd` |
+| `UGP_MinimapWidget.h` present | yes |
+| Switch required | **no** — primary was already on `ui/gp-minimap` @ `4173346` |
 
-## Exact fix
+No `git reset --hard`, `git clean`, stash-all, or restore of Content/Config/maps/Tools/`GP.uproject`.
 
-`UGP_MinimapWidget`:
+## Merge of current main into minimap
 
-```cpp
-#if WITH_EDITOR
-virtual const FText GetPaletteCategory() override;
-#endif
-```
+**Yes.** Ordinary merge commit (not rebase):
 
-```cpp
-#if WITH_EDITOR
-const FText UGP_MinimapWidget::GetPaletteCategory()
-{
-	return NSLOCTEXT("GPMinimapWidget", "PaletteCategory", "GP");
-}
-#endif
-```
+`8b64f0a Merge origin/main swarm docs into ui/gp-minimap.`
 
-DisplayName **GP Minimap** kept. No runtime/FoW/background/bind changes. No Content, no Config, no WBP.
+- `origin/main`: `cfd3d3858993b372ea69bd55865b831584297a83` (4 SWARM/docs commits)
+- Merge-base was `3b1d3aff293049cd3014f03e047b21a3dd2e6665`
+- After merge: **behind main = 0**
+- Not merged the other way; minimap still **not merge-ready** to `main`
 
-## Tests / build
+Conflicts: **only** `Docs/Development/Cursor_Work_Report.md` (resolved with the minimap-side report for the merge, then fully rewritten in this commit).
+
+Auto-merged with both directions kept:
+
+- SWARM: `Docs/GDD/14_SWARM.md`, `Docs/TDD/17_SWARM_Architecture.md`, GDD/TDD/roadmap SWARM wording from main
+- Minimap: `UGP_MinimapWidget` surface/palette current-state in TDD/12, TDD/15, GDD/09, MVP roadmap
+
+## Operator dirty files preserved
+
+Before merge/build and after, `git status --short` is the same **14** entries. Compare-Object: **identical**.
+
+Still dirty/untracked (not committed):
+
+- `GP/Config/DefaultEngine.ini`
+- `GP/Config/DefaultGame.ini`
+- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
+- `GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`
+- `GP/GP.uproject`
+- `GP/Content/Basic_VFX/`
+- `GP/Content/GrimProtocol/Blueprint/` (includes local `WBP_GP_HUD`)
+- `GP/Content/GrimProtocol/DataAssets/Buildings/`
+- `GP/Content/GrimProtocol/DataAssets/Game/`
+- `GP/Content/GrimProtocol/DataAssets/Units/`
+- `GP/Content/GrimProtocol/Materials/`
+- `GP/Content/Mixed_Magic_VFX_Pack/`
+- `GP/Content/RocketThrusterExhaustFX/`
+- `Tools/`
+
+## GPEditor build (MAIN working directory)
+
+Command:
+
+`Build.bat GPEditor Win64 Development -Project="D:\Progects\RTS\GP\GP.uproject" -WaitMutex`
+
+**Passed.** UHT ran (`source file added`). Linked `D:\Progects\RTS\GP\Binaries\Win64\UnrealEditor-GPUIRuntime.dll`.
+
+DLL LastWriteTime: **2026-09-03 00:39:08**. This is **not** the old secondary-worktree binary.
+
+Unicode strings in that DLL: `UGP_MinimapWidget`, `GP Minimap`, `T2_UMGPaletteCategoryIsGP`, palette category `GP`.
+
+## Tests (same MAIN `.uproject`)
 
 Headless `-game -unattended -nop4 -NullRHI` `L_PrototypeArena`. No quit. Editor killed after Complete.
 
 | Command | Result |
 | --- | --- |
 | `gp.UI.RunMinimapSurfaceContractTest` | Complete Failures=0 (`T_WidgetIsPlaceableInUMGDesigner`, `T2_UMGPaletteCategoryIsGP`) |
-| `GPEditor Win64 Development` (UHT included) | **Passed** |
-| `GP Win64 Development` / Shipping | **not run** |
+| `gp.UI.RunMinimapPresentationContractTest` | Complete Failures=0 |
 
-New contract: non-empty palette category `"GP"`, DisplayName `"GP Minimap"`, class not Abstract/Deprecated/Hidden/HideDropDown.
+Class contract from that run: not Abstract/Hidden/Deprecated/HideDropDown; DisplayName **GP Minimap**; `GetPaletteCategory()` **GP**.
 
-## Changed files
+## Exact operator action
 
-- `GP/Source/GPUIRuntime/Public/Widgets/GPMinimapWidget.h`
-- `GP/Source/GPUIRuntime/Private/Widgets/GPMinimapWidget.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapSurfaceContractTest.cpp`
-- `Docs/Development/Cursor_Work_Report.md` (this report)
+1. Fully restart Unreal Editor if it was open during the old worktree.
+2. Open **`D:\Progects\RTS\GP\GP.uproject`** (this folder, not a worktree).
+3. Open local `WBP_GP_HUD`.
+4. Palette search: **GP Minimap**.
+5. Expect category **GP**, widget **GP Minimap**.
+6. Insert into the bottom-left minimap container. Do **not** commit the WBP.
 
 ## Protected-file audit
 
-**Not committed:** `WBP_GP_HUD`, `WBP_GP_PurchaseRow`, `WBP_GP_SelectionGroupRow`, `WBP_GP_LaunchContainerRow`, `Content/`, `Config/`, authored maps, Materials, VFX, `GP.uproject`, `Tools/`.
+**Not committed:** WBP HUD/rows, `Content/`, `Config/`, maps, Materials, VFX, `GP.uproject`, `Tools/`.
 
-## Operator step
-
-1. Restart Unreal Editor (full restart, not live coding only).
-2. Open `WBP_GP_HUD` (local, uncommitted).
-3. Palette search: **GP Minimap**.
-4. Expect category **GP**, widget **GP Minimap**.
-5. Drag into the bottom-left minimap container (Anchors/Fill). Do not commit the WBP.
+This report commit is docs-only. Merge commit was docs-only from `origin/main`.

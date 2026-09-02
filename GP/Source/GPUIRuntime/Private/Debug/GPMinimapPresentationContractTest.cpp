@@ -128,6 +128,8 @@ namespace GPMinimapPresentationContractPrivate
 			&& Presenter->GetMinimapPresentation().GridDimensions == FIntPoint(4, 4)
 			&& FMath::IsNearlyEqual(Presenter->GetMinimapPresentation().CellSizeCm, 100.0f)
 			&& Presenter->GetMinimapPresentation().WorldSizeCm.Equals(FVector2D(400.0f, 400.0f))
+			&& Presenter->GetMinimapPresentation().MapWorldMin.IsZero()
+			&& Presenter->GetMinimapPresentation().MapWorldSizeCm.Equals(FVector2D(400.0f, 400.0f))
 			&& Presenter->GetMinimapPresentation().Revision == 1
 			&& PresentationChanges == ChangesBeforeReady + 1,
 			TEXT("G_ReadyAfterValidMetadata"));

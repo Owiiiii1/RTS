@@ -71,6 +71,7 @@ void AGP_CameraPawn::BeginPlay()
 	ApplyPitch(*Config);
 	FindCameraBoundsVolume();
 	ClampToBounds(*Config);
+	NotifyResolvedCameraBoundsChanged();
 
 	if (!ConfigRef.IsNull())
 	{
@@ -224,6 +225,7 @@ void AGP_CameraPawn::HandleConfigLoaded()
 	TargetArmLength = FMath::Clamp(TargetArmLength, LoadedConfig->MinArmLength, LoadedConfig->MaxArmLength);
 
 	ConfigLoadHandle.Reset();
+	NotifyResolvedCameraBoundsChanged();
 }
 
 float AGP_CameraPawn::CalculateZoomFraction(
@@ -440,18 +442,12 @@ void AGP_CameraPawn::FindCameraBoundsVolume()
 	}
 }
 
-FBox AGP_CameraPawn::ResolveCameraBounds(const UGP_CameraConfigDataAsset& Config)
+FBox AGP_CameraPawn::ResolveCameraBounds(const UGP_CameraConfigDataAsset& Config) const
 {
 	if (CameraBoundsVolume.IsValid())
 	{
 		const FBox VolumeBounds = CameraBoundsVolume->GetCameraBounds();
-		const bool bVolumeBoundsValid =
-			VolumeBounds.IsValid
-			&& VolumeBounds.Min.X < VolumeBounds.Max.X
-			&& VolumeBounds.Min.Y < VolumeBounds.Max.Y
-			&& VolumeBounds.Min.Z < VolumeBounds.Max.Z;
-
-		if (bVolumeBoundsValid)
+		if (IsUsableResolvedCameraBounds(VolumeBounds))
 		{
 			return VolumeBounds;
 		}
@@ -469,6 +465,57 @@ FBox AGP_CameraPawn::ResolveCameraBounds(const UGP_CameraConfigDataAsset& Config
 
 	return Config.FallbackBounds;
 }
+
+bool AGP_CameraPawn::IsUsableResolvedCameraBounds(const FBox& Bounds)
+{
+	return Bounds.IsValid
+		&& FMath::IsFinite(Bounds.Min.X) && FMath::IsFinite(Bounds.Max.X)
+		&& FMath::IsFinite(Bounds.Min.Y) && FMath::IsFinite(Bounds.Max.Y)
+		&& FMath::IsFinite(Bounds.Min.Z) && FMath::IsFinite(Bounds.Max.Z)
+		&& Bounds.Min.X < Bounds.Max.X
+		&& Bounds.Min.Y < Bounds.Max.Y
+		&& Bounds.Min.Z < Bounds.Max.Z;
+}
+
+bool AGP_CameraPawn::GetResolvedCameraBounds(FBox& OutBounds) const
+{
+	const UGP_CameraConfigDataAsset* Config = GetActiveConfig();
+	if (Config == nullptr)
+	{
+		OutBounds = FBox(ForceInit);
+		return false;
+	}
+
+	OutBounds = ResolveCameraBounds(*Config);
+	if (!IsUsableResolvedCameraBounds(OutBounds))
+	{
+		OutBounds = FBox(ForceInit);
+		return false;
+	}
+
+	return true;
+}
+
+void AGP_CameraPawn::NotifyResolvedCameraBoundsChanged()
+{
+	OnResolvedCameraBoundsChanged.Broadcast();
+}
+
+#if !UE_BUILD_SHIPPING
+void AGP_CameraPawn::ContractSetCameraBoundsVolume(AGP_CameraBoundsVolume* Volume)
+{
+	CameraBoundsVolume = Volume;
+	bInvalidCameraBoundsWarningLogged = false;
+	NotifyResolvedCameraBoundsChanged();
+}
+
+void AGP_CameraPawn::ContractClearCameraBoundsVolume()
+{
+	CameraBoundsVolume.Reset();
+	bInvalidCameraBoundsWarningLogged = false;
+	NotifyResolvedCameraBoundsChanged();
+}
+#endif
 
 void AGP_CameraPawn::ClampToBounds(const UGP_CameraConfigDataAsset& Config)
 {

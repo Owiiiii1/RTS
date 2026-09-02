@@ -230,7 +230,13 @@ Two sources, intersected:
 
 Clamp performed on RootScene world XY only; Z is fixed (camera doesn't rise vertically with pan). If pawn detects unbounded level — log warning `LogGPCamera Warning` on BeginPlay.
 
-`AGP_CameraBoundsVolume` is a trivial actor; spec deferred to code task. No replication.
+Resolved bounds are the same `FBox` `ClampToBounds` uses. Public seam for local presentation:
+
+- `AGP_CameraPawn::GetResolvedCameraBounds(FBox& OutBounds) const` — valid `AGP_CameraBoundsVolume` AABB, else the active `Config.FallbackBounds` (CDO until async config load, then authored DA).
+- `OnResolvedCameraBoundsChanged` fires after `BeginPlay` (volume find + first clamp) and after async `HandleConfigLoaded`. Bounds are static for MVP after that; no Tick poll.
+- GPUIRuntime must not re-scan the world for volumes. Minimap displayed extents consume this getter.
+
+`AGP_CameraBoundsVolume` is a trivial actor; spec deferred to code task. No replication. The FoW gameplay grid (2000×2000 / 100 cm) is a separate technical visibility field and is **not** the camera/playable bounds.
 
 ## Edge Cases
 

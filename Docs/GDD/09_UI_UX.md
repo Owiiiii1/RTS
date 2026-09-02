@@ -76,9 +76,10 @@ UX/balance tuning may revisit the presentation scale.
 
 - Square reserved region. Native surface exists: `UGP_MinimapWidget` (UMG: **GP Minimap**) over
   `UGP_MinimapPresenter` + `UGP_HUDRootWidget` accessors / `BP_OnMinimapChanged`. Background is a
-  static authored map image (`UGP_UIPresentationSettings::MinimapBackgroundTexture`, async).
-  FoW overlay is a bounded presentation downsample of the trusted local mirror. Event-driven;
-  no widget Tick. Not SceneCapture / live camera / render-target terrain.
+  static authored map image (`UGP_UIPresentationSettings::MinimapBackgroundTexture`, async) whose
+  left/right/top/bottom match resolved camera/playable bounds, not the full FoW grid.
+  FoW overlay is a bounded presentation downsample of the trusted local mirror through that same
+  crop. Event-driven; no widget Tick. Not SceneCapture / live camera / render-target terrain.
 - Not yet a complete minimap: no unit/building blips, camera rectangle, click-to-pan, last-known
   actors. Operator inserts the native widget into protected `WBP_GP_HUD` (uncommitted).
 

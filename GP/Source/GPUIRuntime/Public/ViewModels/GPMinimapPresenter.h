@@ -4,25 +4,33 @@
 
 #include "CoreMinimal.h"
 #include "FogOfWar/GPFogOfWarComponent.h"
+#include "Math/Box.h"
 #include "UObject/Object.h"
 #include "GPMinimapPresenter.generated.h"
 
+class AGP_CameraPawn;
 class AGP_PlayerController;
 class UGP_LocalFoWComponent;
 
 /**
- * Presentation snapshot of the trusted local FoW grid for HUD minimap consumers.
+ * Presentation snapshot for HUD minimap consumers. Metadata only; never copies FoW cells.
  *
- * This is metadata only. It never copies the FoW cell arrays.
+ * FoW grid fields (GridOrigin / WorldSizeCm / GridDimensions / CellSizeCm) describe the
+ * technical visibility grid. They are not the displayed map extent.
  *
- * Normalized coordinate contract (axis-aligned to the current trusted FoW grid):
- * - Normalized.X = 0 at GridOrigin.X, 1 at GridOrigin.X + WorldSizeCm.X
- * - Normalized.Y = 0 at GridOrigin.Y, 1 at GridOrigin.Y + WorldSizeCm.Y
+ * Displayed map fields (MapWorldMin / MapWorldSizeCm) are the playable camera bounds:
+ * valid AGP_CameraBoundsVolume, else the same Config.FallbackBounds ClampToBounds uses.
+ * If camera bounds are unavailable, displayed fields fall back to the FoW grid.
+ *
+ * Normalized contract (displayed camera/playable rect, not the full FoW grid):
+ * - Normalized.X = 0 at MapWorldMin.X, 1 at MapWorldMin.X + MapWorldSizeCm.X
+ * - Normalized.Y = 0 at MapWorldMin.Y, 1 at MapWorldMin.Y + MapWorldSizeCm.Y
  * - World +X maps to minimap +X. World +Y maps to minimap +Y.
  * - No rotation, mirroring, or Slate Y-flip is applied here.
- * - WorldToMinimapNormalized clamps out-of-grid world XY onto [0,1].
+ * - WorldToMinimapNormalized clamps outside the displayed rect onto [0,1].
  * - MinimapNormalizedToWorld clamps input XY onto [0,1] before mapping.
- * - GetMinimapFoWStateNormalized treats XY outside [0,1] as Unexplored (no clamp).
+ * - GetMinimapFoWStateNormalized maps through displayed bounds into the trusted FoW query;
+ *   XY outside [0,1] is Unexplored (no clamp).
  */
 USTRUCT(BlueprintType)
 struct GPUIRUNTIME_API FGP_MinimapPresentation
@@ -45,6 +53,12 @@ struct GPUIRUNTIME_API FGP_MinimapPresentation
 	FVector2D WorldSizeCm = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Minimap")
+	FVector2D MapWorldMin = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Minimap")
+	FVector2D MapWorldSizeCm = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Minimap")
 	FIntPoint GridDimensions = FIntPoint::ZeroValue;
 
 	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Minimap")
@@ -58,8 +72,9 @@ DECLARE_MULTICAST_DELEGATE(FOnGPMinimapPresentationChanged);
 
 /**
  * LocalPlayer-owned, event-driven minimap presentation foundation.
- * Consumes the trusted owning-client UGP_LocalFoWComponent. Does not tick,
- * scan the world, allocate a FoW texture, or copy cell arrays.
+ * Consumes the trusted owning-client UGP_LocalFoWComponent and the possessed
+ * AGP_CameraPawn resolved bounds. Does not tick, scan the world, allocate a FoW
+ * texture, or copy cell arrays.
  */
 UCLASS()
 class GPUIRUNTIME_API UGP_MinimapPresenter : public UObject
@@ -77,6 +92,13 @@ public:
 	EGP_FoWState GetMinimapFoWStateNormalized(const FVector2D& Normalized) const;
 	const FGP_MinimapPresentation& GetMinimapPresentation() const { return Presentation; }
 	int32 GetBoundDelegateCount() const;
+	int32 GetBoundCameraBoundsDelegateCount() const;
+
+#if !UE_BUILD_SHIPPING
+	void ContractBindCameraPawn(AGP_CameraPawn* CameraPawn);
+	void ContractApplyDisplayedWorldBounds(const FBox& DisplayedBounds);
+	void ContractClearDisplayedWorldBounds();
+#endif
 
 	FOnGPMinimapPresentationChanged OnMinimapPresentationChanged;
 
@@ -85,14 +107,22 @@ protected:
 
 private:
 	void HandleMirrorUpdated(UGP_LocalFoWComponent* Mirror);
+	void HandleResolvedCameraBoundsChanged();
+	void BindCameraPawn(AGP_CameraPawn* CameraPawn);
+	void UnbindCameraPawn();
 	void RebuildPresentation(bool bBroadcast);
 	FGP_MinimapPresentation BuildPresentationFromMirror(const UGP_LocalFoWComponent* Mirror) const;
+	bool TryResolveDisplayedWorldBounds(FVector2D& OutMin, FVector2D& OutSize) const;
 	bool HasUsableBounds() const;
-	FVector2D GetWorldSizeCm() const;
+	FVector2D GetDisplayedWorldSizeCm() const;
 	FVector ResolveFoWQueryWorldLocation(const FVector2D& Normalized) const;
 	void UnbindMirror();
 
 	TWeakObjectPtr<UGP_LocalFoWComponent> BoundMirror;
 	FDelegateHandle MirrorUpdatedHandle;
+	TWeakObjectPtr<AGP_CameraPawn> BoundCameraPawn;
+	FDelegateHandle CameraBoundsChangedHandle;
+	bool bHasExplicitDisplayedBounds = false;
+	FBox ExplicitDisplayedBounds = FBox(ForceInit);
 	FGP_MinimapPresentation Presentation;
 };

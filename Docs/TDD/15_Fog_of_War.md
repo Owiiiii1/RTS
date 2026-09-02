@@ -35,11 +35,13 @@ Current-compatible deviations from the older pseudocode:
   non-Visible cell). Post-process and fullscreen/sampled mask approaches are abandoned. Canonical
   gameplay grid is 100 cm / 10 Hz / 2000×2000;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
-  relevance, minimap **blips / camera / input**, and remaining production HUD panels remain later
+  relevance, minimap **blips / camera rectangle / input**, and remaining production HUD panels remain later
   slices. Native minimap presentation foundation (`UGP_MinimapPresenter`) consumes the trusted
-  local FoW mirror for bounds, Revision, and per-query cell state; it does not allocate a 2000×2000
+  local FoW mirror for grid metadata, Revision, and per-query cell state; displayed minimap extents
+  are resolved camera/playable bounds, not the 2000×2000 FoW grid. It does not allocate a 2000×2000
   texture or copy the cell arrays. `UGP_MinimapWidget` downsamples that trusted query to a bounded
-  overlay (default 128²) over a static authored background; it is not a new gameplay grid.
+  overlay (default 128²) over a static authored background authored to camera/playable bounds;
+  it is not a new gameplay grid.
 - **Voxel terrain integration is NOT reopened here.** World FoW presentation was finalized against
   effectively planar terrain and a fixed ground-projection assumption. After Voxel Plugin deformation
   ships, world FoW presentation must follow the actual terrain surface. That work belongs to the
@@ -329,12 +331,18 @@ Drop reticle on client:
 ## Minimap Rendering (Per TDD/12 Update)
 
 **Current production path (surface):** `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem`
-queries the trusted `UGP_LocalFoWComponent` by world location. Normalized minimap XY maps
-axis-aligned onto the current FoW grid bounds. `UGP_MinimapWidget` paints a static authored
-background plus a bounded FoW overlay (default 128×128 downsample, Unexplored/Explored/Visible).
-Widget-only `ScreenY = 1 - NormalizedY`; presenter mapping is unchanged. Overlay rebuilds on
-`OnMinimapPresentationChanged` only. No `UGP_MinimapSubsystem`, no 10 Hz poll, no per-cell
-widget, no 2000×2000 texture copy, and no terrain capture / SceneCapture in this checkpoint.
+queries the trusted `UGP_LocalFoWComponent` by world location. The FoW gameplay grid remains
+the larger technical visibility field (100 cm / 2000×2000). Normalized minimap XY maps
+axis-aligned onto **resolved camera/playable bounds** (`AGP_CameraPawn::GetResolvedCameraBounds`:
+valid `AGP_CameraBoundsVolume`, else `Config.FallbackBounds`). Minimap is a crop/projection over
+trusted LocalFoW; FoW authority, grid origin, dimensions, and cell size are unchanged.
+`UGP_MinimapWidget` paints a static authored background (authored to those camera/playable extents,
+world +Y at the top) plus a bounded FoW overlay (default 128×128 downsample,
+Unexplored/Explored/Visible) using the same mapping. Widget-only `ScreenY = 1 - NormalizedY`.
+Overlay rebuilds on `OnMinimapPresentationChanged` only (FoW revision and/or camera-bounds ready).
+No `UGP_MinimapSubsystem`, no 10 Hz poll, no per-cell widget, no 2000×2000 texture copy, and no
+terrain capture / SceneCapture in this checkpoint. Degenerate/unavailable camera bounds fall back
+to the FoW-grid rect so mapping never divides by zero.
 
 The older snapshot sketch below remains **future visual/blip design**, not shipped production code:
 

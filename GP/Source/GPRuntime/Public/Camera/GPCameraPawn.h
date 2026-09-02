@@ -13,6 +13,8 @@ class UGP_CameraConfigDataAsset;
 class AGP_CameraBoundsVolume;
 struct FStreamableHandle;
 
+DECLARE_MULTICAST_DELEGATE(FOnGPResolvedCameraBoundsChanged);
+
 /**
  * Local RTS camera pawn: pan / edge-scroll / zoom / pitch / yaw.
  * Presentation only — no replication, RPC, GAS, selection, or input binding.
@@ -32,6 +34,17 @@ public:
 	void AddZoomInput(float WheelDelta);
 	void AddRotateInput(float MouseDeltaX);
 	void SetRotateActive(bool bActive);
+
+	/** Same FBox ClampToBounds uses: valid volume AABB, else Config.FallbackBounds. */
+	bool GetResolvedCameraBounds(FBox& OutBounds) const;
+	static bool IsUsableResolvedCameraBounds(const FBox& Bounds);
+
+	FOnGPResolvedCameraBoundsChanged OnResolvedCameraBoundsChanged;
+
+#if !UE_BUILD_SHIPPING
+	void ContractSetCameraBoundsVolume(AGP_CameraBoundsVolume* Volume);
+	void ContractClearCameraBoundsVolume();
+#endif
 
 protected:
 	virtual void BeginPlay() override;
@@ -55,7 +68,8 @@ private:
 	void ResetFrameInput();
 
 	void FindCameraBoundsVolume();
-	FBox ResolveCameraBounds(const UGP_CameraConfigDataAsset& Config);
+	FBox ResolveCameraBounds(const UGP_CameraConfigDataAsset& Config) const;
+	void NotifyResolvedCameraBoundsChanged();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Camera", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USceneComponent> RootScene;
@@ -85,5 +99,5 @@ private:
 	float CurrentYaw = 0.0f;
 
 	TWeakObjectPtr<AGP_CameraBoundsVolume> CameraBoundsVolume;
-	bool bInvalidCameraBoundsWarningLogged = false;
+	mutable bool bInvalidCameraBoundsWarningLogged = false;
 };

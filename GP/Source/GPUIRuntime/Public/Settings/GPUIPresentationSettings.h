@@ -33,7 +33,8 @@ public:
 	TSoftClassPtr<UGP_HUDRootWidget> ProductionHUDWidgetClass;
 
 	/**
-	 * Static authored minimap background. Same world XY bounds as UGP_MinimapPresenter / FoW grid.
+	 * Static authored minimap background. Same world XY as resolved camera/playable bounds
+	 * (valid AGP_CameraBoundsVolume, else CameraConfig FallbackBounds) — not the full FoW grid.
 	 * Authored image: world +Y (NormalizedY = 1) at the top of the texture. Async load only.
 	 * Empty / loading → solid dark fallback. Not SceneCapture / render-target terrain.
 	 */

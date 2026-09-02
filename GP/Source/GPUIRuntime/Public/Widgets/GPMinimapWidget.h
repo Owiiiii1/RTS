@@ -15,7 +15,8 @@ class UTexture2D;
 /**
  * Native UMG minimap surface: static authored background + trusted FoW overlay.
  *
- * Presenter coordinates are unchanged (world +X/+Y → normalized +X/+Y).
+ * Presenter normalized XY is the displayed camera/playable rect, not the full FoW grid.
+ * Presenter mapping stays world +X/+Y → normalized +X/+Y (no Y-flip there).
  * Widget layer only: ScreenY = 1 - NormalizedY so NormalizedY = 1 is the top of the square.
  * Background and FoW share that transform. Not SceneCapture. No Tick / polling / world scan.
  */

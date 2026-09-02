@@ -177,9 +177,11 @@ PublicDependencyModuleNames.AddRange(new string[]
   accessors / `RequestContextAction` / `BP_OnContextActionsChanged`). Authored Context Action buttons
   are **not** operator-validated. Native minimap presentation foundation exists
   (`UGP_MinimapPresenter` owned by `UGP_HUDViewModelSubsystem`; HUD-root accessors /
-  `BP_OnMinimapChanged`). Native surface widget `UGP_MinimapWidget` paints a static authored
-  background texture plus a bounded FoW overlay from that presenter. It is **not** SceneCapture,
-  live camera, or render-target terrain, and it is **not** a complete minimap.
+  `BP_OnMinimapChanged`).   Native surface widget `UGP_MinimapWidget` paints a static authored
+  background texture plus a bounded FoW overlay from that presenter. Displayed world extents
+  are resolved camera/playable bounds (`AGP_CameraPawn::GetResolvedCameraBounds`), not the full
+  2000×2000 FoW grid. It is **not** SceneCapture, live camera, or render-target terrain, and it
+  is **not** a complete minimap.
   `WBP_GP_HUD` remains uncommitted.
   Still not implemented: minimap blips / camera rectangle / click-to-pan / last-known
   (surface widget exists; operator inserts it into the protected HUD),
@@ -234,7 +236,7 @@ Rules:
 | `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits`, shuttle slots, READY, Wall stock — **not implemented** | Future adapter | Future MainBase PURCHASE panel (bottom-right). Not a fullscreen Order Menu. |
 | `UGP_CargoVM` | Worker cargo for single presentation is carried on `UGP_SelectionViewModel` (`CargoAmount` / `CargoCapacity` / `CargoNormalized` / `bHasCargo`) via existing `OnCargoAmountChanged`. A separate cargo-only VM is **not implemented**. | Selection adapter (single Worker) | Future single-entity Selection/Info cargo meter |
 | `UGP_NotificationVM` | Local notification queue (PC pushes) — **not implemented** | PC native | Future notification stack |
-| `UGP_MinimapVM` | Superseded as the production HUD path. Native `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem` is the minimap presentation foundation. `UGP_MinimapWidget` is the native UMG surface: static authored background (`UGP_UIPresentationSettings::MinimapBackgroundTexture`, async only) plus a bounded FoW downsample overlay. It does **not** snapshot blips or copy the FoW cell arrays. | `UGP_MinimapPresenter` binds `UGP_LocalFoWComponent::OnLocalFoWUpdated`; widget binds `OnMinimapPresentationChanged` | Bottom-left minimap. Operator inserts `GP Minimap` into protected `WBP_GP_HUD`. Blips / camera rectangle / click-to-pan remain later checkpoints. |
+| `UGP_MinimapVM` | Superseded as the production HUD path. Native `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem` is the minimap presentation foundation. `UGP_MinimapWidget` is the native UMG surface: static authored background (`UGP_UIPresentationSettings::MinimapBackgroundTexture`, async only) plus a bounded FoW downsample overlay. Displayed XY = resolved camera/playable bounds; FoW grid metadata stays separate. It does **not** snapshot blips or copy the FoW cell arrays. | `UGP_MinimapPresenter` binds `UGP_LocalFoWComponent::OnLocalFoWUpdated` and `AGP_CameraPawn::OnResolvedCameraBoundsChanged`; widget binds `OnMinimapPresentationChanged` | Bottom-left minimap. Operator inserts `GP Minimap` into protected `WBP_GP_HUD`. Blips / camera rectangle / click-to-pan remain later checkpoints. |
 
 Production Resource/Match/Selection VMs are created once by `UGP_HUDViewModelSubsystem` per `ULocalPlayer`.
 Future widgets receive them from that subsystem; no gameplay module type owns a `GPUIRuntime` object.
@@ -564,21 +566,27 @@ UI legitimately owns:
 
 - Bottom-left **square** remains the approved HUD IA slot.
 - Native foundation is `UGP_MinimapPresenter` owned by `UGP_HUDViewModelSubsystem`.
-  Event-driven from the trusted local FoW mirror. No Tick, no cell-array copy, no terrain capture.
+  Event-driven from the trusted local FoW mirror and `AGP_CameraPawn::OnResolvedCameraBoundsChanged`.
+  No Tick, no cell-array copy, no terrain capture, no GPUIRuntime world actor scan.
 - Production surface is `UGP_MinimapWidget` (`UWidget` / Slate leaf). Background is a **static
   authored map image** (`UGP_UIPresentationSettings::MinimapBackgroundTexture`), async-loaded.
   Not SceneCapture, live camera, or render-target terrain. Empty/loading → solid dark fallback.
-  Authored image uses the same world XY bounds as the presenter / FoW grid, with world +Y
-  (NormalizedY = 1) at the **top** of the texture. No hidden rotate/mirror.
+  Authored image matches **resolved camera/playable bounds** (valid `AGP_CameraBoundsVolume`,
+  else the same `Config.FallbackBounds` `ClampToBounds` uses), with world +Y (NormalizedY = 1)
+  at the **top** of the texture. No hidden rotate/mirror. It is **not** authored to the full FoW grid.
 - FoW overlay is a bounded presentation downsample (default 128×128, clamp 32–256) of the
   trusted `GetMinimapFoWStateNormalized` queries. One compact texture, not a widget per cell.
-  Rebuilds only on `OnMinimapPresentationChanged` (Revision / metadata). Unexplored ≈ black,
-  Explored = dim overlay, Visible = background seen normally.
-- Coordinate contract (presenter, unchanged): normalized XY in `[0,1]` maps axis-aligned to the
-  current FoW grid (`GridOrigin` + `GridDimensions * CellSizeCm`). World `+X` → minimap `+X`;
-  world `+Y` → minimap `+Y`. No rotation/mirroring in the presenter. Out-of-grid world locations
-  clamp in `WorldToMinimapNormalized`; `GetMinimapFoWStateNormalized` returns Unexplored outside
-  `[0,1]`.
+  Rebuilds only on `OnMinimapPresentationChanged` (Revision / metadata / displayed bounds).
+  Unexplored ≈ black, Explored = dim overlay, Visible = background seen normally.
+- Displayed vs FoW: `MapWorldMin` / `MapWorldSizeCm` are the playable camera rect.
+  `GridOrigin` / `WorldSizeCm` / `GridDimensions` / `CellSizeCm` remain the technical FoW grid
+  (2000×2000 / 100 cm in production). Minimap is a crop/projection over trusted LocalFoW.
+- Coordinate contract (presenter): normalized XY in `[0,1]` maps axis-aligned to displayed
+  camera/playable bounds. World `+X` → minimap `+X`; world `+Y` → minimap `+Y`. No rotation/mirroring
+  in the presenter. World locations outside the displayed rect clamp in `WorldToMinimapNormalized`.
+  `GetMinimapFoWStateNormalized` maps the displayed point into world, then queries LocalFoW;
+  XY outside `[0,1]` is Unexplored. If resolved camera bounds are unavailable/degenerate, displayed
+  fields fall back to the FoW-grid rect (no divide-by-zero).
 - Widget-layer orientation only: `ScreenY = 1 - NormalizedY` so NormalizedY = 1 is the top of
   the square. Background and FoW share that transform and the same letterboxed dest rect.
 - This is **not** a complete minimap. Blips, camera rectangle, click-to-pan, last-known actors,

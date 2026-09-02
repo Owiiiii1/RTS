@@ -2,66 +2,133 @@
 
 ## Status
 
-**MINIMAP_PRIMARY_WORKTREE_READY_FOR_OPERATOR_VALIDATION**
+**MINIMAP_CAMERA_BOUNDS_READY_FOR_OPERATOR_VALIDATION**
 
 **INTERMEDIATE / NOT MERGE READY**
 
-This checkpoint is operator-workflow only: the primary working tree `D:\Progects\RTS` now owns `ui/gp-minimap` source + a fresh `GPEditor` build of `D:\Progects\RTS\GP\GP.uproject`. Native **GP → GP Minimap** is compiled into that tree. `WBP_GP_HUD` was not edited.
+Minimap displayed world extents now follow the same resolved camera/playable bounds `AGP_CameraPawn` uses for `ClampToBounds`. The FoW gameplay grid (2000×2000 / 100 cm) is unchanged. Minimap is a crop/projection over trusted LocalFoW. No SceneCapture. Not a complete minimap (no blips / camera rectangle / click-to-pan / last-known).
 
-## Worktree layout
-
-### Before (this conversation / prior Cursor session)
-
-- Primary: `D:\Progects\RTS` (operator Content/Config; historically `main`)
-- Secondary: `D:\Progects\RTS-worktrees\ui-gp-minimap` (minimap C++ built there; no operator authored Content)
-
-### After audit (this session)
-
-`git worktree list` showed **only**:
-
-`D:/Progects/RTS` @ `ui/gp-minimap`
-
-- `D:\Progects\RTS-worktrees\ui-gp-minimap` — **already absent** (no remove needed)
-- `D:\Progects\RTS-worktrees\docs-swarm-concept` — **already absent**; not touched
-
-No `git worktree remove` was required. No EngineAssociation restore. No operator files discarded.
-
-## Primary tree branch / HEAD
+## Branch / base / head
 
 | Item | Value |
 | --- | --- |
 | Path | `D:\Progects\RTS` |
-| `git branch --show-current` | `ui/gp-minimap` |
-| HEAD after merge | `8b64f0af4770463558ba8d2edddd865d5a7695a7` |
-| Remote tip before this session | `4173346cdc6bf9bf964a6061f218a719bcddc4cd` |
-| `UGP_MinimapWidget.h` present | yes |
-| Switch required | **no** — primary was already on `ui/gp-minimap` @ `4173346` |
+| Branch | `ui/gp-minimap` |
+| Remote | `origin/ui/gp-minimap` |
+| Pre-checkpoint HEAD | `d54db93b5e22ed2e88af3c98c15e555c83369a63` |
+| Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
+| `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` (behind main = 0) |
 
-No `git reset --hard`, `git clean`, stash-all, or restore of Content/Config/maps/Tools/`GP.uproject`.
+Not merge-ready to `main`.
 
-## Merge of current main into minimap
+## Canonical bounds source
 
-**Yes.** Ordinary merge commit (not rebase):
+Same `FBox` `AGP_CameraPawn::ClampToBounds` uses:
 
-`8b64f0a Merge origin/main swarm docs into ui/gp-minimap.`
+1. Valid `AGP_CameraBoundsVolume::GetCameraBounds()` AABB, if the pawn has resolved a volume.
+2. Else the active camera config `FallbackBounds` (CDO via `GetActiveConfig()` until async DA load, then authored `CachedConfig`).
 
-- `origin/main`: `cfd3d3858993b372ea69bd55865b831584297a83` (4 SWARM/docs commits)
-- Merge-base was `3b1d3aff293049cd3014f03e047b21a3dd2e6665`
-- After merge: **behind main = 0**
-- Not merged the other way; minimap still **not merge-ready** to `main`
+FoW grid origin / 2000×2000 / 100 cm are **not** minimap visual bounds.
 
-Conflicts: **only** `Docs/Development/Cursor_Work_Report.md` (resolved with the minimap-side report for the merge, then fully rewritten in this commit).
+## Camera API seam
 
-Auto-merged with both directions kept:
+`GPRuntime` public seam on `AGP_CameraPawn` (GPUIRuntime does not scan the world):
 
-- SWARM: `Docs/GDD/14_SWARM.md`, `Docs/TDD/17_SWARM_Architecture.md`, GDD/TDD/roadmap SWARM wording from main
-- Minimap: `UGP_MinimapWidget` surface/palette current-state in TDD/12, TDD/15, GDD/09, MVP roadmap
+- `bool GetResolvedCameraBounds(FBox& OutBounds) const`
+- `static bool IsUsableResolvedCameraBounds(const FBox& Bounds)`
+- `FOnGPResolvedCameraBoundsChanged OnResolvedCameraBoundsChanged`
 
-## Operator dirty files preserved
+Notify only after `BeginPlay` (volume find + first clamp) and after async `HandleConfigLoaded`. Contract-only `ContractSetCameraBoundsVolume` / `ContractClearCameraBoundsVolume` (`!UE_BUILD_SHIPPING`) so UI tests do not iterate actors.
 
-Before merge/build and after, `git status --short` is the same **14** entries. Compare-Object: **identical**.
+## Presenter mapping before / after
 
-Still dirty/untracked (not committed):
+**Before:** `WorldToMinimapNormalized` / `MinimapNormalizedToWorld` used `GridOrigin` + full FoW `WorldSizeCm`. On `L_PrototypeArena` that is the 2000×2000 visibility field, so the playable camera area was a small patch.
+
+**After:**
+
+- FoW metadata stays: `GridOrigin`, `WorldSizeCm`, `GridDimensions`, `CellSizeCm`
+- Displayed rect: `MapWorldMin` + `MapWorldSizeCm`
+- Normalized `[0,1]` maps to that displayed rect (world +X/+Y, no presenter Y-flip)
+- `GetMinimapFoWStateNormalized` maps displayed normalized → world inside camera bounds, then `UGP_LocalFoWComponent::GetStateAtWorldLocation`
+- Widget still `ScreenY = 1 - NormalizedY`; background and FoW share that transform
+
+`UGP_MinimapPresenter::Initialize(PC)` binds the possessed `AGP_CameraPawn` (no `TActorIterator` in GPUIRuntime).
+
+## Fallback semantics
+
+If camera bounds are missing or degenerate (non-finite / Min ≥ Max XY):
+
+- displayed fields fall back to the trusted FoW-grid rect
+- mapping stays finite (no divide-by-zero)
+- presentation can still become ready from FoW metadata
+
+This keeps isolated 4×4 presenter/surface contracts green when no pawn is bound.
+
+## Async / event lifecycle
+
+No widget Tick. No presenter Tick. No polling.
+
+1. HUD `BindMinimapPresenter` → `Initialize(PC)`: bind LocalFoW + current pawn; rebuild immediately from `GetResolvedCameraBounds` if already valid.
+2. If pawn `BeginPlay` / async config has not finished, first snapshot may be CDO fallback (or FoW-grid if pawn is null).
+3. `OnResolvedCameraBoundsChanged` rebuilds presentation once bounds are ready. Re-`Initialize` / rebind does not duplicate camera or mirror delegates (`GetBoundCameraBoundsDelegateCount()` / `GetBoundDelegateCount()`).
+
+MVP bounds are static after initialization; this is not a dynamic bounds system.
+
+## Background image contract
+
+`UGP_UIPresentationSettings::MinimapBackgroundTexture` is authored to **camera/playable bounds**, not the full FoW grid. Left/right/top/bottom = those extents. World +Y / NormalizedY=1 is the top of the image. FoW overlay uses the same mapping. No new texture asset created in this checkpoint.
+
+## Tests
+
+Command: `UnrealEditor-Cmd` `D:\Progects\RTS\GP\GP.uproject` `/Game/GrimProtocol/Maps/L_PrototypeArena` `-game -unattended -nop4 -NullRHI -nosplash -nosteam`
+
+| Command | Result |
+| --- | --- |
+| `gp.UI.RunMinimapCameraBoundsContractTest` | **PASS** Complete Failures=0 |
+| `gp.UI.RunMinimapSurfaceContractTest` | **PASS** Complete Failures=0 |
+| `gp.UI.RunMinimapPresentationContractTest` | **PASS** Complete Failures=0 |
+| `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS** Complete Failures=0 |
+| `gp.UI.RunHUDViewModelBridgeContractTest` | **PASS** Complete Failures=0 |
+
+Focused contract covers: volume → displayed; no volume → exact Config `FallbackBounds`; displayed ≠ full FoW grid; normalized (0,0)/(1,1)/center round-trip; FoW query through crop; degenerate safe; no Tick; rebind does not duplicate camera delegates; background/FoW share orientation.
+
+No dedicated `gp.Camera.*` contract exists; volume vs fallback is asserted against `GetResolvedCameraBounds` in the new UI contract.
+
+## GPEditor build
+
+`GPEditor Win64 Development` + UHT for `D:\Progects\RTS\GP\GP.uproject`: **Succeeded** (79.68 s). Not GP Development / Shipping.
+
+## Changed files (this checkpoint)
+
+- `GP/Source/GPRuntime/Public/Camera/GPCameraPawn.h`
+- `GP/Source/GPRuntime/Private/Camera/GPCameraPawn.cpp`
+- `GP/Source/GPUIRuntime/Public/ViewModels/GPMinimapPresenter.h`
+- `GP/Source/GPUIRuntime/Private/ViewModels/GPMinimapPresenter.cpp`
+- `GP/Source/GPUIRuntime/Public/Settings/GPUIPresentationSettings.h`
+- `GP/Source/GPUIRuntime/Public/Widgets/GPMinimapWidget.h`
+- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapCameraBoundsContractTest.cpp` (new)
+- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapPresentationContractTest.cpp`
+- `Docs/TDD/11_RTS_Camera.md`
+- `Docs/TDD/12_UI_Architecture.md`
+- `Docs/TDD/15_Fog_of_War.md`
+- `Docs/GDD/09_UI_UX.md`
+- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
+- `Docs/Development/Cursor_Work_Report.md`
+
+## Protected audit
+
+Not edited / not committed:
+
+- `WBP_GP_HUD`
+- `GP/Content/`
+- `GP/Config/`
+- `L_PrototypeArena`
+- DataAssets
+- Materials/VFX
+- `GP.uproject`
+- `Tools/`
+
+Operator dirty/untracked left in the working tree (same set as before this checkpoint):
 
 - `GP/Config/DefaultEngine.ini`
 - `GP/Config/DefaultGame.ini`
@@ -78,40 +145,13 @@ Still dirty/untracked (not committed):
 - `GP/Content/RocketThrusterExhaustFX/`
 - `Tools/`
 
-## GPEditor build (MAIN working directory)
+## Operator validation
 
-Command:
+1. Open ordinary `D:\Progects\RTS\GP\GP.uproject` (this primary tree; already on `ui/gp-minimap` with this GPEditor build).
+2. PIE on `L_PrototypeArena`.
+3. Confirm the black minimap square is the same UI size, but the logical world extent now matches the camera movement area (playable clamp), not the full FoW grid. FoW/vision should look much larger on the minimap. Panning the camera into a playable edge should correspond to the minimap edge. If camera bounds are symmetric, world center stays ~0.5/0.5.
+4. Move a unit and confirm Visible → Explored still works at the new scale.
 
-`Build.bat GPEditor Win64 Development -Project="D:\Progects\RTS\GP\GP.uproject" -WaitMutex`
+## INTERMEDIATE / NOT MERGE READY
 
-**Passed.** UHT ran (`source file added`). Linked `D:\Progects\RTS\GP\Binaries\Win64\UnrealEditor-GPUIRuntime.dll`.
-
-DLL LastWriteTime: **2026-09-03 00:39:08**. This is **not** the old secondary-worktree binary.
-
-Unicode strings in that DLL: `UGP_MinimapWidget`, `GP Minimap`, `T2_UMGPaletteCategoryIsGP`, palette category `GP`.
-
-## Tests (same MAIN `.uproject`)
-
-Headless `-game -unattended -nop4 -NullRHI` `L_PrototypeArena`. No quit. Editor killed after Complete.
-
-| Command | Result |
-| --- | --- |
-| `gp.UI.RunMinimapSurfaceContractTest` | Complete Failures=0 (`T_WidgetIsPlaceableInUMGDesigner`, `T2_UMGPaletteCategoryIsGP`) |
-| `gp.UI.RunMinimapPresentationContractTest` | Complete Failures=0 |
-
-Class contract from that run: not Abstract/Hidden/Deprecated/HideDropDown; DisplayName **GP Minimap**; `GetPaletteCategory()` **GP**.
-
-## Exact operator action
-
-1. Fully restart Unreal Editor if it was open during the old worktree.
-2. Open **`D:\Progects\RTS\GP\GP.uproject`** (this folder, not a worktree).
-3. Open local `WBP_GP_HUD`.
-4. Palette search: **GP Minimap**.
-5. Expect category **GP**, widget **GP Minimap**.
-6. Insert into the bottom-left minimap container. Do **not** commit the WBP.
-
-## Protected-file audit
-
-**Not committed:** WBP HUD/rows, `Content/`, `Config/`, maps, Materials, VFX, `GP.uproject`, `Tools/`.
-
-This report commit is docs-only. Merge commit was docs-only from `origin/main`.
+Blips, camera rectangle, click-to-pan, last-known, and terrain/voxel remain later. Authored `WBP_GP_HUD` stays operator-local.

@@ -16,7 +16,7 @@ Minimap blips now use canonical player/team color. Unit vs building is marker si
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
 | Pre-checkpoint HEAD | `157d6b7` (friendly-blips SHA record) |
-| Checkpoint HEAD | *(this commit)* |
+| Checkpoint HEAD | `b0ce02bda1fe5100b26efa4a61974792d5b023b6` |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 
 Not merge-ready to `main`.

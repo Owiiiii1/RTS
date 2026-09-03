@@ -16,7 +16,7 @@ LMB click inside the actual minimap MapDest instantly pans the local camera pawn
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
 | Pre-checkpoint HEAD | `b4edf92d20ea8e2b193f7e0fae5a53bd5609b3d6` (camera-footprint crash-fix SHA record) |
-| Checkpoint HEAD | *(recorded after commit)* |
+| Checkpoint HEAD | `8f252a6d26ed7d0ede1a6341188f611772c8d04a` |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 
 Not merge-ready to `main`.

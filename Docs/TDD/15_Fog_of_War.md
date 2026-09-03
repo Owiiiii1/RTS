@@ -35,14 +35,16 @@ Current-compatible deviations from the older pseudocode:
   non-Visible cell). Post-process and fullscreen/sampled mask approaches are abandoned. Canonical
   gameplay grid is 100 cm / 10 Hz / 2000×2000;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
-  relevance, minimap **last-known / click-to-pan**, and remaining production HUD panels remain later
-  slices. Native minimap presentation foundation (`UGP_MinimapPresenter`) consumes the trusted
-  local FoW mirror for grid metadata, Revision, and per-query cell state; displayed minimap extents
-  are resolved camera/playable bounds, not the 2000×2000 FoW grid. It does not allocate a 2000×2000
-  texture or copy the cell arrays. `UGP_MinimapWidget` downsamples that trusted query to a bounded
-  overlay (default 128²) over a static authored background authored to camera/playable bounds;
-  it is not a new gameplay grid. Camera footprint is a projected viewport outline on the camera
-  pawn XY-anchor plane, painted above FoW and blips. Terrain-aware footprint projection is deferred.
+  relevance, minimap **last-known** markers, and remaining production HUD panels remain later
+  slices. Native minimap presentation (`UGP_MinimapPresenter` + `UGP_MinimapWidget`) consumes the
+  trusted local FoW mirror for grid metadata, Revision, and per-query cell state; displayed
+  minimap extents are resolved camera/playable bounds, not the 2000×2000 FoW grid. It does not
+  allocate a 2000×2000 texture or copy the cell arrays. The widget downsamples that trusted query
+  to a bounded overlay (default 128²) over a static authored background authored to
+  camera/playable bounds. Friendly blips are always shown inside those bounds; enemy blips only
+  while currently Visible. LMB click-to-pan is local camera navigation (no RPC). Camera footprint
+  is a projected viewport outline from the current CameraComponent view on the camera pawn
+  XY-anchor plane, painted above FoW and blips. Terrain-aware footprint projection is deferred.
 - **Voxel terrain integration is NOT reopened here.** World FoW presentation was finalized against
   effectively planar terrain and a fixed ground-projection assumption. After Voxel Plugin deformation
   ships, world FoW presentation must follow the actual terrain surface. That work belongs to the
@@ -346,12 +348,12 @@ background → FoW → blips → camera footprint outline. Color is the canonica
 Friendly units/buildings are always shown inside playable bounds and are not FoW-gated.
 Enemy units/buildings appear only while currently Visible on the trusted local FoW mirror
 (`ShouldPresentUnitForLocalPlayer` / `IsVisible`). Explored and Unexplored enemies are omitted.
-Last-known markers are not in this checkpoint. Camera footprint is the deprojected viewport
+Last-known markers are deferred extras. Camera footprint is the deprojected viewport
 quadrilateral (neutral outline, not team color) and uses the same XY flip; it is not a FoW layer.
 Widget-only `ScreenY = 1 - NormalizedY`
 is superseded by the full XY flip above.
 No `UGP_MinimapSubsystem`, no 10 Hz poll, no per-cell widget, no 2000×2000 texture copy, and no
-terrain capture / SceneCapture in this checkpoint. Degenerate/unavailable camera bounds fall back
+terrain capture / SceneCapture. Degenerate/unavailable camera bounds fall back
 to the FoW-grid rect so mapping never divides by zero.
 
 The older snapshot sketch below remains **future visual/blip design**, not shipped production code:

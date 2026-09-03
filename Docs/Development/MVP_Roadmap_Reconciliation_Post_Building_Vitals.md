@@ -1,11 +1,18 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `HUD_PLANET_FERRONITE_FINALIZED_READY_TO_MERGE`
+**Status:** `MINIMAP_STAGE_COMPLETE` — next allowed stage is Terrain / Voxel / Foundation 3A–3E
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
-**Baseline:** `origin/main` @ `61cedc682a391225ac0a02a716f3d36a4c176d7e`
-**Audit date:** 2026-08-21
+**Baseline:** `origin/main` @ `cfd3d3858993b372ea69bd55865b831584297a83`
+**Audit date:** 2026-08-21; minimap stage closed 2026-09-03
 **Scope:** current factual roadmap and capability status.
-**Current execution checkpoint:** Production HUD Resource/Match data foundation is on `main`.
+**Current execution checkpoint:** Stage 2 Minimap + FoW minimap presentation is **COMPLETE**.
+Native `UGP_MinimapPresenter` + `UGP_MinimapWidget` ship static background/fallback, camera-bounds
+crop, FoW overlay, friendly/visible-enemy blips, canonical team colors, projected CameraComponent
+footprint, and LMB click-to-pan. Operator PASS on `ui/gp-minimap`. Next allowed implementation
+stage is **3. Terrain / Voxel / Foundation (3A–3E)**. Do not start Voxel from this documentation
+slice. Authored `WBP_GP_HUD` remains operator-local.
+
+Production HUD Resource/Match data foundation is on `main`.
 `UGP_HUDRootWidget` injects those subsystem-owned ViewModels into authored Manual MVVM slots.
 GPUIRuntime/LocalPlayer bootstraps at most one production HUD root from a soft-configured
 `UGP_UIPresentationSettings::ProductionHUDWidgetClass`. MatchVM exposes presentation-only
@@ -126,7 +133,7 @@ current execution order.
 | CommonUI/MVVM prerequisites | **DONE — FOUNDATION** | Plugins/dependencies plus project-owned activatable and non-activatable widget bases, HUD root base, FoW/Resource/Match VMs, and push adapters exist in `GPUIRuntime`. |
 | Production HUD | **PARTIAL — DATA FOUNDATION + VIEWMODEL BRIDGE + RUNTIME BOOTSTRAP + THREAT NORMALIZED + PLANET FERRONITE + LAUNCH MENU PRESENTATION + BOTTOM HUD (SELECTION + CONTEXT ACTIONS + PURCHASE) + MINIMAP SURFACE (BACKGROUND + FOW + BLIPS + CAMERA FOOTPRINT + LMB CLICK-TO-PAN)** | Data foundation and HUD bootstrap on `main`. MatchVM exposes presentation-only `FerroniteThreatNormalized` = Clamp(threat / (MainBase `GetTotalCapacity()` × `GetThreatPerStoredUnit()`), 0, 1). ResourceVM exposes exact `PlanetFerronite` = local MainBase `UGP_StorageComponent::GetTotalStored()`. Native right-side Launch Menu presentation: `UGP_LaunchMenuPresenter` on `UGP_HUDViewModelSubsystem`; `UGP_HUDRootWidget` exposes container rows / ready count / Launch request forwarding to `AGP_PlayerController::RequestLaunchReadyContainer`. Bottom HUD is on `main` (operator-validated): Selection None/Single/Group (icon, vitals, cargo, Group 8×3, row-click → single, units-only marquee); Context Actions Move/Stop/Attack-Move/Patrol/MainBase Purchase with command cursor overlay; Purchase navigation, catalog presentation (unit/building icons, first-open Units readiness), and execution (local unit manifest + Launch Shuttle through existing `RequestUnitDrop`; building/turret Launch through existing purchase→READY→placement; Wall Package through existing buy RPC). Native minimap surface exists on `ui/gp-minimap` (`UGP_MinimapPresenter` + `UGP_MinimapWidget` static background + bounded FoW overlay cropped to camera/playable bounds + team-colored friendly/visible-enemy blips + projected camera viewport footprint + LMB click-to-pan on the actual MapDest). Event-driven, no Tick, no world scan, no presentation `LoadSynchronous`. Gameplay selection cap remains 24. Authored `WBP_GP_HUD` / purchase/selection row widgets remain operator-local and uncommitted. Remaining production HUD: minimap last-known/drag-pan, notifications, production end-of-match. TEMP HUD is retired. Production HUD is the active match HUD. |
 | Production Order Menu | **SUPERSEDED AS HUD PATH — UI NOT STARTED** | Canonical production entry is MainBase PURCHASE inside the Context Action Grid. Future production PURCHASE UI will call existing PlayerController gameplay request APIs. TEMP HUD is retired. Backend unit/building/Wall Package flows exist. |
-| Minimap | **SURFACE — INTERMEDIATE** | Native `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem` binds trusted LocalFoW, resolved camera bounds, `OnCameraPresentationChanged`, and the existing `UGP_LocalFoWUnitPresentationSubsystem` registry. Displayed extents = camera/playable bounds; FoW 2000×2000 grid unchanged. `UGP_MinimapWidget` paints background + FoW + blips + projected camera viewport footprint with shared surface flip (`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`). LMB inside the shared MapDest pans the camera pawn XY-anchor via `PanCameraToMinimapNormalized` → `SetCameraAnchorWorldXY` (zoom/yaw/pitch/Z preserved, no RPC). Letterbox is consumed without world mapping. Blip color = `UGP_GameplayPresentationSettings::GetTeamColor`; type = size. Friendly always shown; enemy only currently Visible. Camera indicator is the deprojected viewport quadrilateral on the pawn XY-anchor plane, not a fixed square. Not SceneCapture. Last-known, drag-pan, Tick, and 2000×2000 texture copy remain out of scope. Not merge-ready. |
+| Minimap | **DONE — COMPLETE** | Native `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem` binds trusted LocalFoW, resolved camera bounds, `OnCameraPresentationChanged`, and the existing `UGP_LocalFoWUnitPresentationSubsystem` registry. Displayed extents = camera/playable bounds; FoW 2000×2000 grid unchanged. `UGP_MinimapWidget` paints background + FoW + blips + projected camera viewport footprint with shared surface flip (`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`). LMB inside the shared MapDest pans the camera pawn XY-anchor via `PanCameraToMinimapNormalized` → `SetCameraAnchorWorldXY` (zoom/yaw/pitch/Z preserved, no RPC). Letterbox is consumed without world mapping. Blip color = `UGP_GameplayPresentationSettings::GetTeamColor`; type = size. Friendly always shown; enemy only currently Visible. Camera indicator is the deprojected viewport quadrilateral from the current CameraComponent view on the pawn XY-anchor plane, not a fixed square. Not SceneCapture. Stage 2 minimap + FoW minimap presentation is complete. Deferred extras: last-known, drag-pan, RMB orders, pings, minimap selection, per-type icons, SceneCapture, terrain/voxel-aware footprint. |
 | Notifications | **NOT STARTED** | No notification VM/stack or authority-to-client notification pipeline. |
 | Feedback/VFX foundation | **PARTIAL** | Combat presentation multicast, team colors, health bars, primitive visuals, and placement feedback exist; planned bundle/pool/damage-flash pass is incomplete. |
 | Building placement UI | **DONE (functional)** | Current ghost, per-cell valid/invalid state, payload mesh, and status text make deployment usable; further visual polish is not an MVP blocker. |
@@ -233,8 +240,8 @@ Do not schedule another implementation slice merely to recreate an obsolete hist
 These are factual product gaps, not an implied strict order:
 
 1. Continue the production CommonUI/MVVM HUD after the delivered Resource/Match data foundation
-   (authored root and bounded visual panels remain).
-2. Minimap + FoW minimap presentation.
+   (authored root and bounded visual panels remain; minimap last-known/drag-pan are deferred extras).
+2. Minimap + FoW minimap presentation — **COMPLETE**.
 3. Terrain / Voxel / Foundation system (3A–3E below).
 4. Primitive RTS AI Opponent (`Explore / Mine / Ship / Order / Defend`).
 5. Remaining bounded core-loop gameplay: player-facing Stop, Worker Repair, Logistics Hub storage-cap bonus, necessary feedback.
@@ -265,7 +272,7 @@ construction redesign requires it.
 This order replaces mechanical continuation of the historical Slice 8 -> 13 sequence:
 
 1. **Production UI foundation / HUD**
-2. **Minimap + FoW minimap presentation**
+2. **Minimap + FoW minimap presentation** — **COMPLETE**
 3. **Terrain / Voxel / Foundation system** — must exist before AI and final building/wall design because both depend on construction-site rules and navigation. This stage must also establish the **generic local engineering job contract**, **Worker assignment/contribution model**, and **reusable work-presentation hooks** before final Wall implementation.
    - **3A.** Voxel Plugin technical spike + authoritative terrain deformation foundation
    - **3B.** Worker leveling + generic local engineering job/work hooks
@@ -371,7 +378,7 @@ After SWARM implementation:
 | S46A | Sell/Demolish **REMAINING**. |
 | S47 | CommonUI/MVVM prerequisites and first project activatable/ViewModel base **DONE — FOUNDATION**; full production HUD remains. |
 | S48 | FoW authority, trusted client mirror/MVVM, and world overlay **DONE / MERGED**; relevance/last-known remain. Voxel-surface FoW adaptation is Terrain stage 3E. |
-| S49-S53 | Resource/Match VMs, adapters, local-player ownership, widget/HUD-root bases **DONE — FOUNDATION**; native right-side Launch Menu presentation **DONE** (`UGP_LaunchMenuPresenter`); Bottom HUD **DONE** on `main`; native minimap surface **IN PROGRESS** on `ui/gp-minimap` (`UGP_MinimapPresenter` + `UGP_MinimapWidget` background/FoW crop to camera/playable bounds + team-colored friendly/visible-enemy blips + projected camera viewport footprint + LMB click-to-pan; last-known/drag-pan still later). Authored HUD remaining panel VMs **REMAINING**. Global Order Menu is superseded as the production HUD path. TEMP HUD is retired. Production HUD is the active match HUD. |
+| S49-S53 | Resource/Match VMs, adapters, local-player ownership, widget/HUD-root bases **DONE — FOUNDATION**; native right-side Launch Menu presentation **DONE** (`UGP_LaunchMenuPresenter`); Bottom HUD **DONE** on `main`; native minimap surface **DONE — COMPLETE** (`UGP_MinimapPresenter` + `UGP_MinimapWidget` background/FoW crop to camera/playable bounds + team-colored friendly/visible-enemy blips + projected camera viewport footprint + LMB click-to-pan). Last-known/drag-pan remain deferred extras. Authored HUD remaining panel VMs **REMAINING**. Global Order Menu is superseded as the production HUD path. TEMP HUD is retired. Production HUD is the active match HUD. |
 | S54-S56 | RTS AI Opponent **REMAINING** and distinct from SWARM. |
 | S57-S60 | Feedback pass **PARTIAL**; implement only MVP-readable gaps. |
 | S61-S64 | Steam sessions/lobby/travel/menu **REMAINING**. |
@@ -382,21 +389,18 @@ After SWARM implementation:
 
 ## 11. Immediate NEXT recommendation
 
-**Planet Ferronite presentation is operator-validated and ready to merge.** ResourceVM exposes
-exact `PlanetFerronite` from local MainBase `UGP_StorageComponent::GetTotalStored()`. Same
-underlying raw stored Ferronite that drives threat; not a second currency; not reconstructed
-from Threat. Event-driven via MainBase resolve + storage change. Operator-validated:
-`TXT_PlanetFerroniteValue` binds `GP_ResourceViewModel.PlanetFerronite` through To Text (Float)
-and updates when Workers deposit Ferronite. Authored `WBP_GP_HUD` remains operator-local.
-TEMP HUD is retired. Production HUD is the active match HUD.
+**Stage 2 Minimap + FoW minimap presentation is COMPLETE.** Native surface: static authored
+background / dark fallback, camera/playable bounds crop, FoW Unexplored/Explored/Visible overlay,
+friendly blips, Visible-only enemy blips, canonical team colors, building vs unit size, projected
+CameraComponent viewport footprint, LMB click-to-pan with immediate footprint sync. Operator PASS
+on `ui/gp-minimap`. Authored `WBP_GP_HUD` remains operator-local.
 
-Status: `HUD_PLANET_FERRONITE_FINALIZED_READY_TO_MERGE`. **NOT MERGED.**
+**NEXT allowed roadmap stage: 3. Terrain / Voxel / Foundation (3A–3E).** Do not start Voxel in
+this documentation slice.
 
-Execution order remains: implement remaining production UI/HUD visuals using the approved layout →
-minimap + FoW minimap → Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps →
+Execution order remains: Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps →
 Building-system / Walls gate → Steam → match completion → SWARM implementation → full MVP
-stabilization.
+stabilization. Remaining authored HUD panels, notifications, and end-of-match are still product
+gaps, but they are not the next implementation stage.
 
 **Wall Foundation Rule — RESOLVED:** Walls do not require Foundation. Do not list it as an open design gate.
-
-Do not start minimap function or Terrain runtime work in this documentation slice.

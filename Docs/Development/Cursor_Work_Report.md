@@ -2,11 +2,9 @@
 
 ## Status
 
-**MINIMAP_CLICK_TO_PAN_FOOTPRINT_SYNC_FIXED_READY_FOR_OPERATOR_VALIDATION**
+**MINIMAP_STAGE_MERGE_READY**
 
-**INTERMEDIATE / NOT MERGE READY**
-
-Click-to-pan already moved the camera pawn. The minimap camera footprint now rebuilds from the current CameraComponent view in that same presentation event, without a later WASD/mouse Tick.
+Operator PASS is confirmed for the full minimap stage. Finalization audit, contracts, GPEditor, GP Development, GP Shipping, graphics smoke, and docs are PASS. `origin/main` did not move. Do not change `ui/gp-minimap` until merge.
 
 ## Branch / base / head
 
@@ -15,124 +13,169 @@ Click-to-pan already moved the camera pawn. The minimap camera footprint now reb
 | Path | `D:\Progects\RTS` |
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
-| Pre-checkpoint HEAD | `12b12accf306f9f2a7feb6b1256378487023a251` (click-to-pan SHA record) |
-| Checkpoint HEAD | `ac1ca6aa1d685a0c393e46f03655b9783e03055a` |
+| Pre-finalization HEAD | `83f6cd7d7b900b35f76b7ee9540439a3630302ff` |
+| `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
+| Ahead / behind vs `origin/main` | **22 / 0** before finalization commits; still **behind 0** |
 
-Not merge-ready to `main`.
+After fetch: `origin/main` equals merge-base. No main integration required. No rebase/reset/stash.
 
-## Confirmed root cause
+Finalization HEAD SHA is recorded in the follow-up SHA commit after this report is committed.
 
-`SetCameraAnchorWorldXY` did move the pawn, sync the spring arm, and broadcast `OnCameraPresentationChanged`. The presenter rebuilt the footprint synchronously.
+## Architecture summary
 
-Production `TryDeprojectViewportCornerToGround` then called `AGP_PlayerController::DeprojectScreenPositionToWorld`. That uses the PlayerCameraManager view from earlier in the frame, still aimed at the pre-click camera.
+GPRuntime owns camera navigation and trusted presentation sources. `AGP_CameraPawn` is the canonical camera/playable bounds owner (`GetResolvedCameraBounds`, `OnResolvedCameraBoundsChanged`). `SetCameraAnchorWorldXY` is the local HUD pan API: actor XY-anchor only, Z/yaw/zoom/pitch preserved, `ClampToBounds`, spring-arm + component world sync, then `OnCameraPresentationChanged`. No RPC. `GetPresentationView()` is the current CameraComponent location/rotation/FOV. Blips consume the existing `UGP_LocalFoWUnitPresentationSubsystem` registry. FoW gameplay grid stays 2000×2000 / 100 cm.
 
-So in the click event:
+GPUIRuntime owns presentation only. `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem` binds LocalFoW, camera bounds, camera presentation, and the unit registry. Displayed map rect = resolved camera/playable bounds. One shared MapDest / surface transform (`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`). `UGP_MinimapWidget` + `SGPMinimapSurface` paint background, FoW downsample, blips, and camera footprint. HUD root bridges presenter accessors. Settings async-load `MinimapBackgroundTexture`. Click-to-pan is widget → `PanCameraToMinimapNormalized` → `SetCameraAnchorWorldXY`, never `SetActorLocation` from the widget.
 
-- actor / CameraComponent already at the new XY
-- presentation event already fired
-- footprint rays still used the stale PCM view
-- presenter stored the old quadrilateral
-- the next real camera Tick/input refreshed PCM and the outline finally caught up
+Confirmed non-goals in production:
 
-Headless contracts hid this: they set `ContractSetViewportSizeOverride` and already used `GetPresentationView` + `FSceneView::DeprojectScreenToWorld`.
+- no widget Tick
+- no polling timer
+- no world actor scans in UI
+- no SceneCapture
+- no RenderTarget
+- no synchronous asset load
+- no gameplay authority in minimap
+- no RPC for camera navigation
+- no duplicated FoW gameplay state
+- no duplicate unit registry
+- one shared map rect
+- one shared surface transform
+- current CameraComponent view for footprint
+- camera bounds as canonical displayed-world source
 
-## Old stale-view path
+`GPUIRuntime.Build.cs` keeps **public** `InputCore` because `GPMinimapWidget.h` includes `InputCoreTypes.h` and exposes `FKey` on the public widget API. Private would not compile that header. `GPRuntime` public `InputCore` is pre-existing camera/input, not a minimap-only add.
 
-If `bHasViewportSizeOverride` was false (PIE / real viewport):
+## Operator-PASS features
 
-`PlayerController::DeprojectScreenPositionToWorld` → ray vs pawn XY-anchor plane.
+- minimap surface / palette
+- camera/playable bounds crop
+- static background/fallback
+- FoW overlay (Unexplored / Explored / Visible)
+- orientation `(1-X, 1-Y)`
+- friendly blips
+- enemy Visible-only blips
+- canonical team colors
+- building/unit size differentiation
+- camera projected footprint
+- camera-footprint crash fix
+- LMB click-to-pan
+- immediate footprint sync after click-to-pan
 
-## New canonical projection source
+## Final code audit
 
-One path for production and contracts:
+Branch diff `origin/main...HEAD` is docs + GPRuntime camera/FoW registry seams + GPUIRuntime presenter/widget/HUD/settings/tests. No Content, Config, maps, binaries, Saved, or Intermediate.
 
-1. Viewport size from the local PlayerController, or the contract override when the viewport is degenerate
-2. `AGP_CameraPawn::GetPresentationView()` — current CameraComponent world location, rotation, FOV
-3. Perspective `FMinimalViewInfo` + `UGameplayStatics::GetViewProjectionMatrix`
-4. `FSceneView::DeprojectScreenToWorld` for corners `(0,0)`, `(W-1,0)`, `(W-1,H-1)`, `(0,H-1)`
-5. Existing ray ∩ horizontal plane Z = `GetGroundReferencePlaneZ()`
-6. Existing unclamped normalize + convex clip `[0,1]²` + shared surface `(1-X, 1-Y)`
+Findings:
 
-No PCM / `GetPlayerViewPoint` fallback. If `GetPresentationView` fails, the footprint is not drawn.
+- No remaining `TArray` self-reference Add on the footprint outline path (crash already fixed by copy-then-Add).
+- Delegate binds Unbind-before-bind with same-object short-circuit; `ReleaseSlateResources` clears the Slate LMB callback and unbinds before Super.
+- Slate LMB uses a weak `CreateUObject` callback into the UWidget; UObject lifetime is not owned by Slate.
+- NaN / zero-size / degenerate-bounds / `< 3` clip-point guards remain on mapping and footprint.
+- No widget Tick, no poll timer, no per-frame world scan.
+- Contract seams and `FAutoConsoleCommand` tests are `#if !UE_BUILD_SHIPPING`.
+- No leftover PlayerCameraManager / `DeprojectScreenPositionToWorld` production path. Finalization removed the stale `Camera/PlayerCameraManager.h` include from `GPMinimapPresenter.cpp`.
+- No duplicate coordinate converters beyond presenter normalize + widget surface inverse.
+- No hardcoded cyan/yellow semantic team colors; paint uses `UGP_GameplayPresentationSettings::GetTeamColor`.
+- No SceneCapture / RenderTarget / `LoadSynchronous` production path.
 
-PlayerController is only for local ownership and viewport pixel size.
-
-`SetCameraAnchorWorldXY` still `SyncSpringArmPresentation(0)` and now also `UpdateComponentToWorld` on RootScene / SpringArm / Camera so `GetPresentationView` is current before `NotifyCameraPresentationChangedIfNeeded`.
-
-## Immediate update sequence
-
-LMB MapDest → `PanCameraToMinimapNormalized` → `SetCameraAnchorWorldXY` → component transform sync → fingerprint change → `OnCameraPresentationChanged` → `RebuildCameraFootprint` from the new CameraComponent view → Slate cache/push. No timer, no next Tick, no fake input.
-
-Ground plane, clip, bounds, surface orientation, click mapping, and paint are unchanged.
-
-## Regression that fails the old implementation
-
-`gp.UI.RunMinimapClickToPanFootprintSyncContractTest`
-
-1. Build a valid footprint at camera A
-2. `SetCameraAnchorWorldXY(B)` 
-3. No later `Tick` / WASD / mouse
-4. The presentation callback has already rebuilt the footprint
-5. Revision increased; world-space footprint centroid translated with the anchor (same sign, non-trivial delta)
-6. Current `GetPresentationView` corners moved without a PlayerCameraManager refresh
-7. Yaw/FOV preserved
-
-On the old PCM production path a real-viewport click left the centroid at A until the next camera Tick. NullRHI still needs a size override when `GetViewportSize` is degenerate; that override now uses the same CameraComponent projection as production.
+Cleanup done: unused PCM include only. No broad refactor.
 
 ## Tests
 
-Command pattern: `UnrealEditor-Cmd` `GP.uproject` `/Game/GrimProtocol/Maps/L_PrototypeArena` `-game -unattended -nop4 -NullRHI -nosplash -nosteam -ExecCmds=<cmd>`
+Command pattern: `UnrealEditor-Cmd` `GP.uproject` `/Game/GrimProtocol/Maps/L_PrototypeArena` `-game -unattended -nop4 -NullRHI -nosplash -nosteam -ExecCmds=<one cmd>` (no comma-joined ExecCmds).
 
 | Command | Result |
 | --- | --- |
-| `gp.UI.RunMinimapClickToPanFootprintSyncContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunMinimapClickToPanContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunMinimapCameraFootprintContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunMinimapCameraFootprintOutlineCrashContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunMinimapSurfaceContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunMinimapEnemyBlipsContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunMinimapFriendlyBlipsContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunMinimapCameraBoundsContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunMinimapPresentationContractTest` | **PASS** Complete Failures=0 |
-| `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunHUDViewModelBridgeContractTest` | **PASS** Complete Failures=0 |
+| `gp.UI.RunMinimapPresentationContractTest` | Complete Failures=0 |
+| `gp.UI.RunMinimapSurfaceContractTest` | Complete Failures=0 |
+| `gp.UI.RunMinimapCameraBoundsContractTest` | Complete Failures=0 |
+| `gp.UI.RunMinimapFriendlyBlipsContractTest` | Complete Failures=0 |
+| `gp.UI.RunMinimapEnemyBlipsContractTest` | Complete Failures=0 |
+| `gp.UI.RunMinimapCameraFootprintContractTest` | Complete Failures=0 |
+| `gp.UI.RunMinimapCameraFootprintOutlineCrashContractTest` | Complete Failures=0 |
+| `gp.UI.RunMinimapClickToPanContractTest` | Complete Failures=0 |
+| `gp.UI.RunMinimapClickToPanFootprintSyncContractTest` | Complete Failures=0 |
+| `gp.FoW.RunClientPresentationFoundationContractTest` | Complete Failures=0 |
+| `gp.UI.RunHUDViewModelBridgeContractTest` | Complete Failures=0 |
+| `gp.Combat.RunTeamColorContractTest` | Complete Failures=0 |
+| `gp.Selection.RunMarqueeUnitsOnlyContractTest` | Complete Failures=0 |
 
-## GPEditor build
+No `gp.Camera.*` console contracts exist. Marquee is the nearest input/LMB-consume regression for click-to-pan consume-without-fallthrough.
 
-`GPEditor Win64 Development` + UHT for `D:\Progects\RTS\GP\GP.uproject`: **Succeeded**. Not GP Development / Shipping.
+## Builds
 
-## Protected audit
+| Target | Result |
+| --- | --- |
+| GPEditor Win64 Development + UHT | **PASS** (`Result: Succeeded`) |
+| GP Win64 Development | **PASS** (`GP.exe`) |
+| GP Win64 Shipping | **PASS** (`GP-Win64-Shipping.exe`) |
 
-Not committed:
+Shipping did not expose debug/test leakage.
 
-- `WBP_GP_HUD`
-- `GP/Content/`
-- `GP/Config/`
-- `L_PrototypeArena`
-- DataAssets
-- Materials/VFX
-- `GP.uproject`
-- `Tools/`
+## Runtime smoke
 
-Operator dirty/untracked Content/Config/Tools/`GP.uproject` preserved.
+`UnrealEditor-Cmd` `L_PrototypeArena` `-game` **without NullRHI** (D3D12, NVIDIA GeForce RTX 4070 SUPER).
 
-## Operator test
+- LoadMap `/Game/GrimProtocol/Maps/L_PrototypeArena` succeeded (`LogLoad: Took 0.522472 seconds`)
+- No `Fatal error` / `Assertion failed`
+- `gp.UI.HUDStatus`: `LocalPlayer=LocalPlayer_0` `ConfiguredClass=.../WBP_GP_HUD_C` `InstancePresent=true` `Ready=Ready`
 
-1. PIE; do not pan/rotate first
-2. LMB a distant minimap point
-3. World camera jumps
-4. Camera footprint jumps to that area in the same click
-5. No WASD / mouse move required
-6. Repeated clicks update the outline immediately
-7. Zoom and yaw unchanged
-8. FoW / blips unchanged
+HUD/minimap subsystem initialization passed. Operator visual PASS already covers the painted surface.
 
-## Out of scope
+## Docs updated
 
-- Drag-pan
-- Last-known
+- `Docs/TDD/11_RTS_Camera.md` — camera bounds, `GetPresentationView`, `SetCameraAnchorWorldXY`, deferred drag-pan / terrain-aware projection
+- `Docs/TDD/12_UI_Architecture.md` — MVP minimap surface complete; deferred extras listed
+- `Docs/TDD/15_Fog_of_War.md` — click-to-pan is shipped; last-known remains deferred; no SceneCapture
+- `Docs/GDD/09_UI_UX.md` — current surface vs deferred deposit/SWARM/last-known/drag-pan
+- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md` — Stage 2 Minimap + FoW minimap presentation **COMPLETE**; next allowed stage **3. Terrain / Voxel / Foundation 3A–3E**
+
+Voxel was not started.
+
+## Protected operator files
+
+No `git reset --hard`, `git clean`, stash, or broad restore.
+
+**Before finalization commit:**
+
+```
+ M GP/Config/DefaultEngine.ini
+ M GP/Config/DefaultGame.ini
+ M GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap
+ M GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset
+ M GP/GP.uproject
+?? GP/Content/Basic_VFX/
+?? GP/Content/GrimProtocol/Blueprint/
+?? GP/Content/GrimProtocol/DataAssets/Buildings/
+?? GP/Content/GrimProtocol/DataAssets/Game/
+?? GP/Content/GrimProtocol/DataAssets/Units/
+?? GP/Content/GrimProtocol/Materials/
+?? GP/Content/Mixed_Magic_VFX_Pack/
+?? GP/Content/RocketThrusterExhaustFX/
+?? Tools/
+```
+
+Protected set is preserved after the docs/source commit (verified in the SHA-record step). Not committed: `WBP_GP_HUD`, launch/selection/purchase rows, `GP/Content/`, `GP/Config/`, `L_PrototypeArena`, DataAssets, Materials/VFX, `GP.uproject`, `Tools/`.
+
+## Final diff audit (`origin/main..HEAD`)
+
+30 committed files before this finalization: docs + camera/FoW presentation seams + minimap UI + tests. Finalization adds docs wording + unused PCM include removal + this report.
+
+No accidental map/assets/config/binaries/Saved/Intermediate/operator assets.
+
+## Known intentionally deferred
+
+- minimap drag-pan
+- RMB minimap orders
+- pings
+- selection via minimap
+- last-known enemy markers
+- per-type icons
 - SceneCapture
-- Merge to `main`
+- terrain/voxel-aware footprint
 
-**INTERMEDIATE / NOT MERGE READY**
+## Merge recommendation
+
+Merge `ui/gp-minimap` into `main` with a regular merge (no rebase, no force-push). Branch is behind 0. Keep operator dirty/untracked out of the merge. After merge, next allowed roadmap stage is Terrain 3A–3E; do not start Voxel from leftover minimap work.

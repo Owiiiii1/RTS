@@ -3,7 +3,6 @@
 #include "ViewModels/GPMinimapPresenter.h"
 
 #include "Camera/GPCameraPawn.h"
-#include "Camera/PlayerCameraManager.h"
 #include "FogOfWar/GPLocalFoWComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Player/GPPlayerController.h"

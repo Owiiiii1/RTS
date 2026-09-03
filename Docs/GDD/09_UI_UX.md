@@ -83,7 +83,7 @@ UX/balance tuning may revisit the presentation scale.
   configured player/team color. Units and buildings of one player share that color; buildings are
   larger markers. Friendly actors are always shown inside playable bounds. Enemy actors appear only
   while currently Visible. LMB inside the actual map dest pans the camera pawn XY-anchor (zoom/yaw
-  preserved). Letterbox/padding does not map to world. Drag-pan and last-known remain later.
+  preserved). Letterbox/padding does not map to world. Drag-pan and last-known are deferred extras.
   Event-driven; no widget Tick. Not SceneCapture / live camera / render-target terrain.
 
 **Bottom center — Selection / Current Info** (widest lower block)
@@ -204,15 +204,16 @@ SWARM / Ferronite Threat lives in the **top-left Threat + Score** block. Form:
 **Mandatory у MVP as a reserved bottom-left square.** Native surface now exists: static authored
 map image + FoW overlay + team-colored blips + projected camera viewport footprint
 (`UGP_MinimapWidget`). The camera indicator is the real deprojected viewport quadrilateral on the
-camera pawn XY-anchor plane (pan / zoom / yaw update it). LMB click-to-pan is live: click target =
-camera pawn actor XY (zoom/yaw/pitch preserved). Drag-pan is not in this slice.
-When complete it показує:
+camera pawn XY-anchor plane (pan / zoom / yaw / click-to-pan update it). LMB click-to-pan is live:
+click target = camera pawn actor XY (zoom/yaw/pitch preserved). Drag-pan is deferred.
+Current MVP surface shows:
 
-- Player base (own and opponent, if visible).
-- Ferronite deposits (location + capacity status).
-- Own units і buildings.
-- SWARM approach / spawn pulse (continuous outer pressure; not a numbered-wave countdown).
-- Camera viewport rectangle (projected viewport footprint, not a fixed square).
+- Own units and buildings (always, inside playable bounds).
+- Enemy units and buildings only while currently Visible.
+- FoW Unexplored / Explored / Visible over the static map crop.
+- Camera viewport footprint (projected quadrilateral, not a fixed square).
+
+Still deferred on the minimap: Ferronite deposit markers, SWARM approach pulse, last-known, drag-pan.
 
 Mini-map LMB clickable — re-center camera on the pawn XY-anchor. Mini-map тримає player у курсі map state, особливо при mid-match expansion.
 
@@ -300,7 +301,7 @@ Mandatory display:
 - Notification toast system.
 - Replay UI.
 - In-game chat.
-- Fog of war minimap rendering (vision system — Backlog).
+- Minimap last-known / drag-pan / SceneCapture / terrain-aware footprint (deferred extras).
 - Tooltips / tutorials.
 - Score history / leaderboard (across matches).
 - Off-world upgrade panel (orbit meta — Backlog).

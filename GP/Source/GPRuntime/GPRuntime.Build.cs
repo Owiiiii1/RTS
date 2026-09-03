@@ -30,7 +30,8 @@ public class GPRuntime : ModuleRules
 		{
 			"Slate",
 			"SlateCore",
-			"NavigationSystem"
+			"NavigationSystem",
+			"Voxel"
 		});
 	}
 }

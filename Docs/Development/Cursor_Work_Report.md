@@ -2,11 +2,11 @@
 
 ## Status
 
-**VOXEL_SPIKE_BLOCKED_PLUGIN_NOT_INSTALLED**
+**VOXEL_PLUGIN_UE58_INTEGRATION_PROVEN_READY_FOR_RUNTIME_CRATER_PROBE**
 
 **INTERMEDIATE / NOT MERGE READY**
 
-Stage 3A tech spike only. No production terrain service. Voxel Plugin is not installed on this machine. Do not start Worker leveling / Foundation / placement migration.
+Voxel Plugin Free Legacy installed locally, UE 5.8.1 compile + load + GPRuntime header compile probe proven. No production terrain service. Runtime crater not demonstrated. Do not start Worker leveling / Foundation / placement migration. Do not vendor `GP/Plugins/VoxelFree` yet.
 
 ## Branch / base / head
 
@@ -17,107 +17,132 @@ Stage 3A tech spike only. No production terrain service. Voxel Plugin is not ins
 | Remote | `origin/terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Merge-base with `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
-| Spike commit | `b0773ebcc70d7b824dc94ded7eddd2cd641fc261` |
+| Parent before this checkpoint | `5667277bee05d3818873bb885866c4183f7800ec` |
+| Checkpoint commit | see git HEAD after push (must match `origin/terrain/gp-voxel-foundation`) |
 
-Created from synced `main` with `git switch -c`. No rebase, reset, stash, or clean. Operator dirty/untracked preserved.
+No rebase, reset, stash, or clean. Operator dirty/untracked preserved.
 
-## Local plugin discovery
+## Plugin folder structure
 
-**Not installed.**
+Canonical: `D:\Progects\RTS\GP\Plugins\VoxelFree\VoxelFree.uplugin`
 
-| Location | Result |
+Not nested `VoxelPluginFreeLegacy-master`.
+
+Top-level: `Source/`, `Binaries/`, `Content/`, `Config/`, `Resources/`, `Shaders/`, `Intermediate/` (generated), `.gitignore`, `README.md`, leftover `VoxelFree-434-159fd19a0-5.8-Binaries.zip` (~1.56 GB; do not vendor).
+
+## Version metadata
+
+| Field | Value |
 | --- | --- |
-| `D:\Progects\RTS\GP\Plugins` | directory does not exist |
-| `GP.uproject` Plugins[] | no Voxel entry (GameplayAbilities, EnhancedInput, CommonUI, ModelViewViewModel, ModelingToolsEditorMode) |
-| `C:\Program Files\Epic Games\UE_5.8\Engine\Plugins` | no `*Voxel*.uplugin` (Fab/Runtime/Experimental/Enterprise searched) |
-| `Engine\Plugins\Marketplace` | directory does not exist |
-| UE 5.5 / 5.6 / `C:\epic57\UE_5.7` | no Voxel uplugin |
-| `%LOCALAPPDATA%\UnrealEngine`, Documents Unreal Projects, `D:\Progects`, Downloads | no Voxel uplugin |
+| FriendlyName | Voxel Plugin Free Legacy |
+| Version | 434 |
+| VersionName | 159fd19a0 |
+| EngineVersion | 5.8.0 |
+| EnabledByDefault | absent |
+| CanContainContent | true |
+| Installed | true |
+| Modules | Voxel, VoxelGraph, VoxelHelpers (Runtime); VoxelEditor, VoxelGraphEditor, VoxelEditorDefault (Editor); VoxelExamples (Runtime Win64/Linux) |
+| Plugin deps | Niagara, ProceduralMeshComponent |
 
-Edition (Free / Pro / Legacy) is not claimed.
+## Binary verification
 
-## Exact plugin version / path
+`Binaries/Win64/UnrealEditor.modules` BuildId **`55116800`** = UE 5.8.1 CompatibleChangelist.
 
-**None.** Blocker: `VOXEL_PLUGIN_NOT_INSTALLED`.
+Win64 DLLs: UnrealEditor-Voxel, VoxelEditor, VoxelEditorDefault, VoxelExamples, VoxelGraph, VoxelGraphEditor, VoxelHelpers (+ PDBs).
 
-## UE compatibility
+UBT compiled plugin from source on first GPEditor after plugin add. Precompiled editor modules then loaded. Missing binaries would trigger source compile (observed).
 
-| Item | Proven |
+## Editor / build result
+
+| Step | Result |
 | --- | --- |
-| Engine | UE **5.8.1** changelist `56057345` at `C:\Program Files\Epic Games\UE_5.8` |
-| On-disk EngineAssociation | `"5.8"` in operator-dirty `GP.uproject` (not committed) |
-| Plugin EngineVersion / binaries / Build.cs | **N/A — plugin absent** |
-| Load under this editor | **not attempted** (nothing to load) |
+| GPEditor Win64 Development + UHT | **Succeeded** (~337s first; probe rebuild 5.8s) |
+| Plugin discovered without `.uproject` Plugins[] entry | Yes (`VoxelFree.uplugin has been added`) |
+| Vendor warnings | C4305 double→float in plugin headers only. Not patched. |
+| UnrealEditor-Cmd `L_PrototypeArena` `-game -NullRHI` | Mounted VoxelFree; loaded Voxel/VoxelHelpers/VoxelGraph/VoxelExamples; `LogVoxel: VOXEL_DEBUG=0`; no Fatal / Assertion |
+| `gp.Voxel.RunPluginCompileProbeContractTest` | **Complete Failures=0** (A_WorldClass, B_SphereTools, C_DataTools, D_IsVoxelPluginProFalse) |
+| GP Dev/Shipping | not run (not required) |
 
-No random plugin was downloaded. Engine was not modified. Compile probe skipped because enabling a plugin would require changing protected `GP.uproject`.
+`GP.uproject` Plugins[] left unchanged (ModelingToolsEditorMode, GameplayAbilities, EnhancedInput, CommonUI, ModelViewViewModel). No VoxelFree entry added.
 
-## Proven API symbols
+## Exact runtime API symbols
 
-**None.** Required capabilities (world own, height/density query, crater edit, collision/mesh update, serialize, net helpers, chunk dirtying) have no exact header/class/function until source exists. See `Docs/Development/Voxel_Plugin_Technical_Spike.md`.
+| Capability | Symbol | Header | Module |
+| --- | --- | --- | --- |
+| World owner | `AVoxelWorld` | `VoxelWorld.h` | Voxel |
+| World↔voxel | `GlobalToLocal` / `LocalToGlobal` (+ Float) | same | Voxel |
+| Density | `UVoxelDataTools::GetValue` / `SetValue` / `GetInterpolatedValue` | `VoxelTools/VoxelDataTools.h` | Voxel |
+| Crater | `UVoxelSphereTools::RemoveSphere` | `VoxelTools/Gen/VoxelSphereTools.h` | Voxel |
+| Fill | `UVoxelSphereTools::AddSphere` / `SetValueSphere` | same | Voxel |
+| Surface-ish | `UVoxelDataTools::FindClosestNonEmptyVoxel` | VoxelDataTools.h | Voxel |
+| Bounds | `FVoxelIntBox* OutEditedBounds` | sphere tools | Voxel |
+| Save | `GetSave` / `GetCompressedSave` / `LoadFromSave` | VoxelDataTools.h | Voxel |
+| Pro check | `UVoxelBlueprintLibrary::IsVoxelPluginPro()` → false | VoxelBlueprintLibrary | Voxel |
+| TCP MP | `UVoxelMultiplayerTcpInterface::ConnectToServer` / `StartServer` | **Pro stub, returns false** | Voxel |
 
-## Authority recommendation
+C++ crater signature:
 
-Gameplay must not call Voxel APIs. Future GPRuntime `UWorldSubsystem` (name not locked; same layer as `UGP_BuildGridSubsystem`) should own a generic deformation request. Only an adapter includes Voxel headers. Server accepts gameplay deformation; clients never decide craters.
+`UVoxelSphereTools::RemoveSphere(AVoxelWorld*, const FVector& Position, float Radius, TArray<FModifiedVoxelValue>*, FVoxelIntBox*, bool bMultiThreaded=true, bool bConvertToVoxelSpace=true, bool bUpdateRender=true)`
 
-## Reconstruction / replication recommendation
+## Crater feasibility
 
-**Option B is the preferred candidate, not proven:** server compact event log (location / radius / depth / shape / revision) + local apply on each machine.
+**Yes at API level.** Chain: server deformation request → optional `GlobalToLocal` → `RemoveSphere` with `bConvertToVoxelSpace=true`, `bUpdateRender=true` → `FVoxelToolHelpers::UpdateWorld` → LOD `UpdateBounds` → component `UpdateCollision` / optional `UpdateNavigation`.
 
-- Option A (plugin-native replication): cannot select
-- Option C (chunk/delta payload): cannot select
+One default `RemoveSphere`: writes values, triggers render update, then collision recook on affected chunks. Sync overload is not async; collision cook may still be async. Optional `OutEditedBounds`.
 
-## Determinism risks
+**Not PIE-demonstrated.** Next checkpoint.
 
-Unmeasured. Do not promise bit-identical geometry. Event reconstruction is only valid if the installed plugin’s local apply is close enough for collision, BuildGrid queries, and later FoW surface work. Late join: replay vs snapshot vs out-of-scope — unproven; not implemented.
+## Collision / render behavior
 
-## Nav recommendation
+Local to edited `FVoxelIntBox` / chunk mesh components. Not world-wide. `UpdateNavigation` calls `FNavigationSystem::UpdateComponentData` on that component only.
 
-Current units use Recast when coverage exists: `UGP_MovementComponent::TryBuildNavigationPath` → `UNavigationSystemV1::ProjectPointToNavigation` + `FindPathSync`, else straight-line fallback. Buildings use `NavigationObstacle`. Do not full-rebuild NavMesh per crater. Stage 3E: bounded test of one crater vs Recast locality; optional separate traversability overlay. No nav rewrite in 3A.
+## Event replay feasibility
 
-## BuildGrid seam
+**EVENT_REPLAY_FEASIBLE** (not bit-identical).
 
-`UGP_BuildGridSubsystem`: **200 cm** cells (`DefaultCellSizeCm`). Occupancy independent of voxels. `CellToWorld` takes explicit `GroundZ`. Foundation/leveling queries are future adapter methods, not implemented. BuildGrid source was **not** changed.
+`SphereEdit` has no Rand and no time input. Risks: `bMultiThreaded` write order, float density, async LOD/collision timing. Prefer `bMultiThreaded=false` for experiments. Plugin TCP is Pro-only — use GP event log + local apply (Option B).
 
-## Files changed (this checkpoint)
+## License / vendor recommendation
 
-- `Docs/Development/Voxel_Plugin_Technical_Spike.md` (created)
-- `Docs/Development/Cursor_Work_Report.md`
-- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
-- `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
-- `Docs/Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md`
+**D. DO NOT VENDOR; DOCUMENT INSTALL.** Not executed.
 
-No `GP/Source` production code. No Content / Config / maps / `GP.uproject` / Tools.
+Marketplace plugin (Voxel Plugin SAS). FastNoise MIT only for that subtree. Plugin `.gitignore` already excludes Binaries/Intermediate. Leftover 1.56 GB ZIP must never be committed.
 
-## Build result
+## Plugin folder size
 
-GPEditor Win64 Development + UHT: **PASS** (`Result: Succeeded`, 2026-09-03). Docs/spike only; no production source change. GP Dev/Shipping not required.
+| Tree | Size |
+| --- | --- |
+| Total `GP/Plugins/VoxelFree` | ~3.9 GB |
+| Source | ~4.4 MB |
+| Binaries | ~639 MB (DLLs ~23 MB + PDBs ~616 MB) |
+| Content | ~206 MB |
+| Intermediate | ~1.53 GB (generated) |
+| leftover ZIP | ~1.56 GB |
 
-## Protected before / after
+## Source changes (committed this checkpoint)
 
-**Before branch + after commit (same operator set, not committed):**
+- `GP/Source/GPRuntime/GPRuntime.Build.cs` — PrivateDependency `Voxel`
+- `GP/Source/GPRuntime/Private/Debug/GPVoxelPluginCompileProbe.cpp` — `#if !UE_BUILD_SHIPPING` compile/link probe; does not spawn terrain
 
-```
- M GP/Config/DefaultEngine.ini
- M GP/Config/DefaultGame.ini
- M GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap
- M GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset
- M GP/GP.uproject
-?? GP/Content/Basic_VFX/
-?? GP/Content/GrimProtocol/Blueprint/
-?? GP/Content/GrimProtocol/DataAssets/Buildings/
-?? GP/Content/GrimProtocol/DataAssets/Game/
-?? GP/Content/GrimProtocol/DataAssets/Units/
-?? GP/Content/GrimProtocol/Materials/
-?? GP/Content/Mixed_Magic_VFX_Pack/
-?? GP/Content/RocketThrusterExhaustFX/
-?? Tools/
-```
+## Docs changes
 
-No `git reset --hard`, `git clean`, stash, or broad restore.
+- `Docs/Development/Voxel_Plugin_Technical_Spike.md` — status `PLUGIN_INSTALLED_AND_AUDITED`
+- `Docs/TDD/16_Voxel_Terrain_And_Foundations.md` — factual install/API update
+- `Docs/Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md` — factual install update
+- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md` — 3A in progress, crater probe next
+- this report
+
+## Protected audit
+
+Unchanged operator dirty/untracked (not committed):
+
+- `GP/Config/DefaultEngine.ini`, `DefaultGame.ini`
+- `GP/Content/` including `L_PrototypeArena`, authored Blueprints/DataAssets, VFX packs
+- `GP/GP.uproject`
+- `Tools/`
+
+**Separate, not committed:** `GP/Plugins/` (`VoxelFree` operator-local).
 
 ## Exact next action
 
-1. Operator installs a **vendor Voxel Plugin listed for Unreal Engine 5.8.1** (project-local `GP/Plugins/` preferred, or Fab/engine path if that is the supported install).
-2. Operator enables it in protected `GP.uproject` when ready (not this checkpoint).
-3. Follow-up 3A checkpoint: source API audit with real symbols, optional compile probe, revisit Options A/B/C.
-4. **Do not start 3B** until that follow-up is unblocked.
+Runtime crater probe on `terrain/gp-voxel-foundation`: use `AVoxelWorld` + `UVoxelSphereTools::RemoveSphere`, confirm mesh + collision on affected bounds. Do not vendor the plugin. Do not start 3B.

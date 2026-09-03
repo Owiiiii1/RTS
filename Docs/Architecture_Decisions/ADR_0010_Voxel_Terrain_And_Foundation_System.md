@@ -3,7 +3,7 @@
 ## Status
 Accepted (2026-08-21) — documentation decision. Refined 2026-08-21: Wall does not require Foundation; local engineering is Worker-labor with planned jobs. Production implementation is gated on a Voxel Plugin technical spike and remaining DESIGN REQUIRED items in GDD/13 and TDD/16.
 
-Stage 3A local discovery (2026-09-03): Voxel Plugin is **not installed** in `GP/Plugins` or the associated UE 5.8.1 engine plugin trees. Exact version, edition, and API remain unknown. See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
+Stage 3A local audit (2026-09-04): **Voxel Plugin Free Legacy** is installed at `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0). UE 5.8.1 compile and load are proven. Runtime crater apply is not demonstrated; Stage 3A is not complete. See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
 
 ## Context
 
@@ -23,7 +23,7 @@ This must not revive Barracks / factory / local production of READY buildings (A
 ## Decision
 
 1. **Deformable terrain is now a project architectural capability.** Gameplay events may request terrain deformation; the world is no longer conceptually immutable. Future earthquakes reuse the same generic deformation / foundation-damage contract.
-2. **Voxel Plugin is the intended terrain / deformation backend.** Exact version, edition, and API are **deferred to a technical spike**. Stage 3A (2026-09-03) found **no installed plugin**; this ADR still does not claim a specific Voxel Plugin replication API. Preferred unproven reconstruction candidate is a server event log + local apply, not vendor net code.
+2. **Voxel Plugin is the intended terrain / deformation backend.** Installed locally: Voxel Plugin Free Legacy 434 / `159fd19a0` on UE 5.8.1. This ADR still does not claim plugin-native replication as the GP path (Free TCP MP is a Pro stub). Preferred reconstruction remains a server event log + local apply (`UVoxelSphereTools::RemoveSphere` on each machine). Runtime crater PIE is not yet proven.
 3. **Terrain deformation is server-authoritative.** Clients reconstruct authoritative changes. Clients do not author gameplay destruction.
 4. **Normal player-deployed buildings require a prepared foundation surface.** Canonical sequence: raw terrain → Worker levels → plan foundation install → Workers progressively install cells → deploy READY orbital building. Buildings remain orbital, not Worker-constructed.
 5. **Foundation state is per BuildGrid cell.** A physical slab may cover multiple cells. Placement and destruction query cells, not an all-or-nothing slab actor. Foundation Repair is a future Worker engineering job.

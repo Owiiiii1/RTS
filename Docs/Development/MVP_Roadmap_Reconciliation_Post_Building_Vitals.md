@@ -1,14 +1,14 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `VOXEL_SPIKE_BLOCKED_PLUGIN_NOT_INSTALLED` — Stage 3A discovery; do not start 3B
+**Status:** `VOXEL_PLUGIN_UE58_INTEGRATION_PROVEN_READY_FOR_RUNTIME_CRATER_PROBE` — Stage 3A; do not start 3B
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
 **Baseline:** `origin/main` @ `569777625b8a4718289ad4809efa5ba5da09df7c`
-**Audit date:** 2026-08-21; minimap stage closed 2026-09-03; Stage 3A spike 2026-09-03
+**Audit date:** 2026-08-21; minimap stage closed 2026-09-03; Stage 3A plugin audit 2026-09-04
 **Scope:** current factual roadmap and capability status.
 **Current execution checkpoint:** Stage 2 Minimap is **COMPLETE** on `main`. Stage **3A** Voxel Plugin
-technical spike found **no installed plugin** on UE 5.8.1. Next action is operator install of a
-vendor Voxel Plugin listed for UE 5.8.1, then a follow-up 3A API/compile audit. Do **not** start
-Worker leveling / Foundation / placement migration. Authored `WBP_GP_HUD` remains operator-local.
+Free Legacy is installed locally; UE 5.8.1 compile + load + GPRuntime header compile probe are proven.
+Next action is a **runtime crater probe** (`RemoveSphere`). Do **not** mark 3A complete and do **not**
+start Worker leveling / Foundation / placement migration. Authored `WBP_GP_HUD` remains operator-local.
 
 Production HUD Resource/Match data foundation is on `main`.
 `UGP_HUDRootWidget` injects those subsystem-owned ViewModels into authored Manual MVVM slots.
@@ -150,7 +150,7 @@ current execution order.
 
 | Capability | Status | Factual evidence / boundary |
 | --- | --- | --- |
-| Voxel Plugin terrain backend | **SPIKE BLOCKED — PLUGIN NOT INSTALLED** | Stage 3A (2026-09-03) on `terrain/gp-voxel-foundation`: no `GP/Plugins` dir; no `*Voxel*.uplugin` under UE 5.8.1 (`C:\Program Files\Epic Games\UE_5.8`) or searched sibling installs. Exact version/edition/API still unknown. Operator must install a UE 5.8.1-compatible Voxel Plugin before API/compile probe. See `Docs/Development/Voxel_Plugin_Technical_Spike.md`. |
+| Voxel Plugin terrain backend | **INSTALLED LOCALLY — UE 5.8 COMPILE/LOAD PROVEN** | Stage 3A (2026-09-04) on `terrain/gp-voxel-foundation`: Voxel Plugin Free Legacy at `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0, binaries BuildId `55116800`). GPEditor Win64 Development succeeded; editor-cmd mounted VoxelFree; GPRuntime compile probe `gp.Voxel.RunPluginCompileProbeContractTest` Failures=0. Plugin untracked (do not vendor yet). Runtime crater not demonstrated. See `Docs/Development/Voxel_Plugin_Technical_Spike.md`. |
 | Authoritative terrain deformation | **NOT STARTED** | Generic deformation-event contract documented; no production service. Clients must not author destruction. |
 | Worker terrain leveling / site prep | **NOT STARTED** | Command concept only (names TBD). Grey/yellow BuildGrid overlay. Zone sizing UX **DESIGN REQUIRED**. |
 | Foundation Slab orbital procurement | **NOT STARTED** | Wall Package philosophy; cost/quantity/footprint **TBD** (do not copy 5). |
@@ -272,7 +272,7 @@ This order replaces mechanical continuation of the historical Slice 8 -> 13 sequ
 1. **Production UI foundation / HUD**
 2. **Minimap + FoW minimap presentation** — **COMPLETE**
 3. **Terrain / Voxel / Foundation system** — must exist before AI and final building/wall design because both depend on construction-site rules and navigation. This stage must also establish the **generic local engineering job contract**, **Worker assignment/contribution model**, and **reusable work-presentation hooks** before final Wall implementation.
-   - **3A.** Voxel Plugin technical spike + authoritative terrain deformation foundation — **IN PROGRESS / BLOCKED** (`VOXEL_PLUGIN_NOT_INSTALLED`). Do not start 3B until a UE 5.8.1 plugin is installed and APIs are re-audited.
+   - **3A.** Voxel Plugin technical spike + authoritative terrain deformation foundation — **IN PROGRESS** (`PLUGIN_INSTALLED_AND_AUDITED`). UE 5.8.1 compile/load proven. Do not start 3B until a runtime crater probe is demonstrated.
    - **3B.** Worker leveling + generic local engineering job/work hooks
    - **3C.** Foundation procurement / install / repair foundation support
    - **3D.** Building placement migration to leveled + intact foundation requirement
@@ -393,12 +393,11 @@ friendly blips, Visible-only enemy blips, canonical team colors, building vs uni
 CameraComponent viewport footprint, LMB click-to-pan with immediate footprint sync. Operator PASS
 on `ui/gp-minimap`. Authored `WBP_GP_HUD` remains operator-local.
 
-**NEXT:** Stage **3A** Voxel Plugin technical spike is **blocked on install**.
-`VOXEL_PLUGIN_NOT_INSTALLED` on the associated UE 5.8.1 machine. Do **not** start 3B Worker
-leveling, Foundation, or placement migration. Operator installs a vendor Voxel Plugin listed for
-UE 5.8.1; Cursor must not download a random drop or edit `GP.uproject`.
+**NEXT:** Stage **3A** runtime crater probe. Voxel Plugin Free Legacy is installed locally and
+UE 5.8.1 compile/load are proven. Do **not** start 3B Worker leveling, Foundation, or placement
+migration. Do **not** vendor `GP/Plugins/VoxelFree` until repository policy is decided.
 
-Execution order remains: finish 3A after plugin install → 3B–3E → RTS AI Opponent → bounded core-loop gaps →
+Execution order remains: finish 3A after crater runtime probe → 3B–3E → RTS AI Opponent → bounded core-loop gaps →
 
 Execution order remains: Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps →
 Building-system / Walls gate → Steam → match completion → SWARM implementation → full MVP

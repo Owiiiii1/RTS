@@ -16,7 +16,7 @@ The minimap camera indicator is the real projected viewport footprint on the gam
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
 | Pre-checkpoint HEAD | `55385fa1077c4143773da25ea052429545c07a43` (enemy-blips SHA record) |
-| Checkpoint HEAD | *recorded in follow-up SHA commit* |
+| Checkpoint HEAD | `c26b8e5f8cf7d07e8283aafb7443a8b271c8730e` |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 
 Not merge-ready to `main`.

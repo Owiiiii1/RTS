@@ -16,7 +16,7 @@ Horizontal FoW/minimap mirror is fixed at the shared widget surface layer. Frien
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
 | Pre-checkpoint HEAD | `d2eba077097a042a6c8e4f4b4adecd7767f8a082` (camera-bounds) |
-| Checkpoint HEAD | *(this commit)* |
+| Checkpoint HEAD | `b58ea515c097fa5c3fb1ad9e7ea168454d2ec12d` |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 
 Not merge-ready to `main`.

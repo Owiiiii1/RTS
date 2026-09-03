@@ -16,11 +16,10 @@ Operator PASS is confirmed for the full minimap stage. Finalization audit, contr
 | Pre-finalization HEAD | `83f6cd7d7b900b35f76b7ee9540439a3630302ff` |
 | `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
-| Ahead / behind vs `origin/main` | **22 / 0** before finalization commits; still **behind 0** |
+| Ahead / behind vs `origin/main` | **23 / 0** after the merge-ready commit (behind **0**) |
+| Finalization commit | `e969a7216a7a1fa42003dddb6e3e72b89a83086f` |
 
 After fetch: `origin/main` equals merge-base. No main integration required. No rebase/reset/stash.
-
-Finalization HEAD SHA is recorded in the follow-up SHA commit after this report is committed.
 
 ## Architecture summary
 
@@ -157,7 +156,26 @@ No `git reset --hard`, `git clean`, stash, or broad restore.
 ?? Tools/
 ```
 
-Protected set is preserved after the docs/source commit (verified in the SHA-record step). Not committed: `WBP_GP_HUD`, launch/selection/purchase rows, `GP/Content/`, `GP/Config/`, `L_PrototypeArena`, DataAssets, Materials/VFX, `GP.uproject`, `Tools/`.
+**After finalization commit (`e969a72`):** same protected dirty/untracked set, unchanged:
+
+```
+ M GP/Config/DefaultEngine.ini
+ M GP/Config/DefaultGame.ini
+ M GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap
+ M GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset
+ M GP/GP.uproject
+?? GP/Content/Basic_VFX/
+?? GP/Content/GrimProtocol/Blueprint/
+?? GP/Content/GrimProtocol/DataAssets/Buildings/
+?? GP/Content/GrimProtocol/DataAssets/Game/
+?? GP/Content/GrimProtocol/DataAssets/Units/
+?? GP/Content/GrimProtocol/Materials/
+?? GP/Content/Mixed_Magic_VFX_Pack/
+?? GP/Content/RocketThrusterExhaustFX/
+?? Tools/
+```
+
+Protected set is preserved. Not committed: `WBP_GP_HUD`, launch/selection/purchase rows, `GP/Content/`, `GP/Config/`, `L_PrototypeArena`, DataAssets, Materials/VFX, `GP.uproject`, `Tools/`.
 
 ## Final diff audit (`origin/main..HEAD`)
 

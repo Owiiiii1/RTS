@@ -42,6 +42,8 @@ struct FGPMinimapSurfaceBlipDraw
 	bool bIsBuilding = false;
 };
 
+DECLARE_DELEGATE_OneParam(FOnGPMinimapMapLeftClick, FVector2D);
+
 class SGPMinimapSurface : public SLeafWidget
 {
 public:
@@ -53,6 +55,16 @@ public:
 		(void)InArgs;
 		SetCanTick(false);
 		SetVisibility(EVisibility::Visible);
+	}
+
+	virtual bool SupportsKeyboardFocus() const override
+	{
+		return false;
+	}
+
+	virtual bool IsInteractable() const override
+	{
+		return true;
 	}
 
 	void SetFallbackColor(const FLinearColor& InColor)
@@ -84,9 +96,39 @@ public:
 		bHasCameraFootprint = bInHasFootprint;
 	}
 
+	void SetOnMapLeftClick(const FOnGPMinimapMapLeftClick& InDelegate)
+	{
+		OnMapLeftClick = InDelegate;
+	}
+
 	virtual FVector2D ComputeDesiredSize(float) const override
 	{
 		return FVector2D(128.0f, 128.0f);
+	}
+
+	virtual FReply OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override
+	{
+		const FBox2D MapDest = UGP_MinimapWidget::ComputeSharedMapDestLocal(
+			MyGeometry.GetLocalSize(),
+			bHasBackgroundTexture,
+			TextureSize);
+		FVector2D SurfaceUV = FVector2D::ZeroVector;
+		const EGP_MinimapPointerResult Result = UGP_MinimapWidget::ResolvePointerOnMap(
+			MouseEvent.GetEffectingButton(),
+			MyGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition()),
+			MapDest,
+			SurfaceUV);
+		if (Result == EGP_MinimapPointerResult::Ignored)
+		{
+			return FReply::Unhandled();
+		}
+
+		if (Result == EGP_MinimapPointerResult::PanRequested)
+		{
+			OnMapLeftClick.ExecuteIfBound(SurfaceUV);
+		}
+
+		return FReply::Handled();
 	}
 
 	virtual int32 OnPaint(
@@ -215,6 +257,7 @@ private:
 	bool bHasBackgroundTexture = false;
 	bool bHasFoW = false;
 	bool bHasCameraFootprint = false;
+	FOnGPMinimapMapLeftClick OnMapLeftClick;
 };
 
 UGP_MinimapWidget::UGP_MinimapWidget(const FObjectInitializer& ObjectInitializer)
@@ -243,6 +286,59 @@ FVector2D UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(const FVector2D& Nor
 FVector2D UGP_MinimapWidget::SurfaceUVToPresenterNormalized(const FVector2D& SurfaceUV)
 {
 	return FVector2D(1.0f - SurfaceUV.X, 1.0f - SurfaceUV.Y);
+}
+
+bool UGP_MinimapWidget::TryConvertLocalPointToSurfaceUV(
+	const FVector2D& LocalPoint,
+	const FBox2D& MapDest,
+	FVector2D& OutSurfaceUV)
+{
+	OutSurfaceUV = FVector2D::ZeroVector;
+	const FVector2D DestSize = MapDest.GetSize();
+	if (!FMath::IsFinite(LocalPoint.X)
+		|| !FMath::IsFinite(LocalPoint.Y)
+		|| DestSize.X <= KINDA_SMALL_NUMBER
+		|| DestSize.Y <= KINDA_SMALL_NUMBER
+		|| !FMath::IsFinite(DestSize.X)
+		|| !FMath::IsFinite(DestSize.Y))
+	{
+		return false;
+	}
+
+	if (LocalPoint.X < MapDest.Min.X
+		|| LocalPoint.X > MapDest.Max.X
+		|| LocalPoint.Y < MapDest.Min.Y
+		|| LocalPoint.Y > MapDest.Max.Y)
+	{
+		return false;
+	}
+
+	OutSurfaceUV = FVector2D(
+		(LocalPoint.X - MapDest.Min.X) / DestSize.X,
+		(LocalPoint.Y - MapDest.Min.Y) / DestSize.Y);
+	OutSurfaceUV.X = FMath::Clamp(OutSurfaceUV.X, 0.0f, 1.0f);
+	OutSurfaceUV.Y = FMath::Clamp(OutSurfaceUV.Y, 0.0f, 1.0f);
+	return FMath::IsFinite(OutSurfaceUV.X) && FMath::IsFinite(OutSurfaceUV.Y);
+}
+
+EGP_MinimapPointerResult UGP_MinimapWidget::ResolvePointerOnMap(
+	const FKey& Button,
+	const FVector2D& LocalPoint,
+	const FBox2D& MapDest,
+	FVector2D& OutSurfaceUV)
+{
+	OutSurfaceUV = FVector2D::ZeroVector;
+	if (Button != EKeys::LeftMouseButton)
+	{
+		return EGP_MinimapPointerResult::Ignored;
+	}
+
+	if (!TryConvertLocalPointToSurfaceUV(LocalPoint, MapDest, OutSurfaceUV))
+	{
+		return EGP_MinimapPointerResult::ConsumedNoPan;
+	}
+
+	return EGP_MinimapPointerResult::PanRequested;
 }
 
 FLinearColor UGP_MinimapWidget::ResolveBlipColor(int32 TeamId)
@@ -363,6 +459,10 @@ void UGP_MinimapWidget::ReleaseSlateResources(bool bReleaseChildren)
 {
 	UnbindPresenter();
 	CancelBackgroundLoad();
+	if (MySurface.IsValid())
+	{
+		MySurface->SetOnMapLeftClick(FOnGPMinimapMapLeftClick());
+	}
 	MySurface.Reset();
 	Super::ReleaseSlateResources(bReleaseChildren);
 }
@@ -378,6 +478,8 @@ TSharedRef<SWidget> UGP_MinimapWidget::RebuildWidget()
 {
 	MySurface = SNew(SGPMinimapSurface);
 	MySurface->SetFallbackColor(GPMinimapWidgetPrivate::FallbackColor);
+	MySurface->SetOnMapLeftClick(
+		FOnGPMinimapMapLeftClick::CreateUObject(this, &UGP_MinimapWidget::HandleMapLeftClick));
 	PushBrushesToSlate();
 	return MySurface.ToSharedRef();
 }
@@ -506,6 +608,27 @@ void UGP_MinimapWidget::HandleMinimapCameraFootprintChanged()
 {
 	RebuildCameraFootprintDrawCache();
 	PushBrushesToSlate();
+}
+
+void UGP_MinimapWidget::HandleMapLeftClick(FVector2D SurfaceUV)
+{
+	if (!FMath::IsFinite(SurfaceUV.X)
+		|| !FMath::IsFinite(SurfaceUV.Y)
+		|| SurfaceUV.X < 0.0f
+		|| SurfaceUV.X > 1.0f
+		|| SurfaceUV.Y < 0.0f
+		|| SurfaceUV.Y > 1.0f)
+	{
+		return;
+	}
+
+	UGP_MinimapPresenter* Presenter = BoundPresenter.Get();
+	if (Presenter == nullptr)
+	{
+		return;
+	}
+
+	Presenter->PanCameraToMinimapNormalized(SurfaceUVToPresenterNormalized(SurfaceUV));
 }
 
 FSoftObjectPath UGP_MinimapWidget::GetConfiguredBackgroundPath() const
@@ -849,5 +972,32 @@ FVector2D UGP_MinimapWidget::ContractWorldToSurfaceUV(const FVector& WorldLocati
 	}
 
 	return PresenterNormalizedToSurfaceUV(Unclamped);
+}
+
+bool UGP_MinimapWidget::ContractHandleMapLeftClick(const FVector2D& SurfaceUV)
+{
+	const bool bWouldPan =
+		FMath::IsFinite(SurfaceUV.X)
+		&& FMath::IsFinite(SurfaceUV.Y)
+		&& SurfaceUV.X >= 0.0f
+		&& SurfaceUV.X <= 1.0f
+		&& SurfaceUV.Y >= 0.0f
+		&& SurfaceUV.Y <= 1.0f
+		&& BoundPresenter.Get() != nullptr;
+	HandleMapLeftClick(SurfaceUV);
+	return bWouldPan;
+}
+
+EGP_MinimapPointerResult UGP_MinimapWidget::ContractResolvePointerOnMap(
+	const FKey& Button,
+	const FVector2D& LocalPoint,
+	const FVector2D& AllottedSize,
+	FVector2D& OutSurfaceUV) const
+{
+	return ResolvePointerOnMap(
+		Button,
+		LocalPoint,
+		ComputeMapDestLocal(AllottedSize),
+		OutSurfaceUV);
 }
 #endif

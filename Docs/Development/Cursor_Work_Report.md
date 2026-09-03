@@ -2,11 +2,11 @@
 
 ## Status
 
-**MINIMAP_CAMERA_FOOTPRINT_CRASH_FIXED_READY_FOR_OPERATOR_VALIDATION**
+**MINIMAP_CLICK_TO_PAN_READY_FOR_OPERATOR_VALIDATION**
 
 **INTERMEDIATE / NOT MERGE READY**
 
-PIE no longer hits the UE 5.8 TArray self-reference assertion when painting the minimap camera footprint outline.
+LMB click inside the actual minimap MapDest instantly pans the local camera pawn XY-anchor. Zoom, yaw, pitch, and Z are preserved. Selection, marquee, unit commands, and gameplay authority are not involved. Drag-pan is not in this checkpoint.
 
 ## Branch / base / head
 
@@ -15,75 +15,82 @@ PIE no longer hits the UE 5.8 TArray self-reference assertion when painting the 
 | Path | `D:\Progects\RTS` |
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
-| Pre-checkpoint HEAD | `40c8ca33a8c3cf66cf55b31ebd320ccbdb6293ba` (camera-footprint SHA record) |
-| Checkpoint HEAD | `b2e552692b1510821c11cf48c452ecc1bdddf059` |
+| Pre-checkpoint HEAD | `b4edf92d20ea8e2b193f7e0fae5a53bd5609b3d6` (camera-footprint crash-fix SHA record) |
+| Checkpoint HEAD | *(recorded after commit)* |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 
 Not merge-ready to `main`.
 
-## Exact crash root cause
+## Exact input route
 
-`SGPMinimapSurface::OnPaint` closed the camera-footprint polyline by appending the first outline point back onto the same `TArray`:
+`FInputModeGameAndUI` is unchanged. No `SetInputModeUIOnly`. No global mouse capture. Camera rotate remains MMB. Selection remains Enhanced Input `IA_Select` (LMB). RMB command IMC is unchanged.
 
-```
-OutlinePoints.Add(OutlinePoints[0]);
-```
+1. `SGPMinimapSurface` is `EVisibility::Visible` (hit-testable), `IsInteractable() == true`, no Tick, no keyboard focus.
+2. `OnMouseButtonDown` runs only for pointer routing. `EKeys::LeftMouseButton` is consumed (`FReply::Handled()`). Any other button returns `FReply::Unhandled()` (RMB is not click-to-pan).
+3. MapDest is `UGP_MinimapWidget::ComputeSharedMapDestLocal(...)` — the same helper `OnPaint` uses for background / FoW / blips / camera footprint.
+4. Local cursor = `AllottedGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition())`.
+5. Outside MapDest (letterbox / padding): `ConsumedNoPan` — handled, no world mapping, no camera move. Prevents the click falling through the Visible surface into world selection/marquee.
+6. Inside MapDest: `PanRequested` → Slate delegate `OnMapLeftClick(SurfaceUV)`.
 
-UE 5.8 `TArray::Add` asserts if the argument is an element reference from the array being modified, because `Add` may reallocate and invalidate that reference.
+## Slate callback lifetime
 
-This ran on the real Slate paint path with a valid footprint. Headless NullRHI contract tests did not execute that allocator scenario.
+`FOnGPMinimapMapLeftClick` is a Slate `DECLARE_DELEGATE_OneParam`. Bound in `RebuildWidget` with `CreateUObject(this, &UGP_MinimapWidget::HandleMapLeftClick)` (weak UObject). `OnMouseButtonDown` uses `ExecuteIfBound`. `ReleaseSlateResources` clears the delegate, then `MySurface.Reset()`. No raw UObject pointer is stored on the Slate widget.
 
-## Exact unsafe line / pattern
+`UGP_MinimapWidget::HandleMapLeftClick` rejects non-finite / out-of-range UV, then `BoundPresenter` (`TWeakObjectPtr`). Missing presenter: no-op.
 
-- File: `GP/Source/GPUIRuntime/Private/Widgets/GPMinimapWidget.cpp`
-- Function: `SGPMinimapSurface::OnPaint`
-- Pattern: `TArray<T>::Add(SameArray[Index])` (self-referential element)
+## Coordinate conversion
 
-## Exact fix
+Shared inverse is unchanged:
 
-Extracted `UGP_MinimapWidget::BuildClosedCameraFootprintOutlinePoints`.
+- Presenter: world +X/+Y → normalized +X/+Y
+- Surface: `SurfaceUVToPresenterNormalized` = `(1-X, 1-Y)` (same as paint)
 
-After mapping presenter corners through the existing shared surface transform, it copies the first point by value, then adds that copy:
+Flow: Local point → SurfaceUV in MapDest `[0..1]` → shared inverse → `UGP_MinimapPresenter::PanCameraToMinimapNormalized` → `MinimapNormalizedToWorld` on current displayed camera/playable bounds → camera seam.
 
-```
-if (OutOutlinePoints.Num() < 3) { reset; return false; }
-const FVector2f FirstPoint = OutOutlinePoints[0];
-OutOutlinePoints.Add(FirstPoint);
-```
+## Camera API
 
-Guard remains `Num >= 3` before `[0]`. Semantics unchanged: closed outline is N+1 points, last equals first. Projection, clipping, orientation, and paint order are unchanged. `OnPaint` now calls this helper.
+`AGP_CameraPawn::SetCameraAnchorWorldXY(const FVector2D& TargetXY)`
 
-## Similar-pattern audit
+- Local presentation only. No RPC. No gameplay state.
+- Rejects non-finite XY.
+- Click target = **camera pawn actor location XY** (canonical RTS pan anchor). No viewport-footprint-center compensation.
+- Preserves actor Z, yaw (`CurrentYaw` / root yaw), zoom (`CurrentArmLength` / spring arm), pitch.
+- `SetActorLocation` XY, then existing `ClampToBounds(*GetActiveConfig())`, then restore Z if clamp moved it.
+- `SyncSpringArmPresentation(0)` + `NotifyCameraPresentationChangedIfNeeded()` so the footprint event can follow.
 
-Searched this minimap checkpoint / touched code for:
+Presenter: `UGP_MinimapPresenter::PanCameraToMinimapNormalized`. Requires ready + usable displayed bounds + finite `[0..1]` + valid bound `AGP_CameraPawn`. Widget does not call `SetActorLocation`.
 
-- `Array.Add(Array[Index])`
-- `Array.Emplace(Array[Index])`
-- `Insert` of an element reference from the same container
-- self-`Append`
+## Preserved state
 
-Results:
-
-| Location | Finding |
+| State | Click-to-pan |
 | --- | --- |
-| `GPMinimapWidget.cpp` | Only the crash site above. Fixed. |
-| `GPMinimapPresenter.cpp` clip helpers | `OutPolygon.Add` copies from `InPolygon` / local intersection values, not from `OutPolygon` itself. `Previous = InPolygon.Last()` is a value copy. Safe. |
-| Footprint tests | No self-referential `Add`. |
+| Camera XY-anchor | Moves to mapped world point, then canonical clamp |
+| Z | Preserved |
+| Yaw | Preserved |
+| Pitch | Preserved |
+| Zoom / arm length | Preserved |
+| Selection | Unchanged |
+| Unit commands | Not issued |
+| Gameplay authority | Untouched |
 
-No other matches in GPUIRuntime for this pattern. No broad refactor.
+## Bounds semantics
 
-## Regression test
+A normalized MapDest click is inside the displayed camera/playable rect. `SetCameraAnchorWorldXY` still runs the pawn's canonical `ClampToBounds`. Widget/presenter do not duplicate clamp math. Missing presenter/camera/NaN: ignored.
 
-New command: `gp.UI.RunMinimapCameraFootprintOutlineCrashContractTest`
+## Input conflict audit
 
-Exercises the paint-safe helper (not a source-string-only check):
+| Channel | Result |
+| --- | --- |
+| LMB inside MapDest | Slate handled; camera pan only |
+| LMB letterbox on the Visible surface | Slate handled; no pan; should not start world click-select/marquee |
+| RMB on surface | Unhandled; not click-to-pan; no new minimap RMB commands |
+| MMB rotate | Unchanged (`SetRotateActive` / `IA_Camera` rotate) |
+| `IA_Select` / marquee | PC code unchanged; consume is Slate `FReply::Handled` under GameAndUI |
+| Command targeting / placement | Unchanged |
 
-- 4 corners → N+1 closed points, last == first
-- mapping uses shared `(1-X, 1-Y)`
-- `< 3` corners rejected / cleared
-- 3-corner triangle also closes by copied first point
+## Letterbox semantics
 
-That construction is the same path `OnPaint` now uses.
+Input region == paint MapDest. Authored background aspect letterbox: clicks in the dark bars do not produce map UV. No background (fallback square): MapDest is the current square contract. Both cases are in `gp.UI.RunMinimapClickToPanContractTest`.
 
 ## Tests
 
@@ -91,32 +98,24 @@ Command pattern: `UnrealEditor-Cmd` `GP.uproject` `/Game/GrimProtocol/Maps/L_Pro
 
 | Command | Result |
 | --- | --- |
+| `gp.UI.RunMinimapClickToPanContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapCameraFootprintOutlineCrashContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapCameraFootprintContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunMinimapSurfaceContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapEnemyBlipsContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapFriendlyBlipsContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapCameraBoundsContractTest` | **PASS** Complete Failures=0 |
+| `gp.UI.RunMinimapSurfaceContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapPresentationContractTest` | **PASS** Complete Failures=0 |
 | `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | **PASS** Complete Failures=0 |
+
+Focused contract covers: MapDest center → SurfaceUV 0.5/0.5 and shared inverse; visual left/right/top/bottom vs `(1-X,1-Y)`; letterbox reject / inside accept / RMB ignored; fallback square vs textured letterbox; camera XY move; Z/yaw/zoom preserved; clamp; footprint follow; no presenter/camera/invalid UV; Slate release; LMB-only; no Tick.
 
 ## GPEditor build
 
 `GPEditor Win64 Development` + UHT for `D:\Progects\RTS\GP\GP.uproject`: **Succeeded**. Not GP Development / Shipping.
 
-## Smoke / PIE
-
-Interactive editor PIE was not driven from this session.
-
-Additional `-game` D3D12 smoke (no `-NullRHI`) on `L_PrototypeArena`: map loaded, engine initialized, session reached frame 665 and closed the log with **no** `already comes from the container` / assertion / fatal. This is not a substitute for operator PIE (HUD/minimap visual check still required).
-
-## Changed files (this checkpoint)
-
-- `GP/Source/GPUIRuntime/Public/Widgets/GPMinimapWidget.h`
-- `GP/Source/GPUIRuntime/Private/Widgets/GPMinimapWidget.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapCameraFootprintOutlineCrashContractTest.cpp` (new)
-- `Docs/Development/Cursor_Work_Report.md`
+`GPUIRuntime` now public-depends on `InputCore` (`EKeys` in the minimap surface/contract).
 
 ## Protected audit
 
@@ -127,6 +126,7 @@ Not committed:
 - `GP/Config/`
 - `L_PrototypeArena`
 - DataAssets
+- Materials/VFX
 - `GP.uproject`
 - `Tools/`
 
@@ -134,18 +134,22 @@ Operator dirty/untracked Content/Config/Tools/`GP.uproject` preserved.
 
 ## Operator test
 
-1. PIE on `L_PrototypeArena`
-2. Confirm the game no longer crashes on start
-3. Confirm the light camera-view outline is present
-4. Pan → outline moves
-5. Zoom in/out → outline shrinks/grows
-6. Rotate → outline rotates
-7. FoW and blips still behave as before
+1. PIE: LMB center of minimap → camera jumps there
+2. LMB corners → camera goes to the matching world side
+3. LMB next to a friendly blip → camera footprint around that area
+4. Orientation: visual left/top still match the already-validated world mapping
+5. Zoom, then click-to-pan → zoom unchanged
+6. Rotate, then click-to-pan → yaw unchanged
+7. LMB on minimap does not select world units and does not start marquee
+8. RMB on minimap does not click-to-pan
+9. FoW / blips / camera footprint still update
 
 ## Out of scope
 
-- Click-to-pan
+- Drag-pan / click-and-drag camera on minimap
+- RMB minimap commands, minimap selection, ping
 - Last-known
+- Minimap zoom / rotate
 - SceneCapture
 - Merge to `main`
 

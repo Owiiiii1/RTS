@@ -4,6 +4,7 @@
 
 #include "Components/Widget.h"
 #include "FogOfWar/GPFogOfWarComponent.h"
+#include "InputCoreTypes.h"
 #include "Math/Box2D.h"
 #include "GPMinimapWidget.generated.h"
 
@@ -12,15 +13,22 @@ class SGPMinimapSurface;
 class UGP_MinimapPresenter;
 class UTexture2D;
 
+enum class EGP_MinimapPointerResult : uint8
+{
+	Ignored,
+	ConsumedNoPan,
+	PanRequested
+};
+
 /**
  * Native UMG minimap surface: static authored background + trusted FoW overlay.
  *
  * Presenter normalized XY is the displayed camera/playable rect, not the full FoW grid.
  * Presenter mapping stays world +X/+Y → normalized +X/+Y (no flip there).
  * Widget surface transform only: ScreenX = 1 - NormalizedX, ScreenY = 1 - NormalizedY.
- * Background, FoW, blips, and camera footprint share that transform. Blip color is canonical
- * team color; unit vs building differs by size. Camera footprint is the projected viewport
- * on the camera pawn XY-anchor plane. Not SceneCapture. No Tick / polling / world scan.
+ * Background, FoW, blips, and camera footprint share that transform. LMB inside MapDest
+ * click-to-pans the camera pawn XY-anchor (zoom/yaw/pitch preserved). Letterbox clicks do
+ * not map to world. Blip color is canonical team color; unit vs building differs by size.
  */
 UCLASS(meta = (DisplayName = "GP Minimap", ShortTooltip = "Static map image plus FoW overlay"))
 class GPUIRUNTIME_API UGP_MinimapWidget : public UWidget
@@ -51,6 +59,15 @@ public:
 		const TArray<FVector2D>& PresenterNormalizedCorners,
 		const FBox2D& MapDest,
 		TArray<FVector2f>& OutOutlinePoints);
+	static bool TryConvertLocalPointToSurfaceUV(
+		const FVector2D& LocalPoint,
+		const FBox2D& MapDest,
+		FVector2D& OutSurfaceUV);
+	static EGP_MinimapPointerResult ResolvePointerOnMap(
+		const FKey& Button,
+		const FVector2D& LocalPoint,
+		const FBox2D& MapDest,
+		FVector2D& OutSurfaceUV);
 
 #if !UE_BUILD_SHIPPING
 	void ContractBindPresenter(UGP_MinimapPresenter* Presenter);
@@ -75,6 +92,12 @@ public:
 	bool ContractHasCameraFootprintDraw() const { return bHasCameraFootprintDraw; }
 	FVector2D ContractGetCameraFootprintDrawCorner(int32 Index) const;
 	FVector2D ContractWorldToSurfaceUV(const FVector& WorldLocation) const;
+	bool ContractHandleMapLeftClick(const FVector2D& SurfaceUV);
+	EGP_MinimapPointerResult ContractResolvePointerOnMap(
+		const FKey& Button,
+		const FVector2D& LocalPoint,
+		const FVector2D& AllottedSize,
+		FVector2D& OutSurfaceUV) const;
 #endif
 
 protected:
@@ -89,6 +112,7 @@ private:
 	void HandleMinimapPresentationChanged();
 	void HandleMinimapBlipsChanged();
 	void HandleMinimapCameraFootprintChanged();
+	void HandleMapLeftClick(FVector2D SurfaceUV);
 	void RequestBackgroundLoad();
 	void StartBackgroundLoad(const FSoftObjectPath& Path);
 	void CancelBackgroundLoad();

@@ -43,6 +43,9 @@ public:
 	/** XY-anchor / pan plane Z. Pan preserves this height; not terrain sampling. */
 	float GetGroundReferencePlaneZ() const;
 
+	/** Instant local navigation: move the RTS pan anchor to TargetXY. Preserves Z, yaw, zoom, pitch. Then ClampToBounds. */
+	bool SetCameraAnchorWorldXY(const FVector2D& TargetXY);
+
 	/** Camera component view used by the minimap footprint (not the pawn root). */
 	bool GetPresentationView(FVector& OutLocation, FRotator& OutRotation, float& OutFOV) const;
 

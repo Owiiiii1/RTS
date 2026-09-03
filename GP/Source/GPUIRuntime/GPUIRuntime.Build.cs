@@ -17,6 +17,7 @@ public class GPUIRuntime : ModuleRules
 			"UMG",
 			"Slate",
 			"SlateCore",
+			"InputCore",
 			"GameplayAbilities",
 			"GameplayTags",
 			"CommonUI",

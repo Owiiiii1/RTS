@@ -370,6 +370,36 @@ FVector UGP_MinimapPresenter::MinimapNormalizedToWorld(
 		SafeZ);
 }
 
+bool UGP_MinimapPresenter::PanCameraToMinimapNormalized(const FVector2D& PresenterNormalized)
+{
+	if (!IsMinimapReady()
+		|| !HasUsableBounds()
+		|| !GPMinimapPresenterPrivate::IsFiniteVector2D(PresenterNormalized)
+		|| PresenterNormalized.X < 0.0f
+		|| PresenterNormalized.X > 1.0f
+		|| PresenterNormalized.Y < 0.0f
+		|| PresenterNormalized.Y > 1.0f)
+	{
+		return false;
+	}
+
+	AGP_CameraPawn* CameraPawn = BoundCameraPawn.Get();
+	if (!IsValid(CameraPawn))
+	{
+		return false;
+	}
+
+	const FVector World = MinimapNormalizedToWorld(
+		PresenterNormalized,
+		CameraPawn->GetGroundReferencePlaneZ());
+	if (!GPMinimapPresenterPrivate::IsFiniteVector(World))
+	{
+		return false;
+	}
+
+	return CameraPawn->SetCameraAnchorWorldXY(FVector2D(World.X, World.Y));
+}
+
 EGP_FoWState UGP_MinimapPresenter::GetMinimapFoWStateNormalized(const FVector2D& Normalized) const
 {
 	const UGP_LocalFoWComponent* Mirror = BoundMirror.Get();

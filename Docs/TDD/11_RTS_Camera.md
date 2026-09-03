@@ -241,6 +241,7 @@ Local camera presentation for the minimap viewport footprint:
 - `AGP_CameraPawn::OnCameraPresentationChanged` fires after zoom / pitch / yaw / pan / clamp **only when** a presentation fingerprint changed: actor XY/Z, yaw, spring-arm length, spring-arm pitch, resulting camera location/rotation, and local viewport size. Idle ticks do not broadcast.
 - Ground reference Z for the current MVP footprint is the pawn XY-anchor plane: `GetGroundReferencePlaneZ()` = actor location Z (pan preserves Z). This is **not** hardcoded World Z=0. Terrain-surface / voxel-aware projection is deferred with terrain integration.
 - Viewport resize is part of that same fingerprint (no widget Tick, no UI polling timer).
+- Local HUD navigation seam (no RPC, no gameplay authority): `AGP_CameraPawn::SetCameraAnchorWorldXY(FVector2D TargetXY)` instantly moves the RTS pan anchor (actor location XY). Click target = camera pawn actor XY. Z, yaw, zoom (spring-arm length), and pitch are preserved; then the existing `ClampToBounds` runs. Minimap LMB click-to-pan uses this API. Drag-pan through the minimap is deferred.
 
 `AGP_CameraBoundsVolume` is a trivial actor; spec deferred to code task. No replication. The FoW gameplay grid (2000×2000 / 100 cm) is a separate technical visibility field and is **not** the camera/playable bounds.
 
@@ -298,7 +299,7 @@ None. Confirms validation criteria у GP-0201:
 
 1. Slot rotation snap-to-cardinal на double-MMB? (Out of MVP unless requested.)
 2. Camera focus on selected unit (`F` key) — у GP-0202 чи у GP-0201? Recommend GP-0202 (selection-driven).
-3. Minimap click-to-pan — driven by HUD, not camera spec. Documented у GP-0401.
+3. Minimap LMB click-to-pan — HUD owns input; camera pawn owns the XY-anchor move (`SetCameraAnchorWorldXY`). Drag-pan is deferred.
 4. DPI scaling for `EdgeThresholdPx` — apply at PC level чи у DataAsset? Recommend PC-level via viewport size, документувати у code task.
 5. Cinematic / end-of-match camera — окрема spec post-MVP. Чи варто зразу зарезервувати `AGP_CinematicCameraPawn` clas name? Recommend yes, лише name reservation.
 

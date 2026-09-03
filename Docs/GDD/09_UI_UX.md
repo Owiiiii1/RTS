@@ -82,8 +82,9 @@ UX/balance tuning may revisit the presentation scale.
   surface transform (`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`). Blip color is the
   configured player/team color. Units and buildings of one player share that color; buildings are
   larger markers. Friendly actors are always shown inside playable bounds. Enemy actors appear only
-  while currently Visible. Last-known remains a later checkpoint. Event-driven; no widget Tick.
-  Not SceneCapture / live camera / render-target terrain.
+  while currently Visible. LMB inside the actual map dest pans the camera pawn XY-anchor (zoom/yaw
+  preserved). Letterbox/padding does not map to world. Drag-pan and last-known remain later.
+  Event-driven; no widget Tick. Not SceneCapture / live camera / render-target terrain.
 
 **Bottom center — Selection / Current Info** (widest lower block)
 
@@ -135,7 +136,7 @@ Future authored names; none of these visual widgets are implemented yet.
 - `WBP_GP_Lobby`
 - `WBP_GP_HUD` (root; native base `UGP_HUDRootWidget`)
 - Top-bar blocks: Threat+Score, Match Timer, Planet/Orbit/Cap
-- Bottom-bar blocks: Minimap (native `UGP_MinimapWidget` background + FoW + team-colored blips; last-known later), Selection/Info, Context Action Grid + Message Strip
+- Bottom-bar blocks: Minimap (native `UGP_MinimapWidget` background + FoW + team-colored blips + LMB click-to-pan; last-known / drag-pan later), Selection/Info, Context Action Grid + Message Strip
   (MainBase PURCHASE lives in this panel; not a fullscreen Order Menu)
 - Right-side Launch Menu: Launch button on top, vertical local-MainBase container fill bars below
   (yellow while filling, green when full/ready). Event-driven from local storage. Authored in
@@ -203,7 +204,8 @@ SWARM / Ferronite Threat lives in the **top-left Threat + Score** block. Form:
 **Mandatory у MVP as a reserved bottom-left square.** Native surface now exists: static authored
 map image + FoW overlay + team-colored blips + projected camera viewport footprint
 (`UGP_MinimapWidget`). The camera indicator is the real deprojected viewport quadrilateral on the
-camera pawn XY-anchor plane (pan / zoom / yaw update it). Click-to-pan remains a later slice.
+camera pawn XY-anchor plane (pan / zoom / yaw update it). LMB click-to-pan is live: click target =
+camera pawn actor XY (zoom/yaw/pitch preserved). Drag-pan is not in this slice.
 When complete it показує:
 
 - Player base (own and opponent, if visible).
@@ -212,7 +214,7 @@ When complete it показує:
 - SWARM approach / spawn pulse (continuous outer pressure; not a numbered-wave countdown).
 - Camera viewport rectangle (projected viewport footprint, not a fixed square).
 
-Mini-map clickable — re-center camera. Mini-map тримає player у курсі map state, особливо при mid-match expansion.
+Mini-map LMB clickable — re-center camera on the pawn XY-anchor. Mini-map тримає player у курсі map state, особливо при mid-match expansion.
 
 ## Command Issuance (Hybrid Model)
 

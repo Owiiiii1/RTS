@@ -527,6 +527,33 @@ float AGP_CameraPawn::GetGroundReferencePlaneZ() const
 	return FMath::IsFinite(Location.Z) ? Location.Z : 0.0f;
 }
 
+bool AGP_CameraPawn::SetCameraAnchorWorldXY(const FVector2D& TargetXY)
+{
+	if (!FMath::IsFinite(TargetXY.X) || !FMath::IsFinite(TargetXY.Y))
+	{
+		return false;
+	}
+
+	const FVector CurrentLocation = GetActorLocation();
+	const float PreservedZ = FMath::IsFinite(CurrentLocation.Z) ? CurrentLocation.Z : 0.0f;
+	SetActorLocation(FVector(TargetXY.X, TargetXY.Y, PreservedZ), false);
+
+	if (const UGP_CameraConfigDataAsset* Config = GetActiveConfig())
+	{
+		ClampToBounds(*Config);
+	}
+
+	const FVector ClampedLocation = GetActorLocation();
+	if (FMath::IsFinite(PreservedZ) && !FMath::IsNearlyEqual(ClampedLocation.Z, PreservedZ))
+	{
+		SetActorLocation(FVector(ClampedLocation.X, ClampedLocation.Y, PreservedZ), false);
+	}
+
+	SyncSpringArmPresentation(0.0f);
+	NotifyCameraPresentationChangedIfNeeded();
+	return true;
+}
+
 bool AGP_CameraPawn::GetPresentationView(FVector& OutLocation, FRotator& OutRotation, float& OutFOV) const
 {
 	if (Camera == nullptr)

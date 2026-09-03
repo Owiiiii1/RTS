@@ -139,6 +139,7 @@ public:
 	FVector2D WorldToMinimapNormalized(const FVector& WorldLocation) const;
 	bool TryWorldToMinimapNormalizedUnclamped(const FVector& WorldLocation, FVector2D& OutNormalized) const;
 	FVector MinimapNormalizedToWorld(const FVector2D& Normalized, float WorldZ) const;
+	bool PanCameraToMinimapNormalized(const FVector2D& PresenterNormalized);
 	EGP_FoWState GetMinimapFoWStateNormalized(const FVector2D& Normalized) const;
 	const FGP_MinimapPresentation& GetMinimapPresentation() const { return Presentation; }
 	const TArray<FGP_MinimapBlip>& GetBlips() const { return Blips; }

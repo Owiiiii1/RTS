@@ -6,8 +6,9 @@
 >
 > This page is **not** an implementation spec. Do not treat sketched owner names as existing classes.
 > Stage 3A local audit (2026-09-04): **Voxel Plugin Free Legacy** is installed locally at
-> `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0). UE 5.8.1 compile and
-> editor-cmd load are proven. Runtime crater PIE is **not** demonstrated; Stage 3A is not complete.
+> `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0). UE 5.8.1 compile, load,
+> and runtime `RemoveSphere` crater (mesh + collision) are proven on a transient C++ `UVoxelFlatGenerator`
+> world. Stage 3A is not complete pending operator visual validation and the event-layer decision.
 > See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
 
 ## Intended Backend
@@ -18,7 +19,9 @@ Stage 3A (2026-09-04) installed **Voxel Plugin Free Legacy** locally and proved 
 Plugin-native TCP multiplayer is **Pro-only** (Free stubs return false). This documentation still
 does not claim plugin replication as the GP path. Preferred reconstruction remains a server-authored
 compact deformation event log with local apply (Option B). Option A is unavailable on Free. Option C
-(chunk deltas) is not required for crater events. Runtime crater apply is not yet demonstrated.
+(chunk deltas) is not required for crater events. Runtime `RemoveSphere` crater is proven on a
+transient probe world (density, local `EditedBounds` 13³ vs 64³, mesh update, collision deepen).
+Production deformation service is not started.
 
 ## Authority Boundary
 
@@ -27,10 +30,10 @@ compact deformation event log with local apply (Option B). Option A is unavailab
 - Clients do **not** author gameplay terrain destruction.
 - Local engineering **progress** is server-authoritative. Presentation pulses do not own progress.
 
-Exact multiplayer synchronization strategy for production is still gated on a runtime crater probe
-and later net work. Installed Free source: TCP MP is a Pro stub; `GetSave` / `LoadFromSave` exist
-for snapshot experiments. Event replay of `RemoveSphere` is **EVENT_REPLAY_FEASIBLE** at API level
-(not bit-identical, not PIE-proven).
+Exact multiplayer synchronization strategy for production is still gated on later net work.
+Installed Free source: TCP MP is a Pro stub; `GetSave` / `LoadFromSave` exist for snapshot
+experiments. Event replay of `RemoveSphere` is **EVENT_REPLAY_FEASIBLE** at API level (one-machine
+density proven; not bit-identical, not replicated).
 
 ## Orbital Completed Asset vs Local Engineering
 
@@ -183,7 +186,7 @@ SWARM Medium/Large corpses as temporary obstacles (see [`17_SWARM_Architecture`]
 Before production implementation, a spike must prove:
 
 - Voxel Plugin version / edition / licensing / UE 5.8 compatibility — **Voxel Plugin Free Legacy 434 / `159fd19a0`**, EngineVersion 5.8.0, binaries BuildId `55116800` on UE 5.8.1; compile+load proven 2026-09-04. Plugin remains operator-local / untracked (Marketplace license; do not vendor yet);
-- server-authoritative deformation apply path — API chain proven (`UVoxelSphereTools::RemoveSphere`); **runtime crater not demonstrated**;
+- server-authoritative deformation apply path — **runtime proven** on probe: `UVoxelSphereTools::RemoveSphere` (world cm + radius cm, `bConvertToVoxelSpace=true`); density + mesh + collision; **no production service**;
 - client reconstruction — Option B (event log + local apply). Plugin TCP is Pro-only stub. `EVENT_REPLAY_FEASIBLE` at API level;
 - bandwidth / determinism / listen-server host+client behavior — **not measured**;
 - interaction with existing BuildGrid occupancy — occupancy stays independent; query/leveling adapter later;
@@ -218,7 +221,7 @@ Budgets and strategies are **TECH-SPIKE REQUIRED**. Do not invent numbers here.
 - Foundation package cost, quantity, slab footprint, stock consume/reserve moment.
 - Foundation Repair tunables.
 - Blast radius / depth / damage formula.
-- Voxel Plugin version / API (Free Legacy 434 installed locally; crater runtime probe still required).
+- Voxel Plugin version / API (Free Legacy 434; runtime `RemoveSphere` crater proven on probe world; production service and event layer still required).
 - Voxel replication mechanism (no plugin helpers proven; GP event-log reconstruction is a candidate only).
 - Dynamic navigation strategy.
 - Surviving building after foundation loss.

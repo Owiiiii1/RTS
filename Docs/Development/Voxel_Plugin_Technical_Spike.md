@@ -3,9 +3,9 @@
 **Date:** 2026-09-04
 **Branch:** `terrain/gp-voxel-foundation`
 **Base:** `origin/main` @ `569777625b8a4718289ad4809efa5ba5da09df7c`
-**Status:** `PLUGIN_INSTALLED_AND_AUDITED`
+**Status:** `RUNTIME_CRATER_PROVEN`
 
-This spike is discovery + local integration audit. No production terrain service, no Content, no `GP.uproject` commit, no Worker leveling, no Foundation, no placement migration. Stage 3A is **not complete** until a runtime crater probe actually deforms an `AVoxelWorld`.
+This spike is discovery + local integration + a **non-shipping runtime crater probe**. No production terrain service, no Content, no `GP.uproject` commit, no Worker leveling, no Foundation, no placement migration. Stage 3A is **not complete** until operator visual validation and the next authoritative event-layer decision.
 
 Canonical constraints (unchanged):
 
@@ -29,6 +29,7 @@ Canonical constraints (unchanged):
 | Descriptor | `GP\Plugins\VoxelFree\VoxelFree.uplugin` (canonical; **not** nested `VoxelPluginFreeLegacy-master\`) |
 | `GP.uproject` Plugins[] | Unchanged. No `VoxelFree` entry. Unreal auto-mounted the project plugin. |
 | Compile probe | `gp.Voxel.RunPluginCompileProbeContractTest` → **Failures=0** |
+| Runtime crater probe | `gp.Voxel.RunRuntimeCraterProbeContractTest` → **Failures=0** |
 
 ---
 
@@ -256,11 +257,16 @@ Separate update if render was skipped: `UVoxelBlueprintLibrary::UpdateBounds(Wor
 
 - Density: `GetValue` / `GetInterpolatedValue`
 - Material: `GetMaterial`
-- Surface-ish: `FindClosestNonEmptyVoxel`
 - Coordinates: `GlobalToLocal` / `LocalToGlobal` (+ Float)
 - Default voxel size 100 cm (`AVoxelWorld::VoxelSize`)
+- **No dedicated `QuerySurfaceZ(WorldXY)`.** Proven candidates:
+  1. **Best for GP later:** downward world line trace against voxel collision after mesh/collision idle (used in the crater probe; hit Z moved 199.9 → -100.0 after `RemoveSphere`).
+  2. **Density root along Z:** walk `GetValue` down a voxel column until density < 0, then `LocalToGlobal`. Probe: `DensitySurfaceZ=100` with actor at Z=200 (`VoxelSize=100`, first solid at voxel Z=-1).
+  3. `UVoxelProjectionTools::FindProjectionVoxels` — batch world linetraces, not a single XY→Z helper.
+  4. `FindSurfaceVoxels` — batch surface voxels in a box (sculpt tools), not XY column.
+  5. `FindClosestNonEmptyVoxel` — **only the 8 voxel-cell neighbors** of the query point. Not XY→Z. Fails in empty air or on an integer-empty surface cell (`(0,0,0)` density +0.001). Succeeds inside solid (`(0,0,-1)`).
 
-No production query adapter yet.
+No production query adapter yet. Private probe helper `QueryDensitySurfaceWorldZ` is test-only.
 
 ---
 
@@ -297,7 +303,66 @@ Risks (do **not** claim bit-identical):
 - float density
 - async LOD / collision cook timing (visual/phys lag, not the density field itself)
 
-Prefer `bMultiThreaded=false` for replay experiments. Not proven in PIE.
+Prefer `bMultiThreaded=false` for replay experiments. Runtime probe used `bMultiThreaded=false` and got matching density + local bounds on one machine; still not a multiplayer proof.
+
+---
+
+## Runtime crater proof (2026-09-04)
+
+**RUNTIME_CRATER_PROVEN** via `gp.Voxel.RunRuntimeCraterProbeContractTest` (UnrealEditor-Cmd, `L_PrototypeArena`, `-game -NullRHI`). Failures=0. No map/content assets. Transient `AVoxelWorld` destroyed at end.
+
+### Minimal world init (C++, no UAsset generator)
+
+1. `SpawnActor<AVoxelWorld>` at isolated `(25000, 0, 200)`, tag `GP_VoxelRuntimeProbe`.
+2. `SetGeneratorClass(UVoxelFlatGenerator::StaticClass())` — built-in `UCLASS`, no content asset.
+3. `VoxelSize = 100`, `SetRenderOctreeDepth(1)` → **64³** voxels, `MaxLOD = 0`, `DataOctreeInitialSubdivisionDepth = 1`.
+4. `bEnableCollisions = true`, complex-as-simple, `ECC_WorldDynamic` block-all.
+5. `UVoxelSimpleInvokerComponent` on the actor (`LODRange`/`CollisionsRange` = 20000 cm).
+6. `VoxelMaterial = UMaterial::GetDefaultMaterial(MD_Surface)` (RGB config).
+7. `CreateWorld()` (`PlayType = Game`). Wait `IsLoaded` + proc-mesh count > 0 + `GetTaskCount()==0`.
+
+Flat generator density = `Z + 0.001` in voxel space (negative = solid). Surface ≈ actor origin.
+
+### Coordinate / radius contract
+
+| Input | Space |
+| --- | --- |
+| `RemoveSphere` `Position` | **world cm** when `bConvertToVoxelSpace=true` |
+| `Radius` | **world cm** when `bConvertToVoxelSpace=true` (300 cm = 3 voxels at VoxelSize 100) |
+| `EditedBounds` | **voxel integer box** (inclusive Min, exclusive Max) |
+| `GlobalToLocal` / `LocalToGlobal` | world cm ↔ voxel index |
+
+`FGPVoxelSphereSubtractRequest` (private): `WorldLocation` + `RadiusCm`. Shape = SphereSubtract. **No Depth.** A deeper crater is the same sphere with center offset **below** the surface, not a plugin depth API.
+
+### Proven measurements
+
+| Check | Result |
+| --- | --- |
+| Density crater voxel `(0,0,-1)` | **-0.999 → empty (positive)** |
+| Density far voxel `(20,0,-1)` | **-0.999 unchanged** |
+| `EditedBounds` | `(-6/7, -6/7, -6/7)` Size **13³** vs world **64³** (local) |
+| Proc meshes | **4** before and after (no full-world rebuild) |
+| Line trace crater | hit Z **199.9 → -100.0** (delta **299.9 cm**) |
+| Far trace Z | unchanged (< 80 cm) |
+| Mesh idle after edit | `GetTaskCount()==0` |
+
+### Async / frames
+
+- Density write is **synchronous** on the sync `RemoveSphere` overload.
+- Mesh/LOD is **async** (`IsVoxelWorldMeshLoading` / `GetTaskCount` / `OnWorldLoaded`). Test waits with **TimerManager 0.05 s ticks**, not `Sleep`.
+- Collision cook is async Chaos; no public “cooked” callback on `RemoveSphere`. Test polls traces **after mesh idle**. This run: `waitTicks=0` (collision already deep when mesh went idle).
+
+### GP isolation
+
+Private adapter `GP/Source/GPRuntime/Private/Voxel/GPVoxelRuntimeProbeAdapter.*` holds all Voxel includes. Public runner header has **no** Voxel types. Gameplay headers do not expose `AVoxelWorld`.
+
+Operator visual (does not save the map):
+
+1. PIE `L_PrototypeArena`
+2. `gp.Voxel.SpawnRuntimeProbe`
+3. fly to logged location (pawn-forward 2500 cm, else `(25000,0,200)`)
+4. `gp.Voxel.ApplyProbeCrater`
+5. inspect hole; walk/trace
 
 ---
 
@@ -349,17 +414,18 @@ Folder size (this machine, 2026-09-04):
 
 ## Stage 3A recommendation
 
-**PLUGIN_INSTALLED_AND_AUDITED.** Ready for a **runtime crater probe**. Stage 3A is not complete.
+**RUNTIME_CRATER_PROVEN.** Stage 3A is not complete (operator visual validation + event-layer decision remain).
 
 | Question | Answer |
 | --- | --- |
 | Plugin installed + UE 5.8.1 compile/load? | **Yes** |
+| Runtime crater + mesh + collision? | **Yes** (`RemoveSphere`, Failures=0) |
 | Exact crater API? | `UVoxelSphereTools::RemoveSphere` |
-| Event replay? | **EVENT_REPLAY_FEASIBLE** (API-level) |
+| Event replay? | **EVENT_REPLAY_FEASIBLE** (API-level; one-machine density proven) |
 | Production deformation service? | **No** |
 | Start 3B Worker leveling? | **No** |
-| Next action | Runtime crater probe: spawn or use `AVoxelWorld`, call `RemoveSphere`, confirm mesh + collision on affected bounds. Do not vendor the plugin until policy is decided. |
+| Next action | Operator PIE visual pass (`SpawnRuntimeProbe` / `ApplyProbeCrater`). Then decide GP authoritative event layer. Do not vendor the plugin. Do not start 3B. |
 
 ### GO / BLOCKED
 
-`PLUGIN_INSTALLED_AND_AUDITED` — next checkpoint is the runtime crater probe, not 3B.
+`RUNTIME_CRATER_PROVEN` — next is operator visual validation, not 3B.

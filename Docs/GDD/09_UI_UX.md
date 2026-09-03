@@ -79,10 +79,11 @@ UX/balance tuning may revisit the presentation scale.
   static authored map image (`UGP_UIPresentationSettings::MinimapBackgroundTexture`, async) whose
   left/right/top/bottom match resolved camera/playable bounds, not the full FoW grid.
   FoW overlay is a bounded presentation downsample of the trusted local mirror through the shared
-  surface transform (`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`). Friendly units,
-  buildings, and MainBase appear as simple blips inside playable bounds and are not FoW-gated.
-  Enemy blips remain a later checkpoint. Event-driven; no widget Tick. Not SceneCapture / live camera
-  / render-target terrain.
+  surface transform (`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`). Blip color is the
+  configured player/team color. Units and buildings of one player share that color; buildings are
+  larger markers. Friendly actors are always shown inside playable bounds. Enemy actors appear only
+  while currently Visible. Last-known remains a later checkpoint. Event-driven; no widget Tick.
+  Not SceneCapture / live camera / render-target terrain.
 
 **Bottom center — Selection / Current Info** (widest lower block)
 
@@ -134,7 +135,7 @@ Future authored names; none of these visual widgets are implemented yet.
 - `WBP_GP_Lobby`
 - `WBP_GP_HUD` (root; native base `UGP_HUDRootWidget`)
 - Top-bar blocks: Threat+Score, Match Timer, Planet/Orbit/Cap
-- Bottom-bar blocks: Minimap (native `UGP_MinimapWidget` background + FoW + friendly blips; enemy blips later), Selection/Info, Context Action Grid + Message Strip
+- Bottom-bar blocks: Minimap (native `UGP_MinimapWidget` background + FoW + team-colored blips; last-known later), Selection/Info, Context Action Grid + Message Strip
   (MainBase PURCHASE lives in this panel; not a fullscreen Order Menu)
 - Right-side Launch Menu: Launch button on top, vertical local-MainBase container fill bars below
   (yellow while filling, green when full/ready). Event-driven from local storage. Authored in

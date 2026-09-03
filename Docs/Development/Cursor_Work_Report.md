@@ -2,11 +2,11 @@
 
 ## Status
 
-**MINIMAP_FRIENDLY_BLIPS_READY_FOR_OPERATOR_VALIDATION**
+**MINIMAP_ENEMY_BLIPS_READY_FOR_OPERATOR_VALIDATION**
 
 **INTERMEDIATE / NOT MERGE READY**
 
-Horizontal FoW/minimap mirror is fixed at the shared widget surface layer. Friendly unit/building/MainBase blips are drawn from the existing local unit presentation registry. Enemy blips, camera rectangle, click-to-pan, and last-known markers remain later checkpoints.
+Minimap blips now use canonical player/team color. Unit vs building is marker size only. Friendly actors stay visible inside playable bounds. Enemy units/buildings appear only while currently Visible on trusted local FoW. Last-known is not in this checkpoint.
 
 ## Branch / base / head
 
@@ -15,83 +15,58 @@ Horizontal FoW/minimap mirror is fixed at the shared widget surface layer. Frien
 | Path | `D:\Progects\RTS` |
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
-| Pre-checkpoint HEAD | `d2eba077097a042a6c8e4f4b4adecd7767f8a082` (camera-bounds) |
-| Checkpoint HEAD | `b58ea515c097fa5c3fb1ad9e7ea168454d2ec12d` |
+| Pre-checkpoint HEAD | `157d6b7` (friendly-blips SHA record) |
+| Checkpoint HEAD | *(this commit)* |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 
 Not merge-ready to `main`.
 
-## Exact reason / fix for horizontal mirror
+## Canonical team color source
 
-Operator confirmed FoW was mirrored horizontally vs the game world.
+`UGP_GameplayPresentationSettings::GetTeamColor(TeamId)` is the single source of truth (same mapping as `UGP_TeamPresentationComponent` / unit visuals). Unknown or unassigned TeamId (`< 1` or unlisted) resolves to `NeutralTeamColor`.
 
-**Cause:** widget surface transform only flipped Y (`ScreenY = 1 - NormalizedY`, `ScreenX = NormalizedX`). For the authored/game orientation that left the horizontal axis mirrored.
+Presentation data stores `FGP_MinimapBlip::TeamId`. `UGP_MinimapWidget::ResolveBlipColor` reads the settings at paint time. There is no separate friendly/enemy color scheme.
 
-**Fix (widget/presentation layer only):**
+Removed widget-local `FriendlyUnitBlipColor` (cyan) and `FriendlyBuildingBlipColor` (yellow).
 
-- `PresenterNormalizedToSurfaceUV` → `(1 - X, 1 - Y)`
-- `SurfaceUVToPresenterNormalized` → `(1 - X, 1 - Y)` (self-inverse)
+## Unit / building size semantics
 
-**Unchanged presenter contract:**
+Same TeamId → same color for units, buildings, and MainBase.
 
-- `WorldToMinimapNormalized` still maps world `+X/+Y` → normalized `+X/+Y`
-- displayed extents remain resolved camera/playable bounds
-- FoW gameplay grid (2000×2000 / 100 cm) unchanged
+Type differentiation is size only:
 
-Background, FoW overlay, friendly blips, and future camera-rect / click input must all use this shared surface transform.
+- unit half-extent `1.75px`
+- building/MainBase half-extent `2.75px`
 
-## Shared surface transform
+## Enemy FoW gating source
 
-```
-Presenter normalized: world +X / +Y
-Surface: Xscreen = 1 - NormalizedX
-         Yscreen = 1 - NormalizedY
-```
+Same live membership as friendlies: `UGP_LocalFoWUnitPresentationSubsystem::RegisteredUnits` (`AGP_UnitBase` BeginPlay/EndPlay). No second registry. No actor scans.
 
-Paint order in one Slate pass:
+Gating reuses `UGP_LocalFoWUnitPresentationSubsystem::ShouldPresentUnitForLocalPlayer` against the presenter's trusted `UGP_LocalFoWComponent`:
 
-1. background
-2. FoW
-3. friendly blips
+- TeamId `< 1`: not classified as friendly or enemy; omitted
+- Friendly (`TeamId == LocalTeamId >= 1`): always shown inside camera/playable bounds
+- Enemy (`TeamId >= 1` and `!= LocalTeamId`): shown only if `IsVisible` (Visible). Explored and Unexplored omit the blip
 
-## Blip registry / source
+No distance-based enemy visibility. No last-known markers.
 
-Canonical live membership is **reused**, not reinvented:
+## Update lifecycle
 
-- `UGP_LocalFoWUnitPresentationSubsystem` (`RegisteredUnits`)
-- `AGP_UnitBase` BeginPlay / EndPlay self-register / unregister
-
-No `GetAllActorsOfClass`, no `TActorIterator` in the widget, no widget Tick world scan.
-
-Added registry seams (no duplicate gameplay state):
-
-- `OnUnitRegistryChanged`
-- `OnRegisteredUnitsEvaluated` (end of existing 10 Hz evaluation)
-- `ForEachRegisteredUnit`
-
-`UGP_MinimapPresenter` builds presentation-only `FGP_MinimapBlip` snapshots:
-
-- `NormalizedPosition` (camera-bounds normalized, unclamped; outside → omit)
-- `Kind` Unit / Building
-- weak `SourceActor` for lifecycle identity
-
-Friendly filter: `TeamId == LocalTeamId >= 1` and selection type unit or building. Enemy actors produce no friendly blip in this checkpoint.
-
-## Movement update lifecycle
-
-No widget Tick.
+No widget Tick. No world scan.
 
 | Event | Path |
 | --- | --- |
-| Register / unregister | `OnUnitRegistryChanged` → `RebuildFriendlyBlips` |
-| Movement | existing registry 10 Hz `EvaluateRegisteredUnits` → `OnRegisteredUnitsEvaluated` → bounded O(registered) blip rebuild |
-| FoW / camera metadata | `RebuildPresentation` also refreshes blips |
+| Register / unregister | `OnUnitRegistryChanged` → `RebuildBlips` |
+| Movement / visibility edge | existing 10 Hz `EvaluateRegisteredUnits` → `OnRegisteredUnitsEvaluated` |
+| FoW revision | `OnLocalFoWUpdated` → `RebuildPresentation` → `RebuildBlips` |
 
-Bounded position refresh over registered friendly minimap actors is acceptable (~500 own units). No per-frame per-actor property delegates.
+Enemy Visible → blip appears; leaving Visible → blip disappears. Bounded O(registered actors).
 
-## Friendly FoW semantics
+Paint order (one Slate pass, shared `Xscreen = 1-X`, `Yscreen = 1-Y`):
 
-Friendly units/buildings/MainBase are **always shown** inside displayed playable/camera bounds. They are **not** FoW-gated. Enemy FoW gating remains the next checkpoint.
+1. background
+2. FoW
+3. friendly + currently-visible enemy blips
 
 ## Tests
 
@@ -99,14 +74,16 @@ Command pattern: `UnrealEditor-Cmd` `GP.uproject` `/Game/GrimProtocol/Maps/L_Pro
 
 | Command | Result |
 | --- | --- |
+| `gp.UI.RunMinimapEnemyBlipsContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapFriendlyBlipsContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapCameraBoundsContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapSurfaceContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapPresentationContractTest` | **PASS** Complete Failures=0 |
 | `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | **PASS** Complete Failures=0 |
+| `gp.Combat.RunTeamColorContractTest` | **PASS** Complete Failures=0 |
 
-Focused coverage: orientation `(0,0)→(1,1)` / `(1,1)→(0,0)` / round-trip; FoW/background share transform; friendly unit+building blips; enemy excluded; outside bounds omitted; move updates position; destroy removes; rebind no duplicate registry listeners; no widget Tick / world scan.
+Focused coverage: same-TeamId unit/building same resolved color; different TeamId different configured color; size not color; no cyan/yellow type split; enemy Visible present; Explored/Unexplored absent; Visible→Explored removes; Explored→Visible restores; enemy building same rules; friendly remains regardless FoW; outside bounds omitted; invalid TeamId omitted.
 
 ## GPEditor build
 
@@ -114,22 +91,16 @@ Focused coverage: orientation `(0,0)→(1,1)` / `(1,1)→(0,0)` / round-trip; Fo
 
 ## Changed files (this checkpoint)
 
-- `GP/Source/GPRuntime/Public/Presentation/GPLocalFoWUnitPresentationSubsystem.h`
-- `GP/Source/GPRuntime/Private/Presentation/GPLocalFoWUnitPresentationSubsystem.cpp`
 - `GP/Source/GPUIRuntime/Public/ViewModels/GPMinimapPresenter.h`
 - `GP/Source/GPUIRuntime/Private/ViewModels/GPMinimapPresenter.cpp`
 - `GP/Source/GPUIRuntime/Public/Widgets/GPMinimapWidget.h`
 - `GP/Source/GPUIRuntime/Private/Widgets/GPMinimapWidget.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapFriendlyBlipsContractTest.cpp` (new)
-- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapSurfaceContractTest.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapCameraBoundsContractTest.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapEnemyBlipsContractTest.cpp` (new)
 - `Docs/TDD/12_UI_Architecture.md`
 - `Docs/TDD/15_Fog_of_War.md`
 - `Docs/GDD/09_UI_UX.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/Development/Cursor_Work_Report.md`
-
-Camera doc (`TDD/11_RTS_Camera.md`) unchanged — orientation wording lives in UI/FoW docs.
 
 ## Protected audit
 
@@ -148,15 +119,15 @@ Operator dirty/untracked Content/Config preserved.
 
 ## Operator test
 
-1. Open ordinary `D:\Progects\RTS\GP\GP.uproject`
-2. PIE on `L_PrototypeArena`
-3. Confirm FoW is no longer horizontally mirrored vs the game world
-4. Confirm friendly units/buildings (and MainBase) appear as blips on the minimap
-5. Move a friendly unit and confirm the blip moves in the correct direction
+1. PIE on `L_PrototypeArena`
+2. Confirm own units and buildings are the same team color
+3. Confirm buildings are larger dots, not a different color
+4. Confirm an enemy blip appears only when that enemy is Visible
+5. Move the enemy out of vision → blip disappears
+6. Reveal the enemy again → blip reappears
 
 ## Out of scope (next checkpoints)
 
-- Enemy blips / FoW gating for enemies
 - Last-known markers
 - Camera rectangle
 - Click-to-pan

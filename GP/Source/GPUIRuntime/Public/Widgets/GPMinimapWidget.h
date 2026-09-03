@@ -18,7 +18,8 @@ class UTexture2D;
  * Presenter normalized XY is the displayed camera/playable rect, not the full FoW grid.
  * Presenter mapping stays world +X/+Y → normalized +X/+Y (no flip there).
  * Widget surface transform only: ScreenX = 1 - NormalizedX, ScreenY = 1 - NormalizedY.
- * Background, FoW, and friendly blips share that transform. Not SceneCapture. No Tick / polling / world scan.
+ * Background, FoW, and blips share that transform. Blip color is canonical team color;
+ * unit vs building differs by size. Not SceneCapture. No Tick / polling / world scan.
  */
 UCLASS(meta = (DisplayName = "GP Minimap", ShortTooltip = "Static map image plus FoW overlay"))
 class GPUIRUNTIME_API UGP_MinimapWidget : public UWidget
@@ -37,6 +38,9 @@ public:
 
 	static FVector2D PresenterNormalizedToSurfaceUV(const FVector2D& Normalized);
 	static FVector2D SurfaceUVToPresenterNormalized(const FVector2D& SurfaceUV);
+	static FLinearColor ResolveBlipColor(int32 TeamId);
+	static float GetUnitBlipHalfExtentPx();
+	static float GetBuildingBlipHalfExtentPx();
 	static int32 ClampFoWPresentationResolution(int32 Requested);
 	static FBox2D ComputeSharedMapDestLocal(
 		const FVector2D& AllottedSize,
@@ -58,7 +62,10 @@ public:
 	EGP_FoWState GetFoWPresentationSample(int32 SurfaceX, int32 SurfaceY) const;
 	int32 GetFoWPresentationSampleCount() const { return FoWSamples.Num(); }
 	FBox2D ContractComputeMapDestLocal(const FVector2D& AllottedSize) const;
-	int32 GetFriendlyBlipDrawCount() const { return FriendlyBlipDrawList.Num(); }
+	int32 GetFriendlyBlipDrawCount() const { return BlipDrawList.Num(); }
+	int32 GetBlipDrawCount() const { return BlipDrawList.Num(); }
+	int32 ContractGetBlipDrawTeamId(int32 Index) const;
+	bool ContractGetBlipDrawIsBuilding(int32 Index) const;
 	FVector2D ContractWorldToSurfaceUV(const FVector& WorldLocation) const;
 #endif
 
@@ -79,7 +86,7 @@ private:
 	void HandleBackgroundLoaded();
 	void ApplyResidentBackground(UTexture2D* Texture);
 	void RebuildFoWOverlay();
-	void RebuildFriendlyBlipDrawCache();
+	void RebuildBlipDrawCache();
 	void EnsureFoWTexture();
 	void UploadFoWTexture();
 	void PushBrushesToSlate();
@@ -93,13 +100,14 @@ private:
 	FDelegateHandle PresentationChangedHandle;
 	FDelegateHandle BlipsChangedHandle;
 
-	struct FGPMinimapFriendlyBlipDraw
+	struct FGPMinimapBlipDraw
 	{
 		FVector2D PresenterNormalized = FVector2D::ZeroVector;
+		int32 TeamId = -1;
 		bool bIsBuilding = false;
 	};
 
-	TArray<FGPMinimapFriendlyBlipDraw> FriendlyBlipDrawList;
+	TArray<FGPMinimapBlipDraw> BlipDrawList;
 
 	TSharedPtr<FStreamableHandle> BackgroundLoadHandle;
 	FSoftObjectPath PendingBackgroundPath;

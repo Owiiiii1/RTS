@@ -12,6 +12,7 @@
 #include "TextureResource.h"
 #include "Presentation/GPFoWPresentationRaster.h"
 #include "Rendering/DrawElements.h"
+#include "Settings/GPGameplayPresentationSettings.h"
 #include "Settings/GPUIPresentationSettings.h"
 #include "Styling/SlateBrush.h"
 #include "ViewModels/GPHUDViewModelSubsystem.h"
@@ -23,10 +24,8 @@ namespace GPMinimapWidgetPrivate
 {
 	static constexpr int32 DefaultFoWResolution = 128;
 	static const FLinearColor FallbackColor(0.02f, 0.02f, 0.025f, 1.0f);
-	static const FLinearColor FriendlyUnitBlipColor(0.25f, 0.95f, 1.0f, 1.0f);
-	static const FLinearColor FriendlyBuildingBlipColor(0.95f, 0.95f, 0.35f, 1.0f);
-	static constexpr float FriendlyUnitBlipHalfExtentPx = 1.75f;
-	static constexpr float FriendlyBuildingBlipHalfExtentPx = 2.75f;
+	static constexpr float UnitBlipHalfExtentPx = 1.75f;
+	static constexpr float BuildingBlipHalfExtentPx = 2.75f;
 
 	static FColor OverlayColor(EGP_FoWState State)
 	{
@@ -37,6 +36,7 @@ namespace GPMinimapWidgetPrivate
 struct FGPMinimapSurfaceBlipDraw
 {
 	FVector2D PresenterNormalized = FVector2D::ZeroVector;
+	int32 TeamId = -1;
 	bool bIsBuilding = false;
 };
 
@@ -71,9 +71,9 @@ public:
 		bHasFoW = bInHasFoW;
 	}
 
-	void SetFriendlyBlips(const TArray<FGPMinimapSurfaceBlipDraw>& InBlips)
+	void SetBlips(const TArray<FGPMinimapSurfaceBlipDraw>& InBlips)
 	{
-		FriendlyBlips = InBlips;
+		Blips = InBlips;
 	}
 
 	virtual FVector2D ComputeDesiredSize(float) const override
@@ -151,29 +151,26 @@ public:
 
 		int32 NextLayer = LayerId + 3;
 		const FSlateBrush BlipBrush = FSlateColorBrush(FLinearColor::White);
-		for (const FGPMinimapSurfaceBlipDraw& Blip : FriendlyBlips)
+		for (const FGPMinimapSurfaceBlipDraw& Blip : Blips)
 		{
 			const FVector2D SurfaceUV =
 				UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(Blip.PresenterNormalized);
 			const FVector2D Center = MapDest.Min + SurfaceUV * DestSize;
 			const float HalfExtent = Blip.bIsBuilding
-				? GPMinimapWidgetPrivate::FriendlyBuildingBlipHalfExtentPx
-				: GPMinimapWidgetPrivate::FriendlyUnitBlipHalfExtentPx;
+				? GPMinimapWidgetPrivate::BuildingBlipHalfExtentPx
+				: GPMinimapWidgetPrivate::UnitBlipHalfExtentPx;
 			const FVector2D BlipSize(HalfExtent * 2.0f, HalfExtent * 2.0f);
 			const FVector2D BlipOffset(Center.X - HalfExtent, Center.Y - HalfExtent);
 			const FPaintGeometry BlipGeometry = AllottedGeometry.ToPaintGeometry(
 				BlipSize,
 				FSlateLayoutTransform(BlipOffset));
-			const FLinearColor BlipColor = Blip.bIsBuilding
-				? GPMinimapWidgetPrivate::FriendlyBuildingBlipColor
-				: GPMinimapWidgetPrivate::FriendlyUnitBlipColor;
 			FSlateDrawElement::MakeBox(
 				OutDrawElements,
 				NextLayer,
 				BlipGeometry,
 				&BlipBrush,
 				ESlateDrawEffect::None,
-				BlipColor);
+				UGP_MinimapWidget::ResolveBlipColor(Blip.TeamId));
 		}
 
 		return NextLayer;
@@ -182,7 +179,7 @@ public:
 private:
 	FSlateBrush BackgroundBrush;
 	FSlateBrush FoWBrush;
-	TArray<FGPMinimapSurfaceBlipDraw> FriendlyBlips;
+	TArray<FGPMinimapSurfaceBlipDraw> Blips;
 	FLinearColor FallbackColor = GPMinimapWidgetPrivate::FallbackColor;
 	FVector2D TextureSize = FVector2D::ZeroVector;
 	bool bHasBackgroundTexture = false;
@@ -215,6 +212,26 @@ FVector2D UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(const FVector2D& Nor
 FVector2D UGP_MinimapWidget::SurfaceUVToPresenterNormalized(const FVector2D& SurfaceUV)
 {
 	return FVector2D(1.0f - SurfaceUV.X, 1.0f - SurfaceUV.Y);
+}
+
+FLinearColor UGP_MinimapWidget::ResolveBlipColor(int32 TeamId)
+{
+	if (const UGP_GameplayPresentationSettings* Settings = UGP_GameplayPresentationSettings::Get())
+	{
+		return Settings->GetTeamColor(TeamId);
+	}
+
+	return FLinearColor::White;
+}
+
+float UGP_MinimapWidget::GetUnitBlipHalfExtentPx()
+{
+	return GPMinimapWidgetPrivate::UnitBlipHalfExtentPx;
+}
+
+float UGP_MinimapWidget::GetBuildingBlipHalfExtentPx()
+{
+	return GPMinimapWidgetPrivate::BuildingBlipHalfExtentPx;
 }
 
 int32 UGP_MinimapWidget::ClampFoWPresentationResolution(int32 Requested)
@@ -261,7 +278,7 @@ void UGP_MinimapWidget::SynchronizeProperties()
 	RequestBackgroundLoad();
 	BindPresenter(ResolvePresenter());
 	RebuildFoWOverlay();
-	RebuildFriendlyBlipDrawCache();
+	RebuildBlipDrawCache();
 	PushBrushesToSlate();
 }
 
@@ -333,7 +350,7 @@ void UGP_MinimapWidget::BindPresenter(UGP_MinimapPresenter* Presenter)
 	if (!IsValid(Presenter))
 	{
 		RebuildFoWOverlay();
-		RebuildFriendlyBlipDrawCache();
+		RebuildBlipDrawCache();
 		return;
 	}
 
@@ -344,7 +361,7 @@ void UGP_MinimapWidget::BindPresenter(UGP_MinimapPresenter* Presenter)
 	BlipsChangedHandle = Presenter->OnMinimapBlipsChanged.AddUObject(
 		this,
 		&ThisClass::HandleMinimapBlipsChanged);
-	RebuildFriendlyBlipDrawCache();
+	RebuildBlipDrawCache();
 }
 
 void UGP_MinimapWidget::UnbindPresenter()
@@ -364,31 +381,32 @@ void UGP_MinimapWidget::UnbindPresenter()
 	PresentationChangedHandle.Reset();
 	BlipsChangedHandle.Reset();
 	BoundPresenter.Reset();
-	FriendlyBlipDrawList.Reset();
+	BlipDrawList.Reset();
 }
 
 void UGP_MinimapWidget::HandleMinimapPresentationChanged()
 {
 	RebuildFoWOverlay();
-	RebuildFriendlyBlipDrawCache();
+	RebuildBlipDrawCache();
 	PushBrushesToSlate();
 }
 
 void UGP_MinimapWidget::HandleMinimapBlipsChanged()
 {
-	RebuildFriendlyBlipDrawCache();
+	RebuildBlipDrawCache();
 	if (MySurface.IsValid())
 	{
 		TArray<FGPMinimapSurfaceBlipDraw> SurfaceBlips;
-		SurfaceBlips.Reserve(FriendlyBlipDrawList.Num());
-		for (const FGPMinimapFriendlyBlipDraw& Blip : FriendlyBlipDrawList)
+		SurfaceBlips.Reserve(BlipDrawList.Num());
+		for (const FGPMinimapBlipDraw& Blip : BlipDrawList)
 		{
 			FGPMinimapSurfaceBlipDraw SurfaceBlip;
 			SurfaceBlip.PresenterNormalized = Blip.PresenterNormalized;
+			SurfaceBlip.TeamId = Blip.TeamId;
 			SurfaceBlip.bIsBuilding = Blip.bIsBuilding;
 			SurfaceBlips.Add(SurfaceBlip);
 		}
-		MySurface->SetFriendlyBlips(SurfaceBlips);
+		MySurface->SetBlips(SurfaceBlips);
 		MySurface->Invalidate(EInvalidateWidgetReason::Paint);
 	}
 }
@@ -587,33 +605,35 @@ void UGP_MinimapWidget::PushBrushesToSlate()
 	MySurface->SetBackground(BackgroundBrush, bHasTexture, TextureSize);
 	MySurface->SetFoW(FoWBrush, FoWTexture != nullptr);
 	TArray<FGPMinimapSurfaceBlipDraw> SurfaceBlips;
-	SurfaceBlips.Reserve(FriendlyBlipDrawList.Num());
-	for (const FGPMinimapFriendlyBlipDraw& Blip : FriendlyBlipDrawList)
+	SurfaceBlips.Reserve(BlipDrawList.Num());
+	for (const FGPMinimapBlipDraw& Blip : BlipDrawList)
 	{
 		FGPMinimapSurfaceBlipDraw SurfaceBlip;
 		SurfaceBlip.PresenterNormalized = Blip.PresenterNormalized;
+		SurfaceBlip.TeamId = Blip.TeamId;
 		SurfaceBlip.bIsBuilding = Blip.bIsBuilding;
 		SurfaceBlips.Add(SurfaceBlip);
 	}
-	MySurface->SetFriendlyBlips(SurfaceBlips);
+	MySurface->SetBlips(SurfaceBlips);
 	MySurface->Invalidate(EInvalidateWidgetReason::Paint);
 }
 
-void UGP_MinimapWidget::RebuildFriendlyBlipDrawCache()
+void UGP_MinimapWidget::RebuildBlipDrawCache()
 {
-	FriendlyBlipDrawList.Reset();
+	BlipDrawList.Reset();
 	const UGP_MinimapPresenter* Presenter = BoundPresenter.Get();
 	if (Presenter == nullptr || !Presenter->IsMinimapReady())
 	{
 		return;
 	}
 
-	for (const FGP_MinimapBlip& Blip : Presenter->GetFriendlyBlips())
+	for (const FGP_MinimapBlip& Blip : Presenter->GetBlips())
 	{
-		FGPMinimapFriendlyBlipDraw Draw;
+		FGPMinimapBlipDraw Draw;
 		Draw.PresenterNormalized = Blip.NormalizedPosition;
+		Draw.TeamId = Blip.TeamId;
 		Draw.bIsBuilding = Blip.Kind == EGP_MinimapBlipKind::Building;
-		FriendlyBlipDrawList.Add(Draw);
+		BlipDrawList.Add(Draw);
 	}
 }
 
@@ -677,6 +697,16 @@ EGP_FoWState UGP_MinimapWidget::GetFoWPresentationSample(int32 SurfaceX, int32 S
 FBox2D UGP_MinimapWidget::ContractComputeMapDestLocal(const FVector2D& AllottedSize) const
 {
 	return ComputeMapDestLocal(AllottedSize);
+}
+
+int32 UGP_MinimapWidget::ContractGetBlipDrawTeamId(int32 Index) const
+{
+	return BlipDrawList.IsValidIndex(Index) ? BlipDrawList[Index].TeamId : -1;
+}
+
+bool UGP_MinimapWidget::ContractGetBlipDrawIsBuilding(int32 Index) const
+{
+	return BlipDrawList.IsValidIndex(Index) && BlipDrawList[Index].bIsBuilding;
 }
 
 FVector2D UGP_MinimapWidget::ContractWorldToSurfaceUV(const FVector& WorldLocation) const

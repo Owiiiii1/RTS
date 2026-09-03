@@ -57,6 +57,7 @@ namespace GPMinimapPresenterPrivate
 			const FGP_MinimapBlip& Left = A[Index];
 			const FGP_MinimapBlip& Right = B[Index];
 			if (Left.Kind != Right.Kind
+				|| Left.TeamId != Right.TeamId
 				|| Left.SourceActor.Get() != Right.SourceActor.Get()
 				|| !Left.NormalizedPosition.Equals(Right.NormalizedPosition, 0.0001f))
 			{
@@ -107,8 +108,8 @@ void UGP_MinimapPresenter::Shutdown()
 	UnbindMirror();
 	bHasExplicitDisplayedBounds = false;
 	ExplicitDisplayedBounds = FBox(ForceInit);
-	FriendlyBlips.Reset();
-	FriendlyBlipRevision = 0;
+	Blips.Reset();
+	BlipRevision = 0;
 	RebuildPresentation(true);
 }
 
@@ -243,26 +244,41 @@ void UGP_MinimapPresenter::RebuildPresentation(bool bBroadcast)
 		}
 	}
 
-	RebuildFriendlyBlips(bBroadcast);
+	RebuildBlips(bBroadcast);
 }
 
-void UGP_MinimapPresenter::RebuildFriendlyBlips(bool bBroadcast)
+void UGP_MinimapPresenter::RebuildBlips(bool bBroadcast)
 {
 	TArray<FGP_MinimapBlip> NewBlips;
 	const int32 LocalTeamId = Presentation.LocalTeamId;
+	const UGP_LocalFoWComponent* Mirror = BoundMirror.Get();
 	if (Presentation.bIsReady && LocalTeamId >= 1)
 	{
 		if (UGP_LocalFoWUnitPresentationSubsystem* Registry = BoundUnitRegistry.Get())
 		{
 			Registry->ForEachRegisteredUnit(
-				[this, LocalTeamId, &NewBlips](AGP_UnitBase* Unit)
+				[this, LocalTeamId, Mirror, &NewBlips](AGP_UnitBase* Unit)
 				{
-					if (!IsValid(Unit) || Unit->GetTeamId() != LocalTeamId)
+					if (!IsValid(Unit))
+					{
+						return;
+					}
+
+					const int32 UnitTeamId = Unit->GetTeamId();
+					if (UnitTeamId < 1)
 					{
 						return;
 					}
 
 					if (!Unit->IsSelectionTypeUnit() && !Unit->IsSelectionTypeBuilding())
+					{
+						return;
+					}
+
+					if (!UGP_LocalFoWUnitPresentationSubsystem::ShouldPresentUnitForLocalPlayer(
+							Unit,
+							LocalTeamId,
+							Mirror))
 					{
 						return;
 					}
@@ -278,19 +294,20 @@ void UGP_MinimapPresenter::RebuildFriendlyBlips(bool bBroadcast)
 					Blip.Kind = Unit->IsSelectionTypeBuilding()
 						? EGP_MinimapBlipKind::Building
 						: EGP_MinimapBlipKind::Unit;
+					Blip.TeamId = UnitTeamId;
 					Blip.SourceActor = Unit;
 					NewBlips.Add(Blip);
 				});
 		}
 	}
 
-	if (GPMinimapPresenterPrivate::BlipsEqual(FriendlyBlips, NewBlips))
+	if (GPMinimapPresenterPrivate::BlipsEqual(Blips, NewBlips))
 	{
 		return;
 	}
 
-	FriendlyBlips = MoveTemp(NewBlips);
-	++FriendlyBlipRevision;
+	Blips = MoveTemp(NewBlips);
+	++BlipRevision;
 	if (bBroadcast)
 	{
 		OnMinimapBlipsChanged.Broadcast();
@@ -405,12 +422,12 @@ void UGP_MinimapPresenter::HandleResolvedCameraBoundsChanged()
 
 void UGP_MinimapPresenter::HandleUnitRegistryChanged()
 {
-	RebuildFriendlyBlips(true);
+	RebuildBlips(true);
 }
 
 void UGP_MinimapPresenter::HandleRegisteredUnitsEvaluated()
 {
-	RebuildFriendlyBlips(true);
+	RebuildBlips(true);
 }
 
 void UGP_MinimapPresenter::BindCameraPawn(AGP_CameraPawn* CameraPawn)
@@ -477,7 +494,7 @@ void UGP_MinimapPresenter::BindUnitRegistry(UWorld* World)
 	RegisteredUnitsEvaluatedHandle = Registry->OnRegisteredUnitsEvaluated.AddUObject(
 		this,
 		&ThisClass::HandleRegisteredUnitsEvaluated);
-	RebuildFriendlyBlips(false);
+	RebuildBlips(false);
 }
 
 void UGP_MinimapPresenter::UnbindUnitRegistry()
@@ -535,7 +552,7 @@ void UGP_MinimapPresenter::ContractClearDisplayedWorldBounds()
 
 void UGP_MinimapPresenter::ContractRebuildFriendlyBlips()
 {
-	RebuildFriendlyBlips(true);
+	RebuildBlips(true);
 }
 
 void UGP_MinimapPresenter::ContractBindUnitRegistry(UWorld* World)
@@ -551,7 +568,7 @@ const FGP_MinimapBlip* UGP_MinimapPresenter::ContractFindFriendlyBlipForActor(
 		return nullptr;
 	}
 
-	for (const FGP_MinimapBlip& Blip : FriendlyBlips)
+	for (const FGP_MinimapBlip& Blip : Blips)
 	{
 		if (Blip.SourceActor.Get() == Unit)
 		{
@@ -560,5 +577,11 @@ const FGP_MinimapBlip* UGP_MinimapPresenter::ContractFindFriendlyBlipForActor(
 	}
 
 	return nullptr;
+}
+
+const FGP_MinimapBlip* UGP_MinimapPresenter::ContractFindBlipForActor(
+	const AGP_UnitBase* Unit) const
+{
+	return ContractFindFriendlyBlipForActor(Unit);
 }
 #endif

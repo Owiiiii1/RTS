@@ -77,7 +77,7 @@ enum class EGP_MinimapBlipKind : uint8
 	Building
 };
 
-/** Presentation-only friendly minimap blip. Normalized XY uses presenter/camera-bounds mapping. */
+/** Presentation-only minimap blip. Color is resolved from TeamId at paint time. */
 USTRUCT(BlueprintType)
 struct GPUIRUNTIME_API FGP_MinimapBlip
 {
@@ -88,6 +88,9 @@ struct GPUIRUNTIME_API FGP_MinimapBlip
 
 	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Minimap")
 	EGP_MinimapBlipKind Kind = EGP_MinimapBlipKind::Unit;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Minimap")
+	int32 TeamId = -1;
 
 	TWeakObjectPtr<const AGP_UnitBase> SourceActor;
 };
@@ -117,8 +120,10 @@ public:
 	FVector MinimapNormalizedToWorld(const FVector2D& Normalized, float WorldZ) const;
 	EGP_FoWState GetMinimapFoWStateNormalized(const FVector2D& Normalized) const;
 	const FGP_MinimapPresentation& GetMinimapPresentation() const { return Presentation; }
-	const TArray<FGP_MinimapBlip>& GetFriendlyBlips() const { return FriendlyBlips; }
-	int64 GetFriendlyBlipRevision() const { return FriendlyBlipRevision; }
+	const TArray<FGP_MinimapBlip>& GetBlips() const { return Blips; }
+	const TArray<FGP_MinimapBlip>& GetFriendlyBlips() const { return Blips; }
+	int64 GetBlipRevision() const { return BlipRevision; }
+	int64 GetFriendlyBlipRevision() const { return BlipRevision; }
 	int32 GetBoundDelegateCount() const;
 	int32 GetBoundCameraBoundsDelegateCount() const;
 	int32 GetBoundUnitRegistryDelegateCount() const;
@@ -130,6 +135,7 @@ public:
 	void ContractRebuildFriendlyBlips();
 	void ContractBindUnitRegistry(UWorld* World);
 	const FGP_MinimapBlip* ContractFindFriendlyBlipForActor(const AGP_UnitBase* Unit) const;
+	const FGP_MinimapBlip* ContractFindBlipForActor(const AGP_UnitBase* Unit) const;
 #endif
 
 	FOnGPMinimapPresentationChanged OnMinimapPresentationChanged;
@@ -148,7 +154,7 @@ private:
 	void BindUnitRegistry(UWorld* World);
 	void UnbindUnitRegistry();
 	void RebuildPresentation(bool bBroadcast);
-	void RebuildFriendlyBlips(bool bBroadcast);
+	void RebuildBlips(bool bBroadcast);
 	FGP_MinimapPresentation BuildPresentationFromMirror(const UGP_LocalFoWComponent* Mirror) const;
 	bool TryResolveDisplayedWorldBounds(FVector2D& OutMin, FVector2D& OutSize) const;
 	bool HasUsableBounds() const;
@@ -166,6 +172,6 @@ private:
 	bool bHasExplicitDisplayedBounds = false;
 	FBox ExplicitDisplayedBounds = FBox(ForceInit);
 	FGP_MinimapPresentation Presentation;
-	TArray<FGP_MinimapBlip> FriendlyBlips;
-	int64 FriendlyBlipRevision = 0;
+	TArray<FGP_MinimapBlip> Blips;
+	int64 BlipRevision = 0;
 };

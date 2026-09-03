@@ -17,7 +17,7 @@ Stage 3A tech spike only. No production terrain service. Voxel Plugin is not ins
 | Remote | `origin/terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Merge-base with `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
-| Spike commit | recorded in the SHA follow-up |
+| Spike commit | `b0773ebcc70d7b824dc94ded7eddd2cd641fc261` |
 
 Created from synced `main` with `git switch -c`. No rebase, reset, stash, or clean. Operator dirty/untracked preserved.
 

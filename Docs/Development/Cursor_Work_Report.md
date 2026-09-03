@@ -16,7 +16,7 @@ Click-to-pan already moved the camera pawn. The minimap camera footprint now reb
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
 | Pre-checkpoint HEAD | `12b12accf306f9f2a7feb6b1256378487023a251` (click-to-pan SHA record) |
-| Checkpoint HEAD | *(recorded after commit)* |
+| Checkpoint HEAD | `ac1ca6aa1d685a0c393e46f03655b9783e03055a` |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 
 Not merge-ready to `main`.

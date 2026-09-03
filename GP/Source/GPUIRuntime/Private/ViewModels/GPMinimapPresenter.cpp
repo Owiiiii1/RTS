@@ -595,9 +595,10 @@ bool UGP_MinimapPresenter::TryCollectUnclampedNormalizedCorners(TArray<FVector2D
 	{
 		FVector WorldPoint = FVector::ZeroVector;
 		if (!TryDeprojectViewportCornerToGround(
-				PlayerController,
 				ScreenCorners[CornerIndex][0],
 				ScreenCorners[CornerIndex][1],
+				ViewportX,
+				ViewportY,
 				PlaneZ,
 				WorldPoint))
 		{
@@ -619,48 +620,6 @@ bool UGP_MinimapPresenter::TryCollectUnclampedNormalizedCorners(TArray<FVector2D
 }
 
 bool UGP_MinimapPresenter::TryDeprojectViewportCornerToGround(
-	AGP_PlayerController* PlayerController,
-	float ScreenX,
-	float ScreenY,
-	float PlaneZ,
-	FVector& OutWorld) const
-{
-	if (!IsValid(PlayerController)
-		|| !FMath::IsFinite(ScreenX)
-		|| !FMath::IsFinite(ScreenY)
-		|| !FMath::IsFinite(PlaneZ))
-	{
-		return false;
-	}
-
-	if (bHasViewportSizeOverride)
-	{
-		return TryUnprojectScreenToGroundUsingCameraView(
-			PlayerController,
-			ScreenX,
-			ScreenY,
-			ViewportSizeOverride.X,
-			ViewportSizeOverride.Y,
-			PlaneZ,
-			OutWorld);
-	}
-
-	FVector Origin = FVector::ZeroVector;
-	FVector Direction = FVector::ZeroVector;
-	if (!PlayerController->DeprojectScreenPositionToWorld(ScreenX, ScreenY, Origin, Direction))
-	{
-		return false;
-	}
-
-	return GPMinimapPresenterPrivate::TryIntersectRayWithHorizontalPlane(
-		Origin,
-		Direction,
-		PlaneZ,
-		OutWorld);
-}
-
-bool UGP_MinimapPresenter::TryUnprojectScreenToGroundUsingCameraView(
-	AGP_PlayerController* PlayerController,
 	float ScreenX,
 	float ScreenY,
 	int32 SizeX,
@@ -668,7 +627,12 @@ bool UGP_MinimapPresenter::TryUnprojectScreenToGroundUsingCameraView(
 	float PlaneZ,
 	FVector& OutWorld) const
 {
-	if (!IsValid(PlayerController) || SizeX < 2 || SizeY < 2)
+	OutWorld = FVector::ZeroVector;
+	if (SizeX < 2
+		|| SizeY < 2
+		|| !FMath::IsFinite(ScreenX)
+		|| !FMath::IsFinite(ScreenY)
+		|| !FMath::IsFinite(PlaneZ))
 	{
 		return false;
 	}
@@ -680,11 +644,7 @@ bool UGP_MinimapPresenter::TryUnprojectScreenToGroundUsingCameraView(
 	if (!IsValid(CameraPawn)
 		|| !CameraPawn->GetPresentationView(ViewLocation, ViewRotation, FieldOfView))
 	{
-		PlayerController->GetPlayerViewPoint(ViewLocation, ViewRotation);
-		if (PlayerController->PlayerCameraManager != nullptr)
-		{
-			FieldOfView = PlayerController->PlayerCameraManager->GetFOVAngle();
-		}
+		return false;
 	}
 
 	FMinimalViewInfo ViewInfo;

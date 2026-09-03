@@ -603,12 +603,17 @@ UI legitimately owns:
   presentation: Visible → show, Explored/Unexplored → omit. Invalid TeamId (< 1) is not treated
   as friendly or enemy. Last-known markers are not in this checkpoint. Movement/visibility refresh
   is driven by the registry's bounded 10 Hz evaluation and FoW revision, not widget Tick.
-- Camera footprint (MVP): four viewport corners → `DeprojectScreenPositionToWorld` via the local
-  `AGP_PlayerController` → ray vs horizontal plane Z = camera pawn actor Z → presenter-normalized
-  (unclamped) → convex clip against the unit square `[0,1]²` (Sutherland–Hodgman). Independent
-  per-corner clamp is not used. Invalid deproject / parallel ray / non-finite hit / clip `< 3`
-  points → do not draw. Outline is a thin neutral line (not team color), no fill, painted last
-  in the same Slate pass. Terrain-surface-aware projection is deferred.
+- Camera footprint (MVP): four viewport corners `(0,0)`, `(W-1,0)`, `(W-1,H-1)`, `(0,H-1)` are
+  unprojected from the **current** `AGP_CameraPawn` CameraComponent transform + FOV
+  (`GetPresentationView`) and the local viewport size, via `FSceneView::DeprojectScreenToWorld`.
+  PlayerController supplies viewport size and local ownership only — not a cached
+  `PlayerCameraManager` / `DeprojectScreenPositionToWorld` view. Ray vs horizontal plane
+  Z = camera pawn actor Z → presenter-normalized (unclamped) → convex clip against the unit
+  square `[0,1]²` (Sutherland–Hodgman). Independent per-corner clamp is not used. Invalid
+  deproject / parallel ray / non-finite hit / clip `< 3` points → do not draw. Outline is a
+  thin neutral line (not team color), no fill, painted last in the same Slate pass.
+  Terrain-surface-aware projection is deferred. Click-to-pan must move this outline in the
+  same presentation event; a later WASD/mouse Tick is not required.
 - This is **not** a complete minimap. Last-known, minimap drag-pan,
   and terrain/render-target work remain later checkpoints.
 - LMB click-to-pan (this checkpoint): `SGPMinimapSurface::OnMouseButtonDown` (LeftMouseButton only)

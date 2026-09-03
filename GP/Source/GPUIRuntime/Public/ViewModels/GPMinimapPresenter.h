@@ -191,13 +191,6 @@ private:
 	bool TryBuildCameraFootprint(FGP_MinimapCameraFootprint& OutFootprint) const;
 	bool TryCollectUnclampedNormalizedCorners(TArray<FVector2D>& OutCorners) const;
 	bool TryDeprojectViewportCornerToGround(
-		AGP_PlayerController* PlayerController,
-		float ScreenX,
-		float ScreenY,
-		float PlaneZ,
-		FVector& OutWorld) const;
-	bool TryUnprojectScreenToGroundUsingCameraView(
-		AGP_PlayerController* PlayerController,
 		float ScreenX,
 		float ScreenY,
 		int32 SizeX,

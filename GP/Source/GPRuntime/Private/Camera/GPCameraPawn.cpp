@@ -550,6 +550,18 @@ bool AGP_CameraPawn::SetCameraAnchorWorldXY(const FVector2D& TargetXY)
 	}
 
 	SyncSpringArmPresentation(0.0f);
+	if (RootScene != nullptr)
+	{
+		RootScene->UpdateComponentToWorld();
+	}
+	if (SpringArm != nullptr)
+	{
+		SpringArm->UpdateComponentToWorld();
+	}
+	if (Camera != nullptr)
+	{
+		Camera->UpdateComponentToWorld();
+	}
 	NotifyCameraPresentationChangedIfNeeded();
 	return true;
 }

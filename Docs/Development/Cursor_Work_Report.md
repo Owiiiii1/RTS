@@ -2,11 +2,11 @@
 
 ## Status
 
-**MINIMAP_CLICK_TO_PAN_READY_FOR_OPERATOR_VALIDATION**
+**MINIMAP_CLICK_TO_PAN_FOOTPRINT_SYNC_FIXED_READY_FOR_OPERATOR_VALIDATION**
 
 **INTERMEDIATE / NOT MERGE READY**
 
-LMB click inside the actual minimap MapDest instantly pans the local camera pawn XY-anchor. Zoom, yaw, pitch, and Z are preserved. Selection, marquee, unit commands, and gameplay authority are not involved. Drag-pan is not in this checkpoint.
+Click-to-pan already moved the camera pawn. The minimap camera footprint now rebuilds from the current CameraComponent view in that same presentation event, without a later WASD/mouse Tick.
 
 ## Branch / base / head
 
@@ -15,82 +15,70 @@ LMB click inside the actual minimap MapDest instantly pans the local camera pawn
 | Path | `D:\Progects\RTS` |
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
-| Pre-checkpoint HEAD | `b4edf92d20ea8e2b193f7e0fae5a53bd5609b3d6` (camera-footprint crash-fix SHA record) |
-| Checkpoint HEAD | `8f252a6d26ed7d0ede1a6341188f611772c8d04a` |
+| Pre-checkpoint HEAD | `12b12accf306f9f2a7feb6b1256378487023a251` (click-to-pan SHA record) |
+| Checkpoint HEAD | *(recorded after commit)* |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 
 Not merge-ready to `main`.
 
-## Exact input route
+## Confirmed root cause
 
-`FInputModeGameAndUI` is unchanged. No `SetInputModeUIOnly`. No global mouse capture. Camera rotate remains MMB. Selection remains Enhanced Input `IA_Select` (LMB). RMB command IMC is unchanged.
+`SetCameraAnchorWorldXY` did move the pawn, sync the spring arm, and broadcast `OnCameraPresentationChanged`. The presenter rebuilt the footprint synchronously.
 
-1. `SGPMinimapSurface` is `EVisibility::Visible` (hit-testable), `IsInteractable() == true`, no Tick, no keyboard focus.
-2. `OnMouseButtonDown` runs only for pointer routing. `EKeys::LeftMouseButton` is consumed (`FReply::Handled()`). Any other button returns `FReply::Unhandled()` (RMB is not click-to-pan).
-3. MapDest is `UGP_MinimapWidget::ComputeSharedMapDestLocal(...)` — the same helper `OnPaint` uses for background / FoW / blips / camera footprint.
-4. Local cursor = `AllottedGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition())`.
-5. Outside MapDest (letterbox / padding): `ConsumedNoPan` — handled, no world mapping, no camera move. Prevents the click falling through the Visible surface into world selection/marquee.
-6. Inside MapDest: `PanRequested` → Slate delegate `OnMapLeftClick(SurfaceUV)`.
+Production `TryDeprojectViewportCornerToGround` then called `AGP_PlayerController::DeprojectScreenPositionToWorld`. That uses the PlayerCameraManager view from earlier in the frame, still aimed at the pre-click camera.
 
-## Slate callback lifetime
+So in the click event:
 
-`FOnGPMinimapMapLeftClick` is a Slate `DECLARE_DELEGATE_OneParam`. Bound in `RebuildWidget` with `CreateUObject(this, &UGP_MinimapWidget::HandleMapLeftClick)` (weak UObject). `OnMouseButtonDown` uses `ExecuteIfBound`. `ReleaseSlateResources` clears the delegate, then `MySurface.Reset()`. No raw UObject pointer is stored on the Slate widget.
+- actor / CameraComponent already at the new XY
+- presentation event already fired
+- footprint rays still used the stale PCM view
+- presenter stored the old quadrilateral
+- the next real camera Tick/input refreshed PCM and the outline finally caught up
 
-`UGP_MinimapWidget::HandleMapLeftClick` rejects non-finite / out-of-range UV, then `BoundPresenter` (`TWeakObjectPtr`). Missing presenter: no-op.
+Headless contracts hid this: they set `ContractSetViewportSizeOverride` and already used `GetPresentationView` + `FSceneView::DeprojectScreenToWorld`.
 
-## Coordinate conversion
+## Old stale-view path
 
-Shared inverse is unchanged:
+If `bHasViewportSizeOverride` was false (PIE / real viewport):
 
-- Presenter: world +X/+Y → normalized +X/+Y
-- Surface: `SurfaceUVToPresenterNormalized` = `(1-X, 1-Y)` (same as paint)
+`PlayerController::DeprojectScreenPositionToWorld` → ray vs pawn XY-anchor plane.
 
-Flow: Local point → SurfaceUV in MapDest `[0..1]` → shared inverse → `UGP_MinimapPresenter::PanCameraToMinimapNormalized` → `MinimapNormalizedToWorld` on current displayed camera/playable bounds → camera seam.
+## New canonical projection source
 
-## Camera API
+One path for production and contracts:
 
-`AGP_CameraPawn::SetCameraAnchorWorldXY(const FVector2D& TargetXY)`
+1. Viewport size from the local PlayerController, or the contract override when the viewport is degenerate
+2. `AGP_CameraPawn::GetPresentationView()` — current CameraComponent world location, rotation, FOV
+3. Perspective `FMinimalViewInfo` + `UGameplayStatics::GetViewProjectionMatrix`
+4. `FSceneView::DeprojectScreenToWorld` for corners `(0,0)`, `(W-1,0)`, `(W-1,H-1)`, `(0,H-1)`
+5. Existing ray ∩ horizontal plane Z = `GetGroundReferencePlaneZ()`
+6. Existing unclamped normalize + convex clip `[0,1]²` + shared surface `(1-X, 1-Y)`
 
-- Local presentation only. No RPC. No gameplay state.
-- Rejects non-finite XY.
-- Click target = **camera pawn actor location XY** (canonical RTS pan anchor). No viewport-footprint-center compensation.
-- Preserves actor Z, yaw (`CurrentYaw` / root yaw), zoom (`CurrentArmLength` / spring arm), pitch.
-- `SetActorLocation` XY, then existing `ClampToBounds(*GetActiveConfig())`, then restore Z if clamp moved it.
-- `SyncSpringArmPresentation(0)` + `NotifyCameraPresentationChangedIfNeeded()` so the footprint event can follow.
+No PCM / `GetPlayerViewPoint` fallback. If `GetPresentationView` fails, the footprint is not drawn.
 
-Presenter: `UGP_MinimapPresenter::PanCameraToMinimapNormalized`. Requires ready + usable displayed bounds + finite `[0..1]` + valid bound `AGP_CameraPawn`. Widget does not call `SetActorLocation`.
+PlayerController is only for local ownership and viewport pixel size.
 
-## Preserved state
+`SetCameraAnchorWorldXY` still `SyncSpringArmPresentation(0)` and now also `UpdateComponentToWorld` on RootScene / SpringArm / Camera so `GetPresentationView` is current before `NotifyCameraPresentationChangedIfNeeded`.
 
-| State | Click-to-pan |
-| --- | --- |
-| Camera XY-anchor | Moves to mapped world point, then canonical clamp |
-| Z | Preserved |
-| Yaw | Preserved |
-| Pitch | Preserved |
-| Zoom / arm length | Preserved |
-| Selection | Unchanged |
-| Unit commands | Not issued |
-| Gameplay authority | Untouched |
+## Immediate update sequence
 
-## Bounds semantics
+LMB MapDest → `PanCameraToMinimapNormalized` → `SetCameraAnchorWorldXY` → component transform sync → fingerprint change → `OnCameraPresentationChanged` → `RebuildCameraFootprint` from the new CameraComponent view → Slate cache/push. No timer, no next Tick, no fake input.
 
-A normalized MapDest click is inside the displayed camera/playable rect. `SetCameraAnchorWorldXY` still runs the pawn's canonical `ClampToBounds`. Widget/presenter do not duplicate clamp math. Missing presenter/camera/NaN: ignored.
+Ground plane, clip, bounds, surface orientation, click mapping, and paint are unchanged.
 
-## Input conflict audit
+## Regression that fails the old implementation
 
-| Channel | Result |
-| --- | --- |
-| LMB inside MapDest | Slate handled; camera pan only |
-| LMB letterbox on the Visible surface | Slate handled; no pan; should not start world click-select/marquee |
-| RMB on surface | Unhandled; not click-to-pan; no new minimap RMB commands |
-| MMB rotate | Unchanged (`SetRotateActive` / `IA_Camera` rotate) |
-| `IA_Select` / marquee | PC code unchanged; consume is Slate `FReply::Handled` under GameAndUI |
-| Command targeting / placement | Unchanged |
+`gp.UI.RunMinimapClickToPanFootprintSyncContractTest`
 
-## Letterbox semantics
+1. Build a valid footprint at camera A
+2. `SetCameraAnchorWorldXY(B)` 
+3. No later `Tick` / WASD / mouse
+4. The presentation callback has already rebuilt the footprint
+5. Revision increased; world-space footprint centroid translated with the anchor (same sign, non-trivial delta)
+6. Current `GetPresentationView` corners moved without a PlayerCameraManager refresh
+7. Yaw/FOV preserved
 
-Input region == paint MapDest. Authored background aspect letterbox: clicks in the dark bars do not produce map UV. No background (fallback square): MapDest is the current square contract. Both cases are in `gp.UI.RunMinimapClickToPanContractTest`.
+On the old PCM production path a real-viewport click left the centroid at A until the next camera Tick. NullRHI still needs a size override when `GetViewportSize` is degenerate; that override now uses the same CameraComponent projection as production.
 
 ## Tests
 
@@ -98,24 +86,21 @@ Command pattern: `UnrealEditor-Cmd` `GP.uproject` `/Game/GrimProtocol/Maps/L_Pro
 
 | Command | Result |
 | --- | --- |
+| `gp.UI.RunMinimapClickToPanFootprintSyncContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapClickToPanContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunMinimapCameraFootprintOutlineCrashContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapCameraFootprintContractTest` | **PASS** Complete Failures=0 |
+| `gp.UI.RunMinimapCameraFootprintOutlineCrashContractTest` | **PASS** Complete Failures=0 |
+| `gp.UI.RunMinimapSurfaceContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapEnemyBlipsContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapFriendlyBlipsContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapCameraBoundsContractTest` | **PASS** Complete Failures=0 |
-| `gp.UI.RunMinimapSurfaceContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapPresentationContractTest` | **PASS** Complete Failures=0 |
 | `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | **PASS** Complete Failures=0 |
 
-Focused contract covers: MapDest center → SurfaceUV 0.5/0.5 and shared inverse; visual left/right/top/bottom vs `(1-X,1-Y)`; letterbox reject / inside accept / RMB ignored; fallback square vs textured letterbox; camera XY move; Z/yaw/zoom preserved; clamp; footprint follow; no presenter/camera/invalid UV; Slate release; LMB-only; no Tick.
-
 ## GPEditor build
 
 `GPEditor Win64 Development` + UHT for `D:\Progects\RTS\GP\GP.uproject`: **Succeeded**. Not GP Development / Shipping.
-
-`GPUIRuntime` now public-depends on `InputCore` (`EKeys` in the minimap surface/contract).
 
 ## Protected audit
 
@@ -134,22 +119,19 @@ Operator dirty/untracked Content/Config/Tools/`GP.uproject` preserved.
 
 ## Operator test
 
-1. PIE: LMB center of minimap → camera jumps there
-2. LMB corners → camera goes to the matching world side
-3. LMB next to a friendly blip → camera footprint around that area
-4. Orientation: visual left/top still match the already-validated world mapping
-5. Zoom, then click-to-pan → zoom unchanged
-6. Rotate, then click-to-pan → yaw unchanged
-7. LMB on minimap does not select world units and does not start marquee
-8. RMB on minimap does not click-to-pan
-9. FoW / blips / camera footprint still update
+1. PIE; do not pan/rotate first
+2. LMB a distant minimap point
+3. World camera jumps
+4. Camera footprint jumps to that area in the same click
+5. No WASD / mouse move required
+6. Repeated clicks update the outline immediately
+7. Zoom and yaw unchanged
+8. FoW / blips unchanged
 
 ## Out of scope
 
-- Drag-pan / click-and-drag camera on minimap
-- RMB minimap commands, minimap selection, ping
+- Drag-pan
 - Last-known
-- Minimap zoom / rotate
 - SceneCapture
 - Merge to `main`
 

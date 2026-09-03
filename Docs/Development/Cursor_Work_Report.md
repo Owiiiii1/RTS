@@ -16,7 +16,7 @@ PIE no longer hits the UE 5.8 TArray self-reference assertion when painting the 
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
 | Pre-checkpoint HEAD | `40c8ca33a8c3cf66cf55b31ebd320ccbdb6293ba` (camera-footprint SHA record) |
-| Checkpoint HEAD | *recorded in follow-up SHA commit* |
+| Checkpoint HEAD | `b2e552692b1510821c11cf48c452ecc1bdddf059` |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 
 Not merge-ready to `main`.

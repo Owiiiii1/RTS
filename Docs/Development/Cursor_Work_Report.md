@@ -2,11 +2,11 @@
 
 ## Status
 
-**MINIMAP_CAMERA_BOUNDS_READY_FOR_OPERATOR_VALIDATION**
+**MINIMAP_FRIENDLY_BLIPS_READY_FOR_OPERATOR_VALIDATION**
 
 **INTERMEDIATE / NOT MERGE READY**
 
-Minimap displayed world extents now follow the same resolved camera/playable bounds `AGP_CameraPawn` uses for `ClampToBounds`. The FoW gameplay grid (2000×2000 / 100 cm) is unchanged. Minimap is a crop/projection over trusted LocalFoW. No SceneCapture. Not a complete minimap (no blips / camera rectangle / click-to-pan / last-known).
+Horizontal FoW/minimap mirror is fixed at the shared widget surface layer. Friendly unit/building/MainBase blips are drawn from the existing local unit presentation registry. Enemy blips, camera rectangle, click-to-pan, and last-known markers remain later checkpoints.
 
 ## Branch / base / head
 
@@ -15,110 +15,125 @@ Minimap displayed world extents now follow the same resolved camera/playable bou
 | Path | `D:\Progects\RTS` |
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
-| Pre-checkpoint HEAD | `d54db93b5e22ed2e88af3c98c15e555c83369a63` |
-| Checkpoint HEAD | `d2eba077097a042a6c8e4f4b4adecd7767f8a082` |
+| Pre-checkpoint HEAD | `d2eba077097a042a6c8e4f4b4adecd7767f8a082` (camera-bounds) |
+| Checkpoint HEAD | *(this commit)* |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
-| `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` (behind main = 0) |
 
 Not merge-ready to `main`.
 
-## Canonical bounds source
+## Exact reason / fix for horizontal mirror
 
-Same `FBox` `AGP_CameraPawn::ClampToBounds` uses:
+Operator confirmed FoW was mirrored horizontally vs the game world.
 
-1. Valid `AGP_CameraBoundsVolume::GetCameraBounds()` AABB, if the pawn has resolved a volume.
-2. Else the active camera config `FallbackBounds` (CDO via `GetActiveConfig()` until async DA load, then authored `CachedConfig`).
+**Cause:** widget surface transform only flipped Y (`ScreenY = 1 - NormalizedY`, `ScreenX = NormalizedX`). For the authored/game orientation that left the horizontal axis mirrored.
 
-FoW grid origin / 2000×2000 / 100 cm are **not** minimap visual bounds.
+**Fix (widget/presentation layer only):**
 
-## Camera API seam
+- `PresenterNormalizedToSurfaceUV` → `(1 - X, 1 - Y)`
+- `SurfaceUVToPresenterNormalized` → `(1 - X, 1 - Y)` (self-inverse)
 
-`GPRuntime` public seam on `AGP_CameraPawn` (GPUIRuntime does not scan the world):
+**Unchanged presenter contract:**
 
-- `bool GetResolvedCameraBounds(FBox& OutBounds) const`
-- `static bool IsUsableResolvedCameraBounds(const FBox& Bounds)`
-- `FOnGPResolvedCameraBoundsChanged OnResolvedCameraBoundsChanged`
+- `WorldToMinimapNormalized` still maps world `+X/+Y` → normalized `+X/+Y`
+- displayed extents remain resolved camera/playable bounds
+- FoW gameplay grid (2000×2000 / 100 cm) unchanged
 
-Notify only after `BeginPlay` (volume find + first clamp) and after async `HandleConfigLoaded`. Contract-only `ContractSetCameraBoundsVolume` / `ContractClearCameraBoundsVolume` (`!UE_BUILD_SHIPPING`) so UI tests do not iterate actors.
+Background, FoW overlay, friendly blips, and future camera-rect / click input must all use this shared surface transform.
 
-## Presenter mapping before / after
+## Shared surface transform
 
-**Before:** `WorldToMinimapNormalized` / `MinimapNormalizedToWorld` used `GridOrigin` + full FoW `WorldSizeCm`. On `L_PrototypeArena` that is the 2000×2000 visibility field, so the playable camera area was a small patch.
+```
+Presenter normalized: world +X / +Y
+Surface: Xscreen = 1 - NormalizedX
+         Yscreen = 1 - NormalizedY
+```
 
-**After:**
+Paint order in one Slate pass:
 
-- FoW metadata stays: `GridOrigin`, `WorldSizeCm`, `GridDimensions`, `CellSizeCm`
-- Displayed rect: `MapWorldMin` + `MapWorldSizeCm`
-- Normalized `[0,1]` maps to that displayed rect (world +X/+Y, no presenter Y-flip)
-- `GetMinimapFoWStateNormalized` maps displayed normalized → world inside camera bounds, then `UGP_LocalFoWComponent::GetStateAtWorldLocation`
-- Widget still `ScreenY = 1 - NormalizedY`; background and FoW share that transform
+1. background
+2. FoW
+3. friendly blips
 
-`UGP_MinimapPresenter::Initialize(PC)` binds the possessed `AGP_CameraPawn` (no `TActorIterator` in GPUIRuntime).
+## Blip registry / source
 
-## Fallback semantics
+Canonical live membership is **reused**, not reinvented:
 
-If camera bounds are missing or degenerate (non-finite / Min ≥ Max XY):
+- `UGP_LocalFoWUnitPresentationSubsystem` (`RegisteredUnits`)
+- `AGP_UnitBase` BeginPlay / EndPlay self-register / unregister
 
-- displayed fields fall back to the trusted FoW-grid rect
-- mapping stays finite (no divide-by-zero)
-- presentation can still become ready from FoW metadata
+No `GetAllActorsOfClass`, no `TActorIterator` in the widget, no widget Tick world scan.
 
-This keeps isolated 4×4 presenter/surface contracts green when no pawn is bound.
+Added registry seams (no duplicate gameplay state):
 
-## Async / event lifecycle
+- `OnUnitRegistryChanged`
+- `OnRegisteredUnitsEvaluated` (end of existing 10 Hz evaluation)
+- `ForEachRegisteredUnit`
 
-No widget Tick. No presenter Tick. No polling.
+`UGP_MinimapPresenter` builds presentation-only `FGP_MinimapBlip` snapshots:
 
-1. HUD `BindMinimapPresenter` → `Initialize(PC)`: bind LocalFoW + current pawn; rebuild immediately from `GetResolvedCameraBounds` if already valid.
-2. If pawn `BeginPlay` / async config has not finished, first snapshot may be CDO fallback (or FoW-grid if pawn is null).
-3. `OnResolvedCameraBoundsChanged` rebuilds presentation once bounds are ready. Re-`Initialize` / rebind does not duplicate camera or mirror delegates (`GetBoundCameraBoundsDelegateCount()` / `GetBoundDelegateCount()`).
+- `NormalizedPosition` (camera-bounds normalized, unclamped; outside → omit)
+- `Kind` Unit / Building
+- weak `SourceActor` for lifecycle identity
 
-MVP bounds are static after initialization; this is not a dynamic bounds system.
+Friendly filter: `TeamId == LocalTeamId >= 1` and selection type unit or building. Enemy actors produce no friendly blip in this checkpoint.
 
-## Background image contract
+## Movement update lifecycle
 
-`UGP_UIPresentationSettings::MinimapBackgroundTexture` is authored to **camera/playable bounds**, not the full FoW grid. Left/right/top/bottom = those extents. World +Y / NormalizedY=1 is the top of the image. FoW overlay uses the same mapping. No new texture asset created in this checkpoint.
+No widget Tick.
+
+| Event | Path |
+| --- | --- |
+| Register / unregister | `OnUnitRegistryChanged` → `RebuildFriendlyBlips` |
+| Movement | existing registry 10 Hz `EvaluateRegisteredUnits` → `OnRegisteredUnitsEvaluated` → bounded O(registered) blip rebuild |
+| FoW / camera metadata | `RebuildPresentation` also refreshes blips |
+
+Bounded position refresh over registered friendly minimap actors is acceptable (~500 own units). No per-frame per-actor property delegates.
+
+## Friendly FoW semantics
+
+Friendly units/buildings/MainBase are **always shown** inside displayed playable/camera bounds. They are **not** FoW-gated. Enemy FoW gating remains the next checkpoint.
 
 ## Tests
 
-Command: `UnrealEditor-Cmd` `D:\Progects\RTS\GP\GP.uproject` `/Game/GrimProtocol/Maps/L_PrototypeArena` `-game -unattended -nop4 -NullRHI -nosplash -nosteam`
+Command pattern: `UnrealEditor-Cmd` `GP.uproject` `/Game/GrimProtocol/Maps/L_PrototypeArena` `-game -unattended -nop4 -NullRHI -nosplash -nosteam -ExecCmds=<cmd>`
 
 | Command | Result |
 | --- | --- |
+| `gp.UI.RunMinimapFriendlyBlipsContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapCameraBoundsContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapSurfaceContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapPresentationContractTest` | **PASS** Complete Failures=0 |
 | `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | **PASS** Complete Failures=0 |
 
-Focused contract covers: volume → displayed; no volume → exact Config `FallbackBounds`; displayed ≠ full FoW grid; normalized (0,0)/(1,1)/center round-trip; FoW query through crop; degenerate safe; no Tick; rebind does not duplicate camera delegates; background/FoW share orientation.
-
-No dedicated `gp.Camera.*` contract exists; volume vs fallback is asserted against `GetResolvedCameraBounds` in the new UI contract.
+Focused coverage: orientation `(0,0)→(1,1)` / `(1,1)→(0,0)` / round-trip; FoW/background share transform; friendly unit+building blips; enemy excluded; outside bounds omitted; move updates position; destroy removes; rebind no duplicate registry listeners; no widget Tick / world scan.
 
 ## GPEditor build
 
-`GPEditor Win64 Development` + UHT for `D:\Progects\RTS\GP\GP.uproject`: **Succeeded** (79.68 s). Not GP Development / Shipping.
+`GPEditor Win64 Development` + UHT for `D:\Progects\RTS\GP\GP.uproject`: **Succeeded**. Not GP Development / Shipping.
 
 ## Changed files (this checkpoint)
 
-- `GP/Source/GPRuntime/Public/Camera/GPCameraPawn.h`
-- `GP/Source/GPRuntime/Private/Camera/GPCameraPawn.cpp`
+- `GP/Source/GPRuntime/Public/Presentation/GPLocalFoWUnitPresentationSubsystem.h`
+- `GP/Source/GPRuntime/Private/Presentation/GPLocalFoWUnitPresentationSubsystem.cpp`
 - `GP/Source/GPUIRuntime/Public/ViewModels/GPMinimapPresenter.h`
 - `GP/Source/GPUIRuntime/Private/ViewModels/GPMinimapPresenter.cpp`
-- `GP/Source/GPUIRuntime/Public/Settings/GPUIPresentationSettings.h`
 - `GP/Source/GPUIRuntime/Public/Widgets/GPMinimapWidget.h`
-- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapCameraBoundsContractTest.cpp` (new)
-- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapPresentationContractTest.cpp`
-- `Docs/TDD/11_RTS_Camera.md`
+- `GP/Source/GPUIRuntime/Private/Widgets/GPMinimapWidget.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapFriendlyBlipsContractTest.cpp` (new)
+- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapSurfaceContractTest.cpp`
+- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapCameraBoundsContractTest.cpp`
 - `Docs/TDD/12_UI_Architecture.md`
 - `Docs/TDD/15_Fog_of_War.md`
 - `Docs/GDD/09_UI_UX.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
+Camera doc (`TDD/11_RTS_Camera.md`) unchanged — orientation wording lives in UI/FoW docs.
+
 ## Protected audit
 
-Not edited / not committed:
+Not committed / not modified for this checkpoint:
 
 - `WBP_GP_HUD`
 - `GP/Content/`
@@ -129,30 +144,24 @@ Not edited / not committed:
 - `GP.uproject`
 - `Tools/`
 
-Operator dirty/untracked left in the working tree (same set as before this checkpoint):
+Operator dirty/untracked Content/Config preserved.
 
-- `GP/Config/DefaultEngine.ini`
-- `GP/Config/DefaultGame.ini`
-- `GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap`
-- `GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset`
-- `GP/GP.uproject`
-- `GP/Content/Basic_VFX/`
-- `GP/Content/GrimProtocol/Blueprint/` (includes local `WBP_GP_HUD`)
-- `GP/Content/GrimProtocol/DataAssets/Buildings/`
-- `GP/Content/GrimProtocol/DataAssets/Game/`
-- `GP/Content/GrimProtocol/DataAssets/Units/`
-- `GP/Content/GrimProtocol/Materials/`
-- `GP/Content/Mixed_Magic_VFX_Pack/`
-- `GP/Content/RocketThrusterExhaustFX/`
-- `Tools/`
+## Operator test
 
-## Operator validation
+1. Open ordinary `D:\Progects\RTS\GP\GP.uproject`
+2. PIE on `L_PrototypeArena`
+3. Confirm FoW is no longer horizontally mirrored vs the game world
+4. Confirm friendly units/buildings (and MainBase) appear as blips on the minimap
+5. Move a friendly unit and confirm the blip moves in the correct direction
 
-1. Open ordinary `D:\Progects\RTS\GP\GP.uproject` (this primary tree; already on `ui/gp-minimap` with this GPEditor build).
-2. PIE on `L_PrototypeArena`.
-3. Confirm the black minimap square is the same UI size, but the logical world extent now matches the camera movement area (playable clamp), not the full FoW grid. FoW/vision should look much larger on the minimap. Panning the camera into a playable edge should correspond to the minimap edge. If camera bounds are symmetric, world center stays ~0.5/0.5.
-4. Move a unit and confirm Visible → Explored still works at the new scale.
+## Out of scope (next checkpoints)
 
-## INTERMEDIATE / NOT MERGE READY
+- Enemy blips / FoW gating for enemies
+- Last-known markers
+- Camera rectangle
+- Click-to-pan
+- Selection highlighting
+- Per-type unit icons
+- SceneCapture / terrain / voxel
 
-Blips, camera rectangle, click-to-pan, last-known, and terrain/voxel remain later. Authored `WBP_GP_HUD` stays operator-local.
+**INTERMEDIATE / NOT MERGE READY**

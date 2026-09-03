@@ -59,6 +59,7 @@ void UGP_LocalFoWUnitPresentationSubsystem::RegisterUnit(AGP_UnitBase* Unit)
 	RegisteredUnits.AddUnique(Unit);
 	RefreshLocalMirrorBinding();
 	EvaluateUnit(Unit);
+	OnUnitRegistryChanged.Broadcast();
 }
 
 void UGP_LocalFoWUnitPresentationSubsystem::UnregisterUnit(AGP_UnitBase* Unit)
@@ -74,6 +75,7 @@ void UGP_LocalFoWUnitPresentationSubsystem::UnregisterUnit(AGP_UnitBase* Unit)
 			return !Candidate.IsValid() || Candidate.Get() == Unit;
 		},
 		EAllowShrinking::No);
+	OnUnitRegistryChanged.Broadcast();
 }
 
 void UGP_LocalFoWUnitPresentationSubsystem::NotifyUnitTeamChanged(AGP_UnitBase* Unit)
@@ -137,7 +139,28 @@ void UGP_LocalFoWUnitPresentationSubsystem::EvaluateRegisteredUnits()
 	{
 		EvaluateUnit(UnitWeak.Get());
 	}
+
+	OnRegisteredUnitsEvaluated.Broadcast();
 }
+
+void UGP_LocalFoWUnitPresentationSubsystem::ForEachRegisteredUnit(
+	TFunctionRef<void(AGP_UnitBase*)> Callback) const
+{
+	for (const TWeakObjectPtr<AGP_UnitBase>& UnitWeak : RegisteredUnits)
+	{
+		if (AGP_UnitBase* Unit = UnitWeak.Get())
+		{
+			Callback(Unit);
+		}
+	}
+}
+
+#if !UE_BUILD_SHIPPING
+void UGP_LocalFoWUnitPresentationSubsystem::ContractEvaluateRegisteredUnits()
+{
+	EvaluateRegisteredUnits();
+}
+#endif
 
 void UGP_LocalFoWUnitPresentationSubsystem::EvaluateUnit(AGP_UnitBase* Unit)
 {

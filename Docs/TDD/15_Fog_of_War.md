@@ -35,7 +35,7 @@ Current-compatible deviations from the older pseudocode:
   non-Visible cell). Post-process and fullscreen/sampled mask approaches are abandoned. Canonical
   gameplay grid is 100 cm / 10 Hz / 2000×2000;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
-  relevance, minimap **blips / camera rectangle / input**, and remaining production HUD panels remain later
+  relevance, minimap **enemy blips / camera rectangle / input**, and remaining production HUD panels remain later
   slices. Native minimap presentation foundation (`UGP_MinimapPresenter`) consumes the trusted
   local FoW mirror for grid metadata, Revision, and per-query cell state; displayed minimap extents
   are resolved camera/playable bounds, not the 2000×2000 FoW grid. It does not allocate a 2000×2000
@@ -337,9 +337,12 @@ axis-aligned onto **resolved camera/playable bounds** (`AGP_CameraPawn::GetResol
 valid `AGP_CameraBoundsVolume`, else `Config.FallbackBounds`). Minimap is a crop/projection over
 trusted LocalFoW; FoW authority, grid origin, dimensions, and cell size are unchanged.
 `UGP_MinimapWidget` paints a static authored background (authored to those camera/playable extents,
-world +Y at the top) plus a bounded FoW overlay (default 128×128 downsample,
-Unexplored/Explored/Visible) using the same mapping. Widget-only `ScreenY = 1 - NormalizedY`.
-Overlay rebuilds on `OnMinimapPresentationChanged` only (FoW revision and/or camera-bounds ready).
+world +Y at the top after surface flip) plus a bounded FoW overlay (default 128×128 downsample,
+Unexplored/Explored/Visible) using the same mapping. Surface transform:
+`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`. Friendly blips are drawn in the same
+single Slate paint pass above FoW; friendly units/buildings are always shown inside playable bounds
+and are not FoW-gated. Enemy blips remain a later checkpoint. Widget-only `ScreenY = 1 - NormalizedY`
+is superseded by the full XY flip above.
 No `UGP_MinimapSubsystem`, no 10 Hz poll, no per-cell widget, no 2000×2000 texture copy, and no
 terrain capture / SceneCapture in this checkpoint. Degenerate/unavailable camera bounds fall back
 to the FoW-grid rect so mapping never divides by zero.

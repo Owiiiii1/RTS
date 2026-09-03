@@ -10,7 +10,9 @@
 
 class AGP_CameraPawn;
 class AGP_PlayerController;
+class AGP_UnitBase;
 class UGP_LocalFoWComponent;
+class UGP_LocalFoWUnitPresentationSubsystem;
 
 /**
  * Presentation snapshot for HUD minimap consumers. Metadata only; never copies FoW cells.
@@ -68,7 +70,30 @@ struct GPUIRUNTIME_API FGP_MinimapPresentation
 	int64 Revision = 0;
 };
 
+UENUM(BlueprintType)
+enum class EGP_MinimapBlipKind : uint8
+{
+	Unit,
+	Building
+};
+
+/** Presentation-only friendly minimap blip. Normalized XY uses presenter/camera-bounds mapping. */
+USTRUCT(BlueprintType)
+struct GPUIRUNTIME_API FGP_MinimapBlip
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Minimap")
+	FVector2D NormalizedPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Minimap")
+	EGP_MinimapBlipKind Kind = EGP_MinimapBlipKind::Unit;
+
+	TWeakObjectPtr<const AGP_UnitBase> SourceActor;
+};
+
 DECLARE_MULTICAST_DELEGATE(FOnGPMinimapPresentationChanged);
+DECLARE_MULTICAST_DELEGATE(FOnGPMinimapBlipsChanged);
 
 /**
  * LocalPlayer-owned, event-driven minimap presentation foundation.
@@ -88,19 +113,27 @@ public:
 
 	bool IsMinimapReady() const { return Presentation.bIsReady; }
 	FVector2D WorldToMinimapNormalized(const FVector& WorldLocation) const;
+	bool TryWorldToMinimapNormalizedUnclamped(const FVector& WorldLocation, FVector2D& OutNormalized) const;
 	FVector MinimapNormalizedToWorld(const FVector2D& Normalized, float WorldZ) const;
 	EGP_FoWState GetMinimapFoWStateNormalized(const FVector2D& Normalized) const;
 	const FGP_MinimapPresentation& GetMinimapPresentation() const { return Presentation; }
+	const TArray<FGP_MinimapBlip>& GetFriendlyBlips() const { return FriendlyBlips; }
+	int64 GetFriendlyBlipRevision() const { return FriendlyBlipRevision; }
 	int32 GetBoundDelegateCount() const;
 	int32 GetBoundCameraBoundsDelegateCount() const;
+	int32 GetBoundUnitRegistryDelegateCount() const;
 
 #if !UE_BUILD_SHIPPING
 	void ContractBindCameraPawn(AGP_CameraPawn* CameraPawn);
 	void ContractApplyDisplayedWorldBounds(const FBox& DisplayedBounds);
 	void ContractClearDisplayedWorldBounds();
+	void ContractRebuildFriendlyBlips();
+	void ContractBindUnitRegistry(UWorld* World);
+	const FGP_MinimapBlip* ContractFindFriendlyBlipForActor(const AGP_UnitBase* Unit) const;
 #endif
 
 	FOnGPMinimapPresentationChanged OnMinimapPresentationChanged;
+	FOnGPMinimapBlipsChanged OnMinimapBlipsChanged;
 
 protected:
 	virtual void BeginDestroy() override;
@@ -108,9 +141,14 @@ protected:
 private:
 	void HandleMirrorUpdated(UGP_LocalFoWComponent* Mirror);
 	void HandleResolvedCameraBoundsChanged();
+	void HandleUnitRegistryChanged();
+	void HandleRegisteredUnitsEvaluated();
 	void BindCameraPawn(AGP_CameraPawn* CameraPawn);
 	void UnbindCameraPawn();
+	void BindUnitRegistry(UWorld* World);
+	void UnbindUnitRegistry();
 	void RebuildPresentation(bool bBroadcast);
+	void RebuildFriendlyBlips(bool bBroadcast);
 	FGP_MinimapPresentation BuildPresentationFromMirror(const UGP_LocalFoWComponent* Mirror) const;
 	bool TryResolveDisplayedWorldBounds(FVector2D& OutMin, FVector2D& OutSize) const;
 	bool HasUsableBounds() const;
@@ -122,7 +160,12 @@ private:
 	FDelegateHandle MirrorUpdatedHandle;
 	TWeakObjectPtr<AGP_CameraPawn> BoundCameraPawn;
 	FDelegateHandle CameraBoundsChangedHandle;
+	TWeakObjectPtr<UGP_LocalFoWUnitPresentationSubsystem> BoundUnitRegistry;
+	FDelegateHandle UnitRegistryChangedHandle;
+	FDelegateHandle RegisteredUnitsEvaluatedHandle;
 	bool bHasExplicitDisplayedBounds = false;
 	FBox ExplicitDisplayedBounds = FBox(ForceInit);
 	FGP_MinimapPresentation Presentation;
+	TArray<FGP_MinimapBlip> FriendlyBlips;
+	int64 FriendlyBlipRevision = 0;
 };

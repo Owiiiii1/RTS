@@ -5,6 +5,8 @@
 #include "Camera/GPCameraPawn.h"
 #include "FogOfWar/GPLocalFoWComponent.h"
 #include "Player/GPPlayerController.h"
+#include "Presentation/GPLocalFoWUnitPresentationSubsystem.h"
+#include "Units/GPUnitBase.h"
 
 namespace GPMinimapPresenterPrivate
 {
@@ -42,6 +44,28 @@ namespace GPMinimapPresenterPrivate
 			&& Size.X > KINDA_SMALL_NUMBER
 			&& Size.Y > KINDA_SMALL_NUMBER;
 	}
+
+	static bool BlipsEqual(const TArray<FGP_MinimapBlip>& A, const TArray<FGP_MinimapBlip>& B)
+	{
+		if (A.Num() != B.Num())
+		{
+			return false;
+		}
+
+		for (int32 Index = 0; Index < A.Num(); ++Index)
+		{
+			const FGP_MinimapBlip& Left = A[Index];
+			const FGP_MinimapBlip& Right = B[Index];
+			if (Left.Kind != Right.Kind
+				|| Left.SourceActor.Get() != Right.SourceActor.Get()
+				|| !Left.NormalizedPosition.Equals(Right.NormalizedPosition, 0.0001f))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
 }
 
 bool UGP_MinimapPresenter::Initialize(AGP_PlayerController* InPlayerController)
@@ -54,6 +78,7 @@ bool UGP_MinimapPresenter::Initialize(AGP_PlayerController* InPlayerController)
 		IsValid(InPlayerController) ? Cast<AGP_CameraPawn>(InPlayerController->GetPawn()) : nullptr;
 	const bool bMirrorBound = InitializeWithMirror(Mirror);
 	BindCameraPawn(CameraPawn);
+	BindUnitRegistry(IsValid(InPlayerController) ? InPlayerController->GetWorld() : nullptr);
 	RebuildPresentation(true);
 	return bMirrorBound;
 }
@@ -70,16 +95,20 @@ bool UGP_MinimapPresenter::InitializeWithMirror(UGP_LocalFoWComponent* Mirror)
 	MirrorUpdatedHandle = Mirror->OnLocalFoWUpdated.AddUObject(
 		this,
 		&ThisClass::HandleMirrorUpdated);
+	BindUnitRegistry(Mirror->GetWorld());
 	RebuildPresentation(true);
 	return true;
 }
 
 void UGP_MinimapPresenter::Shutdown()
 {
+	UnbindUnitRegistry();
 	UnbindCameraPawn();
 	UnbindMirror();
 	bHasExplicitDisplayedBounds = false;
 	ExplicitDisplayedBounds = FBox(ForceInit);
+	FriendlyBlips.Reset();
+	FriendlyBlipRevision = 0;
 	RebuildPresentation(true);
 }
 
@@ -99,6 +128,20 @@ int32 UGP_MinimapPresenter::GetBoundCameraBoundsDelegateCount() const
 	return CameraBoundsChangedHandle.IsValid() ? 1 : 0;
 }
 
+int32 UGP_MinimapPresenter::GetBoundUnitRegistryDelegateCount() const
+{
+	int32 Count = 0;
+	if (UnitRegistryChangedHandle.IsValid())
+	{
+		++Count;
+	}
+	if (RegisteredUnitsEvaluatedHandle.IsValid())
+	{
+		++Count;
+	}
+	return Count;
+}
+
 FVector2D UGP_MinimapPresenter::WorldToMinimapNormalized(const FVector& WorldLocation) const
 {
 	if (!HasUsableBounds() || !GPMinimapPresenterPrivate::IsFiniteVector(WorldLocation))
@@ -114,6 +157,29 @@ FVector2D UGP_MinimapPresenter::WorldToMinimapNormalized(const FVector& WorldLoc
 	return FVector2D(
 		FMath::Clamp(NormalizedX, 0.0f, 1.0f),
 		FMath::Clamp(NormalizedY, 0.0f, 1.0f));
+}
+
+bool UGP_MinimapPresenter::TryWorldToMinimapNormalizedUnclamped(
+	const FVector& WorldLocation,
+	FVector2D& OutNormalized) const
+{
+	if (!HasUsableBounds() || !GPMinimapPresenterPrivate::IsFiniteVector(WorldLocation))
+	{
+		return false;
+	}
+
+	const FVector2D WorldSize = GetDisplayedWorldSizeCm();
+	const float NormalizedX =
+		(WorldLocation.X - Presentation.MapWorldMin.X) / WorldSize.X;
+	const float NormalizedY =
+		(WorldLocation.Y - Presentation.MapWorldMin.Y) / WorldSize.Y;
+	if (NormalizedX < 0.0f || NormalizedX > 1.0f || NormalizedY < 0.0f || NormalizedY > 1.0f)
+	{
+		return false;
+	}
+
+	OutNormalized = FVector2D(NormalizedX, NormalizedY);
+	return true;
 }
 
 FVector UGP_MinimapPresenter::MinimapNormalizedToWorld(
@@ -166,15 +232,68 @@ void UGP_MinimapPresenter::RebuildPresentation(bool bBroadcast)
 {
 	const FGP_MinimapPresentation NewPresentation =
 		BuildPresentationFromMirror(BoundMirror.Get());
-	if (GPMinimapPresenterPrivate::PresentationsEqual(Presentation, NewPresentation))
+	const bool bMetadataChanged =
+		!GPMinimapPresenterPrivate::PresentationsEqual(Presentation, NewPresentation);
+	if (bMetadataChanged)
+	{
+		Presentation = NewPresentation;
+		if (bBroadcast)
+		{
+			OnMinimapPresentationChanged.Broadcast();
+		}
+	}
+
+	RebuildFriendlyBlips(bBroadcast);
+}
+
+void UGP_MinimapPresenter::RebuildFriendlyBlips(bool bBroadcast)
+{
+	TArray<FGP_MinimapBlip> NewBlips;
+	const int32 LocalTeamId = Presentation.LocalTeamId;
+	if (Presentation.bIsReady && LocalTeamId >= 1)
+	{
+		if (UGP_LocalFoWUnitPresentationSubsystem* Registry = BoundUnitRegistry.Get())
+		{
+			Registry->ForEachRegisteredUnit(
+				[this, LocalTeamId, &NewBlips](AGP_UnitBase* Unit)
+				{
+					if (!IsValid(Unit) || Unit->GetTeamId() != LocalTeamId)
+					{
+						return;
+					}
+
+					if (!Unit->IsSelectionTypeUnit() && !Unit->IsSelectionTypeBuilding())
+					{
+						return;
+					}
+
+					FVector2D Normalized = FVector2D::ZeroVector;
+					if (!TryWorldToMinimapNormalizedUnclamped(Unit->GetActorLocation(), Normalized))
+					{
+						return;
+					}
+
+					FGP_MinimapBlip Blip;
+					Blip.NormalizedPosition = Normalized;
+					Blip.Kind = Unit->IsSelectionTypeBuilding()
+						? EGP_MinimapBlipKind::Building
+						: EGP_MinimapBlipKind::Unit;
+					Blip.SourceActor = Unit;
+					NewBlips.Add(Blip);
+				});
+		}
+	}
+
+	if (GPMinimapPresenterPrivate::BlipsEqual(FriendlyBlips, NewBlips))
 	{
 		return;
 	}
 
-	Presentation = NewPresentation;
+	FriendlyBlips = MoveTemp(NewBlips);
+	++FriendlyBlipRevision;
 	if (bBroadcast)
 	{
-		OnMinimapPresentationChanged.Broadcast();
+		OnMinimapBlipsChanged.Broadcast();
 	}
 }
 
@@ -284,6 +403,16 @@ void UGP_MinimapPresenter::HandleResolvedCameraBoundsChanged()
 	RebuildPresentation(true);
 }
 
+void UGP_MinimapPresenter::HandleUnitRegistryChanged()
+{
+	RebuildFriendlyBlips(true);
+}
+
+void UGP_MinimapPresenter::HandleRegisteredUnitsEvaluated()
+{
+	RebuildFriendlyBlips(true);
+}
+
 void UGP_MinimapPresenter::BindCameraPawn(AGP_CameraPawn* CameraPawn)
 {
 	if (IsValid(CameraPawn)
@@ -318,6 +447,58 @@ void UGP_MinimapPresenter::UnbindCameraPawn()
 	BoundCameraPawn.Reset();
 }
 
+void UGP_MinimapPresenter::BindUnitRegistry(UWorld* World)
+{
+	if (BoundUnitRegistry.IsValid()
+		&& UnitRegistryChangedHandle.IsValid()
+		&& RegisteredUnitsEvaluatedHandle.IsValid()
+		&& BoundUnitRegistry->GetWorld() == World)
+	{
+		return;
+	}
+
+	UnbindUnitRegistry();
+	if (!IsValid(World) || World->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+
+	UGP_LocalFoWUnitPresentationSubsystem* Registry =
+		World->GetSubsystem<UGP_LocalFoWUnitPresentationSubsystem>();
+	if (Registry == nullptr)
+	{
+		return;
+	}
+
+	BoundUnitRegistry = Registry;
+	UnitRegistryChangedHandle = Registry->OnUnitRegistryChanged.AddUObject(
+		this,
+		&ThisClass::HandleUnitRegistryChanged);
+	RegisteredUnitsEvaluatedHandle = Registry->OnRegisteredUnitsEvaluated.AddUObject(
+		this,
+		&ThisClass::HandleRegisteredUnitsEvaluated);
+	RebuildFriendlyBlips(false);
+}
+
+void UGP_MinimapPresenter::UnbindUnitRegistry()
+{
+	if (UGP_LocalFoWUnitPresentationSubsystem* Registry = BoundUnitRegistry.Get())
+	{
+		if (UnitRegistryChangedHandle.IsValid())
+		{
+			Registry->OnUnitRegistryChanged.Remove(UnitRegistryChangedHandle);
+		}
+		if (RegisteredUnitsEvaluatedHandle.IsValid())
+		{
+			Registry->OnRegisteredUnitsEvaluated.Remove(RegisteredUnitsEvaluatedHandle);
+		}
+	}
+
+	UnitRegistryChangedHandle.Reset();
+	RegisteredUnitsEvaluatedHandle.Reset();
+	BoundUnitRegistry.Reset();
+}
+
 void UGP_MinimapPresenter::UnbindMirror()
 {
 	if (UGP_LocalFoWComponent* Mirror = BoundMirror.Get())
@@ -350,5 +531,34 @@ void UGP_MinimapPresenter::ContractClearDisplayedWorldBounds()
 	bHasExplicitDisplayedBounds = false;
 	ExplicitDisplayedBounds = FBox(ForceInit);
 	RebuildPresentation(true);
+}
+
+void UGP_MinimapPresenter::ContractRebuildFriendlyBlips()
+{
+	RebuildFriendlyBlips(true);
+}
+
+void UGP_MinimapPresenter::ContractBindUnitRegistry(UWorld* World)
+{
+	BindUnitRegistry(World);
+}
+
+const FGP_MinimapBlip* UGP_MinimapPresenter::ContractFindFriendlyBlipForActor(
+	const AGP_UnitBase* Unit) const
+{
+	if (Unit == nullptr)
+	{
+		return nullptr;
+	}
+
+	for (const FGP_MinimapBlip& Blip : FriendlyBlips)
+	{
+		if (Blip.SourceActor.Get() == Unit)
+		{
+			return &Blip;
+		}
+	}
+
+	return nullptr;
 }
 #endif

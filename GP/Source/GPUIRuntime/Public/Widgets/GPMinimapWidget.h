@@ -16,9 +16,9 @@ class UTexture2D;
  * Native UMG minimap surface: static authored background + trusted FoW overlay.
  *
  * Presenter normalized XY is the displayed camera/playable rect, not the full FoW grid.
- * Presenter mapping stays world +X/+Y → normalized +X/+Y (no Y-flip there).
- * Widget layer only: ScreenY = 1 - NormalizedY so NormalizedY = 1 is the top of the square.
- * Background and FoW share that transform. Not SceneCapture. No Tick / polling / world scan.
+ * Presenter mapping stays world +X/+Y → normalized +X/+Y (no flip there).
+ * Widget surface transform only: ScreenX = 1 - NormalizedX, ScreenY = 1 - NormalizedY.
+ * Background, FoW, and friendly blips share that transform. Not SceneCapture. No Tick / polling / world scan.
  */
 UCLASS(meta = (DisplayName = "GP Minimap", ShortTooltip = "Static map image plus FoW overlay"))
 class GPUIRUNTIME_API UGP_MinimapWidget : public UWidget
@@ -58,6 +58,8 @@ public:
 	EGP_FoWState GetFoWPresentationSample(int32 SurfaceX, int32 SurfaceY) const;
 	int32 GetFoWPresentationSampleCount() const { return FoWSamples.Num(); }
 	FBox2D ContractComputeMapDestLocal(const FVector2D& AllottedSize) const;
+	int32 GetFriendlyBlipDrawCount() const { return FriendlyBlipDrawList.Num(); }
+	FVector2D ContractWorldToSurfaceUV(const FVector& WorldLocation) const;
 #endif
 
 protected:
@@ -70,12 +72,14 @@ private:
 	void BindPresenter(UGP_MinimapPresenter* Presenter);
 	void UnbindPresenter();
 	void HandleMinimapPresentationChanged();
+	void HandleMinimapBlipsChanged();
 	void RequestBackgroundLoad();
 	void StartBackgroundLoad(const FSoftObjectPath& Path);
 	void CancelBackgroundLoad();
 	void HandleBackgroundLoaded();
 	void ApplyResidentBackground(UTexture2D* Texture);
 	void RebuildFoWOverlay();
+	void RebuildFriendlyBlipDrawCache();
 	void EnsureFoWTexture();
 	void UploadFoWTexture();
 	void PushBrushesToSlate();
@@ -87,6 +91,15 @@ private:
 
 	TWeakObjectPtr<UGP_MinimapPresenter> BoundPresenter;
 	FDelegateHandle PresentationChangedHandle;
+	FDelegateHandle BlipsChangedHandle;
+
+	struct FGPMinimapFriendlyBlipDraw
+	{
+		FVector2D PresenterNormalized = FVector2D::ZeroVector;
+		bool bIsBuilding = false;
+	};
+
+	TArray<FGPMinimapFriendlyBlipDraw> FriendlyBlipDrawList;
 
 	TSharedPtr<FStreamableHandle> BackgroundLoadHandle;
 	FSoftObjectPath PendingBackgroundPath;

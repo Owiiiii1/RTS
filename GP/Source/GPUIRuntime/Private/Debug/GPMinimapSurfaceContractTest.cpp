@@ -155,28 +155,35 @@ namespace GPMinimapSurfaceContractPrivate
 			&& Widget->GetConsumedFoWRevision() == 1,
 			TEXT("J_BoundedFoWResolutionAndRevision"));
 
-		const EGP_FoWState TopCenter =
-			Widget != nullptr ? Widget->GetFoWPresentationSample(Resolution / 2, 0) : EGP_FoWState::Visible;
-		const EGP_FoWState BottomLeft =
-			Widget != nullptr ? Widget->GetFoWPresentationSample(0, Resolution - 1) : EGP_FoWState::Unexplored;
-		const EGP_FoWState BottomVisibleBand =
-			Widget != nullptr
-				? Widget->GetFoWPresentationSample(
-					FMath::Clamp(FMath::FloorToInt(0.375f * static_cast<float>(Resolution)), 0, Resolution - 1),
-					Resolution - 1)
-				: EGP_FoWState::Unexplored;
-		Expect(TopCenter == EGP_FoWState::Unexplored
-			&& BottomLeft == EGP_FoWState::Explored
-			&& BottomVisibleBand == EGP_FoWState::Visible,
-			TEXT("K_UnexploredExploredVisibleAreDistinctAndYFlipped"));
+		const FVector2D RoundTripPresenter(0.375f, 0.125f);
+		const FVector2D SurfaceUV =
+			UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(RoundTripPresenter);
+		const FVector2D RoundTripBack =
+			UGP_MinimapWidget::SurfaceUVToPresenterNormalized(SurfaceUV);
+		const int32 MappedSurfaceX = FMath::Clamp(
+			FMath::FloorToInt(SurfaceUV.X * static_cast<float>(Resolution)),
+			0,
+			Resolution - 1);
+		const int32 MappedSurfaceY = FMath::Clamp(
+			FMath::FloorToInt(SurfaceUV.Y * static_cast<float>(Resolution)),
+			0,
+			Resolution - 1);
+		Expect(RoundTripBack.Equals(RoundTripPresenter, 0.0001f)
+			&& Widget != nullptr
+			&& Presenter != nullptr
+			&& Widget->GetFoWPresentationSample(MappedSurfaceX, MappedSurfaceY)
+				== EGP_FoWState::Visible
+			&& Widget->GetFoWPresentationSample(MappedSurfaceX, MappedSurfaceY)
+				== Presenter->GetMinimapFoWStateNormalized(RoundTripPresenter),
+			TEXT("K_FoWUsesSharedSurfaceTransform"));
 
-		Expect(UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(FVector2D(0.25f, 1.0f))
-				.Equals(FVector2D(0.25f, 0.0f), 0.0001f)
-			&& UGP_MinimapWidget::SurfaceUVToPresenterNormalized(FVector2D(0.25f, 0.0f))
-				.Equals(FVector2D(0.25f, 1.0f), 0.0001f)
-			&& UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(FVector2D(0.5f, 0.0f))
-				.Equals(FVector2D(0.5f, 1.0f), 0.0001f),
-			TEXT("L_ScreenYIsOneMinusNormalizedY"));
+		Expect(UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(FVector2D(0.0f, 0.0f))
+				.Equals(FVector2D(1.0f, 1.0f), 0.0001f)
+			&& UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(FVector2D(1.0f, 1.0f))
+				.Equals(FVector2D(0.0f, 0.0f), 0.0001f)
+			&& UGP_MinimapWidget::SurfaceUVToPresenterNormalized(FVector2D(0.0f, 0.0f))
+				.Equals(FVector2D(1.0f, 1.0f), 0.0001f),
+			TEXT("M_ScreenXYAreOneMinusPresenterXY"));
 
 		const FBox2D FallbackDest =
 			Widget != nullptr
@@ -207,13 +214,24 @@ namespace GPMinimapSurfaceContractPrivate
 		Delta.VisibleRanges.Add(Range(2, 1));
 		const int64 RevisionBefore = Widget != nullptr ? Widget->GetConsumedFoWRevision() : -1;
 		Expect(Mirror != nullptr && Mirror->ApplyServerUpdate(Delta), TEXT("O_FoWRevisionDelta"));
+		const FVector2D DeltaPresenter(0.625f, 0.125f);
+		const FVector2D DeltaSurfaceUV =
+			UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(DeltaPresenter);
+		const int32 DeltaSurfaceX = FMath::Clamp(
+			FMath::FloorToInt(DeltaSurfaceUV.X * static_cast<float>(Resolution)),
+			0,
+			Resolution - 1);
+		const int32 DeltaSurfaceY = FMath::Clamp(
+			FMath::FloorToInt(DeltaSurfaceUV.Y * static_cast<float>(Resolution)),
+			0,
+			Resolution - 1);
 		Expect(Widget != nullptr
 			&& Widget->GetConsumedFoWRevision() == 2
 			&& Widget->GetConsumedFoWRevision() != RevisionBefore
-			&& Widget->GetFoWPresentationSample(
-				FMath::Clamp(FMath::FloorToInt(0.625f * static_cast<float>(Resolution)), 0, Resolution - 1),
-				Resolution - 1)
-				== EGP_FoWState::Visible,
+			&& Widget->GetFoWPresentationSample(DeltaSurfaceX, DeltaSurfaceY)
+				== EGP_FoWState::Visible
+			&& Presenter != nullptr
+			&& Presenter->GetMinimapFoWStateNormalized(DeltaPresenter) == EGP_FoWState::Visible,
 			TEXT("P_RevisionRebuildsFoWOnce"));
 
 		if (Widget != nullptr)

@@ -268,12 +268,12 @@ namespace GPMinimapCameraBoundsContractPrivate
 				FVector2D(1.0f, 1.0f)),
 			TEXT("N_ValidVolumeBecomesDisplayedBounds"));
 
-		Expect(UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(FVector2D(0.25f, 1.0f))
-				.Equals(FVector2D(0.25f, 0.0f), 0.0001f)
-			&& UGP_MinimapWidget::SurfaceUVToPresenterNormalized(FVector2D(0.25f, 0.0f))
-				.Equals(FVector2D(0.25f, 1.0f), 0.0001f)
-			&& UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(FVector2D(0.5f, 0.0f))
-				.Equals(FVector2D(0.5f, 1.0f), 0.0001f),
+		Expect(UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(FVector2D(0.0f, 0.0f))
+				.Equals(FVector2D(1.0f, 1.0f), 0.0001f)
+			&& UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(FVector2D(1.0f, 1.0f))
+				.Equals(FVector2D(0.0f, 0.0f), 0.0001f)
+			&& UGP_MinimapWidget::SurfaceUVToPresenterNormalized(FVector2D(0.0f, 0.0f))
+				.Equals(FVector2D(1.0f, 1.0f), 0.0001f),
 			TEXT("O_BackgroundAndFoWShareOrientation"));
 
 		if (Presenter != nullptr)

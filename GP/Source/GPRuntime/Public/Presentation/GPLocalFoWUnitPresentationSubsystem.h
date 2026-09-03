@@ -9,6 +9,9 @@
 class AGP_UnitBase;
 class UGP_LocalFoWComponent;
 
+DECLARE_MULTICAST_DELEGATE(FOnGPLocalFoWUnitRegistryChanged);
+DECLARE_MULTICAST_DELEGATE(FOnGPLocalFoWRegisteredUnitsEvaluated);
+
 /**
  * Local presentation-only registry for FoW-gating replicated unit/building visuals.
  *
@@ -39,6 +42,15 @@ public:
 
 	int32 GetRegisteredUnitCount() const { return RegisteredUnits.Num(); }
 	static constexpr float GetEvaluationIntervalSeconds() { return 0.1f; }
+
+	void ForEachRegisteredUnit(TFunctionRef<void(AGP_UnitBase*)> Callback) const;
+
+	FOnGPLocalFoWUnitRegistryChanged OnUnitRegistryChanged;
+	FOnGPLocalFoWRegisteredUnitsEvaluated OnRegisteredUnitsEvaluated;
+
+#if !UE_BUILD_SHIPPING
+	void ContractEvaluateRegisteredUnits();
+#endif
 
 private:
 	void EvaluateRegisteredUnits();

@@ -23,12 +23,22 @@ namespace GPMinimapWidgetPrivate
 {
 	static constexpr int32 DefaultFoWResolution = 128;
 	static const FLinearColor FallbackColor(0.02f, 0.02f, 0.025f, 1.0f);
+	static const FLinearColor FriendlyUnitBlipColor(0.25f, 0.95f, 1.0f, 1.0f);
+	static const FLinearColor FriendlyBuildingBlipColor(0.95f, 0.95f, 0.35f, 1.0f);
+	static constexpr float FriendlyUnitBlipHalfExtentPx = 1.75f;
+	static constexpr float FriendlyBuildingBlipHalfExtentPx = 2.75f;
 
 	static FColor OverlayColor(EGP_FoWState State)
 	{
 		return GPFoWPresentationRaster::OverlayColorForState(State).ToFColor(false);
 	}
 }
+
+struct FGPMinimapSurfaceBlipDraw
+{
+	FVector2D PresenterNormalized = FVector2D::ZeroVector;
+	bool bIsBuilding = false;
+};
 
 class SGPMinimapSurface : public SLeafWidget
 {
@@ -59,6 +69,11 @@ public:
 	{
 		FoWBrush = InBrush;
 		bHasFoW = bInHasFoW;
+	}
+
+	void SetFriendlyBlips(const TArray<FGPMinimapSurfaceBlipDraw>& InBlips)
+	{
+		FriendlyBlips = InBlips;
 	}
 
 	virtual FVector2D ComputeDesiredSize(float) const override
@@ -134,12 +149,40 @@ public:
 				FLinearColor::White);
 		}
 
-		return LayerId + 3;
+		int32 NextLayer = LayerId + 3;
+		const FSlateBrush BlipBrush = FSlateColorBrush(FLinearColor::White);
+		for (const FGPMinimapSurfaceBlipDraw& Blip : FriendlyBlips)
+		{
+			const FVector2D SurfaceUV =
+				UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(Blip.PresenterNormalized);
+			const FVector2D Center = MapDest.Min + SurfaceUV * DestSize;
+			const float HalfExtent = Blip.bIsBuilding
+				? GPMinimapWidgetPrivate::FriendlyBuildingBlipHalfExtentPx
+				: GPMinimapWidgetPrivate::FriendlyUnitBlipHalfExtentPx;
+			const FVector2D BlipSize(HalfExtent * 2.0f, HalfExtent * 2.0f);
+			const FVector2D BlipOffset(Center.X - HalfExtent, Center.Y - HalfExtent);
+			const FPaintGeometry BlipGeometry = AllottedGeometry.ToPaintGeometry(
+				BlipSize,
+				FSlateLayoutTransform(BlipOffset));
+			const FLinearColor BlipColor = Blip.bIsBuilding
+				? GPMinimapWidgetPrivate::FriendlyBuildingBlipColor
+				: GPMinimapWidgetPrivate::FriendlyUnitBlipColor;
+			FSlateDrawElement::MakeBox(
+				OutDrawElements,
+				NextLayer,
+				BlipGeometry,
+				&BlipBrush,
+				ESlateDrawEffect::None,
+				BlipColor);
+		}
+
+		return NextLayer;
 	}
 
 private:
 	FSlateBrush BackgroundBrush;
 	FSlateBrush FoWBrush;
+	TArray<FGPMinimapSurfaceBlipDraw> FriendlyBlips;
 	FLinearColor FallbackColor = GPMinimapWidgetPrivate::FallbackColor;
 	FVector2D TextureSize = FVector2D::ZeroVector;
 	bool bHasBackgroundTexture = false;
@@ -166,12 +209,12 @@ const FText UGP_MinimapWidget::GetPaletteCategory()
 
 FVector2D UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(const FVector2D& Normalized)
 {
-	return FVector2D(Normalized.X, 1.0f - Normalized.Y);
+	return FVector2D(1.0f - Normalized.X, 1.0f - Normalized.Y);
 }
 
 FVector2D UGP_MinimapWidget::SurfaceUVToPresenterNormalized(const FVector2D& SurfaceUV)
 {
-	return FVector2D(SurfaceUV.X, 1.0f - SurfaceUV.Y);
+	return FVector2D(1.0f - SurfaceUV.X, 1.0f - SurfaceUV.Y);
 }
 
 int32 UGP_MinimapWidget::ClampFoWPresentationResolution(int32 Requested)
@@ -218,6 +261,7 @@ void UGP_MinimapWidget::SynchronizeProperties()
 	RequestBackgroundLoad();
 	BindPresenter(ResolvePresenter());
 	RebuildFoWOverlay();
+	RebuildFriendlyBlipDrawCache();
 	PushBrushesToSlate();
 }
 
@@ -278,7 +322,9 @@ UGP_MinimapPresenter* UGP_MinimapWidget::ResolvePresenter() const
 
 void UGP_MinimapWidget::BindPresenter(UGP_MinimapPresenter* Presenter)
 {
-	if (BoundPresenter.Get() == Presenter && PresentationChangedHandle.IsValid())
+	if (BoundPresenter.Get() == Presenter
+		&& PresentationChangedHandle.IsValid()
+		&& BlipsChangedHandle.IsValid())
 	{
 		return;
 	}
@@ -287,6 +333,7 @@ void UGP_MinimapWidget::BindPresenter(UGP_MinimapPresenter* Presenter)
 	if (!IsValid(Presenter))
 	{
 		RebuildFoWOverlay();
+		RebuildFriendlyBlipDrawCache();
 		return;
 	}
 
@@ -294,6 +341,10 @@ void UGP_MinimapWidget::BindPresenter(UGP_MinimapPresenter* Presenter)
 	PresentationChangedHandle = Presenter->OnMinimapPresentationChanged.AddUObject(
 		this,
 		&ThisClass::HandleMinimapPresentationChanged);
+	BlipsChangedHandle = Presenter->OnMinimapBlipsChanged.AddUObject(
+		this,
+		&ThisClass::HandleMinimapBlipsChanged);
+	RebuildFriendlyBlipDrawCache();
 }
 
 void UGP_MinimapWidget::UnbindPresenter()
@@ -304,16 +355,42 @@ void UGP_MinimapWidget::UnbindPresenter()
 		{
 			Presenter->OnMinimapPresentationChanged.Remove(PresentationChangedHandle);
 		}
+		if (BlipsChangedHandle.IsValid())
+		{
+			Presenter->OnMinimapBlipsChanged.Remove(BlipsChangedHandle);
+		}
 	}
 
 	PresentationChangedHandle.Reset();
+	BlipsChangedHandle.Reset();
 	BoundPresenter.Reset();
+	FriendlyBlipDrawList.Reset();
 }
 
 void UGP_MinimapWidget::HandleMinimapPresentationChanged()
 {
 	RebuildFoWOverlay();
+	RebuildFriendlyBlipDrawCache();
 	PushBrushesToSlate();
+}
+
+void UGP_MinimapWidget::HandleMinimapBlipsChanged()
+{
+	RebuildFriendlyBlipDrawCache();
+	if (MySurface.IsValid())
+	{
+		TArray<FGPMinimapSurfaceBlipDraw> SurfaceBlips;
+		SurfaceBlips.Reserve(FriendlyBlipDrawList.Num());
+		for (const FGPMinimapFriendlyBlipDraw& Blip : FriendlyBlipDrawList)
+		{
+			FGPMinimapSurfaceBlipDraw SurfaceBlip;
+			SurfaceBlip.PresenterNormalized = Blip.PresenterNormalized;
+			SurfaceBlip.bIsBuilding = Blip.bIsBuilding;
+			SurfaceBlips.Add(SurfaceBlip);
+		}
+		MySurface->SetFriendlyBlips(SurfaceBlips);
+		MySurface->Invalidate(EInvalidateWidgetReason::Paint);
+	}
 }
 
 FSoftObjectPath UGP_MinimapWidget::GetConfiguredBackgroundPath() const
@@ -451,13 +528,14 @@ void UGP_MinimapWidget::RebuildFoWOverlay()
 	for (int32 SurfaceY = 0; SurfaceY < FoWResolution; ++SurfaceY)
 	{
 		const float SurfaceV = (static_cast<float>(SurfaceY) + 0.5f) * Inv;
-		const float NormalizedY = 1.0f - SurfaceV;
 		for (int32 SurfaceX = 0; SurfaceX < FoWResolution; ++SurfaceX)
 		{
-			const float NormalizedX = (static_cast<float>(SurfaceX) + 0.5f) * Inv;
+			const float SurfaceU = (static_cast<float>(SurfaceX) + 0.5f) * Inv;
+			const FVector2D PresenterNormalized =
+				SurfaceUVToPresenterNormalized(FVector2D(SurfaceU, SurfaceV));
 			const int32 Index = SurfaceY * FoWResolution + SurfaceX;
 			const EGP_FoWState State = bReady
-				? Presenter->GetMinimapFoWStateNormalized(FVector2D(NormalizedX, NormalizedY))
+				? Presenter->GetMinimapFoWStateNormalized(PresenterNormalized)
 				: EGP_FoWState::Unexplored;
 			FoWSamples[Index] = State;
 			FoWPixels[Index] = GPMinimapWidgetPrivate::OverlayColor(State);
@@ -508,7 +586,35 @@ void UGP_MinimapWidget::PushBrushesToSlate()
 	MySurface->SetFallbackColor(GPMinimapWidgetPrivate::FallbackColor);
 	MySurface->SetBackground(BackgroundBrush, bHasTexture, TextureSize);
 	MySurface->SetFoW(FoWBrush, FoWTexture != nullptr);
+	TArray<FGPMinimapSurfaceBlipDraw> SurfaceBlips;
+	SurfaceBlips.Reserve(FriendlyBlipDrawList.Num());
+	for (const FGPMinimapFriendlyBlipDraw& Blip : FriendlyBlipDrawList)
+	{
+		FGPMinimapSurfaceBlipDraw SurfaceBlip;
+		SurfaceBlip.PresenterNormalized = Blip.PresenterNormalized;
+		SurfaceBlip.bIsBuilding = Blip.bIsBuilding;
+		SurfaceBlips.Add(SurfaceBlip);
+	}
+	MySurface->SetFriendlyBlips(SurfaceBlips);
 	MySurface->Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void UGP_MinimapWidget::RebuildFriendlyBlipDrawCache()
+{
+	FriendlyBlipDrawList.Reset();
+	const UGP_MinimapPresenter* Presenter = BoundPresenter.Get();
+	if (Presenter == nullptr || !Presenter->IsMinimapReady())
+	{
+		return;
+	}
+
+	for (const FGP_MinimapBlip& Blip : Presenter->GetFriendlyBlips())
+	{
+		FGPMinimapFriendlyBlipDraw Draw;
+		Draw.PresenterNormalized = Blip.NormalizedPosition;
+		Draw.bIsBuilding = Blip.Kind == EGP_MinimapBlipKind::Building;
+		FriendlyBlipDrawList.Add(Draw);
+	}
 }
 
 FBox2D UGP_MinimapWidget::ComputeMapDestLocal(const FVector2D& AllottedSize) const
@@ -571,5 +677,22 @@ EGP_FoWState UGP_MinimapWidget::GetFoWPresentationSample(int32 SurfaceX, int32 S
 FBox2D UGP_MinimapWidget::ContractComputeMapDestLocal(const FVector2D& AllottedSize) const
 {
 	return ComputeMapDestLocal(AllottedSize);
+}
+
+FVector2D UGP_MinimapWidget::ContractWorldToSurfaceUV(const FVector& WorldLocation) const
+{
+	const UGP_MinimapPresenter* Presenter = BoundPresenter.Get();
+	if (Presenter == nullptr)
+	{
+		return FVector2D::ZeroVector;
+	}
+
+	FVector2D Unclamped = FVector2D::ZeroVector;
+	if (!Presenter->TryWorldToMinimapNormalizedUnclamped(WorldLocation, Unclamped))
+	{
+		return FVector2D(-1.0f, -1.0f);
+	}
+
+	return PresenterNormalizedToSurfaceUV(Unclamped);
 }
 #endif

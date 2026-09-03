@@ -3,9 +3,12 @@
 #include "ViewModels/GPMinimapPresenter.h"
 
 #include "Camera/GPCameraPawn.h"
+#include "Camera/PlayerCameraManager.h"
 #include "FogOfWar/GPLocalFoWComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Player/GPPlayerController.h"
 #include "Presentation/GPLocalFoWUnitPresentationSubsystem.h"
+#include "SceneView.h"
 #include "Units/GPUnitBase.h"
 
 namespace GPMinimapPresenterPrivate
@@ -67,6 +70,161 @@ namespace GPMinimapPresenterPrivate
 
 		return true;
 	}
+
+	static bool CameraFootprintsEqual(
+		const FGP_MinimapCameraFootprint& A,
+		const FGP_MinimapCameraFootprint& B)
+	{
+		if (A.bIsValid != B.bIsValid || A.NormalizedCorners.Num() != B.NormalizedCorners.Num())
+		{
+			return false;
+		}
+
+		for (int32 Index = 0; Index < A.NormalizedCorners.Num(); ++Index)
+		{
+			if (!A.NormalizedCorners[Index].Equals(B.NormalizedCorners[Index], 0.0001f))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	enum class EUnitSquareEdge : uint8
+	{
+		Left,
+		Right,
+		Bottom,
+		Top
+	};
+
+	static bool IsInsideUnitSquare(const FVector2D& Point, EUnitSquareEdge Edge)
+	{
+		switch (Edge)
+		{
+		case EUnitSquareEdge::Left:
+			return Point.X >= 0.0f;
+		case EUnitSquareEdge::Right:
+			return Point.X <= 1.0f;
+		case EUnitSquareEdge::Bottom:
+			return Point.Y >= 0.0f;
+		case EUnitSquareEdge::Top:
+			return Point.Y <= 1.0f;
+		default:
+			return false;
+		}
+	}
+
+	static FVector2D IntersectUnitSquareEdge(
+		const FVector2D& Start,
+		const FVector2D& End,
+		EUnitSquareEdge Edge)
+	{
+		const FVector2D Delta = End - Start;
+		switch (Edge)
+		{
+		case EUnitSquareEdge::Left:
+		{
+			const float T = FMath::IsNearlyZero(Delta.X) ? 0.0f : (0.0f - Start.X) / Delta.X;
+			return FVector2D(0.0f, Start.Y + T * Delta.Y);
+		}
+		case EUnitSquareEdge::Right:
+		{
+			const float T = FMath::IsNearlyZero(Delta.X) ? 0.0f : (1.0f - Start.X) / Delta.X;
+			return FVector2D(1.0f, Start.Y + T * Delta.Y);
+		}
+		case EUnitSquareEdge::Bottom:
+		{
+			const float T = FMath::IsNearlyZero(Delta.Y) ? 0.0f : (0.0f - Start.Y) / Delta.Y;
+			return FVector2D(Start.X + T * Delta.X, 0.0f);
+		}
+		case EUnitSquareEdge::Top:
+		{
+			const float T = FMath::IsNearlyZero(Delta.Y) ? 0.0f : (1.0f - Start.Y) / Delta.Y;
+			return FVector2D(Start.X + T * Delta.X, 1.0f);
+		}
+		default:
+			return Start;
+		}
+	}
+
+	static void ClipPolygonAgainstUnitSquareEdge(
+		const TArray<FVector2D>& InPolygon,
+		TArray<FVector2D>& OutPolygon,
+		EUnitSquareEdge Edge)
+	{
+		OutPolygon.Reset();
+		if (InPolygon.Num() == 0)
+		{
+			return;
+		}
+
+		FVector2D Previous = InPolygon.Last();
+		for (const FVector2D& Current : InPolygon)
+		{
+			const bool bCurrentInside = IsInsideUnitSquare(Current, Edge);
+			const bool bPreviousInside = IsInsideUnitSquare(Previous, Edge);
+			if (bCurrentInside)
+			{
+				if (!bPreviousInside)
+				{
+					OutPolygon.Add(IntersectUnitSquareEdge(Previous, Current, Edge));
+				}
+				OutPolygon.Add(Current);
+			}
+			else if (bPreviousInside)
+			{
+				OutPolygon.Add(IntersectUnitSquareEdge(Previous, Current, Edge));
+			}
+
+			Previous = Current;
+		}
+	}
+
+	static bool ClipConvexPolygonToUnitSquare(TArray<FVector2D>& Polygon)
+	{
+		TArray<FVector2D> Temp;
+		ClipPolygonAgainstUnitSquareEdge(Polygon, Temp, EUnitSquareEdge::Left);
+		ClipPolygonAgainstUnitSquareEdge(Temp, Polygon, EUnitSquareEdge::Right);
+		ClipPolygonAgainstUnitSquareEdge(Polygon, Temp, EUnitSquareEdge::Bottom);
+		ClipPolygonAgainstUnitSquareEdge(Temp, Polygon, EUnitSquareEdge::Top);
+
+		for (const FVector2D& Point : Polygon)
+		{
+			if (!IsFiniteVector2D(Point))
+			{
+				Polygon.Reset();
+				return false;
+			}
+		}
+
+		return Polygon.Num() >= 3;
+	}
+
+	static bool TryIntersectRayWithHorizontalPlane(
+		const FVector& Origin,
+		const FVector& Direction,
+		float PlaneZ,
+		FVector& OutPoint)
+	{
+		if (!IsFiniteVector(Origin)
+			|| !IsFiniteVector(Direction)
+			|| !FMath::IsFinite(PlaneZ)
+			|| FMath::Abs(Direction.Z) <= KINDA_SMALL_NUMBER)
+		{
+			return false;
+		}
+
+		const float T = (PlaneZ - Origin.Z) / Direction.Z;
+		if (T <= KINDA_SMALL_NUMBER)
+		{
+			return false;
+		}
+
+		OutPoint = Origin + Direction * T;
+		return IsFiniteVector(OutPoint);
+	}
 }
 
 bool UGP_MinimapPresenter::Initialize(AGP_PlayerController* InPlayerController)
@@ -78,6 +236,7 @@ bool UGP_MinimapPresenter::Initialize(AGP_PlayerController* InPlayerController)
 	AGP_CameraPawn* CameraPawn =
 		IsValid(InPlayerController) ? Cast<AGP_CameraPawn>(InPlayerController->GetPawn()) : nullptr;
 	const bool bMirrorBound = InitializeWithMirror(Mirror);
+	BindPlayerController(InPlayerController);
 	BindCameraPawn(CameraPawn);
 	BindUnitRegistry(IsValid(InPlayerController) ? InPlayerController->GetWorld() : nullptr);
 	RebuildPresentation(true);
@@ -105,11 +264,15 @@ void UGP_MinimapPresenter::Shutdown()
 {
 	UnbindUnitRegistry();
 	UnbindCameraPawn();
+	UnbindPlayerController();
 	UnbindMirror();
 	bHasExplicitDisplayedBounds = false;
 	ExplicitDisplayedBounds = FBox(ForceInit);
+	bHasViewportSizeOverride = false;
+	ViewportSizeOverride = FIntPoint::ZeroValue;
 	Blips.Reset();
 	BlipRevision = 0;
+	CameraFootprint = FGP_MinimapCameraFootprint();
 	RebuildPresentation(true);
 }
 
@@ -127,6 +290,11 @@ int32 UGP_MinimapPresenter::GetBoundDelegateCount() const
 int32 UGP_MinimapPresenter::GetBoundCameraBoundsDelegateCount() const
 {
 	return CameraBoundsChangedHandle.IsValid() ? 1 : 0;
+}
+
+int32 UGP_MinimapPresenter::GetBoundCameraPresentationDelegateCount() const
+{
+	return CameraPresentationChangedHandle.IsValid() ? 1 : 0;
 }
 
 int32 UGP_MinimapPresenter::GetBoundUnitRegistryDelegateCount() const
@@ -245,6 +413,7 @@ void UGP_MinimapPresenter::RebuildPresentation(bool bBroadcast)
 	}
 
 	RebuildBlips(bBroadcast);
+	RebuildCameraFootprint(bBroadcast);
 }
 
 void UGP_MinimapPresenter::RebuildBlips(bool bBroadcast)
@@ -312,6 +481,226 @@ void UGP_MinimapPresenter::RebuildBlips(bool bBroadcast)
 	{
 		OnMinimapBlipsChanged.Broadcast();
 	}
+}
+
+void UGP_MinimapPresenter::RebuildCameraFootprint(bool bBroadcast)
+{
+	FGP_MinimapCameraFootprint NewFootprint;
+	if (!TryBuildCameraFootprint(NewFootprint))
+	{
+		NewFootprint.bIsValid = false;
+		NewFootprint.NormalizedCorners.Reset();
+	}
+
+	if (GPMinimapPresenterPrivate::CameraFootprintsEqual(CameraFootprint, NewFootprint))
+	{
+		return;
+	}
+
+	NewFootprint.Revision = CameraFootprint.Revision + 1;
+	CameraFootprint = MoveTemp(NewFootprint);
+	if (bBroadcast)
+	{
+		OnMinimapCameraFootprintChanged.Broadcast();
+	}
+}
+
+bool UGP_MinimapPresenter::TryBuildCameraFootprint(FGP_MinimapCameraFootprint& OutFootprint) const
+{
+	OutFootprint = FGP_MinimapCameraFootprint();
+	TArray<FVector2D> NormalizedCorners;
+	if (!TryCollectUnclampedNormalizedCorners(NormalizedCorners)
+		|| !GPMinimapPresenterPrivate::ClipConvexPolygonToUnitSquare(NormalizedCorners))
+	{
+		return false;
+	}
+
+	OutFootprint.bIsValid = true;
+	OutFootprint.NormalizedCorners = MoveTemp(NormalizedCorners);
+	return true;
+}
+
+bool UGP_MinimapPresenter::TryCollectUnclampedNormalizedCorners(TArray<FVector2D>& OutCorners) const
+{
+	OutCorners.Reset();
+	if (!HasUsableBounds())
+	{
+		return false;
+	}
+
+	AGP_PlayerController* PlayerController = BoundPlayerController.Get();
+	AGP_CameraPawn* CameraPawn = BoundCameraPawn.Get();
+	if (!IsValid(PlayerController) || !PlayerController->IsLocalController() || !IsValid(CameraPawn))
+	{
+		return false;
+	}
+
+	int32 ViewportX = 0;
+	int32 ViewportY = 0;
+	if (bHasViewportSizeOverride)
+	{
+		ViewportX = ViewportSizeOverride.X;
+		ViewportY = ViewportSizeOverride.Y;
+	}
+	else
+	{
+		PlayerController->GetViewportSize(ViewportX, ViewportY);
+	}
+
+	if (ViewportX < 2 || ViewportY < 2)
+	{
+		return false;
+	}
+
+	const float PlaneZ = CameraPawn->GetGroundReferencePlaneZ();
+	const float ScreenCorners[4][2] = {
+		{ 0.0f, 0.0f },
+		{ static_cast<float>(ViewportX - 1), 0.0f },
+		{ static_cast<float>(ViewportX - 1), static_cast<float>(ViewportY - 1) },
+		{ 0.0f, static_cast<float>(ViewportY - 1) }
+	};
+
+	OutCorners.Reserve(4);
+	for (int32 CornerIndex = 0; CornerIndex < 4; ++CornerIndex)
+	{
+		FVector WorldPoint = FVector::ZeroVector;
+		if (!TryDeprojectViewportCornerToGround(
+				PlayerController,
+				ScreenCorners[CornerIndex][0],
+				ScreenCorners[CornerIndex][1],
+				PlaneZ,
+				WorldPoint))
+		{
+			OutCorners.Reset();
+			return false;
+		}
+
+		const FVector2D Normalized = WorldToMinimapNormalizedUnclamped(WorldPoint);
+		if (!GPMinimapPresenterPrivate::IsFiniteVector2D(Normalized))
+		{
+			OutCorners.Reset();
+			return false;
+		}
+
+		OutCorners.Add(Normalized);
+	}
+
+	return OutCorners.Num() == 4;
+}
+
+bool UGP_MinimapPresenter::TryDeprojectViewportCornerToGround(
+	AGP_PlayerController* PlayerController,
+	float ScreenX,
+	float ScreenY,
+	float PlaneZ,
+	FVector& OutWorld) const
+{
+	if (!IsValid(PlayerController)
+		|| !FMath::IsFinite(ScreenX)
+		|| !FMath::IsFinite(ScreenY)
+		|| !FMath::IsFinite(PlaneZ))
+	{
+		return false;
+	}
+
+	if (bHasViewportSizeOverride)
+	{
+		return TryUnprojectScreenToGroundUsingCameraView(
+			PlayerController,
+			ScreenX,
+			ScreenY,
+			ViewportSizeOverride.X,
+			ViewportSizeOverride.Y,
+			PlaneZ,
+			OutWorld);
+	}
+
+	FVector Origin = FVector::ZeroVector;
+	FVector Direction = FVector::ZeroVector;
+	if (!PlayerController->DeprojectScreenPositionToWorld(ScreenX, ScreenY, Origin, Direction))
+	{
+		return false;
+	}
+
+	return GPMinimapPresenterPrivate::TryIntersectRayWithHorizontalPlane(
+		Origin,
+		Direction,
+		PlaneZ,
+		OutWorld);
+}
+
+bool UGP_MinimapPresenter::TryUnprojectScreenToGroundUsingCameraView(
+	AGP_PlayerController* PlayerController,
+	float ScreenX,
+	float ScreenY,
+	int32 SizeX,
+	int32 SizeY,
+	float PlaneZ,
+	FVector& OutWorld) const
+{
+	if (!IsValid(PlayerController) || SizeX < 2 || SizeY < 2)
+	{
+		return false;
+	}
+
+	AGP_CameraPawn* CameraPawn = BoundCameraPawn.Get();
+	FVector ViewLocation = FVector::ZeroVector;
+	FRotator ViewRotation = FRotator::ZeroRotator;
+	float FieldOfView = 90.0f;
+	if (!IsValid(CameraPawn)
+		|| !CameraPawn->GetPresentationView(ViewLocation, ViewRotation, FieldOfView))
+	{
+		PlayerController->GetPlayerViewPoint(ViewLocation, ViewRotation);
+		if (PlayerController->PlayerCameraManager != nullptr)
+		{
+			FieldOfView = PlayerController->PlayerCameraManager->GetFOVAngle();
+		}
+	}
+
+	FMinimalViewInfo ViewInfo;
+	ViewInfo.Location = ViewLocation;
+	ViewInfo.Rotation = ViewRotation;
+	ViewInfo.FOV = FieldOfView;
+	ViewInfo.AspectRatio = static_cast<float>(SizeX) / static_cast<float>(SizeY);
+	ViewInfo.bConstrainAspectRatio = false;
+	ViewInfo.ProjectionMode = ECameraProjectionMode::Perspective;
+
+	FMatrix ViewMatrix = FMatrix::Identity;
+	FMatrix ProjectionMatrix = FMatrix::Identity;
+	FMatrix ViewProjectionMatrix = FMatrix::Identity;
+	UGameplayStatics::GetViewProjectionMatrix(
+		ViewInfo,
+		ViewMatrix,
+		ProjectionMatrix,
+		ViewProjectionMatrix);
+
+	FVector Origin = FVector::ZeroVector;
+	FVector Direction = FVector::ZeroVector;
+	FSceneView::DeprojectScreenToWorld(
+		FVector2D(ScreenX, ScreenY),
+		FIntRect(0, 0, SizeX, SizeY),
+		ViewProjectionMatrix.Inverse(),
+		Origin,
+		Direction);
+
+	return GPMinimapPresenterPrivate::TryIntersectRayWithHorizontalPlane(
+		Origin,
+		Direction,
+		PlaneZ,
+		OutWorld);
+}
+
+FVector2D UGP_MinimapPresenter::WorldToMinimapNormalizedUnclamped(const FVector& WorldLocation) const
+{
+	if (!HasUsableBounds() || !GPMinimapPresenterPrivate::IsFiniteVector(WorldLocation))
+	{
+		return FVector2D::ZeroVector;
+	}
+
+	const FVector2D WorldSize = GetDisplayedWorldSizeCm();
+	return FVector2D(
+		(WorldLocation.X - Presentation.MapWorldMin.X) / WorldSize.X,
+		(WorldLocation.Y - Presentation.MapWorldMin.Y) / WorldSize.Y);
 }
 
 FGP_MinimapPresentation UGP_MinimapPresenter::BuildPresentationFromMirror(
@@ -420,6 +809,11 @@ void UGP_MinimapPresenter::HandleResolvedCameraBoundsChanged()
 	RebuildPresentation(true);
 }
 
+void UGP_MinimapPresenter::HandleCameraPresentationChanged()
+{
+	RebuildCameraFootprint(true);
+}
+
 void UGP_MinimapPresenter::HandleUnitRegistryChanged()
 {
 	RebuildBlips(true);
@@ -434,7 +828,8 @@ void UGP_MinimapPresenter::BindCameraPawn(AGP_CameraPawn* CameraPawn)
 {
 	if (IsValid(CameraPawn)
 		&& BoundCameraPawn.Get() == CameraPawn
-		&& CameraBoundsChangedHandle.IsValid())
+		&& CameraBoundsChangedHandle.IsValid()
+		&& CameraPresentationChangedHandle.IsValid())
 	{
 		return;
 	}
@@ -442,6 +837,7 @@ void UGP_MinimapPresenter::BindCameraPawn(AGP_CameraPawn* CameraPawn)
 	UnbindCameraPawn();
 	if (!IsValid(CameraPawn))
 	{
+		RebuildCameraFootprint(true);
 		return;
 	}
 
@@ -449,6 +845,10 @@ void UGP_MinimapPresenter::BindCameraPawn(AGP_CameraPawn* CameraPawn)
 	CameraBoundsChangedHandle = CameraPawn->OnResolvedCameraBoundsChanged.AddUObject(
 		this,
 		&ThisClass::HandleResolvedCameraBoundsChanged);
+	CameraPresentationChangedHandle = CameraPawn->OnCameraPresentationChanged.AddUObject(
+		this,
+		&ThisClass::HandleCameraPresentationChanged);
+	RebuildCameraFootprint(false);
 }
 
 void UGP_MinimapPresenter::UnbindCameraPawn()
@@ -459,9 +859,24 @@ void UGP_MinimapPresenter::UnbindCameraPawn()
 		{
 			CameraPawn->OnResolvedCameraBoundsChanged.Remove(CameraBoundsChangedHandle);
 		}
+		if (CameraPresentationChangedHandle.IsValid())
+		{
+			CameraPawn->OnCameraPresentationChanged.Remove(CameraPresentationChangedHandle);
+		}
 	}
 	CameraBoundsChangedHandle.Reset();
+	CameraPresentationChangedHandle.Reset();
 	BoundCameraPawn.Reset();
+}
+
+void UGP_MinimapPresenter::BindPlayerController(AGP_PlayerController* InPlayerController)
+{
+	BoundPlayerController = IsValid(InPlayerController) ? InPlayerController : nullptr;
+}
+
+void UGP_MinimapPresenter::UnbindPlayerController()
+{
+	BoundPlayerController.Reset();
 }
 
 void UGP_MinimapPresenter::BindUnitRegistry(UWorld* World)
@@ -558,6 +973,30 @@ void UGP_MinimapPresenter::ContractRebuildFriendlyBlips()
 void UGP_MinimapPresenter::ContractBindUnitRegistry(UWorld* World)
 {
 	BindUnitRegistry(World);
+}
+
+void UGP_MinimapPresenter::ContractRebuildCameraFootprint()
+{
+	RebuildCameraFootprint(true);
+}
+
+void UGP_MinimapPresenter::ContractSetViewportSizeOverride(int32 SizeX, int32 SizeY)
+{
+	bHasViewportSizeOverride = true;
+	ViewportSizeOverride = FIntPoint(SizeX, SizeY);
+	RebuildCameraFootprint(true);
+}
+
+void UGP_MinimapPresenter::ContractClearViewportSizeOverride()
+{
+	bHasViewportSizeOverride = false;
+	ViewportSizeOverride = FIntPoint::ZeroValue;
+	RebuildCameraFootprint(true);
+}
+
+bool UGP_MinimapPresenter::ContractTryGetUnclampedNormalizedCorners(TArray<FVector2D>& OutCorners) const
+{
+	return TryCollectUnclampedNormalizedCorners(OutCorners);
 }
 
 const FGP_MinimapBlip* UGP_MinimapPresenter::ContractFindFriendlyBlipForActor(

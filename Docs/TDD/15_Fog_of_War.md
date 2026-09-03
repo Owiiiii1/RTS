@@ -35,13 +35,14 @@ Current-compatible deviations from the older pseudocode:
   non-Visible cell). Post-process and fullscreen/sampled mask approaches are abandoned. Canonical
   gameplay grid is 100 cm / 10 Hz / 2000×2000;
 - selection/inspect integration, explicit-Attack last-known behavior, DropPod sight, replication
-  relevance, minimap **last-known / camera rectangle / input**, and remaining production HUD panels remain later
+  relevance, minimap **last-known / click-to-pan**, and remaining production HUD panels remain later
   slices. Native minimap presentation foundation (`UGP_MinimapPresenter`) consumes the trusted
   local FoW mirror for grid metadata, Revision, and per-query cell state; displayed minimap extents
   are resolved camera/playable bounds, not the 2000×2000 FoW grid. It does not allocate a 2000×2000
   texture or copy the cell arrays. `UGP_MinimapWidget` downsamples that trusted query to a bounded
   overlay (default 128²) over a static authored background authored to camera/playable bounds;
-  it is not a new gameplay grid.
+  it is not a new gameplay grid. Camera footprint is a projected viewport outline on the camera
+  pawn XY-anchor plane, painted above FoW and blips. Terrain-aware footprint projection is deferred.
 - **Voxel terrain integration is NOT reopened here.** World FoW presentation was finalized against
   effectively planar terrain and a fixed ground-projection assumption. After Voxel Plugin deformation
   ships, world FoW presentation must follow the actual terrain surface. That work belongs to the
@@ -339,13 +340,15 @@ trusted LocalFoW; FoW authority, grid origin, dimensions, and cell size are unch
 `UGP_MinimapWidget` paints a static authored background (authored to those camera/playable extents,
 world +Y at the top after surface flip) plus a bounded FoW overlay (default 128×128 downsample,
 Unexplored/Explored/Visible) using the same mapping. Surface transform:
-`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`. Blips are drawn in the same
-single Slate paint pass above FoW. Color is the canonical player/team color from
+`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`. Paint order in one Slate pass:
+background → FoW → blips → camera footprint outline. Color is the canonical player/team color from
 `UGP_GameplayPresentationSettings::GetTeamColor(TeamId)`; unit vs building is marker size only.
 Friendly units/buildings are always shown inside playable bounds and are not FoW-gated.
 Enemy units/buildings appear only while currently Visible on the trusted local FoW mirror
 (`ShouldPresentUnitForLocalPlayer` / `IsVisible`). Explored and Unexplored enemies are omitted.
-Last-known markers are not in this checkpoint. Widget-only `ScreenY = 1 - NormalizedY`
+Last-known markers are not in this checkpoint. Camera footprint is the deprojected viewport
+quadrilateral (neutral outline, not team color) and uses the same XY flip; it is not a FoW layer.
+Widget-only `ScreenY = 1 - NormalizedY`
 is superseded by the full XY flip above.
 No `UGP_MinimapSubsystem`, no 10 Hz poll, no per-cell widget, no 2000×2000 texture copy, and no
 terrain capture / SceneCapture in this checkpoint. Degenerate/unavailable camera bounds fall back

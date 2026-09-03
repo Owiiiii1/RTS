@@ -2,11 +2,11 @@
 
 ## Status
 
-**MINIMAP_ENEMY_BLIPS_READY_FOR_OPERATOR_VALIDATION**
+**MINIMAP_CAMERA_FOOTPRINT_READY_FOR_OPERATOR_VALIDATION**
 
 **INTERMEDIATE / NOT MERGE READY**
 
-Minimap blips now use canonical player/team color. Unit vs building is marker size only. Friendly actors stay visible inside playable bounds. Enemy units/buildings appear only while currently Visible on trusted local FoW. Last-known is not in this checkpoint.
+The minimap camera indicator is the real projected viewport footprint on the gameplay XY-anchor plane, not a fixed square around the camera pawn. Pan / zoom / yaw update it from camera presentation events. Widget Tick remains off.
 
 ## Branch / base / head
 
@@ -15,58 +15,72 @@ Minimap blips now use canonical player/team color. Unit vs building is marker si
 | Path | `D:\Progects\RTS` |
 | Branch | `ui/gp-minimap` |
 | Remote | `origin/ui/gp-minimap` |
-| Pre-checkpoint HEAD | `157d6b7` (friendly-blips SHA record) |
-| Checkpoint HEAD | `b0ce02bda1fe5100b26efa4a61974792d5b023b6` |
+| Pre-checkpoint HEAD | `55385fa1077c4143773da25ea052429545c07a43` (enemy-blips SHA record) |
+| Checkpoint HEAD | *recorded in follow-up SHA commit* |
 | Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
 
 Not merge-ready to `main`.
 
-## Canonical team color source
+## Exact projection algorithm
 
-`UGP_GameplayPresentationSettings::GetTeamColor(TeamId)` is the single source of truth (same mapping as `UGP_TeamPresentationComponent` / unit visuals). Unknown or unassigned TeamId (`< 1` or unlisted) resolves to `NeutralTeamColor`.
+1. Local `AGP_PlayerController` viewport size (or shipping-disabled contract override).
+2. Four viewport corners: `(0,0)`, `(W-1,0)`, `(W-1,H-1)`, `(0,H-1)`.
+3. Production: `DeprojectScreenPositionToWorld` → origin + direction.
+4. Ray vs horizontal plane `Z = AGP_CameraPawn::GetGroundReferencePlaneZ()`. Reject failed deproject, `|Dir.Z| ≈ 0`, `t ≤ KINDA_SMALL_NUMBER`, non-finite hits.
+5. World XY → presenter normalized (unclamped) using camera/playable bounds (`MapWorldMin` / `MapWorldSizeCm`). No surface flip here.
+6. Convex clip of the quad against the unit square `[0,1]²` (Sutherland–Hodgman). Not independent per-corner clamp.
+7. If clip has fewer than 3 finite points, or any earlier step fails: `bIsValid = false`, do not draw.
+8. Widget: shared `Xscreen = 1 - X`, `Yscreen = 1 - Y`, then Slate outline.
 
-Presentation data stores `FGP_MinimapBlip::TeamId`. `UGP_MinimapWidget::ResolveBlipColor` reads the settings at paint time. There is no separate friendly/enemy color scheme.
+Headless contract tests with a 0-size NullRHI viewport use a shipping-disabled viewport override plus camera-view unproject (`GetPresentationView` + `FSceneView::DeprojectScreenToWorld`) with the same ray-plane step. PIE / production with a real viewport uses `DeprojectScreenPositionToWorld`.
 
-Removed widget-local `FriendlyUnitBlipColor` (cyan) and `FriendlyBuildingBlipColor` (yellow).
+## Ground reference Z
 
-## Unit / building size semantics
+`AGP_CameraPawn::GetGroundReferencePlaneZ()` = camera pawn actor location Z.
 
-Same TeamId → same color for units, buildings, and MainBase.
+Pan already preserves actor Z (`PreservedZ`). This is the XY-anchor / gameplay reference plane, **not** hardcoded World Z=0.
 
-Type differentiation is size only:
+Terrain-surface sampling / voxel-aware footprint is deferred with terrain integration.
 
-- unit half-extent `1.75px`
-- building/MainBase half-extent `2.75px`
+## Camera update event seam
 
-## Enemy FoW gating source
+After `AGP_CameraPawn` Tick applies zoom, pitch, yaw, pan, clamp, the pawn syncs the spring arm so the camera component matches that frame, then compares a presentation fingerprint:
 
-Same live membership as friendlies: `UGP_LocalFoWUnitPresentationSubsystem::RegisteredUnits` (`AGP_UnitBase` BeginPlay/EndPlay). No second registry. No actor scans.
+- actor location
+- yaw
+- spring-arm length
+- spring-arm pitch
+- camera location / rotation
+- viewport width / height
 
-Gating reuses `UGP_LocalFoWUnitPresentationSubsystem::ShouldPresentUnitForLocalPlayer` against the presenter's trusted `UGP_LocalFoWComponent`:
+`OnCameraPresentationChanged` broadcasts **only if** that fingerprint changed. Idle ticks do not fire.
 
-- TeamId `< 1`: not classified as friendly or enemy; omitted
-- Friendly (`TeamId == LocalTeamId >= 1`): always shown inside camera/playable bounds
-- Enemy (`TeamId >= 1` and `!= LocalTeamId`): shown only if `IsVisible` (Visible). Explored and Unexplored omit the blip
+`UGP_MinimapPresenter` binds/unbinds that delegate (rebind does not duplicate). On change it rebuilds `FGP_MinimapCameraFootprint` and broadcasts `OnMinimapCameraFootprintChanged`.
 
-No distance-based enemy visibility. No last-known markers.
+No widget Tick. No UI polling timer.
 
-## Update lifecycle
+## Viewport resize handling
 
-No widget Tick. No world scan.
+Viewport size is part of the same camera presentation fingerprint, compared on the existing local camera Tick path (the pawn already calls `GetViewportSize` for edge-scroll). Resize rebuilds the footprint without a dedicated UI timer.
 
-| Event | Path |
-| --- | --- |
-| Register / unregister | `OnUnitRegistryChanged` → `RebuildBlips` |
-| Movement / visibility edge | existing 10 Hz `EvaluateRegisteredUnits` → `OnRegisteredUnitsEvaluated` |
-| FoW revision | `OnLocalFoWUpdated` → `RebuildPresentation` → `RebuildBlips` |
+## Footprint clipping semantics
 
-Enemy Visible → blip appears; leaving Visible → blip disappears. Bounded O(registered actors).
+Unclamped normalized corners may lie outside `[0,1]` when the viewport sees world beyond playable camera bounds (pawn is clamped; the view frustum is not).
 
-Paint order (one Slate pass, shared `Xscreen = 1-X`, `Yscreen = 1-Y`):
+MVP clips the convex quad against the unit square. Result stays inside the minimap. Self-crossing independent clamps are not used. If the intersection has `< 3` points, nothing is drawn. No NaN / huge coordinates.
+
+## Paint layer
+
+One Slate paint pass, no child widgets:
 
 1. background
 2. FoW
-3. friendly + currently-visible enemy blips
+3. blips
+4. **camera footprint outline** (on top)
+
+Visual: thin neutral line `~1.5 px`, color `(0.92, 0.92, 0.92, 0.95)`, no fill, not team color.
+
+Shared orientation with FoW and blips: presenter world `+X/+Y` → surface `(1-X, 1-Y)`.
 
 ## Tests
 
@@ -74,6 +88,7 @@ Command pattern: `UnrealEditor-Cmd` `GP.uproject` `/Game/GrimProtocol/Maps/L_Pro
 
 | Command | Result |
 | --- | --- |
+| `gp.UI.RunMinimapCameraFootprintContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapEnemyBlipsContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapFriendlyBlipsContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunMinimapCameraBoundsContractTest` | **PASS** Complete Failures=0 |
@@ -81,9 +96,10 @@ Command pattern: `UnrealEditor-Cmd` `GP.uproject` `/Game/GrimProtocol/Maps/L_Pro
 | `gp.UI.RunMinimapPresentationContractTest` | **PASS** Complete Failures=0 |
 | `gp.FoW.RunClientPresentationFoundationContractTest` | **PASS** Complete Failures=0 |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | **PASS** Complete Failures=0 |
-| `gp.Combat.RunTeamColorContractTest` | **PASS** Complete Failures=0 |
 
-Focused coverage: same-TeamId unit/building same resolved color; different TeamId different configured color; size not color; no cyan/yellow type split; enemy Visible present; Explored/Unexplored absent; Visible→Explored removes; Explored→Visible restores; enemy building same rules; friendly remains regardless FoW; outside bounds omitted; invalid TeamId omitted.
+Focused coverage: valid local PC+camera footprint; no camera / invalid viewport → no draw; rebind does not duplicate delegates; pan moves all points; zoom-out unclamped extent grows / zoom-in shrinks; yaw is not an axis-aligned fixed rect; shared `(1-X,1-Y)`; edge clip finite inside unit square; idle Tick does not bump revision; shutdown clears; plane Z = pawn Z; widget/presenter have no Tick UFUNCTION; `SGPMinimapSurface` `SetCanTick(false)`.
+
+No dedicated `gp.Camera.*` contract command exists in this tree.
 
 ## GPEditor build
 
@@ -91,11 +107,14 @@ Focused coverage: same-TeamId unit/building same resolved color; different TeamI
 
 ## Changed files (this checkpoint)
 
+- `GP/Source/GPRuntime/Public/Camera/GPCameraPawn.h`
+- `GP/Source/GPRuntime/Private/Camera/GPCameraPawn.cpp`
 - `GP/Source/GPUIRuntime/Public/ViewModels/GPMinimapPresenter.h`
 - `GP/Source/GPUIRuntime/Private/ViewModels/GPMinimapPresenter.cpp`
 - `GP/Source/GPUIRuntime/Public/Widgets/GPMinimapWidget.h`
 - `GP/Source/GPUIRuntime/Private/Widgets/GPMinimapWidget.cpp`
-- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapEnemyBlipsContractTest.cpp` (new)
+- `GP/Source/GPUIRuntime/Private/Debug/GPMinimapCameraFootprintContractTest.cpp` (new)
+- `Docs/TDD/11_RTS_Camera.md`
 - `Docs/TDD/12_UI_Architecture.md`
 - `Docs/TDD/15_Fog_of_War.md`
 - `Docs/GDD/09_UI_UX.md`
@@ -104,7 +123,7 @@ Focused coverage: same-TeamId unit/building same resolved color; different TeamI
 
 ## Protected audit
 
-Not committed / not modified for this checkpoint:
+Not committed / not modified for this checkpoint’s source work:
 
 - `WBP_GP_HUD`
 - `GP/Content/`
@@ -115,24 +134,26 @@ Not committed / not modified for this checkpoint:
 - `GP.uproject`
 - `Tools/`
 
-Operator dirty/untracked Content/Config preserved.
+Operator dirty/untracked Content/Config/Tools/`GP.uproject` preserved.
 
 ## Operator test
 
 1. PIE on `L_PrototypeArena`
-2. Confirm own units and buildings are the same team color
-3. Confirm buildings are larger dots, not a different color
-4. Confirm an enemy blip appears only when that enemy is Visible
-5. Move the enemy out of vision → blip disappears
-6. Reveal the enemy again → blip reappears
+2. Confirm a light neutral camera-view outline on the minimap
+3. WASD / edge pan → outline moves
+4. Zoom in → outline smaller; zoom out → larger
+5. Rotate camera → outline rotates with real camera orientation (not a fixed axis-aligned square)
+6. Near camera bounds the outline stays on the minimap (clipped, no NaN / overshoot)
+7. FoW and blips still behave as in the previous PASS
 
 ## Out of scope (next checkpoints)
 
-- Last-known markers
-- Camera rectangle
-- Click-to-pan
+- Click-to-pan / minimap drag-pan
+- Last-known enemy markers
 - Selection highlighting
-- Per-type unit icons
-- SceneCapture / terrain / voxel
+- Per-unit icons
+- SceneCapture / RenderTarget
+- Terrain / voxel-aware footprint
+- Gameplay authority changes
 
 **INTERMEDIATE / NOT MERGE READY**

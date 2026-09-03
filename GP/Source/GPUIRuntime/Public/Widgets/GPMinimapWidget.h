@@ -18,8 +18,9 @@ class UTexture2D;
  * Presenter normalized XY is the displayed camera/playable rect, not the full FoW grid.
  * Presenter mapping stays world +X/+Y → normalized +X/+Y (no flip there).
  * Widget surface transform only: ScreenX = 1 - NormalizedX, ScreenY = 1 - NormalizedY.
- * Background, FoW, and blips share that transform. Blip color is canonical team color;
- * unit vs building differs by size. Not SceneCapture. No Tick / polling / world scan.
+ * Background, FoW, blips, and camera footprint share that transform. Blip color is canonical
+ * team color; unit vs building differs by size. Camera footprint is the projected viewport
+ * on the camera pawn XY-anchor plane. Not SceneCapture. No Tick / polling / world scan.
  */
 UCLASS(meta = (DisplayName = "GP Minimap", ShortTooltip = "Static map image plus FoW overlay"))
 class GPUIRUNTIME_API UGP_MinimapWidget : public UWidget
@@ -66,6 +67,9 @@ public:
 	int32 GetBlipDrawCount() const { return BlipDrawList.Num(); }
 	int32 ContractGetBlipDrawTeamId(int32 Index) const;
 	bool ContractGetBlipDrawIsBuilding(int32 Index) const;
+	int32 GetCameraFootprintDrawCount() const { return CameraFootprintDrawCorners.Num(); }
+	bool ContractHasCameraFootprintDraw() const { return bHasCameraFootprintDraw; }
+	FVector2D ContractGetCameraFootprintDrawCorner(int32 Index) const;
 	FVector2D ContractWorldToSurfaceUV(const FVector& WorldLocation) const;
 #endif
 
@@ -80,6 +84,7 @@ private:
 	void UnbindPresenter();
 	void HandleMinimapPresentationChanged();
 	void HandleMinimapBlipsChanged();
+	void HandleMinimapCameraFootprintChanged();
 	void RequestBackgroundLoad();
 	void StartBackgroundLoad(const FSoftObjectPath& Path);
 	void CancelBackgroundLoad();
@@ -87,6 +92,7 @@ private:
 	void ApplyResidentBackground(UTexture2D* Texture);
 	void RebuildFoWOverlay();
 	void RebuildBlipDrawCache();
+	void RebuildCameraFootprintDrawCache();
 	void EnsureFoWTexture();
 	void UploadFoWTexture();
 	void PushBrushesToSlate();
@@ -99,6 +105,7 @@ private:
 	TWeakObjectPtr<UGP_MinimapPresenter> BoundPresenter;
 	FDelegateHandle PresentationChangedHandle;
 	FDelegateHandle BlipsChangedHandle;
+	FDelegateHandle CameraFootprintChangedHandle;
 
 	struct FGPMinimapBlipDraw
 	{
@@ -108,6 +115,8 @@ private:
 	};
 
 	TArray<FGPMinimapBlipDraw> BlipDrawList;
+	TArray<FVector2D> CameraFootprintDrawCorners;
+	bool bHasCameraFootprintDraw = false;
 
 	TSharedPtr<FStreamableHandle> BackgroundLoadHandle;
 	FSoftObjectPath PendingBackgroundPath;

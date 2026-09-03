@@ -95,8 +95,29 @@ struct GPUIRUNTIME_API FGP_MinimapBlip
 	TWeakObjectPtr<const AGP_UnitBase> SourceActor;
 };
 
+/**
+ * Projected viewport footprint in presenter-normalized coordinates (no surface flip).
+ * Corners are the convex clip of the four deprojected ground hits against the unit square.
+ * Independent per-corner clamp is not used (that can self-cross). Invalid if clip has < 3 points.
+ */
+USTRUCT(BlueprintType)
+struct GPUIRUNTIME_API FGP_MinimapCameraFootprint
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Minimap")
+	bool bIsValid = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Minimap")
+	TArray<FVector2D> NormalizedCorners;
+
+	UPROPERTY(BlueprintReadOnly, Category = "GP|HUD|Minimap")
+	int32 Revision = 0;
+};
+
 DECLARE_MULTICAST_DELEGATE(FOnGPMinimapPresentationChanged);
 DECLARE_MULTICAST_DELEGATE(FOnGPMinimapBlipsChanged);
+DECLARE_MULTICAST_DELEGATE(FOnGPMinimapCameraFootprintChanged);
 
 /**
  * LocalPlayer-owned, event-driven minimap presentation foundation.
@@ -124,8 +145,10 @@ public:
 	const TArray<FGP_MinimapBlip>& GetFriendlyBlips() const { return Blips; }
 	int64 GetBlipRevision() const { return BlipRevision; }
 	int64 GetFriendlyBlipRevision() const { return BlipRevision; }
+	const FGP_MinimapCameraFootprint& GetCameraFootprint() const { return CameraFootprint; }
 	int32 GetBoundDelegateCount() const;
 	int32 GetBoundCameraBoundsDelegateCount() const;
+	int32 GetBoundCameraPresentationDelegateCount() const;
 	int32 GetBoundUnitRegistryDelegateCount() const;
 
 #if !UE_BUILD_SHIPPING
@@ -134,12 +157,17 @@ public:
 	void ContractClearDisplayedWorldBounds();
 	void ContractRebuildFriendlyBlips();
 	void ContractBindUnitRegistry(UWorld* World);
+	void ContractRebuildCameraFootprint();
+	void ContractSetViewportSizeOverride(int32 SizeX, int32 SizeY);
+	void ContractClearViewportSizeOverride();
+	bool ContractTryGetUnclampedNormalizedCorners(TArray<FVector2D>& OutCorners) const;
 	const FGP_MinimapBlip* ContractFindFriendlyBlipForActor(const AGP_UnitBase* Unit) const;
 	const FGP_MinimapBlip* ContractFindBlipForActor(const AGP_UnitBase* Unit) const;
 #endif
 
 	FOnGPMinimapPresentationChanged OnMinimapPresentationChanged;
 	FOnGPMinimapBlipsChanged OnMinimapBlipsChanged;
+	FOnGPMinimapCameraFootprintChanged OnMinimapCameraFootprintChanged;
 
 protected:
 	virtual void BeginDestroy() override;
@@ -147,14 +175,35 @@ protected:
 private:
 	void HandleMirrorUpdated(UGP_LocalFoWComponent* Mirror);
 	void HandleResolvedCameraBoundsChanged();
+	void HandleCameraPresentationChanged();
 	void HandleUnitRegistryChanged();
 	void HandleRegisteredUnitsEvaluated();
 	void BindCameraPawn(AGP_CameraPawn* CameraPawn);
 	void UnbindCameraPawn();
+	void BindPlayerController(AGP_PlayerController* InPlayerController);
+	void UnbindPlayerController();
 	void BindUnitRegistry(UWorld* World);
 	void UnbindUnitRegistry();
 	void RebuildPresentation(bool bBroadcast);
 	void RebuildBlips(bool bBroadcast);
+	void RebuildCameraFootprint(bool bBroadcast);
+	bool TryBuildCameraFootprint(FGP_MinimapCameraFootprint& OutFootprint) const;
+	bool TryCollectUnclampedNormalizedCorners(TArray<FVector2D>& OutCorners) const;
+	bool TryDeprojectViewportCornerToGround(
+		AGP_PlayerController* PlayerController,
+		float ScreenX,
+		float ScreenY,
+		float PlaneZ,
+		FVector& OutWorld) const;
+	bool TryUnprojectScreenToGroundUsingCameraView(
+		AGP_PlayerController* PlayerController,
+		float ScreenX,
+		float ScreenY,
+		int32 SizeX,
+		int32 SizeY,
+		float PlaneZ,
+		FVector& OutWorld) const;
+	FVector2D WorldToMinimapNormalizedUnclamped(const FVector& WorldLocation) const;
 	FGP_MinimapPresentation BuildPresentationFromMirror(const UGP_LocalFoWComponent* Mirror) const;
 	bool TryResolveDisplayedWorldBounds(FVector2D& OutMin, FVector2D& OutSize) const;
 	bool HasUsableBounds() const;
@@ -166,6 +215,8 @@ private:
 	FDelegateHandle MirrorUpdatedHandle;
 	TWeakObjectPtr<AGP_CameraPawn> BoundCameraPawn;
 	FDelegateHandle CameraBoundsChangedHandle;
+	FDelegateHandle CameraPresentationChangedHandle;
+	TWeakObjectPtr<AGP_PlayerController> BoundPlayerController;
 	TWeakObjectPtr<UGP_LocalFoWUnitPresentationSubsystem> BoundUnitRegistry;
 	FDelegateHandle UnitRegistryChangedHandle;
 	FDelegateHandle RegisteredUnitsEvaluatedHandle;
@@ -174,4 +225,7 @@ private:
 	FGP_MinimapPresentation Presentation;
 	TArray<FGP_MinimapBlip> Blips;
 	int64 BlipRevision = 0;
+	FGP_MinimapCameraFootprint CameraFootprint;
+	bool bHasViewportSizeOverride = false;
+	FIntPoint ViewportSizeOverride = FIntPoint::ZeroValue;
 };

@@ -26,6 +26,8 @@ namespace GPMinimapWidgetPrivate
 	static const FLinearColor FallbackColor(0.02f, 0.02f, 0.025f, 1.0f);
 	static constexpr float UnitBlipHalfExtentPx = 1.75f;
 	static constexpr float BuildingBlipHalfExtentPx = 2.75f;
+	static const FLinearColor CameraFootprintColor(0.92f, 0.92f, 0.92f, 0.95f);
+	static constexpr float CameraFootprintThicknessPx = 1.5f;
 
 	static FColor OverlayColor(EGP_FoWState State)
 	{
@@ -74,6 +76,12 @@ public:
 	void SetBlips(const TArray<FGPMinimapSurfaceBlipDraw>& InBlips)
 	{
 		Blips = InBlips;
+	}
+
+	void SetCameraFootprint(const TArray<FVector2D>& InCorners, bool bInHasFootprint)
+	{
+		CameraFootprintCorners = InCorners;
+		bHasCameraFootprint = bInHasFootprint;
 	}
 
 	virtual FVector2D ComputeDesiredSize(float) const override
@@ -173,6 +181,30 @@ public:
 				UGP_MinimapWidget::ResolveBlipColor(Blip.TeamId));
 		}
 
+		if (bHasCameraFootprint && CameraFootprintCorners.Num() >= 3)
+		{
+			TArray<FVector2f> OutlinePoints;
+			OutlinePoints.Reserve(CameraFootprintCorners.Num() + 1);
+			for (const FVector2D& PresenterNormalized : CameraFootprintCorners)
+			{
+				const FVector2D SurfaceUV =
+					UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(PresenterNormalized);
+				const FVector2D Local = MapDest.Min + SurfaceUV * DestSize;
+				OutlinePoints.Add(FVector2f(static_cast<float>(Local.X), static_cast<float>(Local.Y)));
+			}
+			OutlinePoints.Add(OutlinePoints[0]);
+			FSlateDrawElement::MakeLines(
+				OutDrawElements,
+				NextLayer + 1,
+				AllottedGeometry.ToPaintGeometry(),
+				OutlinePoints,
+				ESlateDrawEffect::None,
+				GPMinimapWidgetPrivate::CameraFootprintColor,
+				true,
+				GPMinimapWidgetPrivate::CameraFootprintThicknessPx);
+			return NextLayer + 1;
+		}
+
 		return NextLayer;
 	}
 
@@ -180,10 +212,12 @@ private:
 	FSlateBrush BackgroundBrush;
 	FSlateBrush FoWBrush;
 	TArray<FGPMinimapSurfaceBlipDraw> Blips;
+	TArray<FVector2D> CameraFootprintCorners;
 	FLinearColor FallbackColor = GPMinimapWidgetPrivate::FallbackColor;
 	FVector2D TextureSize = FVector2D::ZeroVector;
 	bool bHasBackgroundTexture = false;
 	bool bHasFoW = false;
+	bool bHasCameraFootprint = false;
 };
 
 UGP_MinimapWidget::UGP_MinimapWidget(const FObjectInitializer& ObjectInitializer)
@@ -279,6 +313,7 @@ void UGP_MinimapWidget::SynchronizeProperties()
 	BindPresenter(ResolvePresenter());
 	RebuildFoWOverlay();
 	RebuildBlipDrawCache();
+	RebuildCameraFootprintDrawCache();
 	PushBrushesToSlate();
 }
 
@@ -341,7 +376,8 @@ void UGP_MinimapWidget::BindPresenter(UGP_MinimapPresenter* Presenter)
 {
 	if (BoundPresenter.Get() == Presenter
 		&& PresentationChangedHandle.IsValid()
-		&& BlipsChangedHandle.IsValid())
+		&& BlipsChangedHandle.IsValid()
+		&& CameraFootprintChangedHandle.IsValid())
 	{
 		return;
 	}
@@ -351,6 +387,7 @@ void UGP_MinimapWidget::BindPresenter(UGP_MinimapPresenter* Presenter)
 	{
 		RebuildFoWOverlay();
 		RebuildBlipDrawCache();
+		RebuildCameraFootprintDrawCache();
 		return;
 	}
 
@@ -361,7 +398,11 @@ void UGP_MinimapWidget::BindPresenter(UGP_MinimapPresenter* Presenter)
 	BlipsChangedHandle = Presenter->OnMinimapBlipsChanged.AddUObject(
 		this,
 		&ThisClass::HandleMinimapBlipsChanged);
+	CameraFootprintChangedHandle = Presenter->OnMinimapCameraFootprintChanged.AddUObject(
+		this,
+		&ThisClass::HandleMinimapCameraFootprintChanged);
 	RebuildBlipDrawCache();
+	RebuildCameraFootprintDrawCache();
 }
 
 void UGP_MinimapWidget::UnbindPresenter()
@@ -376,18 +417,26 @@ void UGP_MinimapWidget::UnbindPresenter()
 		{
 			Presenter->OnMinimapBlipsChanged.Remove(BlipsChangedHandle);
 		}
+		if (CameraFootprintChangedHandle.IsValid())
+		{
+			Presenter->OnMinimapCameraFootprintChanged.Remove(CameraFootprintChangedHandle);
+		}
 	}
 
 	PresentationChangedHandle.Reset();
 	BlipsChangedHandle.Reset();
+	CameraFootprintChangedHandle.Reset();
 	BoundPresenter.Reset();
 	BlipDrawList.Reset();
+	CameraFootprintDrawCorners.Reset();
+	bHasCameraFootprintDraw = false;
 }
 
 void UGP_MinimapWidget::HandleMinimapPresentationChanged()
 {
 	RebuildFoWOverlay();
 	RebuildBlipDrawCache();
+	RebuildCameraFootprintDrawCache();
 	PushBrushesToSlate();
 }
 
@@ -409,6 +458,12 @@ void UGP_MinimapWidget::HandleMinimapBlipsChanged()
 		MySurface->SetBlips(SurfaceBlips);
 		MySurface->Invalidate(EInvalidateWidgetReason::Paint);
 	}
+}
+
+void UGP_MinimapWidget::HandleMinimapCameraFootprintChanged()
+{
+	RebuildCameraFootprintDrawCache();
+	PushBrushesToSlate();
 }
 
 FSoftObjectPath UGP_MinimapWidget::GetConfiguredBackgroundPath() const
@@ -615,6 +670,7 @@ void UGP_MinimapWidget::PushBrushesToSlate()
 		SurfaceBlips.Add(SurfaceBlip);
 	}
 	MySurface->SetBlips(SurfaceBlips);
+	MySurface->SetCameraFootprint(CameraFootprintDrawCorners, bHasCameraFootprintDraw);
 	MySurface->Invalidate(EInvalidateWidgetReason::Paint);
 }
 
@@ -635,6 +691,26 @@ void UGP_MinimapWidget::RebuildBlipDrawCache()
 		Draw.bIsBuilding = Blip.Kind == EGP_MinimapBlipKind::Building;
 		BlipDrawList.Add(Draw);
 	}
+}
+
+void UGP_MinimapWidget::RebuildCameraFootprintDrawCache()
+{
+	CameraFootprintDrawCorners.Reset();
+	bHasCameraFootprintDraw = false;
+	const UGP_MinimapPresenter* Presenter = BoundPresenter.Get();
+	if (Presenter == nullptr)
+	{
+		return;
+	}
+
+	const FGP_MinimapCameraFootprint& Footprint = Presenter->GetCameraFootprint();
+	if (!Footprint.bIsValid || Footprint.NormalizedCorners.Num() < 3)
+	{
+		return;
+	}
+
+	CameraFootprintDrawCorners = Footprint.NormalizedCorners;
+	bHasCameraFootprintDraw = true;
 }
 
 FBox2D UGP_MinimapWidget::ComputeMapDestLocal(const FVector2D& AllottedSize) const
@@ -707,6 +783,13 @@ int32 UGP_MinimapWidget::ContractGetBlipDrawTeamId(int32 Index) const
 bool UGP_MinimapWidget::ContractGetBlipDrawIsBuilding(int32 Index) const
 {
 	return BlipDrawList.IsValidIndex(Index) && BlipDrawList[Index].bIsBuilding;
+}
+
+FVector2D UGP_MinimapWidget::ContractGetCameraFootprintDrawCorner(int32 Index) const
+{
+	return CameraFootprintDrawCorners.IsValidIndex(Index)
+		? CameraFootprintDrawCorners[Index]
+		: FVector2D::ZeroVector;
 }
 
 FVector2D UGP_MinimapWidget::ContractWorldToSurfaceUV(const FVector& WorldLocation) const

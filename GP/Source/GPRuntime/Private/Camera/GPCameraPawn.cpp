@@ -71,7 +71,9 @@ void AGP_CameraPawn::BeginPlay()
 	ApplyPitch(*Config);
 	FindCameraBoundsVolume();
 	ClampToBounds(*Config);
+	SyncSpringArmPresentation(0.0f);
 	NotifyResolvedCameraBoundsChanged();
+	NotifyCameraPresentationChangedIfNeeded();
 
 	if (!ConfigRef.IsNull())
 	{
@@ -120,6 +122,8 @@ void AGP_CameraPawn::Tick(float DeltaSeconds)
 	ApplyRotation(*Config);
 	ApplyPan(*Config, EdgeInput, DeltaSeconds);
 	ClampToBounds(*Config);
+	SyncSpringArmPresentation(DeltaSeconds);
+	NotifyCameraPresentationChangedIfNeeded();
 	ResetFrameInput();
 }
 
@@ -223,9 +227,15 @@ void AGP_CameraPawn::HandleConfigLoaded()
 
 	CurrentArmLength = FMath::Clamp(CurrentArmLength, LoadedConfig->MinArmLength, LoadedConfig->MaxArmLength);
 	TargetArmLength = FMath::Clamp(TargetArmLength, LoadedConfig->MinArmLength, LoadedConfig->MaxArmLength);
+	if (SpringArm != nullptr)
+	{
+		SpringArm->TargetArmLength = CurrentArmLength;
+	}
 
 	ConfigLoadHandle.Reset();
 	NotifyResolvedCameraBoundsChanged();
+	SyncSpringArmPresentation(0.0f);
+	NotifyCameraPresentationChangedIfNeeded();
 }
 
 float AGP_CameraPawn::CalculateZoomFraction(
@@ -332,6 +342,16 @@ void AGP_CameraPawn::ApplyZoom(const UGP_CameraConfigDataAsset& Config, float De
 	CurrentArmLength = FMath::Clamp(CurrentArmLength, Config.MinArmLength, Config.MaxArmLength);
 
 	SpringArm->TargetArmLength = CurrentArmLength;
+}
+
+void AGP_CameraPawn::SyncSpringArmPresentation(float DeltaSeconds)
+{
+	if (SpringArm == nullptr)
+	{
+		return;
+	}
+
+	SpringArm->TickComponent(DeltaSeconds, LEVELTICK_All, nullptr);
 }
 
 void AGP_CameraPawn::ApplyPitch(const UGP_CameraConfigDataAsset& Config)
@@ -501,6 +521,120 @@ void AGP_CameraPawn::NotifyResolvedCameraBoundsChanged()
 	OnResolvedCameraBoundsChanged.Broadcast();
 }
 
+float AGP_CameraPawn::GetGroundReferencePlaneZ() const
+{
+	const FVector Location = GetActorLocation();
+	return FMath::IsFinite(Location.Z) ? Location.Z : 0.0f;
+}
+
+bool AGP_CameraPawn::GetPresentationView(FVector& OutLocation, FRotator& OutRotation, float& OutFOV) const
+{
+	if (Camera == nullptr)
+	{
+		OutLocation = GetActorLocation();
+		OutRotation = GetActorRotation();
+		OutFOV = 90.0f;
+		return false;
+	}
+
+	OutLocation = Camera->GetComponentLocation();
+	OutRotation = Camera->GetComponentRotation();
+	OutFOV = Camera->FieldOfView;
+	return !OutLocation.ContainsNaN()
+		&& FMath::IsFinite(OutRotation.Pitch)
+		&& FMath::IsFinite(OutRotation.Yaw)
+		&& FMath::IsFinite(OutRotation.Roll)
+		&& FMath::IsFinite(OutFOV)
+		&& OutFOV > KINDA_SMALL_NUMBER;
+}
+
+bool AGP_CameraPawn::CaptureCameraPresentationFingerprint(
+	FVector& OutActorLocation,
+	float& OutYaw,
+	float& OutArmLength,
+	float& OutPitch,
+	FVector& OutCameraLocation,
+	FRotator& OutCameraRotation,
+	int32& OutViewportX,
+	int32& OutViewportY) const
+{
+	OutActorLocation = GetActorLocation();
+	OutYaw = CurrentYaw;
+	OutArmLength = CurrentArmLength;
+	OutPitch = SpringArm != nullptr ? SpringArm->GetRelativeRotation().Pitch : 0.0f;
+	OutCameraLocation = Camera != nullptr ? Camera->GetComponentLocation() : OutActorLocation;
+	OutCameraRotation = Camera != nullptr ? Camera->GetComponentRotation() : FRotator::ZeroRotator;
+	OutViewportX = 0;
+	OutViewportY = 0;
+
+	if (const APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+	{
+		PlayerController->GetViewportSize(OutViewportX, OutViewportY);
+	}
+
+	return FMath::IsFinite(OutActorLocation.X)
+		&& FMath::IsFinite(OutActorLocation.Y)
+		&& FMath::IsFinite(OutActorLocation.Z)
+		&& FMath::IsFinite(OutYaw)
+		&& FMath::IsFinite(OutArmLength)
+		&& FMath::IsFinite(OutPitch)
+		&& !OutCameraLocation.ContainsNaN()
+		&& FMath::IsFinite(OutCameraRotation.Pitch)
+		&& FMath::IsFinite(OutCameraRotation.Yaw)
+		&& FMath::IsFinite(OutCameraRotation.Roll);
+}
+
+void AGP_CameraPawn::NotifyCameraPresentationChangedIfNeeded()
+{
+	FVector ActorLocation = FVector::ZeroVector;
+	FVector CameraLocation = FVector::ZeroVector;
+	FRotator CameraRotation = FRotator::ZeroRotator;
+	float Yaw = 0.0f;
+	float ArmLength = 0.0f;
+	float Pitch = 0.0f;
+	int32 ViewportX = 0;
+	int32 ViewportY = 0;
+	if (!CaptureCameraPresentationFingerprint(
+			ActorLocation,
+			Yaw,
+			ArmLength,
+			Pitch,
+			CameraLocation,
+			CameraRotation,
+			ViewportX,
+			ViewportY))
+	{
+		return;
+	}
+
+	const bool bChanged =
+		!bHasCameraPresentationFingerprint
+		|| !ActorLocation.Equals(LastPresentationActorLocation, 0.05f)
+		|| !FMath::IsNearlyEqual(Yaw, LastPresentationYaw, 0.01f)
+		|| !FMath::IsNearlyEqual(ArmLength, LastPresentationArmLength, 0.05f)
+		|| !FMath::IsNearlyEqual(Pitch, LastPresentationPitch, 0.01f)
+		|| !CameraLocation.Equals(LastPresentationCameraLocation, 0.05f)
+		|| !CameraRotation.Equals(LastPresentationCameraRotation, 0.01f)
+		|| ViewportX != LastPresentationViewportX
+		|| ViewportY != LastPresentationViewportY;
+
+	if (!bChanged)
+	{
+		return;
+	}
+
+	LastPresentationActorLocation = ActorLocation;
+	LastPresentationCameraLocation = CameraLocation;
+	LastPresentationCameraRotation = CameraRotation;
+	LastPresentationYaw = Yaw;
+	LastPresentationArmLength = ArmLength;
+	LastPresentationPitch = Pitch;
+	LastPresentationViewportX = ViewportX;
+	LastPresentationViewportY = ViewportY;
+	bHasCameraPresentationFingerprint = true;
+	OnCameraPresentationChanged.Broadcast();
+}
+
 #if !UE_BUILD_SHIPPING
 void AGP_CameraPawn::ContractSetCameraBoundsVolume(AGP_CameraBoundsVolume* Volume)
 {
@@ -514,6 +648,12 @@ void AGP_CameraPawn::ContractClearCameraBoundsVolume()
 	CameraBoundsVolume.Reset();
 	bInvalidCameraBoundsWarningLogged = false;
 	NotifyResolvedCameraBoundsChanged();
+}
+
+void AGP_CameraPawn::ContractNotifyCameraPresentationChanged()
+{
+	bHasCameraPresentationFingerprint = false;
+	NotifyCameraPresentationChangedIfNeeded();
 }
 #endif
 

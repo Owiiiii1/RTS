@@ -201,14 +201,16 @@ SWARM / Ferronite Threat lives in the **top-left Threat + Score** block. Form:
 ### Minimap
 
 **Mandatory у MVP as a reserved bottom-left square.** Native surface now exists: static authored
-map image + FoW overlay (`UGP_MinimapWidget`). Blips, camera rectangle, and click-to-pan remain
-later slices. When complete it показує:
+map image + FoW overlay + team-colored blips + projected camera viewport footprint
+(`UGP_MinimapWidget`). The camera indicator is the real deprojected viewport quadrilateral on the
+camera pawn XY-anchor plane (pan / zoom / yaw update it). Click-to-pan remains a later slice.
+When complete it показує:
 
 - Player base (own and opponent, if visible).
 - Ferronite deposits (location + capacity status).
 - Own units і buildings.
 - SWARM approach / spawn pulse (continuous outer pressure; not a numbered-wave countdown).
-- Camera viewport rectangle.
+- Camera viewport rectangle (projected viewport footprint, not a fixed square).
 
 Mini-map clickable — re-center camera. Mini-map тримає player у курсі map state, особливо при mid-match expansion.
 

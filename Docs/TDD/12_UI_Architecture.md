@@ -183,8 +183,9 @@ PublicDependencyModuleNames.AddRange(new string[]
   2000×2000 FoW grid. It is **not** SceneCapture, live camera, or render-target terrain, and it
   is **not** a complete minimap.
   `WBP_GP_HUD` remains uncommitted.
-  Still not implemented: minimap blips / camera rectangle / click-to-pan / last-known
-  (surface widget exists; operator inserts it into the protected HUD),
+  Still not implemented: minimap last-known / click-to-pan
+  (surface widget exists with background + FoW + team-colored blips + projected camera footprint;
+  operator inserts it into the protected HUD),
   notifications, and production end-of-match screen.
   Operator-validated runtime visibility of authored `WBP_GP_HUD` (local, not committed).
   Operator-validated: `GP_ResourceViewModel.PlanetFerronite` → To Text (Float) →
@@ -236,7 +237,7 @@ Rules:
 | `UGP_OrderMenuVM` | `UGP_OrbitalDeliverySubsystem` drop catalog (`DA_GP_OrbitalDrop_*`), current `OrbitalFerronite`, current `CurrentUnits/MaxUnits`, shuttle slots, READY, Wall stock — **not implemented** | Future adapter | Future MainBase PURCHASE panel (bottom-right). Not a fullscreen Order Menu. |
 | `UGP_CargoVM` | Worker cargo for single presentation is carried on `UGP_SelectionViewModel` (`CargoAmount` / `CargoCapacity` / `CargoNormalized` / `bHasCargo`) via existing `OnCargoAmountChanged`. A separate cargo-only VM is **not implemented**. | Selection adapter (single Worker) | Future single-entity Selection/Info cargo meter |
 | `UGP_NotificationVM` | Local notification queue (PC pushes) — **not implemented** | PC native | Future notification stack |
-| `UGP_MinimapVM` | Superseded as the production HUD path. Native `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem` is the minimap presentation foundation. `UGP_MinimapWidget` is the native UMG surface: static authored background (`UGP_UIPresentationSettings::MinimapBackgroundTexture`, async only) plus a bounded FoW downsample overlay and team-colored blips. Displayed XY = resolved camera/playable bounds; FoW grid metadata stays separate. Blips use the existing unit presentation registry. Color is `UGP_GameplayPresentationSettings::GetTeamColor(TeamId)`; Unit vs Building differs by marker size. Friendly actors are always shown inside playable bounds; enemy actors only while currently Visible. It does **not** snapshot child widgets per actor or copy the FoW cell arrays. | `UGP_MinimapPresenter` binds `UGP_LocalFoWComponent::OnLocalFoWUpdated`, `AGP_CameraPawn::OnResolvedCameraBoundsChanged`, and `UGP_LocalFoWUnitPresentationSubsystem` registry/movement delegates; widget binds `OnMinimapPresentationChanged` / `OnMinimapBlipsChanged` | Bottom-left minimap. Operator inserts `GP Minimap` into protected `WBP_GP_HUD`. Last-known / camera rectangle / click-to-pan remain later checkpoints. |
+| `UGP_MinimapVM` | Superseded as the production HUD path. Native `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem` is the minimap presentation foundation. `UGP_MinimapWidget` is the native UMG surface: static authored background (`UGP_UIPresentationSettings::MinimapBackgroundTexture`, async only) plus a bounded FoW downsample overlay, team-colored blips, and a projected camera viewport footprint outline. Displayed XY = resolved camera/playable bounds; FoW grid metadata stays separate. Blips use the existing unit presentation registry. Color is `UGP_GameplayPresentationSettings::GetTeamColor(TeamId)`; Unit vs Building differs by marker size. Friendly actors are always shown inside playable bounds; enemy actors only while currently Visible. Camera indicator is the four-corner deprojected viewport on the camera pawn XY-anchor plane (not a fixed square, not team-colored). It does **not** snapshot child widgets per actor or copy the FoW cell arrays. | `UGP_MinimapPresenter` binds `UGP_LocalFoWComponent::OnLocalFoWUpdated`, `AGP_CameraPawn::OnResolvedCameraBoundsChanged`, `AGP_CameraPawn::OnCameraPresentationChanged`, and `UGP_LocalFoWUnitPresentationSubsystem` registry/movement delegates; widget binds `OnMinimapPresentationChanged` / `OnMinimapBlipsChanged` / `OnMinimapCameraFootprintChanged` | Bottom-left minimap. Operator inserts `GP Minimap` into protected `WBP_GP_HUD`. Last-known / click-to-pan remain later checkpoints. |
 
 Production Resource/Match/Selection VMs are created once by `UGP_HUDViewModelSubsystem` per `ULocalPlayer`.
 Future widgets receive them from that subsystem; no gameplay module type owns a `GPUIRuntime` object.
@@ -394,7 +395,7 @@ Per widget — bind ViewModel via `UMVVMSubsystem`. Adapter populates VM.
 | Future bottom-right Context Action Grid | Native `UGP_ContextActionPresenter` modes None/Unit/UnitGroup/Building/MainBase. Unit actions: Move / Stop / Attack-Move / Patrol. MainBase: Purchase panel Actions → PurchaseRoot → PurchaseUnits / PurchaseBuildings / PurchaseDefense / PurchaseBuildingSelected / PurchaseDefenseSelected. `GetPurchaseCatalogRows()` is factual catalog presentation for the active category (empty on Actions / PurchaseRoot / selected-item states). Local unit manifest + LMB/RMB row APIs + Launch Shuttle reuse `RequestUnitDrop` / `Server_RequestUnitDrop`. Building/Defense Launch reuses `Server_RequestBuildingPurchase` then READY auto-deploy into existing placement ghost; Wall Package Launch reuses `Server_RequestWallPackagePurchase` only. Other buildings: empty. Command targeting visual: native `SGPCommandCursorOverlay`. Hardware cursor hidden while targeting. Message Strip: `GetContextMessage()` (targeting prompt wins while command targeting is active; else shuttle/reject text). `GetCommandTargetingPrompt()` remains targeting-only. Authored buttons operator-local. | Local selection + death/destroy; PC eligibility + `OnCommandTargetingModeChanged`; OrbitalFerronite ASC delegate; selected MainBase wall inventory delegates; PlayerState READY `OnReadyChanged` |
 | Future right-side Message Strip | Contextual procurement/action status (shuttle slots, funds, cap). `UGP_HUDRootWidget::GetContextMessage()`. | Presenter local gates + targeting prompt; not a global toast stack |
 | Future MainBase PURCHASE panel | Native catalog rows + local unit manifest + selected-item Launch. No new RPCs. | Existing orbital catalogs + PlayerAttributeSet OrbitalFerronite + MainBase wall inventory + READY auto-deploy. No new gameplay catalog. |
-| Future bottom-left Minimap | Native `UGP_MinimapWidget` (UMG palette: **GP Minimap**) self-binds to `UGP_HUDViewModelSubsystem::GetMinimapPresenter()`. Background = static authored `UTexture2D` on `UGP_UIPresentationSettings` (async; empty/loading → dark fallback). FoW = presentation-only downsample (default 128², clamp 32–256) of the trusted mirror; Unexplored black, Explored dim, Visible clear. Widget-layer `Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`; presenter world +X/+Y → normalized +X/+Y is unchanged. Shared dest rect for background, FoW, and blips. Blip color = canonical team color; type = marker size. Friendly always shown inside bounds; enemy only currently Visible. No Tick / poll / world scan. Last-known / camera rectangle / click-to-pan **not** in this checkpoint. | Trusted `UGP_LocalFoWComponent` + `UGP_LocalFoWUnitPresentationSubsystem` via `UGP_MinimapPresenter` |
+| Future bottom-left Minimap | Native `UGP_MinimapWidget` (UMG palette: **GP Minimap**) self-binds to `UGP_HUDViewModelSubsystem::GetMinimapPresenter()`. Background = static authored `UTexture2D` on `UGP_UIPresentationSettings` (async; empty/loading → dark fallback). FoW = presentation-only downsample (default 128², clamp 32–256) of the trusted mirror; Unexplored black, Explored dim, Visible clear. Widget-layer `Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`; presenter world +X/+Y → normalized +X/+Y is unchanged. Shared dest rect for background, FoW, blips, and camera footprint. Blip color = canonical team color; type = marker size. Friendly always shown inside bounds; enemy only currently Visible. Camera indicator = projected viewport quadrilateral on the pawn XY-anchor plane (neutral outline, no fill). No Tick / poll / world scan. Last-known / click-to-pan **not** in this checkpoint. | Trusted `UGP_LocalFoWComponent` + `UGP_LocalFoWUnitPresentationSubsystem` + `AGP_CameraPawn::OnCameraPresentationChanged` via `UGP_MinimapPresenter` |
 | Future `WBP_GP_HUD_NotificationStack` | `UGP_NotificationVM.{ActiveToasts[]}` | PC `OnHUDNotification` multicast |
 | Future `WBP_GP_EndOfMatch` (Activatable) | `UGP_MatchViewModel.{MatchStateTag, WinnerTeamId, WinReasonTag, MatchDuration, bMatchFinished}` | `AGP_GameState` match-state/result delegates |
 
@@ -543,7 +544,7 @@ NotificationStack — local-only, no replication, queue cap 3 active. Toast dura
 
 UI legitimately owns:
 
-- Camera transform mirror for minimap viewport rectangle.
+- Camera transform mirror for minimap viewport rectangle: event-driven `AGP_CameraPawn::OnCameraPresentationChanged` after zoom/pitch/yaw/pan/clamp when the presentation fingerprint actually changes. The minimap draws the projected viewport footprint (deproject 4 corners → ray vs pawn XY-anchor plane Z), not a fixed square around the pawn.
 - Modal mode flags: `EGP_CommandTargetingMode` (None / Move / AttackMove / Patrol) on the local PlayerController; building-placement ghost remains independent and takes input precedence.
 - Command targeting is local-only. Enter via Context Action (`RequestContextAction` Move / AttackMove / Patrol) or the existing A-key Attack-Move seam. LMB on valid ground confirms; RMB and Esc cancel. While active: selection/marquee and smart RMB click-through are blocked; building placement cannot co-own input (placement cancels targeting first).
 - Visual command cursor is a native HitTestInvisible Slate overlay (`SGPCommandCursorOverlay`) added through the local player `UGameViewportClient` (ZOrder 10000, above HUD/marquee). Hardware/game cursor is hidden while targeting. Shapes (Slate primitives, no assets): Move = four-tick crosshair + center square; AttackMove = crosshair + ring; Patrol = crosshair + two opposing arrows. Overlay is removed and the normal cursor restored on confirm, RMB, Esc, invalid selection, building placement enter, EndPlay, and PlayerController teardown. `GetCommandTargetingCursor` / hardware cursor enum is leftover only — not the production visual path.
@@ -562,11 +563,12 @@ UI legitimately owns:
 | `FerroniteThreatValue` | All clients | Shared world state (swarm pressure). |
 | `MatchTimeRemaining`, `MatchState` | All clients | Universal. |
 
-### Minimap (native surface: static background + FoW overlay)
+### Minimap (native surface: static background + FoW overlay + blips + camera footprint)
 
 - Bottom-left **square** remains the approved HUD IA slot.
 - Native foundation is `UGP_MinimapPresenter` owned by `UGP_HUDViewModelSubsystem`.
-  Event-driven from the trusted local FoW mirror and `AGP_CameraPawn::OnResolvedCameraBoundsChanged`.
+  Event-driven from the trusted local FoW mirror, `AGP_CameraPawn::OnResolvedCameraBoundsChanged`,
+  and `AGP_CameraPawn::OnCameraPresentationChanged` (fingerprint-gated; idle camera ticks do not fire).
   No Tick, no cell-array copy, no terrain capture, no GPUIRuntime world actor scan.
 - Production surface is `UGP_MinimapWidget` (`UWidget` / Slate leaf). Background is a **static
   authored map image** (`UGP_UIPresentationSettings::MinimapBackgroundTexture`), async-loaded.
@@ -589,7 +591,7 @@ UI legitimately owns:
   XY outside `[0,1]` is Unexplored. If resolved camera bounds are unavailable/degenerate, displayed
   fields fall back to the FoW-grid rect (no divide-by-zero).
 - Widget-layer orientation only: `ScreenX = 1 - NormalizedX`, `ScreenY = 1 - NormalizedY` so the authored
-  map image matches operator/game orientation. Background, FoW overlay, and all blips share
+  map image matches operator/game orientation. Background, FoW overlay, blips, and camera footprint share
   that transform and the same letterboxed dest rect.
 - Blips (MVP): `UGP_MinimapPresenter` builds a presentation-only `FGP_MinimapBlip` snapshot
   from the existing `UGP_LocalFoWUnitPresentationSubsystem` registry (units + buildings self-register
@@ -601,7 +603,13 @@ UI legitimately owns:
   presentation: Visible → show, Explored/Unexplored → omit. Invalid TeamId (< 1) is not treated
   as friendly or enemy. Last-known markers are not in this checkpoint. Movement/visibility refresh
   is driven by the registry's bounded 10 Hz evaluation and FoW revision, not widget Tick.
-- This is **not** a complete minimap. Last-known, camera rectangle, click-to-pan,
+- Camera footprint (MVP): four viewport corners → `DeprojectScreenPositionToWorld` via the local
+  `AGP_PlayerController` → ray vs horizontal plane Z = camera pawn actor Z → presenter-normalized
+  (unclamped) → convex clip against the unit square `[0,1]²` (Sutherland–Hodgman). Independent
+  per-corner clamp is not used. Invalid deproject / parallel ray / non-finite hit / clip `< 3`
+  points → do not draw. Outline is a thin neutral line (not team color), no fill, painted last
+  in the same Slate pass. Terrain-surface-aware projection is deferred.
+- This is **not** a complete minimap. Last-known, click-to-pan,
   and terrain/render-target work remain later checkpoints.
 - Historical `UGP_MinimapSubsystem` 5/10 Hz snapshot + `UGP_MinimapVM` cell arrays are **not**
   the production path.

@@ -236,6 +236,12 @@ Resolved bounds are the same `FBox` `ClampToBounds` uses. Public seam for local 
 - `OnResolvedCameraBoundsChanged` fires after `BeginPlay` (volume find + first clamp) and after async `HandleConfigLoaded`. Bounds are static for MVP after that; no Tick poll.
 - GPUIRuntime must not re-scan the world for volumes. Minimap displayed extents consume this getter.
 
+Local camera presentation for the minimap viewport footprint:
+
+- `AGP_CameraPawn::OnCameraPresentationChanged` fires after zoom / pitch / yaw / pan / clamp **only when** a presentation fingerprint changed: actor XY/Z, yaw, spring-arm length, spring-arm pitch, resulting camera location/rotation, and local viewport size. Idle ticks do not broadcast.
+- Ground reference Z for the current MVP footprint is the pawn XY-anchor plane: `GetGroundReferencePlaneZ()` = actor location Z (pan preserves Z). This is **not** hardcoded World Z=0. Terrain-surface / voxel-aware projection is deferred with terrain integration.
+- Viewport resize is part of that same fingerprint (no widget Tick, no UI polling timer).
+
 `AGP_CameraBoundsVolume` is a trivial actor; spec deferred to code task. No replication. The FoW gameplay grid (2000×2000 / 100 cm) is a separate technical visibility field and is **not** the camera/playable bounds.
 
 ## Edge Cases
@@ -249,7 +255,7 @@ Resolved bounds are the same `FBox` `ClampToBounds` uses. Public seam for local 
 | **Match end** | `IMC_GP_Camera` removed by HUD/PC; pawn free-floats. End-of-match cinematic may possess другий pawn via `SetViewTargetWithBlend`. |
 | **Pause (singleplayer)** | `IMC_GP_Camera` лишається активним (RTS pause часто дозволяє огляд), але can be toggled by `Config.bAllowPanWhilePaused`. Default: `true`. |
 | **Low frame-rate** | All deltas multiplied by `DeltaSeconds`. Test at 30 fps and 240 fps — values consistent. |
-| **Window resize** | Edge-scroll thresholds є absolute pixels — at 4K thresholds still 8 px → дуже тонка зона. Plan: scale by `ViewportSize.Y / 1080` (DPI factor) — TODO у code task. |
+| **Window resize** | Edge-scroll thresholds є absolute pixels — at 4K thresholds still 8 px → дуже тонка зона. Plan: scale by `ViewportSize.Y / 1080` (DPI factor) — TODO у code task. Viewport size is also in the camera presentation fingerprint so the minimap footprint rebuilds on resize without a UI timer. |
 | **No bounds volume present** | Use `Config.FallbackBounds`; emit warning. Map artist responsible per level. |
 | **Cursor exits viewport during MMB rotate** | Mouse capture is `LockOnCapture` — cursor locked to viewport while MMB held. Mouse position reset center on release. |
 | **Spectator / dedicated server** | Pawn is local-only; dedicated server doesn't spawn it. Spectator post-MVP — separate spec. |

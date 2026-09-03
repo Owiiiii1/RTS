@@ -47,6 +47,10 @@ public:
 		const FVector2D& AllottedSize,
 		bool bHasTexture,
 		const FVector2D& TextureSize);
+	static bool BuildClosedCameraFootprintOutlinePoints(
+		const TArray<FVector2D>& PresenterNormalizedCorners,
+		const FBox2D& MapDest,
+		TArray<FVector2f>& OutOutlinePoints);
 
 #if !UE_BUILD_SHIPPING
 	void ContractBindPresenter(UGP_MinimapPresenter* Presenter);

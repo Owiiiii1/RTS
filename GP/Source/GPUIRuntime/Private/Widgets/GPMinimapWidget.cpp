@@ -184,25 +184,22 @@ public:
 		if (bHasCameraFootprint && CameraFootprintCorners.Num() >= 3)
 		{
 			TArray<FVector2f> OutlinePoints;
-			OutlinePoints.Reserve(CameraFootprintCorners.Num() + 1);
-			for (const FVector2D& PresenterNormalized : CameraFootprintCorners)
+			if (UGP_MinimapWidget::BuildClosedCameraFootprintOutlinePoints(
+					CameraFootprintCorners,
+					MapDest,
+					OutlinePoints))
 			{
-				const FVector2D SurfaceUV =
-					UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(PresenterNormalized);
-				const FVector2D Local = MapDest.Min + SurfaceUV * DestSize;
-				OutlinePoints.Add(FVector2f(static_cast<float>(Local.X), static_cast<float>(Local.Y)));
+				FSlateDrawElement::MakeLines(
+					OutDrawElements,
+					NextLayer + 1,
+					AllottedGeometry.ToPaintGeometry(),
+					OutlinePoints,
+					ESlateDrawEffect::None,
+					GPMinimapWidgetPrivate::CameraFootprintColor,
+					true,
+					GPMinimapWidgetPrivate::CameraFootprintThicknessPx);
+				return NextLayer + 1;
 			}
-			OutlinePoints.Add(OutlinePoints[0]);
-			FSlateDrawElement::MakeLines(
-				OutDrawElements,
-				NextLayer + 1,
-				AllottedGeometry.ToPaintGeometry(),
-				OutlinePoints,
-				ESlateDrawEffect::None,
-				GPMinimapWidgetPrivate::CameraFootprintColor,
-				true,
-				GPMinimapWidgetPrivate::CameraFootprintThicknessPx);
-			return NextLayer + 1;
 		}
 
 		return NextLayer;
@@ -303,6 +300,51 @@ FBox2D UGP_MinimapWidget::ComputeSharedMapDestLocal(
 		SquareOffset.X + (Side - DrawSize.X) * 0.5f,
 		SquareOffset.Y + (Side - DrawSize.Y) * 0.5f);
 	return FBox2D(DrawOffset, DrawOffset + DrawSize);
+}
+
+bool UGP_MinimapWidget::BuildClosedCameraFootprintOutlinePoints(
+	const TArray<FVector2D>& PresenterNormalizedCorners,
+	const FBox2D& MapDest,
+	TArray<FVector2f>& OutOutlinePoints)
+{
+	OutOutlinePoints.Reset();
+	if (PresenterNormalizedCorners.Num() < 3)
+	{
+		return false;
+	}
+
+	const FVector2D DestSize = MapDest.GetSize();
+	if (DestSize.X <= KINDA_SMALL_NUMBER
+		|| DestSize.Y <= KINDA_SMALL_NUMBER
+		|| !FMath::IsFinite(DestSize.X)
+		|| !FMath::IsFinite(DestSize.Y))
+	{
+		return false;
+	}
+
+	OutOutlinePoints.Reserve(PresenterNormalizedCorners.Num() + 1);
+	for (const FVector2D& PresenterNormalized : PresenterNormalizedCorners)
+	{
+		const FVector2D SurfaceUV = PresenterNormalizedToSurfaceUV(PresenterNormalized);
+		const FVector2D Local = MapDest.Min + SurfaceUV * DestSize;
+		if (!FMath::IsFinite(Local.X) || !FMath::IsFinite(Local.Y))
+		{
+			OutOutlinePoints.Reset();
+			return false;
+		}
+
+		OutOutlinePoints.Add(FVector2f(static_cast<float>(Local.X), static_cast<float>(Local.Y)));
+	}
+
+	if (OutOutlinePoints.Num() < 3)
+	{
+		OutOutlinePoints.Reset();
+		return false;
+	}
+
+	const FVector2f FirstPoint = OutOutlinePoints[0];
+	OutOutlinePoints.Add(FirstPoint);
+	return OutOutlinePoints.Num() == PresenterNormalizedCorners.Num() + 1;
 }
 
 void UGP_MinimapWidget::SynchronizeProperties()

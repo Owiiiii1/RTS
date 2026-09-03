@@ -18,7 +18,7 @@ Voxel Plugin Free Legacy installed locally, UE 5.8.1 compile + load + GPRuntime 
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Merge-base with `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Parent before this checkpoint | `5667277bee05d3818873bb885866c4183f7800ec` |
-| Checkpoint commit | see git HEAD after push (must match `origin/terrain/gp-voxel-foundation`) |
+| Checkpoint commit | `2a99bb8b4953c93731d526fada11cb4d52588c2b` |
 
 No rebase, reset, stash, or clean. Operator dirty/untracked preserved.
 

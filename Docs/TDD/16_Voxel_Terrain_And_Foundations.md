@@ -4,13 +4,22 @@
 > Gameplay WHAT: [`../GDD/13_Terrain_Engineering_And_Foundations.md`](../GDD/13_Terrain_Engineering_And_Foundations.md).
 > Decision: [`../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md`](../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md).
 >
-> This page is **not** an implementation spec. Do not treat sketched owner names as existing classes. Exact Voxel Plugin version, edition, and API are **not decided** here and must be validated in a later technical spike.
+> This page is **not** an implementation spec. Do not treat sketched owner names as existing classes.
+> Stage 3A local discovery (2026-09-03): Voxel Plugin is **not installed** on the GP machine
+> (`GP/Plugins` missing; no `*Voxel*.uplugin` under the associated UE 5.8.1 engine or searched
+> sibling installs). Exact version, edition, and API remain unproven. See
+> [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
 
 ## Intended Backend
 
 **Voxel Plugin** is the intended terrain / deformation backend.
 
-Exact plugin version / edition / API integration is **TECH-SPIKE REQUIRED**. This documentation must not claim a specific Voxel Plugin replication API unless already verified.
+Stage 3A (2026-09-03) did not find an installed plugin, binaries, or source. Exact version /
+edition / API integration remains **TECH-SPIKE REQUIRED** until operator install. This
+documentation must not claim a specific Voxel Plugin replication API. Spike notes: preferred
+unproven candidate is a server-authored compact deformation event log with local apply (Option B),
+not plugin-native replication (Option A) and not chunk deltas (Option C), until source proves
+otherwise.
 
 ## Authority Boundary
 
@@ -19,7 +28,9 @@ Exact plugin version / edition / API integration is **TECH-SPIKE REQUIRED**. Thi
 - Clients do **not** author gameplay terrain destruction.
 - Local engineering **progress** is server-authoritative. Presentation pulses do not own progress.
 
-Exact multiplayer synchronization strategy must be proven in a technical spike before production implementation.
+Exact multiplayer synchronization strategy must be proven against an installed plugin before
+production implementation. Stage 3A could not prove plugin replication, determinism, or late-join
+snapshot APIs because the plugin is absent.
 
 ## Orbital Completed Asset vs Local Engineering
 
@@ -163,18 +174,20 @@ Terrain implementation must account for:
 
 Exact NavMesh vs voxel-navigation update strategy is **DESIGN / TECH-SPIKE REQUIRED**. Do not assume a full NavMesh rebuild after every explosion is acceptable.
 
+Current production path (unchanged this checkpoint): `UGP_MovementComponent` uses `UNavigationSystemV1::FindPathSync` / `ProjectPointToNavigation` (Recast when `NavMeshBoundsVolume` coverage exists, else straight-line fallback). Stage 3E must account for that seam; Stage 3A did not rewrite navigation.
+
 SWARM Medium/Large corpses as temporary obstacles (see [`17_SWARM_Architecture`](17_SWARM_Architecture.md)) must **not** mandate a runtime NavMesh rebuild. Preferred direction: transient obstacle data / traversability layer, or local check + repath, aligned with this voxel terrain / traversability work. Concrete **navigation/obstacle** approach remains prototype / profile TBD. This is not a Mass / gameplay-backend choice.
 
 ## Multiplayer Tech-Spike Requirements
 
 Before production implementation, a spike must prove:
 
-- Voxel Plugin version / edition / licensing / UE 5.8 compatibility;
-- server-authoritative deformation apply path;
-- client reconstruction / replication approach **without claiming an unverified plugin API**;
-- bandwidth / determinism / listen-server host+client behavior;
-- interaction with existing BuildGrid occupancy;
-- failure modes (desync, late join — if in spike scope).
+- Voxel Plugin version / edition / licensing / UE 5.8 compatibility — **not installed locally (2026-09-03)**;
+- server-authoritative deformation apply path — **not proven (no plugin API)**;
+- client reconstruction / replication approach **without claiming an unverified plugin API** — Option B is the preferred candidate only;
+- bandwidth / determinism / listen-server host+client behavior — **not measured**;
+- interaction with existing BuildGrid occupancy — occupancy stays independent; query/leveling adapter later;
+- failure modes (desync, late join — if in spike scope) — late join not implemented; snapshot vs replay unproven.
 
 ## FoW Terrain-Surface Integration Requirement
 
@@ -205,8 +218,8 @@ Budgets and strategies are **TECH-SPIKE REQUIRED**. Do not invent numbers here.
 - Foundation package cost, quantity, slab footprint, stock consume/reserve moment.
 - Foundation Repair tunables.
 - Blast radius / depth / damage formula.
-- Voxel Plugin version / API.
-- Voxel replication mechanism.
+- Voxel Plugin version / API (plugin **not installed** on the Stage 3A machine).
+- Voxel replication mechanism (no plugin helpers proven; GP event-log reconstruction is a candidate only).
 - Dynamic navigation strategy.
 - Surviving building after foundation loss.
 - Wall slope / visual adapt / auto-level / voxel base interaction; Wall stock consume moment.

@@ -2,198 +2,122 @@
 
 ## Status
 
-**MINIMAP_STAGE_MERGE_READY**
+**VOXEL_SPIKE_BLOCKED_PLUGIN_NOT_INSTALLED**
 
-Operator PASS is confirmed for the full minimap stage. Finalization audit, contracts, GPEditor, GP Development, GP Shipping, graphics smoke, and docs are PASS. `origin/main` did not move. Do not change `ui/gp-minimap` until merge.
+**INTERMEDIATE / NOT MERGE READY**
+
+Stage 3A tech spike only. No production terrain service. Voxel Plugin is not installed on this machine. Do not start Worker leveling / Foundation / placement migration.
 
 ## Branch / base / head
 
 | Item | Value |
 | --- | --- |
 | Path | `D:\Progects\RTS` |
-| Branch | `ui/gp-minimap` |
-| Remote | `origin/ui/gp-minimap` |
-| Pre-finalization HEAD | `83f6cd7d7b900b35f76b7ee9540439a3630302ff` |
-| `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
-| Merge-base with `origin/main` | `cfd3d3858993b372ea69bd55865b831584297a83` |
-| Ahead / behind vs `origin/main` | **23 / 0** after the merge-ready commit (behind **0**) |
-| Finalization commit | `e969a7216a7a1fa42003dddb6e3e72b89a83086f` |
+| Branch | `terrain/gp-voxel-foundation` |
+| Remote | `origin/terrain/gp-voxel-foundation` |
+| Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
+| Merge-base with `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
+| Spike commit | recorded in the SHA follow-up |
 
-After fetch: `origin/main` equals merge-base. No main integration required. No rebase/reset/stash.
+Created from synced `main` with `git switch -c`. No rebase, reset, stash, or clean. Operator dirty/untracked preserved.
 
-## Architecture summary
+## Local plugin discovery
 
-GPRuntime owns camera navigation and trusted presentation sources. `AGP_CameraPawn` is the canonical camera/playable bounds owner (`GetResolvedCameraBounds`, `OnResolvedCameraBoundsChanged`). `SetCameraAnchorWorldXY` is the local HUD pan API: actor XY-anchor only, Z/yaw/zoom/pitch preserved, `ClampToBounds`, spring-arm + component world sync, then `OnCameraPresentationChanged`. No RPC. `GetPresentationView()` is the current CameraComponent location/rotation/FOV. Blips consume the existing `UGP_LocalFoWUnitPresentationSubsystem` registry. FoW gameplay grid stays 2000×2000 / 100 cm.
+**Not installed.**
 
-GPUIRuntime owns presentation only. `UGP_MinimapPresenter` on `UGP_HUDViewModelSubsystem` binds LocalFoW, camera bounds, camera presentation, and the unit registry. Displayed map rect = resolved camera/playable bounds. One shared MapDest / surface transform (`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`). `UGP_MinimapWidget` + `SGPMinimapSurface` paint background, FoW downsample, blips, and camera footprint. HUD root bridges presenter accessors. Settings async-load `MinimapBackgroundTexture`. Click-to-pan is widget → `PanCameraToMinimapNormalized` → `SetCameraAnchorWorldXY`, never `SetActorLocation` from the widget.
-
-Confirmed non-goals in production:
-
-- no widget Tick
-- no polling timer
-- no world actor scans in UI
-- no SceneCapture
-- no RenderTarget
-- no synchronous asset load
-- no gameplay authority in minimap
-- no RPC for camera navigation
-- no duplicated FoW gameplay state
-- no duplicate unit registry
-- one shared map rect
-- one shared surface transform
-- current CameraComponent view for footprint
-- camera bounds as canonical displayed-world source
-
-`GPUIRuntime.Build.cs` keeps **public** `InputCore` because `GPMinimapWidget.h` includes `InputCoreTypes.h` and exposes `FKey` on the public widget API. Private would not compile that header. `GPRuntime` public `InputCore` is pre-existing camera/input, not a minimap-only add.
-
-## Operator-PASS features
-
-- minimap surface / palette
-- camera/playable bounds crop
-- static background/fallback
-- FoW overlay (Unexplored / Explored / Visible)
-- orientation `(1-X, 1-Y)`
-- friendly blips
-- enemy Visible-only blips
-- canonical team colors
-- building/unit size differentiation
-- camera projected footprint
-- camera-footprint crash fix
-- LMB click-to-pan
-- immediate footprint sync after click-to-pan
-
-## Final code audit
-
-Branch diff `origin/main...HEAD` is docs + GPRuntime camera/FoW registry seams + GPUIRuntime presenter/widget/HUD/settings/tests. No Content, Config, maps, binaries, Saved, or Intermediate.
-
-Findings:
-
-- No remaining `TArray` self-reference Add on the footprint outline path (crash already fixed by copy-then-Add).
-- Delegate binds Unbind-before-bind with same-object short-circuit; `ReleaseSlateResources` clears the Slate LMB callback and unbinds before Super.
-- Slate LMB uses a weak `CreateUObject` callback into the UWidget; UObject lifetime is not owned by Slate.
-- NaN / zero-size / degenerate-bounds / `< 3` clip-point guards remain on mapping and footprint.
-- No widget Tick, no poll timer, no per-frame world scan.
-- Contract seams and `FAutoConsoleCommand` tests are `#if !UE_BUILD_SHIPPING`.
-- No leftover PlayerCameraManager / `DeprojectScreenPositionToWorld` production path. Finalization removed the stale `Camera/PlayerCameraManager.h` include from `GPMinimapPresenter.cpp`.
-- No duplicate coordinate converters beyond presenter normalize + widget surface inverse.
-- No hardcoded cyan/yellow semantic team colors; paint uses `UGP_GameplayPresentationSettings::GetTeamColor`.
-- No SceneCapture / RenderTarget / `LoadSynchronous` production path.
-
-Cleanup done: unused PCM include only. No broad refactor.
-
-## Tests
-
-Command pattern: `UnrealEditor-Cmd` `GP.uproject` `/Game/GrimProtocol/Maps/L_PrototypeArena` `-game -unattended -nop4 -NullRHI -nosplash -nosteam -ExecCmds=<one cmd>` (no comma-joined ExecCmds).
-
-| Command | Result |
+| Location | Result |
 | --- | --- |
-| `gp.UI.RunMinimapPresentationContractTest` | Complete Failures=0 |
-| `gp.UI.RunMinimapSurfaceContractTest` | Complete Failures=0 |
-| `gp.UI.RunMinimapCameraBoundsContractTest` | Complete Failures=0 |
-| `gp.UI.RunMinimapFriendlyBlipsContractTest` | Complete Failures=0 |
-| `gp.UI.RunMinimapEnemyBlipsContractTest` | Complete Failures=0 |
-| `gp.UI.RunMinimapCameraFootprintContractTest` | Complete Failures=0 |
-| `gp.UI.RunMinimapCameraFootprintOutlineCrashContractTest` | Complete Failures=0 |
-| `gp.UI.RunMinimapClickToPanContractTest` | Complete Failures=0 |
-| `gp.UI.RunMinimapClickToPanFootprintSyncContractTest` | Complete Failures=0 |
-| `gp.FoW.RunClientPresentationFoundationContractTest` | Complete Failures=0 |
-| `gp.UI.RunHUDViewModelBridgeContractTest` | Complete Failures=0 |
-| `gp.Combat.RunTeamColorContractTest` | Complete Failures=0 |
-| `gp.Selection.RunMarqueeUnitsOnlyContractTest` | Complete Failures=0 |
+| `D:\Progects\RTS\GP\Plugins` | directory does not exist |
+| `GP.uproject` Plugins[] | no Voxel entry (GameplayAbilities, EnhancedInput, CommonUI, ModelViewViewModel, ModelingToolsEditorMode) |
+| `C:\Program Files\Epic Games\UE_5.8\Engine\Plugins` | no `*Voxel*.uplugin` (Fab/Runtime/Experimental/Enterprise searched) |
+| `Engine\Plugins\Marketplace` | directory does not exist |
+| UE 5.5 / 5.6 / `C:\epic57\UE_5.7` | no Voxel uplugin |
+| `%LOCALAPPDATA%\UnrealEngine`, Documents Unreal Projects, `D:\Progects`, Downloads | no Voxel uplugin |
 
-No `gp.Camera.*` console contracts exist. Marquee is the nearest input/LMB-consume regression for click-to-pan consume-without-fallthrough.
+Edition (Free / Pro / Legacy) is not claimed.
 
-## Builds
+## Exact plugin version / path
 
-| Target | Result |
+**None.** Blocker: `VOXEL_PLUGIN_NOT_INSTALLED`.
+
+## UE compatibility
+
+| Item | Proven |
 | --- | --- |
-| GPEditor Win64 Development + UHT | **PASS** (`Result: Succeeded`) |
-| GP Win64 Development | **PASS** (`GP.exe`) |
-| GP Win64 Shipping | **PASS** (`GP-Win64-Shipping.exe`) |
+| Engine | UE **5.8.1** changelist `56057345` at `C:\Program Files\Epic Games\UE_5.8` |
+| On-disk EngineAssociation | `"5.8"` in operator-dirty `GP.uproject` (not committed) |
+| Plugin EngineVersion / binaries / Build.cs | **N/A — plugin absent** |
+| Load under this editor | **not attempted** (nothing to load) |
 
-Shipping did not expose debug/test leakage.
+No random plugin was downloaded. Engine was not modified. Compile probe skipped because enabling a plugin would require changing protected `GP.uproject`.
 
-## Runtime smoke
+## Proven API symbols
 
-`UnrealEditor-Cmd` `L_PrototypeArena` `-game` **without NullRHI** (D3D12, NVIDIA GeForce RTX 4070 SUPER).
+**None.** Required capabilities (world own, height/density query, crater edit, collision/mesh update, serialize, net helpers, chunk dirtying) have no exact header/class/function until source exists. See `Docs/Development/Voxel_Plugin_Technical_Spike.md`.
 
-- LoadMap `/Game/GrimProtocol/Maps/L_PrototypeArena` succeeded (`LogLoad: Took 0.522472 seconds`)
-- No `Fatal error` / `Assertion failed`
-- `gp.UI.HUDStatus`: `LocalPlayer=LocalPlayer_0` `ConfiguredClass=.../WBP_GP_HUD_C` `InstancePresent=true` `Ready=Ready`
+## Authority recommendation
 
-HUD/minimap subsystem initialization passed. Operator visual PASS already covers the painted surface.
+Gameplay must not call Voxel APIs. Future GPRuntime `UWorldSubsystem` (name not locked; same layer as `UGP_BuildGridSubsystem`) should own a generic deformation request. Only an adapter includes Voxel headers. Server accepts gameplay deformation; clients never decide craters.
 
-## Docs updated
+## Reconstruction / replication recommendation
 
-- `Docs/TDD/11_RTS_Camera.md` — camera bounds, `GetPresentationView`, `SetCameraAnchorWorldXY`, deferred drag-pan / terrain-aware projection
-- `Docs/TDD/12_UI_Architecture.md` — MVP minimap surface complete; deferred extras listed
-- `Docs/TDD/15_Fog_of_War.md` — click-to-pan is shipped; last-known remains deferred; no SceneCapture
-- `Docs/GDD/09_UI_UX.md` — current surface vs deferred deposit/SWARM/last-known/drag-pan
-- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md` — Stage 2 Minimap + FoW minimap presentation **COMPLETE**; next allowed stage **3. Terrain / Voxel / Foundation 3A–3E**
+**Option B is the preferred candidate, not proven:** server compact event log (location / radius / depth / shape / revision) + local apply on each machine.
 
-Voxel was not started.
+- Option A (plugin-native replication): cannot select
+- Option C (chunk/delta payload): cannot select
 
-## Protected operator files
+## Determinism risks
+
+Unmeasured. Do not promise bit-identical geometry. Event reconstruction is only valid if the installed plugin’s local apply is close enough for collision, BuildGrid queries, and later FoW surface work. Late join: replay vs snapshot vs out-of-scope — unproven; not implemented.
+
+## Nav recommendation
+
+Current units use Recast when coverage exists: `UGP_MovementComponent::TryBuildNavigationPath` → `UNavigationSystemV1::ProjectPointToNavigation` + `FindPathSync`, else straight-line fallback. Buildings use `NavigationObstacle`. Do not full-rebuild NavMesh per crater. Stage 3E: bounded test of one crater vs Recast locality; optional separate traversability overlay. No nav rewrite in 3A.
+
+## BuildGrid seam
+
+`UGP_BuildGridSubsystem`: **200 cm** cells (`DefaultCellSizeCm`). Occupancy independent of voxels. `CellToWorld` takes explicit `GroundZ`. Foundation/leveling queries are future adapter methods, not implemented. BuildGrid source was **not** changed.
+
+## Files changed (this checkpoint)
+
+- `Docs/Development/Voxel_Plugin_Technical_Spike.md` (created)
+- `Docs/Development/Cursor_Work_Report.md`
+- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
+- `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
+- `Docs/Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md`
+
+No `GP/Source` production code. No Content / Config / maps / `GP.uproject` / Tools.
+
+## Build result
+
+GPEditor Win64 Development + UHT: **PASS** (`Result: Succeeded`, 2026-09-03). Docs/spike only; no production source change. GP Dev/Shipping not required.
+
+## Protected before / after
+
+**Before branch + after commit (same operator set, not committed):**
+
+```
+ M GP/Config/DefaultEngine.ini
+ M GP/Config/DefaultGame.ini
+ M GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap
+ M GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset
+ M GP/GP.uproject
+?? GP/Content/Basic_VFX/
+?? GP/Content/GrimProtocol/Blueprint/
+?? GP/Content/GrimProtocol/DataAssets/Buildings/
+?? GP/Content/GrimProtocol/DataAssets/Game/
+?? GP/Content/GrimProtocol/DataAssets/Units/
+?? GP/Content/GrimProtocol/Materials/
+?? GP/Content/Mixed_Magic_VFX_Pack/
+?? GP/Content/RocketThrusterExhaustFX/
+?? Tools/
+```
 
 No `git reset --hard`, `git clean`, stash, or broad restore.
 
-**Before finalization commit:**
+## Exact next action
 
-```
- M GP/Config/DefaultEngine.ini
- M GP/Config/DefaultGame.ini
- M GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap
- M GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset
- M GP/GP.uproject
-?? GP/Content/Basic_VFX/
-?? GP/Content/GrimProtocol/Blueprint/
-?? GP/Content/GrimProtocol/DataAssets/Buildings/
-?? GP/Content/GrimProtocol/DataAssets/Game/
-?? GP/Content/GrimProtocol/DataAssets/Units/
-?? GP/Content/GrimProtocol/Materials/
-?? GP/Content/Mixed_Magic_VFX_Pack/
-?? GP/Content/RocketThrusterExhaustFX/
-?? Tools/
-```
-
-**After finalization commit (`e969a72`):** same protected dirty/untracked set, unchanged:
-
-```
- M GP/Config/DefaultEngine.ini
- M GP/Config/DefaultGame.ini
- M GP/Content/GrimProtocol/Maps/L_PrototypeArena.umap
- M GP/Content/GrimProtocol/Resources/BP_ResourceNode_AuthoredExample.uasset
- M GP/GP.uproject
-?? GP/Content/Basic_VFX/
-?? GP/Content/GrimProtocol/Blueprint/
-?? GP/Content/GrimProtocol/DataAssets/Buildings/
-?? GP/Content/GrimProtocol/DataAssets/Game/
-?? GP/Content/GrimProtocol/DataAssets/Units/
-?? GP/Content/GrimProtocol/Materials/
-?? GP/Content/Mixed_Magic_VFX_Pack/
-?? GP/Content/RocketThrusterExhaustFX/
-?? Tools/
-```
-
-Protected set is preserved. Not committed: `WBP_GP_HUD`, launch/selection/purchase rows, `GP/Content/`, `GP/Config/`, `L_PrototypeArena`, DataAssets, Materials/VFX, `GP.uproject`, `Tools/`.
-
-## Final diff audit (`origin/main..HEAD`)
-
-30 committed files before this finalization: docs + camera/FoW presentation seams + minimap UI + tests. Finalization adds docs wording + unused PCM include removal + this report.
-
-No accidental map/assets/config/binaries/Saved/Intermediate/operator assets.
-
-## Known intentionally deferred
-
-- minimap drag-pan
-- RMB minimap orders
-- pings
-- selection via minimap
-- last-known enemy markers
-- per-type icons
-- SceneCapture
-- terrain/voxel-aware footprint
-
-## Merge recommendation
-
-Merge `ui/gp-minimap` into `main` with a regular merge (no rebase, no force-push). Branch is behind 0. Keep operator dirty/untracked out of the merge. After merge, next allowed roadmap stage is Terrain 3A–3E; do not start Voxel from leftover minimap work.
+1. Operator installs a **vendor Voxel Plugin listed for Unreal Engine 5.8.1** (project-local `GP/Plugins/` preferred, or Fab/engine path if that is the supported install).
+2. Operator enables it in protected `GP.uproject` when ready (not this checkpoint).
+3. Follow-up 3A checkpoint: source API audit with real symbols, optional compile probe, revisit Options A/B/C.
+4. **Do not start 3B** until that follow-up is unblocked.

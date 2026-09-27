@@ -16,6 +16,7 @@ Docs only. No gameplay or source implementation. Stage 3A is not complete. Dynam
 | Branch | `terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Parent | `2ae1e27ca1101bff812f3ea7c1ab27a4a7e188a4` |
+| Checkpoint commit | `29919a0c121e1b8752dd992de3b82216a22cb5c8` |
 | Engine | UE 5.8.3 |
 
 ## Canonical decisions

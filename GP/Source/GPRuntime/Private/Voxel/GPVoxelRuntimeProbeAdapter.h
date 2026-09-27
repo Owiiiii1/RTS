@@ -9,7 +9,8 @@ class UWorld;
 struct FHitResult;
 
 /**
- * Private GPRuntime Voxel Plugin adapter for Stage 3A runtime crater probes.
+ * Private GPRuntime Voxel Plugin adapter.
+ * Production terrain deformation and the Stage 3A probes both call this seam.
  * Voxel types stay in the .cpp. Public gameplay headers must not include this.
  *
  * Experimental request consumed by RemoveSphere: WorldLocation (cm) + RadiusCm.

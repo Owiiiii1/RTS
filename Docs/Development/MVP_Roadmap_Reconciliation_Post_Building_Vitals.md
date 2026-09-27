@@ -1,13 +1,14 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `VOXEL_RUNTIME_CRATER_PROVEN_READY_FOR_OPERATOR_VALIDATION` — Stage 3A; do not start 3B
+**Status:** `TERRAIN_DEFORMATION_PRODUCTION_LAYER_READY_FOR_OPERATOR_VALIDATION` — Stage 3A; do not start 3B
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
 **Baseline:** `origin/main` @ `569777625b8a4718289ad4809efa5ba5da09df7c`
 **Audit date:** 2026-08-21; minimap stage closed 2026-09-03; Stage 3A runtime crater 2026-09-04
 **Scope:** current factual roadmap and capability status.
-**Current execution checkpoint:** Stage 2 Minimap is **COMPLETE** on `main`. Stage **3A** Voxel Plugin
-Free Legacy runtime crater is proven (`RemoveSphere` density/mesh/collision on a transient
-`UVoxelFlatGenerator` world). Next is **operator visual validation**, then the event-layer decision.
+**Current execution checkpoint:** Stage 2 Minimap is **COMPLETE** on `main`. Stage **3A** has an authority
+`UGP_TerrainDeformationComponent` and one implemented profile, `ShallowSphereCap`. Operator visual
+validation of authored deformation already passed on 2026-09-27. Next is an operator retest of
+`gp.Voxel.CraterUnderCursor` through that service.
 Do **not** mark 3A complete and do **not** start Worker leveling / Foundation / placement migration.
 Authored `WBP_GP_HUD` remains operator-local.
 
@@ -151,7 +152,7 @@ current execution order.
 
 | Capability | Status | Factual evidence / boundary |
 | --- | --- | --- |
-| Voxel Plugin terrain backend | **RUNTIME CRATER PROVEN — AWAITING OPERATOR VISUAL** | Stage 3A (2026-09-04) on `terrain/gp-voxel-foundation`: transient `AVoxelWorld` + `UVoxelFlatGenerator` (no content asset). `UVoxelSphereTools::RemoveSphere` (300 cm, `bMultiThreaded=false`, `bConvertToVoxelSpace=true`, `bUpdateRender=true`). Density `(0,0,-1)` -0.999→empty; far voxel unchanged; `EditedBounds` 13³ vs world 64³; 4 proc meshes; crater trace Z 199.9→-100.0. `gp.Voxel.RunRuntimeCraterProbeContractTest` Failures=0. Plugin untracked. See `Docs/Development/Voxel_Plugin_Technical_Spike.md`. |
+| Voxel Plugin terrain backend | **AUTHORITY DEFORMATION LAYER — OPERATOR RETEST** | Stage 3A on `terrain/gp-voxel-foundation`: `UGP_TerrainDeformationComponent` on `AGP_GameState`. `RequestDeformation` is authority-only, `ShallowSphereCap` only, radius 50..1500 cm, depth 10..radius. Vertical-trace world resolve. Replicated event log, max 32, no voxel payload. `gp.Voxel.CraterUnderCursor` calls that API. Other profiles, scars, debris, vegetation, foundation reaction, dynamic traversability, and late-join snapshot are not done. Plugin untracked. See `Docs/Development/Voxel_Plugin_Technical_Spike.md`. |
 | Authoritative terrain deformation | **NOT STARTED** | Generic deformation-event contract documented; no production service. Clients must not author destruction. |
 | Worker terrain leveling / site prep | **NOT STARTED** | Command concept only (names TBD). Grey/yellow BuildGrid overlay. Zone sizing UX **DESIGN REQUIRED**. |
 | Foundation Slab orbital procurement | **NOT STARTED** | Wall Package philosophy; cost/quantity/footprint **TBD** (do not copy 5). |
@@ -273,7 +274,7 @@ This order replaces mechanical continuation of the historical Slice 8 -> 13 sequ
 1. **Production UI foundation / HUD**
 2. **Minimap + FoW minimap presentation** — **COMPLETE**
 3. **Terrain / Voxel / Foundation system** — must exist before AI and final building/wall design because both depend on construction-site rules and navigation. This stage must also establish the **generic local engineering job contract**, **Worker assignment/contribution model**, and **reusable work-presentation hooks** before final Wall implementation.
-   - **3A.** Voxel Plugin technical spike + authoritative terrain deformation foundation — **IN PROGRESS** (`RUNTIME_CRATER_PROVEN`). Automated crater proven. Do not start 3B until operator visual validation and event-layer decision.
+   - **3A.** Voxel Plugin technical spike + authoritative terrain deformation foundation — **IN PROGRESS** (authority `ShallowSphereCap` layer implemented). Do not mark 3A complete. Do not start 3B.
    - **3B.** Worker leveling + generic local engineering job/work hooks
    - **3C.** Foundation procurement / install / repair foundation support
    - **3D.** Building placement migration to leveled + intact foundation requirement
@@ -394,12 +395,12 @@ friendly blips, Visible-only enemy blips, canonical team colors, building vs uni
 CameraComponent viewport footprint, LMB click-to-pan with immediate footprint sync. Operator PASS
 on `ui/gp-minimap`. Authored `WBP_GP_HUD` remains operator-local.
 
-**NEXT:** Stage **3A** operator visual validation of the runtime crater probe.
-PIE `L_PrototypeArena` (do not save) → `gp.Voxel.SpawnRuntimeProbe` → `gp.Voxel.ApplyProbeCrater`.
+**NEXT:** Stage **3A** operator retest of `gp.Voxel.CraterUnderCursor` on `L_VoxelArena_2P` (authority viewport).
+The command now calls `UGP_TerrainDeformationComponent::RequestDeformation`.
 Do **not** start 3B Worker leveling, Foundation, or placement migration. Do **not** vendor
 `GP/Plugins/VoxelFree` until repository policy is decided.
 
-Execution order remains: finish 3A after operator visual + event-layer decision → 3B–3E → RTS AI Opponent → bounded core-loop gaps →
+Execution order remains: finish 3A (profiles, scars, debris, vegetation, foundation reaction, late-join snapshot) → 3B–3E → RTS AI Opponent → bounded core-loop gaps →
 
 Execution order remains: Terrain stage 3A–3E → RTS AI Opponent → bounded core-loop gaps →
 Building-system / Walls gate → Steam → match completion → SWARM implementation → full MVP

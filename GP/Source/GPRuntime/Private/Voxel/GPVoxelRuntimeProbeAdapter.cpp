@@ -2,8 +2,6 @@
 
 #include "Voxel/GPVoxelRuntimeProbeAdapter.h"
 
-#if !UE_BUILD_SHIPPING
-
 #include "CollisionQueryParams.h"
 #include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
@@ -468,5 +466,3 @@ namespace GPVoxelRuntimeProbeAdapter
 		VoxelWorld->Destroy();
 	}
 }
-
-#endif

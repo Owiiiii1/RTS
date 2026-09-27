@@ -4,15 +4,18 @@
 > Gameplay WHAT: [`../GDD/13_Terrain_Engineering_And_Foundations.md`](../GDD/13_Terrain_Engineering_And_Foundations.md).
 > Decision: [`../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md`](../Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md).
 >
-> This page is **not** an implementation spec. Do not treat sketched owner names as existing classes.
+> This page is **not** a full implementation spec. `UGP_TerrainDeformationComponent` is a real class.
+> Other sketched owner names are not classes.
 > Stage 3A local audit (2026-09-04): **Voxel Plugin Free Legacy** is installed locally at
 > `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0). UE 5.8.1 compile, load,
 > and runtime `RemoveSphere` crater (mesh + collision) are proven on a transient C++ `UVoxelFlatGenerator`
 > world. Operator visual check on authored `L_VoxelArena_2P` (2026-09-27) confirmed deformation and
 > collision, and a shallow radius/depth crater. Units descend and climb that deformed surface.
-> The spherical cap is the current technical probe only. Production craters still need a profile
-> catalog, material scars, and presentation debris. Unit XY still comes from the nav/straight path;
-> actor Z follows the physical surface. Dynamic traversability and NavMesh rebuild stay Stage 3E.
+> The spherical cap is the implemented ShallowSphereCap profile. Further profiles, material scars,
+> and presentation debris are not implemented. `UGP_TerrainDeformationComponent` on `AGP_GameState`
+> is the authority service: it validates a generic request, applies that cap locally, and replicates
+> a bounded event log. Unit XY still comes from the nav/straight path; actor Z follows the physical
+> surface. Dynamic traversability and NavMesh rebuild stay Stage 3E.
 > Stage 3A is not complete.
 > See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
 
@@ -26,7 +29,8 @@ does not claim plugin replication as the GP path. Preferred reconstruction remai
 compact deformation event log with local apply (Option B). Option A is unavailable on Free. Option C
 (chunk deltas) is not required for crater events. Runtime `RemoveSphere` crater is proven on a
 transient probe world (density, local `EditedBounds` 13³ vs 64³, mesh update, collision deepen).
-Production deformation service is not started. `AGP_CameraPawn` owns one `UVoxelSimpleInvokerComponent`
+`UGP_TerrainDeformationComponent` (default subobject of `AGP_GameState`) is the production authority
+service. Only `ShallowSphereCap` is implemented. `AGP_CameraPawn` owns one `UVoxelSimpleInvokerComponent`
 (`LODRange`/`CollisionsRange` 20000 cm, navmesh off). The plugin registers every invoker and only
 gates LOD with `IsLocalInvoker()`; GP enables the component only while the pawn is locally controlled.
 Authored maps should keep VoxelWorld camera-invoker fallback off. Stage 3A is not complete.
@@ -49,10 +53,12 @@ Dynamic crater nav remains Stage 3E.
 - Clients do **not** author gameplay terrain destruction.
 - Local engineering **progress** is server-authoritative. Presentation pulses do not own progress.
 
-Exact multiplayer synchronization strategy for production is still gated on later net work.
-Installed Free source: TCP MP is a Pro stub; `GetSave` / `LoadFromSave` exist for snapshot
-experiments. Event replay of `RemoveSphere` is **EVENT_REPLAY_FEASIBLE** at API level (one-machine
-density proven; not bit-identical, not replicated).
+Production reconstruction is a replicated compact event log on `UGP_TerrainDeformationComponent`
+(last 32 accepted events). Authority applies once, then appends. Each machine applies a SequenceId
+at most once. Clients cannot author events. Dense voxel payloads are not replicated. Late join only
+sees the retained window; snapshot compaction is not implemented. A two-process visual replay was
+not run. Installed Free source: TCP MP is a Pro stub; `GetSave` / `LoadFromSave` exist for a future
+snapshot. Plugin multiplayer is not the GP path.
 
 ## Orbital Completed Asset vs Local Engineering
 
@@ -102,20 +108,23 @@ Mining’s authored Mining-only Niagara hook is the **reference pattern**, not a
 
 Gameplay systems must not call “destroy terrain as this tank gun.” They emit a **generic deformation request**:
 
-| Field (conceptual) | Notes |
+| Field | Runtime |
 | --- | --- |
-| WorldLocation | Impact / explosion / later earthquake origin |
-| Radius | Data-driven; exact values **TBD** |
-| Depth / Strength | Data-driven; exact formula **TBD**. Probe depth is cap penetration, not a shipped API |
-| Shape / ProfileId | Data-driven catalog entry. About 3–5 authored profiles are the MVP target |
-| Seed | Deterministic variety. Chosen by authority with the event |
-| Rotation | Deterministic orientation of the profile |
-| SurfaceScarType | Material change in the footprint. Channels and persistence **TECH / DESIGN REQUIRED** |
-| SourceIdentity | Optional for diagnostics; not a hard coupling to one weapon class |
+| SequenceId | Assigned by authority, starting at 1. Clients do not allocate ids |
+| WorldLocation | Surface impact. Not the sphere center |
+| RadiusCm | Finite and > 0, then clamped to 50..1500 cm |
+| DepthCm | Finite and > 0, then clamped to 10..RadiusCm. Depth > Radius becomes a hemisphere |
+| Profile | `EGP_TerrainDeformationProfile`. Only `ShallowSphereCap` is accepted |
+| Seed | Stored. Ignored by the current cap. Future irregular profiles must be deterministic from Profile + Seed + Rotation + geometry |
+| RotationDegrees | Stored. The spherical cap does not change when rotated |
+| SurfaceScar | `EGP_TerrainSurfaceScarType::None` only. Not painted |
+| SourceIdentity | Diagnostic `FName`. Not a weapon class |
 
-These names are conceptual. They are not an implemented struct or class.
+Implemented types: `FGP_TerrainDeformationRequest`, `FGP_TerrainDeformationEvent`, `UGP_TerrainDeformationComponent::RequestDeformation`. Non-finite inputs are rejected. Radius or depth ≤ 0 is rejected. Any other profile is rejected. The service resolves the authored `AVoxelWorld` with a vertical trace and the existing hit-ownership resolver. It does not take the first `AVoxelWorld` in the world.
 
-Clients reconstruct geometry from the authoritative event. Seed and rotation must be part of that event so every machine builds the same crater. The exact mesh/voxel algorithm is **not** decided. Fully random voxel noise is not required.
+`ShallowSphereCap` places the sphere center at `WorldLocation.Z + (RadiusCm - DepthCm)` and calls `UVoxelSphereTools::RemoveSphere` through the private adapter (`bConvertToVoxelSpace=true`, `bUpdateRender=true`, `bMultiThreaded=false`). Gameplay callers do not include Voxel types. Seed and rotation are on the event so a future irregular profile can be rebuilt the same way on every machine. That generator is not implemented. Fully random voxel noise is not used.
+
+`OnTerrainDeformationApplied` is the subscription point for a future scar, debris, or vegetation consumer. The terrain service does not own those.
 
 ### World-impact pipeline
 
@@ -136,7 +145,7 @@ The terrain service does not own combat damage. Niagara does not own authoritati
 
 ### Crater profiles, scars, debris, landforms, vegetation
 
-The current spherical cap (`EditCenter` above the surface by `Radius - Depth`) is a probe primitive. Production presentation is a small authored profile catalog (wide shallow, asymmetric, elongated, ragged, compound, and similar). Profile, seed, and rotation travel with the event.
+`ShallowSphereCap` (`EditCenter` above the surface by `Radius - Depth`) is the only implemented profile. The remaining catalog (wide shallow, asymmetric, elongated, ragged, compound, and similar) is not implemented. Profile, seed, and rotation already travel with the event.
 
 A deformation may also change voxel material in the footprint (dark soil, scorch, fresh rock, Ferronite variant). Prefer a surface material layer on the voxel terrain. Exact channels, fading, and persistence are **TECH / DESIGN REQUIRED**. A match-long scar is acceptable for MVP.
 
@@ -241,9 +250,9 @@ SWARM Medium/Large corpses as temporary obstacles (see [`17_SWARM_Architecture`]
 Before production implementation, a spike must prove:
 
 - Voxel Plugin version / edition / licensing / UE 5.8 compatibility — **Voxel Plugin Free Legacy 434 / `159fd19a0`**, EngineVersion 5.8.0, binaries BuildId `55116800` on UE 5.8.1; compile+load proven 2026-09-04. Plugin remains operator-local / untracked (Marketplace license; do not vendor yet);
-- server-authoritative deformation apply path — **runtime proven** on probe: `UVoxelSphereTools::RemoveSphere` (world cm + radius cm, `bConvertToVoxelSpace=true`); density + mesh + collision; **no production service**;
-- client reconstruction — Option B (event log + local apply). Plugin TCP is Pro-only stub. `EVENT_REPLAY_FEASIBLE` at API level;
-- bandwidth / determinism / listen-server host+client behavior — **not measured**;
+- server-authoritative deformation apply path — **implemented** as `UGP_TerrainDeformationComponent::RequestDeformation`. `ShallowSphereCap` uses `RemoveSphere` through the adapter. Probe density/mesh/collision remain proven;
+- client reconstruction — replicated compact log (max 32) plus local apply, duplicate SequenceId skipped. Plugin TCP is not used. Two-process visual replay was **not** run;
+- bandwidth / determinism / listen-server host+client behavior — listen-server double-apply is guarded by the local applied-id set. Bandwidth and a real second process were **not measured**;
 - interaction with existing BuildGrid occupancy — occupancy stays independent; query/leveling adapter later;
 - failure modes (desync, late join) — late join not implemented; save/load APIs exist; snapshot vs replay unproven in play.
 
@@ -276,13 +285,13 @@ Budgets and strategies are **TECH-SPIKE REQUIRED**. Do not invent numbers here.
 - Foundation package cost, quantity, slab footprint, stock consume/reserve moment.
 - Foundation Repair tunables.
 - Blast radius / depth / damage formula.
-- Crater profile catalog, deterministic seed/rotation scheme, and generation algorithm.
+- Crater profile catalog beyond `ShallowSphereCap`. Seed and rotation are stored; the irregular generator is not implemented.
 - Voxel material channel layout, scar types, fading, and persistence past the match.
 - Debris pool, lifetime, and budget; boundary between Niagara fragments and gameplay debris.
 - Vegetation technology, pooling, persistence, and reaction thresholds.
 - Authored VoxelWorld coverage for every landform that must deform. Static Mesh destruction stays separate.
-- Voxel Plugin version / API (Free Legacy 434; runtime `RemoveSphere` crater proven on probe world; production service and event layer still required).
-- Voxel replication mechanism (no plugin helpers proven; GP event-log reconstruction is a candidate only).
+- Voxel Plugin version / API (Free Legacy 434; `ShallowSphereCap` is the production geometry; other profiles are not).
+- Full late-join snapshot. The replicated log is a 32-event window, not a compacted match snapshot.
 - Dynamic navigation strategy.
 - Surviving building after foundation loss.
 - Wall slope / visual adapt / auto-level / voxel base interaction; Wall stock consume moment.

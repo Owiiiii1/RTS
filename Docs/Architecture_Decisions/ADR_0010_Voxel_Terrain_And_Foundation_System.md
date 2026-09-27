@@ -3,7 +3,7 @@
 ## Status
 Accepted (2026-08-21) — documentation decision. Refined 2026-08-21: Wall does not require Foundation; local engineering is Worker-labor with planned jobs. Production implementation is gated on a Voxel Plugin technical spike and remaining DESIGN REQUIRED items in GDD/13 and TDD/16.
 
-Stage 3A local audit (2026-09-04): **Voxel Plugin Free Legacy** is installed at `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0). UE 5.8.1 compile and load are proven. Operator PIE on `L_VoxelArena_2P` (2026-09-27) confirmed authored deformation, collision update, a shallow radius/depth probe crater, and units following the deformed surface. That sphere is a technical probe, not the final crater presentation. The production service and event layer are not done. Dynamic traversability remains Stage 3E. See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
+Stage 3A local audit (2026-09-04): **Voxel Plugin Free Legacy** is installed at `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0). UE 5.8.1 compile and load are proven. Operator PIE on `L_VoxelArena_2P` (2026-09-27) confirmed authored deformation, collision update, a shallow radius/depth crater, and units following the deformed surface. `UGP_TerrainDeformationComponent` on `AGP_GameState` now implements that cap as the only production profile, with an authority request and a bounded replicated event log. Other profiles, scars, debris, vegetation, foundation reaction, dynamic traversability, and late-join snapshot compaction are not done. Stage 3A is not complete. See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
 
 ## Context
 

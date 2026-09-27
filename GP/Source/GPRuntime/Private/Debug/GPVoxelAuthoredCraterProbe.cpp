@@ -10,6 +10,8 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
+#include "Game/GPGameState.h"
+#include "Terrain/GPTerrainDeformationComponent.h"
 #include "TimerManager.h"
 #include "Voxel/GPVoxelRuntimeProbeAdapter.h"
 
@@ -243,6 +245,110 @@ namespace GPVoxelAuthoredCraterProbe
 			TEXT("gp.Voxel collision check: navmesh not rebuilt (dynamic Recast deferred Stage 3E)"));
 	}
 
+	static const TCHAR* RejectReasonName(EGP_TerrainDeformationRejectReason Reason)
+	{
+		switch (Reason)
+		{
+		case EGP_TerrainDeformationRejectReason::None:
+			return TEXT("None");
+		case EGP_TerrainDeformationRejectReason::NoAuthority:
+			return TEXT("NoAuthority");
+		case EGP_TerrainDeformationRejectReason::NonFinite:
+			return TEXT("NonFinite");
+		case EGP_TerrainDeformationRejectReason::InvalidRadius:
+			return TEXT("InvalidRadius");
+		case EGP_TerrainDeformationRejectReason::InvalidDepth:
+			return TEXT("InvalidDepth");
+		case EGP_TerrainDeformationRejectReason::UnsupportedProfile:
+			return TEXT("UnsupportedProfile");
+		case EGP_TerrainDeformationRejectReason::NoVoxelWorld:
+			return TEXT("NoVoxelWorld");
+		case EGP_TerrainDeformationRejectReason::ApplyFailed:
+			return TEXT("ApplyFailed");
+		default:
+			return TEXT("Unknown");
+		}
+	}
+
+	static void SubmitProductionCrater(
+		UWorld* World,
+		const FVector& ImpactPoint,
+		float RequestedRadius,
+		float RequestedDepth)
+	{
+		const TCHAR* Command = TEXT("gp.Voxel.CraterUnderCursor");
+		AGP_GameState* GameState = World->GetGameState<AGP_GameState>();
+		UGP_TerrainDeformationComponent* Terrain = GameState != nullptr
+			? GameState->GetTerrainDeformationComponent()
+			: nullptr;
+		if (Terrain == nullptr)
+		{
+			UE_LOG(LogGPVoxelAuthoredCrater, Warning,
+				TEXT("%s: AGP_GameState terrain service missing"), Command);
+			Screen(CraterMessageKey, FColor::Red, TEXT("no terrain service"));
+			return;
+		}
+
+		const FVector TraceStart = ImpactPoint + FVector(0.f, 0.f, VerticalTraceHalfExtentCm);
+		const FVector TraceEnd = ImpactPoint - FVector(0.f, 0.f, VerticalTraceHalfExtentCm);
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(GPVoxelAuthoredCraterBaseline), true);
+		FHitResult BaselineHit;
+		bool bBaselineHit = false;
+		ClosestChannelHit(World, TraceStart, TraceEnd, ECC_Visibility, Params, BaselineHit, bBaselineHit);
+		ClosestChannelHit(World, TraceStart, TraceEnd, ECC_WorldStatic, Params, BaselineHit, bBaselineHit);
+		ClosestChannelHit(World, TraceStart, TraceEnd, ECC_WorldDynamic, Params, BaselineHit, bBaselineHit);
+		const float BeforeSurfaceZ = bBaselineHit ? BaselineHit.ImpactPoint.Z : ImpactPoint.Z;
+
+		FGP_TerrainDeformationRequest Request;
+		Request.WorldLocation = ImpactPoint;
+		Request.RadiusCm = RequestedRadius;
+		Request.DepthCm = RequestedDepth;
+		Request.Profile = EGP_TerrainDeformationProfile::ShallowSphereCap;
+		Request.Seed = 0;
+		Request.RotationDegrees = 0.f;
+		Request.SurfaceScar = EGP_TerrainSurfaceScarType::None;
+		Request.SourceIdentity = TEXT("DebugCursor");
+
+		const FGP_TerrainDeformationResult Result = Terrain->RequestDeformation(Request);
+		AActor* VoxelWorld = Result.ResolvedVoxelWorld.Get();
+		const float VoxelSizeCm = VoxelWorld != nullptr
+			? GPVoxelRuntimeProbeAdapter::GetVoxelSizeCm(VoxelWorld)
+			: 0.f;
+
+		UE_LOG(LogGPVoxelAuthoredCrater, Log,
+			TEXT("%s: production RequestDeformation accepted=%s seq=%d reason=%s impact=%s editCenter=%s radius=%.1f depth=%.1f source=%s boundsValid=%s"),
+			Command,
+			Result.bAccepted ? TEXT("true") : TEXT("false"),
+			Result.SequenceId,
+			RejectReasonName(Result.Reason),
+			*ImpactPoint.ToString(),
+			*Result.EditCenter.ToString(),
+			Result.AppliedRadiusCm,
+			Result.AppliedDepthCm,
+			*Request.SourceIdentity.ToString(),
+			Result.EditedBounds.bValid ? TEXT("true") : TEXT("false"));
+
+		if (!Result.bAccepted || VoxelWorld == nullptr)
+		{
+			Screen(CraterMessageKey, FColor::Red,
+				FString::Printf(TEXT("crater rejected %s"), RejectReasonName(Result.Reason)));
+			return;
+		}
+
+		DrawDebugSphere(World, Result.EditCenter, Result.AppliedRadiusCm, 24, FColor::Orange, false, 8.f, 0, 3.f);
+		DrawDebugLine(World, TraceStart, TraceEnd, FColor::White, false, 8.f, 0, 1.5f);
+		Screen(CraterMessageKey, FColor::Orange, TEXT("CRATER APPLIED"));
+		ScheduleCollisionCheck(
+			World,
+			VoxelWorld,
+			ImpactPoint,
+			Result.AppliedRadiusCm,
+			BeforeSurfaceZ,
+			VoxelSizeCm,
+			bBaselineHit,
+			false);
+	}
+
 	static void ApplyUnderCursor(const TArray<FString>& Args, UWorld* World, bool bFill)
 	{
 		const TCHAR* Command = bFill ? TEXT("gp.Voxel.FillUnderCursor") : TEXT("gp.Voxel.CraterUnderCursor");
@@ -260,9 +366,9 @@ namespace GPVoxelAuthoredCraterProbe
 		if (World->GetNetMode() == NM_Client)
 		{
 			UE_LOG(LogGPVoxelAuthoredCrater, Warning,
-				TEXT("%s: client world refused. Run on the listen-server viewport. This probe does not replicate."),
+				TEXT("%s: client world refused. Run on the authority viewport."),
 				Command);
-			Screen(CraterMessageKey, FColor::Red, TEXT("client refused — listen-server only"));
+			Screen(CraterMessageKey, FColor::Red, TEXT("client refused — authority viewport only"));
 			return;
 		}
 
@@ -284,11 +390,6 @@ namespace GPVoxelAuthoredCraterProbe
 		{
 			RequestedDepth = FCString::Atof(*Args[1]);
 		}
-		const float RadiusCm = FMath::Clamp(
-			FMath::IsFinite(RequestedRadius) ? RequestedRadius : (bFill ? DefaultRadiusCm : GPVoxelCraterMath::DefaultRadiusCm),
-			MinRadiusCm,
-			MaxRadiusCm);
-
 		FHitResult CursorHit;
 		if (!TraceCursor(World, PlayerController, CursorHit))
 		{
@@ -297,6 +398,17 @@ namespace GPVoxelAuthoredCraterProbe
 			Screen(CraterMessageKey, FColor::Red, TEXT("cursor ray hit nothing"));
 			return;
 		}
+
+		if (!bFill)
+		{
+			SubmitProductionCrater(World, CursorHit.ImpactPoint, RequestedRadius, RequestedDepth);
+			return;
+		}
+
+		const float RadiusCm = FMath::Clamp(
+			FMath::IsFinite(RequestedRadius) ? RequestedRadius : DefaultRadiusCm,
+			MinRadiusCm,
+			MaxRadiusCm);
 
 		EGPVoxelWorldResolvePath ResolvePath = EGPVoxelWorldResolvePath::None;
 		AActor* VoxelWorld = GPVoxelRuntimeProbeAdapter::ResolveVoxelWorldFromHit(CursorHit, ResolvePath);
@@ -402,7 +514,7 @@ namespace GPVoxelAuthoredCraterProbe
 
 	static FAutoConsoleCommandWithWorldAndArgs GCraterUnderCursor(
 		TEXT("gp.Voxel.CraterUnderCursor"),
-		TEXT("PIE debug: shallow RemoveSphere on the authored AVoxelWorld under the mouse. Args: RadiusCm DepthCm. Defaults 400 80. Does not save or spawn a world."),
+		TEXT("PIE debug producer for UGP_TerrainDeformationComponent::RequestDeformation. Args: RadiusCm DepthCm. Defaults 400 80. Authority only. Does not save or spawn a world."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&CraterUnderCursor));
 
 	static FAutoConsoleCommandWithWorldAndArgs GFillUnderCursor(

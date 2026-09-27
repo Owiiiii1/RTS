@@ -13,6 +13,7 @@ class AGP_MainBase;
 class AGP_ResourceNode;
 class APlayerState;
 class UGP_FogOfWarComponent;
+class UGP_TerrainDeformationComponent;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGP_MatchStateTagChanged, FGameplayTag /*OldTag*/, FGameplayTag /*NewTag*/);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGP_MatchTimeRemainingChanged, float /*OldTime*/, float /*NewTime*/);
@@ -148,6 +149,8 @@ public:
 	/** Server-authoritative three-state per-team Fog of War service. Runtime bit grids are not replicated. */
 	UFUNCTION(BlueprintPure, Category = "GP|FogOfWar")
 	UGP_FogOfWarComponent* GetFogOfWarComponent() const { return FogOfWarComponent; }
+
+	UGP_TerrainDeformationComponent* GetTerrainDeformationComponent() const { return TerrainDeformationComponent; }
 
 	// --- Authority-only mutation (no RPCs) ---
 
@@ -356,6 +359,9 @@ protected:
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|FogOfWar", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UGP_FogOfWarComponent> FogOfWarComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Terrain", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UGP_TerrainDeformationComponent> TerrainDeformationComponent;
 
 	/** Authority-only weak registry; not replicated. */
 	TArray<TWeakObjectPtr<AGP_MainBase>> RegisteredMainBases;

@@ -5,6 +5,7 @@
 #include "Buildings/GPMainBase.h"
 #include "Engine/World.h"
 #include "FogOfWar/GPFogOfWarComponent.h"
+#include "Terrain/GPTerrainDeformationComponent.h"
 #include "GameFramework/PlayerState.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
@@ -20,6 +21,7 @@ AGP_GameState::AGP_GameState()
 	bReplicates = true;
 	PrimaryActorTick.bCanEverTick = false;
 	FogOfWarComponent = CreateDefaultSubobject<UGP_FogOfWarComponent>(TEXT("FogOfWarComponent"));
+	TerrainDeformationComponent = CreateDefaultSubobject<UGP_TerrainDeformationComponent>(TEXT("TerrainDeformationComponent"));
 
 	// Native tags are registered in FGPGASRuntimeModule::StartupModule before worlds/GameState spawn.
 	const FGameplayTag LoadingTag = FGPGameplayTags::Get().Match_State_Loading;

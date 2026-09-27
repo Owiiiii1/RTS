@@ -5,7 +5,7 @@
 **Base:** `origin/main` @ `569777625b8a4718289ad4809efa5ba5da09df7c`
 **Status:** `RUNTIME_CRATER_PROVEN`
 
-This spike is discovery + local integration + a **non-shipping runtime crater probe**. No production terrain service, no Content, no `GP.uproject` commit, no Worker leveling, no Foundation, no placement migration. Operator PIE on `L_VoxelArena_2P` (2026-09-27) passed authored deformation, collision, a shallow radius/depth crater, and unit surface following. That spherical cap is the probe shape only. Production still needs a profile catalog, material scars, presentation debris, and the authoritative event layer. Stage 3A is **not complete**. Dynamic traversability remains Stage 3E.
+This spike is discovery + local integration + the production `ShallowSphereCap` deformation layer. No Content, no `GP.uproject` commit, no Worker leveling, no Foundation, no placement migration. Operator PIE on `L_VoxelArena_2P` (2026-09-27) passed authored deformation, collision, a shallow radius/depth crater, and unit surface following. That cap is the only implemented profile. Further profiles, material scars, and presentation debris are still open. Stage 3A is **not complete**. Dynamic traversability remains Stage 3E.
 
 Canonical constraints (unchanged):
 
@@ -488,18 +488,18 @@ Folder size (this machine, 2026-09-04):
 
 ## Stage 3A recommendation
 
-**RUNTIME_CRATER_PROVEN.** Operator visual pass on authored `L_VoxelArena_2P` (2026-09-27) succeeded for deformation, collision, shallow radius/depth, and surface following. Stage 3A is not complete: the production event layer, crater profiles, material scars, and presentation debris are still open. The spherical cap remains a probe primitive.
+**TERRAIN_DEFORMATION_LAYER_IMPLEMENTED.** Operator visual pass on authored `L_VoxelArena_2P` (2026-09-27) succeeded for deformation, collision, shallow radius/depth, and surface following. `UGP_TerrainDeformationComponent` on `AGP_GameState` is the authority owner. `RequestDeformation` accepts only `ShallowSphereCap`, clamps radius to 50..1500 cm and depth to 10..radius, resolves the VoxelWorld by a vertical trace, and applies `RemoveSphere` through the private adapter. Accepted events replicate in a 32-entry log. Each machine applies a SequenceId once. `gp.Voxel.CraterUnderCursor` builds that request; it does not call `RemoveSphere` itself. `gp.Voxel.FillUnderCursor` and `gp.Voxel.ApplyProbeCrater` remain direct adapter spike paths. Two-process visual reconstruction was not run. Stage 3A is not complete: other profiles, material scars, Niagara debris, vegetation, foundation reaction, dynamic traversability, and late-join snapshot compaction are still open.
 
 | Question | Answer |
 | --- | --- |
 | Plugin installed + UE 5.8.1 compile/load? | **Yes** |
 | Runtime crater + mesh + collision? | **Yes** (`RemoveSphere`, Failures=0) |
-| Exact crater API? | `UVoxelSphereTools::RemoveSphere` |
-| Event replay? | **EVENT_REPLAY_FEASIBLE** (API-level; one-machine density proven) |
-| Production deformation service? | **No** |
+| Exact crater API? | `UVoxelSphereTools::RemoveSphere` via `GPVoxelRuntimeProbeAdapter`, called by the terrain component |
+| Event replay? | Replicated compact log + local apply. Duplicate SequenceId skipped. Two-process visual replay **not run** |
+| Production deformation service? | **Yes, ShallowSphereCap only** (`UGP_TerrainDeformationComponent`) |
 | Start 3B Worker leveling? | **No** |
-| Next action | Decide the GP authoritative event layer (profile, seed, rotation, scar). Do not vendor the plugin. Do not start 3B. Do not treat the spherical cap as the final crater look. |
+| Next action | Operator retest of `gp.Voxel.CraterUnderCursor` on `L_VoxelArena_2P`. Do not vendor the plugin. Do not start 3B. Do not treat the spherical cap as the final crater catalog. |
 
 ### GO / BLOCKED
 
-`RUNTIME_CRATER_PROVEN` — authored visual pass is done. Next is the event layer and production presentation rules, not 3B.
+`TERRAIN_DEFORMATION_PRODUCTION_LAYER` — authority service and event contract exist. Stage 3A is not complete.

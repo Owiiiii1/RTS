@@ -16,7 +16,10 @@
 > is the authority service: it validates a generic request, applies that cap locally, and replicates
 > a bounded event log. Unit XY still comes from the nav/straight path; actor Z follows the physical
 > surface. Dynamic traversability and NavMesh rebuild stay Stage 3E.
-> Stage 3A is not complete.
+> Stage 3A deformation foundation is complete on UE 5.8.3. Two-player PIE Listen Server
+> (2026-09-28) showed the host crater, the client reconstructing it from the replicated
+> event, no duplicate application, and Worker terrain-follow still correct. The 32-event
+> log is not a late-join snapshot.
 > See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
 
 ## Intended Backend
@@ -33,7 +36,7 @@ transient probe world (density, local `EditedBounds` 13³ vs 64³, mesh update, 
 service. Only `ShallowSphereCap` is implemented. `AGP_CameraPawn` owns one `UVoxelSimpleInvokerComponent`
 (`LODRange`/`CollisionsRange` 20000 cm, navmesh off). The plugin registers every invoker and only
 gates LOD with `IsLocalInvoker()`; GP enables the component only while the pawn is locally controlled.
-Authored maps should keep VoxelWorld camera-invoker fallback off. Stage 3A is not complete.
+Authored maps should keep VoxelWorld camera-invoker fallback off. Stage 3A deformation foundation is complete.
 The voxel-map minimap looking 90° off the 3D view was inherited PlayerStart yaw on `AGP_CameraPawn`, not the minimap XY transform. Startup yaw is `CameraConfig.DefaultYaw` (90°).
 
 Editor Build Paths flag `0x20` is `ENavigationBuildLock::AsyncLoadLock` (`1 << 5`) in UE 5.8.3
@@ -54,10 +57,14 @@ Dynamic crater nav remains Stage 3E.
 - Local engineering **progress** is server-authoritative. Presentation pulses do not own progress.
 
 Production reconstruction is a replicated compact event log on `UGP_TerrainDeformationComponent`
-(last 32 accepted events). Authority applies once, then appends. Each machine applies a SequenceId
-at most once. Clients cannot author events. Dense voxel payloads are not replicated. Late join only
-sees the retained window; snapshot compaction is not implemented. A two-process visual replay was
-not run. Installed Free source: TCP MP is a Pro stub; `GetSave` / `LoadFromSave` exist for a future
+(last 32 accepted events). That cap is an intermediate buffer. It is not a late-join solution
+and it is not guaranteed once a match has more than 32 historical deformations. Authority applies
+once, then appends. Each machine applies a SequenceId at most once. Clients cannot author events.
+Dense voxel payloads are not replicated. Two-player PIE Listen Server on `L_VoxelArena_2P`
+(2026-09-28): the host `gp.Voxel.CraterUnderCursor` created the crater, the client received the
+compact event and reconstructed the same deformation automatically, and no duplicate application
+was observed. Worker terrain-follow stayed correct. Snapshot compaction is not implemented.
+Installed Free source: TCP MP is a Pro stub; `GetSave` / `LoadFromSave` exist for a future
 snapshot. Plugin multiplayer is not the GP path.
 
 ## Orbital Completed Asset vs Local Engineering
@@ -251,8 +258,8 @@ Before production implementation, a spike must prove:
 
 - Voxel Plugin version / edition / licensing / UE 5.8 compatibility — **Voxel Plugin Free Legacy 434 / `159fd19a0`**, EngineVersion 5.8.0, binaries BuildId `55116800` on UE 5.8.1; compile+load proven 2026-09-04. Plugin remains operator-local / untracked (Marketplace license; do not vendor yet);
 - server-authoritative deformation apply path — **implemented** as `UGP_TerrainDeformationComponent::RequestDeformation`. `ShallowSphereCap` uses `RemoveSphere` through the adapter. Probe density/mesh/collision remain proven;
-- client reconstruction — replicated compact log (max 32) plus local apply, duplicate SequenceId skipped. Plugin TCP is not used. Two-process visual replay was **not** run;
-- bandwidth / determinism / listen-server host+client behavior — listen-server double-apply is guarded by the local applied-id set. Bandwidth and a real second process were **not measured**;
+- client reconstruction — replicated compact log (max 32) plus local apply, duplicate SequenceId skipped. Plugin TCP is not used. Two-player PIE Listen Server visual replay **passed** 2026-09-28. Late join and snapshot compaction were **not** tested;
+- bandwidth / determinism / listen-server host+client behavior — listen-server host created the crater and the client reconstructed it once. Bandwidth was **not measured**. A client joining after more than 32 events is **not** covered;
 - interaction with existing BuildGrid occupancy — occupancy stays independent; query/leveling adapter later;
 - failure modes (desync, late join) — late join not implemented; save/load APIs exist; snapshot vs replay unproven in play.
 

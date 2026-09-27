@@ -13,9 +13,11 @@
  * Authority creates events through RequestDeformation. Each machine applies the
  * same profile locally. Clients do not author events.
  *
- * The replicated log is a bounded match history (MaxEventHistory). It is not a
- * late-join snapshot. Events trimmed before a client joins are not replayed.
- * Snapshot compaction is deferred. Dense voxel data is never replicated.
+ * MaxEventHistory (32) is an intermediate reconstruction buffer, not a late-join
+ * solution and not a snapshot. A match with more than 32 accepted events does
+ * not retain the older ones for a client that never applied them. Connected
+ * clients that already applied a trimmed event are unaffected. Snapshot
+ * compaction is future network work. Dense voxel data is never replicated.
  *
  * ShallowSphereCap rotation has no visible effect. Future irregular profiles must
  * be deterministic from Profile + Seed + RotationDegrees + geometry parameters.

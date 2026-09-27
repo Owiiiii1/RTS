@@ -5,7 +5,7 @@
 **Base:** `origin/main` @ `569777625b8a4718289ad4809efa5ba5da09df7c`
 **Status:** `RUNTIME_CRATER_PROVEN`
 
-This spike is discovery + local integration + the production `ShallowSphereCap` deformation layer. No Content, no `GP.uproject` commit, no Worker leveling, no Foundation, no placement migration. Operator PIE on `L_VoxelArena_2P` (2026-09-27) passed authored deformation, collision, a shallow radius/depth crater, and unit surface following. That cap is the only implemented profile. Further profiles, material scars, and presentation debris are still open. Stage 3A is **not complete**. Dynamic traversability remains Stage 3E.
+This spike is discovery + local integration + the production `ShallowSphereCap` deformation layer. No Content, no `GP.uproject` commit, no Worker leveling, no Foundation, no placement migration. Operator PIE on `L_VoxelArena_2P` passed authored deformation, collision, a shallow radius/depth crater, and unit surface following. Two-player PIE Listen Server (2026-09-28) passed client reconstruction from the replicated event with no duplicate application. That cap is the only implemented profile. Further profiles, material scars, and presentation debris stay outside Stage 3A. Stage 3A is **complete**. Dynamic traversability remains Stage 3E. Worker leveling is not started.
 
 Canonical constraints (unchanged):
 
@@ -356,13 +356,7 @@ Flat generator density = `Z + 0.001` in voxel space (negative = solid). Surface 
 
 Private adapter `GP/Source/GPRuntime/Private/Voxel/GPVoxelRuntimeProbeAdapter.*` holds all Voxel includes. Public runner header has **no** Voxel types. Gameplay headers do not expose `AVoxelWorld`.
 
-Operator visual (does not save the map):
-
-1. PIE `L_PrototypeArena`
-2. `gp.Voxel.SpawnRuntimeProbe`
-3. fly to logged location (pawn-forward 2500 cm, else `(25000,0,200)`)
-4. `gp.Voxel.ApplyProbeCrater`
-5. inspect hole; walk/trace
+The transient probe is covered by `gp.Voxel.RunRuntimeCraterProbeContractTest`. The authored operator command is `gp.Voxel.CraterUnderCursor`, which calls `RequestDeformation`. `gp.Voxel.SpawnRuntimeProbe` and `gp.Voxel.ApplyProbeCrater` were removed; they duplicated that coverage and bypassed the production service. `gp.Voxel.FillUnderCursor` remains a non-shipping direct `AddSphere` spike. `gp.Nav.Dump` was removed after the `0x20` lock was identified as `AsyncLoadLock`. `gp.Movement.DumpGroundFollow` stays.
 
 ---
 
@@ -391,7 +385,7 @@ Observed:
 - `L_PrototypeArena?listen` (`GP_GameMode`, port 7777): `Voxel Invoker enabled` for `GP_CameraPawn_0`. Contract `localPawns=1 remoteEnabled=0`. No fatal.
 - `L_VoxelArena_2P?listen`: `VoxelWorld_1` generated (~0.05s). Log game class was `GameModeBase`, so `AGP_CameraPawn` was **not** spawned in that `-game` process. The camera-invoker warning string was absent. That map override is operator-authored and was not changed.
 
-Stage 3A is still not complete.
+Stage 3A deformation foundation is complete. Dynamic traversability remains Stage 3E.
 
 ---
 
@@ -488,18 +482,21 @@ Folder size (this machine, 2026-09-04):
 
 ## Stage 3A recommendation
 
-**TERRAIN_DEFORMATION_LAYER_IMPLEMENTED.** Operator visual pass on authored `L_VoxelArena_2P` (2026-09-27) succeeded for deformation, collision, shallow radius/depth, and surface following. `UGP_TerrainDeformationComponent` on `AGP_GameState` is the authority owner. `RequestDeformation` accepts only `ShallowSphereCap`, clamps radius to 50..1500 cm and depth to 10..radius, resolves the VoxelWorld by a vertical trace, and applies `RemoveSphere` through the private adapter. Accepted events replicate in a 32-entry log. Each machine applies a SequenceId once. `gp.Voxel.CraterUnderCursor` builds that request; it does not call `RemoveSphere` itself. `gp.Voxel.FillUnderCursor` and `gp.Voxel.ApplyProbeCrater` remain direct adapter spike paths. Two-process visual reconstruction was not run. Stage 3A is not complete: other profiles, material scars, Niagara debris, vegetation, foundation reaction, dynamic traversability, and late-join snapshot compaction are still open.
+**STAGE_3A_COMPLETE.** Operator PIE on authored `L_VoxelArena_2P` passed deformation, collision, shallow radius/depth, and surface following. Two-player PIE Listen Server (2026-09-28): the host `gp.Voxel.CraterUnderCursor` created the crater, the client received the replicated compact event and reconstructed the same deformation automatically, no duplicate application was observed, and Worker terrain-follow stayed correct. `UGP_TerrainDeformationComponent` on `AGP_GameState` is the authority owner. `RequestDeformation` accepts only `ShallowSphereCap`, clamps radius to 50..1500 cm and depth to 10..radius, resolves the VoxelWorld by a vertical trace, and applies `RemoveSphere` through the private adapter. Gameplay headers do not expose `UVoxelSphereTools`. Accepted events replicate in a 32-entry log. That cap is an intermediate buffer: it is not a late-join solution, and a match with more than 32 historical deformations does not retain the older events for a client that never applied them. Snapshot compaction is future network work. Each machine applies a SequenceId once. `gp.Voxel.CraterUnderCursor` builds that request. `gp.Voxel.FillUnderCursor` remains a direct adapter spike. `gp.Voxel.ApplyProbeCrater` and `gp.Nav.Dump` were removed.
+
+Still outside Stage 3A, and not blocking it: other crater profiles, material scars, Niagara debris, vegetation, foundation reaction, dynamic traversability, late-join snapshot/compaction, and Worker leveling. Worker leveling is the next stage and is not implemented.
 
 | Question | Answer |
 | --- | --- |
-| Plugin installed + UE 5.8.1 compile/load? | **Yes** |
-| Runtime crater + mesh + collision? | **Yes** (`RemoveSphere`, Failures=0) |
-| Exact crater API? | `UVoxelSphereTools::RemoveSphere` via `GPVoxelRuntimeProbeAdapter`, called by the terrain component |
-| Event replay? | Replicated compact log + local apply. Duplicate SequenceId skipped. Two-process visual replay **not run** |
-| Production deformation service? | **Yes, ShallowSphereCap only** (`UGP_TerrainDeformationComponent`) |
-| Start 3B Worker leveling? | **No** |
-| Next action | Operator retest of `gp.Voxel.CraterUnderCursor` on `L_VoxelArena_2P`. Do not vendor the plugin. Do not start 3B. Do not treat the spherical cap as the final crater catalog. |
+| Plugin installed + UE 5.8.3 compile/load? | **Yes** (Free Legacy, operator-local, not vendored) |
+| Runtime crater + mesh + collision? | **Yes** |
+| Authored VoxelWorld deformation? | **Yes**, operator PASS |
+| Exact crater API? | `RequestDeformation` → adapter → `UVoxelSphereTools::RemoveSphere` |
+| Event replay? | Two-player PIE Listen Server **PASS**. Duplicate SequenceId skipped. Late join **not** claimed |
+| Production deformation service? | **Yes, ShallowSphereCap only** |
+| Start 3B Worker leveling? | **Next stage. Not implemented.** |
+| Next action | Stage 3B Worker terrain leveling / site preparation. Do not vendor the plugin. Do not treat the spherical cap as the final crater catalog. |
 
 ### GO / BLOCKED
 
-`TERRAIN_DEFORMATION_PRODUCTION_LAYER` — authority service and event contract exist. Stage 3A is not complete.
+`STAGE_3A_COMPLETE` — deformation foundation is the merge candidate. 3B does not exist yet.

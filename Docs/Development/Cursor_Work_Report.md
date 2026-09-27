@@ -16,6 +16,7 @@ Stage 3A is not complete. The crater exists only in PIE/runtime memory. No Conte
 | Branch | `terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Parent | `a3df2ec8fce382decab2446df412b2183d269bcc` |
+| Checkpoint commit | `4f0153698ead057f1397657980db0e0bd936fb9b` |
 | Engine | UE 5.8.3 |
 
 ## Command

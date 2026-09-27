@@ -14,8 +14,8 @@ struct FHitResult;
  *
  * Experimental request consumed by RemoveSphere: WorldLocation (cm) + RadiusCm.
  * Shape is SphereSubtract. There is no Depth parameter on RemoveSphere.
- * A shallow crater is the same sphere with its center dropped below the surface
- * by (RadiusCm - DepthCm). Depth is world centimeters, not voxel units.
+ * A shallow crater places the sphere center ABOVE the surface by (RadiusCm - DepthCm).
+ * Depth is the lower cap's penetration under the surface, in world centimeters.
  */
 namespace GPVoxelCraterMath
 {
@@ -30,7 +30,7 @@ namespace GPVoxelCraterMath
 		FVector EditCenter = FVector::ZeroVector;
 		float RadiusCm = DefaultRadiusCm;
 		float DepthCm = DefaultDepthCm;
-		float CenterZOffsetCm = -(DefaultRadiusCm - DefaultDepthCm);
+		float CenterZOffsetCm = DefaultRadiusCm - DefaultDepthCm;
 	};
 
 	inline FShallowCrater Make(const FVector& ImpactPoint, float RequestedRadiusCm, float RequestedDepthCm)
@@ -41,7 +41,7 @@ namespace GPVoxelCraterMath
 		const float DepthSource = FMath::IsFinite(RequestedDepthCm) ? RequestedDepthCm : DefaultDepthCm;
 		const float DepthMax = FMath::Max(MinDepthCm, Out.RadiusCm);
 		Out.DepthCm = FMath::Clamp(DepthSource, MinDepthCm, DepthMax);
-		Out.CenterZOffsetCm = -(Out.RadiusCm - Out.DepthCm);
+		Out.CenterZOffsetCm = Out.RadiusCm - Out.DepthCm;
 		Out.EditCenter = FVector(ImpactPoint.X, ImpactPoint.Y, ImpactPoint.Z + Out.CenterZOffsetCm);
 		return Out;
 	}

@@ -350,7 +350,7 @@ namespace GPVoxelAuthoredCraterProbe
 #endif
 
 		UE_LOG(LogGPVoxelAuthoredCrater, Log,
-			TEXT("%s: NetMode=%s VoxelWorld=%s Label=%s Resolve=%s HitComponent=%s HitClass=%s Impact=%s EditCenter=%s RadiusRequested=%.1f Radius=%.1f Depth=%.1f CenterZOffset=%.1f VoxelSize=%.1f BeforeSurfaceZ=%.1f BaselineHit=%s Applied=%s EditedBounds valid=%s infinite=%s (%d/%d, %d/%d, %d/%d) bMultiThreaded=false bConvertToVoxelSpace=true bUpdateRender=true"),
+			TEXT("%s: NetMode=%s VoxelWorld=%s Label=%s Resolve=%s HitComponent=%s HitClass=%s Impact=%s EditCenter=%s RadiusRequested=%.1f Radius=%.1f ExpectedMaxDepth=%.1f CenterZOffset=%+.1f VoxelSize=%.1f BeforeSurfaceZ=%.1f BaselineHit=%s Applied=%s EditedBounds valid=%s infinite=%s (%d/%d, %d/%d, %d/%d) bMultiThreaded=false bConvertToVoxelSpace=true bUpdateRender=true"),
 			Command,
 			NetModeName(World->GetNetMode()),
 			*VoxelWorld->GetName(),

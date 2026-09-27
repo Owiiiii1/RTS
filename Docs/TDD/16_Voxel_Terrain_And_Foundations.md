@@ -9,8 +9,9 @@
 > `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0). UE 5.8.1 compile, load,
 > and runtime `RemoveSphere` crater (mesh + collision) are proven on a transient C++ `UVoxelFlatGenerator`
 > world. Operator visual check on authored `L_VoxelArena_2P` (2026-09-27) confirmed deformation and
-> collision. The debug crater is a shallow spherical cap (`Radius` + `Depth`), not a sphere centered
-> on the surface. Unit XY still comes from the nav/straight path; actor Z follows the physical surface.
+> collision. The debug crater is a shallow spherical cap: the sphere center sits above the original
+> surface by `Radius - Depth`, and only the lower cap intersects terrain. Depth is that penetration
+> in centimeters. Unit XY still comes from the nav/straight path; actor Z follows the physical surface.
 > Dynamic traversability and NavMesh rebuild stay Stage 3E. Stage 3A is not complete.
 > See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
 

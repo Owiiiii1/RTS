@@ -53,10 +53,15 @@ namespace GPMovementGroundFollowContract
 		const GPVoxelCraterMath::FShallowCrater DefaultCrater = GPVoxelCraterMath::Make(Impact, 400.f, 80.f);
 		Expect(FMath::IsNearlyEqual(DefaultCrater.RadiusCm, 400.f), TEXT("A_Radius400"));
 		Expect(FMath::IsNearlyEqual(DefaultCrater.DepthCm, 80.f), TEXT("A_Depth80"));
-		Expect(FMath::IsNearlyEqual(DefaultCrater.CenterZOffsetCm, -320.f), TEXT("A_CenterOffsetMinus320"));
-		Expect(FMath::IsNearlyEqual(DefaultCrater.EditCenter.Z, Impact.Z - 320.f), TEXT("A_EditCenterZ"));
+		Expect(FMath::IsNearlyEqual(DefaultCrater.CenterZOffsetCm, 320.f), TEXT("A_CenterOffsetPlus320"));
+		Expect(FMath::IsNearlyEqual(DefaultCrater.EditCenter.Z, Impact.Z + 320.f), TEXT("A_EditCenterZ"));
+		Expect(FMath::IsNearlyEqual(DefaultCrater.CenterZOffsetCm - DefaultCrater.RadiusCm, -80.f), TEXT("A_SphereBottomMinus80"));
 		Expect(FMath::IsNearlyEqual(DefaultCrater.EditCenter.X, Impact.X)
 			&& FMath::IsNearlyEqual(DefaultCrater.EditCenter.Y, Impact.Y), TEXT("A_EditCenterXY"));
+
+		const GPVoxelCraterMath::FShallowCrater Wide = GPVoxelCraterMath::Make(Impact, 600.f, 100.f);
+		Expect(FMath::IsNearlyEqual(Wide.CenterZOffsetCm, 500.f), TEXT("A_WideOffsetPlus500"));
+		Expect(FMath::IsNearlyEqual(Wide.CenterZOffsetCm - Wide.RadiusCm, -100.f), TEXT("A_WideSphereBottomMinus100"));
 
 		const GPVoxelCraterMath::FShallowCrater Clamped = GPVoxelCraterMath::Make(Impact, 400.f, 900.f);
 		Expect(FMath::IsNearlyEqual(Clamped.RadiusCm, 400.f), TEXT("A_DepthClampRadius"));

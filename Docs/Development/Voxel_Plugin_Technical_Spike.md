@@ -332,7 +332,7 @@ Flat generator density = `Z + 0.001` in voxel space (negative = solid). Surface 
 | `EditedBounds` | **voxel integer box** (inclusive Min, exclusive Max) |
 | `GlobalToLocal` / `LocalToGlobal` | world cm ↔ voxel index |
 
-`FGPVoxelSphereSubtractRequest` (private): `WorldLocation` + `RadiusCm`. Shape = SphereSubtract. **No Depth.** A deeper crater is the same sphere with center offset **below** the surface, not a plugin depth API.
+`FGPVoxelSphereSubtractRequest` (private): `WorldLocation` + `RadiusCm`. Shape = SphereSubtract. **No Depth parameter.** The debug shallow crater places the sphere center above the original surface by `Radius - Depth`, so only the lower cap intersects solid terrain.
 
 ### Proven measurements
 
@@ -428,11 +428,11 @@ Runtime crater → Recast is still Stage 3E.
 
 Operator PIE on `L_VoxelArena_2P` confirmed `gp.Voxel.CraterUnderCursor` changes authored voxel geometry and collision. The first version centered `RemoveSphere` on the click point, so the hole read as a hemisphere.
 
-The debug command is now a spherical cap in world centimeters:
+The debug command is a spherical cap in world centimeters. Solid terrain is below the click, so the sphere center must sit above the original surface:
 
-`EditCenter.Z = ImpactPoint.Z - (RadiusCm - DepthCm)`
+`EditCenter.Z = ImpactPoint.Z + (RadiusCm - DepthCm)`
 
-Defaults are radius **400** and depth **80** (center **320** cm below the click). Radius clamps to 50..1500. Depth clamps to 10..Radius. `FillUnderCursor` still adds a sphere at the impact point and does not use that offset. The debug sphere is drawn at the edit center. The map is not saved. Dynamic Recast is still not rebuilt.
+Defaults are radius **400** and depth **80** (center **+320** cm, sphere bottom **80** cm under the click). Radius 600 and depth 100 give offset **+500** and bottom **100** cm under the click. Radius equal to depth is the hemisphere edge case (offset 0). Radius clamps to 50..1500. Depth clamps to 10..Radius. `FillUnderCursor` still adds a sphere at the impact point and does not use that offset. The debug sphere is drawn at the edit center. The map is not saved. Dynamic Recast is still not rebuilt.
 
 `UGP_MovementComponent` keeps nav/straight **XY**. Each movement tick traces down from the candidate XY (`ECC_WorldStatic` and `ECC_WorldDynamic`), skips `AGP_UnitBase` (units and buildings), and moves actor Z toward `SurfaceZ + root support`. A capsule root uses scaled half-height, because the actor origin is the capsule center. Vertical change is capped at 1200 cm/s, with a 2 cm settle band. A missed trace keeps the current Z and does not cancel the move. Sweep and 2D progress checks are unchanged. This is not slope rejection and not a NavMesh update.
 

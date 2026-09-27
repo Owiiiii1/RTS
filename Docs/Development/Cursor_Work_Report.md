@@ -16,6 +16,7 @@ Stage 3A is not complete. No Content, map, Blueprint, Niagara asset, Config, upr
 | Branch | `terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Parent | `3cebeff54e67a91b9edc09126c67e0c37b68ead2` |
+| Checkpoint commit | `c3c30347f2e42a98660d1623b5f9ea87414350b7` |
 | Engine | UE 5.8.3, changelist 58210709 |
 
 ## Worker Blueprint

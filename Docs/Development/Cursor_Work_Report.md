@@ -16,7 +16,7 @@ Stage 3A is not complete. Minimap XY transform was not changed. `L_VoxelArena_2P
 | Branch | `terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Parent | `914809c65984e82c6cdee88801ed13aaf0f3c8c9` |
-| Checkpoint commit | recorded in the following docs commit |
+| Checkpoint commit | `ffb348f9025675894a0ea97f1e7397edf3c08568` |
 
 ## Old startup behavior
 

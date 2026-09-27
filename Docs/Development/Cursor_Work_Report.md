@@ -16,7 +16,7 @@ Stage 3A is not complete. Stage 3B and dynamic crater navigation (3E) were not s
 | Branch | `terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Parent | `026c0457fc2f6eb738035976515ae08345c52df8` |
-| Checkpoint commit | recorded in the following docs commit |
+| Checkpoint commit | `2dd9a5cb7250657a30ce4230e855b200259b7a61` |
 
 ## A. NAVMESH
 

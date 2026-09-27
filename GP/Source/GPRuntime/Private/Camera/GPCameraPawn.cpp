@@ -11,9 +11,13 @@
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "VoxelComponents/VoxelInvokerComponent.h"
 
 namespace GPCameraPawnPrivate
 {
+	constexpr float VoxelInvokerLODRangeCm = 20000.f;
+	constexpr float VoxelInvokerCollisionsRangeCm = 20000.f;
+
 	static void ClampVector2DMagnitude(FVector2D& Value, float MaxMagnitude)
 	{
 		const float MaxSquared = MaxMagnitude * MaxMagnitude;
@@ -49,6 +53,16 @@ AGP_CameraPawn::AGP_CameraPawn()
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(SpringArm, USpringArmComponent::SocketName);
 	Camera->bUsePawnControlRotation = false;
+
+	VoxelInvoker = CreateDefaultSubobject<UVoxelSimpleInvokerComponent>(TEXT("VoxelInvoker"));
+	VoxelInvoker->SetupAttachment(RootScene);
+	VoxelInvoker->bUseForLOD = true;
+	VoxelInvoker->LODToSet = 0;
+	VoxelInvoker->LODRange = GPCameraPawnPrivate::VoxelInvokerLODRangeCm;
+	VoxelInvoker->bUseForCollisions = true;
+	VoxelInvoker->CollisionsRange = GPCameraPawnPrivate::VoxelInvokerCollisionsRangeCm;
+	VoxelInvoker->bUseForNavmesh = false;
+	VoxelInvoker->NavmeshRange = 0.f;
 }
 
 AGP_CameraPawn::~AGP_CameraPawn() = default;
@@ -56,6 +70,7 @@ AGP_CameraPawn::~AGP_CameraPawn() = default;
 void AGP_CameraPawn::BeginPlay()
 {
 	Super::BeginPlay();
+	SyncVoxelInvokerLocalActivation();
 
 	const UGP_CameraConfigDataAsset* Config = GetActiveConfig();
 	if (Config == nullptr || RootScene == nullptr || SpringArm == nullptr)
@@ -78,6 +93,45 @@ void AGP_CameraPawn::BeginPlay()
 	if (!ConfigRef.IsNull())
 	{
 		BeginLoadConfig();
+	}
+}
+
+void AGP_CameraPawn::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+	SyncVoxelInvokerLocalActivation();
+}
+
+void AGP_CameraPawn::UnPossessed()
+{
+	Super::UnPossessed();
+	SyncVoxelInvokerLocalActivation();
+}
+
+void AGP_CameraPawn::OnRep_Controller()
+{
+	Super::OnRep_Controller();
+	SyncVoxelInvokerLocalActivation();
+}
+
+void AGP_CameraPawn::SyncVoxelInvokerLocalActivation()
+{
+	if (VoxelInvoker == nullptr)
+	{
+		return;
+	}
+
+	const bool bShouldEnable = IsLocallyControlled();
+	if (bShouldEnable)
+	{
+		if (!VoxelInvoker->IsInvokerEnabled())
+		{
+			VoxelInvoker->EnableInvoker();
+		}
+	}
+	else if (VoxelInvoker->IsInvokerEnabled())
+	{
+		VoxelInvoker->DisableInvoker();
 	}
 }
 

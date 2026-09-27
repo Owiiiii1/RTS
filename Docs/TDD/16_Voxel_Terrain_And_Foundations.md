@@ -21,7 +21,10 @@ does not claim plugin replication as the GP path. Preferred reconstruction remai
 compact deformation event log with local apply (Option B). Option A is unavailable on Free. Option C
 (chunk deltas) is not required for crater events. Runtime `RemoveSphere` crater is proven on a
 transient probe world (density, local `EditedBounds` 13³ vs 64³, mesh update, collision deepen).
-Production deformation service is not started.
+Production deformation service is not started. `AGP_CameraPawn` owns one `UVoxelSimpleInvokerComponent`
+(`LODRange`/`CollisionsRange` 20000 cm, navmesh off). The plugin registers every invoker and only
+gates LOD with `IsLocalInvoker()`; GP enables the component only while the pawn is locally controlled.
+Authored maps should keep VoxelWorld camera-invoker fallback off. Stage 3A is not complete.
 
 ## Authority Boundary
 

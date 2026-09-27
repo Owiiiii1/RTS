@@ -9,8 +9,10 @@
 class UCameraComponent;
 class USceneComponent;
 class USpringArmComponent;
+class UVoxelSimpleInvokerComponent;
 class UGP_CameraConfigDataAsset;
 class AGP_CameraBoundsVolume;
+class AController;
 struct FStreamableHandle;
 
 DECLARE_MULTICAST_DELEGATE(FOnGPResolvedCameraBoundsChanged);
@@ -61,6 +63,9 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void PossessedBy(AController* NewController) override;
+	virtual void UnPossessed() override;
+	virtual void OnRep_Controller() override;
 
 private:
 	void BeginLoadConfig();
@@ -84,6 +89,7 @@ private:
 	FBox ResolveCameraBounds(const UGP_CameraConfigDataAsset& Config) const;
 	void NotifyResolvedCameraBoundsChanged();
 	void NotifyCameraPresentationChangedIfNeeded();
+	void SyncVoxelInvokerLocalActivation();
 	bool CaptureCameraPresentationFingerprint(
 		FVector& OutActorLocation,
 		float& OutYaw,
@@ -102,6 +108,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Camera", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCameraComponent> Camera;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GP|Voxel", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UVoxelSimpleInvokerComponent> VoxelInvoker;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Camera", meta = (AllowPrivateAccess = "true"))
 	TSoftObjectPtr<UGP_CameraConfigDataAsset> ConfigRef;

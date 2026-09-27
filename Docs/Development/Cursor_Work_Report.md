@@ -2,11 +2,11 @@
 
 ## Status
 
-**VOXEL_RUNTIME_CRATER_PROVEN_READY_FOR_OPERATOR_VALIDATION**
+**VOXEL_CAMERA_INVOKER_INTEGRATION_PROVEN**
 
 **INTERMEDIATE / NOT MERGE READY**
 
-Runtime `RemoveSphere` crater proven on a transient C++ `UVoxelFlatGenerator` `AVoxelWorld` (density, local bounds, mesh, collision). No production terrain service. Do not start 3B. Do not vendor `GP/Plugins/VoxelFree`. Stage 3A is not complete until operator visual validation and the event-layer decision.
+`AGP_CameraPawn` now owns one local-gated `UVoxelSimpleInvokerComponent`. Runtime crater contracts still pass. Stage 3A is not complete. Do not start 3B. Do not vendor `GP/Plugins/VoxelFree`.
 
 ## Branch / base / head
 
@@ -17,127 +17,75 @@ Runtime `RemoveSphere` crater proven on a transient C++ `UVoxelFlatGenerator` `A
 | Remote | `origin/terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Merge-base with `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
-| Parent before this checkpoint | `6bc950a116ff93418b7cbc33ec6e80c241745337` |
-| Checkpoint commit | `55c2679604c4e296090dec83b728cbce90a0f490` |
+| Parent before this checkpoint | `fd8556b91b248ef5ba9dcea138ef9dfd7cf8c37f` |
+| Checkpoint commit | see git HEAD after push |
 
-No rebase, reset, stash, or clean. Operator dirty/untracked preserved.
+No rebase, reset, stash, or clean. Operator dirty/untracked preserved. Engine on this machine is UE **5.8.3** (changelist `58210709`, CompatibleChangelist `55116800`).
 
-## Exact world initialization API
+## Exact component type / header
 
-C++ only. No UAsset generator. No map change.
+`UVoxelSimpleInvokerComponent` in `VoxelComponents/VoxelInvokerComponent.h`.
 
-1. `SpawnActor<AVoxelWorld>` (transient, tag `GP_VoxelRuntimeProbe`)
-2. `SetGeneratorClass(UVoxelFlatGenerator::StaticClass())`
-3. `VoxelSize = 100`
-4. `SetRenderOctreeDepth(1)` → 64³ voxels
-5. `MaxLOD = 0`, `DataOctreeInitialSubdivisionDepth = 1`
-6. `bEnableCollisions = true`, `CTF_UseComplexAsSimple`, `ECC_WorldDynamic` block-all
-7. `UVoxelSimpleInvokerComponent` (`LODRange`/`CollisionsRange` = 20000 cm)
-8. `VoxelMaterial = UMaterial::GetDefaultMaterial(MD_Surface)`
-9. `CreateWorld()` then wait loaded + proc-mesh count > 0 + mesh task count 0
+Default subobject name `VoxelInvoker` on `AGP_CameraPawn`, attached to `RootScene`. `VisibleAnywhere`, `BlueprintReadOnly`, category `GP|Voxel`. Forward-declared in the public header. `Voxel` stays a **PrivateDependency**.
 
-## Exact generator used
+## Exact configured ranges
 
-`UVoxelFlatGenerator` (plugin `UCLASS`, density `Z + 0.001` in voxel space). Negative = solid.
-
-## Exact RemoveSphere call
-
-```
-UVoxelSphereTools::RemoveSphere(
-    VoxelWorld,
-    Request.WorldLocation,  // world cm
-    300.f,                  // radius cm
-    nullptr,
-    &EditedBounds,
-    false,  // bMultiThreaded
-    true,   // bConvertToVoxelSpace
-    true);  // bUpdateRender
-```
-
-Private request: `FGPVoxelSphereSubtractRequest { FVector WorldLocation; float RadiusCm; }`. Shape = SphereSubtract. **No Depth** — deeper crater = center offset below surface.
-
-## Coordinate / radius contract
-
-| Item | Space |
+| Field | Value |
 | --- | --- |
-| Position / Radius into `RemoveSphere` | world cm (`bConvertToVoxelSpace=true`) |
-| `VoxelSize` | 100 cm/voxel → 300 cm = 3 voxels |
-| `EditedBounds` | voxel integer box |
-| `GlobalToLocal` / `LocalToGlobal` | world cm ↔ voxel index (round-trip proven) |
+| `LODRange` | 20000 cm |
+| `CollisionsRange` | 20000 cm |
+| `bUseForLOD` | true |
+| `LODToSet` | 0 |
+| `bUseForCollisions` | true |
+| `bUseForNavmesh` | false |
+| `NavmeshRange` | 0 |
 
-## EditedBounds
+Camera movement, zoom, rotation, bounds, minimap callbacks, replication, and input were not changed.
 
-`(-6/7, -6/7, -6/7)` Size **(13,13,13)** vs world **(64,64,64)**. Valid, finite, local.
+## Plugin registration behavior
 
-## Density / query before/after
+`UVoxelInvokerComponentBase::OnRegister` enables the component when `bStartsEnabled` (default true) and inserts it into a per-world list. `IsLocalInvoker()` returns `!Pawn || Pawn->IsLocallyControlled()`. The LOD manager applies that only to `bUseForLOD`. Collision, navmesh, and priority still follow every registered invoker.
 
-| Sample | Before | After |
-| --- | --- | --- |
-| Crater voxel `(0,0,-1)` | -0.999 (solid) | empty (positive) |
-| Far voxel `(20,0,-1)` | -0.999 | -0.999 unchanged |
-| Density-column surface Z | 100 (actor Z=200) | — |
+`AGP_CameraPawn::SyncVoxelInvokerLocalActivation` runs from `BeginPlay`, `PossessedBy`, `UnPossessed`, and `OnRep_Controller`. It enables the invoker only when `IsLocallyControlled()`, and disables it otherwise. Dedicated-server pawns stay disabled. Non-local replicated camera pawns do not keep collision ranges active.
 
-## Collision before/after
+## Multiplayer observation
 
-Downward line trace vs the probe actor (`ECC_WorldDynamic` / Visibility fallback):
-
-| Sample | Before Z | After Z |
-| --- | --- | --- |
-| Crater | 199.9 | **-100.0** (delta 299.9 cm) |
-| Far | 199.9 | unchanged (< 80 cm) |
-
-Collision poll after mesh idle: `waitTicks=0`.
-
-## Render update proof
-
-`IsLoaded=true`, mesh tasks 0, **4** `UVoxelProceduralMeshComponent` before and after edit (no full-world rebuild). `bUpdateRender=true` → `UpdateWorld` → LOD `UpdateBounds`.
-
-## Locality
-
-Edited 13³ vs 64³ world. Far density and far collision unchanged. Mesh count stayed 4.
-
-## Surface query findings
-
-No `QuerySurfaceZ(XY)`. Best later GP candidates: (1) downward world trace after collision idle; (2) density sign-change along Z. `FindClosestNonEmptyVoxel` is **neighbor-only**, not XY→Z.
-
-## Tests
-
-| Test | Result |
+| Launch | Result |
 | --- | --- |
-| GPEditor Win64 Development + UHT | **Succeeded** |
+| `L_PrototypeArena?listen` `-game -NullRHI` | `GP_GameMode`, `IpNetDriver` port 7777. `LogVoxel: Voxel Invoker enabled; Name: VoxelInvoker; Owner: GP_CameraPawn_0`. Contract `localPawns=1 remoteEnabled=0`. No fatal. No voxel world on this map, so the camera-fallback warning was not applicable. |
+| `L_VoxelArena_2P?listen` `-game -NullRHI` | `VoxelWorld_1` generated in ~0.05s. Log game class was `GameModeBase`, so `AGP_CameraPawn` was not spawned. Warning string `Can't use camera as invoker in multiplayer` was **absent**. Map/game-mode override was not modified. |
+
+Operator already turned off VoxelWorld **Use camera if no invokers found**. That setting is what emits the warning when the invoker list is empty outside Standalone.
+
+## Tests / build
+
+| Step | Result |
+| --- | --- |
+| GPEditor Win64 Development + UHT | **Succeeded** (full rebuild after 5.8.3 `Build.version`) |
 | `gp.Voxel.RunPluginCompileProbeContractTest` | Failures=0 |
 | `gp.Voxel.RunRuntimeCraterProbeContractTest` | Failures=0 |
 | `gp.UI.RunHUDViewModelBridgeContractTest` | Failures=0 |
+| `gp.Voxel.RunCameraInvokerContractTest` | Failures=0 (CDO one invoker, ranges, nav off, local enabled) |
 | Fatal / assertion | none |
 
-## Operator commands
+## Files changed
 
-Do **not** save `L_PrototypeArena`.
-
-1. Open PIE on `L_PrototypeArena`
-2. Console: `gp.Voxel.SpawnRuntimeProbe` — small flat voxel slab (near pawn, else `(25000,0,200)`)
-3. Fly to the logged location
-4. Console: `gp.Voxel.ApplyProbeCrater` — `RemoveSphere` hole
-5. Inspect mesh; walk / cursor-trace the crater
-
-## Files changed (this checkpoint)
-
-- `GP/Source/GPRuntime/Private/Voxel/GPVoxelRuntimeProbeAdapter.h/.cpp` — private Voxel adapter
-- `GP/Source/GPRuntime/Public/Debug/GPVoxelRuntimeCraterProbeContractTest.h`
-- `GP/Source/GPRuntime/Private/Debug/GPVoxelRuntimeCraterProbeContractTest.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPVoxelRuntimeVisualProbe.cpp`
-- `Docs/Development/Voxel_Plugin_Technical_Spike.md` — `RUNTIME_CRATER_PROVEN`
+- `GP/Source/GPRuntime/Public/Camera/GPCameraPawn.h`
+- `GP/Source/GPRuntime/Private/Camera/GPCameraPawn.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPVoxelCameraInvokerContractTest.cpp`
+- `Docs/Development/Voxel_Plugin_Technical_Spike.md`
 - `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
-- `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
 - this report
 
 ## Protected audit
 
-Unchanged / not committed:
+Not committed:
 
-- `GP/Config/`, `GP/Content/` including `L_PrototypeArena`, `GP/GP.uproject`, `Tools/`
-- **`GP/Plugins/` (`VoxelFree`) still untracked**
+- `GP/Config/`, `GP/Content/` including `L_PrototypeArena` and `L_VoxelArena_2P`
+- `GP/GP.uproject`
+- `GP/Plugins/` (`VoxelFree`)
+- `Tools/`
 
 ## Exact next action
 
-Operator PIE visual pass of `SpawnRuntimeProbe` + `ApplyProbeCrater`. Then decide GP authoritative deformation event layer. Do not vendor the plugin. Do not start 3B.
+Authored VoxelWorld crater-under-cursor validation in PIE. If that map stays on `GameModeBase`, `AGP_CameraPawn` will not spawn until the map uses `GP_GameMode`. Do not vendor the plugin. Do not start 3B.

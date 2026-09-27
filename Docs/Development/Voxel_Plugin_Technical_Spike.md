@@ -23,7 +23,7 @@ Canonical constraints (unchanged):
 
 | Item | Proven value |
 | --- | --- |
-| Unreal Engine | **5.8.1** (changelist `56057345`, CompatibleChangelist `55116800`, `C:\Program Files\Epic Games\UE_5.8`) |
+| Unreal Engine | **5.8.3** (changelist `58210709`, CompatibleChangelist `55116800`, `C:\Program Files\Epic Games\UE_5.8`). Rebuilt GPEditor after the upgrade (`Build.version is newer`). |
 | `GP.uproject` EngineAssociation (operator-dirty, not committed) | `"5.8"` |
 | Project plugin path | `D:\Progects\RTS\GP\Plugins\VoxelFree\` |
 | Descriptor | `GP\Plugins\VoxelFree\VoxelFree.uplugin` (canonical; **not** nested `VoxelPluginFreeLegacy-master\`) |
@@ -363,6 +363,35 @@ Operator visual (does not save the map):
 3. fly to logged location (pawn-forward 2500 cm, else `(25000,0,200)`)
 4. `gp.Voxel.ApplyProbeCrater`
 5. inspect hole; walk/trace
+
+---
+
+## Camera invoker (2026-09-27)
+
+`AGP_CameraPawn` is the canonical Voxel invoker owner. Default subobject `VoxelInvoker` (`UVoxelSimpleInvokerComponent`, header `VoxelComponents/VoxelInvokerComponent.h`), attached to `RootScene`.
+
+| Field | Value |
+| --- | --- |
+| `LODRange` | 20000 cm |
+| `CollisionsRange` | 20000 cm |
+| `bUseForLOD` / `LODToSet` | true / 0 |
+| `bUseForCollisions` | true |
+| `bUseForNavmesh` / `NavmeshRange` | **false / 0** |
+
+Operator disabled VoxelWorld **Use camera if no invokers found** on the authored map. That fallback is what logs `Can't use camera as invoker in multiplayer` when `GetInvokers()` is empty and `NetMode` is not Standalone/DedicatedServer (`AVoxelWorld::CreateWorld`).
+
+Plugin registration (installed source):
+
+- `OnRegister` calls `EnableInvoker()` when `bStartsEnabled` (default true). Every registered component is added to a per-`UWorld` list. There is **no** local-pawn filter at registration.
+- `IsLocalInvoker()` is `!Owner || Owner->IsLocallyControlled()`. `FVoxelDefaultLODManager` applies that flag to **LOD only** (`bUseForLOD &= IsLocalInvoker()`). Collisions, navmesh, and priorities are not filtered.
+- GP therefore calls `SyncVoxelInvokerLocalActivation()` from `BeginPlay`, `PossessedBy`, `UnPossessed`, and `OnRep_Controller`: enable only when `IsLocallyControlled()`, otherwise `DisableInvoker()`. Dedicated-server pawns stay disabled. Non-local replicated camera pawns do not keep collision ranges active.
+
+Observed:
+
+- `L_PrototypeArena?listen` (`GP_GameMode`, port 7777): `Voxel Invoker enabled` for `GP_CameraPawn_0`. Contract `localPawns=1 remoteEnabled=0`. No fatal.
+- `L_VoxelArena_2P?listen`: `VoxelWorld_1` generated (~0.05s). Log game class was `GameModeBase`, so `AGP_CameraPawn` was **not** spawned in that `-game` process. The camera-invoker warning string was absent. That map override is operator-authored and was not changed.
+
+Stage 3A is still not complete.
 
 ---
 

@@ -16,7 +16,7 @@ Stage 3A is not complete. Do not start Worker leveling, Foundation, or placement
 | Branch | `terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Parent | `f9c3296c33d9a6673334049341fd95634a39a164` |
-| Checkpoint commit | recorded in the follow-up commit |
+| Checkpoint commit | `9607d969a149627d54a54893c467edc449da7db7` |
 | Engine | UE 5.8.3 |
 
 ## Production owner

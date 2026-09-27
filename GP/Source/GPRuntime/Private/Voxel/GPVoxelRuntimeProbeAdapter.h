@@ -30,6 +30,15 @@ struct FGPVoxelIntBoxReport
 	bool bInfinite = false;
 };
 
+enum class EGPVoxelWorldResolvePath : uint8
+{
+	None,
+	HitActor,
+	ComponentOuter,
+	AttachParent,
+	ActorOuter
+};
+
 namespace GPVoxelRuntimeProbeAdapter
 {
 	static const FName ProbeActorTag(TEXT("GP_VoxelRuntimeProbe"));
@@ -47,6 +56,13 @@ namespace GPVoxelRuntimeProbeAdapter
 		AActor* VoxelWorldActor,
 		const FGPVoxelSphereSubtractRequest& Request,
 		FGPVoxelIntBoxReport& OutEditedBounds);
+
+	bool ApplySphereAdd(
+		AActor* VoxelWorldActor,
+		const FGPVoxelSphereSubtractRequest& Request,
+		FGPVoxelIntBoxReport& OutEditedBounds);
+
+	AActor* ResolveVoxelWorldFromHit(const FHitResult& Hit, EGPVoxelWorldResolvePath& OutPath);
 
 	bool QueryDensityAtVoxel(AActor* VoxelWorldActor, const FIntVector& VoxelCoord, float& OutDensity);
 	bool QueryDensityAtWorld(AActor* VoxelWorldActor, const FVector& WorldLocation, float& OutDensity, FIntVector& OutVoxelCoord);

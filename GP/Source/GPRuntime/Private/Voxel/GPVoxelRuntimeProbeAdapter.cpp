@@ -202,6 +202,80 @@ namespace GPVoxelRuntimeProbeAdapter
 		return OutEditedBounds.bValid && !OutEditedBounds.bInfinite;
 	}
 
+	bool ApplySphereAdd(
+		AActor* VoxelWorldActor,
+		const FGPVoxelSphereSubtractRequest& Request,
+		FGPVoxelIntBoxReport& OutEditedBounds)
+	{
+		OutEditedBounds = FGPVoxelIntBoxReport();
+		AVoxelWorld* VoxelWorld = AsVoxelWorld(VoxelWorldActor);
+		if (VoxelWorld == nullptr || !VoxelWorld->IsCreated())
+		{
+			return false;
+		}
+
+		FVoxelIntBox EditedBounds;
+		UVoxelSphereTools::AddSphere(
+			VoxelWorld,
+			Request.WorldLocation,
+			Request.RadiusCm,
+			nullptr,
+			&EditedBounds,
+			false,
+			true,
+			true);
+
+		OutEditedBounds.Min = EditedBounds.Min;
+		OutEditedBounds.Max = EditedBounds.Max;
+		OutEditedBounds.bValid = EditedBounds.IsValid();
+		OutEditedBounds.bInfinite = (EditedBounds == FVoxelIntBox::Infinite);
+		return OutEditedBounds.bValid && !OutEditedBounds.bInfinite;
+	}
+
+	AActor* ResolveVoxelWorldFromHit(const FHitResult& Hit, EGPVoxelWorldResolvePath& OutPath)
+	{
+		OutPath = EGPVoxelWorldResolvePath::None;
+		if (AVoxelWorld* Direct = Cast<AVoxelWorld>(Hit.GetActor()))
+		{
+			OutPath = EGPVoxelWorldResolvePath::HitActor;
+			return Direct;
+		}
+
+		if (UPrimitiveComponent* Component = Hit.GetComponent())
+		{
+			if (AVoxelWorld* FromOuter = Component->GetTypedOuter<AVoxelWorld>())
+			{
+				OutPath = EGPVoxelWorldResolvePath::ComponentOuter;
+				return FromOuter;
+			}
+
+			for (USceneComponent* Parent = Component->GetAttachParent(); Parent != nullptr; Parent = Parent->GetAttachParent())
+			{
+				if (AVoxelWorld* FromParent = Cast<AVoxelWorld>(Parent->GetOwner()))
+				{
+					OutPath = EGPVoxelWorldResolvePath::AttachParent;
+					return FromParent;
+				}
+				if (AVoxelWorld* FromParentOuter = Parent->GetTypedOuter<AVoxelWorld>())
+				{
+					OutPath = EGPVoxelWorldResolvePath::AttachParent;
+					return FromParentOuter;
+				}
+			}
+		}
+
+		if (AActor* Actor = Hit.GetActor())
+		{
+			if (AVoxelWorld* FromActorOuter = Actor->GetTypedOuter<AVoxelWorld>())
+			{
+				OutPath = EGPVoxelWorldResolvePath::ActorOuter;
+				return FromActorOuter;
+			}
+		}
+
+		return nullptr;
+	}
+
 	bool QueryDensityAtVoxel(AActor* VoxelWorldActor, const FIntVector& VoxelCoord, float& OutDensity)
 	{
 		OutDensity = 0.f;
@@ -305,6 +379,17 @@ namespace GPVoxelRuntimeProbeAdapter
 
 		Hits.Reset();
 		World->LineTraceMultiByChannel(Hits, Start, End, ECC_WorldDynamic, Params);
+		for (const FHitResult& Hit : Hits)
+		{
+			if (Hit.GetActor() == VoxelWorldActor)
+			{
+				OutHit = Hit;
+				return Hit.bBlockingHit;
+			}
+		}
+
+		Hits.Reset();
+		World->LineTraceMultiByChannel(Hits, Start, End, ECC_WorldStatic, Params);
 		for (const FHitResult& Hit : Hits)
 		{
 			if (Hit.GetActor() == VoxelWorldActor)

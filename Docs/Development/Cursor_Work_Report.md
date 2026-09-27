@@ -14,7 +14,7 @@ Stage 3A deformation foundation is complete. Stage 3B Worker terrain leveling is
 | Branch | `terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Parent | `cf47d24f65239e2ba97003095a18c7779f3ace3c` |
-| Feature commit | recorded in the follow-up commit |
+| Feature commit | `92ae64780c34689fd044ac8716f60c80f737be0d` |
 | Engine | UE 5.8.3 |
 | Ahead / behind `origin/terrain/gp-voxel-foundation` | 0 / 0 after push |
 

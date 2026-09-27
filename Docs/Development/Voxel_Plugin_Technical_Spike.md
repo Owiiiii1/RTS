@@ -5,7 +5,7 @@
 **Base:** `origin/main` @ `569777625b8a4718289ad4809efa5ba5da09df7c`
 **Status:** `RUNTIME_CRATER_PROVEN`
 
-This spike is discovery + local integration + a **non-shipping runtime crater probe**. No production terrain service, no Content, no `GP.uproject` commit, no Worker leveling, no Foundation, no placement migration. Stage 3A is **not complete** until operator visual validation and the next authoritative event-layer decision.
+This spike is discovery + local integration + a **non-shipping runtime crater probe**. No production terrain service, no Content, no `GP.uproject` commit, no Worker leveling, no Foundation, no placement migration. Operator PIE on `L_VoxelArena_2P` (2026-09-27) passed authored deformation, collision, a shallow radius/depth crater, and unit surface following. That spherical cap is the probe shape only. Production still needs a profile catalog, material scars, presentation debris, and the authoritative event layer. Stage 3A is **not complete**. Dynamic traversability remains Stage 3E.
 
 Canonical constraints (unchanged):
 
@@ -426,7 +426,7 @@ Runtime crater → Recast is still Stage 3E.
 
 ## Authored crater and terrain-follow Z (2026-09-27)
 
-Operator PIE on `L_VoxelArena_2P` confirmed `gp.Voxel.CraterUnderCursor` changes authored voxel geometry and collision. The first version centered `RemoveSphere` on the click point, so the hole read as a hemisphere.
+Operator PIE on `L_VoxelArena_2P` (2026-09-27) confirmed authored voxel geometry, collision, the shallow radius/depth probe, and units descending and climbing the new surface. The first version centered `RemoveSphere` on the click point, so the hole read as a hemisphere. This spherical cap is the technical probe only. Production craters use a small profile catalog, a voxel material scar, and presentation-only debris. Those are not implemented here.
 
 The debug command is a spherical cap in world centimeters. Solid terrain is below the click, so the sphere center must sit above the original surface:
 
@@ -488,7 +488,7 @@ Folder size (this machine, 2026-09-04):
 
 ## Stage 3A recommendation
 
-**RUNTIME_CRATER_PROVEN.** Stage 3A is not complete (operator visual validation + event-layer decision remain).
+**RUNTIME_CRATER_PROVEN.** Operator visual pass on authored `L_VoxelArena_2P` (2026-09-27) succeeded for deformation, collision, shallow radius/depth, and surface following. Stage 3A is not complete: the production event layer, crater profiles, material scars, and presentation debris are still open. The spherical cap remains a probe primitive.
 
 | Question | Answer |
 | --- | --- |
@@ -498,8 +498,8 @@ Folder size (this machine, 2026-09-04):
 | Event replay? | **EVENT_REPLAY_FEASIBLE** (API-level; one-machine density proven) |
 | Production deformation service? | **No** |
 | Start 3B Worker leveling? | **No** |
-| Next action | Operator PIE visual pass (`SpawnRuntimeProbe` / `ApplyProbeCrater`). Then decide GP authoritative event layer. Do not vendor the plugin. Do not start 3B. |
+| Next action | Decide the GP authoritative event layer (profile, seed, rotation, scar). Do not vendor the plugin. Do not start 3B. Do not treat the spherical cap as the final crater look. |
 
 ### GO / BLOCKED
 
-`RUNTIME_CRATER_PROVEN` — next is operator visual validation, not 3B.
+`RUNTIME_CRATER_PROVEN` — authored visual pass is done. Next is the event layer and production presentation rules, not 3B.

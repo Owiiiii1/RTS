@@ -2,11 +2,11 @@
 
 ## Status
 
-**SHALLOW_CRATER_DEPTH_GEOMETRY_FIXED**
+**TERRAIN_DESTRUCTION_PRESENTATION_AND_ENVIRONMENT_RULES_DOCUMENTED**
 
 **INTERMEDIATE / NOT MERGE READY**
 
-Stage 3A is not complete. Dynamic traversability and NavMesh updates remain Stage 3E. No Content, map, Config, uproject, or plugin file was saved or committed. Movement code was not changed.
+Docs only. No gameplay or source implementation. Stage 3A is not complete. Dynamic traversability remains Stage 3E.
 
 ## Branch / base / head
 
@@ -15,61 +15,44 @@ Stage 3A is not complete. Dynamic traversability and NavMesh updates remain Stag
 | Path | `D:\Progects\RTS` |
 | Branch | `terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
-| Parent | `19adbadf3577c23edabeb9838717f94851834241` |
-| Checkpoint commit | `69a89ff8d73b35b02e4ed513639c49708396f8eb` |
+| Parent | `2ae1e27ca1101bff812f3ea7c1ab27a4a7e188a4` |
 | Engine | UE 5.8.3 |
 
-## Geometry
+## Canonical decisions
 
-Solid terrain is below the click. A sphere centered under the surface carves almost its whole volume downward, so the hole is far deeper than `Depth`.
+Operator PIE on `L_VoxelArena_2P` (2026-09-27) passed authored VoxelWorld deformation, collision update, the shallow radius/depth crater, and units descending and climbing the deformed surface.
 
-`gp.Voxel.CraterUnderCursor` now places the subtract sphere above the original surface:
+The perfect sphere / spherical cap is the current technical probe. Production impacts use a small data-driven catalog of about 3–5 crater profiles (wide shallow, asymmetric, elongated, ragged, compound, and similar). Fully random voxel noise is not required. The authority stores profile, seed, and rotation on the deformation event so every client reconstructs the same result.
 
-`EditCenter.Z = ImpactPoint.Z + (RadiusCm - DepthCm)`
+A fresh deformation may change voxel material in the footprint (dark soil, scorch, fresh rock, Ferronite variant). The scar belongs on the physical surface. A match-long scar is acceptable for MVP.
 
-X and Y stay on the impact point. `Depth` is the lower cap's penetration under that surface. `RemoveSphere` flags are unchanged: `bMultiThreaded=false`, `bConvertToVoxelSpace=true`, `bUpdateRender=true`. The debug sphere is drawn at `EditCenter`.
+Niagara explosion, dust, and mesh-particle stones are presentation only. Small rocks are not replicated gameplay Actors. Blocking debris, if added later, is a separate gameplay representation.
 
-| Radius | Depth | Center Z offset | Sphere bottom vs surface |
-| --- | --- | --- | --- |
-| 400 | 80 | +320 | -80 |
-| 600 | 100 | +500 | -100 |
-| 400 | 400 | 0 | hemisphere |
+Hills, mountains, ridges, cliffs, embankments, and major rock masses that should take impacts are authored in the VoxelWorld. The same generic deformation request covers flat ground and those landforms. There is no separate mountain-destruction system. Static Mesh props that need destruction use their own behavior.
 
-Depth still clamps to 10 cm through the radius. Radius still clamps to 50..1500 cm. Defaults remain 400 and 80.
+Vegetation is not voxel terrain. It sits on the surface and may react to the same footprint: remove or swap, optional short fall, then cheap static wreck. Permanently simulating large numbers of physics trees is out of scope.
 
-The log prints `CenterZOffset=+320` and `ExpectedMaxDepth=80`.
+The world-impact pipeline keeps consumers separate: combat damage, terrain geometry, terrain material scar, foundation cells, vegetation, then presentation. Terrain does not own damage. Niagara does not own terrain. Vegetation does not own deformation.
 
-`FillUnderCursor` still adds a sphere at the impact point.
+Conceptual event fields, not an implemented API: WorldLocation, Radius, Depth/Strength, Shape/ProfileId, Seed, Rotation, SurfaceScarType, SourceIdentity.
 
-## Operator retest
+## Unresolved
 
-PIE `L_VoxelArena_2P`.
+- Profile catalog contents, seed/rotation scheme, and the voxel generation algorithm.
+- Material channels, scar types, fading, and persistence past the match.
+- Debris pool, lifetime, budget, and the boundary with gameplay debris.
+- Vegetation technology, pooling, persistence, and strength thresholds.
+- Which authored landforms are inside the VoxelWorld versus decorative Static Meshes.
+- Production deformation service and multiplayer event log. Dynamic traversability stays Stage 3E.
 
-`gp.Voxel.CraterUnderCursor 400 80`
+## Docs changed
 
-Expected: a wide shallow depression, maximum depth about 80 cm, not a deep sphere pit.
-
-Then `gp.Voxel.CraterUnderCursor 600 100`
-
-Expected maximum depth about 100 cm.
-
-## Tests / build
-
-| Step | Result |
-| --- | --- |
-| GPEditor Win64 Development | Succeeded |
-| `gp.Movement.RunGroundFollowContractTest` | Failures=0 (2026.09.27-22.04.52), including offset +320, bottom -80, offset +500, bottom -100, depth clamp offset 0 |
-| `gp.Voxel.RunRuntimeCraterProbeContractTest` | Failures=0 Cancelled=false (2026.09.27-22.05.17) |
-
-## Files changed
-
-- `GP/Source/GPRuntime/Private/Voxel/GPVoxelRuntimeProbeAdapter.h`
-- `GP/Source/GPRuntime/Private/Debug/GPVoxelAuthoredCraterProbe.cpp`
-- `GP/Source/GPRuntime/Private/Debug/GPMovementGroundFollowContractTest.cpp`
-- `Docs/Development/Voxel_Plugin_Technical_Spike.md`
+- `Docs/GDD/13_Terrain_Engineering_And_Foundations.md`
 - `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
+- `Docs/Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md`
+- `Docs/Development/Voxel_Plugin_Technical_Spike.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
 ## Protected audit
 
-Not modified and not committed: `GP/Content/`, maps, `GP/Config/`, `GP/GP.uproject`, `GP/Plugins/`, `Tools/`.
+Not modified and not committed: `GP/Source/`, `GP/Content/`, `GP/Config/`, `GP/GP.uproject`, `GP/Plugins/`, `Tools/`.

@@ -198,8 +198,86 @@ Exact projectile gameplay is deferred until projectile-based units exist. Terrai
 The design contract is generic:
 
 - a gameplay event may request terrain deformation at a world location;
-- radius / depth / strength / shape are **data-driven**;
+- radius, depth / strength, shape / profile, seed, rotation, and surface scar are **data-driven**;
 - exact crater radius, depth, and damage formula are **TBD**.
+
+A perfect circle or spherical cap is a technical probe shape. It is not the intended final look of production impacts.
+
+### Crater shape variety
+
+Terrain deformation supports a small **data-driven catalog** of crater / deformation profiles.
+
+MVP target: about **3–5 authored profiles** are enough. Examples, not a required list:
+
+- wide shallow;
+- asymmetric;
+- elongated / oval;
+- irregular / ragged;
+- compound / double-lobed.
+
+Fully random voxel noise is not required.
+
+When a deformation event is created, the authority chooses a profile plus a deterministic seed and rotation so repeated impacts do not all leave identical circles. Randomness must be deterministic from the authoritative event. Clients reconstruct the same result from that event. The exact generation algorithm is **not** decided.
+
+### Terrain scar
+
+A fresh crater should look different from untouched ground. The deformation pipeline may paint or update voxel terrain material in the affected footprint. Examples: exposed dark soil, scorched ground, fresh rock, a Ferronite dust / material variant.
+
+Prefer a material change on the physical voxel surface. A disconnected floating decal is not the preferred scar.
+
+Exact material channels, layout, fading, and persistence are **TECH / DESIGN REQUIRED**. For MVP, a scar may persist for the match.
+
+### Impact debris
+
+Explosion / impact presentation may spawn temporary visual debris. Preferred MVP presentation:
+
+- Niagara explosion;
+- smoke / dust;
+- Niagara mesh-particle stones and soil fragments.
+
+Those particles are presentation only. They do not author gameplay terrain. Do not replicate every small visual rock as a gameplay Actor.
+
+If a later large piece must block movement or stay as a physical object, that is a separate gameplay debris representation, not Niagara particle state. Pool, lifetime, and budget are **TBD**.
+
+### Deformable landforms
+
+Any hill, mountain, ridge, cliff, embankment, or major rock mass that should deform from gameplay impacts is authored as part of the VoxelWorld.
+
+The same generic deformation request applies whether the impact hits flat ground, an existing crater, a hillside, a mountain face, or a cliff. There is no separate mountain-destruction gameplay system.
+
+Static Mesh rocks and mountains may decorate the map or act as special props. If one of those props must be destroyed, it needs its own replacement / destruction behavior. It is not voxel terrain.
+
+### Vegetation
+
+Vegetation is not voxel terrain. Trees, bushes, and similar props sit on top of the voxel surface as foliage, actors, or instances.
+
+The explosion / deformation footprint is reusable by a vegetation reaction layer. Conceptually, one impact may:
+
+- deform voxel terrain;
+- apply a terrain material scar;
+- play explosion presentation;
+- let vegetation inside the footprint react by strength and type.
+
+A possible MVP tree reaction: remove the intact foliage instance, spawn or reveal a destroyed-tree representation, optionally let it fall briefly, then freeze or replace it with cheap static debris once physics settles. That debris may last for part or all of the match, depending on budget. Hundreds of permanently simulated physics trees are not required. Small plants may simply disappear or swap to a destroyed state.
+
+Exact vegetation technology, pooling, persistence, and thresholds are **DESIGN / TECH REQUIRED**.
+
+### World-impact pipeline
+
+Consumers stay separate:
+
+```
+Impact / Explosion event
+  → damage / combat reaction
+  → generic TerrainDeformationRequest
+  → terrain geometry deformation
+  → terrain material scar
+  → Foundation footprint reaction where applicable
+  → vegetation / prop reaction where applicable
+  → presentation event for explosion / dust / debris
+```
+
+The terrain service does not own combat damage. Niagara does not own authoritative terrain changes. The vegetation reaction does not own terrain deformation.
 
 ## Worker Terrain Leveling
 
@@ -426,7 +504,8 @@ Future contract only:
 - projectile-based weapons later emit impact / explosion events;
 - if a projectile hits terrain / misses its target, terrain deformation occurs at impact;
 - unit / building destruction may emit an explosion / deformation event;
-- the terrain system consumes a **generic deformation request** rather than knowing about every weapon type.
+- the terrain system consumes a **generic deformation request** rather than knowing about every weapon type;
+- crater profile, seed, rotation, material scar, debris, and vegetation reaction are data-driven extensions of that request, not per-weapon implementations.
 
 Exact blast crater radius / depth / formula: **TBD**.
 
@@ -450,8 +529,9 @@ FoW gameplay visibility grid remains conceptually independent from terrain rende
 
 In MVP this system is intended to provide:
 
-- deformable voxel terrain as a gameplay surface;
+- deformable voxel terrain as a gameplay surface, including hills, cliffs, and mountains that are meant to take impacts;
 - generic deformation requests from explosions / future projectile misses (earthquakes later reuse the same contract);
+- a small authored crater-profile catalog, deterministic per event, plus a terrain material scar and presentation-only debris;
 - generic **local engineering job** contract (plan first, Worker assignment, physical work, completion);
 - Worker assignment / contribution model (multi-Worker acceleration);
 - reusable Worker **work-presentation** start / end hooks (Blueprint-owned Niagara);
@@ -484,6 +564,10 @@ Out of this slice / later:
 - Foundation stock consume / reserve moment.
 - Foundation Repair thresholds, cost, duration, replacement-stock vs repair, damaged-but-intact support validity.
 - Exact blast crater radius / depth / terrain damage formula.
+- Crater profile catalog contents, seed/rotation scheme, and the generation algorithm.
+- Voxel material channels, scar types, fading, and whether scars persist past the match.
+- Debris pool, lifetime, and budget; when a piece becomes gameplay debris instead of a particle.
+- Vegetation technology, pooling, persistence, strength thresholds, and destroyed-tree representation.
 - Voxel Plugin version / edition / API.
 - Multiplayer voxel replication mechanism.
 - Dynamic navigation strategy.

@@ -3,7 +3,7 @@
 ## Status
 Accepted (2026-08-21) — documentation decision. Refined 2026-08-21: Wall does not require Foundation; local engineering is Worker-labor with planned jobs. Production implementation is gated on a Voxel Plugin technical spike and remaining DESIGN REQUIRED items in GDD/13 and TDD/16.
 
-Stage 3A local audit (2026-09-04): **Voxel Plugin Free Legacy** is installed at `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0). UE 5.8.1 compile and load are proven. Runtime crater apply is not demonstrated; Stage 3A is not complete. See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
+Stage 3A local audit (2026-09-04): **Voxel Plugin Free Legacy** is installed at `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0). UE 5.8.1 compile and load are proven. Operator PIE on `L_VoxelArena_2P` (2026-09-27) confirmed authored deformation, collision update, a shallow radius/depth probe crater, and units following the deformed surface. That sphere is a technical probe, not the final crater presentation. The production service and event layer are not done. Dynamic traversability remains Stage 3E. See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
 
 ## Context
 
@@ -23,7 +23,7 @@ This must not revive Barracks / factory / local production of READY buildings (A
 ## Decision
 
 1. **Deformable terrain is now a project architectural capability.** Gameplay events may request terrain deformation; the world is no longer conceptually immutable. Future earthquakes reuse the same generic deformation / foundation-damage contract.
-2. **Voxel Plugin is the intended terrain / deformation backend.** Installed locally: Voxel Plugin Free Legacy 434 / `159fd19a0` on UE 5.8.1. This ADR still does not claim plugin-native replication as the GP path (Free TCP MP is a Pro stub). Preferred reconstruction remains a server event log + local apply (`UVoxelSphereTools::RemoveSphere` on each machine). Runtime crater PIE is not yet proven.
+2. **Voxel Plugin is the intended terrain / deformation backend.** Installed locally: Voxel Plugin Free Legacy 434 / `159fd19a0` on UE 5.8.1. This ADR still does not claim plugin-native replication as the GP path (Free TCP MP is a Pro stub). Preferred reconstruction remains a server event log + local apply. Authored `L_VoxelArena_2P` deformation and surface following are operator-proven as a probe. Production profile variety, material scars, and the event service are not claimed.
 3. **Terrain deformation is server-authoritative.** Clients reconstruct authoritative changes. Clients do not author gameplay destruction.
 4. **Normal player-deployed buildings require a prepared foundation surface.** Canonical sequence: raw terrain → Worker levels → plan foundation install → Workers progressively install cells → deploy READY orbital building. Buildings remain orbital, not Worker-constructed.
 5. **Foundation state is per BuildGrid cell.** A physical slab may cover multiple cells. Placement and destruction query cells, not an all-or-nothing slab actor. Foundation Repair is a future Worker engineering job.
@@ -34,6 +34,8 @@ This must not revive Barracks / factory / local production of READY buildings (A
 10. **Plan first, work second.** Player may define a local engineering job before Workers are present. Progress starts only when an assigned Worker reaches a valid work position. Exact job/site/blueprint class names are implementation decisions.
 11. **Reusable Worker work-presentation hooks:** gameplay emits work-pulse start/end; Blueprint owns authored Niagara. No hardcoded project Niagara asset in Worker native gameplay. Mining presentation is the reference pattern.
 12. **Exact plugin API, network strategy, and dynamic navigation strategy are deferred to spike / design.** Surviving-building-after-foundation-loss remains **DESIGN REQUIRED**.
+13. **Deformable landforms belong to voxel terrain.** A hill, mountain, ridge, cliff, embankment, or major rock mass that should react to impacts is authored in the VoxelWorld and uses the generic deformation request. There is no separate mountain-destruction system. Static Mesh props that need destruction use their own behavior.
+14. **Crater variety, material scars, and impact debris extend the generic deformation architecture.** They are data-driven presentation and terrain-material concerns, not per-weapon implementations. Profile, seed, and rotation are authoritative event data so clients reconstruct the same result. Niagara debris does not author terrain state.
 
 ## Consequences
 
@@ -60,6 +62,8 @@ This must not revive Barracks / factory / local production of READY buildings (A
 - Do not require Foundation under Wall segments.
 - Do not silently decide surviving-building-after-support-loss.
 - Do not hardcode a project Niagara asset into Worker native gameplay for engineering pulses.
+- Do not build a separate mountain-destruction system for landforms that should deform. Author those masses in the VoxelWorld.
+- Do not implement crater variety, material scars, or impact debris as weapon-specific systems. They extend the generic deformation event. Niagara does not own authoritative terrain.
 
 ## Alternatives Considered
 
@@ -73,6 +77,8 @@ This must not revive Barracks / factory / local production of READY buildings (A
 | One actor per slab, destroy all-or-nothing | Cannot support shared cells, multi-slab footprints, or partial blast damage. |
 | Claim a specific Voxel Plugin replication API now | Unverified; must wait for the spike. |
 | Separate earthquake terrain system | Rejected; earthquakes must reuse the generic deformation / foundation-damage contract. |
+| Separate mountain-destruction system | Rejected; deformable landforms are voxel terrain and use the same deformation request. |
+| Per-weapon crater, scar, and debris implementations | Rejected; variety and scars are data-driven extensions of the generic event. |
 
 ## References
 

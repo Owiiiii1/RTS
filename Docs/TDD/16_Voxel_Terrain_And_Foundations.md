@@ -9,10 +9,11 @@
 > `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0). UE 5.8.1 compile, load,
 > and runtime `RemoveSphere` crater (mesh + collision) are proven on a transient C++ `UVoxelFlatGenerator`
 > world. Operator visual check on authored `L_VoxelArena_2P` (2026-09-27) confirmed deformation and
-> collision. The debug crater is a shallow spherical cap: the sphere center sits above the original
-> surface by `Radius - Depth`, and only the lower cap intersects terrain. Depth is that penetration
-> in centimeters. Unit XY still comes from the nav/straight path; actor Z follows the physical surface.
-> Dynamic traversability and NavMesh rebuild stay Stage 3E. Stage 3A is not complete.
+> collision, and a shallow radius/depth crater. Units descend and climb that deformed surface.
+> The spherical cap is the current technical probe only. Production craters still need a profile
+> catalog, material scars, and presentation debris. Unit XY still comes from the nav/straight path;
+> actor Z follows the physical surface. Dynamic traversability and NavMesh rebuild stay Stage 3E.
+> Stage 3A is not complete.
 > See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
 
 ## Intended Backend
@@ -103,11 +104,47 @@ Gameplay systems must not call “destroy terrain as this tank gun.” They emit
 
 | Field (conceptual) | Notes |
 | --- | --- |
-| World location | Impact / explosion / later earthquake origin |
+| WorldLocation | Impact / explosion / later earthquake origin |
 | Radius | Data-driven; exact values **TBD** |
-| Depth / strength | Data-driven; exact formula **TBD** |
-| Shape | Data-driven; exact catalog **TBD** |
-| Source identity | Optional for diagnostics; not a hard coupling to one weapon class |
+| Depth / Strength | Data-driven; exact formula **TBD**. Probe depth is cap penetration, not a shipped API |
+| Shape / ProfileId | Data-driven catalog entry. About 3–5 authored profiles are the MVP target |
+| Seed | Deterministic variety. Chosen by authority with the event |
+| Rotation | Deterministic orientation of the profile |
+| SurfaceScarType | Material change in the footprint. Channels and persistence **TECH / DESIGN REQUIRED** |
+| SourceIdentity | Optional for diagnostics; not a hard coupling to one weapon class |
+
+These names are conceptual. They are not an implemented struct or class.
+
+Clients reconstruct geometry from the authoritative event. Seed and rotation must be part of that event so every machine builds the same crater. The exact mesh/voxel algorithm is **not** decided. Fully random voxel noise is not required.
+
+### World-impact pipeline
+
+Consumers stay separate. Names below are roles, not classes:
+
+```
+Impact / Explosion event
+  → damage / combat reaction
+  → generic TerrainDeformationRequest
+  → terrain geometry deformation
+  → terrain material scar
+  → Foundation footprint reaction where applicable
+  → vegetation / prop reaction where applicable
+  → presentation event for explosion / dust / debris
+```
+
+The terrain service does not own combat damage. Niagara does not own authoritative terrain. Vegetation reaction does not own terrain deformation.
+
+### Crater profiles, scars, debris, landforms, vegetation
+
+The current spherical cap (`EditCenter` above the surface by `Radius - Depth`) is a probe primitive. Production presentation is a small authored profile catalog (wide shallow, asymmetric, elongated, ragged, compound, and similar). Profile, seed, and rotation travel with the event.
+
+A deformation may also change voxel material in the footprint (dark soil, scorch, fresh rock, Ferronite variant). Prefer a surface material layer on the voxel terrain. Exact channels, fading, and persistence are **TECH / DESIGN REQUIRED**. A match-long scar is acceptable for MVP.
+
+Niagara explosion, dust, and mesh-particle stones are presentation only. Do not replicate each small rock as a gameplay Actor. Persistent blocking debris, if added later, is a separate gameplay representation.
+
+Hills, mountains, ridges, cliffs, embankments, and major rock masses that should take impacts are authored in the VoxelWorld. The same deformation request covers flat ground and those landforms. There is no separate mountain-destruction system. Static Mesh props that need destruction use their own replacement behavior.
+
+Vegetation is not voxel terrain. It sits on the surface as foliage, actors, or instances and may react to the same footprint: remove or swap the intact instance, optionally a short fall, then a cheap static wreck. Permanently simulating large numbers of physics trees is out of scope. Vegetation technology, pooling, persistence, and thresholds are **DESIGN / TECH REQUIRED**.
 
 Canonical future producers (not implemented now):
 
@@ -239,6 +276,11 @@ Budgets and strategies are **TECH-SPIKE REQUIRED**. Do not invent numbers here.
 - Foundation package cost, quantity, slab footprint, stock consume/reserve moment.
 - Foundation Repair tunables.
 - Blast radius / depth / damage formula.
+- Crater profile catalog, deterministic seed/rotation scheme, and generation algorithm.
+- Voxel material channel layout, scar types, fading, and persistence past the match.
+- Debris pool, lifetime, and budget; boundary between Niagara fragments and gameplay debris.
+- Vegetation technology, pooling, persistence, and reaction thresholds.
+- Authored VoxelWorld coverage for every landform that must deform. Static Mesh destruction stays separate.
 - Voxel Plugin version / API (Free Legacy 434; runtime `RemoveSphere` crater proven on probe world; production service and event layer still required).
 - Voxel replication mechanism (no plugin helpers proven; GP event-log reconstruction is a candidate only).
 - Dynamic navigation strategy.

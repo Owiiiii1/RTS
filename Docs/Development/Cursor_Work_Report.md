@@ -16,6 +16,7 @@ Stage 3A is not complete. Dynamic traversability and NavMesh updates remain Stag
 | Branch | `terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Parent | `19adbadf3577c23edabeb9838717f94851834241` |
+| Checkpoint commit | `69a89ff8d73b35b02e4ed513639c49708396f8eb` |
 | Engine | UE 5.8.3 |
 
 ## Geometry

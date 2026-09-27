@@ -33,5 +33,11 @@ public class GPRuntime : ModuleRules
 			"NavigationSystem",
 			"Voxel"
 		});
+
+		if (Target.Configuration != UnrealTargetConfiguration.Shipping)
+		{
+			PrivateDependencyModuleNames.Add("Niagara");
+			PrivateIncludePaths.Add(System.IO.Path.Combine(EngineDirectory, "Plugins/FX/Niagara/Source/Niagara/Internal"));
+		}
 	}
 }

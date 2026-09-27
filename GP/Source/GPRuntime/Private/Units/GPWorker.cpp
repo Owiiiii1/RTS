@@ -2149,11 +2149,19 @@ namespace GPWorkerDebug
 		Expect(Mining->GetMiningState() == EGP_MiningState::Mining, TEXT("MiningStateActive"));
 		Expect(MiningProbe->bLastEffectActive, TEXT("MiningEffectActiveTrue"));
 		Expect(MiningProbe->LastNewState == EGP_MiningState::Mining, TEXT("MiningEffectNewStateMining"));
-		Expect(MiningProbe->EventCount > MiningEventsBeforeBegin, TEXT("MiningEffectEventOnBegin"));
+		Expect(MiningProbe->EventCount == MiningEventsBeforeBegin + 1, TEXT("MiningEffectOneEventOnEnter"));
 
+		const int32 EventsWhileMining = MiningProbe->EventCount;
+		const EGP_BeginMiningResult RepeatResult = Mining->BeginMining(Node);
+		Expect(RepeatResult == EGP_BeginMiningResult::AlreadyMiningTarget, TEXT("RepeatBeginAlreadyMining"));
+		Expect(Mining->GetMiningState() == EGP_MiningState::Mining, TEXT("RepeatBeginStaysMining"));
+		Expect(MiningProbe->EventCount == EventsWhileMining, TEXT("RepeatBeginNoExtraEffectEvent"));
+
+		const int32 EventsBeforeStop = MiningProbe->EventCount;
 		Mining->StopMining(EGP_MiningStopReason::ManualStop);
 		Expect(!MiningProbe->bLastEffectActive, TEXT("MiningEffectInactiveAfterStop"));
 		Expect(MiningProbe->LastNewState != EGP_MiningState::Mining, TEXT("MiningEffectLeftMining"));
+		Expect(MiningProbe->EventCount == EventsBeforeStop + 1, TEXT("MiningEffectOneEventOnLeave"));
 
 		// WaitingForSlot must not activate Niagara.
 		TArray<AGP_Worker*> SlotHolders;

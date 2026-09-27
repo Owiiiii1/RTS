@@ -18,7 +18,7 @@
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Merge-base with `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
 | Parent before this checkpoint | `fd8556b91b248ef5ba9dcea138ef9dfd7cf8c37f` |
-| Checkpoint commit | see git HEAD after push |
+| Checkpoint commit | `3fc12e7630e7d082ca804622ac3baef697a2df90` |
 
 No rebase, reset, stash, or clean. Operator dirty/untracked preserved. Engine on this machine is UE **5.8.3** (changelist `58210709`, CompatibleChangelist `55116800`).
 

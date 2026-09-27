@@ -191,6 +191,22 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Movement|Navigation")
 	bool bRequireNavigationWhenAvailable = true;
 
+	/**
+	 * Path XY stays on the nav or straight route. Actor Z follows a physical ground trace.
+	 * Slope rejection and dynamic NavMesh are not part of this.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Movement|Ground")
+	bool bFollowGroundSurface = true;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Movement|Ground", meta = (ClampMin = "0.0"))
+	float GroundTraceAboveCm = 500.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Movement|Ground", meta = (ClampMin = "0.0"))
+	float GroundTraceBelowCm = 1000.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Movement|Ground", meta = (ClampMin = "1.0"))
+	float GroundVerticalSpeedCmPerSec = 1200.0f;
+
 private:
 	void ClearActiveMovementState();
 	void BroadcastMovementResult(
@@ -204,6 +220,15 @@ private:
 	FVector ComputeSteeringOffset(const FVector& OwnerLocation, const FVector& DesiredDir2D) const;
 	void FinishMoveReached(AActor* Owner, const FVector& FinalLocation);
 	void FinishMoveFailed(AActor* Owner, EGP_MovementResultReason Reason);
+	float ResolveGroundSupportOffsetCm(const AActor* Owner) const;
+	bool TraceGroundSurface(
+		const AActor* Owner,
+		float CandidateX,
+		float CandidateY,
+		float ReferenceZ,
+		float& OutSurfaceZ,
+		FName& OutHitActor,
+		FName& OutHitComponent) const;
 
 	static const TCHAR* StopReasonToString(EGP_MovementStopReason Reason);
 	static const TCHAR* MovementResultToString(EGP_MovementResult Result);
@@ -229,5 +254,26 @@ private:
 	FVector DebugLastActualStart = FVector::ZeroVector;
 	FVector DebugLastRawNavPath0 = FVector::ZeroVector;
 	FString DebugLastPathMode;
+
+public:
+	struct FGroundFollowDebugSample
+	{
+		bool bHasSample = false;
+		bool bActive = false;
+		bool bHit = false;
+		FVector CurrentLocation = FVector::ZeroVector;
+		FVector Candidate = FVector::ZeroVector;
+		float SurfaceZ = 0.0f;
+		float SupportOffsetCm = 0.0f;
+		float DesiredActorZ = 0.0f;
+		float ResultActorZ = 0.0f;
+		FName HitActor = NAME_None;
+		FName HitComponent = NAME_None;
+	};
+
+	const FGroundFollowDebugSample& DebugGetGroundFollowSample() const { return DebugGroundFollow; }
+
+private:
+	FGroundFollowDebugSample DebugGroundFollow;
 #endif
 };

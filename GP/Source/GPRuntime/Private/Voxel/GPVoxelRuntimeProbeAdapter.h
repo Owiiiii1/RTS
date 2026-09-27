@@ -13,9 +13,40 @@ struct FHitResult;
  * Voxel types stay in the .cpp. Public gameplay headers must not include this.
  *
  * Experimental request consumed by RemoveSphere: WorldLocation (cm) + RadiusCm.
- * Shape is SphereSubtract. There is no Depth parameter on RemoveSphere; a deeper
- * crater is a sphere whose center is offset below the surface, not a separate API.
+ * Shape is SphereSubtract. There is no Depth parameter on RemoveSphere.
+ * A shallow crater is the same sphere with its center dropped below the surface
+ * by (RadiusCm - DepthCm). Depth is world centimeters, not voxel units.
  */
+namespace GPVoxelCraterMath
+{
+	constexpr float DefaultRadiusCm = 400.f;
+	constexpr float DefaultDepthCm = 80.f;
+	constexpr float MinRadiusCm = 50.f;
+	constexpr float MaxRadiusCm = 1500.f;
+	constexpr float MinDepthCm = 10.f;
+
+	struct FShallowCrater
+	{
+		FVector EditCenter = FVector::ZeroVector;
+		float RadiusCm = DefaultRadiusCm;
+		float DepthCm = DefaultDepthCm;
+		float CenterZOffsetCm = -(DefaultRadiusCm - DefaultDepthCm);
+	};
+
+	inline FShallowCrater Make(const FVector& ImpactPoint, float RequestedRadiusCm, float RequestedDepthCm)
+	{
+		FShallowCrater Out;
+		const float RadiusSource = FMath::IsFinite(RequestedRadiusCm) ? RequestedRadiusCm : DefaultRadiusCm;
+		Out.RadiusCm = FMath::Clamp(RadiusSource, MinRadiusCm, MaxRadiusCm);
+		const float DepthSource = FMath::IsFinite(RequestedDepthCm) ? RequestedDepthCm : DefaultDepthCm;
+		const float DepthMax = FMath::Max(MinDepthCm, Out.RadiusCm);
+		Out.DepthCm = FMath::Clamp(DepthSource, MinDepthCm, DepthMax);
+		Out.CenterZOffsetCm = -(Out.RadiusCm - Out.DepthCm);
+		Out.EditCenter = FVector(ImpactPoint.X, ImpactPoint.Y, ImpactPoint.Z + Out.CenterZOffsetCm);
+		return Out;
+	}
+}
+
 struct FGPVoxelSphereSubtractRequest
 {
 	FVector WorldLocation = FVector::ZeroVector;

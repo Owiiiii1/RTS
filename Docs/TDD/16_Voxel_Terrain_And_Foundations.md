@@ -8,7 +8,10 @@
 > Stage 3A local audit (2026-09-04): **Voxel Plugin Free Legacy** is installed locally at
 > `GP/Plugins/VoxelFree` (Version 434 / `159fd19a0`, EngineVersion 5.8.0). UE 5.8.1 compile, load,
 > and runtime `RemoveSphere` crater (mesh + collision) are proven on a transient C++ `UVoxelFlatGenerator`
-> world. Stage 3A is not complete pending operator visual validation and the event-layer decision.
+> world. Operator visual check on authored `L_VoxelArena_2P` (2026-09-27) confirmed deformation and
+> collision. The debug crater is a shallow spherical cap (`Radius` + `Depth`), not a sphere centered
+> on the surface. Unit XY still comes from the nav/straight path; actor Z follows the physical surface.
+> Dynamic traversability and NavMesh rebuild stay Stage 3E. Stage 3A is not complete.
 > See [`../Development/Voxel_Plugin_Technical_Spike.md`](../Development/Voxel_Plugin_Technical_Spike.md).
 
 ## Intended Backend
@@ -191,7 +194,7 @@ Terrain implementation must account for:
 
 Exact NavMesh vs voxel-navigation update strategy is **DESIGN / TECH-SPIKE REQUIRED**. Do not assume a full NavMesh rebuild after every explosion is acceptable.
 
-Current production path (unchanged this checkpoint): `UGP_MovementComponent` uses `UNavigationSystemV1::FindPathSync` / `ProjectPointToNavigation` (Recast when `NavMeshBoundsVolume` coverage exists, else straight-line fallback). Stage 3E must account for that seam; Stage 3A did not rewrite navigation.
+Current production path: `UGP_MovementComponent` uses `UNavigationSystemV1::FindPathSync` / `ProjectPointToNavigation` (Recast when `NavMeshBoundsVolume` coverage exists, else straight-line fallback) for **XY**. While moving, actor Z follows a downward `WorldStatic`/`WorldDynamic` trace, ignoring `AGP_UnitBase` hits (units and buildings), offset by the root capsule half-height, smoothed at `GroundVerticalSpeedCmPerSec`. A missed trace keeps the current Z. Path point Z is still the owner Z and is not the physical height. Slope rejection, unit-class walkability, and dynamic crater NavMesh remain Stage 3E.
 
 SWARM Medium/Large corpses as temporary obstacles (see [`17_SWARM_Architecture`](17_SWARM_Architecture.md)) must **not** mandate a runtime NavMesh rebuild. Preferred direction: transient obstacle data / traversability layer, or local check + repath, aligned with this voxel terrain / traversability work. Concrete **navigation/obstacle** approach remains prototype / profile TBD. This is not a Mass / gameplay-backend choice.
 

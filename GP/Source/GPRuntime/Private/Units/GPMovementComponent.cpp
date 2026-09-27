@@ -12,11 +12,15 @@
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "NavigationSystemTypes.h"
+#include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Units/GPMobileUnit.h"
+#include "Units/GPUnitBase.h"
 
 #if !UE_BUILD_SHIPPING
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
+#include "UObject/UObjectIterator.h"
 #endif
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPUnitMovement, Log, All);
@@ -759,6 +763,88 @@ const FVector& UGP_MovementComponent::GetMoveDestination() const
 	return MoveDestination;
 }
 
+float UGP_MovementComponent::ResolveGroundSupportOffsetCm(const AActor* Owner) const
+{
+	const USceneComponent* Root = Owner != nullptr ? Owner->GetRootComponent() : nullptr;
+	if (const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Root))
+	{
+		const float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+		return (FMath::IsFinite(HalfHeight) && HalfHeight > 0.0f) ? HalfHeight : 0.0f;
+	}
+	if (const UBoxComponent* Box = Cast<UBoxComponent>(Root))
+	{
+		const float ExtentZ = Box->GetScaledBoxExtent().Z;
+		return (FMath::IsFinite(ExtentZ) && ExtentZ > 0.0f) ? ExtentZ : 0.0f;
+	}
+	if (const UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Root))
+	{
+		const float ExtentZ = Primitive->Bounds.BoxExtent.Z;
+		return (FMath::IsFinite(ExtentZ) && ExtentZ > 0.0f) ? ExtentZ : 0.0f;
+	}
+	return 0.0f;
+}
+
+bool UGP_MovementComponent::TraceGroundSurface(
+	const AActor* Owner,
+	float CandidateX,
+	float CandidateY,
+	float ReferenceZ,
+	float& OutSurfaceZ,
+	FName& OutHitActor,
+	FName& OutHitComponent) const
+{
+	OutSurfaceZ = 0.0f;
+	OutHitActor = NAME_None;
+	OutHitComponent = NAME_None;
+	if (Owner == nullptr || !FMath::IsFinite(CandidateX) || !FMath::IsFinite(CandidateY) || !FMath::IsFinite(ReferenceZ))
+	{
+		return false;
+	}
+
+	UWorld* World = Owner->GetWorld();
+	if (World == nullptr)
+	{
+		return false;
+	}
+
+	const float Above = FMath::Max(GroundTraceAboveCm, 0.0f);
+	const float Below = FMath::Max(GroundTraceBelowCm, 0.0f);
+	const FVector Start(CandidateX, CandidateY, ReferenceZ + Above);
+	const FVector End(CandidateX, CandidateY, ReferenceZ - Below);
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GPMovementGroundFollow), true);
+	Params.AddIgnoredActor(Owner);
+
+	FCollisionObjectQueryParams ObjectParams;
+	ObjectParams.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+
+	TArray<FHitResult> Hits;
+	if (!World->LineTraceMultiByObjectType(Hits, Start, End, ObjectParams, Params))
+	{
+		return false;
+	}
+
+	for (const FHitResult& Hit : Hits)
+	{
+		if (!Hit.bBlockingHit || !FMath::IsFinite(Hit.ImpactPoint.Z))
+		{
+			continue;
+		}
+		const AActor* HitActor = Hit.GetActor();
+		if (HitActor != nullptr && HitActor->IsA(AGP_UnitBase::StaticClass()))
+		{
+			continue;
+		}
+		OutSurfaceZ = Hit.ImpactPoint.Z;
+		OutHitActor = HitActor != nullptr ? HitActor->GetFName() : NAME_None;
+		OutHitComponent = Hit.GetComponent() != nullptr ? Hit.GetComponent()->GetFName() : NAME_None;
+		return true;
+	}
+
+	return false;
+}
+
 void UGP_MovementComponent::TickComponent(
 	float DeltaTime,
 	ELevelTick TickType,
@@ -853,16 +939,74 @@ void UGP_MovementComponent::TickComponent(
 		Step *= (MaxStepLen / StepLen);
 	}
 
-	const FVector NextLocation(
+	FVector NextLocation(
 		CurrentLocation.X + Step.X,
 		CurrentLocation.Y + Step.Y,
 		CurrentLocation.Z);
+
+	constexpr float GroundSettleCm = 2.0f;
+	const float SupportOffset = bFollowGroundSurface ? ResolveGroundSupportOffsetCm(Owner) : 0.0f;
+	float SurfaceZ = 0.0f;
+	float DesiredActorZ = CurrentLocation.Z;
+	bool bGroundHit = false;
+	FName GroundHitActor = NAME_None;
+	FName GroundHitComponent = NAME_None;
+	if (bFollowGroundSurface)
+	{
+		bGroundHit = TraceGroundSurface(
+			Owner,
+			NextLocation.X,
+			NextLocation.Y,
+			CurrentLocation.Z,
+			SurfaceZ,
+			GroundHitActor,
+			GroundHitComponent);
+		if (bGroundHit)
+		{
+			DesiredActorZ = SurfaceZ + SupportOffset;
+			if (!FMath::IsFinite(DesiredActorZ))
+			{
+				bGroundHit = false;
+				DesiredActorZ = CurrentLocation.Z;
+			}
+			else
+			{
+				const float Gap = DesiredActorZ - CurrentLocation.Z;
+				if (FMath::Abs(Gap) <= GroundSettleCm)
+				{
+					NextLocation.Z = CurrentLocation.Z;
+				}
+				else
+				{
+					const float MaxStepZ = FMath::Max(GroundVerticalSpeedCmPerSec, 0.0f) * FMath::Max(DeltaTime, 0.0f);
+					NextLocation.Z = CurrentLocation.Z + FMath::Clamp(Gap, -MaxStepZ, MaxStepZ);
+				}
+			}
+		}
+	}
+	if (!FMath::IsFinite(NextLocation.Z))
+	{
+		NextLocation.Z = CurrentLocation.Z;
+	}
 
 	FHitResult Hit;
 	// Sweep enabled for any future blocking channels; unit↔unit uses Overlap+separation, static via NavMesh.
 	Owner->SetActorLocation(NextLocation, true, &Hit);
 
 	const FVector AfterLocation = Owner->GetActorLocation();
+#if !UE_BUILD_SHIPPING
+	DebugGroundFollow.bHasSample = true;
+	DebugGroundFollow.bActive = bFollowGroundSurface;
+	DebugGroundFollow.bHit = bGroundHit;
+	DebugGroundFollow.CurrentLocation = CurrentLocation;
+	DebugGroundFollow.Candidate = FVector(NextLocation.X, NextLocation.Y, CurrentLocation.Z);
+	DebugGroundFollow.SurfaceZ = SurfaceZ;
+	DebugGroundFollow.SupportOffsetCm = SupportOffset;
+	DebugGroundFollow.DesiredActorZ = DesiredActorZ;
+	DebugGroundFollow.ResultActorZ = AfterLocation.Z;
+	DebugGroundFollow.HitActor = GroundHitActor;
+	DebugGroundFollow.HitComponent = GroundHitComponent;
+#endif
 	const float MovedDist2D = FVector::Dist2D(CurrentLocation, AfterLocation);
 	const float ExpectedMove = FMath::Max(StepDist * 0.25f, 1.0f);
 	// Only treat as blocked when a blocking hit actually stopped the step (avoid false Blocked on soft/overlap).
@@ -974,6 +1118,56 @@ void UGP_MovementComponent::DebugBroadcastResult(
 {
 	BroadcastMovementResult(Serial, Result, Reason, MoveDestination);
 }
+
+static void DumpGroundFollow(const TArray<FString>& Args, UWorld* World)
+{
+	(void)Args;
+	if (World == nullptr)
+	{
+		UE_LOG(LogGPUnitMovement, Warning, TEXT("gp.Movement.DumpGroundFollow: missing world"));
+		return;
+	}
+
+	int32 Count = 0;
+	for (TObjectIterator<UGP_MovementComponent> It; It; ++It)
+	{
+		UGP_MovementComponent* Movement = *It;
+		if (Movement == nullptr
+			|| Movement->HasAnyFlags(RF_ClassDefaultObject)
+			|| Movement->GetWorld() != World)
+		{
+			continue;
+		}
+
+		const AActor* Owner = Movement->GetOwner();
+		const UGP_MovementComponent::FGroundFollowDebugSample& Sample = Movement->DebugGetGroundFollowSample();
+		const FVector Location = Owner != nullptr ? Owner->GetActorLocation() : FVector::ZeroVector;
+		UE_LOG(LogGPUnitMovement, Log,
+			TEXT("gp.Movement.DumpGroundFollow Unit=%s Moving=%s Follow=%s Hit=%s Current=%s CandidateXY=(%.1f, %.1f) SurfaceZ=%.1f Support=%.1f DesiredZ=%.1f ResultZ=%.1f HitActor=%s HitComponent=%s HasSample=%s"),
+			*GetNameSafe(Owner),
+			Movement->IsMoving() ? TEXT("true") : TEXT("false"),
+			Sample.bActive ? TEXT("true") : TEXT("false"),
+			Sample.bHit ? TEXT("true") : TEXT("false"),
+			*Location.ToCompactString(),
+			Sample.Candidate.X,
+			Sample.Candidate.Y,
+			Sample.SurfaceZ,
+			Sample.SupportOffsetCm,
+			Sample.DesiredActorZ,
+			Sample.ResultActorZ,
+			*Sample.HitActor.ToString(),
+			*Sample.HitComponent.ToString(),
+			Sample.bHasSample ? TEXT("true") : TEXT("false"));
+		++Count;
+	}
+
+	UE_LOG(LogGPUnitMovement, Log, TEXT("gp.Movement.DumpGroundFollow Complete Units=%d"), Count);
+}
+
+static FAutoConsoleCommandWithWorldAndArgs GDumpGroundFollow(
+	TEXT("gp.Movement.DumpGroundFollow"),
+	TEXT("Log ground-follow samples for movement components in this world."),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&DumpGroundFollow));
 #endif
 
 void UGP_MovementComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)

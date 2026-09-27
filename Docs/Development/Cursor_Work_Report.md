@@ -2,11 +2,11 @@
 
 ## Status
 
-**AUTHORED_VOXELWORLD_DEFORMATION_PROBE_READY**
+**SHALLOW_CRATER_AND_TERRAIN_FOLLOW_READY_FOR_OPERATOR_VALIDATION**
 
 **INTERMEDIATE / NOT MERGE READY**
 
-Stage 3A is not complete. The crater exists only in PIE/runtime memory. No Content, map, Config, uproject, or plugin file was saved or committed.
+Stage 3A is not complete. Dynamic traversability and NavMesh updates are still Stage 3E. No Content, map, Config, uproject, or plugin file was saved or committed.
 
 ## Branch / base / head
 
@@ -15,97 +15,91 @@ Stage 3A is not complete. The crater exists only in PIE/runtime memory. No Conte
 | Path | `D:\Progects\RTS` |
 | Branch | `terrain/gp-voxel-foundation` |
 | Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
-| Parent | `a3df2ec8fce382decab2446df412b2183d269bcc` |
-| Checkpoint commit | `4f0153698ead057f1397657980db0e0bd936fb9b` |
+| Parent | `5b16dbd0b8aac7d7a9aecc8faa038f34beb67ed3` |
 | Engine | UE 5.8.3 |
 
-## Command
+## Crater
 
-`gp.Voxel.CraterUnderCursor`
+Operator PIE on `L_VoxelArena_2P` confirmed authored deformation and collision. The previous debug sphere was centered on the click, so the hole read as a hemisphere.
 
-Optional radius, centimeters:
+`gp.Voxel.CraterUnderCursor [RadiusCm] [DepthCm]`
 
-`gp.Voxel.CraterUnderCursor 500`
-
-Default radius is **300**. Values are clamped to **50..1500**. The command does not spawn a VoxelWorld, does not call `CreateWorld`, and does not save the map.
-
-Optional additive twin, same targeting: `gp.Voxel.FillUnderCursor` (`AddSphere`).
-
-This is an operator debug probe. It is not the multiplayer deformation architecture. A client world is refused. Standalone and listen-server apply the edit on that process's traced `AVoxelWorld`.
-
-## Target resolution
-
-Cursor ray from the first local `PlayerController` (`GetMousePosition` + `DeprojectScreenPositionToWorld`). Trace length 1,000,000 cm. Complex traces on `ECC_Visibility`, `ECC_WorldStatic`, and `ECC_WorldDynamic`. The camera pawn is ignored. The closest blocking hit is the only candidate.
-
-`UVoxelProceduralMeshComponent` is created with outer `UVoxelWorldRootComponent` (`NewObject` in `VoxelRendererMeshHandler::GetNewMesh`) and registered on that actor. `Hit.GetActor()` is therefore that `AVoxelWorld`. The resolver still walks, in order:
-
-1. Hit actor is `AVoxelWorld` (`HitActor`)
-2. Hit component `GetTypedOuter<AVoxelWorld>()` (`ComponentOuter`)
-3. Attach-parent owner / outer (`AttachParent`)
-4. Hit actor outer (`ActorOuter`)
-
-It does not iterate `TActorIterator<AVoxelWorld>`. A non-voxel hit logs the actor and component and does nothing. A world that is not created is refused.
-
-## Edit
-
-Center is the hit `ImpactPoint`.
-
-`UVoxelSphereTools::RemoveSphere` through the private adapter:
-
-| Argument | Value |
+| | |
 | --- | --- |
-| Position | world cm (`ImpactPoint`) |
-| Radius | clamped cm |
-| `bMultiThreaded` | false |
-| `bConvertToVoxelSpace` | true |
-| `bUpdateRender` | true |
+| Default radius | 400 cm |
+| Default depth | 80 cm |
+| Radius clamp | 50..1500 cm |
+| Depth clamp | 10 cm .. radius |
 
-`FillUnderCursor` uses `AddSphere` with the same flags.
+Edit center, world centimeters:
 
-Log line includes VoxelWorld name, resolve path, hit component, impact, requested and clamped radius, voxel size, and edited bounds.
+`EditCenter.Z = ImpactPoint.Z - (RadiusCm - DepthCm)`
 
-## Collision check
+X and Y stay on the impact point. Radius 400 and depth 80 put the center 320 cm below the click. `RemoveSphere` is unchanged: `bMultiThreaded=false`, `bConvertToVoxelSpace=true`, `bUpdateRender=true`. The debug sphere is drawn at that edit center. The vertical collision trace still uses the click column.
 
-Before the edit, a vertical trace runs through the center from **+8000 cm** to **-8000 cm**, limited to the resolved VoxelWorld (`LineTraceHitsProbe`, including `ECC_WorldStatic`).
+`gp.Voxel.FillUnderCursor` still calls `AddSphere` at the impact point. It does not apply the depth offset.
 
-`BeforeSurfaceZ` is that hit. If the vertical trace misses, the click Z is recorded and a later miss is not treated as a hole.
+The crater stays in PIE memory. The map is not saved. Recast is not rebuilt.
 
-A timer fires after **0.75 s**. The same vertical trace runs again. There is no immediate PASS.
+## Movement
 
-PASS when:
+Previous tick kept path-point Z at the owner Z, forced `Step.Z = 0`, and wrote `NextLocation.Z` from the current actor Z. XY came from the nav or straight path. The unit kept its old height over a crater.
 
-- the baseline hit and the after trace misses (hole), or
-- the after surface is lower by at least `max(50 cm, 0.5 * voxel size)`
+XY routing is unchanged. Path-point Z is still the owner Z and is not a second ground projection.
 
-The log prints `BeforeSurfaceZ`, `AfterSurfaceZ`, and `DeltaZ`. On screen: `CRATER APPLIED`, then `COLLISION UPDATED` or `collision delta`. A debug sphere marks the edit. The vertical line is drawn before and after.
+Each authority movement tick:
 
-Dynamic Recast is not rebuilt. The log says navmesh is deferred Stage 3E.
+1. Candidate XY is the same swept step as before.
+2. A complex object trace runs from `ReferenceZ + 500` cm to `ReferenceZ - 1000` cm through that XY.
+3. Object types are `ECC_WorldStatic` and `ECC_WorldDynamic`. The owner is ignored. Hits whose actor is `AGP_UnitBase` are skipped, which covers units and buildings.
+4. Desired Z is `SurfaceZ + support`. A capsule root uses scaled half-height, because `AGP_Unit` / `AGP_Worker` put the actor origin at the capsule center. A box root uses scaled extent Z.
+5. Z moves toward that height at 1200 cm/s. A gap of 2 cm or less stays put. A miss, or a non-finite result, keeps the current Z and does not cancel the move.
+6. `SetActorLocation` is still swept. Progress and arrival stay 2D.
+
+`gp.Movement.DumpGroundFollow` logs the last sample per movement component. Non-shipping only.
+
+Not in this checkpoint: slope rejection, tank versus infantry, BuildGrid traversability, per-crater NavMesh, path-cost grid.
+
+## Niagara cleanup
+
+`GPWorkerMiningVFXDump.cpp` and the non-shipping Niagara module plus internal include are removed. The mining presentation contract still requires one effect event on enter, none on a repeat `BeginMining`, and one on leave.
 
 ## Operator retest
 
 1. PIE `L_VoxelArena_2P`
-2. Point the mouse at empty voxel ground
-3. Run `gp.Voxel.CraterUnderCursor`
-4. Inspect the crater
-5. Walk, click, or trace across the hole
-6. Report whether geometry and collision changed
+2. `gp.Voxel.CraterUnderCursor`
+3. The hole should be wide and shallow, not a hemisphere
+4. Order a Worker across it
+5. The Worker should descend and climb instead of holding the old Z
+6. Repeat with `gp.Voxel.CraterUnderCursor 600 100`
 
 ## Tests / build
 
 | Step | Result |
 | --- | --- |
 | GPEditor Win64 Development | Succeeded |
-| `gp.Voxel.RunPluginCompileProbeContractTest` | Failures=0 (2026.09.27-18.56.21) |
-| `gp.Voxel.RunCameraInvokerContractTest` | Failures=0 (2026.09.27-18.56.21) |
-| `gp.Voxel.RunRuntimeCraterProbeContractTest` | Failures=0 Cancelled=false (2026.09.27-18.57.04) |
+| `gp.Voxel.RunPluginCompileProbeContractTest` | Failures=0 (2026.09.27-19.24.02) |
+| `gp.Voxel.RunCameraInvokerContractTest` | Failures=0 (2026.09.27-19.24.02) |
+| `gp.Movement.RunGroundFollowContractTest` | Failures=0 (2026.09.27-19.24.02) |
+| `gp.Resource.RunPresentationContractTest` | Failures=0 (2026.09.27-19.24.02) |
+| `gp.Voxel.RunRuntimeCraterProbeContractTest` | Failures=0 (2026.09.27-19.24.29) |
+| `gp.Movement.RunRTSMovementReconciliationContractTest` | Failures=0 (2026.09.27-19.25.02) |
+| `gp.Worker.RunCommandIntentContractTest` | Failures=0 (2026.09.27-19.25.22) |
+| `gp.Mining.RunContractTest` | Failures=0 (2026.09.27-19.25.46) |
 
-No automated edit of `L_VoxelArena_2P`.
+Ground-follow cases: radius 400 / depth 80 offset -320; depth clamps to radius; flat floor keeps support Z; lower floor drops Z while XY continues; return climb; a missed trace keeps Z and does not NaN or cancel the move.
 
 ## Files changed
 
 - `GP/Source/GPRuntime/Private/Debug/GPVoxelAuthoredCraterProbe.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPMovementGroundFollowContractTest.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPWorkerMiningVFXDump.cpp` (removed)
+- `GP/Source/GPRuntime/Private/Units/GPMovementComponent.cpp`
 - `GP/Source/GPRuntime/Private/Voxel/GPVoxelRuntimeProbeAdapter.h`
-- `GP/Source/GPRuntime/Private/Voxel/GPVoxelRuntimeProbeAdapter.cpp`
+- `GP/Source/GPRuntime/Public/Units/GPMovementComponent.h`
+- `GP/Source/GPRuntime/GPRuntime.Build.cs`
+- `Docs/Development/Voxel_Plugin_Technical_Spike.md`
+- `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
 ## Protected audit

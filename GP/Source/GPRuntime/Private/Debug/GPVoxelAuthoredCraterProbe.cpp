@@ -84,17 +84,6 @@ namespace GPVoxelAuthoredCraterProbe
 		}
 	}
 
-	static float ParseRadiusCm(const TArray<FString>& Args, float& OutRequested)
-	{
-		OutRequested = DefaultRadiusCm;
-		if (Args.Num() == 0 || Args[0].IsEmpty())
-		{
-			return DefaultRadiusCm;
-		}
-		OutRequested = FCString::Atof(*Args[0]);
-		return FMath::Clamp(OutRequested, MinRadiusCm, MaxRadiusCm);
-	}
-
 	static bool ClosestChannelHit(
 		UWorld* World,
 		const FVector& Start,
@@ -285,8 +274,20 @@ namespace GPVoxelAuthoredCraterProbe
 			return;
 		}
 
-		float RequestedRadius = 0.f;
-		const float RadiusCm = ParseRadiusCm(Args, RequestedRadius);
+		float RequestedRadius = bFill ? DefaultRadiusCm : GPVoxelCraterMath::DefaultRadiusCm;
+		float RequestedDepth = GPVoxelCraterMath::DefaultDepthCm;
+		if (Args.Num() > 0 && !Args[0].IsEmpty())
+		{
+			RequestedRadius = FCString::Atof(*Args[0]);
+		}
+		if (!bFill && Args.Num() > 1 && !Args[1].IsEmpty())
+		{
+			RequestedDepth = FCString::Atof(*Args[1]);
+		}
+		const float RadiusCm = FMath::Clamp(
+			FMath::IsFinite(RequestedRadius) ? RequestedRadius : (bFill ? DefaultRadiusCm : GPVoxelCraterMath::DefaultRadiusCm),
+			MinRadiusCm,
+			MaxRadiusCm);
 
 		FHitResult CursorHit;
 		if (!TraceCursor(World, PlayerController, CursorHit))
@@ -321,17 +322,22 @@ namespace GPVoxelAuthoredCraterProbe
 			return;
 		}
 
-		const FVector Center = CursorHit.ImpactPoint;
-		const FVector TraceStart = Center + FVector(0.f, 0.f, VerticalTraceHalfExtentCm);
-		const FVector TraceEnd = Center - FVector(0.f, 0.f, VerticalTraceHalfExtentCm);
+		const FVector ImpactPoint = CursorHit.ImpactPoint;
+		const GPVoxelCraterMath::FShallowCrater Shallow = bFill
+			? GPVoxelCraterMath::FShallowCrater{}
+			: GPVoxelCraterMath::Make(ImpactPoint, RequestedRadius, RequestedDepth);
+		const FVector EditCenter = bFill ? ImpactPoint : Shallow.EditCenter;
+		const float EditRadius = bFill ? RadiusCm : Shallow.RadiusCm;
+		const FVector TraceStart = ImpactPoint + FVector(0.f, 0.f, VerticalTraceHalfExtentCm);
+		const FVector TraceEnd = ImpactPoint - FVector(0.f, 0.f, VerticalTraceHalfExtentCm);
 		FHitResult BaselineHit;
 		const bool bBaselineHit = GPVoxelRuntimeProbeAdapter::LineTraceHitsProbe(
 			World, VoxelWorld, TraceStart, TraceEnd, BaselineHit);
-		const float BeforeSurfaceZ = bBaselineHit ? BaselineHit.ImpactPoint.Z : Center.Z;
+		const float BeforeSurfaceZ = bBaselineHit ? BaselineHit.ImpactPoint.Z : ImpactPoint.Z;
 
 		FGPVoxelSphereSubtractRequest Request;
-		Request.WorldLocation = Center;
-		Request.RadiusCm = RadiusCm;
+		Request.WorldLocation = EditCenter;
+		Request.RadiusCm = EditRadius;
 		FGPVoxelIntBoxReport Edited;
 		const bool bApplied = bFill
 			? GPVoxelRuntimeProbeAdapter::ApplySphereAdd(VoxelWorld, Request, Edited)
@@ -344,7 +350,7 @@ namespace GPVoxelAuthoredCraterProbe
 #endif
 
 		UE_LOG(LogGPVoxelAuthoredCrater, Log,
-			TEXT("%s: NetMode=%s VoxelWorld=%s Label=%s Resolve=%s HitComponent=%s HitClass=%s Impact=%s RadiusRequested=%.1f Radius=%.1f VoxelSize=%.1f BeforeSurfaceZ=%.1f BaselineHit=%s Applied=%s EditedBounds valid=%s infinite=%s (%d/%d, %d/%d, %d/%d) bMultiThreaded=false bConvertToVoxelSpace=true bUpdateRender=true"),
+			TEXT("%s: NetMode=%s VoxelWorld=%s Label=%s Resolve=%s HitComponent=%s HitClass=%s Impact=%s EditCenter=%s RadiusRequested=%.1f Radius=%.1f Depth=%.1f CenterZOffset=%.1f VoxelSize=%.1f BeforeSurfaceZ=%.1f BaselineHit=%s Applied=%s EditedBounds valid=%s infinite=%s (%d/%d, %d/%d, %d/%d) bMultiThreaded=false bConvertToVoxelSpace=true bUpdateRender=true"),
 			Command,
 			NetModeName(World->GetNetMode()),
 			*VoxelWorld->GetName(),
@@ -352,9 +358,12 @@ namespace GPVoxelAuthoredCraterProbe
 			ResolvePathName(ResolvePath),
 			HitComponent != nullptr ? *HitComponent->GetName() : TEXT("none"),
 			HitComponent != nullptr ? *HitComponent->GetClass()->GetName() : TEXT("none"),
-			*Center.ToString(),
+			*ImpactPoint.ToString(),
+			*EditCenter.ToString(),
 			RequestedRadius,
-			RadiusCm,
+			EditRadius,
+			bFill ? 0.f : Shallow.DepthCm,
+			bFill ? 0.f : Shallow.CenterZOffsetCm,
 			VoxelSizeCm,
 			BeforeSurfaceZ,
 			bBaselineHit ? TEXT("true") : TEXT("false"),
@@ -367,7 +376,7 @@ namespace GPVoxelAuthoredCraterProbe
 			TEXT("%s: runtime memory only. Map and content are not saved. Navmesh is not rebuilt (dynamic Recast deferred Stage 3E)."),
 			Command);
 
-		DrawDebugSphere(World, Center, RadiusCm, 24, bFill ? FColor::Cyan : FColor::Orange, false, 8.f, 0, 3.f);
+		DrawDebugSphere(World, EditCenter, EditRadius, 24, bFill ? FColor::Cyan : FColor::Orange, false, 8.f, 0, 3.f);
 		DrawDebugLine(World, TraceStart, TraceEnd, FColor::White, false, 8.f, 0, 1.5f);
 
 		if (!bApplied)
@@ -378,7 +387,7 @@ namespace GPVoxelAuthoredCraterProbe
 
 		Screen(CraterMessageKey, bFill ? FColor::Cyan : FColor::Orange,
 			bFill ? TEXT("FILL APPLIED") : TEXT("CRATER APPLIED"));
-		ScheduleCollisionCheck(World, VoxelWorld, Center, RadiusCm, BeforeSurfaceZ, VoxelSizeCm, bBaselineHit, bFill);
+		ScheduleCollisionCheck(World, VoxelWorld, ImpactPoint, EditRadius, BeforeSurfaceZ, VoxelSizeCm, bBaselineHit, bFill);
 	}
 
 	static void CraterUnderCursor(const TArray<FString>& Args, UWorld* World)
@@ -393,7 +402,7 @@ namespace GPVoxelAuthoredCraterProbe
 
 	static FAutoConsoleCommandWithWorldAndArgs GCraterUnderCursor(
 		TEXT("gp.Voxel.CraterUnderCursor"),
-		TEXT("PIE debug: RemoveSphere on the authored AVoxelWorld under the mouse. Optional radius cm, clamped 50..1500. Does not save or spawn a world."),
+		TEXT("PIE debug: shallow RemoveSphere on the authored AVoxelWorld under the mouse. Args: RadiusCm DepthCm. Defaults 400 80. Does not save or spawn a world."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&CraterUnderCursor));
 
 	static FAutoConsoleCommandWithWorldAndArgs GFillUnderCursor(

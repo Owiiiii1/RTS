@@ -424,6 +424,22 @@ Runtime crater → Recast is still Stage 3E.
 
 ---
 
+## Authored crater and terrain-follow Z (2026-09-27)
+
+Operator PIE on `L_VoxelArena_2P` confirmed `gp.Voxel.CraterUnderCursor` changes authored voxel geometry and collision. The first version centered `RemoveSphere` on the click point, so the hole read as a hemisphere.
+
+The debug command is now a spherical cap in world centimeters:
+
+`EditCenter.Z = ImpactPoint.Z - (RadiusCm - DepthCm)`
+
+Defaults are radius **400** and depth **80** (center **320** cm below the click). Radius clamps to 50..1500. Depth clamps to 10..Radius. `FillUnderCursor` still adds a sphere at the impact point and does not use that offset. The debug sphere is drawn at the edit center. The map is not saved. Dynamic Recast is still not rebuilt.
+
+`UGP_MovementComponent` keeps nav/straight **XY**. Each movement tick traces down from the candidate XY (`ECC_WorldStatic` and `ECC_WorldDynamic`), skips `AGP_UnitBase` (units and buildings), and moves actor Z toward `SurfaceZ + root support`. A capsule root uses scaled half-height, because the actor origin is the capsule center. Vertical change is capped at 1200 cm/s, with a 2 cm settle band. A missed trace keeps the current Z and does not cancel the move. Sweep and 2D progress checks are unchanged. This is not slope rejection and not a NavMesh update.
+
+The Niagara mining-effect dump (`gp.Worker.DumpMiningVFX` and the non-shipping Niagara internal include) was removed after the operator fixed the project Niagara asset. The one-event mining presentation contract remains.
+
+---
+
 ## Determinism risks
 
 Same as above. Collision cook is async; Recast may see the new collision later. BuildGrid occupancy is independent and will not auto-update from voxels.

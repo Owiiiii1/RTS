@@ -16,6 +16,7 @@
 #include "Tags/GPGameplayTags.h"
 #include "TimerManager.h"
 #include "UObject/Package.h"
+#include "Units/GPMovementComponent.h"
 #include "Units/GPUnitCommandComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGPWorkerCommandIntent, Log, All);
@@ -681,6 +682,71 @@ void UGP_WorkerCommandIntentContractTestRunner::AdvanceStage()
 		break;
 	}
 	case 12:
+	{
+		// F: CargoFull haul (ReturningToBase or wait) is fully replaced by a ground Move.
+		AGP_Worker* Worker = WorkerWeak.Get();
+		AGP_MainBase* Base = MainBaseWeak.Get();
+		AGP_ResourceNode* NodeA = NodeAWeak.Get();
+		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && IsValid(Base) && IsValid(NodeA) && Cmd, TEXT("CaseFObjects")))
+		{
+			Finish();
+			return;
+		}
+		IssueStop(Worker);
+		FreeStorage(Base);
+		Worker->SetActorLocation(NodeALocation, false, nullptr, ETeleportType::TeleportPhysics);
+		FillCargo(Worker);
+		IssueMine(Worker, NodeA);
+		const bool bHaulStarted = IsHaulOrWaitActive(Cmd);
+		Expect(bHaulStarted, TEXT("CaseFHaulOrWaitAfterCargoFull"));
+		const FVector MoveDest = NodeALocation + FVector(0.0f, 1500.0f, 0.0f);
+		IssueMove(Worker, MoveDest);
+		const FGP_StoredUnitCommand* Held = Cmd->GetHeldCommand();
+		UGP_MovementComponent* Movement = Worker->GetUnitMovementComponent();
+		const bool bHeldMove = Held != nullptr
+			&& Held->CommandTag == FGPGameplayTags::Get().Command_Move
+			&& Held->TargetActor.Get() == nullptr;
+		Expect(bHeldMove, TEXT("CaseFHeldIsGroundMove"));
+		Expect(IsLatentOrchestrationCleared(Cmd), TEXT("CaseFMineHaulCleared"));
+		Expect(Cmd->GetMineExecutionState() == EGP_MineExecutionState::Idle, TEXT("CaseFMineIdle"));
+		Expect(Movement != nullptr
+				&& bHeldMove
+				&& Movement->IsMoving()
+				&& Movement->GetActiveMoveSerial() == Held->CommandSerial,
+			TEXT("CaseFMoveAccepted"));
+		Expect(Movement != nullptr && !Movement->DebugGetLastPathMode().IsEmpty(), TEXT("CaseFPathModeLogged"));
+		UE_LOG(LogGPWorkerCommandIntent, Log,
+			TEXT("CaseF path mode %s haulWas=%s"),
+			Movement != nullptr ? *Movement->DebugGetLastPathMode() : TEXT("none"),
+			bHaulStarted ? TEXT("true") : TEXT("false"));
+		++StageIndex;
+		WaitTicks = 0;
+		WaitStartTime = -1.0;
+		ScheduleNext(0.25f);
+		break;
+	}
+	case 13:
+	{
+		AGP_Worker* Worker = WorkerWeak.Get();
+		UGP_UnitCommandComponent* Cmd = IsValid(Worker) ? Worker->GetUnitCommandComponent() : nullptr;
+		UGP_MovementComponent* Movement = IsValid(Worker) ? Worker->GetUnitMovementComponent() : nullptr;
+		if (!Expect(IsValid(Worker) && Cmd && Movement, TEXT("CaseFLingerObjects")))
+		{
+			Finish();
+			return;
+		}
+		const FGP_StoredUnitCommand* Held = Cmd->GetHeldCommand();
+		const bool bStillMove = Held != nullptr
+			&& Held->CommandTag == FGPGameplayTags::Get().Command_Move;
+		const bool bReachedAndIdle = Held == nullptr && !Movement->IsMoving();
+		Expect(bStillMove || bReachedAndIdle, TEXT("CaseFMoveNotReplacedByHaul"));
+		Expect(IsLatentOrchestrationCleared(Cmd), TEXT("CaseFHaulStaysCleared"));
+		++StageIndex;
+		ScheduleNext(0.05f);
+		break;
+	}
+	case 14:
 		Finish();
 		break;
 	default:

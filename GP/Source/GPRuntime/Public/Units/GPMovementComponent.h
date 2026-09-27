@@ -136,6 +136,8 @@ public:
 	FVector DebugGetLastProjectedStart() const { return DebugLastProjectedStart; }
 	FVector DebugGetLastActualStart() const { return DebugLastActualStart; }
 	FVector DebugGetLastRawNavPath0() const { return DebugLastRawNavPath0; }
+	/** Last TryBuildNavigationPath classification. Empty until a request runs. */
+	const FString& DebugGetLastPathMode() const { return DebugLastPathMode; }
 
 	/** Synthetic terminal broadcast for stale-serial validation. Does not mutate movement state. */
 	void DebugBroadcastResult(
@@ -226,5 +228,6 @@ private:
 	FVector DebugLastProjectedStart = FVector::ZeroVector;
 	FVector DebugLastActualStart = FVector::ZeroVector;
 	FVector DebugLastRawNavPath0 = FVector::ZeroVector;
+	FString DebugLastPathMode;
 #endif
 };

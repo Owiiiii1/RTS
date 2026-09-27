@@ -239,10 +239,21 @@ bool UGP_MovementComponent::TryBuildNavigationPath(
 	OutPoints.Reset();
 	bOutUsedNav = false;
 
+#if !UE_BUILD_SHIPPING
+	auto NotePathMode = [this](const TCHAR* Mode)
+	{
+		DebugLastPathMode = Mode;
+		UE_LOG(LogGPUnitMovement, Log, TEXT("GP UnitMovement NavPathMode: %s"), Mode);
+	};
+#else
+	auto NotePathMode = [](const TCHAR*) {};
+#endif
+
 	UWorld* World = GetWorld();
 	AActor* Owner = GetOwner();
 	if (World == nullptr || Owner == nullptr)
 	{
+		NotePathMode(TEXT("NO_NAVDATA_STRAIGHT_FALLBACK"));
 		OutPoints.Add(Start);
 		OutPoints.Add(Dest);
 		return true;
@@ -255,6 +266,7 @@ bool UGP_MovementComponent::TryBuildNavigationPath(
 	if (NavSys == nullptr || NavData == nullptr)
 	{
 		// Straight-line fallback when NavMesh is unavailable.
+		NotePathMode(TEXT("NO_NAVDATA_STRAIGHT_FALLBACK"));
 		OutPoints.Add(Start);
 		OutPoints.Add(Dest);
 		bOutUsedNav = false;
@@ -269,6 +281,7 @@ bool UGP_MovementComponent::TryBuildNavigationPath(
 	{
 		// Unit is outside nav coverage (isolation coords / missing local bounds).
 		// Straight-line fallback preserves Move/Attack contracts; do not reject.
+		NotePathMode(TEXT("NAVDATA_EXISTS_START_PROJECTION_FAILED_STRAIGHT_FALLBACK"));
 		OutPoints.Add(Start);
 		OutPoints.Add(Dest);
 		bOutUsedNav = false;
@@ -280,6 +293,7 @@ bool UGP_MovementComponent::TryBuildNavigationPath(
 	FNavLocation ProjectedDest;
 	if (!NavSys->ProjectPointToNavigation(Dest, ProjectedDest, Extent))
 	{
+		NotePathMode(TEXT("NAVDATA_EXISTS_DEST_PROJECTION_FAILED"));
 		return false;
 	}
 
@@ -297,6 +311,7 @@ bool UGP_MovementComponent::TryBuildNavigationPath(
 	// Short on-nav legs (mine corrective / micro-adjust) skip FindPathSync — Recast often fails these.
 	if (DistNav2D <= TrivialPathCm)
 	{
+		NotePathMode(TEXT("NAVDATA_EXISTS_TRIVIAL_STRAIGHT"));
 		MakeProjectedStraightPath();
 		RecordNavRuntimePathDebug(Start, PathStart, OutPoints);
 		return true;
@@ -313,10 +328,12 @@ bool UGP_MovementComponent::TryBuildNavigationPath(
 		constexpr float SoftStraightMaxCm = 900.0f;
 		if (DistNav2D <= SoftStraightMaxCm)
 		{
+			NotePathMode(TEXT("NAVDATA_EXISTS_PATH_FAILED_SOFT_STRAIGHT"));
 			MakeProjectedStraightPath();
 			RecordNavRuntimePathDebug(Start, PathStart, OutPoints);
 			return true;
 		}
+		NotePathMode(TEXT("NAVDATA_EXISTS_PATH_FAILED"));
 		return false;
 	}
 
@@ -341,6 +358,7 @@ bool UGP_MovementComponent::TryBuildNavigationPath(
 	}
 
 	bOutUsedNav = true;
+	NotePathMode(TEXT("NAVDATA_EXISTS_PATH_OK"));
 	RecordNavRuntimePathDebug(Start, PathStart, OutPoints);
 	return true;
 }

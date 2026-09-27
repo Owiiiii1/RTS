@@ -395,6 +395,35 @@ Stage 3A is still not complete.
 
 ---
 
+## Navigation vs authored VoxelWorld (2026-09-27)
+
+`UNavigationSystemV1::Build` logs `navigation build is locked (flags: 0x20)` when
+`NavBuildingLockFlags` includes anything other than `NoUpdateInEditor`, or when there is nowhere to
+build. `0x20` is exactly `ENavigationBuildLock::AsyncLoadLock` (`1 << 5`).
+
+Call chain (UE 5.8.3 `NavigationSystem.cpp`):
+
+1. `DoInitialSetup`, editor mode, `bWaitForAsyncLoadingBeforeBuildingNavigationAutomatically` (default true), auto-update enabled → `AddNavigationBuildLock(AsyncLoadLock)`.
+2. `UpdateDelayedUnlockeRegistration` waits until `FAssetCompilingManager::GetNumRemainingAssets()==0`.
+3. `RegisterDelayedUnlock` then waits 16 ticks and 2 seconds, resets dirty areas, and
+   `RemoveNavigationBuildLock(AsyncLoadLock, NoRebuild)`.
+4. `Build` refuses while that flag is set. The log text always says "locked" even though the same
+   branch also covers "nowhere to build".
+
+GP and VoxelFree do not set this flag. `bInitialBuildingLocked` is a different bit (`InitialLock`, `1 << 3`).
+
+`UCrowdManager::CreateCrowdManager` logs `Unable to find RecastNavMesh instance` when no `ARecastNavMesh`
+is registered. GP movement does not use crowd following. With no main nav data,
+`UGP_MovementComponent::TryBuildNavigationPath` uses `NO_NAVDATA_STRAIGHT_FALLBACK`.
+
+Voxel Recast export is `UVoxelProceduralMeshComponent::DoCustomNavigableGeometryExport`, and it skips
+sections whose `bEnableNavmesh` is false. World default `bEnableNavmesh` is false. Camera invoker
+`bUseForNavmesh` remains false. Static terrain nav needs the world flag plus
+`bComputeVisibleChunksNavmesh` (default true), then Build Paths after `AsyncLoadLock` clears.
+Runtime crater → Recast is still Stage 3E.
+
+---
+
 ## Determinism risks
 
 Same as above. Collision cook is async; Recast may see the new collision later. BuildGrid occupancy is independent and will not auto-update from voxels.

@@ -590,7 +590,9 @@ UI legitimately owns:
   XY outside `[0,1]` is Unexplored. If resolved camera bounds are unavailable/degenerate, displayed
   fields fall back to the FoW-grid rect (no divide-by-zero).
 - Widget-layer orientation only: `ScreenX = 1 - NormalizedX`, `ScreenY = 1 - NormalizedY` so the authored
-  map image matches operator/game orientation. Background, FoW overlay, blips, and camera footprint share
+  map image matches operator/game orientation. With Slate Y growing downward, world `+X` draws **left**
+  and world `+Y` draws **top**. The minimap stays world-fixed; camera yaw is the footprint polygon, not
+  a rotation of the map. Background, FoW overlay, blips, click-to-pan, and camera footprint share
   that transform and the same letterboxed dest rect.
 - Blips (MVP): `UGP_MinimapPresenter` builds a presentation-only `FGP_MinimapBlip` snapshot
   from the existing `UGP_LocalFoWUnitPresentationSubsystem` registry (units + buildings self-register

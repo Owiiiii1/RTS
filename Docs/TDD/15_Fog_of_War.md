@@ -342,7 +342,10 @@ trusted LocalFoW; FoW authority, grid origin, dimensions, and cell size are unch
 `UGP_MinimapWidget` paints a static authored background (authored to those camera/playable extents,
 world +Y at the top after surface flip) plus a bounded FoW overlay (default 128×128 downsample,
 Unexplored/Explored/Visible) using the same mapping. Surface transform:
-`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`. Paint order in one Slate pass:
+`Xscreen = 1 - NormalizedX`, `Yscreen = 1 - NormalizedY`. That flip is shared by background, FoW, blips,
+click-to-pan, and the camera footprint. On the Slate surface (Y down) world `+X` is left and world `+Y`
+is top. The map does not rotate with camera yaw; a yaw mismatch against the 3D view is the footprint's
+job. Paint order in one Slate pass:
 background → FoW → blips → camera footprint outline. Color is the canonical player/team color from
 `UGP_GameplayPresentationSettings::GetTeamColor(TeamId)`; unit vs building is marker size only.
 Friendly units/buildings are always shown inside playable bounds and are not FoW-gated.

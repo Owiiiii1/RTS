@@ -26,6 +26,16 @@ Production deformation service is not started. `AGP_CameraPawn` owns one `UVoxel
 gates LOD with `IsLocalInvoker()`; GP enables the component only while the pawn is locally controlled.
 Authored maps should keep VoxelWorld camera-invoker fallback off. Stage 3A is not complete.
 
+Editor Build Paths flag `0x20` is `ENavigationBuildLock::AsyncLoadLock` (`1 << 5`) in UE 5.8.3
+`NavigationSystem.h`. `UNavigationSystemV1::DoInitialSetup` adds it in editor mode while
+`bWaitForAsyncLoadingBeforeBuildingNavigationAutomatically` is true (engine default). A ticker removes
+it after asset compilation is idle, 16 frames, and 2 seconds, with `NoRebuild`. It is not Initial
+Building Locked and not a Voxel or GP GameMode lock. `UVoxelProceduralMeshComponent` exports Recast
+triangles only for sections with `bEnableNavmesh`. `AVoxelWorld::bEnableNavmesh` defaults false, so
+collision alone does not feed Recast. Camera `bUseForNavmesh` stays false; visible-chunk navmesh
+(`bComputeVisibleChunksNavmesh`, default true) is the static baseline once the world flag is on.
+Dynamic crater nav remains Stage 3E.
+
 ## Authority Boundary
 
 - Terrain deformation is **server-authoritative**.

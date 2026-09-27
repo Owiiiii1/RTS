@@ -1,6 +1,9 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+#include "Camera/CameraComponent.h"
+#include "Camera/GPCameraPawn.h"
 #include "Engine/GameInstance.h"
+#include "EngineUtils.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
@@ -185,6 +188,20 @@ namespace GPMinimapSurfaceContractPrivate
 				.Equals(FVector2D(1.0f, 1.0f), 0.0001f),
 			TEXT("M_ScreenXYAreOneMinusPresenterXY"));
 
+		// Presenter +X/+Y is proven elsewhere. Surface 1-minus puts +X left and +Y top (Slate Y down).
+		const FVector2D CenterSurface =
+			UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(FVector2D(0.5f, 0.5f));
+		const FVector2D PlusXSurface =
+			UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(FVector2D(1.0f, 0.5f));
+		const FVector2D PlusYSurface =
+			UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(FVector2D(0.5f, 1.0f));
+		Expect(PlusXSurface.X < CenterSurface.X - 0.2f
+				&& FMath::IsNearlyEqual(PlusXSurface.Y, CenterSurface.Y, 0.001f),
+			TEXT("N_WorldPlusXIsLeft"));
+		Expect(PlusYSurface.Y < CenterSurface.Y - 0.2f
+				&& FMath::IsNearlyEqual(PlusYSurface.X, CenterSurface.X, 0.001f),
+			TEXT("N_WorldPlusYIsTop"));
+
 		const FBox2D FallbackDest =
 			Widget != nullptr
 				? Widget->ContractComputeMapDestLocal(FVector2D(200.0f, 200.0f))
@@ -281,6 +298,102 @@ namespace GPMinimapSurfaceContractPrivate
 			TEXT("gp.UI.RunMinimapSurfaceContractTest: Complete Failures=%d Cancelled=false"),
 			Failures);
 	}
+
+	static void RunMinimapOrientationDump(const TArray<FString>& Args, UWorld* World)
+	{
+		(void)Args;
+		if (World == nullptr)
+		{
+			UE_LOG(LogGPMinimapSurfaceContract, Warning, TEXT("gp.UI.MinimapOrientationDump: no world"));
+			return;
+		}
+
+		AGP_CameraPawn* Pawn = nullptr;
+		for (TActorIterator<AGP_CameraPawn> It(World); It; ++It)
+		{
+			if (IsValid(*It))
+			{
+				Pawn = *It;
+				break;
+			}
+		}
+
+		const UCameraComponent* Camera = Pawn != nullptr
+			? Pawn->FindComponentByClass<UCameraComponent>()
+			: nullptr;
+		UE_LOG(LogGPMinimapSurfaceContract, Log,
+			TEXT("gp.UI.MinimapOrientationDump Pawn=%s ActorXY=(%.1f,%.1f) ActorYaw=%.1f CameraYaw=%.1f"),
+			*GetNameSafe(Pawn),
+			Pawn != nullptr ? Pawn->GetActorLocation().X : 0.0f,
+			Pawn != nullptr ? Pawn->GetActorLocation().Y : 0.0f,
+			Pawn != nullptr ? Pawn->GetActorRotation().Yaw : 0.0f,
+			Camera != nullptr ? Camera->GetComponentRotation().Yaw : 0.0f);
+
+		UGameInstance* GameInstance = World->GetGameInstance();
+		ULocalPlayer* LocalPlayer = GameInstance != nullptr ? GameInstance->GetFirstGamePlayer() : nullptr;
+		UGP_HUDViewModelSubsystem* Subsystem =
+			LocalPlayer != nullptr ? LocalPlayer->GetSubsystem<UGP_HUDViewModelSubsystem>() : nullptr;
+		UGP_MinimapPresenter* Presenter = Subsystem != nullptr ? Subsystem->GetMinimapPresenter() : nullptr;
+		const FGP_MinimapPresentation Presentation = Presenter != nullptr
+			? Presenter->GetMinimapPresentation()
+			: FGP_MinimapPresentation();
+		if (Presenter == nullptr || !Presenter->IsMinimapReady() || Presentation.MapWorldSizeCm.X <= 1.0f)
+		{
+			UE_LOG(LogGPMinimapSurfaceContract, Log,
+				TEXT("gp.UI.MinimapOrientationDump Presenter=%s ready=%s"),
+				*GetNameSafe(Presenter),
+				Presenter != nullptr && Presenter->IsMinimapReady() ? TEXT("true") : TEXT("false"));
+			return;
+		}
+
+		const FGP_MinimapPresentation& PresentationRef = Presenter->GetMinimapPresentation();
+		const FVector2D Min = PresentationRef.MapWorldMin;
+		const FVector2D Size = PresentationRef.MapWorldSizeCm;
+		const FVector Center(Min.X + Size.X * 0.5f, Min.Y + Size.Y * 0.5f, 0.0f);
+		const FVector PlusX = Center + FVector(FMath::Min(1000.0f, Size.X * 0.25f), 0.0f, 0.0f);
+		const FVector PlusY = Center + FVector(0.0f, FMath::Min(1000.0f, Size.Y * 0.25f), 0.0f);
+
+		auto LogPoint = [&](const TCHAR* Label, const FVector& WorldPoint)
+		{
+			const FVector2D Norm = Presenter->WorldToMinimapNormalized(WorldPoint);
+			const FVector2D Surface = UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(Norm);
+			UE_LOG(LogGPMinimapSurfaceContract, Log,
+				TEXT("gp.UI.MinimapOrientationDump %s World=(%.1f,%.1f) Norm=(%.3f,%.3f) Surface=(%.3f,%.3f)"),
+				Label,
+				WorldPoint.X,
+				WorldPoint.Y,
+				Norm.X,
+				Norm.Y,
+				Surface.X,
+				Surface.Y);
+		};
+
+		UE_LOG(LogGPMinimapSurfaceContract, Log,
+			TEXT("gp.UI.MinimapOrientationDump MapWorldMin=(%.1f,%.1f) MapWorldSize=(%.1f,%.1f) Contract=WorldPlusXLeft WorldPlusYTop NorthUp"),
+			Min.X, Min.Y, Size.X, Size.Y);
+		LogPoint(TEXT("Center"), Center);
+		LogPoint(TEXT("PlusX"), PlusX);
+		LogPoint(TEXT("PlusY"), PlusY);
+
+		const FGP_MinimapCameraFootprint& Footprint = Presenter->GetCameraFootprint();
+		UE_LOG(LogGPMinimapSurfaceContract, Log,
+			TEXT("gp.UI.MinimapOrientationDump FootprintValid=%s Corners=%d"),
+			Footprint.bIsValid ? TEXT("true") : TEXT("false"),
+			Footprint.NormalizedCorners.Num());
+		for (int32 Index = 0; Index < Footprint.NormalizedCorners.Num(); ++Index)
+		{
+			const FVector2D Norm = Footprint.NormalizedCorners[Index];
+			const FVector2D Surface = UGP_MinimapWidget::PresenterNormalizedToSurfaceUV(Norm);
+			UE_LOG(LogGPMinimapSurfaceContract, Log,
+				TEXT("gp.UI.MinimapOrientationDump Footprint[%d] Norm=(%.3f,%.3f) Surface=(%.3f,%.3f)"),
+				Index, Norm.X, Norm.Y, Surface.X, Surface.Y);
+		}
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs GMinimapOrientationDump(
+		TEXT("gp.UI.MinimapOrientationDump"),
+		TEXT("Non-shipping: world +X/+Y minimap surface directions and camera yaw. No gameplay effect."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunMinimapOrientationDump));
 
 	static FAutoConsoleCommandWithWorldAndArgs GMinimapSurfaceContract(
 		TEXT("gp.UI.RunMinimapSurfaceContractTest"),

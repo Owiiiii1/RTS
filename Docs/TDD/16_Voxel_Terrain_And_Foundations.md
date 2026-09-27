@@ -25,6 +25,7 @@ Production deformation service is not started. `AGP_CameraPawn` owns one `UVoxel
 (`LODRange`/`CollisionsRange` 20000 cm, navmesh off). The plugin registers every invoker and only
 gates LOD with `IsLocalInvoker()`; GP enables the component only while the pawn is locally controlled.
 Authored maps should keep VoxelWorld camera-invoker fallback off. Stage 3A is not complete.
+The voxel-map minimap looking 90° off the 3D view was inherited PlayerStart yaw on `AGP_CameraPawn`, not the minimap XY transform. Startup yaw is `CameraConfig.DefaultYaw` (90°).
 
 Editor Build Paths flag `0x20` is `ENavigationBuildLock::AsyncLoadLock` (`1 << 5`) in UE 5.8.3
 `NavigationSystem.h`. `UNavigationSystemV1::DoInitialSetup` adds it in editor mode while

@@ -95,6 +95,11 @@ public:
 
 	// --- Rotation ---
 
+	/** Initial gameplay yaw. PlayerStart rotation does not own this. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Camera|Rotation",
+		meta = (Units = "deg"))
+	float DefaultYaw = 90.0f;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GP|Camera|Rotation",
 		meta = (ClampMin = "0.001", UIMin = "0.001", Units = "deg"))
 	float RotateSpeed = 4.0f;

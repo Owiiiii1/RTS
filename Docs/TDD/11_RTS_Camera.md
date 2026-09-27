@@ -71,6 +71,8 @@ struct CameraState (members of AGP_CameraPawn, not USTRUCT)
   float      CurrentYaw
 ```
 
+PlayerStart defines the camera pawn **position** only. Initial RTS yaw is `Config.DefaultYaw` (default **90°**), applied to `RootScene` in `BeginPlay` as `(0, Unwind(DefaultYaw), 0)`. An authored PlayerStart rotation does not define the gameplay view. If `ConfigRef` is already resident, that asset's `DefaultYaw` is used; otherwise the CDO value is used. Async `HandleConfigLoaded` remaps zoom and does not write yaw again, so a late config arrival cannot snap the view after rotate input.
+
 Інтеграція на Tick (frame-rate-independent через `DeltaSeconds`):
 
 1. Sample cursor screen position → derive edge-scroll vector (if `Config.bEdgeScrollEnabled` and viewport focused).
@@ -167,6 +169,7 @@ Owner module: `GPRuntime`. Naming per [`STYLE.md`](../../STYLE.md).
 | `PitchAtMaxZoom` | `float` | `-65` | degrees | Pitch when fully zoomed out (steeper). |
 | `PitchAtMinZoom` | `float` | `-45` | degrees | Pitch when fully zoomed in (flatter). |
 | `bPitchInterpEnabled` | `bool` | `true` | — | Toggle zoom-driven pitch. |
+| `DefaultYaw` | `float` | `90` | degrees | Initial gameplay yaw. PlayerStart rotation is ignored. |
 | `RotateSpeed` | `float` | `4.0` | deg per mouse-px | MMB drag → yaw delta. |
 | `bInvertRotate` | `bool` | `false` | — | Designer-toggleable. |
 | `FallbackBounds` | `FBox` | `{(-50000,-50000,-1000), (50000,50000,5000)}` | cm | Used when level provides no `AGP_CameraBoundsVolume`. |

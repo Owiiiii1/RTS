@@ -78,7 +78,7 @@ void AGP_CameraPawn::BeginPlay()
 		return;
 	}
 
-	CurrentYaw = RootScene->GetRelativeRotation().Yaw;
+	ApplyCanonicalStartupYaw(*Config);
 	CurrentArmLength = Config->DefaultArmLength;
 	TargetArmLength = CurrentArmLength;
 	SpringArm->TargetArmLength = CurrentArmLength;
@@ -268,6 +268,8 @@ void AGP_CameraPawn::HandleConfigLoaded()
 
 	CachedConfig = LoadedConfig;
 
+	// Yaw stays at the BeginPlay canonical value. Async config arrival remaps zoom only.
+	// A later DefaultYaw write would snap the view after the player may already have rotated.
 	if (bOldRangeValid)
 	{
 		CurrentArmLength = FMath::Lerp(LoadedConfig->MinArmLength, LoadedConfig->MaxArmLength, CurrentFraction);
@@ -406,6 +408,23 @@ void AGP_CameraPawn::SyncSpringArmPresentation(float DeltaSeconds)
 	}
 
 	SpringArm->TickComponent(DeltaSeconds, LEVELTICK_All, nullptr);
+}
+
+void AGP_CameraPawn::ApplyCanonicalStartupYaw(const UGP_CameraConfigDataAsset& Config)
+{
+	if (RootScene == nullptr)
+	{
+		return;
+	}
+
+	const UGP_CameraConfigDataAsset* YawSource = &Config;
+	if (const UGP_CameraConfigDataAsset* ResidentConfig = ConfigRef.Get())
+	{
+		YawSource = ResidentConfig;
+	}
+
+	CurrentYaw = FMath::UnwindDegrees(YawSource->DefaultYaw);
+	RootScene->SetRelativeRotation(FRotator(0.0f, CurrentYaw, 0.0f));
 }
 
 void AGP_CameraPawn::ApplyPitch(const UGP_CameraConfigDataAsset& Config)
@@ -747,6 +766,23 @@ void AGP_CameraPawn::ContractNotifyCameraPresentationChanged()
 {
 	bHasCameraPresentationFingerprint = false;
 	NotifyCameraPresentationChangedIfNeeded();
+}
+
+void AGP_CameraPawn::ContractSimulateRotateInput(float MouseDeltaX)
+{
+	const UGP_CameraConfigDataAsset* Config = GetActiveConfig();
+	if (Config == nullptr)
+	{
+		return;
+	}
+
+	const float SavedInput = PendingRotateInput;
+	const bool bSavedActive = bRotateActive;
+	PendingRotateInput = MouseDeltaX;
+	bRotateActive = true;
+	ApplyRotation(*Config);
+	PendingRotateInput = SavedInput;
+	bRotateActive = bSavedActive;
 }
 #endif
 

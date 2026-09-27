@@ -58,6 +58,8 @@ public:
 	void ContractSetCameraBoundsVolume(AGP_CameraBoundsVolume* Volume);
 	void ContractClearCameraBoundsVolume();
 	void ContractNotifyCameraPresentationChanged();
+	float ContractGetCurrentYaw() const { return CurrentYaw; }
+	void ContractSimulateRotateInput(float MouseDeltaX);
 #endif
 
 protected:
@@ -77,6 +79,7 @@ private:
 	float CalculateEdgeStrength(float DistanceToEdge, int32 ThresholdPx, int32 FalloffPx) const;
 	float CalculateZoomFraction(const UGP_CameraConfigDataAsset& Config, float ArmLength) const;
 
+	void ApplyCanonicalStartupYaw(const UGP_CameraConfigDataAsset& Config);
 	void ApplyZoom(const UGP_CameraConfigDataAsset& Config, float DeltaSeconds);
 	void ApplyPitch(const UGP_CameraConfigDataAsset& Config);
 	void ApplyRotation(const UGP_CameraConfigDataAsset& Config);

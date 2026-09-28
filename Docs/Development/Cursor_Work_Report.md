@@ -2,127 +2,122 @@
 
 ## Status
 
-**STAGE_3A_FINAL_MERGE_CANDIDATE**
+**STAGE_3B1_LEVELING_PLANNING_READY_FOR_OPERATOR_VALIDATION**
 
-Stage 3A deformation foundation is complete. Stage 3B Worker terrain leveling is not implemented.
+**INTERMEDIATE / NOT MERGE READY**
+
+Stage 3A stays complete. Stage 3B is not complete. This slice does not level terrain.
 
 ## Branch / base / head
 
 | Item | Value |
 | --- | --- |
 | Path | `D:\Progects\RTS` |
-| Branch | `terrain/gp-voxel-foundation` |
-| Base `origin/main` | `569777625b8a4718289ad4809efa5ba5da09df7c` |
-| Parent | `cf47d24f65239e2ba97003095a18c7779f3ace3c` |
-| Feature commit | `92ae64780c34689fd044ac8716f60c80f737be0d` |
+| Branch | `terrain/gp-worker-leveling` |
+| Base `origin/main` | `98cc07592eb7bd52e0eea89460ca7646ac723f13` |
+| Feature commit | recorded in the follow-up commit |
 | Engine | UE 5.8.3 |
-| Ahead / behind `origin/terrain/gp-voxel-foundation` | 0 / 0 after push |
 
-## Operator PASS
+## Owner
 
-Authored `L_VoxelArena_2P`:
+`UGP_EngineeringJobSubsystem` (`UWorldSubsystem`), same lifetime pattern as `UGP_BuildGridSubsystem`.
 
-- Voxel crater works
-- Collision updates
-- Shallow radius/depth geometry works
-- Units descend and climb the deformed surface
+Jobs are world-scoped. They are not attached to a Worker and they are not `GP.Command.Build`. Authority is the server world, and a simulated `GameState` is rejected. The store is not replicated. The job struct is the domain record a later client mirror can copy.
 
-Two-player PIE, Play As Listen Server (2026-09-28):
+## Job data
 
-- The authority debug command created the crater on the host
-- The client received the replicated compact deformation event
-- The client reconstructed the same crater automatically
-- No duplicate application was observed
-- Worker terrain-follow stayed correct
+`CreateTerrainLevelingJob(OriginCell, SizeCells, TargetPlaneZ)`.
 
-Late join is not claimed. Snapshot compaction is not claimed.
+- `JobId` is an `FGuid`
+- Type is `TerrainLeveling` only
+- State is `Planned`. `Completed` exists and nothing sets it
+- Rectangle comes from `UGP_BuildGridSubsystem::EnumerateFootprintCells`
+- Size must be 1..32 on each axis
+- `TargetPlaneZ` is stored as given. The service does not average or median the terrain
+- Each cell stores state, mean / min / max sample Z, max absolute deviation, and sample count
+- Find, enumerate, and cancel are available. Cancel does not deform terrain
+- Zero Workers is the only mode. Assignment, progress, work positions, and pulses are not fields yet
 
-## Architecture
+An all-`Level` zone is rejected with `NothingToLevel` and is not stored.
 
-Owner: `UGP_TerrainDeformationComponent`, default subobject of `AGP_GameState`, replicated.
+## Sampling
 
-API: `RequestDeformation`. Authority only. Clients get `NoAuthority`. Gameplay headers do not expose `UVoxelSphereTools`. The private adapter is the Voxel seam.
+Five traces per cell: center and four points inset by 25% of the BuildGrid cell. Traces run ±8000 cm through `WorldStatic`, `WorldDynamic`, and `Visibility`. `AGP_UnitBase` hits are skipped, which also skips buildings. A hit counts only when it resolves to a VoxelWorld. NavMesh Z is not used.
 
-Profile: `ShallowSphereCap` only. Center Z = `WorldLocation.Z + (RadiusCm - DepthCm)`. `RemoveSphere` uses `bConvertToVoxelSpace=true`, `bUpdateRender=true`, `bMultiThreaded=false`.
+The center sample must hit. A cell whose center misses is `NoTerrain`, and the plan is rejected. Quadrant hits that exist participate in the deviation test.
 
-Validation: non-finite rejected; radius or depth ≤ 0 rejected; other profiles rejected; radius clamped to 50..1500 cm; depth clamped to 10..radius.
+## Classification
 
-World resolution: vertical trace ±8000 cm. Closest hit that resolves to an `AVoxelWorld`. No world-actor scan.
+`LevelHeightToleranceCm` is **15**. It is a named tunable, not a final balance value.
 
-## Replication
+`NeedsLeveling` when any hit sample is more than 15 cm from `TargetPlaneZ`. Otherwise `Level`.
 
-Replicated `TArray` of compact events, max 32, `OnRep` applies locally. No voxel payload.
+## Debug
 
-`MaxEventHistory=32` is an intermediate reconstruction buffer. It is not a late-join solution. A match with more than 32 historical deformations does not keep the older events for a client that never applied them. Connected clients that already applied a trimmed event are unaffected. Snapshot compaction remains future network work.
+`gp.Engineering.PlanLevelingUnderCursor [WidthCells] [HeightCells]`, defaults `4 4`.
 
-Duplicate guard: a `SequenceId` is applied at most once per machine. The listen-server host applies inside `RequestDeformation` and does not apply that id again from the log. The operator saw no duplicate on the client.
+Authority viewport only. The cursor must hit voxel terrain. `ImpactPoint.Z` is `TargetPlaneZ`. The zone is snapped with `SnapOriginCell`. The command logs the job id, origin, size, plane, level count, needs-leveling count, and reject reason. It draws grey and yellow debug boxes for 8 seconds. No tick. No content assets.
 
-`gp.Voxel.CraterUnderCursor` is the non-shipping debug producer of `RequestDeformation`.
+`gp.Engineering.DumpJobs` lists stored plans.
 
-## Cleanup
+## Tests / build
 
-Removed:
+`gp.Engineering.RunLevelingPlanningContractTest` at 2026.09.28-17.44.08: **Failures=0**.
 
-- `GPVoxelRuntimeVisualProbe.cpp` (`gp.Voxel.SpawnRuntimeProbe`, `gp.Voxel.ApplyProbeCrater`). The runtime crater contract and the authored command already cover that path.
-- `GPNavAndWorkerDump.cpp` (`gp.Nav.Dump`). The `0x20` lock was already identified as `AsyncLoadLock`.
+- A. 2×3 BuildGrid enumeration
+- B. Authority create
+- C. Simulated proxy rejected
+- D. Zero size and 33-wide size rejected
+- E. Explicit `TargetPlaneZ` stored unchanged
+- F / H. Flat plane is all `Level` and `NothingToLevel`
+- G. Shallow crater cell becomes `NeedsLeveling` after collision updates
+- I. Stored job can be found, listed, and cancelled
+- J. Planning does not append a terrain deformation event
 
-Kept:
+Regressions, all **Failures=0** on the same editor build:
 
-- Production terrain component, types, and GameState ownership
-- Voxel adapter seam
-- `gp.Terrain.RunDeformationContractTest`
-- `gp.Voxel.RunPluginCompileProbeContractTest`
-- `gp.Voxel.RunRuntimeCraterProbeContractTest`
-- `gp.Voxel.RunCameraInvokerContractTest`
-- `gp.Voxel.CraterUnderCursor`
-- `gp.Voxel.FillUnderCursor` (direct add spike, not a second crater path)
-- `gp.Movement.DumpGroundFollow`
+- `gp.Building.RunBuildGridContractTest` 17.40.55
+- `gp.Terrain.RunDeformationContractTest` 17.41.04
+- `gp.Voxel.RunRuntimeCraterProbeContractTest` 17.41.14
+- `gp.Movement.RunGroundFollowContractTest` 17.41.22
+- `gp.Worker.RunCommandIntentContractTest` 17.41.32
 
-## Deferred (does not block 3A)
+Build: **GPEditor Win64 Development succeeded**. GP Development and Shipping were not run.
 
-- Irregular crater profiles
-- Material scars
-- Niagara debris
-- Vegetation reaction
-- Foundation destruction
-- Dynamic traversability (Stage 3E)
-- World FoW terrain-surface adaptation (Stage 3E)
-- Late-join snapshot / compaction
-- Worker leveling (Stage 3B, not started)
+## Still unresolved in 3B
 
-## Tests
+- Player UX for choosing `TargetPlaneZ`
+- Drag rectangle versus a fixed-size plan
+- Worker assignment and multi-worker scaling
+- Work positions
+- Leveling speed
+- Cut / fill deformation
+- Interrupt / resume
+- Niagara work presentation
+- Foundation and Wall jobs
 
-All **Failures=0** on `L_PrototypeArena`, `-game -NullRHI`, 2026-09-27 UTC:
+## Operator test
 
-- `gp.Terrain.RunDeformationContractTest` 23.01.05
-- `gp.Voxel.RunPluginCompileProbeContractTest` 23.01.14
-- `gp.Voxel.RunRuntimeCraterProbeContractTest` 23.01.23
-- `gp.Voxel.RunCameraInvokerContractTest` 23.01.32
-- `gp.Movement.RunGroundFollowContractTest` 23.01.41
-- `gp.Movement.RunRTSMovementReconciliationContractTest` 23.02.04
-- `gp.Worker.RunCommandIntentContractTest` 23.02.15
-- `gp.Mining.RunContractTest` 23.02.25
-- `gp.Match.RunWinLoseContractTest` 23.02.34
-
-Minimap and world-FoW contracts were not re-run. This checkpoint does not change camera presentation, FoW, or minimap code. The voxel camera-invoker contract was run.
-
-## Builds
-
-- GPEditor Win64 Development + UHT: **succeeded** (exit 0)
-- GP Win64 Development: **succeeded** (`GP\Binaries\Win64\GP.exe`, exit 0)
-- GP Win64 Shipping: **succeeded** (`GP\Binaries\Win64\GP-Win64-Shipping.exe`, exit 0)
+1. PIE `L_VoxelArena_2P` on the authority viewport.
+2. On flat ground run `gp.Engineering.PlanLevelingUnderCursor 4 4`.
+3. Expect grey cells, or `NothingToLevel` when the patch is already within 15 cm.
+4. Run `gp.Voxel.CraterUnderCursor 400 80`.
+5. Point into and around the crater and run `gp.Engineering.PlanLevelingUnderCursor 4 4`.
+6. Crater cells should be yellow (`NeedsLeveling`). Surrounding flat cells should be grey (`Level`).
+7. The terrain shape does not change because of the plan.
 
 ## Files changed
 
-- `GP/Source/GPRuntime/Public/Terrain/GPTerrainDeformationComponent.h`
-- `GP/Source/GPRuntime/Private/Debug/GPVoxelRuntimeVisualProbe.cpp` (deleted)
-- `GP/Source/GPRuntime/Private/Debug/GPNavAndWorkerDump.cpp` (deleted)
+- `GP/Source/GPRuntime/Public/Engineering/GPEngineeringJobTypes.h`
+- `GP/Source/GPRuntime/Public/Engineering/GPEngineeringJobSubsystem.h`
+- `GP/Source/GPRuntime/Private/Engineering/GPEngineeringJobSubsystem.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPEngineeringLevelingPlan.cpp`
+- `GP/Source/GPRuntime/Private/Debug/GPEngineeringLevelingPlanningContractTest.cpp`
+- `Docs/GDD/13_Terrain_Engineering_And_Foundations.md`
 - `Docs/TDD/16_Voxel_Terrain_And_Foundations.md`
-- `Docs/Development/Voxel_Plugin_Technical_Spike.md`
 - `Docs/Development/MVP_Roadmap_Reconciliation_Post_Building_Vitals.md`
-- `Docs/Architecture_Decisions/ADR_0010_Voxel_Terrain_And_Foundation_System.md`
 - `Docs/Development/Cursor_Work_Report.md`
 
 ## Protected audit
 
-Not staged: `GP/Content/` (including `L_VoxelArena_2P` and `L_PrototypeArena`), `GP/Config/`, `GP/GP.uproject`, `GP/Plugins/VoxelFree/`, `Tools/`. The plugin stays operator-local and untracked.
+Not staged: `GP/Content/` (including `L_VoxelArena_2P` and `L_PrototypeArena`), `GP/Config/`, `GP/GP.uproject`, `GP/Plugins/VoxelFree/`, `Tools/`. The plugin stays untracked.

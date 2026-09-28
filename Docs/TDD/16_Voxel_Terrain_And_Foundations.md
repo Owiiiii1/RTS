@@ -78,7 +78,7 @@ Do not mix these in APIs.
 
 Wall **Package** and Foundation Slab **package** are orbital **material**. The field work that turns stock into Wall segments or foundation cells is local engineering.
 
-Do not resurrect Barracks / factory / `UGP_ConstructionComponent` as a READY-building production path. A future generic **engineering job** owner is a different problem; exact class names are **TBD**.
+Do not resurrect Barracks / factory / `UGP_ConstructionComponent` as a READY-building production path. The local-engineering owner is `UGP_EngineeringJobSubsystem`. Only Terrain Leveling plans exist. Foundation and Wall jobs are not implemented.
 
 ## Generic Local Engineering Job Contract (future)
 
@@ -205,18 +205,20 @@ Foundation Repair is a future local-engineering job using the same Worker / pres
 
 **DESIGN REQUIRED:** behavior of a still-alive building that loses some supporting foundation from an external explosion or earthquake. No option is approved.
 
-## Leveling Service Responsibilities (future)
+## Leveling Service Responsibilities
 
-A future leveling / site-preparation service (exact class TBD) should:
+`UGP_EngineeringJobSubsystem` is the world-scoped owner. A Terrain Leveling job is `CreateTerrainLevelingJob(OriginCell, SizeCells, TargetPlaneZ)`.
 
-- treat the selected rectangular BuildGrid-aligned zone as the planned job;
-- query voxel terrain for per-cell height / slope vs the target construction plane (algorithm **TBD**);
-- present grey / yellow cell feedback to the local placement-style overlay;
-- reject planning when every cell is already grey;
-- apply **progressive** terrain convergence only while assigned Workers work — not an instant flatten at job complete;
-- remain server-authoritative for the actual deformation.
+Implemented in the planning slice:
 
-Do not implement a completion-only mesh swap.
+- the rectangular BuildGrid zone is the planned job and persists with zero Workers;
+- `TargetPlaneZ` is stored as given. The debug command uses the clicked terrain Z. Player UX for that plane is still open;
+- each cell samples voxel terrain at its center and four inset quadrant points. NavMesh Z is not used. Units and buildings are skipped. A hit that is not a VoxelWorld is not terrain;
+- `Level` means every hit sample is within `LevelHeightToleranceCm` (15) of the plane. `NeedsLeveling` means any hit sample is farther. A missing center sample is `NoTerrain` and the plan is rejected;
+- an all-`Level` zone is rejected with `NothingToLevel` and is not stored;
+- planning does not call terrain deformation.
+
+Not implemented: Worker assignment, progress, work positions, presentation pulses, the cut/fill edit, and client UI. `Completed` exists on the enum and nothing sets it yet.
 
 ## Placement-Query Contract (future)
 
@@ -287,7 +289,8 @@ Budgets and strategies are **TECH-SPIKE REQUIRED**. Do not invent numbers here.
 ## Explicit Unresolved Decisions
 
 - Leveling zone sizing UX (fixed vs drag).
-- Target elevation algorithm, slope tolerance, leveling speed, Worker pathing, interrupt/resume.
+- Target elevation player UX. The job core already stores an explicit `TargetPlaneZ`.
+- Leveling speed, Worker pathing, interrupt/resume. Height tolerance for planning is 15 cm and is not final.
 - Max Workers / scaling / contribution / assignment / work-position reservation.
 - Foundation package cost, quantity, slab footprint, stock consume/reserve moment.
 - Foundation Repair tunables.

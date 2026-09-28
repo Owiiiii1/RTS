@@ -1,15 +1,15 @@
 # MVP Roadmap Reconciliation — Post Building Vitals
 
-**Status:** `STAGE_3A_COMPLETE` — next is 3B Worker terrain leveling / site preparation (not started)
+**Status:** `STAGE_3B1_LEVELING_PLANNING` — not Stage 3B complete; 3A remains complete
 **Authority:** current-state MVP roadmap; supersedes historical S-number order as an execution cursor
 **Baseline:** `origin/main` @ `569777625b8a4718289ad4809efa5ba5da09df7c`
 **Audit date:** 2026-08-21; minimap stage closed 2026-09-03; Stage 3A runtime crater 2026-09-04
 **Scope:** current factual roadmap and capability status.
-**Current execution checkpoint:** Stage 2 Minimap is **COMPLETE** on `main`. Stage **3A** Voxel deformation
-foundation is **COMPLETE** on `terrain/gp-voxel-foundation`: authority `ShallowSphereCap`, replicated
-compact event log, and a two-player PIE Listen Server replay. Next is **3B** Worker terrain leveling /
-site preparation. 3B is not implemented. Dynamic traversability and world FoW terrain-surface
-integration stay **3E**.
+**Current execution checkpoint:** Stage 2 Minimap is **COMPLETE**. Stage **3A** is **COMPLETE** on `main`.
+Stage **3B-1** on `terrain/gp-worker-leveling` is the planning/query substrate only: a persistent
+Terrain Leveling job, explicit `TargetPlaneZ`, and per-cell `Level` / `NeedsLeveling`. It does not
+deform terrain, assign Workers, or add UI. Stage 3B is not complete. Dynamic traversability and
+world FoW terrain-surface integration stay **3E**.
 Do **not** vendor the plugin. Authored `WBP_GP_HUD` remains operator-local.
 
 Production HUD Resource/Match data foundation is on `main`.
@@ -154,7 +154,7 @@ current execution order.
 | --- | --- | --- |
 | Voxel Plugin terrain backend | **COMPLETE — STAGE 3A** | `UGP_TerrainDeformationComponent` on `AGP_GameState`. `RequestDeformation` is authority-only and generic. `ShallowSphereCap` only. Radius 50..1500 cm, depth 10..radius. Vertical-trace world resolve. Replicated event log, max 32, no voxel payload. That window is not a late-join snapshot and is not guaranteed past 32 historical events. Two-player PIE Listen Server PASS 2026-09-28: host crater, client reconstruction, no duplicate apply, Worker terrain-follow still correct. Plugin untracked. Other profiles, scars, debris, vegetation, foundation reaction, and dynamic traversability are outside 3A. |
 | Authoritative terrain deformation | **DONE — STAGE 3A** | `RequestDeformation` on `AGP_GameState`'s terrain component. Clients do not author destruction. Only `ShallowSphereCap` is implemented. |
-| Worker terrain leveling / site prep | **NOT STARTED** | Command concept only (names TBD). Grey/yellow BuildGrid overlay. Zone sizing UX **DESIGN REQUIRED**. |
+| Worker terrain leveling / site prep | **3B-1 PLANNING ONLY** | `UGP_EngineeringJobSubsystem::CreateTerrainLevelingJob`. Explicit `TargetPlaneZ`. Cells are `Level` or `NeedsLeveling` against a 15 cm tolerance. All-level plans are rejected. Zero Workers, no deformation, no UI. Zone sizing UX and the player target-plane rule remain **DESIGN REQUIRED**. |
 | Foundation Slab orbital procurement | **NOT STARTED** | Wall Package philosophy; cost/quantity/footprint **TBD** (do not copy 5). |
 | Per-cell foundation coverage | **NOT STARTED** | Canonical model: track intact foundation per BuildGrid cell. Physical slab may cover multiple cells. |
 | Building deploy requires foundation | **NOT STARTED** | Additional placement prerequisite for normal orbital buildings. Initial MainBase excepted. |
@@ -274,8 +274,8 @@ This order replaces mechanical continuation of the historical Slice 8 -> 13 sequ
 1. **Production UI foundation / HUD**
 2. **Minimap + FoW minimap presentation** — **COMPLETE**
 3. **Terrain / Voxel / Foundation system** — must exist before AI and final building/wall design because both depend on construction-site rules and navigation. This stage must also establish the **generic local engineering job contract**, **Worker assignment/contribution model**, and **reusable work-presentation hooks** before final Wall implementation.
-   - **3A.** Voxel Plugin technical spike + authoritative terrain deformation foundation — **COMPLETE**. Next is 3B, which is not implemented.
-   - **3B.** Worker leveling + generic local engineering job/work hooks — **NOT STARTED**
+   - **3A.** Voxel Plugin technical spike + authoritative terrain deformation foundation — **COMPLETE**.
+   - **3B.** Worker leveling + generic local engineering job/work hooks — **3B-1 IN PROGRESS** (planning/query only). Not complete.
    - **3C.** Foundation procurement / install / repair foundation support
    - **3D.** Building placement migration to leveled + intact foundation requirement
    - **3E.** navigation + current world-FoW terrain-surface integration
@@ -395,8 +395,9 @@ friendly blips, Visible-only enemy blips, canonical team colors, building vs uni
 CameraComponent viewport footprint, LMB click-to-pan with immediate footprint sync. Operator PASS
 on `ui/gp-minimap`. Authored `WBP_GP_HUD` remains operator-local.
 
-**NEXT:** Stage **3B** Worker terrain leveling / site preparation. Not implemented.
-Stage **3A** is complete. Stage **3E** remains dynamic traversability and world FoW terrain-surface integration.
+**NEXT:** Operator check of `gp.Engineering.PlanLevelingUnderCursor` on `L_VoxelArena_2P`.
+Stage **3B-1** is planning only. Stage **3B** is not complete. Stage **3A** stays complete.
+Stage **3E** remains dynamic traversability and world FoW terrain-surface integration.
 Do **not** vendor `GP/Plugins/VoxelFree` until repository policy is decided.
 
 Execution order remains: 3B → 3C → 3D → 3E → RTS AI Opponent → bounded core-loop gaps →

@@ -314,6 +314,8 @@ Rules:
 - if **at least one** cell is yellow, the player may start terrain leveling;
 - if **all** cells are grey, there is nothing to level.
 
+The planning substrate stores that classification as `Level` and `NeedsLeveling`. A cell is `NeedsLeveling` when any voxel sample is more than 15 cm from the job's explicit `TargetPlaneZ`. That 15 cm tolerance is tunable and not a final balance value. `TargetPlaneZ` is an input to the job. How the player chooses it is still **DESIGN REQUIRED**. The debug planner uses the clicked terrain impact Z. A plan with every cell already `Level` is rejected and is not stored. Creating the plan does not deform terrain.
+
 Additional invalid / blocked visual states may be added later. Grey / yellow are the required MVP concept.
 
 ### Leveling execution
@@ -329,13 +331,14 @@ After confirmation of the planned zone and Worker assignment:
 
 Do not design this as a progress bar that instantly replaces terrain at completion.
 
-**DATA-DRIVEN / DESIGN REQUIRED** before implementation:
+**DATA-DRIVEN / DESIGN REQUIRED** before Worker execution:
 
-- target elevation determination;
-- slope / flatness tolerance;
+- player UX that chooses `TargetPlaneZ` (click, reference, or a derived rule);
 - leveling speed / duration;
 - worker movement pattern;
 - interruption / resume rules.
+
+The job core already stores an explicit `TargetPlaneZ`. Planning classifies a cell as needing work when a voxel sample is more than 15 cm from that plane. That tolerance is tunable and not final. Height samples record min, max, and mean. A separate slope limit is not a planning reject. Dynamic traversability stays Stage 3E.
 
 ## Foundation Slabs
 

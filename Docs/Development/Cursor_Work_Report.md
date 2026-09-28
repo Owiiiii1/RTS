@@ -15,7 +15,7 @@ Stage 3A stays complete. Stage 3B is not complete. This slice does not level ter
 | Path | `D:\Progects\RTS` |
 | Branch | `terrain/gp-worker-leveling` |
 | Base `origin/main` | `98cc07592eb7bd52e0eea89460ca7646ac723f13` |
-| Feature commit | recorded in the follow-up commit |
+| Feature commit | `c66f50cba08623df25ab37085872e5783766f69c` |
 | Engine | UE 5.8.3 |
 
 ## Owner
